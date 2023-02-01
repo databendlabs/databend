@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,16 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// Mask a string by "******", but keep `unmask_len` of suffix.
-///
-/// Copied from `common-base` so that we don't need to depend on it.
-#[inline]
-pub fn mask_string(s: &str, unmask_len: usize) -> String {
-    if s.len() <= unmask_len {
-        s.to_string()
+use common_exception::Result;
+use common_meta_types::StageType;
+use common_meta_types::UserStageInfo;
+use opendal::layers::SubdirLayer;
+use opendal::Operator;
+
+use crate::init_operator;
+use crate::DataOperator;
+
+pub fn init_stage_operator(stage_info: &UserStageInfo) -> Result<Operator> {
+    if stage_info.stage_type == StageType::External {
+        Ok(init_operator(&stage_info.stage_params.storage)?)
     } else {
-        let mut ret = "******".to_string();
-        ret.push_str(&s[(s.len() - unmask_len)..]);
-        ret
+        let pop = DataOperator::instance().operator();
+        Ok(pop.layer(SubdirLayer::new(&stage_info.stage_prefix())))
     }
 }

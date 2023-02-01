@@ -23,12 +23,8 @@ use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::constants::NAN_BYTES_SNAKE;
-use common_storage::init_operator;
-use common_storage::DataOperator;
-use common_storage::StorageParams;
-use opendal::layers::SubdirLayer;
-use opendal::Operator;
 
+use crate::StorageParams;
 use crate::UserIdentity;
 
 // -- Internal stage
@@ -501,15 +497,6 @@ impl UserStageInfo {
             }
             StageType::Internal => format!("/stage/internal/{}/", self.stage_name),
             StageType::User => format!("/stage/user/{}/", self.stage_name),
-        }
-    }
-
-    pub fn get_operator(&self) -> Result<Operator> {
-        if self.stage_type == StageType::External {
-            Ok(init_operator(&self.stage_params.storage)?)
-        } else {
-            let pop = DataOperator::instance().operator();
-            Ok(pop.layer(SubdirLayer::new(&self.stage_prefix())))
         }
     }
 }

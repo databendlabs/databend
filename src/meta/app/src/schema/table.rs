@@ -24,7 +24,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_expression::TableSchema;
 use common_meta_types::MatchSeq;
-use common_storage::StorageParams;
+use common_meta_types::StorageParams;
 use maplit::hashmap;
 
 use crate::schema::database::DatabaseNameIdent;

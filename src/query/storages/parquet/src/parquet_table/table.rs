@@ -37,6 +37,7 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
+use common_storage::init_stage_operator;
 use opendal::Operator;
 
 pub struct ParquetTable {
@@ -51,7 +52,7 @@ pub struct ParquetTable {
 impl ParquetTable {
     pub fn from_info(info: &ParquetTableInfo) -> Result<Arc<dyn Table>> {
         let operator = match &info.user_stage_info {
-            Some(info) => info.get_operator(),
+            Some(info) => init_stage_operator(info),
             None => Self::get_local_operator(),
         }?;
 
