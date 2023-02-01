@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::plan::ParquetReadOptions;
 use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
@@ -24,7 +25,6 @@ use common_expression::Scalar;
 use opendal::Operator;
 
 use crate::parquet_table::ParquetTable;
-use crate::ReadOptions;
 
 impl ParquetTable {
     /// Create the table function `read_parquet`.
@@ -53,8 +53,7 @@ impl ParquetTable {
 
         let (file_locations, read_options) = parse_parquet_table_args(&table_args)?;
 
-        let table =
-            Self::blocking_create(table_id, table_args, operator, file_locations, read_options)?;
+        let table = Self::blocking_create(table_id, operator, file_locations, read_options, None)?;
 
         Ok(Arc::new(table))
     }
@@ -71,12 +70,14 @@ impl TableFunction for ParquetTable {
     }
 }
 
-/// Parse [`TableArgs`] to get the file locations and [`ReadOptions`].
+/// Parse [`TableArgs`] to get the file locations and [`ParquetReadOptions`].
 ///
 /// Options should always be behind the file locations, or an error will be returned.
 ///
 /// The file locations may be glob patterns.
-pub fn parse_parquet_table_args(table_args: &TableArgs) -> Result<(Vec<String>, ReadOptions)> {
+pub fn parse_parquet_table_args(
+    table_args: &TableArgs,
+) -> Result<(Vec<String>, ParquetReadOptions)> {
     if table_args.is_none() {
         return Err(ErrorCode::BadArguments(
             "read_parquet needs at least one argument",
@@ -109,7 +110,7 @@ pub fn parse_parquet_table_args(table_args: &TableArgs) -> Result<(Vec<String>, 
         }
     }
 
-    let read_options = ReadOptions::try_from(&args[path_num..])?;
+    let read_options = ParquetReadOptions::try_from(&args[path_num..])?;
 
     Ok((paths, read_options))
 }
