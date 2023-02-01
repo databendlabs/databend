@@ -57,7 +57,9 @@ impl kvapi::Key for IdGenerator {
     const PREFIX: &'static str = PREFIX_ID_GEN;
 
     fn to_string_key(&self) -> String {
-        format!("{}/{}", Self::PREFIX, self.resource)
+        kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+            .push_raw(&self.resource)
+            .done()
     }
 
     fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {

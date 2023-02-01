@@ -754,7 +754,9 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_TABLE_ID_TO_NAME;
 
         fn to_string_key(&self) -> String {
-            format!("{}/{}", Self::PREFIX, self.table_id,)
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.table_id)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
@@ -772,7 +774,9 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_TABLE_BY_ID;
 
         fn to_string_key(&self) -> String {
-            format!("{}/{}", Self::PREFIX, self.table_id,)
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.table_id)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
@@ -812,7 +816,9 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_TABLE_COUNT;
 
         fn to_string_key(&self) -> String {
-            format!("{}/{}", Self::PREFIX, self.tenant)
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_raw(&self.tenant)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
@@ -830,14 +836,20 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_TABLE_COPIED_FILES;
 
         fn to_string_key(&self) -> String {
-            format!("{}/{}/{}", Self::PREFIX, self.table_id, self.file)
+            // TODO: file is not escaped!!!
+            //       There already are non escaped data stored on disk.
+            //       We can not change it anymore.
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.table_id)
+                .push_raw(&self.file)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
             let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
             let table_id = p.next_u64()?;
-            let file = p.tail()?.to_string();
+            let file = p.tail_raw()?.to_string();
 
             Ok(TableCopiedFileNameIdent { table_id, file })
         }
@@ -848,7 +860,9 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_TABLE_COPIED_FILES_LOCK;
 
         fn to_string_key(&self) -> String {
-            format!("{}/{}", Self::PREFIX, self.table_id)
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.table_id)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
