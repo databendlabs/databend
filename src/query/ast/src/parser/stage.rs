@@ -45,8 +45,9 @@ pub fn connection_options(i: Input) -> IResult<BTreeMap<String, String>> {
         rule! {
             (AWS_KEY_ID
                 | AWS_SECRET_KEY
-                | ENDPOINT_URL
                 | ACCESS_KEY_ID
+                | ACCESS_KEY_SECRET
+                | ENDPOINT_URL
                 | SECRET_ACCESS_KEY
                 | SESSION_TOKEN
                 | REGION
