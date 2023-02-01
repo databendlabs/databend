@@ -12,44 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_expression::TableSchema;
-use common_meta_app::schema::TableInfo;
-
+mod data_source_info;
 mod parquet;
 mod parquet_read_options;
-
 mod stage;
 
+pub use data_source_info::DataSourceInfo;
 pub use parquet::ParquetTableInfo;
 pub use parquet_read_options::ParquetReadOptions;
 pub use stage::StageTableInfo;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum DataSourceInfo {
-    // Normal table source, `fuse/system`.
-    TableSource(TableInfo),
-    // Internal/External source, like `s3://` or `azblob://`.
-    StageSource(StageTableInfo),
-    // stage source with parquet format used for select.
-    ParquetSource(ParquetTableInfo),
-}
-
-impl DataSourceInfo {
-    pub fn schema(&self) -> Arc<TableSchema> {
-        match self {
-            DataSourceInfo::TableSource(table_info) => table_info.schema(),
-            DataSourceInfo::StageSource(table_info) => table_info.schema(),
-            DataSourceInfo::ParquetSource(table_info) => table_info.schema(),
-        }
-    }
-
-    pub fn desc(&self) -> String {
-        match self {
-            DataSourceInfo::TableSource(table_info) => table_info.desc.clone(),
-            DataSourceInfo::StageSource(table_info) => table_info.desc(),
-            DataSourceInfo::ParquetSource(table_info) => table_info.desc(),
-        }
-    }
-}
