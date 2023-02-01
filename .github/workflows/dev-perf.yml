@@ -100,7 +100,7 @@ jobs:
       - name: Run Benchmark
         run: |
           mkdir -p /tmp/databend-perf/
-          bensql benchmark \
+          bendsql benchmark \
             --test-dir ./scripts/benchmark/query/benchmarks/ \
             --output-format json,md \
             --output-dir /tmp/databend-perf/ \
