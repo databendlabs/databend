@@ -24,7 +24,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_expression::TableSchema;
 use common_meta_types::MatchSeq;
-use common_storage::StorageParams;
+use common_meta_types::StorageParams;
 use maplit::hashmap;
 
 use crate::schema::database::DatabaseNameIdent;
@@ -710,13 +710,7 @@ pub struct TableCopiedFileLockKey {
 pub struct TableCopiedFileLock {}
 
 mod kvapi_key_impl {
-    use common_meta_kvapi::check_segment;
-    use common_meta_kvapi::check_segment_absent;
-    use common_meta_kvapi::check_segment_present;
-    use common_meta_kvapi::decode_id;
-    use common_meta_kvapi::escape;
     use common_meta_kvapi::kvapi;
-    use common_meta_kvapi::unescape;
 
     use crate::schema::CountTablesKey;
     use crate::schema::DBIdTableName;
@@ -738,32 +732,20 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_TABLE;
 
         fn to_string_key(&self) -> String {
-            format!(
-                "{}/{}/{}",
-                Self::PREFIX,
-                self.db_id,
-                escape(&self.table_name),
-            )
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.db_id)
+                .push_str(&self.table_name)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut elts = s.split('/');
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-            let prefix = check_segment_present(elts.next(), 0, s)?;
-            check_segment(prefix, 0, Self::PREFIX)?;
+            let db_id = p.next_u64()?;
+            let table_name = p.next_str()?;
+            p.done()?;
 
-            let db_id = check_segment_present(elts.next(), 1, s)?;
-            let db_id = decode_id(db_id)?;
-
-            let tb_name = check_segment_present(elts.next(), 2, s)?;
-            let tb_name = unescape(tb_name)?;
-
-            check_segment_absent(elts.next(), 3, s)?;
-
-            Ok(DBIdTableName {
-                db_id,
-                table_name: tb_name,
-            })
+            Ok(DBIdTableName { db_id, table_name })
         }
     }
 
@@ -772,19 +754,16 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_TABLE_ID_TO_NAME;
 
         fn to_string_key(&self) -> String {
-            format!("{}/{}", Self::PREFIX, self.table_id,)
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.table_id)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut elts = s.split('/');
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-            let prefix = check_segment_present(elts.next(), 0, s)?;
-            check_segment(prefix, 0, Self::PREFIX)?;
-
-            let table_id = check_segment_present(elts.next(), 1, s)?;
-            let table_id = decode_id(table_id)?;
-
-            check_segment_absent(elts.next(), 2, s)?;
+            let table_id = p.next_u64()?;
+            p.done()?;
 
             Ok(TableIdToName { table_id })
         }
@@ -795,21 +774,18 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_TABLE_BY_ID;
 
         fn to_string_key(&self) -> String {
-            format!("{}/{}", Self::PREFIX, self.table_id,)
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.table_id)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut elts = s.split('/');
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-            let prefix = check_segment_present(elts.next(), 0, s)?;
-            check_segment(prefix, 0, Self::PREFIX)?;
+            let table_id = p.next_u64()?;
+            p.done()?;
 
-            let tb_id = check_segment_present(elts.next(), 1, s)?;
-            let tb_id = decode_id(tb_id)?;
-
-            check_segment_absent(elts.next(), 2, s)?;
-
-            Ok(TableId { table_id: tb_id })
+            Ok(TableId { table_id })
         }
     }
 
@@ -818,32 +794,20 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_TABLE_ID_LIST;
 
         fn to_string_key(&self) -> String {
-            format!(
-                "{}/{}/{}",
-                Self::PREFIX,
-                self.db_id,
-                escape(&self.table_name),
-            )
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.db_id)
+                .push_str(&self.table_name)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut elts = s.split('/');
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-            let prefix = check_segment_present(elts.next(), 0, s)?;
-            check_segment(prefix, 0, Self::PREFIX)?;
+            let db_id = p.next_u64()?;
+            let table_name = p.next_str()?;
+            p.done()?;
 
-            let db_id = check_segment_present(elts.next(), 1, s)?;
-            let db_id = decode_id(db_id)?;
-
-            let tb_name = check_segment_present(elts.next(), 2, s)?;
-            let tb_name = unescape(tb_name)?;
-
-            check_segment_absent(elts.next(), 3, s)?;
-
-            Ok(TableIdListKey {
-                db_id,
-                table_name: tb_name,
-            })
+            Ok(TableIdListKey { db_id, table_name })
         }
     }
 
@@ -852,20 +816,16 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_TABLE_COUNT;
 
         fn to_string_key(&self) -> String {
-            format!("{}/{}", Self::PREFIX, self.tenant)
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_raw(&self.tenant)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut elts = s.split('/');
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-            let prefix = check_segment_present(elts.next(), 0, s)?;
-            check_segment(prefix, 0, Self::PREFIX)?;
-
-            let tenant = check_segment_present(elts.next(), 1, s)?;
-
-            check_segment_absent(elts.next(), 2, s)?;
-
-            let tenant = unescape(tenant)?;
+            let tenant = p.next_str()?;
+            p.done()?;
 
             Ok(CountTablesKey { tenant })
         }
@@ -876,43 +836,40 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_TABLE_COPIED_FILES;
 
         fn to_string_key(&self) -> String {
-            format!("{}/{}/{}", Self::PREFIX, self.table_id, self.file)
+            // TODO: file is not escaped!!!
+            //       There already are non escaped data stored on disk.
+            //       We can not change it anymore.
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.table_id)
+                .push_raw(&self.file)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let elts: Vec<&str> = s.splitn(3, '/').collect();
-            if elts.len() < 3 {
-                return Err(kvapi::KeyError::AtleastSegments {
-                    expect: 3,
-                    actual: elts.len(),
-                });
-            }
-            let prefix = elts[0];
-            check_segment(prefix, 0, Self::PREFIX)?;
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-            let table_id = decode_id(elts[1])?;
-            let file = unescape(elts[2])?;
+            let table_id = p.next_u64()?;
+            let file = p.tail_raw()?.to_string();
 
             Ok(TableCopiedFileNameIdent { table_id, file })
         }
     }
 
-    // __fd_table_copied_file_lock/table_id -> ""
+    /// __fd_table_copied_file_lock/table_id -> ""
     impl kvapi::Key for TableCopiedFileLockKey {
         const PREFIX: &'static str = PREFIX_TABLE_COPIED_FILES_LOCK;
 
         fn to_string_key(&self) -> String {
-            format!("{}/{}", Self::PREFIX, self.table_id)
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.table_id)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut elts = s.split('/');
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-            let prefix = check_segment_present(elts.next(), 0, s)?;
-            check_segment(prefix, 0, Self::PREFIX)?;
-
-            let table_id = check_segment_present(elts.next(), 1, s)?;
-            let table_id = decode_id(table_id)?;
+            let table_id = p.next_u64()?;
+            p.done()?;
 
             Ok(TableCopiedFileLockKey { table_id })
         }

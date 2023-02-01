@@ -20,6 +20,7 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::parquet::indexes::Interval;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
+use common_catalog::plan::ParquetReadOptions;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -41,7 +42,6 @@ use crate::parquet_part::ParquetRowGroupPart;
 use crate::parquet_reader::IndexedChunk;
 use crate::parquet_reader::ParquetReader;
 use crate::parquet_source::State::Generated;
-use crate::ReadOptions;
 
 struct PrewhereData {
     data_block: DataBlock,
@@ -84,7 +84,7 @@ pub struct ParquetSource {
     prewhere_filter: Arc<Option<Expr>>,
     remain_reader: Arc<Option<ParquetReader>>,
 
-    read_options: ReadOptions,
+    read_options: ParquetReadOptions,
 }
 
 impl ParquetSource {
@@ -99,7 +99,7 @@ impl ParquetSource {
         prewhere_reader: Arc<ParquetReader>,
         prewhere_filter: Arc<Option<Expr>>,
         remain_reader: Arc<Option<ParquetReader>>,
-        read_options: ReadOptions,
+        read_options: ParquetReadOptions,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
 

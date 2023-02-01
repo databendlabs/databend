@@ -23,8 +23,8 @@ use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::constants::NAN_BYTES_SNAKE;
-use common_storage::StorageParams;
 
+use crate::StorageParams;
 use crate::UserIdentity;
 
 // -- Internal stage

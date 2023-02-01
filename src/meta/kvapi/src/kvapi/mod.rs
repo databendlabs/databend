@@ -13,20 +13,19 @@
 //  limitations under the License.
 
 mod api;
+mod helper;
 mod key;
+mod key_builder;
+mod key_parser;
 mod prefix;
 mod test_suite;
 
 pub use api::ApiBuilder;
 pub use api::AsKVApi;
 pub use api::KVApi;
-pub use key::check_segment;
-pub use key::check_segment_absent;
-pub use key::check_segment_present;
-pub use key::decode_id;
-pub use key::escape;
-pub use key::unescape;
 pub use key::Key;
 pub use key::KeyError;
+pub use key_builder::KeyBuilder;
+pub use key_parser::KeyParser;
 pub use prefix::prefix_to_range;
 pub use test_suite::TestSuite;

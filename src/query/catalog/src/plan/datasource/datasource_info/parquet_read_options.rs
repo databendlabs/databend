@@ -16,8 +16,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Scalar;
 
-#[derive(Copy, Clone, Debug)]
-pub struct ReadOptions {
+#[derive(serde::Serialize, serde::Deserialize, Copy, Clone, Debug, PartialEq, Eq)]
+pub struct ParquetReadOptions {
     /// Prune row groups before reading. Require Chunk level statistics.
     /// Filter row groups don't need to read.
     prune_row_groups: bool,
@@ -39,10 +39,10 @@ pub struct ReadOptions {
     // refresh_meta_cache: bool,
 }
 
-impl ReadOptions {
+impl ParquetReadOptions {
     #[inline]
     pub fn new() -> Self {
-        ReadOptions::default()
+        ParquetReadOptions::default()
     }
 
     #[inline]
@@ -104,9 +104,9 @@ impl ReadOptions {
     // }
 }
 
-impl Default for ReadOptions {
+impl Default for ParquetReadOptions {
     fn default() -> Self {
-        ReadOptions {
+        ParquetReadOptions {
             do_prewhere: true,
             prune_row_groups: true,
             prune_pages: false,
@@ -117,8 +117,8 @@ impl Default for ReadOptions {
 }
 
 /// Convert ReadOptions into tuples.
-impl From<ReadOptions> for Vec<Scalar> {
-    fn from(value: ReadOptions) -> Self {
+impl From<ParquetReadOptions> for Vec<Scalar> {
+    fn from(value: ParquetReadOptions) -> Self {
         vec![
             make_pair("prune_row_groups", value.prune_row_groups),
             make_pair("prune_pages", value.prune_pages),
@@ -136,10 +136,10 @@ fn make_pair(name: &str, value: bool) -> Scalar {
     ])
 }
 
-impl TryFrom<&[Scalar]> for ReadOptions {
+impl TryFrom<&[Scalar]> for ParquetReadOptions {
     type Error = ErrorCode;
     fn try_from(values: &[Scalar]) -> Result<Self> {
-        let mut opts = ReadOptions::default();
+        let mut opts = ParquetReadOptions::default();
         for value in values {
             let (name, v) = get_boolean_option(value)?;
             opts = match name {

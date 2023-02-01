@@ -7,7 +7,7 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [features]
-storage-hdfs = ["opendal/services-hdfs"]
+storage-hdfs = ["common-meta-types/storage-hdfs"]
 
 [dependencies]
 common-arrow = { path = "../arrow" }
@@ -15,6 +15,7 @@ common-auth = { path = "../auth" }
 common-base = { path = "../base" }
 common-exception = { path = "../exception" }
 common-expression = { path = "../../query/expression" }
+common-meta-types = { path = "../../meta/types" }
 
 anyhow = { workspace = true }
 async-trait = "0.1"

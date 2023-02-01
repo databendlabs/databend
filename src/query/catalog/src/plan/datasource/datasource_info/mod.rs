@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,16 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
-#![deny(unused_crate_dependencies)]
+mod data_source_info;
+mod parquet;
+mod parquet_read_options;
+mod stage;
 
-mod parquet_part;
-mod parquet_reader;
-mod parquet_source;
-mod parquet_table;
-mod pruning;
-mod statistics;
-mod table_function;
-
-pub use parquet_table::ParquetTable;
-pub use table_function::parse_parquet_table_args;
+pub use data_source_info::DataSourceInfo;
+pub use parquet::ParquetTableInfo;
+pub use parquet_read_options::ParquetReadOptions;
+pub use stage::StageTableInfo;
