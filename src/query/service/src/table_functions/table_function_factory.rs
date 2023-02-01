@@ -134,7 +134,7 @@ impl TableFunctionFactory {
 
         creators.insert(
             "read_parquet".to_string(),
-            (next_id(), Arc::new(ParquetTable::create)),
+            (next_id(), Arc::new(ParquetTable::create_table_function)),
         );
 
         TableFunctionFactory {
@@ -150,5 +150,14 @@ impl TableFunctionFactory {
         })?;
         let func = factory.try_create("", &func_name, *id, tbl_args)?;
         Ok(func)
+    }
+
+    pub fn get_id(&self, func_name: &str) -> Result<MetaId> {
+        let lock = self.creators.read();
+        let func_name = func_name.to_lowercase();
+        let (id, _) = lock.get(&func_name).ok_or_else(|| {
+            ErrorCode::UnknownTable(format!("Unknown table function {}", func_name))
+        })?;
+        Ok(*id)
     }
 }

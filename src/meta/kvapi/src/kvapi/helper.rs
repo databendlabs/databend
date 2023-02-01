@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,52 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
 use std::string::FromUtf8Error;
 
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum KVApiKeyError {
-    #[error(transparent)]
-    FromUtf8Error(#[from] FromUtf8Error),
-
-    #[error("Expect {i}-th segment to be '{expect}', but: '{got}'")]
-    InvalidSegment {
-        i: usize,
-        expect: String,
-        got: String,
-    },
-
-    #[error("Expect {expect} segments, but: '{got}'")]
-    WrongNumberOfSegments { expect: usize, got: String },
-
-    #[error("Expect at least {expect} segments, but {actual} segments found")]
-    AtleastSegments { expect: usize, actual: usize },
-
-    #[error("Invalid id string: '{s}': {reason}")]
-    InvalidId { s: String, reason: String },
-}
-
-/// Convert structured key to a string key used by KVApi and backwards
-pub trait KVApiKey: Debug
-where Self: Sized
-{
-    const PREFIX: &'static str;
-
-    fn to_key(&self) -> String;
-    fn from_key(s: &str) -> Result<Self, KVApiKeyError>;
-}
-
-impl KVApiKey for String {
-    const PREFIX: &'static str = "";
-
-    fn to_key(&self) -> String {
-        self.clone()
-    }
-
-    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
-        Ok(s.to_string())
-    }
-}
+use crate::kvapi::KeyError;
 
 /// Function that escapes special characters in a string.
 ///
@@ -67,10 +24,10 @@ impl KVApiKey for String {
 /// # Example
 /// ```
 /// let key = "data_bend!!";
-/// let new_key = escape_for_key(&key);
+/// let new_key = escape(&key);
 /// assert_eq!("data_bend%21%21".to_string(), new_key);
 /// ```
-pub fn escape(key: &str) -> String {
+pub(crate) fn escape(key: &str) -> String {
     let mut new_key = Vec::with_capacity(key.len());
 
     fn hex(num: u8) -> u8 {
@@ -102,10 +59,10 @@ pub fn escape(key: &str) -> String {
 /// # Example
 /// ```
 /// let key = "data_bend%21%21";
-/// let original_key = unescape_for_key(&key);
+/// let original_key = unescape(&key);
 /// assert_eq!(Ok("data_bend!!".to_string()), original_key);
 /// ```
-pub fn unescape(key: &str) -> Result<String, FromUtf8Error> {
+pub(crate) fn unescape(key: &str) -> Result<String, FromUtf8Error> {
     let mut new_key = Vec::with_capacity(key.len());
 
     fn unhex(num: u8) -> u8 {
@@ -138,48 +95,9 @@ pub fn unescape(key: &str) -> Result<String, FromUtf8Error> {
     String::from_utf8(new_key)
 }
 
-/// Check if the `i`-th segment absent.
-pub fn check_segment_absent(elt: Option<&str>, i: usize, key: &str) -> Result<(), KVApiKeyError> {
-    if elt.is_some() {
-        Err(KVApiKeyError::WrongNumberOfSegments {
-            expect: i,
-            got: key.to_string(),
-        })
-    } else {
-        Ok(())
-    }
-}
-
-/// Check if the `i`-th segment present.
-pub fn check_segment_present<'a>(
-    elt: Option<&'a str>,
-    i: usize,
-    key: &str,
-) -> Result<&'a str, KVApiKeyError> {
-    if let Some(s) = elt {
-        Ok(s)
-    } else {
-        Err(KVApiKeyError::WrongNumberOfSegments {
-            expect: i + 1,
-            got: key.to_string(),
-        })
-    }
-}
-
-/// Check if the `i`-th segment equals `expect`.
-pub fn check_segment(elt: &str, i: usize, expect: &str) -> Result<(), KVApiKeyError> {
-    if elt != expect {
-        return Err(KVApiKeyError::InvalidSegment {
-            i,
-            expect: expect.to_string(),
-            got: elt.to_string(),
-        });
-    }
-    Ok(())
-}
-
-pub fn decode_id(s: &str) -> Result<u64, KVApiKeyError> {
-    let id = s.parse::<u64>().map_err(|e| KVApiKeyError::InvalidId {
+/// Decode a string into u64 id.
+pub(crate) fn decode_id(s: &str) -> Result<u64, KeyError> {
+    let id = s.parse::<u64>().map_err(|e| KeyError::InvalidId {
         s: s.to_string(),
         reason: e.to_string(),
     })?;

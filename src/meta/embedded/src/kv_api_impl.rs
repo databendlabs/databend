@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use async_trait::async_trait;
-use common_meta_api::KVApi;
+use common_meta_kvapi::kvapi;
 pub use common_meta_sled_store::init_temp_sled_db;
 use common_meta_types::GetKVReply;
 use common_meta_types::KVAppError;
@@ -27,7 +27,8 @@ use common_meta_types::UpsertKVReq;
 use crate::MetaEmbedded;
 
 #[async_trait]
-impl KVApi for MetaEmbedded {
+impl kvapi::KVApi for MetaEmbedded {
+    type Error = KVAppError;
     async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, KVAppError> {
         let sm = self.inner.lock().await;
         sm.upsert_kv(act).await

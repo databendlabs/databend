@@ -19,7 +19,6 @@ pub mod pipeline;
 pub mod pipeline_display;
 pub mod unsafe_cell_wrap;
 
-pub use pipe::Pipe;
 pub use pipe::SinkPipeBuilder;
 pub use pipe::SourcePipeBuilder;
 pub use pipe::TransformPipeBuilder;

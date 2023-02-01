@@ -66,7 +66,7 @@ async fn test_remove_invalid_nodes() -> Result<()> {
     Ok(())
 }
 
-// TODO:(Winter) need KVApi for cluster multiple nodes test
+// TODO:(Winter) need kvapi::KVApi for cluster multiple nodes test
 // #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 // async fn test_multiple_cluster_discovery() -> Result<()> {
 //     let mut config = Config::default();

@@ -38,6 +38,7 @@ simd = ["arrow/simd"]
 arrow = { package = "arrow2", git = "https://github.com/b41sh/arrow2", rev = "faf92ac", default-features = false, features = [
     "io_parquet",
     "io_parquet_compression",
+    "serde_types",
 ] }
 
 arrow-format = { version = "0.8.0", features = ["flight-data", "flight-service", "ipc"] }

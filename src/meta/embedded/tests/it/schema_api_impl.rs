@@ -14,16 +14,16 @@
 
 use async_trait::async_trait;
 use common_base::base::tokio;
-use common_meta_api::ApiBuilder;
 use common_meta_api::SchemaApiTestSuite;
 use common_meta_api::ShareApiTestSuite;
 use common_meta_embedded::MetaEmbedded;
+use common_meta_kvapi::kvapi;
 
 #[derive(Clone)]
 pub struct MetaEmbeddedBuilder {}
 
 #[async_trait]
-impl ApiBuilder<MetaEmbedded> for MetaEmbeddedBuilder {
+impl kvapi::ApiBuilder<MetaEmbedded> for MetaEmbeddedBuilder {
     async fn build(&self) -> MetaEmbedded {
         MetaEmbedded::new_temp().await.unwrap()
     }

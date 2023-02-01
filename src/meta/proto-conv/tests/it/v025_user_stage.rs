@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use common_meta_types as mt;
+use common_meta_types::StorageFsConfig;
+use common_meta_types::StorageParams;
 use common_meta_types::UserIdentity;
-use common_storage::StorageFsConfig;
-use common_storage::StorageParams;
 
 use crate::common;
 

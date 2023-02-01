@@ -24,6 +24,18 @@ use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
+use common_meta_types::StorageAzblobConfig;
+use common_meta_types::StorageFsConfig;
+use common_meta_types::StorageFtpConfig;
+use common_meta_types::StorageGcsConfig;
+use common_meta_types::StorageHttpConfig;
+use common_meta_types::StorageIpfsConfig;
+use common_meta_types::StorageMokaConfig;
+use common_meta_types::StorageObsConfig;
+use common_meta_types::StorageOssConfig;
+use common_meta_types::StorageParams;
+use common_meta_types::StorageRedisConfig;
+use common_meta_types::StorageS3Config;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MetricsLayer;
@@ -41,19 +53,9 @@ use opendal::services::redis;
 use opendal::services::s3;
 use opendal::Operator;
 
-use super::StorageAzblobConfig;
-use super::StorageFsConfig;
-use super::StorageParams;
-use super::StorageS3Config;
-use crate::config::StorageGcsConfig;
-use crate::config::StorageHttpConfig;
-use crate::config::StorageMokaConfig;
-use crate::config::StorageObsConfig;
 use crate::runtime_layer::RuntimeLayer;
 use crate::CacheConfig;
 use crate::StorageConfig;
-use crate::StorageOssConfig;
-use crate::StorageRedisConfig;
 
 /// init_operator will init an opendal operator based on storage config.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
@@ -141,7 +143,7 @@ fn init_fs_operator(cfg: &StorageFsConfig) -> Result<Operator> {
 }
 
 /// init_ftp_operator will init a opendal ftp operator.
-fn init_ftp_operator(_: &super::StorageFtpConfig) -> Result<Operator> {
+fn init_ftp_operator(_: &StorageFtpConfig) -> Result<Operator> {
     // Should be addressed after https://github.com/datafuselabs/opendal/pull/1101
     Err(Error::other("ftp support has been disabled"))
     // let mut builder = ftp::Builder::default();
@@ -171,7 +173,7 @@ fn init_gcs_operator(cfg: &StorageGcsConfig) -> Result<Operator> {
 
 /// init_hdfs_operator will init an opendal hdfs operator.
 #[cfg(feature = "storage-hdfs")]
-fn init_hdfs_operator(cfg: &super::StorageHdfsConfig) -> Result<Operator> {
+fn init_hdfs_operator(cfg: &common_meta_types::StorageHdfsConfig) -> Result<Operator> {
     use opendal::services::hdfs;
 
     let mut builder = hdfs::Builder::default();
@@ -185,7 +187,7 @@ fn init_hdfs_operator(cfg: &super::StorageHdfsConfig) -> Result<Operator> {
     Ok(Operator::new(builder.build()?))
 }
 
-fn init_ipfs_operator(cfg: &super::StorageIpfsConfig) -> Result<Operator> {
+fn init_ipfs_operator(cfg: &StorageIpfsConfig) -> Result<Operator> {
     use opendal::services::ipfs;
 
     let mut builder = ipfs::Builder::default();

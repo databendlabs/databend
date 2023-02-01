@@ -27,7 +27,6 @@ use common_expression::SortColumnDescription;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
-use common_pipeline_core::Pipe;
 use common_pipeline_sinks::processors::sinks::EmptySink;
 use common_pipeline_sinks::processors::sinks::UnionReceiveSink;
 use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
@@ -52,7 +51,6 @@ use common_sql::plans::JoinType;
 use common_sql::ColumnBinding;
 use common_sql::IndexType;
 
-use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::transforms::efficiently_memory_final_aggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
@@ -325,14 +323,23 @@ impl PipelineBuilder {
             None,
         )?;
 
+        let pass_state_to_final = self.enable_memory_efficient_aggregator(&params);
+
         self.main_pipeline.add_transform(|input, output| {
             TransformAggregator::try_create_partial(
                 AggregatorTransformParams::try_create(input, output, &params)?,
                 self.ctx.clone(),
+                pass_state_to_final,
             )
         })?;
 
         Ok(())
+    }
+
+    fn enable_memory_efficient_aggregator(&self, params: &Arc<AggregatorParams>) -> bool {
+        self.ctx.get_cluster().is_empty()
+            && !params.group_columns.is_empty()
+            && self.main_pipeline.output_len() > 1
     }
 
     fn build_aggregate_final(&mut self, aggregate: &AggregateFinal) -> Result<()> {
@@ -346,10 +353,7 @@ impl PipelineBuilder {
             aggregate.limit,
         )?;
 
-        if self.ctx.get_cluster().is_empty()
-            && !params.group_columns.is_empty()
-            && self.main_pipeline.output_len() > 1
-        {
+        if self.enable_memory_efficient_aggregator(&params) {
             return efficiently_memory_final_aggregator(params, &mut self.main_pipeline);
         }
 
@@ -558,21 +562,11 @@ impl PipelineBuilder {
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
 
         let (tx, rx) = async_channel::unbounded();
-        let mut inputs_port = Vec::with_capacity(build_res.main_pipeline.output_len());
-        let mut processors = Vec::with_capacity(build_res.main_pipeline.output_len());
-        for _ in 0..build_res.main_pipeline.output_len() {
-            let input_port = InputPort::create();
-            processors.push(UnionReceiveSink::create(
-                Some(tx.clone()),
-                input_port.clone(),
-            ));
-            inputs_port.push(input_port);
-        }
-        build_res.main_pipeline.add_pipe(Pipe::SimplePipe {
-            outputs_port: vec![],
-            inputs_port,
-            processors,
-        });
+
+        build_res
+            .main_pipeline
+            .add_sink(|input_port| Ok(UnionReceiveSink::create(Some(tx.clone()), input_port)))?;
+
         self.pipelines.push(build_res.main_pipeline);
         self.pipelines
             .extend(build_res.sources_pipelines.into_iter());

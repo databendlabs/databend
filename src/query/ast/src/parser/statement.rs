@@ -895,16 +895,19 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! {
             PRESIGN ~ ( #presign_action )?
                 ~ #presign_location
-                ~ (EXPIRE ~ "=" ~ #literal_u64)?
+                ~ ( #presign_option )*
         },
-        |(_, action, location, expire)| {
-            Statement::Presign(PresignStmt {
+        |(_, action, location, opts)| {
+            let mut presign_stmt = PresignStmt {
                 action: action.unwrap_or_default(),
                 location,
-                expire: expire
-                    .map(|(_, _, v)| Duration::from_secs(v))
-                    .unwrap_or_else(|| Duration::from_secs(3600)),
-            })
+                expire: Duration::from_secs(3600),
+                content_type: None,
+            };
+            for opt in opts {
+                presign_stmt.apply_option(opt);
+            }
+            Statement::Presign(presign_stmt)
         },
     );
 
@@ -1763,6 +1766,18 @@ pub fn presign_location(i: Input) -> IResult<PresignLocation> {
         },
         |v| Ok(PresignLocation::StageLocation(v)),
     )(i)
+}
+
+pub fn presign_option(i: Input) -> IResult<PresignOption> {
+    alt((
+        map(rule! { EXPIRE ~ "=" ~ #literal_u64 }, |(_, _, v)| {
+            PresignOption::Expire(v)
+        }),
+        map(
+            rule! { CONTENT_TYPE ~ "=" ~ #literal_string },
+            |(_, _, v)| PresignOption::ContentType(v),
+        ),
+    ))(i)
 }
 
 pub fn table_reference_only(i: Input) -> IResult<TableReference> {

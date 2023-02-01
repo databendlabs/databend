@@ -47,7 +47,6 @@ mod sessions {
 }
 
 mod pipelines {
-    pub use common_pipeline_core::Pipe;
     pub use common_pipeline_core::Pipeline;
     pub mod processors {
         pub use common_pipeline_core::processors::*;

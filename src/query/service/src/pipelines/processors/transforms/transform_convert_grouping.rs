@@ -24,18 +24,20 @@ use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_expression::HashMethod;
 use common_expression::HashMethodKind;
+use common_pipeline_core::pipe::Pipe;
+use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_core::Pipe;
 use common_pipeline_core::Pipeline;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
 
+use super::aggregator::AggregateHashStateInfo;
 use crate::pipelines::processors::transforms::aggregator::AggregateInfo;
 use crate::pipelines::processors::transforms::aggregator::BucketAggregator;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
@@ -100,6 +102,8 @@ struct InputPortState {
     bucket: isize,
 }
 
+/// A helper class that  Map
+/// AggregateInfo/AggregateHashStateInfo  --->  ConvertGroupingMetaInfo { meta: blocks with Option<AggregateHashStateInfo> }
 pub struct TransformConvertGrouping<Method: HashMethod + PolymorphicKeysHelper<Method>> {
     output: Arc<OutputPort>,
     inputs: Vec<InputPortState>,
@@ -185,11 +189,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
     }
 
     fn add_bucket(&mut self, data_block: DataBlock) -> isize {
-        let data_block_meta: Option<&AggregateInfo> = data_block
+        if let Some(info) = data_block
             .get_meta()
-            .and_then(|meta| meta.as_any().downcast_ref::<AggregateInfo>());
-
-        if let Some(info) = data_block_meta {
+            .and_then(|meta| meta.as_any().downcast_ref::<AggregateInfo>())
+        {
             if info.overflow.is_none() && info.bucket > SINGLE_LEVEL_BUCKET_NUM {
                 let bucket = info.bucket;
                 match self.buckets_blocks.entry(bucket) {
@@ -203,6 +206,23 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
 
                 return bucket;
             }
+        }
+
+        // check if it's local state
+        if let Some(info) = data_block
+            .get_meta()
+            .and_then(|meta| meta.as_any().downcast_ref::<AggregateHashStateInfo>())
+        {
+            let bucket = info.bucket as isize;
+            match self.buckets_blocks.entry(bucket) {
+                Entry::Vacant(v) => {
+                    v.insert(vec![data_block]);
+                }
+                Entry::Occupied(mut v) => {
+                    v.get_mut().push(data_block);
+                }
+            };
+            return bucket;
         }
 
         self.unsplitted_blocks.push(data_block);
@@ -395,11 +415,11 @@ fn build_convert_grouping<Method: HashMethod + PolymorphicKeysHelper<Method> + S
     let output = transform.get_output();
     let inputs_port = transform.get_inputs();
 
-    pipeline.add_pipe(Pipe::ResizePipe {
+    pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
+        ProcessorPtr::create(Box::new(transform)),
         inputs_port,
-        outputs_port: vec![output],
-        processor: ProcessorPtr::create(Box::new(transform)),
-    });
+        vec![output],
+    )]));
 
     pipeline.resize(input_nums)?;
 
@@ -504,9 +524,9 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
     fn process(&mut self) -> Result<()> {
         if let Some(mut data_block) = self.input_block.take() {
             let mut blocks = vec![];
-            if let Some(meta) = data_block.take_meta() {
-                if let Some(meta) = meta.as_any().downcast_ref::<ConvertGroupingMetaInfo>() {
-                    blocks.extend(meta.blocks.iter().cloned());
+            if let Some(mut meta) = data_block.take_meta() {
+                if let Some(meta) = meta.as_mut_any().downcast_mut::<ConvertGroupingMetaInfo>() {
+                    std::mem::swap(&mut blocks, &mut meta.blocks);
                 }
             }
 

@@ -14,6 +14,7 @@
 
 //! Supporting utilities for tests.
 
+use common_meta_kvapi::kvapi;
 use common_meta_types::anyerror::AnyError;
 use common_meta_types::KVAppError;
 use common_meta_types::MetaAPIError;
@@ -22,19 +23,16 @@ use common_meta_types::MetaDataReadError;
 use common_meta_types::MetaError;
 use common_proto_conv::FromToProto;
 
-use crate::KVApi;
-use crate::KVApiKey;
-
 /// Get existing value by key. Panic if key is absent.
 pub(crate) async fn get_kv_data<T>(
-    kv_api: &(impl KVApi + ?Sized),
-    key: &impl KVApiKey,
+    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    key: &impl kvapi::Key,
 ) -> Result<T, KVAppError>
 where
     T: FromToProto,
     T::PB: common_protos::prost::Message + Default,
 {
-    let res = kv_api.get_kv(&key.to_key()).await?;
+    let res = kv_api.get_kv(&key.to_string_key()).await?;
     if let Some(res) = res {
         let s = crate::deserialize_struct(&res.data)?;
         return Ok(s);

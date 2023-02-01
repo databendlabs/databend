@@ -18,14 +18,14 @@ use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_management::*;
-use common_meta_api::KVApi;
 use common_meta_embedded::MetaEmbedded;
+use common_meta_kvapi::kvapi::KVApi;
 use common_meta_types::SeqV;
 use common_meta_types::StageFile;
 use common_meta_types::StageParams;
+use common_meta_types::StorageParams;
+use common_meta_types::StorageS3Config;
 use common_meta_types::UserStageInfo;
-use common_storage::StorageParams;
-use common_storage::StorageS3Config;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_add_stage() -> Result<()> {

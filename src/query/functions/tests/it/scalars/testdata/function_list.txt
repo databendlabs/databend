@@ -413,6 +413,13 @@ city64withseed(Variant, Float64) :: UInt64
 city64withseed(Variant NULL, Float64 NULL) :: UInt64 NULL
 city64withseed(Variant, Float32) :: UInt64
 city64withseed(Variant NULL, Float32 NULL) :: UInt64 NULL
+concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing)
+concat(Array(Nothing), Array(T0 NULL)) :: Array(T0 NULL)
+concat(Array(Nothing) NULL, Array(T0 NULL) NULL) :: Array(T0 NULL) NULL
+concat(Array(T0 NULL), Array(Nothing)) :: Array(T0 NULL)
+concat(Array(T0 NULL) NULL, Array(Nothing) NULL) :: Array(T0 NULL) NULL
+concat(Array(T0), Array(T0)) :: Array(T0)
+concat(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL
 contains(Array(UInt8), UInt8) :: Boolean
 contains(Array(UInt8) NULL, UInt8 NULL) :: Boolean NULL
 contains(Array(UInt16), UInt16) :: Boolean

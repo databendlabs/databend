@@ -47,7 +47,6 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::EmptySource;
 use crate::pipelines::processors::SyncSource;
 use crate::pipelines::processors::SyncSourcer;
-use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::TableContext;
@@ -177,13 +176,7 @@ impl Table for NumbersTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         if plan.parts.partitions.is_empty() {
-            let output = OutputPort::create();
-            pipeline.add_pipe(Pipe::SimplePipe {
-                inputs_port: vec![],
-                outputs_port: vec![output.clone()],
-                processors: vec![EmptySource::create(output)?],
-            });
-
+            pipeline.add_source(EmptySource::create, 1)?;
             return Ok(());
         }
 

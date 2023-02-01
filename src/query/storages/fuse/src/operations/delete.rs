@@ -37,6 +37,8 @@ use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_pipeline_core::pipe::Pipe;
+use common_pipeline_core::pipe::PipeItem;
 use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -49,7 +51,6 @@ use crate::operations::mutation::MutationTransform;
 use crate::operations::mutation::SerializeDataTransform;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
 use crate::pruning::FusePruner;
 use crate::statistics::ClusterStatsGenerator;
@@ -297,33 +298,33 @@ impl FuseTable {
         base_segments: Vec<Location>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        match pipeline.pipes.last() {
-            None => Err(ErrorCode::Internal("The pipeline is empty.")),
-            Some(pipe) if pipe.output_size() == 0 => {
-                Err(ErrorCode::Internal("The output of the last pipe is 0."))
-            }
-            Some(pipe) => {
-                let input_size = pipe.output_size();
-                let mut inputs_port = Vec::with_capacity(input_size);
-                for _ in 0..input_size {
+        if pipeline.is_empty() {
+            return Err(ErrorCode::Internal("The pipeline is empty."));
+        }
+
+        match pipeline.output_len() {
+            0 => Err(ErrorCode::Internal("The output of the last pipe is 0.")),
+            last_pipe_size => {
+                let mut inputs_port = Vec::with_capacity(last_pipe_size);
+                for _ in 0..last_pipe_size {
                     inputs_port.push(InputPort::create());
                 }
                 let output_port = OutputPort::create();
-                let processor = MutationTransform::try_create(
-                    ctx,
-                    self.schema(),
-                    inputs_port.clone(),
-                    output_port.clone(),
-                    self.get_operator(),
-                    self.meta_location_generator().clone(),
-                    base_segments,
-                    self.get_block_compact_thresholds(),
-                )?;
-                pipeline.pipes.push(Pipe::ResizePipe {
+                pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
+                    MutationTransform::try_create(
+                        ctx,
+                        self.schema(),
+                        inputs_port.clone(),
+                        output_port.clone(),
+                        self.get_operator(),
+                        self.meta_location_generator().clone(),
+                        base_segments,
+                        self.get_block_compact_thresholds(),
+                    )?,
                     inputs_port,
-                    outputs_port: vec![output_port],
-                    processor,
-                });
+                    vec![output_port],
+                )]));
+
                 Ok(())
             }
         }

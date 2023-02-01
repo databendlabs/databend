@@ -17,9 +17,10 @@ use std::sync::Arc;
 use common_base::base::escape_for_key;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_api::KVApi;
+use common_meta_kvapi::kvapi;
 use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
+use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::Operation;
@@ -37,12 +38,12 @@ use crate::user::user_api::UserApi;
 static USER_API_KEY_PREFIX: &str = "__fd_users";
 
 pub struct UserMgr {
-    kv_api: Arc<dyn KVApi>,
+    kv_api: Arc<dyn kvapi::KVApi<Error = KVAppError>>,
     user_prefix: String,
 }
 
 impl UserMgr {
-    pub fn create(kv_api: Arc<dyn KVApi>, tenant: &str) -> Result<Self> {
+    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = KVAppError>>, tenant: &str) -> Result<Self> {
         if tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
                 "Tenant can not empty(while user mgr create)",

@@ -181,6 +181,12 @@ pub trait Catalog: DynClone + Send + Sync {
         ))
     }
 
+    fn get_table_function_id(&self, _func_name: &str) -> Result<MetaId> {
+        Err(ErrorCode::Unimplemented(
+            "'get_table_function' not implemented",
+        ))
+    }
+
     fn as_any(&self) -> &dyn Any;
 
     // Get table engines

@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_api::KVApi;
+use common_meta_kvapi::kvapi::KVApi;
 use common_meta_sled_store::openraft::error::RemoveLearnerError;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::ForwardRequest;
 use common_meta_types::ForwardResponse;
 use common_meta_types::LogEntry;
+use common_meta_types::MetaDataError;
 use common_meta_types::MetaDataReadError;
 use common_meta_types::MetaOperationError;
 use common_meta_types::Node;
@@ -149,22 +150,36 @@ impl<'a> MetaLeader<'a> {
     ///
     /// If the node is not in cluster membership, it still returns Ok.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn leave(&self, req: LeaveRequest) -> Result<(), RaftChangeMembershipError> {
+    pub async fn leave(&self, req: LeaveRequest) -> Result<(), MetaOperationError> {
         let node_id = req.node_id;
-        let metrics = self.meta_node.raft.metrics().borrow().clone();
-        let membership = metrics.membership_config.membership.clone();
+
+        let can_res =
+            self.meta_node.can_leave(node_id).await.map_err(|e| {
+                MetaDataError::ReadError(MetaDataReadError::new("can_leave()", "", &e))
+            })?;
+
+        if let Err(e) = can_res {
+            info!("no need to leave: {}", e);
+            return Ok(());
+        }
 
         // safe unwrap: if the first config is None, panic is the expected behavior here.
-        let mut membership = membership.get_ith_config(0).unwrap().clone();
+        let membership = {
+            let sm = self.meta_node.sto.get_state_machine().await;
+            let m = sm.get_membership().map_err(|e| {
+                MetaDataError::ReadError(MetaDataReadError::new("get_membership()", "", &e))
+            })?;
+
+            // Safe unwrap(): can_leave() assert that m is not None.
+            m.unwrap().membership
+        };
 
         // 1. Remove it from membership if needed.
         if membership.contains(&node_id) {
-            membership.remove(&node_id);
+            let mut config0 = membership.get_ith_config(0).unwrap().clone();
+            config0.remove(&node_id);
 
-            self.meta_node
-                .raft
-                .change_membership(membership, true)
-                .await?;
+            self.meta_node.raft.change_membership(config0, true).await?;
         }
 
         // 2. Stop replication
@@ -172,7 +187,7 @@ impl<'a> MetaLeader<'a> {
         if let Err(e) = res {
             match e {
                 RemoveLearnerError::ForwardToLeader(e) => {
-                    return Err(RaftChangeMembershipError::ForwardToLeader(e));
+                    return Err(MetaOperationError::ForwardToLeader(e));
                 }
                 RemoveLearnerError::NotLearner(_e) => {
                     error!("Node to leave the cluster is not a learner: {}", node_id);
@@ -180,7 +195,9 @@ impl<'a> MetaLeader<'a> {
                 RemoveLearnerError::NotExists(_e) => {
                     info!("Node to leave the cluster does not exists: {}", node_id);
                 }
-                RemoveLearnerError::Fatal(e) => return Err(RaftChangeMembershipError::Fatal(e)),
+                RemoveLearnerError::Fatal(e) => {
+                    return Err(MetaOperationError::DataError(MetaDataError::WriteError(e)));
+                }
             }
         }
 

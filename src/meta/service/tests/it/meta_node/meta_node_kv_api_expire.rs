@@ -16,7 +16,7 @@ use std::time::Duration;
 
 use common_base::base::tokio;
 use common_base::base::tokio::time::sleep;
-use common_meta_api::KVApi;
+use common_meta_kvapi::kvapi::KVApi;
 use common_meta_types::Cmd;
 use common_meta_types::KVMeta;
 use common_meta_types::LogEntry;

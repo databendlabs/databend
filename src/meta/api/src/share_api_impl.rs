@@ -21,6 +21,7 @@ use common_meta_app::schema::TableIdToName;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::*;
+use common_meta_kvapi::kvapi;
 use common_meta_types::errors::app_error::AppError;
 use common_meta_types::errors::app_error::ShareAccountsAlreadyExists;
 use common_meta_types::errors::app_error::ShareAlreadyExists;
@@ -58,14 +59,13 @@ use crate::table_has_to_exist;
 use crate::txn_cond_seq;
 use crate::txn_op_del;
 use crate::txn_op_put;
-use crate::KVApi;
 use crate::ShareApi;
 use crate::TXN_MAX_RETRY_TIMES;
 
-/// ShareApi is implemented upon KVApi.
-/// Thus every type that impl KVApi impls ShareApi.
+/// ShareApi is implemented upon kvapi::KVApi.
+/// Thus every type that impl kvapi::KVApi impls ShareApi.
 #[async_trait::async_trait]
-impl<KV: KVApi> ShareApi for KV {
+impl<KV: kvapi::KVApi<Error = KVAppError>> ShareApi for KV {
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn show_shares(&self, req: ShowSharesReq) -> Result<ShowSharesReply, KVAppError> {
         debug!(req = debug(&req), "ShareApi: {}", func_name!());
@@ -947,7 +947,7 @@ impl<KV: KVApi> ShareApi for KV {
 }
 
 async fn get_share_database_name(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
     share_meta: &ShareMeta,
     share_name: &ShareNameIdent,
 ) -> Result<Option<String>, KVAppError> {
@@ -974,7 +974,7 @@ async fn get_share_database_name(
 }
 
 async fn get_outbound_share_tenants_by_name(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
     share_name: &ShareNameIdent,
 ) -> Result<Vec<GetShareGrantTenants>, KVAppError> {
     let res = get_share_or_err(kv_api, share_name, format!("get_share: {share_name}")).await?;
@@ -1004,7 +1004,7 @@ async fn get_outbound_share_tenants_by_name(
 }
 
 async fn get_outbound_share_info_by_name(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
     share_name: &ShareNameIdent,
 ) -> Result<ShareAccountReply, KVAppError> {
     let res = get_share_or_err(
@@ -1032,7 +1032,7 @@ async fn get_outbound_share_info_by_name(
 }
 
 async fn get_outbound_share_infos_by_tenant(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
     tenant: &str,
 ) -> Result<Vec<ShareAccountReply>, KVAppError> {
     let mut outbound_share_accounts: Vec<ShareAccountReply> = vec![];
@@ -1054,7 +1054,7 @@ async fn get_outbound_share_infos_by_tenant(
 }
 
 async fn get_inbound_share_info_by_tenant(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
     tenant: &String,
     share_account: ShareAccountNameIdent,
 ) -> Result<ShareAccountReply, KVAppError> {
@@ -1098,7 +1098,7 @@ async fn get_inbound_share_info_by_tenant(
 }
 
 async fn get_inbound_share_infos_by_tenant(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
     tenant: &String,
 ) -> Result<Vec<ShareAccountReply>, KVAppError> {
     let mut inbound_share_accounts: Vec<ShareAccountReply> = vec![];
@@ -1119,7 +1119,7 @@ async fn get_inbound_share_infos_by_tenant(
 }
 
 async fn get_object_name_from_id(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
     database_name: &Option<&String>,
     object: ShareGrantObject,
 ) -> Result<Option<ShareGrantObjectName>, KVAppError> {
@@ -1149,7 +1149,7 @@ async fn get_object_name_from_id(
 }
 
 async fn create_db_name_to_id_key_if_need(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
     seq_and_id: &ShareGrantObjectSeqAndId,
     tenant: &str,
     obj_name: &ShareGrantObjectName,
@@ -1208,7 +1208,7 @@ fn check_share_object(
 
 /// Returns ShareGrantObjectSeqAndId by ShareGrantObjectName
 async fn get_share_object_seq_and_id(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
     obj_name: &ShareGrantObjectName,
     tenant: &str,
 ) -> Result<ShareGrantObjectSeqAndId, KVAppError> {
@@ -1319,7 +1319,7 @@ fn add_grant_object_txn_if_then(
 }
 
 async fn drop_accounts_granted_from_share(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
     share_id: u64,
     share_meta: &ShareMeta,
     condition: &mut Vec<TxnCondition>,
@@ -1348,7 +1348,7 @@ async fn drop_accounts_granted_from_share(
 }
 
 async fn remove_share_id_from_share_object(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
     share_id: u64,
     entry: &ShareGrantEntry,
     condition: &mut Vec<TxnCondition>,
@@ -1364,7 +1364,7 @@ async fn remove_share_id_from_share_object(
 }
 
 async fn remove_share_id_from_share_objects(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
     share_id: u64,
     share_meta: &ShareMeta,
     condition: &mut Vec<TxnCondition>,
@@ -1382,7 +1382,7 @@ async fn remove_share_id_from_share_objects(
 }
 
 async fn drop_all_database_from_share(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
     _share_id: u64,
     share_meta: &ShareMeta,
     condition: &mut Vec<TxnCondition>,
@@ -1395,7 +1395,7 @@ async fn drop_all_database_from_share(
 }
 
 async fn get_tenant_share_spec_vec(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
     tenant: String,
 ) -> Result<Vec<ShareSpec>, KVAppError> {
     let mut share_metas = vec![];
@@ -1439,7 +1439,7 @@ async fn get_tenant_share_spec_vec(
 }
 
 async fn convert_share_meta_to_spec(
-    kv_api: &(impl KVApi + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
     share_name: &str,
     share_id: u64,
     share_meta: ShareMeta,

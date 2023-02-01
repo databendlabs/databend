@@ -31,6 +31,7 @@ pub struct PresignPlan {
     pub path: String,
     pub action: PresignAction,
     pub expire: Duration,
+    pub content_type: Option<String>,
 }
 
 impl PresignPlan {

@@ -196,6 +196,8 @@ dependencies = [
  "regex",
  "regex-syntax",
  "rustc_version",
+ "serde",
+ "serde_derive",
  "simdutf8",
  "streaming-iterator",
  "strength_reduce",
@@ -1304,6 +1306,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "common-arrow",
  "common-base",
  "common-exception",
  "common-expression",
@@ -1576,6 +1579,7 @@ dependencies = [
  "common-functions",
  "common-meta-api",
  "common-meta-embedded",
+ "common-meta-kvapi",
  "common-meta-store",
  "common-meta-types",
  "common-proto-conv",
@@ -1592,10 +1596,10 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
- "common-base",
  "common-exception",
  "common-expression",
  "common-meta-app",
+ "common-meta-kvapi",
  "common-meta-types",
  "common-proto-conv",
  "common-protos",
@@ -1603,7 +1607,6 @@ dependencies = [
  "enumflags2",
  "maplit",
  "serde_json",
- "thiserror",
  "tonic",
  "tracing",
 ]
@@ -1615,8 +1618,8 @@ dependencies = [
  "chrono",
  "common-building",
  "common-expression",
+ "common-meta-kvapi",
  "common-meta-types",
- "common-storage",
  "enumflags2",
  "maplit",
  "num-derive",
@@ -1636,6 +1639,7 @@ dependencies = [
  "common-grpc",
  "common-meta-api",
  "common-meta-app",
+ "common-meta-kvapi",
  "common-meta-types",
  "common-metrics",
  "common-tracing",
@@ -1660,12 +1664,25 @@ dependencies = [
  "async-trait",
  "common-base",
  "common-meta-api",
+ "common-meta-kvapi",
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-stoerr",
  "common-meta-types",
  "once_cell",
  "tempfile",
+ "tracing",
+]
+
+[[package]]
+name = "common-meta-kvapi"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "common-meta-types",
+ "thiserror",
+ "tokio",
  "tracing",
 ]
 
@@ -1682,6 +1699,7 @@ dependencies = [
  "common-exception",
  "common-grpc",
  "common-meta-api",
+ "common-meta-kvapi",
  "common-meta-sled-store",
  "common-meta-stoerr",
  "common-meta-types",
@@ -1739,9 +1757,9 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "common-grpc",
- "common-meta-api",
  "common-meta-client",
  "common-meta-embedded",
+ "common-meta-kvapi",
  "common-meta-types",
  "tracing",
 ]
@@ -1757,13 +1775,13 @@ dependencies = [
  "common-exception",
  "common-io",
  "common-meta-stoerr",
- "common-storage",
  "derive_more",
  "enumflags2",
  "hex",
  "num-derive",
  "num-traits",
  "once_cell",
+ "opendal",
  "openraft",
  "prost",
  "prost-build",
@@ -1954,6 +1972,7 @@ dependencies = [
  "bytes",
  "chrono",
  "chrono-tz",
+ "common-arrow",
  "common-ast",
  "common-base",
  "common-catalog",
@@ -1977,6 +1996,7 @@ dependencies = [
  "common-pipeline-transforms",
  "common-settings",
  "common-storage",
+ "common-storages-parquet",
  "common-storages-stage",
  "common-storages-view",
  "common-tracing",
@@ -2029,6 +2049,7 @@ dependencies = [
  "common-auth",
  "common-base",
  "common-exception",
+ "common-meta-types",
  "futures",
  "globiter",
  "once_cell",
@@ -2260,9 +2281,11 @@ dependencies = [
  "common-expression",
  "common-functions",
  "common-meta-app",
+ "common-meta-types",
  "common-pipeline-core",
  "common-sql",
  "common-storage",
+ "futures",
  "glob",
  "opendal",
  "serde",
@@ -2444,6 +2467,7 @@ dependencies = [
  "common-grpc",
  "common-management",
  "common-meta-api",
+ "common-meta-kvapi",
  "common-meta-store",
  "common-meta-types",
  "jwt-simple",
@@ -2901,6 +2925,7 @@ dependencies = [
  "common-meta-app",
  "common-meta-client",
  "common-meta-embedded",
+ "common-meta-kvapi",
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-stoerr",
@@ -2942,6 +2967,7 @@ dependencies = [
  "common-http",
  "common-meta-api",
  "common-meta-client",
+ "common-meta-kvapi",
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-stoerr",
@@ -2982,6 +3008,7 @@ dependencies = [
  "clap 3.2.23",
  "common-meta-api",
  "common-meta-app",
+ "common-meta-kvapi",
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-types",
@@ -4011,9 +4038,9 @@ dependencies = [
 
 [[package]]
 name = "glob"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
+checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
 name = "globiter"
@@ -5588,9 +5615,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.25.1"
+version = "0.25.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73829d3a057542556dc2c2d2b70700a44dda913cdb5483094c20ef9673ca283c"
+checksum = "c2059246a452d8d6bee6c8f61873a554c10db2e51feb17b6f95277114444c738"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -7478,6 +7505,7 @@ dependencies = [
  "common-base",
  "common-config",
  "common-exception",
+ "common-meta-types",
  "common-storage",
  "once_cell",
  "opendal",

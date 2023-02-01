@@ -17,10 +17,10 @@
 use std::sync::Arc;
 
 use common_grpc::RpcClientConf;
-use common_meta_api::KVApi;
 use common_meta_client::ClientHandle;
 use common_meta_client::MetaGrpcClient;
 use common_meta_embedded::MetaEmbedded;
+use common_meta_kvapi::kvapi;
 use common_meta_types::GetKVReply;
 use common_meta_types::KVAppError;
 use common_meta_types::ListKVReply;
@@ -68,7 +68,9 @@ impl MetaStore {
 }
 
 #[async_trait::async_trait]
-impl KVApi for MetaStore {
+impl kvapi::KVApi for MetaStore {
+    type Error = KVAppError;
+
     async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, KVAppError> {
         match self {
             MetaStore::L(x) => x.upsert_kv(act).await,

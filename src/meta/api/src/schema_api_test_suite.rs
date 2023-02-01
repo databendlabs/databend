@@ -70,6 +70,8 @@ use common_meta_app::share::ShareGrantObjectPrivilege;
 use common_meta_app::share::ShareId;
 use common_meta_app::share::ShareMeta;
 use common_meta_app::share::ShareNameIdent;
+use common_meta_kvapi::kvapi;
+use common_meta_kvapi::kvapi::Key;
 use common_meta_types::GCDroppedDataReq;
 use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
@@ -81,10 +83,6 @@ use tracing::info;
 use crate::is_all_db_data_removed;
 use crate::serialize_struct;
 use crate::testing::get_kv_data;
-use crate::ApiBuilder;
-use crate::AsKVApi;
-use crate::KVApi;
-use crate::KVApiKey;
 use crate::SchemaApi;
 use crate::ShareApi;
 
@@ -120,7 +118,7 @@ fn calc_and_compare_drop_on_db_result(result: Vec<Arc<DatabaseInfo>>, expected: 
 
     let mut get = BTreeMap::new();
     for item in result.iter() {
-        let name = item.name_ident.to_string();
+        let name = item.name_ident.to_string_key();
         let mut drop_on_info = match get.get_mut(&name) {
             Some(drop_on_info) => drop_on_info,
             None => {
@@ -177,13 +175,13 @@ fn calc_and_compare_drop_on_table_result(result: Vec<Arc<TableInfo>>, expected: 
 }
 
 async fn upsert_test_data(
-    kv_api: &(impl KVApi + ?Sized),
-    key: &impl KVApiKey,
+    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    key: &impl kvapi::Key,
     value: Vec<u8>,
 ) -> Result<u64, KVAppError> {
     let res = kv_api
         .upsert_kv(UpsertKVReq {
-            key: key.to_key(),
+            key: key.to_string_key(),
             seq: MatchSeq::Any,
             value: Operation::Update(value),
             value_meta: None,
@@ -195,12 +193,12 @@ async fn upsert_test_data(
 }
 
 async fn delete_test_data(
-    kv_api: &(impl KVApi + ?Sized),
-    key: &impl KVApiKey,
+    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    key: &impl kvapi::Key,
 ) -> Result<(), KVAppError> {
     let _res = kv_api
         .upsert_kv(UpsertKVReq {
-            key: key.to_key(),
+            key: key.to_string_key(),
             seq: MatchSeq::Any,
             value: Operation::Delete,
             value_meta: None,
@@ -214,8 +212,8 @@ impl SchemaApiTestSuite {
     /// Test SchemaAPI on a single node
     pub async fn test_single_node<B, MT>(b: B) -> anyhow::Result<()>
     where
-        B: ApiBuilder<MT>,
-        MT: ShareApi + AsKVApi + SchemaApi,
+        B: kvapi::ApiBuilder<MT>,
+        MT: ShareApi + kvapi::AsKVApi<Error = KVAppError> + SchemaApi,
     {
         let suite = SchemaApiTestSuite {};
 
@@ -265,7 +263,7 @@ impl SchemaApiTestSuite {
     /// Test SchemaAPI on cluster
     pub async fn test_cluster<B, MT>(b: B) -> anyhow::Result<()>
     where
-        B: ApiBuilder<MT>,
+        B: kvapi::ApiBuilder<MT>,
         MT: SchemaApi,
     {
         let suite = SchemaApiTestSuite {};
@@ -322,7 +320,7 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn database_and_table_rename<MT: SchemaApi + AsKVApi>(
+    async fn database_and_table_rename<MT: SchemaApi + kvapi::AsKVApi<Error = KVAppError>>(
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -637,7 +635,9 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn database_create_from_share_and_drop<MT: ShareApi + AsKVApi + SchemaApi>(
+    async fn database_create_from_share_and_drop<
+        MT: ShareApi + kvapi::AsKVApi<Error = KVAppError> + SchemaApi,
+    >(
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -1207,7 +1207,7 @@ impl SchemaApiTestSuite {
                 })
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![DroponInfo {
-                name: db_name_ident.to_string(),
+                name: db_name_ident.to_string_key(),
                 desc: "".to_string(),
                 drop_on_cnt: 0,
                 non_drop_on_cnt: 1,
@@ -1225,7 +1225,7 @@ impl SchemaApiTestSuite {
                 })
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![DroponInfo {
-                name: db_name_ident.to_string(),
+                name: db_name_ident.to_string_key(),
                 desc: "".to_string(),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 0,
@@ -1242,7 +1242,7 @@ impl SchemaApiTestSuite {
                 })
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![DroponInfo {
-                name: db_name_ident.to_string(),
+                name: db_name_ident.to_string_key(),
                 desc: "".to_string(),
                 drop_on_cnt: 0,
                 non_drop_on_cnt: 1,
@@ -1263,7 +1263,7 @@ impl SchemaApiTestSuite {
                 })
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![DroponInfo {
-                name: db_name_ident.to_string(),
+                name: db_name_ident.to_string_key(),
                 desc: "".to_string(),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 0,
@@ -1287,7 +1287,7 @@ impl SchemaApiTestSuite {
                 })
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![DroponInfo {
-                name: db_name_ident.to_string(),
+                name: db_name_ident.to_string_key(),
                 desc: "".to_string(),
                 drop_on_cnt: 1,
                 non_drop_on_cnt: 1,
@@ -1315,13 +1315,13 @@ impl SchemaApiTestSuite {
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![
                 DroponInfo {
-                    name: db_name_ident.to_string(),
+                    name: db_name_ident.to_string_key(),
                     desc: "".to_string(),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 1,
                 },
                 DroponInfo {
-                    name: new_db_name_ident.to_string(),
+                    name: new_db_name_ident.to_string_key(),
                     desc: "".to_string(),
                     drop_on_cnt: 0,
                     non_drop_on_cnt: 1,
@@ -1341,13 +1341,13 @@ impl SchemaApiTestSuite {
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![
                 DroponInfo {
-                    name: db_name_ident.to_string(),
+                    name: db_name_ident.to_string_key(),
                     desc: "".to_string(),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 1,
                 },
                 DroponInfo {
-                    name: new_db_name_ident.to_string(),
+                    name: new_db_name_ident.to_string_key(),
                     desc: "".to_string(),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 0,
@@ -1371,13 +1371,13 @@ impl SchemaApiTestSuite {
                 .await?;
             calc_and_compare_drop_on_db_result(res, vec![
                 DroponInfo {
-                    name: db_name_ident.to_string(),
+                    name: db_name_ident.to_string_key(),
                     desc: "".to_string(),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 0,
                 },
                 DroponInfo {
-                    name: new_db_name_ident.to_string(),
+                    name: new_db_name_ident.to_string_key(),
                     desc: "".to_string(),
                     drop_on_cnt: 1,
                     non_drop_on_cnt: 1,
@@ -2236,7 +2236,9 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn database_drop_out_of_retention_time_history<MT: SchemaApi + AsKVApi>(
+    async fn database_drop_out_of_retention_time_history<
+        MT: SchemaApi + kvapi::AsKVApi<Error = KVAppError>,
+    >(
         self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -2298,7 +2300,7 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn create_out_of_retention_time_db<MT: SchemaApi + AsKVApi>(
+    async fn create_out_of_retention_time_db<MT: SchemaApi + kvapi::AsKVApi<Error = KVAppError>>(
         self,
         mt: &MT,
         db_name: DatabaseNameIdent,
@@ -2335,7 +2337,9 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn database_gc_out_of_retention_time<MT: SchemaApi + AsKVApi>(
+    async fn database_gc_out_of_retention_time<
+        MT: SchemaApi + kvapi::AsKVApi<Error = KVAppError>,
+    >(
         self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -2418,7 +2422,9 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn create_out_of_retention_time_table<MT: SchemaApi + AsKVApi>(
+    async fn create_out_of_retention_time_table<
+        MT: SchemaApi + kvapi::AsKVApi<Error = KVAppError>,
+    >(
         self,
         mt: &MT,
         name_ident: TableNameIdent,
@@ -2470,7 +2476,7 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn table_gc_out_of_retention_time<MT: SchemaApi + AsKVApi>(
+    async fn table_gc_out_of_retention_time<MT: SchemaApi + kvapi::AsKVApi<Error = KVAppError>>(
         self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -2604,7 +2610,9 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn table_drop_out_of_retention_time_history<MT: SchemaApi + AsKVApi>(
+    async fn table_drop_out_of_retention_time_history<
+        MT: SchemaApi + kvapi::AsKVApi<Error = KVAppError>,
+    >(
         self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -3398,7 +3406,9 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    async fn get_tables_from_share<MT: ShareApi + AsKVApi + SchemaApi>(
+    async fn get_tables_from_share<
+        MT: ShareApi + kvapi::AsKVApi<Error = KVAppError> + SchemaApi,
+    >(
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
