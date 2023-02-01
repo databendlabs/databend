@@ -35,6 +35,7 @@ fn test_array() {
     test_concat(file);
     test_prepend(file);
     test_append(file);
+    test_indexof(file);
 }
 
 fn test_create(file: &mut impl Write) {
@@ -145,6 +146,9 @@ fn test_contains(file: &mut impl Write) {
 }
 
 fn test_concat(file: &mut impl Write) {
+    run_ast(file, "concat([], [])", &[]);
+    run_ast(file, "concat([], [1,2])", &[]);
+    run_ast(file, "concat([false, true], [])", &[]);
     run_ast(file, "concat([false, true], [1,2])", &[]);
     run_ast(file, "concat([1,2,3], ['s', null])", &[]);
 
@@ -186,4 +190,30 @@ fn test_append(file: &mut impl Write) {
         ("b", Int16Type::from_data(vec![3i16, 4, 5])),
         ("c", Int16Type::from_data(vec![6i16, 7, 8])),
     ]);
+}
+
+fn test_indexof(file: &mut impl Write) {
+    run_ast(file, "indexof([false, true], false)", &[]);
+    run_ast(file, "indexof([], false)", &[]);
+    run_ast(file, "indexof([false, true], null)", &[]);
+    run_ast(file, "indexof([false, true], 0)", &[]);
+    run_ast(file, "indexof([1,2,3,'s'], 's')", &[]);
+    run_ast(file, "indexof([1,'x',null,'x'], 'x')", &[]);
+
+    let columns = [
+        ("int8_col", Int8Type::from_data(vec![1i8, 2, 7, 8])),
+        (
+            "nullable_col",
+            Int64Type::from_data_with_validity(vec![9i64, 10, 11, 12], vec![
+                true, true, false, false,
+            ]),
+        ),
+    ];
+
+    run_ast(
+        file,
+        "indexof([1, 2, 3, 4, 5, null], nullable_col)",
+        &columns,
+    );
+    run_ast(file, "indexof([9,10,null], int8_col)", &columns);
 }

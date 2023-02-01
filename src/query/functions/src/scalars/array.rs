@@ -150,6 +150,30 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
+    registry.register_2_arg_core::<ArrayType<NullableType<GenericType<0>>>, GenericType<0>, UInt64Type, _, _>(
+        "indexof",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<ArrayType<NullableType<GenericType<0>>>, GenericType<0>, UInt64Type>(
+            |arr, val, output, _| {
+                let len = arr.len();
+                let mut matched = false;
+                for idx in 0..len {
+                    if let Some(Some(item)) = arr.index(idx) {
+                        if item == val {
+                            output.push(idx as u64 + 1);
+                            matched = true;
+                            break
+                        }
+                    }
+                }
+                if !matched {
+                    output.push(0u64)
+                }
+            }
+        ),
+    );
+
     registry.register_combine_nullable_2_arg::<ArrayType<GenericType<0>>, UInt64Type, GenericType<0>, _, _>(
         "get",
         FunctionProperty::default(),
@@ -176,28 +200,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         |_, _, _| Value::Scalar(()),
-    );
-
-    registry.register_passthrough_nullable_2_arg::<EmptyArrayType, ArrayType<NullableType<GenericType<0>>>, ArrayType<NullableType<GenericType<0>>>, _, _>(
-        "concat",
-        FunctionProperty::default(),
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_2_arg::<EmptyArrayType, ArrayType<NullableType<GenericType<0>>>, ArrayType<NullableType<GenericType<0>>>>(
-            |_, arr, output, _| {
-                output.push(arr)
-            }
-        ),
-    );
-
-    registry.register_passthrough_nullable_2_arg::<ArrayType<NullableType<GenericType<0>>>, EmptyArrayType, ArrayType<NullableType<GenericType<0>>>, _, _>(
-        "concat",
-        FunctionProperty::default(),
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_2_arg::<ArrayType<NullableType<GenericType<0>>>, EmptyArrayType, ArrayType<NullableType<GenericType<0>>>>(
-            |arr, _, output, _| {
-                output.push(arr)
-            }
-        ),
     );
 
     registry.register_passthrough_nullable_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(

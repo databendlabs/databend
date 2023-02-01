@@ -36,5 +36,10 @@ select concat(col4, col3) from t;
 ----
 ['2023-01-01 02:00:01.000000','2022-02-02 00:00:00.000000']
 
+query IIIIII
+select indexof(col1,'2'), indexof(col1,2), indexof(col2,'x'), indexof(col3,'2022-02-02'), indexof(col4,'2023-01-01 02:00:02'), indexof(col5,[NULL]) from t
+----
+0 2 1 1 0 3
+
 statement ok
 DROP DATABASE data_type
