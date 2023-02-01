@@ -116,7 +116,6 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
 
     /// Scan `self.root` for existing files and store them.
     fn init(mut self) -> Result<Self> {
-        eprintln!("INIT>>>>");
         fs::create_dir_all(&self.root)?;
         for (file, size) in get_all_files(&self.root) {
             if !self.can_store(size) {
