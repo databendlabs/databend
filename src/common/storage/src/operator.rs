@@ -173,7 +173,7 @@ fn init_gcs_operator(cfg: &StorageGcsConfig) -> Result<Operator> {
 
 /// init_hdfs_operator will init an opendal hdfs operator.
 #[cfg(feature = "storage-hdfs")]
-fn init_hdfs_operator(cfg: &StorageHdfsConfig) -> Result<Operator> {
+fn init_hdfs_operator(cfg: &common_meta_types::StorageHdfsConfig) -> Result<Operator> {
     use opendal::services::hdfs;
 
     let mut builder = hdfs::Builder::default();

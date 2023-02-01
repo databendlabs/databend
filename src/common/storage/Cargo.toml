@@ -7,7 +7,7 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [features]
-storage-hdfs = ["opendal/services-hdfs"]
+storage-hdfs = ["common-meta-types/storage-hdfs"]
 
 [dependencies]
 common-arrow = { path = "../arrow" }

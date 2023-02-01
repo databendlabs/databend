@@ -1779,6 +1779,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "once_cell",
+ "opendal",
  "openraft",
  "prost",
  "prost-build",
