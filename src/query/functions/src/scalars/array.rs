@@ -150,27 +150,27 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_2_arg_core::<ArrayType<NullableType<GenericType<0>>>, GenericType<0>, UInt64Type, _, _>(
+    registry.register_2_arg_core::<ArrayType<GenericType<0>>, GenericType<0>, UInt64Type, _, _>(
         "indexof",
         FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
-        vectorize_with_builder_2_arg::<ArrayType<NullableType<GenericType<0>>>, GenericType<0>, UInt64Type>(
+        vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, GenericType<0>, UInt64Type>(
             |arr, val, output, _| {
                 let len = arr.len();
                 let mut matched = false;
                 for idx in 0..len {
-                    if let Some(Some(item)) = arr.index(idx) {
+                    if let Some(item) = arr.index(idx) {
                         if item == val {
                             output.push(idx as u64 + 1);
                             matched = true;
-                            break
+                            break;
                         }
                     }
                 }
                 if !matched {
                     output.push(0u64)
                 }
-            }
+            },
         ),
     );
 

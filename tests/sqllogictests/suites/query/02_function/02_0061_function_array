@@ -1,0 +1,50 @@
+statement ok
+DROP DATABASE IF EXISTS data_type
+
+statement ok
+CREATE DATABASE IF NOT EXISTS data_type
+
+statement ok
+USE data_type
+
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+create table t(col1 Array(Int Null), col2 Array(String), col3 Array(Date), col4 Array(Timestamp), col5 Array(Array(Int null)))
+
+statement ok
+insert into t values([1,2],['x','y'], ['2022-02-02'], ['2023-01-01 02:00:01'], [[1,2],[],[null]])
+
+query T
+select concat(col1, col5) from t
+----
+['1','2','[1,2]','[]','[null]']
+
+query T
+select concat(col1, col2) from t;
+----
+['1','2','"x"','"y"']
+
+query T
+select concat(col5, col2) from t;
+----
+['[1,2]','[]','[null]','"x"','"y"']
+
+query T
+select concat(col4, col3) from t;
+----
+['2023-01-01 02:00:01.000000','2022-02-02 00:00:00.000000']
+
+query IIIIII
+select indexof(col1,'2'), indexof(col1,2), indexof(col2,'x'), indexof(col3,'2022-02-02'), indexof(col4,'2023-01-01 02:00:02'), indexof(col5,[NULL]) from t
+----
+0 2 1 1 0 3
+
+query I
+select indexof([1,2,null,2,null], null)
+----
+3
+
+statement ok
+DROP DATABASE data_type

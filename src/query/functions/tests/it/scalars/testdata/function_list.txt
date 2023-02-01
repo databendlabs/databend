@@ -1012,7 +1012,7 @@ humanize_number(Float64) :: String
 humanize_number(Float64 NULL) :: String NULL
 humanize_size(Float64) :: String
 humanize_size(Float64 NULL) :: String NULL
-indexof(Array(T0 NULL), T0) :: UInt64
+indexof(Array(T0), T0) :: UInt64
 inet_aton(String) :: UInt32
 inet_aton(String NULL) :: UInt32 NULL
 inet_ntoa(Int64) :: String
