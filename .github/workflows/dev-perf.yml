@@ -46,7 +46,7 @@ jobs:
           target: x86_64-unknown-linux-gnu
           profile: release
 
-  perf_hits:
+  hits:
     needs: build_release
     timeout-minutes: 30
     runs-on: [self-hosted, X64, Linux, perf]
@@ -105,9 +105,9 @@ jobs:
             --output-format json,md \
             --output-dir /tmp/databend-perf/ \
             --size 'c5.4xlarge' \
-      - name: Comment on PR
-        uses: everpcpc/comment-on-pr-action@v1
+          cat /tmp/databend-perf/hits.md
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
         with:
-          token: ${{ inputs.github_token }}
-          identifier: benchmark.hits
-          files: /tmp/databend-perf/hits.md
+          name: benchmark-results
+          path: /tmp/databend-perf/
