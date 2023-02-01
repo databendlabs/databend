@@ -12,10 +12,13 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::sync::Arc;
+
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::read as pread;
 use common_base::base::tokio;
 use common_catalog::plan::ParquetReadOptions;
+use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UserStageInfo;
@@ -36,7 +39,7 @@ impl ParquetTable {
         maybe_glob_locations: Vec<String>,
         read_options: ParquetReadOptions,
         stage_info: Option<UserStageInfo>,
-    ) -> Result<Self> {
+    ) -> Result<Arc<dyn Table>> {
         if operator.metadata().can_blocking() {
             return Self::blocking_create(
                 table_id,
@@ -52,14 +55,14 @@ impl ParquetTable {
 
         let table_info = create_parquet_table_info(table_id, arrow_schema.clone());
 
-        Ok(ParquetTable {
+        Ok(Arc::new(ParquetTable {
             file_locations,
             table_info,
             arrow_schema,
             operator,
             read_options,
             stage_info,
-        })
+        }))
     }
 
     async fn prepare_metas(
