@@ -33,6 +33,7 @@ ctrlc = { version = "3.2.3", features = ["termination"] }
 enquote = "1.1.0"
 futures = "0.3.24"
 libc = "0.2.133"
+libmimalloc-sys = "0.1.30"
 num_cpus = "1.13.1"
 once_cell = "1.15.0"
 parking_lot = "0.12"

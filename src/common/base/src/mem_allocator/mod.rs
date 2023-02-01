@@ -12,18 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod default;
 mod global;
 mod jemalloc;
+mod mi;
 mod mmap;
 mod std_;
 
 pub use default::DefaultAllocator;
 pub use global::GlobalAllocator;
 pub use jemalloc::JEAllocator;
+pub use mi::MiAllocator;
 pub use mmap::MmapAllocator;
 pub use std_::StdAllocator;
 
-mod default;
 #[cfg(feature = "memory-profiling")]
 mod profiling;
 

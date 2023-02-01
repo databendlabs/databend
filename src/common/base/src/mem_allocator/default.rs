@@ -14,6 +14,7 @@
 
 use crate::mem_allocator::JEAllocator;
 
-// Default allocator is jemalloc, you can change it to std:
-// pub type DefaultAllocator = StdAllocator;
 pub type DefaultAllocator = JEAllocator;
+
+// Your can change it to:
+// pub type DefaultAllocator = MiAllocator;

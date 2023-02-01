@@ -1261,6 +1261,7 @@ dependencies = [
  "enquote",
  "futures",
  "libc",
+ "libmimalloc-sys",
  "num_cpus",
  "once_cell",
  "parking_lot 0.12.1",
@@ -3004,7 +3005,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap 3.2.23",
- "common-meta-api",
  "common-meta-app",
  "common-meta-kvapi",
  "common-meta-raft-store",
@@ -4859,6 +4859,16 @@ name = "libm"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "348108ab3fba42ec82ff6e9564fc4ca0247bdccdc68dd8af9764bbc79c3c8ffb"
+
+[[package]]
+name = "libmimalloc-sys"
+version = "0.1.30"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd8c7cbf8b89019683667e347572e6d55a7df7ea36b0c4ce69961b0cde67b174"
+dependencies = [
+ "cc",
+ "libc",
+]
 
 [[package]]
 name = "libtest-mimic"

@@ -22,6 +22,7 @@
 #![feature(thread_id_value)]
 #![feature(backtrace_frames)]
 #![feature(alloc_error_hook)]
+#![feature(nonnull_slice_from_raw_parts)]
 
 pub mod base;
 pub mod containers;
