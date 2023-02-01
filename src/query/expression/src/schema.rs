@@ -73,13 +73,17 @@ pub struct DataField {
     data_type: DataType,
 }
 
+fn uninit_column_id() -> u32 {
+    0
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct TableSchema {
     pub(crate) fields: Vec<TableField>,
     pub(crate) metadata: BTreeMap<String, String>,
-
-    // define new fields as Option for compatibility
-    pub next_column_id: Option<u32>,
+    // next column id that assign to TableField.column_id
+    #[serde(default = "uninit_column_id")]
+    pub(crate) next_column_id: u32,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -87,8 +91,8 @@ pub struct TableField {
     name: String,
     default_expr: Option<String>,
     data_type: TableDataType,
-    // column id of this field, define as Option for compatibility
-    column_id: Option<u32>,
+    #[serde(default = "uninit_column_id")]
+    column_id: u32,
 }
 
 /// DataType with more information that is only available for table field, e.g, the
@@ -248,13 +252,13 @@ impl TableSchema {
         Self {
             fields: vec![],
             metadata: BTreeMap::new(),
-            next_column_id: Some(0),
+            next_column_id: 0,
         }
     }
 
     pub fn init_if_need(data_schema: TableSchema) -> Self {
-        // If next_column_id is none, it is an old version needs to compatibility
-        if data_schema.next_column_id.is_none() {
+        // If next_column_id is 0, it is an old version needs to compatibility
+        if data_schema.next_column_id == 0 {
             Self::new_from(data_schema.fields, data_schema.metadata)
         } else {
             data_schema
@@ -267,7 +271,6 @@ impl TableSchema {
     ) -> (u32, Vec<TableField>) {
         if next_column_id > 0 {
             // make sure that field column id has been inited.
-            assert!(fields[0].has_column_id());
             if fields.len() > 1 {
                 assert!(fields[1].column_id() > 0);
             }
@@ -278,6 +281,8 @@ impl TableSchema {
         let mut new_fields = Vec::with_capacity(fields.len());
 
         for field in fields {
+            // assert all field column id has not been inited.
+            assert!(field.column_id() == 0);
             let new_field = field.build_column_id(&mut new_next_column_id);
             // check next_column_id value cannot fallback
             assert!(new_next_column_id >= new_field.column_id());
@@ -295,7 +300,7 @@ impl TableSchema {
         Self {
             fields: new_fields,
             metadata: BTreeMap::new(),
-            next_column_id: Some(next_column_id),
+            next_column_id,
         }
     }
 
@@ -304,7 +309,7 @@ impl TableSchema {
         Self {
             fields: new_fields,
             metadata,
-            next_column_id: Some(next_column_id),
+            next_column_id,
         }
     }
 
@@ -317,13 +322,13 @@ impl TableSchema {
         Self {
             fields: new_fields,
             metadata,
-            next_column_id: Some(next_column_id),
+            next_column_id,
         }
     }
 
     #[inline]
     pub fn next_column_id(&self) -> u32 {
-        *self.next_column_id.as_ref().unwrap()
+        self.next_column_id
     }
 
     pub fn column_id_of_index(&self, i: usize) -> Result<u32> {
@@ -353,7 +358,7 @@ impl TableSchema {
                     f.name(),
                 )));
             }
-            let field = f.build_column_id(self.next_column_id.as_mut().unwrap());
+            let field = f.build_column_id(&mut self.next_column_id);
             self.fields.push(field);
         }
         Ok(())
@@ -694,7 +699,7 @@ impl TableField {
             name: name.to_string(),
             default_expr: None,
             data_type,
-            column_id: None,
+            column_id: 0,
         }
     }
 
@@ -703,7 +708,7 @@ impl TableField {
             name: name.to_string(),
             default_expr: None,
             data_type,
-            column_id: Some(column_id),
+            column_id,
         }
     }
 
@@ -746,12 +751,8 @@ impl TableField {
             name: self.name.clone(),
             default_expr: self.default_expr.clone(),
             data_type: self.data_type.clone(),
-            column_id: Some(column_id),
+            column_id,
         }
-    }
-
-    pub fn has_column_id(&self) -> bool {
-        self.column_id.is_some()
     }
 
     pub fn contain_column_id(&self, column_id: u32) -> bool {
@@ -768,7 +769,7 @@ impl TableField {
 
     pub fn column_ids(&self) -> Vec<u32> {
         let mut column_ids = vec![];
-        let mut new_next_column_id = self.column_id.unwrap();
+        let mut new_next_column_id = self.column_id;
         Self::build_column_ids_from_data_type(
             self.data_type(),
             &mut column_ids,
@@ -779,7 +780,7 @@ impl TableField {
     }
 
     pub fn column_id(&self) -> u32 {
-        self.column_id.unwrap()
+        self.column_id
     }
 
     #[must_use]
@@ -1108,7 +1109,7 @@ impl From<&ArrowField> for TableField {
             name: f.name.clone(),
             data_type: f.into(),
             default_expr: None,
-            column_id: None,
+            column_id: 0,
         }
     }
 }
