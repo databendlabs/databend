@@ -154,8 +154,8 @@ impl ParquetReader {
         let mut chunks = Vec::with_capacity(self.columns_to_read.len());
 
         for index in &self.columns_to_read {
-            // in `read_parquet` function, there is no `TableSchema`, so index treated as column id
             let obj = self.operator.object(&part.location);
+            // in `read_parquet` function, there is no `TableSchema`, so index treated as column id
             let meta = &part.column_metas[&(*index as u32)];
             let chunk = obj.blocking_range_read(meta.offset..meta.offset + meta.length)?;
 
