@@ -837,8 +837,7 @@ mod kvapi_key_impl {
             let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
             let table_id = p.next_u64()?;
-            let file = p.next_str()?;
-            p.done()?;
+            let file = p.tail()?.to_string();
 
             Ok(TableCopiedFileNameIdent { table_id, file })
         }

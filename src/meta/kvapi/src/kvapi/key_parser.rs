@@ -21,7 +21,10 @@ use crate::kvapi::KeyError;
 /// A helper for parsing a string key into structured key.
 pub struct KeyParser<'s> {
     str_key: &'s str,
+    /// The index of the next item to return.
     i: usize,
+    /// The index of char for the next return.
+    index: usize,
     elements: Split<'s, char>,
 }
 
@@ -31,6 +34,7 @@ impl<'s> KeyParser<'s> {
         Self {
             str_key: source,
             i: 0,
+            index: 0,
             elements: source.split('/'),
         }
     }
@@ -40,6 +44,7 @@ impl<'s> KeyParser<'s> {
         let mut s = Self {
             str_key: source,
             i: 0,
+            index: 0,
             elements: source.split('/'),
         };
         s.next_literal(prefix)?;
@@ -54,6 +59,7 @@ impl<'s> KeyParser<'s> {
 
         if let Some(s) = elt {
             self.i += 1;
+            self.index += s.len() + 1;
             Ok(s)
         } else {
             Err(KeyError::WrongNumberOfSegments {
@@ -93,6 +99,14 @@ impl<'s> KeyParser<'s> {
         }
 
         Ok(())
+    }
+
+    /// Return trailing raw string that is not processed.
+    pub fn tail(&mut self) -> Result<&str, KeyError> {
+        let index = self.index;
+        let _ = self.next_raw()?;
+
+        Ok(&self.str_key[index..])
     }
 
     /// Finish parsing, if there are ore elements left, it returns KeyError::WrongNumberOfSegments
@@ -176,6 +190,36 @@ mod tests {
         assert!(kp.next_literal("bar%20-").is_ok());
         assert!(kp.next_literal("foo").is_err());
         assert!(kp.next_literal("123").is_err(), "already consumed");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_key_parser_tail() -> anyhow::Result<()> {
+        let s = "_foo/bar%20-/123";
+
+        {
+            let mut kp = KeyParser::new(s);
+            assert_eq!(Ok(s), kp.tail());
+        }
+        {
+            let mut kp = KeyParser::new(s);
+            kp.next_raw()?;
+            assert_eq!(Ok("bar%20-/123"), kp.tail());
+        }
+        {
+            let mut kp = KeyParser::new(s);
+            kp.next_raw()?;
+            kp.next_raw()?;
+            assert_eq!(Ok("123"), kp.tail());
+        }
+        {
+            let mut kp = KeyParser::new(s);
+            kp.next_raw()?;
+            kp.next_raw()?;
+            kp.next_raw()?;
+            assert!(kp.tail().is_err());
+        }
 
         Ok(())
     }
