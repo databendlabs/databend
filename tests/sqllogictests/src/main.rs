@@ -159,6 +159,7 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
     // Todo: set validator to process regex
     let args = SqlLogicTestArgs::parse();
     let mut tasks = vec![];
+    let mut num_of_tests = 0;
     let start = Instant::now();
     // Walk each suit dir and read all files in it
     // After get a slt file, set the file name to databend
@@ -182,6 +183,7 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
                     continue;
                 }
             }
+            num_of_tests += parse_file(file.as_ref().unwrap().path()).unwrap().len();
             if args.complete {
                 let col_separator = " ";
                 let validator = default_validator;
@@ -198,12 +200,11 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
         return Ok(());
     }
     // Run all tasks parallel
-    let num_of_tasks = tasks.len();
-    run_parallel_async(tasks).await?;
+    run_parallel_async(tasks, num_of_tests).await?;
     let duration = start.elapsed();
     println!(
         "Run all tests[{}] using {} ms",
-        num_of_tasks,
+        num_of_tests,
         duration.as_millis()
     );
 
@@ -212,10 +213,10 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
 
 async fn run_parallel_async(
     tasks: Vec<impl Future<Output = std::result::Result<Vec<TestError>, TestError>>>,
+    num_of_tests: usize,
 ) -> Result<()> {
     let args = SqlLogicTestArgs::parse();
     let jobs = tasks.len().clamp(1, args.parallel);
-    let num_of_tasks = tasks.len();
     let tasks = stream::iter(tasks).buffer_unordered(jobs);
     let no_fail_fast = args.no_fail_fast;
     if !no_fail_fast {
@@ -223,7 +224,7 @@ async fn run_parallel_async(
             .filter_map(|result| async { result.err() })
             .collect()
             .await;
-        handle_error_records(errors, no_fail_fast, num_of_tasks)?;
+        handle_error_records(errors, no_fail_fast, num_of_tests)?;
     } else {
         let errors: Vec<Vec<TestError>> = tasks
             .filter_map(|result| async { result.ok() })
@@ -232,7 +233,7 @@ async fn run_parallel_async(
         handle_error_records(
             errors.into_iter().flatten().collect(),
             no_fail_fast,
-            num_of_tasks,
+            num_of_tests,
         )?;
     }
     Ok(())
@@ -283,7 +284,7 @@ async fn run_file_async(
 fn handle_error_records(
     error_records: Vec<TestError>,
     no_fail_fast: bool,
-    total_tests: usize,
+    num_of_tests: usize,
 ) -> Result<()> {
     if error_records.is_empty() {
         return Ok(());
@@ -293,7 +294,7 @@ fn handle_error_records(
         "Test finished, fail fast {}, {} out of {} records failed to run",
         if no_fail_fast { "disabled" } else { "enabled" },
         error_records.len(),
-        total_tests
+        num_of_tests
     );
     for (idx, error_record) in error_records.iter().enumerate() {
         println!("{idx}: {}", error_record.display(true));
