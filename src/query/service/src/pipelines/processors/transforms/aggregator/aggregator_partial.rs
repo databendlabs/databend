@@ -28,6 +28,7 @@ use common_hashtable::HashtableLike;
 
 use super::estimated_key_size;
 use crate::pipelines::processors::transforms::group_by::Area;
+use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
@@ -39,24 +40,36 @@ where Method: HashMethod + PolymorphicKeysHelper<Method>
     pub states_dropped: bool,
 
     pub area: Option<Area>,
+    pub area_holder: Option<ArenaHolder>,
     pub method: Method,
     pub hash_table: Method::HashTable,
     pub params: Arc<AggregatorParams>,
     pub generated: bool,
+    pub input_rows: usize,
+    pub pass_state_to_final: bool,
+    pub two_level_mode: bool,
 }
 
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
     PartialAggregator<HAS_AGG, Method>
 {
-    pub fn create(method: Method, params: Arc<AggregatorParams>) -> Result<Self> {
+    pub fn create(
+        method: Method,
+        params: Arc<AggregatorParams>,
+        pass_state_to_final: bool,
+    ) -> Result<Self> {
         let hash_table = method.create_hash_table()?;
         Ok(Self {
             params,
             method,
             hash_table,
             area: Some(Area::create()),
+            area_holder: None,
             states_dropped: false,
             generated: false,
+            input_rows: 0,
+            pass_state_to_final,
+            two_level_mode: false,
         })
     }
 
@@ -160,10 +173,16 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             .collect::<Vec<_>>()
     }
 
+    pub fn try_holder_state(&mut self) {
+        let area = self.area.take();
+        if area.is_some() {
+            self.area_holder = Some(ArenaHolder::create(area));
+        }
+    }
+
     #[inline(always)]
     fn generate_data(&mut self) -> Result<Vec<DataBlock>> {
         if self.generated || self.hash_table.len() == 0 {
-            self.drop_states();
             return Ok(vec![]);
         }
         self.generated = true;
@@ -183,6 +202,8 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         let mut group_key_builder = self
             .method
             .keys_column_builder(state_groups_len, value_size);
+
+        // TODO use batch
         for group_entity in self.hash_table.iter() {
             let place = Into::<StateAddr>::into(*group_entity.get());
 
@@ -216,6 +237,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     const NAME: &'static str = "GroupByPartialTransform";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
+        self.input_rows += block.num_rows();
         let block = block.convert_to_full();
         // 1.1 and 1.2.
         let group_columns = Self::group_columns(&block, &self.params.group_columns);
@@ -275,9 +297,9 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>>
                     }
                 }
             }
-
-            self.hash_table.clear();
             drop(self.area.take());
+            drop(self.area_holder.take());
+            self.hash_table.clear();
             self.states_dropped = true;
         }
     }

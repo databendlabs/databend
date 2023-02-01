@@ -32,8 +32,10 @@ use common_hashtable::HashtableLike;
 use tracing::info;
 
 use super::estimated_key_size;
+use super::AggregateHashStateInfo;
 use crate::pipelines::processors::transforms::aggregator::aggregate_info::AggregateInfo;
 use crate::pipelines::processors::transforms::group_by::Area;
+use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
@@ -148,10 +150,11 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
     method: Method,
     params: Arc<AggregatorParams>,
     hash_table: Method::HashTable,
+    state_holders: Vec<Option<ArenaHolder>>,
 
     pub(crate) reach_limit: bool,
-    // used for deserialization only, so we can reuse it during the loop
-    temp_place: Option<StateAddr>,
+    // used for deserialization only if has agg, so we can reuse it during the loop
+    temp_place: StateAddr,
 }
 
 impl<const HAS_AGG: bool, Method> BucketAggregator<HAS_AGG, Method>
@@ -161,8 +164,8 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
         let mut area = Area::create();
         let hash_table = method.create_hash_table()?;
         let temp_place = match params.aggregate_functions.is_empty() {
-            true => None,
-            false => Some(params.alloc_layout(&mut area)),
+            true => StateAddr::new(0),
+            false => params.alloc_layout(&mut area),
         };
 
         Ok(Self {
@@ -171,15 +174,72 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             params,
             hash_table,
             reach_limit: false,
+            state_holders: Vec::with_capacity(16),
             temp_place,
         })
+    }
+
+    fn merge_partial_hashstates(&mut self, hashtable: &mut Method::HashTable) -> Result<()> {
+        if !HAS_AGG {
+            unsafe {
+                for key in hashtable.iter() {
+                    let _ = self.hash_table.insert_and_entry(key.key());
+                }
+                if let Some(limit) = self.params.limit {
+                    if self.hash_table.len() >= limit {
+                        return Ok(());
+                    }
+                }
+            }
+        } else {
+            let aggregate_functions = &self.params.aggregate_functions;
+            let offsets_aggregate_states = &self.params.offsets_aggregate_states;
+
+            for entry in hashtable.iter() {
+                let key = entry.key();
+                unsafe {
+                    match self.hash_table.insert(key) {
+                        Ok(e) => {
+                            // just set new places and the arena will be keeped in partial state
+                            e.write(*entry.get());
+                        }
+                        Err(place) => {
+                            // place already exists
+                            // that means we should merge the aggregation
+                            let place = StateAddr::new(*place);
+                            let old_place = StateAddr::new(*entry.get());
+
+                            for (idx, aggregate_function) in aggregate_functions.iter().enumerate()
+                            {
+                                let final_place = place.next(offsets_aggregate_states[idx]);
+                                let state_place = old_place.next(offsets_aggregate_states[idx]);
+                                aggregate_function.merge(final_place, state_place)?;
+                                aggregate_function.drop_state(state_place);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        hashtable.clear();
+        Ok(())
     }
 
     pub fn merge_blocks(&mut self, blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
         if blocks.is_empty() {
             return Ok(vec![]);
         }
-        for data_block in blocks {
+
+        for mut data_block in blocks {
+            if let Some(mut meta) = data_block.take_meta() {
+                if let Some(info) = meta.as_mut_any().downcast_mut::<AggregateHashStateInfo>() {
+                    let hashtable = info.hash_state.downcast_mut::<Method::HashTable>().unwrap();
+                    self.state_holders.push(info.state_holder.take());
+                    self.merge_partial_hashstates(hashtable)?;
+                    continue;
+                }
+            }
+
             let block = data_block.convert_to_full();
             // 1.1 and 1.2.
             let aggregate_function_len = self.params.aggregate_functions.len();
@@ -224,17 +284,15 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 
                 let aggregate_functions = &self.params.aggregate_functions;
                 let offsets_aggregate_states = &self.params.offsets_aggregate_states;
-                if let Some(temp_place) = self.temp_place {
-                    for (row, place) in places.iter() {
-                        for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
-                            let final_place = place.next(offsets_aggregate_states[idx]);
-                            let state_place = temp_place.next(offsets_aggregate_states[idx]);
 
-                            let mut data =
-                                unsafe { states_binary_columns[idx].index_unchecked(*row) };
-                            aggregate_function.deserialize(state_place, &mut data)?;
-                            aggregate_function.merge(final_place, state_place)?;
-                        }
+                for (row, place) in places.iter() {
+                    for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
+                        let final_place = place.next(offsets_aggregate_states[idx]);
+                        let state_place = self.temp_place.next(offsets_aggregate_states[idx]);
+
+                        let mut data = unsafe { states_binary_columns[idx].index_unchecked(*row) };
+                        aggregate_function.deserialize(state_place, &mut data)?;
+                        aggregate_function.merge(final_place, state_place)?;
                     }
                 }
             }
@@ -342,12 +400,8 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 
         places
     }
-}
 
-impl<const HAS_AGG: bool, Method> Drop for BucketAggregator<HAS_AGG, Method>
-where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
-{
-    fn drop(&mut self) {
+    fn drop_states(&mut self) {
         let aggregator_params = self.params.as_ref();
         let aggregate_functions = &aggregator_params.aggregate_functions;
         let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
@@ -374,11 +428,20 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             }
         }
 
-        if let Some(temp_place) = self.temp_place {
+        if HAS_AGG {
             for (state_offset, function) in state_offsets.iter().zip(functions.iter()) {
-                let place = temp_place.next(*state_offset);
+                let place = self.temp_place.next(*state_offset);
                 unsafe { function.drop_state(place) }
             }
         }
+        self.state_holders.clear();
+    }
+}
+
+impl<const HAS_AGG: bool, Method> Drop for BucketAggregator<HAS_AGG, Method>
+where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
+{
+    fn drop(&mut self) {
+        self.drop_states();
     }
 }

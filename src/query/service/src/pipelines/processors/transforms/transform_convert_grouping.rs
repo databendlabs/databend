@@ -37,6 +37,7 @@ use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
 
+use super::aggregator::AggregateHashStateInfo;
 use crate::pipelines::processors::transforms::aggregator::AggregateInfo;
 use crate::pipelines::processors::transforms::aggregator::BucketAggregator;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
@@ -101,6 +102,8 @@ struct InputPortState {
     bucket: isize,
 }
 
+/// A helper class that  Map
+/// AggregateInfo/AggregateHashStateInfo  --->  ConvertGroupingMetaInfo { meta: blocks with Option<AggregateHashStateInfo> }
 pub struct TransformConvertGrouping<Method: HashMethod + PolymorphicKeysHelper<Method>> {
     output: Arc<OutputPort>,
     inputs: Vec<InputPortState>,
@@ -186,11 +189,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
     }
 
     fn add_bucket(&mut self, data_block: DataBlock) -> isize {
-        let data_block_meta: Option<&AggregateInfo> = data_block
+        if let Some(info) = data_block
             .get_meta()
-            .and_then(|meta| meta.as_any().downcast_ref::<AggregateInfo>());
-
-        if let Some(info) = data_block_meta {
+            .and_then(|meta| meta.as_any().downcast_ref::<AggregateInfo>())
+        {
             if info.overflow.is_none() && info.bucket > SINGLE_LEVEL_BUCKET_NUM {
                 let bucket = info.bucket;
                 match self.buckets_blocks.entry(bucket) {
@@ -204,6 +206,23 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
 
                 return bucket;
             }
+        }
+
+        // check if it's local state
+        if let Some(info) = data_block
+            .get_meta()
+            .and_then(|meta| meta.as_any().downcast_ref::<AggregateHashStateInfo>())
+        {
+            let bucket = info.bucket as isize;
+            match self.buckets_blocks.entry(bucket) {
+                Entry::Vacant(v) => {
+                    v.insert(vec![data_block]);
+                }
+                Entry::Occupied(mut v) => {
+                    v.get_mut().push(data_block);
+                }
+            };
+            return bucket;
         }
 
         self.unsplitted_blocks.push(data_block);
@@ -505,9 +524,9 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
     fn process(&mut self) -> Result<()> {
         if let Some(mut data_block) = self.input_block.take() {
             let mut blocks = vec![];
-            if let Some(meta) = data_block.take_meta() {
-                if let Some(meta) = meta.as_any().downcast_ref::<ConvertGroupingMetaInfo>() {
-                    blocks.extend(meta.blocks.iter().cloned());
+            if let Some(mut meta) = data_block.take_meta() {
+                if let Some(meta) = meta.as_mut_any().downcast_mut::<ConvertGroupingMetaInfo>() {
+                    std::mem::swap(&mut blocks, &mut meta.blocks);
                 }
             }
 
