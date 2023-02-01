@@ -26,9 +26,12 @@ use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
 use poem::http::StatusCode;
 use poem::Addr;
+use poem::Body;
 use poem::Endpoint;
+use poem::IntoResponse;
 use poem::Middleware;
 use poem::Request;
+use poem::Response;
 use tracing::error;
 use tracing::info;
 
@@ -38,7 +41,6 @@ use crate::auth::Credential;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
-
 pub struct HTTPSessionMiddleware {
     pub kind: HttpHandlerKind,
     pub auth_manager: Arc<AuthMgr>,
@@ -154,7 +156,6 @@ pub struct HTTPSessionEndpoint<E> {
     pub kind: HttpHandlerKind,
     pub auth_manager: Arc<AuthMgr>,
 }
-
 impl<E> HTTPSessionEndpoint<E> {
     async fn auth(&self, req: &Request) -> Result<HttpQueryContext> {
         let credential = get_credential(req, self.kind)?;
@@ -173,10 +174,9 @@ impl<E> HTTPSessionEndpoint<E> {
         Ok(HttpQueryContext::new(session))
     }
 }
-
 #[poem::async_trait]
 impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
-    type Output = E::Output;
+    type Output = Response;
 
     async fn call(&self, mut req: Request) -> PoemResult<Self::Output> {
         // method, url, version, header
@@ -191,9 +191,19 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                 StatusCode::UNAUTHORIZED,
             )),
         };
-        if let Err(ref err) = res {
-            error!("http request error: {}", err);
-        };
-        res
+        match res {
+            Err(err) => {
+                error!("http request error: {}", err);
+                let body = Body::from_json(serde_json::json!({
+                    "error": {
+                        "code": err.status().as_str(),
+                        "message": err.to_string(),
+                    }
+                }))
+                .unwrap();
+                Ok(Response::builder().status(err.status()).body(body))
+            }
+            Ok(res) => Ok(res.into_response()),
+        }
     }
 }
