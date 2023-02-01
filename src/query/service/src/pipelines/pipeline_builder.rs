@@ -323,14 +323,23 @@ impl PipelineBuilder {
             None,
         )?;
 
+        let pass_state_to_final = self.enable_memory_efficient_aggregator(&params);
+
         self.main_pipeline.add_transform(|input, output| {
             TransformAggregator::try_create_partial(
                 AggregatorTransformParams::try_create(input, output, &params)?,
                 self.ctx.clone(),
+                pass_state_to_final,
             )
         })?;
 
         Ok(())
+    }
+
+    fn enable_memory_efficient_aggregator(&self, params: &Arc<AggregatorParams>) -> bool {
+        self.ctx.get_cluster().is_empty()
+            && !params.group_columns.is_empty()
+            && self.main_pipeline.output_len() > 1
     }
 
     fn build_aggregate_final(&mut self, aggregate: &AggregateFinal) -> Result<()> {
@@ -344,10 +353,7 @@ impl PipelineBuilder {
             aggregate.limit,
         )?;
 
-        if self.ctx.get_cluster().is_empty()
-            && !params.group_columns.is_empty()
-            && self.main_pipeline.output_len() > 1
-        {
+        if self.enable_memory_efficient_aggregator(&params) {
             return efficiently_memory_final_aggregator(params, &mut self.main_pipeline);
         }
 

@@ -32,6 +32,7 @@ fn test_array() {
     test_remove_first(file);
     test_remove_last(file);
     test_contains(file);
+    test_concat(file);
 }
 
 fn test_create(file: &mut impl Write) {
@@ -126,4 +127,26 @@ fn test_contains(file: &mut impl Write) {
         "nullable_col in (1, '9', 3, 10, 12, true, [1,2,3])",
         &columns,
     );
+}
+
+fn test_concat(file: &mut impl Write) {
+    run_ast(file, "concat([false, true], [1,2])", &[]);
+    run_ast(file, "concat([1,2,3], ['s', null])", &[]);
+
+    let columns = [
+        ("int8_col", Int8Type::from_data(vec![1i8, 2, 7, 8])),
+        (
+            "nullable_col",
+            Int64Type::from_data_with_validity(vec![9i64, 10, 11, 12], vec![
+                true, true, false, false,
+            ]),
+        ),
+    ];
+
+    run_ast(
+        file,
+        "concat([1, 2, 3, 4, 5, null], [nullable_col])",
+        &columns,
+    );
+    run_ast(file, "concat([1,2,null], [int8_col])", &columns);
 }

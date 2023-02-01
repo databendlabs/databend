@@ -495,3 +495,69 @@ evaluation (internal):
 +--------------+---------------------------------------------------------------------------+
 
 
+ast            : concat([false, true], [1,2])
+raw expr       : concat(array(false, true), array(1_u8, 2_u8))
+checked expr   : concat<T0=Variant><Array(T0), Array(T0)>(CAST(array<T0=Boolean><T0, T0>(false, true) AS Array(Variant)), CAST(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(Variant)))
+optimized expr : [false, true, 1, 2]
+output type    : Array(Variant)
+output domain  : [Undefined]
+output         : [false, true, 1, 2]
+
+
+ast            : concat([1,2,3], ['s', null])
+raw expr       : concat(array(1_u8, 2_u8, 3_u8), array("s", NULL))
+checked expr   : concat<T0=Variant NULL><Array(T0), Array(T0)>(CAST(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(Variant NULL)), CAST(array<T0=String NULL><T0, T0>(CAST("s" AS String NULL), CAST(NULL AS String NULL)) AS Array(Variant NULL)))
+optimized expr : [1, 2, 3, "s", NULL]
+output type    : Array(Variant NULL)
+output domain  : [Undefined ∪ {NULL}]
+output         : [1, 2, 3, "s", NULL]
+
+
+ast            : concat([1, 2, 3, 4, 5, null], [nullable_col])
+raw expr       : concat(array(1_u8, 2_u8, 3_u8, 4_u8, 5_u8, NULL), array(nullable_col::Int64 NULL))
+checked expr   : concat<T0=Int64 NULL><Array(T0), Array(T0)>(CAST(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(4_u8 AS UInt8 NULL), CAST(5_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)) AS Array(Int64 NULL)), array<T0=Int64 NULL><T0>(nullable_col))
+optimized expr : concat<T0=Int64 NULL><Array(T0), Array(T0)>([1_i64, 2_i64, 3_i64, 4_i64, 5_i64, NULL], array<T0=Int64 NULL><T0>(nullable_col))
+evaluation:
++--------+-------------------+---------------------------------------------------------+
+|        | nullable_col      | Output                                                  |
++--------+-------------------+---------------------------------------------------------+
+| Type   | Int64 NULL        | Array(Int64 NULL)                                       |
+| Domain | {9..=12} ∪ {NULL} | [{-9223372036854775808..=9223372036854775807} ∪ {NULL}] |
+| Row 0  | 9_i64             | [1_i64, 2_i64, 3_i64, 4_i64, 5_i64, NULL, 9_i64]        |
+| Row 1  | 10_i64            | [1_i64, 2_i64, 3_i64, 4_i64, 5_i64, NULL, 10_i64]       |
+| Row 2  | NULL              | [1_i64, 2_i64, 3_i64, 4_i64, 5_i64, NULL, NULL]         |
+| Row 3  | NULL              | [1_i64, 2_i64, 3_i64, 4_i64, 5_i64, NULL, NULL]         |
++--------+-------------------+---------------------------------------------------------+
+evaluation (internal):
++--------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column       | Data                                                                                                                                                                                                                                     |
++--------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| nullable_col | NullableColumn { column: Int64([9, 10, 11, 12]), validity: [0b____0011] }                                                                                                                                                                |
+| Output       | ArrayColumn { values: NullableColumn { column: Int64([1, 2, 3, 4, 5, 0, 9, 1, 2, 3, 4, 5, 0, 10, 1, 2, 3, 4, 5, 0, 0, 1, 2, 3, 4, 5, 0, 0]), validity: [0b11011111, 0b11101111, 0b11100111, 0b____0011] }, offsets: [0, 7, 14, 21, 28] } |
++--------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : concat([1,2,null], [int8_col])
+raw expr       : concat(array(1_u8, 2_u8, NULL), array(int8_col::Int8))
+checked expr   : concat<T0=Int16 NULL><Array(T0), Array(T0)>(CAST(array<T0=UInt8 NULL><T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)) AS Array(Int16 NULL)), CAST(array<T0=Int8><T0>(int8_col) AS Array(Int16 NULL)))
+optimized expr : concat<T0=Int16 NULL><Array(T0), Array(T0)>([1_i16, 2_i16, NULL], CAST(array<T0=Int8><T0>(int8_col) AS Array(Int16 NULL)))
+evaluation:
++--------+----------+-----------------------------+
+|        | int8_col | Output                      |
++--------+----------+-----------------------------+
+| Type   | Int8     | Array(Int16 NULL)           |
+| Domain | {1..=8}  | [{-32768..=32767} ∪ {NULL}] |
+| Row 0  | 1_i8     | [1_i16, 2_i16, NULL, 1_i16] |
+| Row 1  | 2_i8     | [1_i16, 2_i16, NULL, 2_i16] |
+| Row 2  | 7_i8     | [1_i16, 2_i16, NULL, 7_i16] |
+| Row 3  | 8_i8     | [1_i16, 2_i16, NULL, 8_i16] |
++--------+----------+-----------------------------+
+evaluation (internal):
++----------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column   | Data                                                                                                                                                                       |
++----------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| int8_col | Int8([1, 2, 7, 8])                                                                                                                                                         |
+| Output   | ArrayColumn { values: NullableColumn { column: Int16([1, 2, 0, 1, 1, 2, 0, 2, 1, 2, 0, 7, 1, 2, 0, 8]), validity: [0b10111011, 0b10111011] }, offsets: [0, 4, 8, 12, 16] } |
++----------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+

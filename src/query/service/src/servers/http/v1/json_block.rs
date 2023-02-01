@@ -14,8 +14,6 @@
 
 use std::sync::Arc;
 
-use bstr::ByteSlice;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Column;
 use common_expression::DataBlock;
@@ -57,10 +55,7 @@ pub fn block_to_json_value(
         for column in &columns {
             buf.clear();
             encoder.write_field(column, row_index, &mut buf, true);
-            row.push(serde_json::to_value(
-                buf.to_str()
-                    .map_err(|e| ErrorCode::BadBytes(format!("{}", e)))?,
-            )?);
+            row.push(serde_json::to_value(String::from_utf8_lossy(&buf))?);
         }
         res.push(row)
     }

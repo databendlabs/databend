@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use std::alloc::Layout;
+use std::fmt::Debug;
 use std::ptr::NonNull;
+use std::sync::Arc;
 
 use bumpalo::Bump;
 
@@ -32,3 +34,26 @@ impl Area {
 }
 
 unsafe impl Send for Area {}
+
+#[derive(Clone)]
+pub struct ArenaHolder {
+    _data: Arc<Option<Area>>,
+}
+
+impl ArenaHolder {
+    pub fn create(area: Option<Area>) -> ArenaHolder {
+        tracing::info!("Putting one arena into holder");
+        ArenaHolder {
+            _data: Arc::new(area),
+        }
+    }
+}
+
+impl Debug for ArenaHolder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ArenaHolder").finish()
+    }
+}
+
+unsafe impl Send for ArenaHolder {}
+unsafe impl Sync for ArenaHolder {}

@@ -26,5 +26,6 @@ pub use aggregator_keys_iter::KeysColumnIter;
 pub use aggregator_polymorphic_keys::PolymorphicKeysHelper;
 pub use aggregator_polymorphic_keys::TwoLevelHashMethod;
 pub use aggregator_state::Area;
+pub use aggregator_state::ArenaHolder;
 pub use aggregator_state_entity::StateEntityMutRef;
 pub use aggregator_state_entity::StateEntityRef;
