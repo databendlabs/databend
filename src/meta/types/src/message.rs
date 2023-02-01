@@ -44,11 +44,31 @@ pub enum RetryableError {
     ForwardToLeader { leader: NodeId },
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq)]
 pub struct JoinRequest {
     pub node_id: NodeId,
     pub endpoint: Endpoint,
+
+    #[serde(skip)]
+    #[deprecated(note = "it is listening addr, not advertise addr")]
     pub grpc_api_addr: String,
+
+    pub grpc_api_advertise_address: Option<String>,
+}
+
+impl JoinRequest {
+    pub fn new(
+        node_id: NodeId,
+        endpoint: Endpoint,
+        grpc_api_advertise_address: Option<impl ToString>,
+    ) -> Self {
+        Self {
+            node_id,
+            endpoint,
+            grpc_api_advertise_address: grpc_api_advertise_address.map(|x| x.to_string()),
+            ..Default::default()
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
