@@ -353,7 +353,9 @@ impl StringColumnBuilder {
         );
     }
 
-    pub fn build(self) -> StringColumn {
+    pub fn build(mut self) -> StringColumn {
+        self.data.shrink_to_fit();
+
         StringColumn {
             data: self.data.into(),
             offsets: self.offsets.into(),
