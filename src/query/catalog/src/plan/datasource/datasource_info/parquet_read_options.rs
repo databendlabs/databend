@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::Scalar;
-
 #[derive(serde::Serialize, serde::Deserialize, Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ParquetReadOptions {
     /// Prune row groups before reading. Require Chunk level statistics.
@@ -109,78 +105,9 @@ impl Default for ParquetReadOptions {
         ParquetReadOptions {
             do_prewhere: true,
             prune_row_groups: true,
-            prune_pages: false,
+            prune_pages: true,
             push_down_bitmap: false,
             // refresh_meta_cache: false,
         }
-    }
-}
-
-/// Convert ReadOptions into tuples.
-impl From<ParquetReadOptions> for Vec<Scalar> {
-    fn from(value: ParquetReadOptions) -> Self {
-        vec![
-            make_pair("prune_row_groups", value.prune_row_groups),
-            make_pair("prune_pages", value.prune_pages),
-            make_pair("do_prewhere", value.do_prewhere),
-            make_pair("push_down_bitmap", value.push_down_bitmap),
-            // make_pair("refresh_meta_cache", value.refresh_meta_cache),
-        ]
-    }
-}
-
-fn make_pair(name: &str, value: bool) -> Scalar {
-    Scalar::Tuple(vec![
-        Scalar::String(name.to_string().into_bytes()),
-        Scalar::Boolean(value),
-    ])
-}
-
-impl TryFrom<&[Scalar]> for ParquetReadOptions {
-    type Error = ErrorCode;
-    fn try_from(values: &[Scalar]) -> Result<Self> {
-        let mut opts = ParquetReadOptions::default();
-        for value in values {
-            let (name, v) = get_boolean_option(value)?;
-            opts = match name {
-                b"prune_row_groups" => opts.with_prune_row_groups(v),
-                b"prune_pages" => opts.with_prune_pages(v),
-                b"do_prewhere" => opts.with_do_prewhere(v),
-                b"push_down_bitmap" => opts.with_push_down_bitmap(v),
-                // b"refresh_meta_cache" => opts.with_refresh_meta_cache(v),
-                _ => {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "Unknown option: {}",
-                        String::from_utf8(name.to_vec())?
-                    )));
-                }
-            };
-        }
-
-        Ok(opts)
-    }
-}
-
-fn get_boolean_option(pair: &Scalar) -> Result<(&[u8], bool)> {
-    match pair {
-        Scalar::Tuple(p) => {
-            if p.len() != 2 {
-                return Err(ErrorCode::BadArguments(format!(
-                    "expect a pair of (string, bool), found: {:?}",
-                    pair,
-                )));
-            }
-            match (&p[0], &p[1]) {
-                (Scalar::String(name), Scalar::Boolean(value)) => Ok((name, *value)),
-                (_, _) => Err(ErrorCode::BadArguments(format!(
-                    "expect a pair of (string, bool), found: {:?}",
-                    pair,
-                ))),
-            }
-        }
-        _ => Err(ErrorCode::BadArguments(format!(
-            "expect a pair of (string, bool), found: {:?}",
-            pair,
-        ))),
     }
 }

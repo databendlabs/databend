@@ -358,17 +358,14 @@ impl Binder {
                         .map(|x| x.path)
                         .collect();
 
-                    let table = Arc::new(
-                        ParquetTable::create(
-                            table_id,
-                            op,
-                            files,
-                            Default::default(),
-                            Some(user_stage_info.clone()),
-                        )
-                        .await?,
+                    let table = ParquetTable::create(
+                        table_id,
+                        op,
+                        files,
+                        Default::default(),
+                        Some(user_stage_info.clone()),
                     )
-                    .as_table();
+                    .await?;
 
                     let table_alias_name = if let Some(table_alias) = alias {
                         Some(
