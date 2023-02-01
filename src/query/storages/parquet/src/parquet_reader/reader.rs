@@ -21,7 +21,9 @@ use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::schema_projection as ap;
 use common_base::base::tokio;
+use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
@@ -31,7 +33,25 @@ use opendal::Operator;
 use crate::parquet_part::ParquetRowGroupPart;
 use crate::parquet_table::arrow_to_table_schema;
 
+pub struct DataReader {
+    bytes: usize,
+    inner: Box<dyn std::io::Read + Sync + Send>,
+}
+
+impl DataReader {
+    pub fn new(inner: Box<dyn std::io::Read + Sync + Send>, bytes: usize) -> Self {
+        Self { inner, bytes }
+    }
+
+    pub fn read_to_end(&mut self) -> Result<Vec<u8>> {
+        let mut data = Vec::with_capacity(self.bytes);
+        self.inner.read_to_end(&mut data)?;
+        Ok(data)
+    }
+}
+
 pub type IndexedChunk = (usize, Vec<u8>);
+pub type IndexedReaders = HashMap<usize, DataReader>;
 
 /// The reader to parquet files with a projected schema.
 ///
@@ -147,6 +167,68 @@ impl ParquetReader {
             projected_column_descriptors,
             columns_to_read,
         ))
+    }
+
+    pub fn read_from_readers(&self, readers: &mut IndexedReaders) -> Result<Vec<IndexedChunk>> {
+        let mut chunks = Vec::with_capacity(self.columns_to_read.len());
+
+        for index in &self.columns_to_read {
+            let reader = readers.get_mut(index).unwrap();
+            let data = reader.read_to_end()?;
+
+            chunks.push((*index, data));
+        }
+
+        Ok(chunks)
+    }
+
+    pub fn readers_from_blocking_io(&self, part: PartInfoPtr) -> Result<IndexedReaders> {
+        let part = ParquetRowGroupPart::from_part(&part)?;
+
+        let mut readers: HashMap<usize, DataReader> =
+            HashMap::with_capacity(self.columns_to_read.len());
+
+        for index in &self.columns_to_read {
+            let obj = self.operator.object(&part.location);
+            let meta = &part.column_metas[index];
+            let reader = obj.blocking_range_reader(meta.offset..meta.offset + meta.length)?;
+            readers.insert(
+                *index,
+                DataReader::new(Box::new(reader), meta.length as usize),
+            );
+        }
+        Ok(readers)
+    }
+
+    pub async fn readers_from_non_blocking_io(&self, part: PartInfoPtr) -> Result<IndexedReaders> {
+        use backon::ExponentialBackoff;
+        use backon::Retryable;
+
+        let part = ParquetRowGroupPart::from_part(&part)?;
+
+        let mut join_handlers = Vec::with_capacity(self.columns_to_read.len());
+        let obj = self.operator.object(&part.location);
+
+        for index in self.columns_to_read.iter() {
+            let meta = &part.column_metas[index];
+            let obj = obj.clone();
+            let (offset, length) = (meta.offset, meta.length);
+
+            join_handlers.push(async move {
+                let data = { || async { obj.range_read(offset..offset + length).await } }
+                    .retry(ExponentialBackoff::default())
+                    .when(|err| err.is_temporary())
+                    .await?;
+                Ok::<_, ErrorCode>((
+                    *index,
+                    DataReader::new(Box::new(std::io::Cursor::new(data)), length as usize),
+                ))
+            });
+        }
+
+        let res = futures::future::try_join_all(join_handlers).await?;
+
+        Ok(res.into_iter().collect())
     }
 
     /// Read columns data of one row group.
