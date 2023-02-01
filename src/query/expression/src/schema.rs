@@ -281,8 +281,6 @@ impl TableSchema {
         let mut new_fields = Vec::with_capacity(fields.len());
 
         for field in fields {
-            // assert all field column id has not been inited.
-            assert!(field.column_id() == 0);
             let new_field = field.build_column_id(&mut new_next_column_id);
             // check next_column_id value cannot fallback
             assert!(new_next_column_id >= new_field.column_id());
