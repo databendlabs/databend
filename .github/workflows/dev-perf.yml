@@ -16,9 +16,13 @@ on:
       - "scripts/setup/**"
       - "docker/**"
       - ".devcontainer/**"
-  schedule:
-    # Run base perf at 08:00 UTC+8
-    - cron: "0 0 * * *"
+  # schedule:
+  #   # Run base perf at 08:00 UTC+8
+  #   - cron: "0 0 * * *"
+
+permissions:
+  pull-requests: write
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
@@ -79,14 +83,31 @@ jobs:
             --storage-s3-root "perf/data/${{ github.run_id }}" \
             --tenant-id perf \
             --cluster-id "${{ github.run_id }}" \
-            --log-level=ERROR &
+            --storage-allow-insecure &
           echo "Waiting on databend-query 10 seconds..."
           python3 scripts/ci/wait_tcp.py --timeout 5 --port 3307
       - name: Setup BendSQL
         run: |
-          curl -fsSLo ./bendsql.tar.gz https://github.com/databendcloud/bendsql/releases/download/v0.2.1/bendsql-linux-amd64.tar.gz
+          curl -fsSLo ./bendsql.tar.gz https://github.com/databendcloud/bendsql/releases/download/v0.2.3/bendsql-linux-amd64.tar.gz
           tar -xvzf ./bendsql.tar.gz
           chmod +x ./linux-amd64/bendsql
           sudo cp ./linux-amd64/bendsql /usr/local/bin/bendsql
           bendsql version
           bendsql connect
+      - name: Load Data
+        run: |
+          ./scripts/benchmark/hits/load.sh
+      - name: Run Benchmark
+        run: |
+          mkdir -p /tmp/databend-perf/
+          bensql benchmark \
+            --test-dir ./scripts/benchmark/query/benchmarks/ \
+            --output-format json,md \
+            --output-dir /tmp/databend-perf/ \
+            --size 'c5.4xlarge' \
+      - name: Comment on PR
+        uses: everpcpc/comment-on-pr-action@v1
+        with:
+          token: ${{ inputs.github_token }}
+          identifier: benchmark.hits
+          files: /tmp/databend-perf/hits.md
