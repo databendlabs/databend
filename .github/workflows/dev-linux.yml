@@ -242,6 +242,9 @@ jobs:
     runs-on: [self-hosted, X64, Linux, dev]
     steps:
       - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/build_linux_hive
         with:
           target: x86_64-unknown-linux-gnu
