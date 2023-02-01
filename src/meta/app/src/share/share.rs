@@ -666,13 +666,7 @@ pub struct ShareSpec {
 }
 
 mod kvapi_key_impl {
-    use common_meta_kvapi::check_segment;
-    use common_meta_kvapi::check_segment_absent;
-    use common_meta_kvapi::check_segment_present;
-    use common_meta_kvapi::decode_id;
-    use common_meta_kvapi::escape;
     use common_meta_kvapi::kvapi;
-    use common_meta_kvapi::unescape;
 
     use crate::share::ShareAccountNameIdent;
     use crate::share::ShareGrantObject;
@@ -702,28 +696,22 @@ mod kvapi_key_impl {
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut elts = s.split('/');
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-            let prefix = check_segment_present(elts.next(), 0, s)?;
-            check_segment(prefix, 0, Self::PREFIX)?;
+            let kind = p.next_raw()?;
+            let id = p.next_u64()?;
+            p.done()?;
 
-            let kind = check_segment_present(elts.next(), 1, s)?;
-            if kind != "db" && kind != "table" {
+            if kind == "db" {
+                Ok(ShareGrantObject::Database(id))
+            } else if kind == "table" {
+                Ok(ShareGrantObject::Table(id))
+            } else {
                 return Err(kvapi::KeyError::InvalidSegment {
                     i: 1,
                     expect: "db or table".to_string(),
                     got: kind.to_string(),
                 });
-            }
-
-            let id = decode_id(check_segment_present(elts.next(), 2, s)?)?;
-
-            check_segment_absent(elts.next(), 3, s)?;
-
-            if kind == "db" {
-                Ok(ShareGrantObject::Database(id))
-            } else {
-                Ok(ShareGrantObject::Table(id))
             }
         }
     }
@@ -733,28 +721,18 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_SHARE;
 
         fn to_string_key(&self) -> String {
-            format!(
-                "{}/{}/{}",
-                Self::PREFIX,
-                escape(&self.tenant),
-                escape(&self.share_name),
-            )
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_str(&self.tenant)
+                .push_str(&self.share_name)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut elts = s.split('/');
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-            let prefix = check_segment_present(elts.next(), 0, s)?;
-            check_segment(prefix, 0, Self::PREFIX)?;
-
-            let tenant = check_segment_present(elts.next(), 1, s)?;
-
-            let share_name = check_segment_present(elts.next(), 2, s)?;
-
-            check_segment_absent(elts.next(), 3, s)?;
-
-            let tenant = unescape(tenant)?;
-            let share_name = unescape(share_name)?;
+            let tenant = p.next_str()?;
+            let share_name = p.next_str()?;
+            p.done()?;
 
             Ok(ShareNameIdent { tenant, share_name })
         }
@@ -769,14 +747,10 @@ mod kvapi_key_impl {
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut elts = s.split('/');
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-            let prefix = check_segment_present(elts.next(), 0, s)?;
-            check_segment(prefix, 0, Self::PREFIX)?;
-
-            let share_id = decode_id(check_segment_present(elts.next(), 1, s)?)?;
-
-            check_segment_absent(elts.next(), 2, s)?;
+            let share_id = p.next_u64()?;
+            p.done()?;
 
             Ok(ShareId { share_id })
         }
@@ -788,30 +762,23 @@ mod kvapi_key_impl {
 
         fn to_string_key(&self) -> String {
             if self.share_id != 0 {
-                format!(
-                    "{}/{}/{}",
-                    Self::PREFIX,
-                    escape(&self.account),
-                    self.share_id,
-                )
+                kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                    .push_str(&self.account)
+                    .push_u64(self.share_id)
+                    .done()
             } else {
-                format!("{}/{}/", Self::PREFIX, escape(&self.account),)
+                kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                    .push_str(&self.account)
+                    .done()
             }
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut elts = s.split('/');
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-            let prefix = check_segment_present(elts.next(), 0, s)?;
-            check_segment(prefix, 0, Self::PREFIX)?;
-
-            let account = check_segment_present(elts.next(), 1, s)?;
-
-            let share_id = decode_id(check_segment_present(elts.next(), 2, s)?)?;
-
-            check_segment_absent(elts.next(), 3, s)?;
-
-            let account = unescape(account)?;
+            let account = p.next_str()?;
+            let share_id = p.next_u64()?;
+            p.done()?;
 
             Ok(ShareAccountNameIdent { account, share_id })
         }
@@ -826,15 +793,10 @@ mod kvapi_key_impl {
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut elts = s.split('/');
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-            let prefix = check_segment_present(elts.next(), 0, s)?;
-            check_segment(prefix, 0, Self::PREFIX)?;
-
-            let share_id = check_segment_present(elts.next(), 1, s)?;
-            let share_id = decode_id(share_id)?;
-
-            check_segment_absent(elts.next(), 2, s)?;
+            let share_id = p.next_u64()?;
+            p.done()?;
 
             Ok(ShareIdToName { share_id })
         }
