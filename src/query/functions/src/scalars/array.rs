@@ -41,6 +41,7 @@ use common_expression::vectorize_with_builder_2_arg;
 use common_expression::vectorize_with_builder_3_arg;
 use common_expression::with_number_mapped_type;
 use common_expression::Column;
+use common_expression::ColumnBuilder;
 use common_expression::Domain;
 use common_expression::Function;
 use common_expression::FunctionDomain;
@@ -301,6 +302,32 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
         ),
+    );
+
+    registry.register_2_arg_core::<GenericType<0>, ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
+        "prepend",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        vectorize_2_arg::<GenericType<0>, ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(|val, arr, _| {
+            let data_type = arr.data_type();
+            let mut builder = ColumnBuilder::with_capacity(&data_type, arr.len() + 1);
+            builder.push(val);
+            builder.append_column(&arr);
+            builder.build()
+        }),
+    );
+
+    registry.register_2_arg_core::<ArrayType<GenericType<0>>, GenericType<0>, ArrayType<GenericType<0>>, _, _>(
+        "append",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        vectorize_2_arg::<ArrayType<GenericType<0>>, GenericType<0>, ArrayType<GenericType<0>>>(|arr, val, _| {
+            let data_type = arr.data_type();
+            let mut builder = ColumnBuilder::with_capacity(&data_type, arr.len() + 1);
+            builder.append_column(&arr);
+            builder.push(val);
+            builder.build()
+        }),
     );
 
     fn eval_contains<T: ArgType>(

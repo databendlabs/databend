@@ -39,6 +39,7 @@ and(Boolean, Boolean) :: Boolean
 and(Boolean NULL, Boolean NULL) :: Boolean NULL
 and_filters(Boolean, Boolean) :: Boolean
 and_filters(Boolean NULL, Boolean NULL) :: Boolean NULL
+append(Array(T0), T0) :: Array(T0)
 array() :: Array(Nothing)
 as_array(Variant) :: Variant NULL
 as_array(Variant NULL) :: Variant NULL
@@ -2127,6 +2128,7 @@ position(String, String) :: UInt64
 position(String NULL, String NULL) :: UInt64 NULL
 pow(Float64, Float64) :: Float64
 pow(Float64 NULL, Float64 NULL) :: Float64 NULL
+prepend(T0, Array(T0)) :: Array(T0)
 quote(String) :: String
 quote(String NULL) :: String NULL
 radians(Float64) :: Float64

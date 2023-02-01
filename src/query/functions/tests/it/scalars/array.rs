@@ -33,6 +33,8 @@ fn test_array() {
     test_remove_last(file);
     test_contains(file);
     test_concat(file);
+    test_prepend(file);
+    test_append(file);
 }
 
 fn test_create(file: &mut impl Write) {
@@ -81,6 +83,11 @@ fn test_slice(file: &mut impl Write) {
     run_ast(file, "slice(['a', 'b', 'c', 'd'], 0, 2)", &[]);
     run_ast(file, "slice(['a', 'b', 'c', 'd'], 1, 4)", &[]);
     run_ast(file, "slice(['a', 'b', 'c', 'd'], 2, 6)", &[]);
+    run_ast(file, "slice([a, b, c], 1, 2)", &[
+        ("a", Int16Type::from_data(vec![0i16, 1, 2])),
+        ("b", Int16Type::from_data(vec![3i16, 4, 5])),
+        ("c", Int16Type::from_data(vec![7i16, 8, 9])),
+    ]);
 }
 
 fn test_remove_first(file: &mut impl Write) {
@@ -89,6 +96,10 @@ fn test_remove_first(file: &mut impl Write) {
     run_ast(file, "remove_first([0, 1, 2, NULL])", &[]);
     run_ast(file, "remove_first([0, 1, 2, 3])", &[]);
     run_ast(file, "remove_first(['a', 'b', 'c', 'd'])", &[]);
+    run_ast(file, "remove_first([a, b])", &[
+        ("a", Int16Type::from_data(vec![0i16, 1, 2])),
+        ("b", Int16Type::from_data(vec![3i16, 4, 5])),
+    ]);
 }
 
 fn test_remove_last(file: &mut impl Write) {
@@ -97,6 +108,10 @@ fn test_remove_last(file: &mut impl Write) {
     run_ast(file, "remove_last([0, 1, 2, NULL])", &[]);
     run_ast(file, "remove_last([0, 1, 2, 3])", &[]);
     run_ast(file, "remove_last(['a', 'b', 'c', 'd'])", &[]);
+    run_ast(file, "remove_last([a, b])", &[
+        ("a", Int16Type::from_data(vec![0i16, 1, 2])),
+        ("b", Int16Type::from_data(vec![3i16, 4, 5])),
+    ]);
 }
 
 fn test_contains(file: &mut impl Write) {
@@ -149,4 +164,26 @@ fn test_concat(file: &mut impl Write) {
         &columns,
     );
     run_ast(file, "concat([1,2,null], [int8_col])", &columns);
+}
+
+fn test_prepend(file: &mut impl Write) {
+    run_ast(file, "prepend(1, [])", &[]);
+    run_ast(file, "prepend(1, [2, 3, NULL, 4])", &[]);
+    run_ast(file, "prepend('a', ['b', NULL, NULL, 'c', 'd'])", &[]);
+    run_ast(file, "prepend(a, [b, c])", &[
+        ("a", Int16Type::from_data(vec![0i16, 1, 2])),
+        ("b", Int16Type::from_data(vec![3i16, 4, 5])),
+        ("c", Int16Type::from_data(vec![6i16, 7, 8])),
+    ]);
+}
+
+fn test_append(file: &mut impl Write) {
+    run_ast(file, "append([], 1)", &[]);
+    run_ast(file, "append([2, 3, NULL, 4], 5)", &[]);
+    run_ast(file, "append(['b', NULL, NULL, 'c', 'd'], 'e')", &[]);
+    run_ast(file, "append([b, c], a)", &[
+        ("a", Int16Type::from_data(vec![0i16, 1, 2])),
+        ("b", Int16Type::from_data(vec![3i16, 4, 5])),
+        ("c", Int16Type::from_data(vec![6i16, 7, 8])),
+    ]);
 }
