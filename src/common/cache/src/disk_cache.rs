@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::boxed::Box;
 use std::fs;
 use std::fs::File;
 use std::hash::Hash;
@@ -21,8 +20,6 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::path::PathBuf;
 
-use filetime::set_file_times;
-use filetime::FileTime;
 use siphasher::sip128;
 use siphasher::sip128::Hasher128;
 use tracing::error;
@@ -34,40 +31,27 @@ use crate::FileSize;
 use crate::LruCache;
 
 // TODO doc the disk cache path layout
-// TODO extract new type CacheKey
 // TODO checksum of cached data
 
 /// Return an iterator of `(path, size)` of files under `path` sorted by ascending last-modified
 /// time, such that the oldest modified file is returned first.
-fn get_all_files<P: AsRef<Path>>(path: P) -> Box<dyn Iterator<Item = (PathBuf, u64)>> {
-    let mut files: Vec<_> = WalkDir::new(path.as_ref())
-        .into_iter()
-        .filter_map(|e| {
-            e.ok().and_then(|f| {
-                // Only look at files
-                if f.file_type().is_file() {
-                    // Get the last-modified time, size, and the full path.
-                    f.metadata().ok().and_then(|m| {
-                        m.modified()
-                            .ok()
-                            .map(|mtime| (mtime, f.path().to_owned(), m.len()))
-                    })
-                } else {
-                    None
-                }
-            })
+fn get_all_files<P: AsRef<Path>>(path: P) -> impl Iterator<Item = (PathBuf, u64)> {
+    WalkDir::new(path.as_ref()).into_iter().filter_map(|e| {
+        e.ok().and_then(|f| {
+            // Only look at files
+            if f.file_type().is_file() {
+                f.metadata().ok().map(|m| (f.path().to_owned(), m.len()))
+            } else {
+                None
+            }
         })
-        .collect();
-    // Sort by last-modified-time, so oldest file first.
-    files.sort_by_key(|k| k.0);
-    Box::new(files.into_iter().map(|(_mtime, path, size)| (path, size)))
+    })
 }
 
 /// An LRU cache of files on disk.
 pub type LruDiskCache = DiskCache<LruCache<String, u64, DefaultHashBuilder, FileSize>>;
 
 /// An basic disk cache of files on disk.
-// pub struct DiskCache<C, S: BuildHasher + Clone = DefaultHashBuilder>
 pub struct DiskCache<C> {
     cache: C,
     root: PathBuf,
@@ -132,6 +116,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
 
     /// Scan `self.root` for existing files and store them.
     fn init(mut self) -> Result<Self> {
+        eprintln!("INIT>>>>");
         fs::create_dir_all(&self.root)?;
         for (file, size) in get_all_files(&self.root) {
             if !self.can_store(size) {
@@ -147,9 +132,8 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
                         .cache
                         .pop_by_policy()
                         .expect("Unexpectedly empty cache!");
+                    // FIX ME, this path is not right :)
                     let remove_path = self.rel_to_abs_path(&rel_path);
-                    // TODO: check that files are removable during `init`, so that this is only
-                    // due to outside interference.
                     fs::remove_file(&remove_path).unwrap_or_else(|e| {
                         panic!("Error removing file from cache: `{:?}`: {}", remove_path, e)
                     });
@@ -169,10 +153,17 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
         size <= self.cache.capacity()
     }
 
-    pub fn recovery_from(relative_path: &Path) -> String {
-        let key_string = match relative_path.as_os_str().to_str() {
-            Some(str) => str.to_owned(),
+    fn recovery_from(relative_path: &Path) -> String {
+        let key_string = match relative_path.file_name() {
+            Some(file_name) => match file_name.to_str() {
+                Some(str) => str.to_owned(),
+                None => {
+                    // relative_path is constructed by ourself, and shall be valid utf8 string
+                    unreachable!()
+                }
+            },
             None => {
+                // only called during init, and only path of files are passed in
                 unreachable!()
             }
         };
@@ -225,12 +216,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
         self.cache
             .get(&cache_key.0)
             .ok_or(Error::FileNotInCache)
-            .and_then(|_| {
-                // TODO do we need to adjust the mtime, cross reboot?
-                let t = FileTime::now();
-                set_file_times(&path, t, t)?;
-                File::open(path).map_err(Into::into)
-            })
+            .and_then(|_len| File::open(path).map_err(Into::into))
     }
 
     /// Remove the given key from the cache.

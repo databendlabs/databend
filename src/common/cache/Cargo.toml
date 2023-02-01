@@ -18,7 +18,6 @@ amortized = ["ritelinked/ahash-amortized", "ritelinked/inline-more-amortized"]
 
 # Crates.io dependencies
 #crc32fast = "1.3.2"
-filetime = "0.2.15"
 hex = "0.4.3"
 ritelinked = { version = "0.3.2", default-features = false, features = ["ahash", "inline-more"] }
 siphasher = "0.3.10"
