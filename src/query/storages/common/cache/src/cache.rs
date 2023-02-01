@@ -40,10 +40,8 @@ mod impls {
     use crate::cache::CacheAccessor;
     use crate::cache::StorageCache;
 
-    impl<'a, V, C> CacheAccessor<String, V> for Arc<RwLock<C>>
-    where
-        C: StorageCache<String, V, CachedItem = Arc<V>>,
-        Self: 'a,
+    impl<V, C> CacheAccessor<String, V> for Arc<RwLock<C>>
+    where C: StorageCache<String, V, CachedItem = Arc<V>>
     {
         fn get(&self, k: &str) -> Option<C::CachedItem> {
             let mut guard = self.write();
@@ -61,8 +59,8 @@ mod impls {
         }
     }
 
-    impl<V, C> CacheAccessor<String, V> for Option<Arc<RwLock<C>>>
-    where C: StorageCache<String, V, CachedItem = Arc<V>>
+    impl<V, C> CacheAccessor<String, V> for Option<C>
+    where C: CacheAccessor<String, V>
     {
         fn get(&self, k: &str) -> Option<Arc<V>> {
             self.as_ref().and_then(|cache| cache.get(k))

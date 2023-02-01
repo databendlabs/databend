@@ -21,34 +21,30 @@ use common_exception::Result;
 use parking_lot::RwLock;
 use tracing::error;
 
-use crate::cache::StorageCache;
+use crate::CacheAccessor;
 
-pub type DiskBytesCache = Arc<RwLock<DiskCache>>;
+#[derive(Clone)]
+pub struct DiskBytesCache {
+    inner: Arc<RwLock<DiskCache>>,
+}
 
 pub struct DiskCacheBuilder;
 impl DiskCacheBuilder {
     pub fn new_disk_cache(path: &str, capacity: u64) -> Result<DiskBytesCache> {
         let cache = DiskCache::new(path, capacity)
             .map_err(|e| ErrorCode::StorageOther(format!("create disk cache failed, {e}")))?;
-        Ok(Arc::new(RwLock::new(cache)))
+        let inner = Arc::new(RwLock::new(cache));
+        Ok(DiskBytesCache { inner })
     }
 }
 
-impl StorageCache<String, Vec<u8>> for DiskCache {
-    type Meter = ();
-    type CachedItem = Arc<Vec<u8>>;
-
-    // TODO change this signature, takes &[u8]
-    fn put(&mut self, key: String, value: Arc<Vec<u8>>) {
-        if let Err(e) = self.insert_bytes(key, &value) {
-            error!("populate disk cache failed {}", e);
-        }
-    }
-
-    // TODO change this signature, remove that Arc
-    fn get(&mut self, k: &str) -> Option<Arc<Vec<u8>>> {
-        let mut read_file = || {
-            let mut file = self.get_file(k)?;
+impl CacheAccessor<String, Vec<u8>> for DiskBytesCache {
+    fn get(&self, k: &str) -> Option<Arc<Vec<u8>>> {
+        let read_file = || {
+            let mut file = {
+                let mut inner = self.inner.write();
+                inner.get_file(k)?
+            };
             let mut v = vec![];
             file.read_to_end(&mut v)?;
             Ok::<_, Box<dyn std::error::Error>>(v)
@@ -57,14 +53,26 @@ impl StorageCache<String, Vec<u8>> for DiskCache {
         match read_file() {
             Ok(bytes) => Some(Arc::new(bytes)),
             Err(e) => {
-                error!("get disk cache item failed {}", e);
+                error!("get disk cache item failed, {}", e);
                 None
             }
         }
     }
 
-    fn evict(&mut self, k: &str) -> bool {
-        if let Err(e) = self.remove(k) {
+    fn put(&self, k: String, v: Arc<Vec<u8>>) {
+        if let Err(e) = {
+            let mut inner = self.inner.write();
+            inner.insert_bytes(k, &v)
+        } {
+            error!("populate disk cache failed {}", e);
+        }
+    }
+
+    fn evict(&self, k: &str) -> bool {
+        if let Err(e) = {
+            let mut inner = self.inner.write();
+            inner.remove(k)
+        } {
             error!("evict disk cache item failed {}", e);
             false
         } else {

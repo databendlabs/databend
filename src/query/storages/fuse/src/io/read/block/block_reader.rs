@@ -170,8 +170,8 @@ impl BlockReader {
 
     pub fn support_blocking_api(&self) -> bool {
         // TODO for testing purpose only, remove this in the final PR
-        let force_async = std::env::var("DATABEND_DEBUG_FORCE_ASYNC_READ").is_ok();
-        force_async && self.operator.metadata().can_blocking()
+        let revert_sync_read = std::env::var("DATABEND_DEBUG_REVERT_SYNC_READ").is_ok();
+        revert_sync_read && self.operator.metadata().can_blocking()
     }
 
     /// This is an optimized for data read, works like the Linux kernel io-scheduler IO merging.
@@ -314,14 +314,14 @@ impl BlockReader {
         }
 
         let mut ranges = vec![];
-        let cache_manager = CacheManager::instance().get_block_data_cache();
+        let block_data_cache = CacheManager::instance().get_block_data_cache();
         let mut data_from_cache = vec![];
         for column_id in self.project_indices.keys() {
             // TODO encapsulate this in another component
             let column_cache_key = format!("{location}-{column_id}");
             let cache_name = "data_block_cache";
             metrics_inc_cache_access_count(1, cache_name);
-            if let Some(cached_column_raw_data) = cache_manager.get(&column_cache_key) {
+            if let Some(cached_column_raw_data) = block_data_cache.get(&column_cache_key) {
                 metrics_inc_cache_hit_count(1, cache_name);
                 data_from_cache.push((*column_id as ColumnId, cached_column_raw_data));
             } else {
