@@ -20,7 +20,6 @@ use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::schema_projection as ap;
-use common_base::base::tokio;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
 use common_exception::ErrorCode;
@@ -115,10 +114,6 @@ impl ParquetReader {
             projected_column_nodes,
             projected_column_descriptors,
         }))
-    }
-
-    pub fn output_schema(&self) -> &DataSchema {
-        &self.output_schema
     }
 
     /// Project the schema and get the needed column leaves.
@@ -229,46 +224,5 @@ impl ParquetReader {
         let res = futures::future::try_join_all(join_handlers).await?;
 
         Ok(res.into_iter().collect())
-    }
-
-    /// Read columns data of one row group.
-    pub fn sync_read_columns(&self, part: &ParquetRowGroupPart) -> Result<Vec<IndexedChunk>> {
-        let mut chunks = Vec::with_capacity(self.columns_to_read.len());
-
-        for index in &self.columns_to_read {
-            let obj = self.operator.object(&part.location);
-            // in `read_parquet` function, there is no `TableSchema`, so index treated as column id
-            let meta = &part.column_metas[index];
-            let chunk = obj.blocking_range_read(meta.offset..meta.offset + meta.length)?;
-
-            chunks.push((*index, chunk));
-        }
-
-        Ok(chunks)
-    }
-
-    /// Read columns data of one row group (but async).
-    pub async fn read_columns(&self, part: &ParquetRowGroupPart) -> Result<Vec<IndexedChunk>> {
-        let mut chunks = Vec::with_capacity(self.columns_to_read.len());
-
-        for &index in &self.columns_to_read {
-            // in `read_parquet` function, there is no `TableSchema`, so index treated as column id
-            let meta = &part.column_metas[&index];
-            let obj = self.operator.object(&part.location);
-            let range = meta.offset..meta.offset + meta.length;
-            chunks.push(async move {
-                tokio::spawn(async move { obj.range_read(range).await.map(|chunk| (index, chunk)) })
-                    .await
-                    .unwrap()
-            });
-        }
-
-        let chunks = futures::future::try_join_all(chunks).await?;
-        Ok(chunks)
-    }
-
-    #[inline]
-    pub fn support_blocking(&self) -> bool {
-        self.operator.metadata().can_blocking()
     }
 }

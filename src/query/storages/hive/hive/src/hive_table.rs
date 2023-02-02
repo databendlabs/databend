@@ -312,7 +312,7 @@ impl HiveTable {
         ) {
             (true, _) | (_, None) => {
                 let projection =
-                    PushDownInfo::projection_of_push_downs(&plan.table_schema(), &plan.push_downs);
+                    PushDownInfo::projection_of_push_downs(&plan.schema(), &plan.push_downs);
                 HiveBlockReader::create(
                     self.dal.clone(),
                     self.table_info.schema(),
