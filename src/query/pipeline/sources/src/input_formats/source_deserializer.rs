@@ -24,10 +24,10 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
-use crate::processors::sources::input_formats::input_context::InputContext;
-use crate::processors::sources::input_formats::input_pipeline::BlockBuilderTrait;
-use crate::processors::sources::input_formats::input_pipeline::InputFormatPipe;
-use crate::processors::sources::input_formats::input_pipeline::RowBatchTrait;
+use crate::input_formats::input_pipeline::BlockBuilderTrait;
+use crate::input_formats::input_pipeline::InputFormatPipe;
+use crate::input_formats::input_pipeline::RowBatchTrait;
+use crate::input_formats::InputContext;
 
 pub struct DeserializeSource<I: InputFormatPipe> {
     #[allow(unused)]

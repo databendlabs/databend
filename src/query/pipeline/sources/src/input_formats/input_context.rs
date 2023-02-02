@@ -39,15 +39,15 @@ use dashmap::DashMap;
 use opendal::raw::CompressAlgorithm;
 use opendal::Operator;
 
-use crate::processors::sources::input_formats::impls::input_format_csv::InputFormatCSV;
-use crate::processors::sources::input_formats::impls::input_format_ndjson::InputFormatNDJson;
-use crate::processors::sources::input_formats::impls::input_format_parquet::InputFormatParquet;
-use crate::processors::sources::input_formats::impls::input_format_tsv::InputFormatTSV;
-use crate::processors::sources::input_formats::impls::input_format_xml::InputFormatXML;
-use crate::processors::sources::input_formats::input_pipeline::StreamingReadBatch;
-use crate::processors::sources::input_formats::input_split::SplitInfo;
-use crate::processors::sources::input_formats::InputError;
-use crate::processors::sources::input_formats::InputFormat;
+use crate::input_formats::impls::InputFormatCSV;
+use crate::input_formats::impls::InputFormatNDJson;
+use crate::input_formats::impls::InputFormatParquet;
+use crate::input_formats::impls::InputFormatTSV;
+use crate::input_formats::impls::InputFormatXML;
+use crate::input_formats::InputError;
+use crate::input_formats::InputFormat;
+use crate::input_formats::SplitInfo;
+use crate::input_formats::StreamingReadBatch;
 
 #[derive(Debug)]
 pub enum InputPlan {

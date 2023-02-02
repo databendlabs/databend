@@ -12,8 +12,14 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-pub mod input_format_csv;
-pub mod input_format_ndjson;
-pub mod input_format_parquet;
-pub mod input_format_tsv;
-pub mod input_format_xml;
+mod input_format_csv;
+mod input_format_ndjson;
+mod input_format_parquet;
+mod input_format_tsv;
+mod input_format_xml;
+
+pub use input_format_csv::InputFormatCSV;
+pub use input_format_ndjson::InputFormatNDJson;
+pub use input_format_parquet::InputFormatParquet;
+pub use input_format_tsv::InputFormatTSV;
+pub use input_format_xml::InputFormatXML;

@@ -12,41 +12,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_base::base::tokio::sync::mpsc::Receiver;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use parking_lot::Mutex;
 
-use crate::processors::sources::SyncSource;
-use crate::processors::sources::SyncSourcer;
+use crate::SyncSource;
+use crate::SyncSourcer;
 
-pub struct BlocksSource {
-    data_blocks: Arc<Mutex<VecDeque<DataBlock>>>,
+#[allow(dead_code)]
+pub struct SyncReceiverSource {
+    receiver: Receiver<Result<DataBlock>>,
 }
 
-impl BlocksSource {
+impl SyncReceiverSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
-        output: Arc<OutputPort>,
-        data_blocks: Arc<Mutex<VecDeque<DataBlock>>>,
+        rx: Receiver<Result<DataBlock>>,
+        out: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(ctx, output, BlocksSource { data_blocks })
+        SyncSourcer::create(ctx, out, SyncReceiverSource { receiver: rx })
     }
 }
 
-impl SyncSource for BlocksSource {
-    const NAME: &'static str = "BlocksSource";
+#[async_trait::async_trait]
+impl SyncSource for SyncReceiverSource {
+    const NAME: &'static str = "SyncReceiverSource";
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
-        let mut blocks_guard = self.data_blocks.lock();
-        match blocks_guard.pop_front() {
+        match self.receiver.blocking_recv() {
             None => Ok(None),
-            Some(data_block) => Ok(Some(data_block)),
+            Some(Err(cause)) => Err(cause),
+            Some(Ok(data_block)) => Ok(Some(data_block)),
         }
     }
 }
