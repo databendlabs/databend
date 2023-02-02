@@ -38,7 +38,7 @@ use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
-use common_pipeline_sinks::processors::sinks::ContextSink;
+use common_pipeline_sinks::ContextSink;
 use common_pipeline_sources::processors::sources::SyncSource;
 use common_pipeline_sources::processors::sources::SyncSourcer;
 use common_storage::StorageMetrics;

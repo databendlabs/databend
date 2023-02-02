@@ -14,30 +14,31 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
+use common_base::base::tokio::sync::mpsc::Sender;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 
-use crate::processors::sinks::Sink;
-use crate::processors::sinks::Sinker;
+use crate::Sink;
+use crate::Sinker;
 
-pub struct ContextSink {
-    ctx: Arc<dyn TableContext>,
+pub struct SyncSenderSink {
+    sender: Sender<Result<DataBlock>>,
 }
 
-impl ContextSink {
-    pub fn create(input: Arc<InputPort>, ctx: Arc<dyn TableContext>) -> ProcessorPtr {
-        Sinker::create(input, ContextSink { ctx })
+impl SyncSenderSink {
+    pub fn create(sender: Sender<Result<DataBlock>>, input: Arc<InputPort>) -> ProcessorPtr {
+        Sinker::create(input, SyncSenderSink { sender })
     }
 }
 
-impl Sink for ContextSink {
-    const NAME: &'static str = "ContextSink";
+#[async_trait::async_trait]
+impl Sink for SyncSenderSink {
+    const NAME: &'static str = "SyncSenderSink";
 
-    fn consume(&mut self, block: DataBlock) -> Result<()> {
-        self.ctx.push_precommit_block(block);
+    fn consume(&mut self, data_block: DataBlock) -> Result<()> {
+        self.sender.blocking_send(Ok(data_block)).unwrap();
         Ok(())
     }
 }

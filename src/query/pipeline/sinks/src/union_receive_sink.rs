@@ -23,8 +23,8 @@ use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 
-use crate::processors::sinks::AsyncSink;
-use crate::processors::sinks::AsyncSinker;
+use crate::AsyncSink;
+use crate::AsyncSinker;
 
 pub struct UnionReceiveSink {
     sender: Option<Sender<DataBlock>>,
