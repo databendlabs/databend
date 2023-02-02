@@ -104,8 +104,7 @@ pub fn dump_metric_samples(handle: PrometheusHandle) -> Result<Vec<MetricSample>
         })
         .collect::<Vec<_>>();
 
-    let proc_stats = dump_proc_stats()
-        .map_err(|err| ErrorCode::Internal(format!("Dump proc stats failed: {:?}", err)))?;
+    let proc_stats = dump_proc_stats().unwrap_or_default();
     samples.extend(proc_stats);
     Ok(samples)
 }
