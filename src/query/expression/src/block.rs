@@ -29,6 +29,7 @@ use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataSchemaRef;
 use crate::Domain;
+use crate::Scalar;
 use crate::Value;
 
 pub type SendableDataBlockStream =
@@ -343,43 +344,46 @@ impl DataBlock {
         Ok(DataBlock::new(cols, arrow_chunk.len()))
     }
 
-    // If use_field_default_vals[i].is_some(), then DataBlock.column[i] = num_rows * DataField.default_value().
+    // If default_vals[i].is_some(), then DataBlock.column[i] = num_rows * default_vals[i].
     // else, DataBlock.column[i] = chuck.column.
-    // For example, Schema.field is [a,b,c] and use_field_default_vals is [Some(), None, Some()],
-    // then the return block column will be [a.default_value()*num_rows, chunk.column[0], c.default_value()*num_rows].
+    // For example, Schema.field is [a,b,c] and default_vals is [Some("a"), None, Some("c")],
+    // then the return block column will be ["a"*num_rows, chunk.column[0], "c"*num_rows].
     pub fn create_with_default_value_and_chunk<A: AsRef<dyn Array>>(
         schema: &DataSchemaRef,
         chuck: &ArrowChunk<A>,
-        use_field_default_vals: &[Option<()>],
+        default_vals: &[Option<Scalar>],
         num_rows: usize,
     ) -> Result<DataBlock> {
-        assert_eq!(schema.fields().len(), use_field_default_vals.len());
+        assert_eq!(schema.fields().len(), default_vals.len());
         let mut data_block = DataBlock::empty();
         data_block.num_rows = num_rows;
         let mut chunk_idx: usize = 0;
         let chunk_columns = chuck.arrays();
         let schema_fields = schema.fields();
 
-        for (i, use_field_default_val) in use_field_default_vals.iter().enumerate() {
+        for (i, default_val) in default_vals.iter().enumerate() {
             let field = &schema_fields[i];
             let data_type = field.data_type();
-            let block = if use_field_default_val.is_some() {
-                let default_value = data_type.default_value();
-                let builder = ColumnBuilder::repeat(&default_value.as_ref(), num_rows, data_type);
-                let col = builder.build();
-                BlockEntry {
-                    data_type: data_type.clone(),
-                    value: Value::Column(col),
+
+            let block = match default_val {
+                Some(default_val) => {
+                    let builder = ColumnBuilder::repeat(&default_val.as_ref(), num_rows, data_type);
+                    let col = builder.build();
+                    BlockEntry {
+                        data_type: data_type.clone(),
+                        value: Value::Column(col),
+                    }
                 }
-            } else {
-                assert!(chunk_idx < chunk_columns.len());
-                let chunk_column = &chunk_columns[chunk_idx];
-                chunk_idx += 1;
-                BlockEntry {
-                    data_type: data_type.clone(),
-                    value: Value::Column(Column::from_arrow(chunk_column.as_ref(), data_type)),
+                None => {
+                    let chunk_column = &chunk_columns[chunk_idx];
+                    chunk_idx += 1;
+                    BlockEntry {
+                        data_type: data_type.clone(),
+                        value: Value::Column(Column::from_arrow(chunk_column.as_ref(), data_type)),
+                    }
                 }
             };
+
             data_block.add_column(block);
         }
 

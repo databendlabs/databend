@@ -20,23 +20,18 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
 use common_expression::*;
-use pretty_assertions::assert_eq;
+use goldenfile::Mint;
 
-use crate::common::new_block;
+use crate::common::*;
 
 #[test]
-fn test_data_block_create_with_schema_from_chunk() -> Result<()> {
+fn test_data_block_create_with_default_value_and_chunk() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Number(NumberDataType::Int32))
-            .with_default_expr(Some("1".to_string())),
-        DataField::new("b", DataType::Number(NumberDataType::Int32))
-            .with_default_expr(Some("2".to_string())),
-        DataField::new("c", DataType::Number(NumberDataType::Float32))
-            .with_default_expr(Some("3.0".to_string())),
-        DataField::new("d", DataType::Number(NumberDataType::Int32))
-            .with_default_expr(Some("4".to_string()))
-            .with_default_expr(Some("5".to_string())),
-        DataField::new("e", DataType::String).with_default_expr(Some("6e".to_string())),
+        DataField::new("a", DataType::Number(NumberDataType::Int32)),
+        DataField::new("b", DataType::Number(NumberDataType::Int32)),
+        DataField::new("c", DataType::Number(NumberDataType::Float32)),
+        DataField::new("d", DataType::Number(NumberDataType::Int32)),
+        DataField::new("e", DataType::String),
     ]);
 
     let num_rows = 3;
@@ -46,41 +41,22 @@ fn test_data_block_create_with_schema_from_chunk() -> Result<()> {
         StringType::from_data(vec!["x1", "x2", "x3"]),
     ]);
 
-    let chunks: Chunk<ArrayRef> = chunk_block.clone().try_into().unwrap();
-    let use_field_default_vals = vec![None, Some(()), None, Some(()), None];
-    let new_block: DataBlock = DataBlock::create_with_default_value_and_chunk(
-        &schema,
-        &chunks,
-        &use_field_default_vals,
-        num_rows,
-    )
-    .unwrap();
-    assert_eq!(3, new_block.num_rows());
-    assert_eq!(5, new_block.num_columns());
+    let chunks: Chunk<ArrayRef> = chunk_block.try_into().unwrap();
+    let default_vals = vec![
+        None,
+        Some(Scalar::Number(NumberScalar::Int32(2))),
+        None,
+        Some(Scalar::Number(NumberScalar::Int32(4))),
+        None,
+    ];
+    let new_block: DataBlock =
+        DataBlock::create_with_default_value_and_chunk(&schema, &chunks, &default_vals, num_rows)
+            .unwrap();
 
-    let mut chunk_index = 0;
-    for (i, block) in new_block.columns().iter().enumerate() {
-        let field = schema.fields()[i].clone();
-        let column = &new_block.columns()[i];
-        assert_eq!(block.data_type, field.data_type().clone());
+    let mut mint = Mint::new("tests/it/testdata");
+    let mut file = mint.new_goldenfile("fill_field_default_value.txt").unwrap();
 
-        if use_field_default_vals[i].is_some() {
-            let value = &block.value;
-            let column = value.clone().into_column().unwrap();
-            assert_eq!(column.len(), num_rows);
-            for j in 0..column.len() {
-                assert_eq!(
-                    column.index(j).unwrap().to_owned(),
-                    field.data_type().default_value()
-                );
-            }
-        } else {
-            let chunk = &chunk_block.columns()[chunk_index].clone();
-            assert_eq!(chunk.data_type, column.data_type);
-            assert_eq!(chunk.value, column.value);
-            chunk_index += 1;
-        }
-    }
+    run_take(&mut file, &[0, 1, 2], &new_block);
 
     Ok(())
 }

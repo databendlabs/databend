@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
+
+use common_arrow::arrow::compute::merge_sort::MergeSlice;
 use common_expression::BlockEntry;
+use common_expression::BlockRowIndex;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::Value;
@@ -28,4 +32,116 @@ pub fn new_block(columns: &[Column]) -> DataBlock {
         .collect();
 
     DataBlock::new(columns, len)
+}
+
+pub fn run_filter(file: &mut impl Write, predicate: Column, block: &DataBlock) {
+    let predicate = Value::Column(predicate);
+    let result = block.clone().filter(&predicate);
+
+    match result {
+        Ok(result_block) => {
+            writeln!(file, "Filter:         {predicate}").unwrap();
+            writeln!(file, "Source:\n{block}").unwrap();
+            writeln!(file, "Result:\n{result_block}").unwrap();
+            write!(file, "\n\n").unwrap();
+        }
+        Err(err) => {
+            writeln!(file, "error: {}\n", err.message()).unwrap();
+        }
+    }
+}
+
+pub fn run_concat(file: &mut impl Write, blocks: &[DataBlock]) {
+    let result = DataBlock::concat(blocks);
+
+    match result {
+        Ok(result_block) => {
+            for (i, c) in blocks.iter().enumerate() {
+                writeln!(file, "Concat-Column {}:", i).unwrap();
+                writeln!(file, "{:?}", c).unwrap();
+            }
+            writeln!(file, "Result:\n{result_block}").unwrap();
+            write!(file, "\n\n").unwrap();
+        }
+        Err(err) => {
+            writeln!(file, "error: {}\n", err.message()).unwrap();
+        }
+    }
+}
+
+pub fn run_take_block(file: &mut impl Write, indices: &[BlockRowIndex], blocks: &[DataBlock]) {
+    let result = DataBlock::take_blocks(blocks, indices);
+    writeln!(file, "Take Block indices:         {indices:?}").unwrap();
+    for (i, block) in blocks.iter().enumerate() {
+        writeln!(file, "Block{i}:\n{block}").unwrap();
+    }
+    writeln!(file, "Result:\n{result}").unwrap();
+    write!(file, "\n\n").unwrap();
+}
+
+pub fn run_take_block_by_slices_with_limit(
+    file: &mut impl Write,
+    slices: &[MergeSlice],
+    blocks: &[DataBlock],
+    limit: Option<usize>,
+) {
+    let result = DataBlock::take_by_slices_limit_from_blocks(blocks, slices, limit);
+    writeln!(
+        file,
+        "Take Block by slices (limit: {limit:?}):       {slices:?}"
+    )
+    .unwrap();
+    for (i, block) in blocks.iter().enumerate() {
+        writeln!(file, "Block{i}:\n{block}").unwrap();
+    }
+    writeln!(file, "Result:\n{result}").unwrap();
+    write!(file, "\n\n").unwrap();
+}
+
+pub fn run_take_by_slice_limit(
+    file: &mut impl Write,
+    block: &DataBlock,
+    slice: (usize, usize),
+    limit: Option<usize>,
+) {
+    let result = DataBlock::take_by_slice_limit(block, slice, limit);
+    writeln!(file, "Take Block by slice (limit: {limit:?}): {slice:?}").unwrap();
+    writeln!(file, "Block:\n{block}").unwrap();
+    writeln!(file, "Result:\n{result}").unwrap();
+    write!(file, "\n\n").unwrap();
+}
+
+pub fn run_scatter(file: &mut impl Write, block: &DataBlock, indices: &[u32], scatter_size: usize) {
+    let result = DataBlock::scatter(block, indices, scatter_size);
+
+    match result {
+        Ok(result_block) => {
+            writeln!(file, "Scatter:         {indices:?}").unwrap();
+            writeln!(file, "Source:\n{block}").unwrap();
+
+            for (i, c) in result_block.iter().enumerate() {
+                writeln!(file, "Result-{i}:\n{c}").unwrap();
+            }
+            write!(file, "\n\n").unwrap();
+        }
+        Err(err) => {
+            writeln!(file, "error: {}\n", err.message()).unwrap();
+        }
+    }
+}
+
+pub fn run_take(file: &mut impl Write, indices: &[u32], block: &DataBlock) {
+    let result = DataBlock::take(block, indices);
+
+    match result {
+        Ok(result_block) => {
+            writeln!(file, "Take:         {indices:?}").unwrap();
+            writeln!(file, "Source:\n{block}").unwrap();
+            writeln!(file, "Result:\n{result_block}").unwrap();
+            write!(file, "\n\n").unwrap();
+        }
+        Err(err) => {
+            writeln!(file, "error: {}\n", err.message()).unwrap();
+        }
+    }
 }
