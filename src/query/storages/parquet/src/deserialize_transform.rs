@@ -233,10 +233,6 @@ impl Processor for ParquetDeserializeTransform {
 
             // this means it's empty projection
             if readers.is_empty() {
-                let _ = self.data_readers.pop_front();
-                let part = self.parts.pop_front().unwrap();
-
-                let part = ParquetRowGroupPart::from_part(&part)?;
                 let data_block = DataBlock::new(vec![], part.num_rows);
                 self.add_block(data_block)?;
                 return Ok(());
