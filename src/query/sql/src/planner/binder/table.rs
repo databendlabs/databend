@@ -346,12 +346,6 @@ impl Binder {
                     user_stage_info.file_format_options.format,
                     StageFileFormatType::Parquet
                 ) {
-                    // Table functions always reside is default catalog
-                    let table_id = self
-                        .catalogs
-                        .get_catalog(CATALOG_DEFAULT)?
-                        .get_table_function_id("read_parquet")?;
-
                     let files = list_file(&op, &path)
                         .await?
                         .into_iter()
@@ -359,7 +353,6 @@ impl Binder {
                         .collect();
 
                     let table = ParquetTable::create(
-                        table_id,
                         op,
                         files,
                         Default::default(),

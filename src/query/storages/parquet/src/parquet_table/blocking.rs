@@ -32,7 +32,6 @@ use crate::ParquetTable;
 
 impl ParquetTable {
     pub fn blocking_create(
-        table_id: u64,
         operator: Operator,
         maybe_glob_locations: Vec<String>,
         read_options: ParquetReadOptions,
@@ -41,7 +40,7 @@ impl ParquetTable {
         let (file_locations, arrow_schema) =
             Self::blocking_prepare_metas(maybe_glob_locations, operator.clone())?;
 
-        let table_info = create_parquet_table_info(table_id, arrow_schema.clone());
+        let table_info = create_parquet_table_info(arrow_schema.clone());
 
         Ok(Arc::new(ParquetTable {
             file_locations,

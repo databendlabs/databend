@@ -34,26 +34,19 @@ use crate::ParquetTable;
 
 impl ParquetTable {
     pub async fn create(
-        table_id: u64,
         operator: Operator,
         maybe_glob_locations: Vec<String>,
         read_options: ParquetReadOptions,
         stage_info: UserStageInfo,
     ) -> Result<Arc<dyn Table>> {
         if operator.metadata().can_blocking() {
-            return Self::blocking_create(
-                table_id,
-                operator,
-                maybe_glob_locations,
-                read_options,
-                stage_info,
-            );
+            return Self::blocking_create(operator, maybe_glob_locations, read_options, stage_info);
         }
 
         let (file_locations, arrow_schema) =
             Self::prepare_metas(maybe_glob_locations, operator.clone()).await?;
 
-        let table_info = create_parquet_table_info(table_id, arrow_schema.clone());
+        let table_info = create_parquet_table_info(arrow_schema.clone());
 
         Ok(Arc::new(ParquetTable {
             file_locations,

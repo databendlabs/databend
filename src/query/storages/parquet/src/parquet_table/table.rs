@@ -140,9 +140,9 @@ pub(crate) fn arrow_to_table_schema(mut schema: ArrowSchema) -> TableSchema {
     TableSchema::from(&schema)
 }
 
-pub(super) fn create_parquet_table_info(table_id: u64, schema: ArrowSchema) -> TableInfo {
+pub(super) fn create_parquet_table_info(schema: ArrowSchema) -> TableInfo {
     TableInfo {
-        ident: TableIdent::new(table_id, 0),
+        ident: TableIdent::new(0, 0),
         desc: "''.'read_parquet'".to_string(),
         name: "read_parquet".to_string(),
         meta: TableMeta {
