@@ -23,6 +23,9 @@ prometheus-parse = "0.2.3"
 serde = { workspace = true }
 tracing = "0.1.36"
 
+[target.'cfg(target_os = "linux")'.dependencies]
+procfs = "0.12.0"
+
 [dev-dependencies]
 anyhow = { workspace = true }
 

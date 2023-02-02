@@ -21,7 +21,6 @@ use metrics_exporter_prometheus::PrometheusHandle;
 #[derive(Debug)]
 pub struct MetricSample {
     pub name: String,
-    pub kind: String,
     pub labels: HashMap<String, String>,
     pub value: MetricValue,
 }
@@ -90,7 +89,7 @@ pub struct SummaryCount {
 pub fn dump_metric_samples(handle: PrometheusHandle) -> Result<Vec<MetricSample>> {
     let text = handle.render();
     let lines = text.lines().map(|s| Ok(s.to_owned()));
-    let samples = prometheus_parse::Scrape::parse(lines)
+    let mut samples = prometheus_parse::Scrape::parse(lines)
         .map_err(|err| ErrorCode::Internal(format!("Dump prometheus metrics failed: {:?}", err)))?
         .samples
         .into_iter()
@@ -98,11 +97,59 @@ pub fn dump_metric_samples(handle: PrometheusHandle) -> Result<Vec<MetricSample>
             let value: MetricValue = s.value.into();
             MetricSample {
                 name: s.metric,
-                kind: value.kind(),
                 value,
                 labels: (*s.labels).clone(),
             }
         })
         .collect::<Vec<_>>();
+
+    let proc_stats = dump_proc_stats().unwrap_or_default();
+    samples.extend(proc_stats);
     Ok(samples)
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn dump_proc_stats() -> Result<Vec<MetricSample>> {
+    Ok(vec![])
+}
+
+#[cfg(target_os = "linux")]
+pub fn dump_proc_stats() -> procfs::ProcResult<Vec<MetricSample>> {
+    let me = procfs::process::Process::myself()?;
+    let io = me.io()?;
+    // ❯ cat /proc/thread-self/io
+    // rchar: 4092
+    // wchar: 8
+    // syscr: 8
+    // syscw: 1
+    // read_bytes: 0
+    // write_bytes: 0
+    // cancelled_write_bytes: 0
+
+    let results = vec![
+        MetricSample {
+            // "Number of bytes read from disks or block devices. Doesn't include bytes read from page cache."
+            name: "os_read_bytes".to_string(),
+            value: MetricValue::Counter(io.read_bytes as f64),
+            labels: HashMap::new(),
+        },
+        MetricSample {
+            // "Number of bytes written to disks or block devices. Doesn't include bytes that are in page cache dirty pages."
+            name: "os_write_bytes".to_string(),
+            value: MetricValue::Counter(io.write_bytes as f64),
+            labels: HashMap::new(),
+        },
+        MetricSample {
+            name: "os_read_chars".to_string(),
+            value: MetricValue::Counter(io.rchar as f64),
+            labels: HashMap::new(),
+        },
+        MetricSample {
+            name: "os_write_chars".to_string(),
+            value: MetricValue::Counter(io.wchar as f64),
+            labels: HashMap::new(),
+        },
+    ];
+
+    Ok(results)
 }

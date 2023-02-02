@@ -858,6 +858,29 @@ impl TableDataType {
         }
     }
 
+    pub fn remove_recursive_nullable(&self) -> Self {
+        match self {
+            TableDataType::Nullable(ty) => ty.as_ref().remove_recursive_nullable(),
+            TableDataType::Tuple {
+                fields_name,
+                fields_type,
+            } => {
+                let mut new_fields_type = vec![];
+                for ty in fields_type {
+                    new_fields_type.push(ty.remove_recursive_nullable());
+                }
+                TableDataType::Tuple {
+                    fields_name: fields_name.clone(),
+                    fields_type: new_fields_type,
+                }
+            }
+            TableDataType::Array(ty) => {
+                TableDataType::Array(Box::new(ty.as_ref().remove_recursive_nullable()))
+            }
+            _ => self.clone(),
+        }
+    }
+
     pub fn wrapped_display(&self) -> String {
         match self {
             TableDataType::Nullable(inner_ty) => {

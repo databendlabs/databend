@@ -566,6 +566,33 @@ evaluation (internal):
 +--------------+---------------------------------------------------------------------------+
 
 
+ast            : concat([], [])
+raw expr       : concat(array(), array())
+checked expr   : concat<Array(Nothing) NULL, Array(Nothing) NULL>(CAST(array<>() AS Array(Nothing) NULL), CAST(array<>() AS Array(Nothing) NULL))
+optimized expr : [] :: Array(Nothing)
+output type    : Array(Nothing)
+output domain  : []
+output         : []
+
+
+ast            : concat([], [1,2])
+raw expr       : concat(array(), array(1_u8, 2_u8))
+checked expr   : concat<T0=UInt8><Array(T0), Array(T0)>(CAST(array<>() AS Array(UInt8)), array<T0=UInt8><T0, T0>(1_u8, 2_u8))
+optimized expr : [1_u8, 2_u8]
+output type    : Array(UInt8)
+output domain  : [{1..=2}]
+output         : [1_u8, 2_u8]
+
+
+ast            : concat([false, true], [])
+raw expr       : concat(array(false, true), array())
+checked expr   : concat<T0=Boolean><Array(T0), Array(T0)>(array<T0=Boolean><T0, T0>(false, true), CAST(array<>() AS Array(Boolean)))
+optimized expr : [false, true]
+output type    : Array(Boolean)
+output domain  : [{FALSE, TRUE}]
+output         : [false, true]
+
+
 ast            : concat([false, true], [1,2])
 raw expr       : concat(array(false, true), array(1_u8, 2_u8))
 checked expr   : concat<T0=Variant><Array(T0), Array(T0)>(CAST(array<T0=Boolean><T0, T0>(false, true) AS Array(Variant)), CAST(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(Variant)))
@@ -732,5 +759,125 @@ evaluation (internal):
 | c      | Int16([6, 7, 8])                                                                  |
 | Output | ArrayColumn { values: Int16([3, 6, 0, 4, 7, 1, 5, 8, 2]), offsets: [0, 3, 6, 9] } |
 +--------+-----------------------------------------------------------------------------------+
+
+
+ast            : indexof([], NULL)
+raw expr       : indexof(array(), NULL)
+checked expr   : indexof<T0=NULL><Array(T0), T0>(CAST(array<>() AS Array(NULL)), NULL)
+optimized expr : 0_u64
+output type    : UInt64
+output domain  : {0..=0}
+output         : 0_u64
+
+
+ast            : indexof(NULL, NULL)
+raw expr       : indexof(NULL, NULL)
+checked expr   : indexof<NULL, NULL>(NULL, NULL)
+optimized expr : NULL
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : indexof([false, true], false)
+raw expr       : indexof(array(false, true), false)
+checked expr   : indexof<T0=Boolean><Array(T0), T0>(array<T0=Boolean><T0, T0>(false, true), false)
+optimized expr : 1_u64
+output type    : UInt64
+output domain  : {1..=1}
+output         : 1_u64
+
+
+ast            : indexof([], false)
+raw expr       : indexof(array(), false)
+checked expr   : indexof<T0=Boolean><Array(T0), T0>(CAST(array<>() AS Array(Boolean)), false)
+optimized expr : 0_u64
+output type    : UInt64
+output domain  : {0..=0}
+output         : 0_u64
+
+
+ast            : indexof([false, true], null)
+raw expr       : indexof(array(false, true), NULL)
+checked expr   : indexof<T0=Boolean NULL><Array(T0), T0>(CAST(array<T0=Boolean><T0, T0>(false, true) AS Array(Boolean NULL)), CAST(NULL AS Boolean NULL))
+optimized expr : 0_u64
+output type    : UInt64
+output domain  : {0..=0}
+output         : 0_u64
+
+
+ast            : indexof([false, true], 0)
+raw expr       : indexof(array(false, true), 0_u8)
+checked expr   : indexof<T0=Variant><Array(T0), T0>(CAST(array<T0=Boolean><T0, T0>(false, true) AS Array(Variant)), to_variant<T0=UInt8><T0>(0_u8))
+optimized expr : 0_u64
+output type    : UInt64
+output domain  : {0..=0}
+output         : 0_u64
+
+
+ast            : indexof([1,2,3,'s'], 's')
+raw expr       : indexof(array(1_u8, 2_u8, 3_u8, "s"), "s")
+checked expr   : indexof<T0=Variant><Array(T0), T0>(array<T0=Variant><T0, T0, T0, T0>(to_variant<T0=UInt8><T0>(1_u8), to_variant<T0=UInt8><T0>(2_u8), to_variant<T0=UInt8><T0>(3_u8), to_variant<T0=String><T0>("s")), to_variant<T0=String><T0>("s"))
+optimized expr : 4_u64
+output type    : UInt64
+output domain  : {4..=4}
+output         : 4_u64
+
+
+ast            : indexof([1,'x',null,'x'], 'x')
+raw expr       : indexof(array(1_u8, "x", NULL, "x"), "x")
+checked expr   : indexof<T0=Variant NULL><Array(T0), T0>(array<T0=Variant NULL><T0, T0, T0, T0>(CAST(1_u8 AS Variant NULL), CAST("x" AS Variant NULL), CAST(NULL AS Variant NULL), CAST("x" AS Variant NULL)), CAST("x" AS Variant NULL))
+optimized expr : 2_u64
+output type    : UInt64
+output domain  : {2..=2}
+output         : 2_u64
+
+
+ast            : indexof([1, 2, 3, 4, 5, null], nullable_col)
+raw expr       : indexof(array(1_u8, 2_u8, 3_u8, 4_u8, 5_u8, NULL), nullable_col::Int64 NULL)
+checked expr   : indexof<T0=Int64 NULL><Array(T0), T0>(CAST(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(4_u8 AS UInt8 NULL), CAST(5_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)) AS Array(Int64 NULL)), nullable_col)
+optimized expr : indexof<T0=Int64 NULL><Array(T0), T0>([1_i64, 2_i64, 3_i64, 4_i64, 5_i64, NULL], nullable_col)
+evaluation:
++--------+-------------------+----------------------------+
+|        | nullable_col      | Output                     |
++--------+-------------------+----------------------------+
+| Type   | Int64 NULL        | UInt64                     |
+| Domain | {9..=12} ∪ {NULL} | {0..=18446744073709551615} |
+| Row 0  | 9_i64             | 0_u64                      |
+| Row 1  | 10_i64            | 0_u64                      |
+| Row 2  | NULL              | 6_u64                      |
+| Row 3  | NULL              | 6_u64                      |
++--------+-------------------+----------------------------+
+evaluation (internal):
++--------------+---------------------------------------------------------------------------+
+| Column       | Data                                                                      |
++--------------+---------------------------------------------------------------------------+
+| nullable_col | NullableColumn { column: Int64([9, 10, 11, 12]), validity: [0b____0011] } |
+| Output       | UInt64([0, 0, 6, 6])                                                      |
++--------------+---------------------------------------------------------------------------+
+
+
+ast            : indexof([9,10,null], int8_col)
+raw expr       : indexof(array(9_u8, 10_u8, NULL), int8_col::Int8)
+checked expr   : indexof<T0=Int16 NULL><Array(T0), T0>(CAST(array<T0=UInt8 NULL><T0, T0, T0>(CAST(9_u8 AS UInt8 NULL), CAST(10_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)) AS Array(Int16 NULL)), CAST(int8_col AS Int16 NULL))
+optimized expr : indexof<T0=Int16 NULL><Array(T0), T0>([9_i16, 10_i16, NULL], CAST(int8_col AS Int16 NULL))
+evaluation:
++--------+----------+----------------------------+
+|        | int8_col | Output                     |
++--------+----------+----------------------------+
+| Type   | Int8     | UInt64                     |
+| Domain | {1..=8}  | {0..=18446744073709551615} |
+| Row 0  | 1_i8     | 0_u64                      |
+| Row 1  | 2_i8     | 0_u64                      |
+| Row 2  | 7_i8     | 0_u64                      |
+| Row 3  | 8_i8     | 0_u64                      |
++--------+----------+----------------------------+
+evaluation (internal):
++----------+----------------------+
+| Column   | Data                 |
++----------+----------------------+
+| int8_col | Int8([1, 2, 7, 8])   |
+| Output   | UInt64([0, 0, 0, 0]) |
++----------+----------------------+
 
 
