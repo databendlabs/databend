@@ -14,8 +14,20 @@
 
 use common_exception::Result;
 use common_expression::create_test_complex_schema;
+use common_expression::types::NumberDataType;
+use common_expression::TableDataType;
+use common_expression::TableField;
 use common_expression::TableSchema;
 use common_storage::ColumnNodes;
+
+fn test_leaf_index_match_column_ids(schema: &TableSchema, column_leaves: &ColumnNodes) {
+    let leaf_column_ids = schema.to_leaf_column_ids();
+    for column_leaf in &column_leaves.column_nodes {
+        for (j, lead_index) in column_leaf.leaf_ids.iter().enumerate() {
+            assert_eq!(leaf_column_ids[*lead_index], column_leaf.leaf_column_ids[j]);
+        }
+    }
+}
 
 #[test]
 fn test_column_leaf_schema_from_struct() -> Result<()> {
@@ -41,16 +53,13 @@ fn test_column_leaf_schema_from_struct() -> Result<()> {
         ("tuplesimple", &column_8_ids),
     ];
 
-    let leaf_column_ids = schema.to_leaf_column_ids();
     for (i, column_leaf) in column_leaves.column_nodes.iter().enumerate() {
         let expeted_column_id = expeted_column_ids[i];
         assert_eq!(expeted_column_id.0.to_string(), column_leaf.field.name);
         assert_eq!(*expeted_column_id.1, column_leaf.leaf_column_ids);
-
-        for (i, lead_index) in column_leaf.leaf_ids.iter().enumerate() {
-            assert_eq!(leaf_column_ids[*lead_index], column_leaf.leaf_column_ids[i]);
-        }
     }
+
+    test_leaf_index_match_column_ids(&schema, &column_leaves);
 
     Ok(())
 }
@@ -79,6 +88,36 @@ fn test_column_leaf_schema_from_struct_of_old_version() -> Result<()> {
         {
             assert_eq!(*leaf_id as u32, *column_id);
         }
+    }
+
+    Ok(())
+}
+
+// add/drop column from schema, and test column_ids match leaf_ids
+#[test]
+fn test_alter_schema_column() -> Result<()> {
+    let fields = vec![TableField::new(
+        "exist_column",
+        TableDataType::Number(NumberDataType::UInt64),
+    )];
+    let mut schema = TableSchema::new(fields);
+
+    let old_schema = create_test_complex_schema();
+
+    // test add column
+    for field in old_schema.fields() {
+        schema.add_columns(&[TableField::new(field.name(), field.data_type().to_owned())])?;
+
+        let column_leaves = ColumnNodes::new_from_schema(&schema.to_arrow(), Some(&schema));
+        test_leaf_index_match_column_ids(&schema, &column_leaves);
+    }
+
+    // test drop column
+    for field in old_schema.fields() {
+        schema.drop_column(field.name())?;
+
+        let column_leaves = ColumnNodes::new_from_schema(&schema.to_arrow(), Some(&schema));
+        test_leaf_index_match_column_ids(&schema, &column_leaves);
     }
 
     Ok(())
