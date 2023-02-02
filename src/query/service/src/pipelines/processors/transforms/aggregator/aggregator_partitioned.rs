@@ -38,54 +38,54 @@ use crate::pipelines::processors::transforms::aggregator::PartialAggregator;
 use crate::pipelines::processors::transforms::aggregator::SingleStateAggregator;
 use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
-use crate::pipelines::processors::transforms::group_by::TwoLevelHashMethod;
+use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::processors::AggregatorParams;
 
-pub trait TwoLevelAggregatorLike
+pub trait PartitionedAggregatorLike
 where Self: Aggregator + Send
 {
     const SUPPORT_TWO_LEVEL: bool;
 
-    type TwoLevelAggregator: Aggregator;
+    type PartitionedAggregator: Aggregator;
 
     fn get_state_cardinality(&self) -> usize {
         0
     }
 
-    fn convert_two_level(self) -> Result<TwoLevelAggregator<Self>> {
+    fn convert_partitioned(self) -> Result<PartitionedAggregator<Self>> {
         Err(ErrorCode::Unimplemented(format!(
-            "Two level aggregator is unimplemented for {}",
+            "Partitioned aggregator is unimplemented for {}",
             Self::NAME
         )))
     }
 
-    fn convert_two_level_block(_agg: &mut Self::TwoLevelAggregator) -> Result<Vec<DataBlock>> {
+    fn convert_partitioned_block(_agg: &mut Self::PartitionedAggregator) -> Result<Vec<DataBlock>> {
         Err(ErrorCode::Unimplemented(format!(
-            "Two level aggregator is unimplemented for {}",
+            "Partitioned aggregator is unimplemented for {}",
             Self::NAME
         )))
     }
 }
 
-impl<Method, const HAS_AGG: bool> TwoLevelAggregatorLike for PartialAggregator<HAS_AGG, Method>
+impl<Method, const HAS_AGG: bool> PartitionedAggregatorLike for PartialAggregator<HAS_AGG, Method>
 where
     Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
     Method::HashKey: FastHash,
 {
     const SUPPORT_TWO_LEVEL: bool = Method::SUPPORT_TWO_LEVEL;
 
-    type TwoLevelAggregator = PartialAggregator<HAS_AGG, TwoLevelHashMethod<Method>>;
+    type PartitionedAggregator = PartialAggregator<HAS_AGG, PartitionedHashMethod<Method>>;
 
     fn get_state_cardinality(&self) -> usize {
         self.hash_table.len()
     }
 
-    // PartialAggregator<HAS_AGG, Method> -> TwoLevelAggregator<PartialAggregator<HAS_AGG, Method>>
-    fn convert_two_level(mut self) -> Result<TwoLevelAggregator<Self>> {
+    // PartialAggregator<HAS_AGG, Method> -> PartitionedAggregator<PartialAggregator<HAS_AGG, Method>>
+    fn convert_partitioned(mut self) -> Result<PartitionedAggregator<Self>> {
         let instant = Instant::now();
         let method = self.method.clone();
-        let two_level_method = TwoLevelHashMethod::create(method);
+        let two_level_method = PartitionedHashMethod::create(method);
         let mut two_level_hashtable = two_level_method.create_hash_table()?;
 
         unsafe {
@@ -102,13 +102,13 @@ where
         }
 
         info!(
-            "Convert to two level aggregator elapsed: {:?}",
+            "Convert to Partitioned aggregator elapsed: {:?}",
             instant.elapsed()
         );
 
         self.states_dropped = true;
-        Ok(TwoLevelAggregator::<Self> {
-            inner: PartialAggregator::<HAS_AGG, TwoLevelHashMethod<Method>> {
+        Ok(PartitionedAggregator::<Self> {
+            inner: PartialAggregator::<HAS_AGG, PartitionedHashMethod<Method>> {
                 area: self.area.take(),
                 area_holder: None,
                 params: self.params.clone(),
@@ -123,7 +123,7 @@ where
         })
     }
 
-    fn convert_two_level_block(agg: &mut Self::TwoLevelAggregator) -> Result<Vec<DataBlock>> {
+    fn convert_partitioned_block(agg: &mut Self::PartitionedAggregator) -> Result<Vec<DataBlock>> {
         let mut data_blocks = Vec::with_capacity(256);
 
         fn clear_table<T: HashtableLike<Value = usize>>(table: &mut T, params: &AggregatorParams) {
@@ -227,7 +227,7 @@ where
 
             clear_table(inner_table, &agg.params);
 
-            // streaming return two level blocks by bucket
+            // streaming return Partitioned blocks by bucket
             return Ok(data_blocks);
         }
 
@@ -240,36 +240,36 @@ where
     }
 }
 
-impl TwoLevelAggregatorLike for SingleStateAggregator<true> {
+impl PartitionedAggregatorLike for SingleStateAggregator<true> {
     const SUPPORT_TWO_LEVEL: bool = false;
-    type TwoLevelAggregator = SingleStateAggregator<true>;
+    type PartitionedAggregator = SingleStateAggregator<true>;
 }
 
-impl TwoLevelAggregatorLike for SingleStateAggregator<false> {
+impl PartitionedAggregatorLike for SingleStateAggregator<false> {
     const SUPPORT_TWO_LEVEL: bool = false;
-    type TwoLevelAggregator = SingleStateAggregator<false>;
+    type PartitionedAggregator = SingleStateAggregator<false>;
 }
 
-impl<Method, const HAS_AGG: bool> TwoLevelAggregatorLike
+impl<Method, const HAS_AGG: bool> PartitionedAggregatorLike
     for ParallelFinalAggregator<HAS_AGG, Method>
 where
     Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
     Method::HashKey: FastHash,
 {
     const SUPPORT_TWO_LEVEL: bool = false;
-    type TwoLevelAggregator = ParallelFinalAggregator<HAS_AGG, TwoLevelHashMethod<Method>>;
+    type PartitionedAggregator = ParallelFinalAggregator<HAS_AGG, PartitionedHashMethod<Method>>;
 }
 
-// Example: TwoLevelAggregator<PartialAggregator<HAS_AGG, Method>> ->
-//      TwoLevelAggregator {
-//          inner: PartialAggregator<HAS_AGG, TwoLevelMethod<Method>>
+// Example: PartitionedAggregator<PartialAggregator<HAS_AGG, Method>> ->
+//      PartitionedAggregator {
+//          inner: PartialAggregator<HAS_AGG, PartitionedMethod<Method>>
 //      }
-pub struct TwoLevelAggregator<T: TwoLevelAggregatorLike> {
-    inner: T::TwoLevelAggregator,
+pub struct PartitionedAggregator<T: PartitionedAggregatorLike> {
+    inner: T::PartitionedAggregator,
 }
 
-impl<T: TwoLevelAggregatorLike> Aggregator for TwoLevelAggregator<T> {
-    const NAME: &'static str = "TwoLevelAggregator";
+impl<T: PartitionedAggregatorLike> Aggregator for PartitionedAggregator<T> {
+    const NAME: &'static str = "PartitionedAggregator";
 
     #[inline(always)]
     fn consume(&mut self, data: DataBlock) -> Result<()> {
@@ -278,6 +278,6 @@ impl<T: TwoLevelAggregatorLike> Aggregator for TwoLevelAggregator<T> {
 
     #[inline(always)]
     fn generate(&mut self) -> Result<Vec<DataBlock>> {
-        T::convert_two_level_block(&mut self.inner)
+        T::convert_partitioned_block(&mut self.inner)
     }
 }

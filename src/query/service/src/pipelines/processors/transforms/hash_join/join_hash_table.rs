@@ -34,8 +34,8 @@ use common_expression::RemoteExpr;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_hashtable::HashMap;
 use common_hashtable::HashtableKeyable;
-use common_hashtable::SimpleUnsizedHashMap;
-use common_hashtable::UnsizedHashMap;
+use common_hashtable::StringHashMap;
+use common_hashtable::ShortStringHashMap;
 use common_sql::plans::JoinType;
 use parking_lot::RwLock;
 use primitive_types::U256;
@@ -51,12 +51,12 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
 pub struct SerializerHashTable {
-    pub(crate) hash_table: SimpleUnsizedHashMap<[u8], Vec<RowPtr>>,
+    pub(crate) hash_table: StringHashMap<[u8], Vec<RowPtr>>,
     pub(crate) hash_method: HashMethodSerializer,
 }
 
 pub struct SingleStringHashTable {
-    pub(crate) hash_table: UnsizedHashMap<[u8], Vec<RowPtr>>,
+    pub(crate) hash_table: ShortStringHashMap<[u8], Vec<RowPtr>>,
     pub(crate) hash_method: HashMethodSingleString,
 }
 
@@ -109,7 +109,7 @@ impl JoinHashTable {
             HashMethodKind::Serializer(_) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 HashTable::Serializer(SerializerHashTable {
-                    hash_table: SimpleUnsizedHashMap::<[u8], Vec<RowPtr>>::new(),
+                    hash_table: StringHashMap::<[u8], Vec<RowPtr>>::new(),
                     hash_method: HashMethodSerializer::default(),
                 }),
                 build_schema,
@@ -119,7 +119,7 @@ impl JoinHashTable {
             HashMethodKind::SingleString(_) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 HashTable::SingleString(SingleStringHashTable {
-                    hash_table: UnsizedHashMap::<[u8], Vec<RowPtr>>::new(),
+                    hash_table: ShortStringHashMap::<[u8], Vec<RowPtr>>::new(),
                     hash_method: HashMethodSingleString::default(),
                 }),
                 build_schema,

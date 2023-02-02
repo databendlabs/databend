@@ -26,13 +26,13 @@ mod lookup_hashtable;
 mod stack_hashtable;
 mod table0;
 
-mod simple_unsized_hashtable;
+mod string_hashtable;
 #[allow(dead_code)]
 mod table1;
 mod table_empty;
 mod traits;
-mod twolevel_hashtable;
-mod unsized_hashtable;
+mod partitioned_hashtable;
+mod short_string_hashtable;
 mod utils;
 
 pub use table0::Entry as HashtableEntry;
@@ -63,28 +63,28 @@ pub type StackHashSet<K, const N: usize = 16> = stack_hashtable::StackHashtable<
 pub type StackHashSetIter<'a, K> = stack_hashtable::StackHashtableIter<'a, K, ()>;
 pub type StackHashSetIterMut<'a, K> = stack_hashtable::StackHashtableIter<'a, K, ()>;
 
-pub type TwoLevelHashMap<Inner> = twolevel_hashtable::TwoLevelHashtable<Inner>;
-pub type TwoLevelHashSet<K> = twolevel_hashtable::TwoLevelHashtable<HashSet<K>>;
-pub type TwoLevelHashMapIter<Inner> = twolevel_hashtable::TwoLevelHashtableIter<Inner>;
+pub type PartitionedHashMap<Inner> = partitioned_hashtable::PartitionedHashtable<Inner>;
+pub type PartitionedHashSet<K> = partitioned_hashtable::PartitionedHashtable<HashSet<K>>;
+pub type PartitionedHashMapIter<Inner> = partitioned_hashtable::PartitionedHashtableIter<Inner>;
 
-pub type UnsizedHashMap<K, V> = unsized_hashtable::UnsizedHashtable<K, V>;
-pub type UnsizedHashMapIter<'a, K, V> = unsized_hashtable::UnsizedHashtableIter<'a, K, V>;
-pub type UnsizedHashMapIterMut<'a, K, V> = unsized_hashtable::UnsizedHashtableIterMut<'a, K, V>;
-pub type UnsizedHashSet<K> = unsized_hashtable::UnsizedHashtable<K, ()>;
-pub type UnsizedHashtableEntryRef<'a, K, V> = unsized_hashtable::UnsizedHashtableEntryRef<'a, K, V>;
-pub type UnsizedHashtableEntryMutRef<'a, K, V> =
-    unsized_hashtable::UnsizedHashtableEntryMutRef<'a, K, V>;
+pub type ShortStringHashMap<K, V> = short_string_hashtable::ShortStringHashtable<K, V>;
+pub type ShortStringHashMapIter<'a, K, V> = short_string_hashtable::ShortStringHashtableIter<'a, K, V>;
+pub type ShortStringHashMapIterMut<'a, K, V> = short_string_hashtable::ShortStringHashtableIterMut<'a, K, V>;
+pub type ShortStringHashSet<K> = short_string_hashtable::ShortStringHashtable<K, ()>;
+pub type ShortStringHashtableEntryRef<'a, K, V> = short_string_hashtable::ShortStringHashtableEntryRef<'a, K, V>;
+pub type ShortStringHashtableEntryMutRef<'a, K, V> =
+    short_string_hashtable::ShortStringHashtableEntryMutRef<'a, K, V>;
 
-pub type SimpleUnsizedHashMap<K, V> = simple_unsized_hashtable::SimpleUnsizedHashtable<K, V>;
-pub type SimpleUnsizedHashMapIter<'a, K, V> =
-    simple_unsized_hashtable::SimpleUnsizedHashtableIter<'a, K, V>;
-pub type SimpleUnsizedHashMapIterMut<'a, K, V> =
-    simple_unsized_hashtable::SimpleUnsizedHashtableIterMut<'a, K, V>;
-pub type SimpleUnsizedHashSet<K> = simple_unsized_hashtable::SimpleUnsizedHashtable<K, ()>;
-pub type SimpleUnsizedHashtableEntryRef<'a, K, V> =
-    simple_unsized_hashtable::SimpleUnsizedHashtableEntryRef<'a, K, V>;
-pub type SimpleUnsizedHashtableEntryMutRef<'a, K, V> =
-    simple_unsized_hashtable::SimpleUnsizedHashtableEntryMutRef<'a, K, V>;
+pub type StringHashMap<K, V> = string_hashtable::StringHashtable<K, V>;
+pub type StringHashMapIter<'a, K, V> =
+    string_hashtable::StringHashtableIter<'a, K, V>;
+pub type StringHashMapIterMut<'a, K, V> =
+    string_hashtable::StringHashtableIterMut<'a, K, V>;
+pub type StringHashSet<K> = string_hashtable::StringHashtable<K, ()>;
+pub type StringHashtableEntryRef<'a, K, V> =
+    string_hashtable::StringHashtableEntryRef<'a, K, V>;
+pub type StringHashtableEntryMutRef<'a, K, V> =
+    string_hashtable::StringHashtableEntryMutRef<'a, K, V>;
 
 pub type LookupHashMap<K, const CAPACITY: usize, V> = LookupHashtable<K, CAPACITY, V>;
 pub type LookupHashMapIter<'a, K, const CAPACITY: usize, V> = LookupTableIter<'a, CAPACITY, K, V>;

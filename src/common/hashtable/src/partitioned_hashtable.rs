@@ -20,29 +20,29 @@ use crate::FastHash;
 use crate::HashSet;
 use crate::HashtableKeyable;
 use crate::HashtableLike;
-use crate::TwoLevelHashSet;
+use crate::PartitionedHashSet;
 
 const BUCKETS_LG2: u32 = 8;
 const BUCKETS: usize = 1 << BUCKETS_LG2;
 
-pub struct TwoLevelHashtable<Impl> {
+pub struct PartitionedHashtable<Impl> {
     tables: Vec<Impl>,
 }
 
-impl<Impl> TwoLevelHashtable<Impl> {
+impl<Impl> PartitionedHashtable<Impl> {
     pub fn create(tables: Vec<Impl>) -> Self {
         assert_eq!(tables.len(), BUCKETS);
-        TwoLevelHashtable::<Impl> { tables }
+        PartitionedHashtable::<Impl> { tables }
     }
 }
 
-impl<Impl: HashtableLike> TwoLevelHashtable<Impl> {
+impl<Impl: HashtableLike> PartitionedHashtable<Impl> {
     pub fn iter_tables_mut(&mut self) -> IterMut<'_, Impl> {
         self.tables.iter_mut()
     }
 }
 
-impl<K: HashtableKeyable + FastHash> TwoLevelHashSet<K> {
+impl<K: HashtableKeyable + FastHash> PartitionedHashSet<K> {
     pub fn inner_sets_mut(&mut self) -> &mut Vec<HashSet<K>> {
         &mut self.tables
     }
@@ -68,14 +68,14 @@ impl<K: HashtableKeyable + FastHash> TwoLevelHashSet<K> {
 }
 
 impl<K: ?Sized + FastHash, V, Impl: HashtableLike<Key = K, Value = V>> HashtableLike
-    for TwoLevelHashtable<Impl>
+    for PartitionedHashtable<Impl>
 {
     type Key = Impl::Key;
     type Value = Impl::Value;
     type EntryRef<'a> = Impl::EntryRef<'a> where Self: 'a, Self::Key: 'a, Self::Value: 'a;
     type EntryMutRef<'a> = Impl::EntryMutRef<'a> where Self: 'a, Self::Key: 'a, Self::Value: 'a;
-    type Iterator<'a> = TwoLevelHashtableIter<Impl::Iterator<'a>> where Self: 'a, Self::Key: 'a, Self::Value: 'a;
-    type IteratorMut<'a> = TwoLevelHashtableIter<Impl::IteratorMut<'a>> where Self: 'a, Self::Key: 'a, Self::Value: 'a;
+    type Iterator<'a> = PartitionedHashtableIter<Impl::Iterator<'a>> where Self: 'a, Self::Key: 'a, Self::Value: 'a;
+    type IteratorMut<'a> = PartitionedHashtableIter<Impl::IteratorMut<'a>> where Self: 'a, Self::Key: 'a, Self::Value: 'a;
 
     fn len(&self) -> usize {
         self.tables.iter().map(|x| x.len()).sum::<usize>()
@@ -157,7 +157,7 @@ impl<K: ?Sized + FastHash, V, Impl: HashtableLike<Key = K, Value = V>> Hashtable
             inner.push_back(table.iter());
         }
 
-        TwoLevelHashtableIter::create(inner)
+        PartitionedHashtableIter::create(inner)
     }
 
     fn clear(&mut self) {
@@ -167,17 +167,17 @@ impl<K: ?Sized + FastHash, V, Impl: HashtableLike<Key = K, Value = V>> Hashtable
     }
 }
 
-pub struct TwoLevelHashtableIter<Impl> {
+pub struct PartitionedHashtableIter<Impl> {
     inner: VecDeque<Impl>,
 }
 
-impl<Impl> TwoLevelHashtableIter<Impl> {
+impl<Impl> PartitionedHashtableIter<Impl> {
     pub fn create(inner: VecDeque<Impl>) -> Self {
-        TwoLevelHashtableIter::<Impl> { inner }
+        PartitionedHashtableIter::<Impl> { inner }
     }
 }
 
-impl<Impl: Iterator> Iterator for TwoLevelHashtableIter<Impl> {
+impl<Impl: Iterator> Iterator for PartitionedHashtableIter<Impl> {
     type Item = Impl::Item;
 
     fn next(&mut self) -> Option<Self::Item> {

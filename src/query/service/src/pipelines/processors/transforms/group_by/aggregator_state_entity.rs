@@ -14,8 +14,8 @@
 
 use common_hashtable::HashtableEntry;
 use common_hashtable::HashtableKeyable;
-use common_hashtable::UnsizedHashtableEntryMutRef;
-use common_hashtable::UnsizedHashtableEntryRef;
+use common_hashtable::ShortStringHashtableEntryMutRef;
+use common_hashtable::ShortStringHashtableEntryRef;
 
 pub trait StateEntityRef {
     type KeyRef: Copy;
@@ -111,7 +111,7 @@ impl<'a, Key: HashtableKeyable> StateEntityMutRef for &'a mut HashtableEntry<Key
     }
 }
 
-impl<'a> StateEntityRef for UnsizedHashtableEntryRef<'a, [u8], usize> {
+impl<'a> StateEntityRef for ShortStringHashtableEntryRef<'a, [u8], usize> {
     type KeyRef = &'a [u8];
 
     #[inline(always)]
@@ -125,7 +125,7 @@ impl<'a> StateEntityRef for UnsizedHashtableEntryRef<'a, [u8], usize> {
     }
 }
 
-impl<'a> StateEntityMutRef for UnsizedHashtableEntryMutRef<'a, [u8], usize> {
+impl<'a> StateEntityMutRef for ShortStringHashtableEntryMutRef<'a, [u8], usize> {
     type KeyRef = &'a [u8];
 
     #[inline(always)]

@@ -19,7 +19,7 @@ mod aggregator_final_parallel;
 mod aggregator_params;
 mod aggregator_partial;
 mod aggregator_single_key;
-mod aggregator_twolevel;
+mod aggregator_partitioned;
 mod utils;
 
 pub use aggregate_hashstate_info::AggregateHashStateInfo;
@@ -33,6 +33,6 @@ pub use aggregator_partial::PartialAggregator;
 pub use aggregator_single_key::FinalSingleStateAggregator;
 pub use aggregator_single_key::PartialSingleStateAggregator;
 pub use aggregator_single_key::SingleStateAggregator;
-pub use aggregator_twolevel::TwoLevelAggregator;
-pub use aggregator_twolevel::TwoLevelAggregatorLike;
+pub use aggregator_partitioned::PartitionedAggregator;
+pub use aggregator_partitioned::PartitionedAggregatorLike;
 pub use utils::*;

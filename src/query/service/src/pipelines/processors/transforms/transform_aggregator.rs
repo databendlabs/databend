@@ -117,15 +117,15 @@ pub trait Aggregator: Sized + Send {
     fn generate(&mut self) -> Result<Vec<DataBlock>>;
 }
 
-enum AggregatorTransform<TAggregator: Aggregator + TwoLevelAggregatorLike> {
+enum AggregatorTransform<TAggregator: Aggregator + PartitionedAggregatorLike> {
     ConsumeData(ConsumeState<TAggregator>),
-    TwoLevelConsumeData(TwoLevelConsumeState<TAggregator>),
+    PartitionedConsumeData(PartitionedConsumeState<TAggregator>),
     Generate(GenerateState<TAggregator>),
-    TwoLevelGenerate(GenerateState<TwoLevelAggregator<TAggregator>>),
+    PartitionedGenerate(GenerateState<PartitionedAggregator<TAggregator>>),
     Finished,
 }
 
-impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTransform<TAggregator> {
+impl<TAggregator: Aggregator + PartitionedAggregatorLike + 'static> AggregatorTransform<TAggregator> {
     pub fn create(
         ctx: Arc<QueryContext>,
         transform_params: AggregatorTransformParams,
@@ -163,8 +163,8 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
                     output_data_block: vec![],
                 }))
             }
-            AggregatorTransform::TwoLevelConsumeData(s) => {
-                Ok(AggregatorTransform::TwoLevelGenerate(GenerateState {
+            AggregatorTransform::PartitionedConsumeData(s) => {
+                Ok(AggregatorTransform::PartitionedGenerate(GenerateState {
                     inner: s.inner,
                     is_generated: false,
                     output_port: s.output_port,
@@ -177,9 +177,9 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
 
     pub fn convert_to_two_level_consume(self) -> Result<Self> {
         match self {
-            AggregatorTransform::ConsumeData(s) => Ok(AggregatorTransform::TwoLevelConsumeData(
-                TwoLevelConsumeState {
-                    inner: s.inner.convert_two_level()?,
+            AggregatorTransform::ConsumeData(s) => Ok(AggregatorTransform::PartitionedConsumeData(
+                PartitionedConsumeState {
+                    inner: s.inner.convert_partitioned()?,
                     input_port: s.input_port,
                     output_port: s.output_port,
                     input_data_block: None,
@@ -190,7 +190,7 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
     }
 }
 
-impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> Processor
+impl<TAggregator: Aggregator + PartitionedAggregatorLike + 'static> Processor
     for AggregatorTransform<TAggregator>
 {
     fn name(&self) -> String {
@@ -206,8 +206,8 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> Processor
             AggregatorTransform::Finished => Ok(Event::Finished),
             AggregatorTransform::Generate(_) => self.generate_event(),
             AggregatorTransform::ConsumeData(_) => self.consume_event(),
-            AggregatorTransform::TwoLevelConsumeData(_) => self.consume_event(),
-            AggregatorTransform::TwoLevelGenerate(_) => self.generate_event(),
+            AggregatorTransform::PartitionedConsumeData(_) => self.consume_event(),
+            AggregatorTransform::PartitionedGenerate(_) => self.generate_event(),
         }
     }
 
@@ -216,13 +216,13 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> Processor
             AggregatorTransform::Finished => Ok(()),
             AggregatorTransform::ConsumeData(state) => state.consume(),
             AggregatorTransform::Generate(state) => state.generate(),
-            AggregatorTransform::TwoLevelConsumeData(state) => state.consume(),
-            AggregatorTransform::TwoLevelGenerate(state) => state.generate(),
+            AggregatorTransform::PartitionedConsumeData(state) => state.consume(),
+            AggregatorTransform::PartitionedGenerate(state) => state.generate(),
         }
     }
 }
 
-impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTransform<TAggregator> {
+impl<TAggregator: Aggregator + PartitionedAggregatorLike + 'static> AggregatorTransform<TAggregator> {
     #[inline(always)]
     fn consume_event(&mut self) -> Result<Event> {
         if let AggregatorTransform::ConsumeData(state) = self {
@@ -264,7 +264,7 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
             };
         }
 
-        if let AggregatorTransform::TwoLevelConsumeData(state) = self {
+        if let AggregatorTransform::PartitionedConsumeData(state) = self {
             if state.input_data_block.is_some() {
                 return Ok(Event::Sync);
             }
@@ -324,7 +324,7 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
             return Ok(Event::Sync);
         }
 
-        if let AggregatorTransform::TwoLevelGenerate(state) = self {
+        if let AggregatorTransform::PartitionedGenerate(state) = self {
             if state.output_port.is_finished() {
                 let mut temp_state = AggregatorTransform::Finished;
                 std::mem::swap(self, &mut temp_state);
@@ -377,15 +377,15 @@ impl<TAggregator: Aggregator> ConsumeState<TAggregator> {
     }
 }
 
-struct TwoLevelConsumeState<TAggregator: Aggregator + TwoLevelAggregatorLike> {
-    inner: TwoLevelAggregator<TAggregator>,
+struct PartitionedConsumeState<TAggregator: Aggregator + PartitionedAggregatorLike> {
+    inner: PartitionedAggregator<TAggregator>,
 
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
     input_data_block: Option<DataBlock>,
 }
 
-impl<TAggregator: Aggregator + TwoLevelAggregatorLike> TwoLevelConsumeState<TAggregator> {
+impl<TAggregator: Aggregator + PartitionedAggregatorLike> PartitionedConsumeState<TAggregator> {
     pub fn consume(&mut self) -> Result<()> {
         if let Some(input_data) = self.input_data_block.take() {
             self.inner.consume(input_data)?;
