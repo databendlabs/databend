@@ -109,7 +109,16 @@ impl<'a> Debug for ScalarRef<'a> {
             ScalarRef::Number(val) => write!(f, "{val:?}"),
             ScalarRef::Decimal(val) => write!(f, "{val:?}"),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
-            ScalarRef::String(s) => write!(f, "{:?}", String::from_utf8_lossy(s)),
+            ScalarRef::String(s) => match std::str::from_utf8(s) {
+                Ok(v) => write!(f, "{:?}", v),
+                Err(_e) => {
+                    write!(f, "0x")?;
+                    for c in *s {
+                        write!(f, "{:02x}", c)?;
+                    }
+                    Ok(())
+                }
+            },
             ScalarRef::Timestamp(t) => write!(f, "{t:?}"),
             ScalarRef::Date(d) => write!(f, "{d:?}"),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
@@ -163,8 +172,9 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::Decimal(val) => write!(f, "{:?}", val),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
             ScalarRef::String(s) => match std::str::from_utf8(s) {
-                Ok(v) => write!(f, "{}", v),
+                Ok(v) => write!(f, "{:?}", v),
                 Err(_e) => {
+                    write!(f, "0x")?;
                     for c in *s {
                         write!(f, "{:02x}", c)?;
                     }
