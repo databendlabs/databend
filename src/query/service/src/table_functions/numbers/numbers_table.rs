@@ -39,14 +39,14 @@ use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_pipeline_sources::EmptySource;
+use common_pipeline_sources::SyncSource;
+use common_pipeline_sources::SyncSourcer;
 
 use super::numbers_part::generate_numbers_parts;
 use super::NumbersPartInfo;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::EmptySource;
-use crate::pipelines::processors::SyncSource;
-use crate::pipelines::processors::SyncSourcer;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::TableContext;

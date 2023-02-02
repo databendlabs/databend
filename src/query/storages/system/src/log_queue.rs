@@ -36,8 +36,8 @@ use common_meta_app::schema::TableMeta;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
-use common_pipeline_sources::processors::sources::SyncSource;
-use common_pipeline_sources::processors::sources::SyncSourcer;
+use common_pipeline_sources::SyncSource;
+use common_pipeline_sources::SyncSourcer;
 use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
 
