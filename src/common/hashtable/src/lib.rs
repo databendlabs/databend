@@ -26,13 +26,13 @@ mod lookup_hashtable;
 mod stack_hashtable;
 mod table0;
 
+mod partitioned_hashtable;
+mod short_string_hashtable;
 mod string_hashtable;
 #[allow(dead_code)]
 mod table1;
 mod table_empty;
 mod traits;
-mod partitioned_hashtable;
-mod short_string_hashtable;
 mod utils;
 
 pub use table0::Entry as HashtableEntry;
@@ -68,21 +68,21 @@ pub type PartitionedHashSet<K> = partitioned_hashtable::PartitionedHashtable<Has
 pub type PartitionedHashMapIter<Inner> = partitioned_hashtable::PartitionedHashtableIter<Inner>;
 
 pub type ShortStringHashMap<K, V> = short_string_hashtable::ShortStringHashtable<K, V>;
-pub type ShortStringHashMapIter<'a, K, V> = short_string_hashtable::ShortStringHashtableIter<'a, K, V>;
-pub type ShortStringHashMapIterMut<'a, K, V> = short_string_hashtable::ShortStringHashtableIterMut<'a, K, V>;
+pub type ShortStringHashMapIter<'a, K, V> =
+    short_string_hashtable::ShortStringHashtableIter<'a, K, V>;
+pub type ShortStringHashMapIterMut<'a, K, V> =
+    short_string_hashtable::ShortStringHashtableIterMut<'a, K, V>;
 pub type ShortStringHashSet<K> = short_string_hashtable::ShortStringHashtable<K, ()>;
-pub type ShortStringHashtableEntryRef<'a, K, V> = short_string_hashtable::ShortStringHashtableEntryRef<'a, K, V>;
+pub type ShortStringHashtableEntryRef<'a, K, V> =
+    short_string_hashtable::ShortStringHashtableEntryRef<'a, K, V>;
 pub type ShortStringHashtableEntryMutRef<'a, K, V> =
     short_string_hashtable::ShortStringHashtableEntryMutRef<'a, K, V>;
 
 pub type StringHashMap<K, V> = string_hashtable::StringHashtable<K, V>;
-pub type StringHashMapIter<'a, K, V> =
-    string_hashtable::StringHashtableIter<'a, K, V>;
-pub type StringHashMapIterMut<'a, K, V> =
-    string_hashtable::StringHashtableIterMut<'a, K, V>;
+pub type StringHashMapIter<'a, K, V> = string_hashtable::StringHashtableIter<'a, K, V>;
+pub type StringHashMapIterMut<'a, K, V> = string_hashtable::StringHashtableIterMut<'a, K, V>;
 pub type StringHashSet<K> = string_hashtable::StringHashtable<K, ()>;
-pub type StringHashtableEntryRef<'a, K, V> =
-    string_hashtable::StringHashtableEntryRef<'a, K, V>;
+pub type StringHashtableEntryRef<'a, K, V> = string_hashtable::StringHashtableEntryRef<'a, K, V>;
 pub type StringHashtableEntryMutRef<'a, K, V> =
     string_hashtable::StringHashtableEntryMutRef<'a, K, V>;
 

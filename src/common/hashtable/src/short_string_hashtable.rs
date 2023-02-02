@@ -158,7 +158,8 @@ where
     pub unsafe fn insert_and_entry_borrowing(
         &mut self,
         key: *const K,
-    ) -> Result<ShortStringHashtableEntryMutRef<'_, K, V>, ShortStringHashtableEntryMutRef<'_, K, V>> {
+    ) -> Result<ShortStringHashtableEntryMutRef<'_, K, V>, ShortStringHashtableEntryMutRef<'_, K, V>>
+    {
         let key = (*key).as_bytes();
         match key.len() {
             _ if key.last().copied() == Some(0) => {
@@ -167,27 +168,30 @@ where
                     .insert(FallbackKey::new(key))
                     .map(|x| {
                         self.key_size += key.len();
-                        ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table4(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table4(x),
+                        )
                     })
                     .map_err(|x| {
-                        ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table4(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table4(x),
+                        )
                     })
             }
-            0 => self
-                .table0
-                .insert()
-                .map(|x| {
-                    ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                })
-                .map_err(|x| {
-                    ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                }),
+            0 => {
+                self.table0
+                    .insert()
+                    .map(|x| {
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table0(x, PhantomData),
+                        )
+                    })
+                    .map_err(|x| {
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table0(x, PhantomData),
+                        )
+                    })
+            }
             1..=8 => {
                 self.table1.check_grow();
                 let mut t = [0u64; 1];
@@ -197,10 +201,14 @@ where
                     .insert(t)
                     .map(|x| {
                         self.key_size += key.len();
-                        ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table1(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table1(x),
+                        )
                     })
                     .map_err(|x| {
-                        ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table1(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table1(x),
+                        )
                     })
             }
             9..=16 => {
@@ -213,10 +221,14 @@ where
                     .insert(t)
                     .map(|x| {
                         self.key_size += key.len();
-                        ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table2(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table2(x),
+                        )
                     })
                     .map_err(|x| {
-                        ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table2(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table2(x),
+                        )
                     })
             }
             17..=24 => {
@@ -230,10 +242,14 @@ where
                     .insert(t)
                     .map(|x| {
                         self.key_size += key.len();
-                        ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table3(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table3(x),
+                        )
                     })
                     .map_err(|x| {
-                        ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table3(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table3(x),
+                        )
                     })
             }
             _ => {
@@ -242,10 +258,14 @@ where
                     .insert(FallbackKey::new(key))
                     .map(|x| {
                         self.key_size += key.len();
-                        ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table4(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table4(x),
+                        )
                     })
                     .map_err(|x| {
-                        ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table4(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table4(x),
+                        )
                     })
             }
         }
@@ -476,7 +496,9 @@ impl<'a, K: ?Sized + UnsizedKeyable, V> ShortStringHashtableEntryRefInner<'a, K,
     }
 }
 
-pub struct ShortStringHashtableEntryRef<'a, K: ?Sized, V>(ShortStringHashtableEntryRefInner<'a, K, V>);
+pub struct ShortStringHashtableEntryRef<'a, K: ?Sized, V>(
+    ShortStringHashtableEntryRefInner<'a, K, V>,
+);
 
 impl<'a, K: ?Sized, V> Copy for ShortStringHashtableEntryRef<'a, K, V> {}
 
@@ -762,29 +784,32 @@ where A: Allocator + Clone + Default
         let key = key.as_bytes();
         match key.len() {
             _ if key.last().copied() == Some(0) => unsafe {
-                self.table4
-                    .get(&FallbackKey::new(key))
-                    .map(|x| ShortStringHashtableEntryRef(ShortStringHashtableEntryRefInner::Table4(x)))
+                self.table4.get(&FallbackKey::new(key)).map(|x| {
+                    ShortStringHashtableEntryRef(ShortStringHashtableEntryRefInner::Table4(x))
+                })
             },
             0 => self.table0.get().map(|x| {
-                ShortStringHashtableEntryRef(ShortStringHashtableEntryRefInner::Table0(x, PhantomData))
+                ShortStringHashtableEntryRef(ShortStringHashtableEntryRefInner::Table0(
+                    x,
+                    PhantomData,
+                ))
             }),
             1..=8 => unsafe {
                 let mut t = [0u64; 1];
                 t[0] = read_le(key.as_ptr(), key.len());
                 let t = std::mem::transmute::<_, InlineKey<0>>(t);
-                self.table1
-                    .get(&t)
-                    .map(|x| ShortStringHashtableEntryRef(ShortStringHashtableEntryRefInner::Table1(x)))
+                self.table1.get(&t).map(|x| {
+                    ShortStringHashtableEntryRef(ShortStringHashtableEntryRefInner::Table1(x))
+                })
             },
             9..=16 => unsafe {
                 let mut t = [0u64; 2];
                 t[0] = (key.as_ptr() as *const u64).read_unaligned();
                 t[1] = read_le(key.as_ptr().offset(8), key.len() - 8);
                 let t = std::mem::transmute::<_, InlineKey<1>>(t);
-                self.table2
-                    .get(&t)
-                    .map(|x| ShortStringHashtableEntryRef(ShortStringHashtableEntryRefInner::Table2(x)))
+                self.table2.get(&t).map(|x| {
+                    ShortStringHashtableEntryRef(ShortStringHashtableEntryRefInner::Table2(x))
+                })
             },
             17..=24 => unsafe {
                 let mut t = [0u64; 3];
@@ -792,14 +817,14 @@ where A: Allocator + Clone + Default
                 t[1] = (key.as_ptr() as *const u64).offset(1).read_unaligned();
                 t[2] = read_le(key.as_ptr().offset(16), key.len() - 16);
                 let t = std::mem::transmute::<_, InlineKey<2>>(t);
-                self.table3
-                    .get(&t)
-                    .map(|x| ShortStringHashtableEntryRef(ShortStringHashtableEntryRefInner::Table3(x)))
+                self.table3.get(&t).map(|x| {
+                    ShortStringHashtableEntryRef(ShortStringHashtableEntryRefInner::Table3(x))
+                })
             },
             _ => unsafe {
-                self.table4
-                    .get(&FallbackKey::new(key))
-                    .map(|x| ShortStringHashtableEntryRef(ShortStringHashtableEntryRefInner::Table4(x)))
+                self.table4.get(&FallbackKey::new(key)).map(|x| {
+                    ShortStringHashtableEntryRef(ShortStringHashtableEntryRefInner::Table4(x))
+                })
             },
         }
     }
@@ -896,21 +921,20 @@ where A: Allocator + Clone + Default
                     )),
                 }
             }
-            0 => self
-                .table0
-                .insert()
-                .map(|x| {
-                    ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                })
-                .map_err(|x| {
-                    ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                }),
+            0 => {
+                self.table0
+                    .insert()
+                    .map(|x| {
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table0(x, PhantomData),
+                        )
+                    })
+                    .map_err(|x| {
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table0(x, PhantomData),
+                        )
+                    })
+            }
 
             1..=8 => {
                 self.table1.check_grow();
@@ -921,10 +945,14 @@ where A: Allocator + Clone + Default
                     .insert(t)
                     .map(|x| {
                         self.key_size += key.len();
-                        ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table1(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table1(x),
+                        )
                     })
                     .map_err(|x| {
-                        ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table1(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table1(x),
+                        )
                     })
             }
             9..=16 => {
@@ -937,10 +965,14 @@ where A: Allocator + Clone + Default
                     .insert(t)
                     .map(|x| {
                         self.key_size += key.len();
-                        ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table2(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table2(x),
+                        )
                     })
                     .map_err(|x| {
-                        ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table2(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table2(x),
+                        )
                     })
             }
             17..=24 => {
@@ -954,10 +986,14 @@ where A: Allocator + Clone + Default
                     .insert(t)
                     .map(|x| {
                         self.key_size += key.len();
-                        ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table3(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table3(x),
+                        )
                     })
                     .map_err(|x| {
-                        ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table3(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table3(x),
+                        )
                     })
             }
             _ => {
@@ -1008,22 +1044,21 @@ where A: Allocator + Clone + Default
                     )),
                 }
             }
-            0 => self
-                .table0
-                .insert()
-                .map(|x| {
-                    self.key_size += key.len();
-                    ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                })
-                .map_err(|x| {
-                    ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                }),
+            0 => {
+                self.table0
+                    .insert()
+                    .map(|x| {
+                        self.key_size += key.len();
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table0(x, PhantomData),
+                        )
+                    })
+                    .map_err(|x| {
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table0(x, PhantomData),
+                        )
+                    })
+            }
             1..=8 => {
                 self.table1.check_grow();
                 let mut t = [0u64; 1];
@@ -1033,10 +1068,14 @@ where A: Allocator + Clone + Default
                     .insert_with_hash(t, hash)
                     .map(|x| {
                         self.key_size += key.len();
-                        ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table1(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table1(x),
+                        )
                     })
                     .map_err(|x| {
-                        ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table1(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table1(x),
+                        )
                     })
             }
             9..=16 => {
@@ -1049,10 +1088,14 @@ where A: Allocator + Clone + Default
                     .insert_with_hash(t, hash)
                     .map(|x| {
                         self.key_size += key.len();
-                        ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table2(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table2(x),
+                        )
                     })
                     .map_err(|x| {
-                        ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table2(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table2(x),
+                        )
                     })
             }
             17..=24 => {
@@ -1066,10 +1109,14 @@ where A: Allocator + Clone + Default
                     .insert_with_hash(t, hash)
                     .map(|x| {
                         self.key_size += key.len();
-                        ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table3(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table3(x),
+                        )
                     })
                     .map_err(|x| {
-                        ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table3(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table3(x),
+                        )
                     })
             }
             _ => {

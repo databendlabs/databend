@@ -27,12 +27,12 @@ use super::traits::EntryMutRefLike;
 use super::traits::EntryRefLike;
 use super::traits::HashtableLike;
 use super::traits::UnsizedKeyable;
+use crate::short_string_hashtable::FallbackKey;
 use crate::table0::Table0Iter;
 use crate::table0::Table0IterMut;
 use crate::table_empty::TableEmpty;
 use crate::table_empty::TableEmptyIter;
 use crate::table_empty::TableEmptyIterMut;
-use crate::short_string_hashtable::FallbackKey;
 
 /// Simple unsized hashtable is used for storing unsized keys in arena. It can be worked with HashMethodSerializer.
 /// Different from `ShortStringHashTable`, it doesn't use adpative sub hashtable to store key values via key size.
@@ -140,24 +140,23 @@ where
     pub unsafe fn insert_and_entry_borrowing(
         &mut self,
         key: *const K,
-    ) -> Result<
-        StringHashtableEntryMutRef<'_, K, V>,
-        StringHashtableEntryMutRef<'_, K, V>,
-    > {
+    ) -> Result<StringHashtableEntryMutRef<'_, K, V>, StringHashtableEntryMutRef<'_, K, V>> {
         let key = (*key).as_bytes();
         match key.len() {
             0 => self
                 .table_empty
                 .insert()
                 .map(|x| {
-                    StringHashtableEntryMutRef(
-                        StringHashtableEntryMutRefInner::TableEmpty(x, PhantomData),
-                    )
+                    StringHashtableEntryMutRef(StringHashtableEntryMutRefInner::TableEmpty(
+                        x,
+                        PhantomData,
+                    ))
                 })
                 .map_err(|x| {
-                    StringHashtableEntryMutRef(
-                        StringHashtableEntryMutRefInner::TableEmpty(x, PhantomData),
-                    )
+                    StringHashtableEntryMutRef(StringHashtableEntryMutRefInner::TableEmpty(
+                        x,
+                        PhantomData,
+                    ))
                 }),
             _ => {
                 self.table.check_grow();
@@ -165,14 +164,10 @@ where
                     .insert(FallbackKey::new(key))
                     .map(|x| {
                         self.key_size += key.len();
-                        StringHashtableEntryMutRef(
-                            StringHashtableEntryMutRefInner::Table(x),
-                        )
+                        StringHashtableEntryMutRef(StringHashtableEntryMutRefInner::Table(x))
                     })
                     .map_err(|x| {
-                        StringHashtableEntryMutRef(
-                            StringHashtableEntryMutRefInner::Table(x),
-                        )
+                        StringHashtableEntryMutRef(StringHashtableEntryMutRefInner::Table(x))
                     })
             }
         }
@@ -302,9 +297,7 @@ impl<'a, K: ?Sized + UnsizedKeyable, V> StringHashtableEntryRefInner<'a, K, V> {
     }
 }
 
-pub struct StringHashtableEntryRef<'a, K: ?Sized, V>(
-    StringHashtableEntryRefInner<'a, K, V>,
-);
+pub struct StringHashtableEntryRef<'a, K: ?Sized, V>(StringHashtableEntryRefInner<'a, K, V>);
 
 impl<'a, K: ?Sized, V> Copy for StringHashtableEntryRef<'a, K, V> {}
 
@@ -371,9 +364,7 @@ impl<'a, K: ?Sized + UnsizedKeyable, V> StringHashtableEntryMutRefInner<'a, K, V
     }
 }
 
-pub struct StringHashtableEntryMutRef<'a, K: ?Sized, V>(
-    StringHashtableEntryMutRefInner<'a, K, V>,
-);
+pub struct StringHashtableEntryMutRef<'a, K: ?Sized, V>(StringHashtableEntryMutRefInner<'a, K, V>);
 
 impl<'a, K: ?Sized + UnsizedKeyable, V> StringHashtableEntryMutRef<'a, K, V> {
     pub fn key(&self) -> &'a K {
@@ -464,15 +455,12 @@ where A: Allocator + Clone + Default
         let key = key.as_bytes();
         match key.len() {
             0 => self.table_empty.get().map(|x| {
-                StringHashtableEntryRef(StringHashtableEntryRefInner::TableEmpty(
-                    x,
-                    PhantomData,
-                ))
+                StringHashtableEntryRef(StringHashtableEntryRefInner::TableEmpty(x, PhantomData))
             }),
             _ => unsafe {
-                self.table.get(&FallbackKey::new(key)).map(|x| {
-                    StringHashtableEntryRef(StringHashtableEntryRefInner::Table(x))
-                })
+                self.table
+                    .get(&FallbackKey::new(key))
+                    .map(|x| StringHashtableEntryRef(StringHashtableEntryRefInner::Table(x)))
             },
         }
     }
@@ -480,16 +468,15 @@ where A: Allocator + Clone + Default
     fn entry_mut(&mut self, key: &[u8]) -> Option<Self::EntryMutRef<'_>> {
         match key.len() {
             0 => self.table_empty.get_mut().map(|x| {
-                StringHashtableEntryMutRef(
-                    StringHashtableEntryMutRefInner::TableEmpty(x, PhantomData),
-                )
+                StringHashtableEntryMutRef(StringHashtableEntryMutRefInner::TableEmpty(
+                    x,
+                    PhantomData,
+                ))
             }),
             _ => unsafe {
-                self.table.get_mut(&FallbackKey::new(key)).map(|x| {
-                    StringHashtableEntryMutRef(
-                        StringHashtableEntryMutRefInner::Table(x),
-                    )
-                })
+                self.table
+                    .get_mut(&FallbackKey::new(key))
+                    .map(|x| StringHashtableEntryMutRef(StringHashtableEntryMutRefInner::Table(x)))
             },
         }
     }
@@ -524,14 +511,16 @@ where A: Allocator + Clone + Default
                 .table_empty
                 .insert()
                 .map(|x| {
-                    StringHashtableEntryMutRef(
-                        StringHashtableEntryMutRefInner::TableEmpty(x, PhantomData),
-                    )
+                    StringHashtableEntryMutRef(StringHashtableEntryMutRefInner::TableEmpty(
+                        x,
+                        PhantomData,
+                    ))
                 })
                 .map_err(|x| {
-                    StringHashtableEntryMutRef(
-                        StringHashtableEntryMutRefInner::TableEmpty(x, PhantomData),
-                    )
+                    StringHashtableEntryMutRef(StringHashtableEntryMutRefInner::TableEmpty(
+                        x,
+                        PhantomData,
+                    ))
                 }),
 
             _ => {
@@ -567,14 +556,16 @@ where A: Allocator + Clone + Default
                 .table_empty
                 .insert()
                 .map(|x| {
-                    StringHashtableEntryMutRef(
-                        StringHashtableEntryMutRefInner::TableEmpty(x, PhantomData),
-                    )
+                    StringHashtableEntryMutRef(StringHashtableEntryMutRefInner::TableEmpty(
+                        x,
+                        PhantomData,
+                    ))
                 })
                 .map_err(|x| {
-                    StringHashtableEntryMutRef(
-                        StringHashtableEntryMutRefInner::TableEmpty(x, PhantomData),
-                    )
+                    StringHashtableEntryMutRef(StringHashtableEntryMutRefInner::TableEmpty(
+                        x,
+                        PhantomData,
+                    ))
                 }),
             _ => {
                 self.table.check_grow();

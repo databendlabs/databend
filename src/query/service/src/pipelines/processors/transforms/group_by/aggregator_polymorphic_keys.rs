@@ -32,9 +32,9 @@ use common_hashtable::FastHash;
 use common_hashtable::HashMap;
 use common_hashtable::HashtableLike;
 use common_hashtable::LookupHashMap;
-use common_hashtable::StringHashMap;
 use common_hashtable::PartitionedHashMap;
 use common_hashtable::ShortStringHashMap;
+use common_hashtable::StringHashMap;
 use primitive_types::U256;
 use primitive_types::U512;
 

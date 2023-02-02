@@ -125,7 +125,9 @@ enum AggregatorTransform<TAggregator: Aggregator + PartitionedAggregatorLike> {
     Finished,
 }
 
-impl<TAggregator: Aggregator + PartitionedAggregatorLike + 'static> AggregatorTransform<TAggregator> {
+impl<TAggregator: Aggregator + PartitionedAggregatorLike + 'static>
+    AggregatorTransform<TAggregator>
+{
     pub fn create(
         ctx: Arc<QueryContext>,
         transform_params: AggregatorTransformParams,
@@ -222,7 +224,9 @@ impl<TAggregator: Aggregator + PartitionedAggregatorLike + 'static> Processor
     }
 }
 
-impl<TAggregator: Aggregator + PartitionedAggregatorLike + 'static> AggregatorTransform<TAggregator> {
+impl<TAggregator: Aggregator + PartitionedAggregatorLike + 'static>
+    AggregatorTransform<TAggregator>
+{
     #[inline(always)]
     fn consume_event(&mut self) -> Result<Event> {
         if let AggregatorTransform::ConsumeData(state) = self {

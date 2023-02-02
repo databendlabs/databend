@@ -17,8 +17,8 @@ use std::sync::atomic::Ordering;
 
 use common_hashtable::HashMap;
 use common_hashtable::HashtableLike;
-use common_hashtable::StackHashMap;
 use common_hashtable::ShortStringHashMap;
+use common_hashtable::StackHashMap;
 use rand::Rng;
 
 macro_rules! simple_test {
@@ -81,7 +81,6 @@ fn test_hash_map() {
 fn test_stack_hash_map() {
     simple_test!(StackHashMap);
 }
-
 
 #[test]
 fn test_unsized_hash_map() {
