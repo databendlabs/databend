@@ -41,10 +41,15 @@ fn test_column_leaf_schema_from_struct() -> Result<()> {
         ("tuplesimple", &column_8_ids),
     ];
 
+    let leaf_column_ids = schema.to_leaf_column_ids();
     for (i, column_leaf) in column_leaves.column_nodes.iter().enumerate() {
         let expeted_column_id = expeted_column_ids[i];
         assert_eq!(expeted_column_id.0.to_string(), column_leaf.field.name);
         assert_eq!(*expeted_column_id.1, column_leaf.leaf_column_ids);
+
+        for (i, lead_index) in column_leaf.leaf_ids.iter().enumerate() {
+            assert_eq!(leaf_column_ids[*lead_index], column_leaf.leaf_column_ids[i]);
+        }
     }
 
     Ok(())

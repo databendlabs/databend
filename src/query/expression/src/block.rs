@@ -342,6 +342,47 @@ impl DataBlock {
 
         Ok(DataBlock::new(cols, arrow_chunk.len()))
     }
+
+    // If use_field_default_vals[i].is_some(), then DataBlock.column[i] = num_rows * DataField.default_value().
+    // else, DataBlock.column[i] = chuck.columns[i].
+    pub fn create_with_schema_from_chunk<A: AsRef<dyn Array>>(
+        schema: &DataSchemaRef,
+        chuck: &ArrowChunk<A>,
+        use_field_default_vals: &[Option<()>],
+        num_rows: usize,
+    ) -> Result<DataBlock> {
+        assert_eq!(schema.fields().len(), use_field_default_vals.len());
+        let mut data_block = DataBlock::empty();
+        data_block.num_rows = num_rows;
+        let mut chunk_idx: usize = 0;
+        let chunk_columns = chuck.arrays();
+        let schema_fields = schema.fields();
+
+        for (i, use_field_default_val) in use_field_default_vals.iter().enumerate() {
+            let field = &schema_fields[i];
+            let data_type = field.data_type();
+            let block = if use_field_default_val.is_some() {
+                let default_value = data_type.default_value();
+                let builder = ColumnBuilder::repeat(&default_value.as_ref(), num_rows, data_type);
+                let col = builder.build();
+                BlockEntry {
+                    data_type: data_type.clone(),
+                    value: Value::Column(col),
+                }
+            } else {
+                assert!(chunk_idx < chunk_columns.len());
+                let chunk_column = &chunk_columns[chunk_idx];
+                chunk_idx += 1;
+                BlockEntry {
+                    data_type: data_type.clone(),
+                    value: Value::Column(Column::from_arrow(chunk_column.as_ref(), data_type)),
+                }
+            };
+            data_block.add_column(block);
+        }
+
+        Ok(data_block)
+    }
 }
 
 impl TryFrom<DataBlock> for ArrowChunk<ArrayRef> {
