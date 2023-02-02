@@ -116,7 +116,6 @@ The `Compute Layer` codes are mainly in the `query` directory.
 ### Storage Layer
 
 Databend stores data in an efficient, columnar format as Parquet files.
-Each Parquet file is sorted by the primary key before being written to the underlying shared storage.
 For efficient pruning, Databend also creates indexes for each Parquet file:
 
 - `min_max.idx` The index file stores the *minimum* and *maximum* value of this Parquet file.
