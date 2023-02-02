@@ -48,7 +48,7 @@ impl AsyncSystemTable for ColumnsTable {
         let mut names: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut tables: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut databases: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
-        let mut column_types: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
+        let mut types: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut data_types: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut default_kinds: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut default_exprs: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
@@ -58,7 +58,7 @@ impl AsyncSystemTable for ColumnsTable {
             names.push(field.name().clone().into_bytes());
             tables.push(table_name.into_bytes());
             databases.push(database_name.into_bytes());
-            column_types.push(field.data_type().wrapped_display().into_bytes());
+            types.push(field.data_type().wrapped_display().into_bytes());
             let data_type = field.data_type().remove_recursive_nullable().sql_name();
             data_types.push(data_type.into_bytes());
 
@@ -83,7 +83,7 @@ impl AsyncSystemTable for ColumnsTable {
             StringType::from_data(names),
             StringType::from_data(databases),
             StringType::from_data(tables),
-            StringType::from_data(column_types),
+            StringType::from_data(types),
             StringType::from_data(data_types),
             StringType::from_data(default_kinds),
             StringType::from_data(default_exprs),
