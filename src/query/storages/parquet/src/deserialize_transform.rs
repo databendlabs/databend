@@ -16,17 +16,24 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::parquet::indexes::Interval;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::filter_helper::FilterHelpers;
+use common_expression::types::DataType;
+use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FunctionContext;
+use common_expression::Scalar;
+use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
@@ -219,6 +226,10 @@ impl Processor for ParquetDeserializeTransform {
         if let Some(mut readers) = self.data_readers.pop_front() {
             let part = self.parts.pop_front().unwrap();
             let part = ParquetRowGroupPart::from_part(&part)?;
+            let row_selection = part
+                .row_selection
+                .as_ref()
+                .map(|sel| intervals_to_bitmap(sel, part.num_rows));
 
             // this means it's empty projection
             if readers.is_empty() {
@@ -257,7 +268,8 @@ impl Processor for ParquetDeserializeTransform {
                     filter,
                 }) => {
                     let chunks = reader.read_from_readers(&mut readers)?;
-                    let mut prewhere_block = reader.deserialize(part, chunks, None)?;
+                    let mut prewhere_block =
+                        reader.deserialize(part, chunks, row_selection.clone())?;
                     let evaluator = Evaluator::new(&prewhere_block, *func_ctx, &BUILTIN_FUNCTIONS);
                     let result = evaluator
                         .run(filter)
@@ -269,7 +281,18 @@ impl Processor for ParquetDeserializeTransform {
                         return Ok(());
                     }
 
-                    // Step 4: Apply the filter to topk and update the bitmap, this will filter more results
+                    // Step 4: Remove columns that are not needed for output. Use dummy column to replce them.
+                    let mut columns = prewhere_block.columns().to_vec();
+                    for (col, f) in columns.iter_mut().zip(reader.output_schema().fields()) {
+                        if !self.output_schema.has_field(f.name()) {
+                            *col = BlockEntry {
+                                data_type: DataType::Null,
+                                value: Value::Scalar(Scalar::Null),
+                            };
+                        }
+                    }
+
+                    // Step 5: Apply the filter to topk and update the bitmap, this will filter more results
                     // let filter = if let Some((_, sorter, index)) = &mut self.top_k {
                     //     let index_prewhere = self
                     //         .prewhere_columns
@@ -294,29 +317,67 @@ impl Processor for ParquetDeserializeTransform {
                     //     return Self::skip_chunks_page(&self.read_columns, chunks);
                     // }
 
+                    // Step 6: Read remain columns.
                     let chunks = self.remain_reader.read_from_readers(&mut readers)?;
+                    if row_selection.is_some() {
+                        let remain_block =
+                            self.remain_reader
+                                .deserialize(part, chunks, row_selection)?;
 
-                    // TODO: the filter may be able to pushed down
-                    let remain_block = self.remain_reader.deserialize(part, chunks, None)?;
+                        // Combine two blocks.
+                        for col in remain_block.columns() {
+                            prewhere_block.add_column(col.clone());
+                        }
 
-                    // Combine two blocks.
-                    for col in remain_block.columns() {
-                        prewhere_block.add_column(col.clone());
+                        let block = prewhere_block.resort(&self.src_schema, &self.output_schema)?;
+                        block.filter_boolean_value(filter)
+                    } else {
+                        // filter prewhere columns first.
+                        let mut prewhere_block =
+                            prewhere_block.filter_boolean_value(filter.clone())?;
+                        // If row_selection is None, we can push down the prewhere filter to remain data deserialization.
+                        let remain_block = match filter {
+                            Value::Column(bitmap) => {
+                                self.remain_reader.deserialize(part, chunks, Some(bitmap))?
+                            }
+                            _ => self.remain_reader.deserialize(part, chunks, None)?, // all true
+                        };
+                        for col in remain_block.columns() {
+                            prewhere_block.add_column(col.clone());
+                        }
+
+                        prewhere_block.resort(&self.src_schema, &self.output_schema)
                     }
-
-                    let block = remain_block.resort(&self.src_schema, &self.output_schema)?;
-                    block.filter_boolean_value(filter)
                 }
                 None => {
                     let chunks = self.remain_reader.read_from_readers(&mut readers)?;
-                    self.remain_reader.deserialize(part, chunks, None)
+                    self.remain_reader.deserialize(part, chunks, row_selection)
                 }
             }?;
 
-            // Step 5: Add the block to output data
             self.add_block(data_block)?;
         }
 
         Ok(())
     }
+}
+
+/// Convert intervals to a bitmap. The `intervals` represents the row selection across `num_rows`.
+fn intervals_to_bitmap(interval: &[Interval], num_rows: usize) -> Bitmap {
+    debug_assert!(
+        interval.is_empty()
+            || interval.last().unwrap().start + interval.last().unwrap().length < num_rows
+    );
+
+    let mut bitmap = MutableBitmap::with_capacity(num_rows);
+    let mut offset = 0;
+
+    for intv in interval {
+        bitmap.extend_constant(intv.start - offset, false);
+        bitmap.extend_constant(intv.length, true);
+        offset = intv.start + intv.length;
+    }
+    bitmap.extend_constant(num_rows - offset, false);
+
+    bitmap.into()
 }

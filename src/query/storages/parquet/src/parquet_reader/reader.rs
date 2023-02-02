@@ -238,7 +238,7 @@ impl ParquetReader {
         for index in &self.columns_to_read {
             let obj = self.operator.object(&part.location);
             // in `read_parquet` function, there is no `TableSchema`, so index treated as column id
-            let meta = &part.column_metas[&(*index as u32)];
+            let meta = &part.column_metas[index];
             let chunk = obj.blocking_range_read(meta.offset..meta.offset + meta.length)?;
 
             chunks.push((*index, chunk));
@@ -253,7 +253,7 @@ impl ParquetReader {
 
         for &index in &self.columns_to_read {
             // in `read_parquet` function, there is no `TableSchema`, so index treated as column id
-            let meta = &part.column_metas[&(index as u32)];
+            let meta = &part.column_metas[&index];
             let obj = self.operator.object(&part.location);
             let range = meta.offset..meta.offset + meta.length;
             chunks.push(async move {

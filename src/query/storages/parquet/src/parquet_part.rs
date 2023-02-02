@@ -23,7 +23,6 @@ use common_arrow::parquet::compression::Compression;
 use common_arrow::parquet::indexes::Interval;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
-use common_catalog::table::ColumnId;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Scalar;
@@ -40,7 +39,7 @@ pub struct ColumnMeta {
 pub struct ParquetRowGroupPart {
     pub location: String,
     pub num_rows: usize,
-    pub column_metas: HashMap<ColumnId, ColumnMeta>,
+    pub column_metas: HashMap<usize, ColumnMeta>,
     pub row_selection: Option<Vec<Interval>>,
     /// If all row group parts have min/max stats. This is used for topk push down optimization.
     ///
