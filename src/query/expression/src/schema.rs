@@ -857,6 +857,14 @@ impl TableDataType {
             _ => self.clone(),
         }
     }
+    
+    pub fn remove_recursive_nullable(&self) -> Self {
+        match self {
+            TableDataType::Nullable(ty) => &ty.as_ref().remove_recursive_nullable(),
+            TableDataType::Tuple(ty) => 
+            _ => self.clone(),
+        }
+    }
 
     pub fn wrapped_display(&self) -> String {
         match self {
@@ -875,7 +883,8 @@ impl TableDataType {
             _ => format!("{}", self),
         }
     }
-
+    
+    
     pub fn sql_name(&self) -> String {
         match self {
             TableDataType::Number(num_ty) => match num_ty {
