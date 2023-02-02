@@ -40,6 +40,7 @@ use crate::types::array::ArrayColumn;
 use crate::types::date::DATE_MAX;
 use crate::types::date::DATE_MIN;
 use crate::types::decimal::DecimalDataType;
+use crate::types::decimal::DecimalSize;
 use crate::types::nullable::NullableColumn;
 use crate::types::timestamp::TIMESTAMP_MAX;
 use crate::types::timestamp::TIMESTAMP_MIN;
@@ -1157,13 +1158,13 @@ impl From<&ArrowField> for TableDataType {
 
             ArrowDataType::Decimal(precision, scale) =>
                 TableDataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-                    precision,
-                    scale,
+                    precision: *precision as u8,
+                    scale: *scale as u8,
                 })),
             ArrowDataType::Decimal256(precision, scale) =>
                 TableDataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
-                    precision,
-                    scale,
+                    precision: *precision as u8,
+                    scale: *scale as u8,
                 })),
 
             ArrowDataType::Null => return TableDataType::Null,
