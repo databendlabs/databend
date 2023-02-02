@@ -10,6 +10,19 @@ CREATE TABLE COLUMNTEST.A(ID INT, ID2 INT DEFAULT 1, ID3 STRING, ID4 STRING DEFA
 statement ok
 SELECT lower(database), name, type, default_kind as default_type, default_expression, comment FROM system.columns  WHERE database LIKE 'columntest'
 
+query show_columns_for_view
+SELECT lower(database), name, type, default_kind as default_type, default_expression, comment FROM system.columns  WHERE table LIKE 'views'
+----
+information_schema table_catalog VARCHAR (empty) (empty) (empty)
+information_schema table_schema VARCHAR (empty) (empty) (empty)
+information_schema table_name VARCHAR (empty) (empty) (empty)
+information_schema view_definition NULL (empty) (empty) (empty)
+information_schema check_option VARCHAR (empty) (empty) (empty)
+information_schema is_updatable TINYINT UNSIGNED (empty) (empty) (empty)
+information_schema is_insertable_into BOOLEAN (empty) (empty) (empty)
+information_schema is_trigger_updatable TINYINT UNSIGNED (empty) (empty) (empty)
+information_schema is_trigger_deletable TINYINT UNSIGNED (empty) (empty) (empty)
+information_schema is_trigger_insertable_into TINYINT UNSIGNED (empty) (empty) (empty)
+
 statement ok
 DROP DATABASE COLUMNTEST
-
