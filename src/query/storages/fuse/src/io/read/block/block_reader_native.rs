@@ -77,6 +77,7 @@ impl BlockReader {
                 metas,
                 &part.range,
                 column_node.field.clone(),
+                column_node.is_nested,
             ));
 
             // Perf
@@ -112,6 +113,7 @@ impl BlockReader {
         metas: Vec<ColumnMeta>,
         range: &Option<Range<usize>>,
         field: ArrowField,
+        is_nested: bool,
     ) -> Result<(usize, NativeReader<Reader>)> {
         use backon::ExponentialBackoff;
         use backon::Retryable;
@@ -135,9 +137,10 @@ impl BlockReader {
 
             let reader: Reader = Box::new(std::io::Cursor::new(reader));
             readers.push(reader);
-            scratchs.push(Vec::with_capacity(8 * 1024));
+            scratchs.push(Vec::new());
         }
-        let fuse_reader = NativeReader::new(readers, field, leaves, native_metas, scratchs);
+        let fuse_reader =
+            NativeReader::new(readers, field, is_nested, leaves, native_metas, scratchs);
         Ok((index, fuse_reader))
     }
 
@@ -169,6 +172,7 @@ impl BlockReader {
                 metas,
                 &part.range,
                 column_node.field.clone(),
+                column_node.is_nested,
             );
             results.push(result?);
         }
@@ -183,6 +187,7 @@ impl BlockReader {
         metas: Vec<ColumnMeta>,
         range: &Option<Range<usize>>,
         field: ArrowField,
+        is_nested: bool,
     ) -> Result<(usize, NativeReader<Reader>)> {
         let mut readers = Vec::with_capacity(metas.len());
         let mut scratchs = Vec::with_capacity(metas.len());
@@ -201,9 +206,10 @@ impl BlockReader {
             let reader = o.blocking_range_reader(offset..offset + length)?;
             let reader: Reader = Box::new(BufReader::new(reader));
             readers.push(reader);
-            scratchs.push(Vec::with_capacity(8 * 1024));
+            scratchs.push(Vec::new());
         }
-        let fuse_reader = NativeReader::new(readers, field, leaves, native_metas, scratchs);
+        let fuse_reader =
+            NativeReader::new(readers, field, is_nested, leaves, native_metas, scratchs);
         Ok((index, fuse_reader))
     }
 
