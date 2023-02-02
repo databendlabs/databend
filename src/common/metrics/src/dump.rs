@@ -17,7 +17,6 @@ use std::collections::HashMap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use metrics_exporter_prometheus::PrometheusHandle;
-use procfs::ProcResult;
 
 #[derive(Debug)]
 pub struct MetricSample {
@@ -115,7 +114,7 @@ pub fn dump_proc_stats() -> Result<Vec<MetricSample>> {
 }
 
 #[cfg(target_os = "linux")]
-pub fn dump_proc_stats() -> ProcResult<Vec<MetricSample>> {
+pub fn dump_proc_stats() -> procfs::ProcResult<Vec<MetricSample>> {
     let me = procfs::process::Process::myself()?;
     let io = me.io()?;
     // ❯ cat /proc/thread-self/io
