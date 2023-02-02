@@ -48,7 +48,7 @@ fn test_data_block_create_with_schema_from_chunk() -> Result<()> {
 
     let chunks: Chunk<ArrayRef> = chunk_block.clone().try_into().unwrap();
     let use_field_default_vals = vec![None, Some(()), None, Some(()), None];
-    let new_block: DataBlock = DataBlock::create_with_schema_from_chunk(
+    let new_block: DataBlock = DataBlock::create_with_default_value_and_chunk(
         &schema,
         &chunks,
         &use_field_default_vals,
