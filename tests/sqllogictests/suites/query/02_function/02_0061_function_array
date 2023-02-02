@@ -1,11 +1,11 @@
 statement ok
-DROP DATABASE IF EXISTS data_type
+DROP DATABASE IF EXISTS array_func_test
 
 statement ok
-CREATE DATABASE IF NOT EXISTS data_type
+CREATE DATABASE IF NOT EXISTS array_func_test
 
 statement ok
-USE data_type
+USE array_func_test
 
 statement ok
 DROP TABLE IF EXISTS t
@@ -47,4 +47,4 @@ select indexof([1,2,null,2,null], null)
 3
 
 statement ok
-DROP DATABASE data_type
+DROP DATABASE array_func_test

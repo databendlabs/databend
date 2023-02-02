@@ -193,6 +193,8 @@ fn test_append(file: &mut impl Write) {
 }
 
 fn test_indexof(file: &mut impl Write) {
+    run_ast(file, "indexof([], NULL)", &[]);
+    run_ast(file, "indexof(NULL, NULL)", &[]);
     run_ast(file, "indexof([false, true], false)", &[]);
     run_ast(file, "indexof([], false)", &[]);
     run_ast(file, "indexof([false, true], null)", &[]);

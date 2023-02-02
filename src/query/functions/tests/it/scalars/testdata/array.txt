@@ -761,6 +761,24 @@ evaluation (internal):
 +--------+-----------------------------------------------------------------------------------+
 
 
+ast            : indexof([], NULL)
+raw expr       : indexof(array(), NULL)
+checked expr   : indexof<T0=NULL><Array(T0), T0>(CAST(array<>() AS Array(NULL)), NULL)
+optimized expr : 0_u64
+output type    : UInt64
+output domain  : {0..=0}
+output         : 0_u64
+
+
+ast            : indexof(NULL, NULL)
+raw expr       : indexof(NULL, NULL)
+checked expr   : indexof<NULL, NULL>(NULL, NULL)
+optimized expr : NULL
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : indexof([false, true], false)
 raw expr       : indexof(array(false, true), false)
 checked expr   : indexof<T0=Boolean><Array(T0), T0>(array<T0=Boolean><T0, T0>(false, true), false)
