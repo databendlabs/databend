@@ -31,8 +31,8 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sinks::EmptySink;
-use common_pipeline_sources::processors::sources::SyncSource;
-use common_pipeline_sources::processors::sources::SyncSourcer;
+use common_pipeline_sources::SyncSource;
+use common_pipeline_sources::SyncSourcer;
 
 pub struct NullTable {
     table_info: TableInfo,

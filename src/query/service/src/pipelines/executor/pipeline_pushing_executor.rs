@@ -21,14 +21,14 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_pipeline_sources::SyncSource;
+use common_pipeline_sources::SyncSourcer;
 use parking_lot::Mutex;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::SyncSource;
-use crate::pipelines::processors::SyncSourcer;
 use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::QueryContext;

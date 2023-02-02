@@ -25,9 +25,9 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use crossbeam_channel::TryRecvError;
 
-use crate::processors::sources::input_formats::input_context::InputContext;
-use crate::processors::sources::input_formats::input_pipeline::BlockBuilderTrait;
-use crate::processors::sources::input_formats::input_pipeline::InputFormatPipe;
+use crate::input_formats::input_pipeline::BlockBuilderTrait;
+use crate::input_formats::input_pipeline::InputFormatPipe;
+use crate::input_formats::InputContext;
 
 struct DeserializeProcessor<I: InputFormatPipe> {
     pub block_builder: I::BlockBuilder,

@@ -23,7 +23,7 @@ use common_expression::DataBlock;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_sinks::SyncSenderSink;
-use common_pipeline_sources::processors::sources::SyncReceiverSource;
+use common_pipeline_sources::SyncReceiverSource;
 use databend_query::pipelines::executor::RunningGraph;
 use databend_query::pipelines::processors::port::InputPort;
 use databend_query::pipelines::processors::port::OutputPort;

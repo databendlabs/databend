@@ -16,4 +16,24 @@
 #![allow(clippy::uninlined_format_args)]
 #![deny(unused_crate_dependencies)]
 
-pub mod processors;
+mod async_source;
+mod blocks_source;
+mod empty_source;
+mod one_block_source;
+mod stream_source;
+mod sync_source;
+mod sync_source_receiver;
+
+pub mod input_formats;
+
+pub use async_source::AsyncSource;
+pub use async_source::AsyncSourcer;
+pub use blocks_source::BlocksSource;
+pub use empty_source::EmptySource;
+pub use one_block_source::OneBlockSource;
+pub use stream_source::AsyncStreamSource;
+pub use stream_source::StreamSource;
+pub use stream_source::StreamSourceNoSkipEmpty;
+pub use sync_source::SyncSource;
+pub use sync_source::SyncSourcer;
+pub use sync_source_receiver::SyncReceiverSource;

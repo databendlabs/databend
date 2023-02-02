@@ -50,16 +50,16 @@ use serde::Deserializer;
 use serde::Serializer;
 use similar_asserts::traits::MakeDiff;
 
-use crate::processors::sources::input_formats::input_context::InputContext;
-use crate::processors::sources::input_formats::input_pipeline::AligningStateTrait;
-use crate::processors::sources::input_formats::input_pipeline::BlockBuilderTrait;
-use crate::processors::sources::input_formats::input_pipeline::InputFormatPipe;
-use crate::processors::sources::input_formats::input_pipeline::ReadBatchTrait;
-use crate::processors::sources::input_formats::input_pipeline::RowBatchTrait;
-use crate::processors::sources::input_formats::input_split::DynData;
-use crate::processors::sources::input_formats::input_split::FileInfo;
-use crate::processors::sources::input_formats::input_split::SplitInfo;
-use crate::processors::sources::input_formats::InputFormat;
+use crate::input_formats::input_pipeline::AligningStateTrait;
+use crate::input_formats::input_pipeline::BlockBuilderTrait;
+use crate::input_formats::input_pipeline::InputFormatPipe;
+use crate::input_formats::input_pipeline::ReadBatchTrait;
+use crate::input_formats::input_pipeline::RowBatchTrait;
+use crate::input_formats::input_split::DynData;
+use crate::input_formats::input_split::FileInfo;
+use crate::input_formats::InputContext;
+use crate::input_formats::InputFormat;
+use crate::input_formats::SplitInfo;
 
 pub struct InputFormatParquet;
 

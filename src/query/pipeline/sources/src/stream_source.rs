@@ -23,8 +23,8 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use futures::StreamExt;
 
-use crate::processors::sources::AsyncSource;
-use crate::processors::sources::AsyncSourcer;
+use crate::AsyncSource;
+use crate::AsyncSourcer;
 
 /// AsyncSource backed by a stream
 pub struct AsyncStreamSource<const SKIP_EMPTY_DATA_BLOCK: bool> {

@@ -27,12 +27,12 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use crossbeam_channel::TrySendError;
 
-use crate::processors::sources::input_formats::input_context::InputContext;
-use crate::processors::sources::input_formats::input_pipeline::AligningStateTrait;
-use crate::processors::sources::input_formats::input_pipeline::InputFormatPipe;
-use crate::processors::sources::input_formats::input_pipeline::ReadBatchTrait;
-use crate::processors::sources::input_formats::input_pipeline::RowBatchTrait;
-use crate::processors::sources::input_formats::input_pipeline::Split;
+use crate::input_formats::input_pipeline::AligningStateTrait;
+use crate::input_formats::input_pipeline::InputFormatPipe;
+use crate::input_formats::input_pipeline::ReadBatchTrait;
+use crate::input_formats::input_pipeline::RowBatchTrait;
+use crate::input_formats::input_pipeline::Split;
+use crate::input_formats::InputContext;
 
 pub struct Aligner<I: InputFormatPipe> {
     ctx: Arc<InputContext>,

@@ -21,8 +21,8 @@ use common_pipeline_core::Pipeline;
 use common_settings::Settings;
 use opendal::Operator;
 
-use crate::processors::sources::input_formats::input_context::InputContext;
-use crate::processors::sources::input_formats::input_split::SplitInfo;
+use crate::input_formats::InputContext;
+use crate::input_formats::SplitInfo;
 
 #[async_trait::async_trait]
 pub trait InputFormat: Send + Sync {

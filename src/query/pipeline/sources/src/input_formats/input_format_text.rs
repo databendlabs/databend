@@ -36,17 +36,17 @@ use opendal::raw::DecompressDecoder;
 use opendal::raw::DecompressState;
 use opendal::Operator;
 
-use super::InputFormat;
-use crate::processors::sources::input_formats::beyond_end_reader::BeyondEndReader;
-use crate::processors::sources::input_formats::input_context::InputContext;
-use crate::processors::sources::input_formats::input_pipeline::AligningStateTrait;
-use crate::processors::sources::input_formats::input_pipeline::BlockBuilderTrait;
-use crate::processors::sources::input_formats::input_pipeline::InputFormatPipe;
-use crate::processors::sources::input_formats::input_pipeline::RowBatchTrait;
-use crate::processors::sources::input_formats::input_split::split_by_size;
-use crate::processors::sources::input_formats::input_split::FileInfo;
-use crate::processors::sources::input_formats::input_split::SplitInfo;
-use crate::processors::sources::input_formats::InputError;
+use crate::input_formats::beyond_end_reader::BeyondEndReader;
+use crate::input_formats::input_pipeline::AligningStateTrait;
+use crate::input_formats::input_pipeline::BlockBuilderTrait;
+use crate::input_formats::input_pipeline::InputFormatPipe;
+use crate::input_formats::input_pipeline::RowBatchTrait;
+use crate::input_formats::input_split::FileInfo;
+use crate::input_formats::split_by_size;
+use crate::input_formats::InputContext;
+use crate::input_formats::InputError;
+use crate::input_formats::InputFormat;
+use crate::input_formats::SplitInfo;
 
 pub trait AligningStateTextBased: Sync + Sized + Send {
     fn try_create(ctx: &Arc<InputContext>, split_info: &Arc<SplitInfo>) -> Result<Self>;

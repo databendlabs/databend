@@ -30,13 +30,13 @@ use common_meta_types::StageFileFormatType;
 use xml::reader::XmlEvent;
 use xml::ParserConfig;
 
-use crate::processors::sources::input_formats::input_format_text::AligningStateTextBased;
-use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
-use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
-use crate::processors::sources::input_formats::input_format_text::RowBatch;
-use crate::processors::sources::input_formats::InputContext;
-use crate::processors::sources::input_formats::InputError;
-use crate::processors::sources::input_formats::SplitInfo;
+use crate::input_formats::input_format_text::AligningStateTextBased;
+use crate::input_formats::input_format_text::BlockBuilder;
+use crate::input_formats::input_format_text::InputFormatTextBase;
+use crate::input_formats::input_format_text::RowBatch;
+use crate::input_formats::InputContext;
+use crate::input_formats::InputError;
+use crate::input_formats::SplitInfo;
 
 pub struct InputFormatXML {}
 

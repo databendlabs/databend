@@ -12,4 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod sources;
+use common_pipeline_sources::input_formats::split_by_size;
+
+#[test]
+fn test_split_by_size() {
+    assert_eq!(split_by_size(10, 3), vec![(0, 3), (3, 3), (6, 3), (9, 1)]);
+    assert_eq!(split_by_size(9, 3), vec![(0, 3), (3, 3), (6, 3)]);
+    assert_eq!(split_by_size(8, 3), vec![(0, 3), (3, 3), (6, 2)]);
+}

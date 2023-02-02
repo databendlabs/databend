@@ -19,8 +19,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use futures_util::AsyncReadExt;
 
-use crate::processors::sources::input_formats::input_split::SplitInfo;
-use crate::processors::sources::input_formats::InputContext;
+use crate::input_formats::InputContext;
+use crate::input_formats::SplitInfo;
 
 pub struct BeyondEndReader {
     pub ctx: Arc<InputContext>,
