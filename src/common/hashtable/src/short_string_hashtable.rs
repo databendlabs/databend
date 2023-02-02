@@ -38,7 +38,7 @@ use crate::table_empty::TableEmpty;
 use crate::table_empty::TableEmptyIter;
 use crate::table_empty::TableEmptyIterMut;
 
-pub struct UnsizedHashtable<K, V, A = MmapAllocator<GlobalAllocator>>
+pub struct ShortStringHashtable<K, V, A = MmapAllocator<GlobalAllocator>>
 where
     K: UnsizedKeyable + ?Sized,
     A: Allocator + Clone,
@@ -54,16 +54,16 @@ where
 }
 
 unsafe impl<K: UnsizedKeyable + ?Sized + Send, V: Send, A: Allocator + Clone + Send> Send
-    for UnsizedHashtable<K, V, A>
+    for ShortStringHashtable<K, V, A>
 {
 }
 
 unsafe impl<K: UnsizedKeyable + ?Sized + Sync, V: Sync, A: Allocator + Clone + Sync> Sync
-    for UnsizedHashtable<K, V, A>
+    for ShortStringHashtable<K, V, A>
 {
 }
 
-impl<K, V, A> UnsizedHashtable<K, V, A>
+impl<K, V, A> ShortStringHashtable<K, V, A>
 where
     K: UnsizedKeyable + ?Sized,
     A: Allocator + Clone + Default,
@@ -73,7 +73,7 @@ where
     }
 }
 
-impl<K, V, A> Default for UnsizedHashtable<K, V, A>
+impl<K, V, A> Default for ShortStringHashtable<K, V, A>
 where
     K: UnsizedKeyable + ?Sized,
     A: Allocator + Clone + Default,
@@ -83,7 +83,7 @@ where
     }
 }
 
-impl<K, A> UnsizedHashtable<K, (), A>
+impl<K, A> ShortStringHashtable<K, (), A>
 where
     K: UnsizedKeyable + ?Sized,
     A: Allocator + Clone + Default,
@@ -107,7 +107,7 @@ where
     }
 }
 
-impl<K, V, A> UnsizedHashtable<K, V, A>
+impl<K, V, A> ShortStringHashtable<K, V, A>
 where
     K: UnsizedKeyable + ?Sized,
     A: Allocator + Clone + Default,
@@ -158,7 +158,8 @@ where
     pub unsafe fn insert_and_entry_borrowing(
         &mut self,
         key: *const K,
-    ) -> Result<UnsizedHashtableEntryMutRef<'_, K, V>, UnsizedHashtableEntryMutRef<'_, K, V>> {
+    ) -> Result<ShortStringHashtableEntryMutRef<'_, K, V>, ShortStringHashtableEntryMutRef<'_, K, V>>
+    {
         let key = (*key).as_bytes();
         match key.len() {
             _ if key.last().copied() == Some(0) => {
@@ -167,27 +168,30 @@ where
                     .insert(FallbackKey::new(key))
                     .map(|x| {
                         self.key_size += key.len();
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table4(x),
+                        )
                     })
                     .map_err(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table4(x),
+                        )
                     })
             }
-            0 => self
-                .table0
-                .insert()
-                .map(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                })
-                .map_err(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                }),
+            0 => {
+                self.table0
+                    .insert()
+                    .map(|x| {
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table0(x, PhantomData),
+                        )
+                    })
+                    .map_err(|x| {
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table0(x, PhantomData),
+                        )
+                    })
+            }
             1..=8 => {
                 self.table1.check_grow();
                 let mut t = [0u64; 1];
@@ -197,10 +201,14 @@ where
                     .insert(t)
                     .map(|x| {
                         self.key_size += key.len();
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table1(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table1(x),
+                        )
                     })
                     .map_err(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table1(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table1(x),
+                        )
                     })
             }
             9..=16 => {
@@ -213,10 +221,14 @@ where
                     .insert(t)
                     .map(|x| {
                         self.key_size += key.len();
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table2(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table2(x),
+                        )
                     })
                     .map_err(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table2(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table2(x),
+                        )
                     })
             }
             17..=24 => {
@@ -230,10 +242,14 @@ where
                     .insert(t)
                     .map(|x| {
                         self.key_size += key.len();
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table3(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table3(x),
+                        )
                     })
                     .map_err(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table3(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table3(x),
+                        )
                     })
             }
             _ => {
@@ -242,10 +258,14 @@ where
                     .insert(FallbackKey::new(key))
                     .map(|x| {
                         self.key_size += key.len();
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table4(x),
+                        )
                     })
                     .map_err(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table4(x),
+                        )
                     })
             }
         }
@@ -263,7 +283,7 @@ where
     }
 }
 
-pub struct UnsizedHashtableIter<'a, K, V>
+pub struct ShortStringHashtableIter<'a, K, V>
 where K: UnsizedKeyable + ?Sized
 {
     it_0: Option<TableEmptyIter<'a, V>>,
@@ -274,48 +294,48 @@ where K: UnsizedKeyable + ?Sized
     _phantom: PhantomData<&'a mut K>,
 }
 
-impl<'a, K, V> Iterator for UnsizedHashtableIter<'a, K, V>
+impl<'a, K, V> Iterator for ShortStringHashtableIter<'a, K, V>
 where K: UnsizedKeyable + ?Sized
 {
-    type Item = UnsizedHashtableEntryRef<'a, K, V>;
+    type Item = ShortStringHashtableEntryRef<'a, K, V>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(it) = self.it_0.as_mut() {
             if let Some(e) = it.next() {
-                return Some(UnsizedHashtableEntryRef(
-                    UnsizedHashtableEntryRefInner::Table0(e, PhantomData),
+                return Some(ShortStringHashtableEntryRef(
+                    ShortStringHashtableEntryRefInner::Table0(e, PhantomData),
                 ));
             }
             self.it_0 = None;
         }
         if let Some(it) = self.it_1.as_mut() {
             if let Some(e) = it.next() {
-                return Some(UnsizedHashtableEntryRef(
-                    UnsizedHashtableEntryRefInner::Table1(e),
+                return Some(ShortStringHashtableEntryRef(
+                    ShortStringHashtableEntryRefInner::Table1(e),
                 ));
             }
             self.it_1 = None;
         }
         if let Some(it) = self.it_2.as_mut() {
             if let Some(e) = it.next() {
-                return Some(UnsizedHashtableEntryRef(
-                    UnsizedHashtableEntryRefInner::Table2(e),
+                return Some(ShortStringHashtableEntryRef(
+                    ShortStringHashtableEntryRefInner::Table2(e),
                 ));
             }
             self.it_2 = None;
         }
         if let Some(it) = self.it_3.as_mut() {
             if let Some(e) = it.next() {
-                return Some(UnsizedHashtableEntryRef(
-                    UnsizedHashtableEntryRefInner::Table3(e),
+                return Some(ShortStringHashtableEntryRef(
+                    ShortStringHashtableEntryRefInner::Table3(e),
                 ));
             }
             self.it_3 = None;
         }
         if let Some(it) = self.it_4.as_mut() {
             if let Some(e) = it.next() {
-                return Some(UnsizedHashtableEntryRef(
-                    UnsizedHashtableEntryRefInner::Table4(e),
+                return Some(ShortStringHashtableEntryRef(
+                    ShortStringHashtableEntryRefInner::Table4(e),
                 ));
             }
             self.it_4 = None;
@@ -324,7 +344,7 @@ where K: UnsizedKeyable + ?Sized
     }
 }
 
-pub struct UnsizedHashtableIterMut<'a, K, V>
+pub struct ShortStringHashtableIterMut<'a, K, V>
 where K: UnsizedKeyable + ?Sized
 {
     it_0: Option<TableEmptyIterMut<'a, V>>,
@@ -335,48 +355,48 @@ where K: UnsizedKeyable + ?Sized
     _phantom: PhantomData<&'a mut K>,
 }
 
-impl<'a, K, V> Iterator for UnsizedHashtableIterMut<'a, K, V>
+impl<'a, K, V> Iterator for ShortStringHashtableIterMut<'a, K, V>
 where K: UnsizedKeyable + ?Sized
 {
-    type Item = UnsizedHashtableEntryMutRef<'a, K, V>;
+    type Item = ShortStringHashtableEntryMutRef<'a, K, V>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(it) = self.it_0.as_mut() {
             if let Some(e) = it.next() {
-                return Some(UnsizedHashtableEntryMutRef(
-                    UnsizedHashtableEntryMutRefInner::Table0(e, PhantomData),
+                return Some(ShortStringHashtableEntryMutRef(
+                    ShortStringHashtableEntryMutRefInner::Table0(e, PhantomData),
                 ));
             }
             self.it_0 = None;
         }
         if let Some(it) = self.it_1.as_mut() {
             if let Some(e) = it.next() {
-                return Some(UnsizedHashtableEntryMutRef(
-                    UnsizedHashtableEntryMutRefInner::Table1(e),
+                return Some(ShortStringHashtableEntryMutRef(
+                    ShortStringHashtableEntryMutRefInner::Table1(e),
                 ));
             }
             self.it_1 = None;
         }
         if let Some(it) = self.it_2.as_mut() {
             if let Some(e) = it.next() {
-                return Some(UnsizedHashtableEntryMutRef(
-                    UnsizedHashtableEntryMutRefInner::Table2(e),
+                return Some(ShortStringHashtableEntryMutRef(
+                    ShortStringHashtableEntryMutRefInner::Table2(e),
                 ));
             }
             self.it_2 = None;
         }
         if let Some(it) = self.it_3.as_mut() {
             if let Some(e) = it.next() {
-                return Some(UnsizedHashtableEntryMutRef(
-                    UnsizedHashtableEntryMutRefInner::Table3(e),
+                return Some(ShortStringHashtableEntryMutRef(
+                    ShortStringHashtableEntryMutRefInner::Table3(e),
                 ));
             }
             self.it_3 = None;
         }
         if let Some(it) = self.it_4.as_mut() {
             if let Some(e) = it.next() {
-                return Some(UnsizedHashtableEntryMutRef(
-                    UnsizedHashtableEntryMutRefInner::Table4(e),
+                return Some(ShortStringHashtableEntryMutRef(
+                    ShortStringHashtableEntryMutRefInner::Table4(e),
                 ));
             }
             self.it_4 = None;
@@ -385,7 +405,7 @@ where K: UnsizedKeyable + ?Sized
     }
 }
 
-enum UnsizedHashtableEntryRefInner<'a, K: ?Sized, V> {
+enum ShortStringHashtableEntryRefInner<'a, K: ?Sized, V> {
     Table0(&'a Entry<[u8; 0], V>, PhantomData<K>),
     Table1(&'a Entry<InlineKey<0>, V>),
     Table2(&'a Entry<InlineKey<1>, V>),
@@ -393,11 +413,11 @@ enum UnsizedHashtableEntryRefInner<'a, K: ?Sized, V> {
     Table4(&'a Entry<FallbackKey, V>),
 }
 
-impl<'a, K: ?Sized, V> Copy for UnsizedHashtableEntryRefInner<'a, K, V> {}
+impl<'a, K: ?Sized, V> Copy for ShortStringHashtableEntryRefInner<'a, K, V> {}
 
-impl<'a, K: ?Sized, V> Clone for UnsizedHashtableEntryRefInner<'a, K, V> {
+impl<'a, K: ?Sized, V> Clone for ShortStringHashtableEntryRefInner<'a, K, V> {
     fn clone(&self) -> Self {
-        use UnsizedHashtableEntryRefInner::*;
+        use ShortStringHashtableEntryRefInner::*;
         match self {
             Table0(a, b) => Table0(a, *b),
             Table1(a) => Table1(a),
@@ -408,9 +428,9 @@ impl<'a, K: ?Sized, V> Clone for UnsizedHashtableEntryRefInner<'a, K, V> {
     }
 }
 
-impl<'a, K: ?Sized + UnsizedKeyable, V> UnsizedHashtableEntryRefInner<'a, K, V> {
+impl<'a, K: ?Sized + UnsizedKeyable, V> ShortStringHashtableEntryRefInner<'a, K, V> {
     fn key(self) -> &'a K {
-        use UnsizedHashtableEntryRefInner::*;
+        use ShortStringHashtableEntryRefInner::*;
         match self {
             Table0(_, _) => unsafe { UnsizedKeyable::from_bytes(&[]) },
             Table1(e) => unsafe {
@@ -455,7 +475,7 @@ impl<'a, K: ?Sized + UnsizedKeyable, V> UnsizedHashtableEntryRefInner<'a, K, V> 
         }
     }
     fn get(self) -> &'a V {
-        use UnsizedHashtableEntryRefInner::*;
+        use ShortStringHashtableEntryRefInner::*;
         match self {
             Table0(e, _) => e.get(),
             Table1(e) => e.get(),
@@ -465,7 +485,7 @@ impl<'a, K: ?Sized + UnsizedKeyable, V> UnsizedHashtableEntryRefInner<'a, K, V> 
         }
     }
     fn get_ptr(self) -> *const V {
-        use UnsizedHashtableEntryRefInner::*;
+        use ShortStringHashtableEntryRefInner::*;
         match self {
             Table0(e, _) => e.val.as_ptr(),
             Table1(e) => e.val.as_ptr(),
@@ -476,17 +496,19 @@ impl<'a, K: ?Sized + UnsizedKeyable, V> UnsizedHashtableEntryRefInner<'a, K, V> 
     }
 }
 
-pub struct UnsizedHashtableEntryRef<'a, K: ?Sized, V>(UnsizedHashtableEntryRefInner<'a, K, V>);
+pub struct ShortStringHashtableEntryRef<'a, K: ?Sized, V>(
+    ShortStringHashtableEntryRefInner<'a, K, V>,
+);
 
-impl<'a, K: ?Sized, V> Copy for UnsizedHashtableEntryRef<'a, K, V> {}
+impl<'a, K: ?Sized, V> Copy for ShortStringHashtableEntryRef<'a, K, V> {}
 
-impl<'a, K: ?Sized, V> Clone for UnsizedHashtableEntryRef<'a, K, V> {
+impl<'a, K: ?Sized, V> Clone for ShortStringHashtableEntryRef<'a, K, V> {
     fn clone(&self) -> Self {
         Self(self.0)
     }
 }
 
-impl<'a, K: ?Sized + UnsizedKeyable, V> UnsizedHashtableEntryRef<'a, K, V> {
+impl<'a, K: ?Sized + UnsizedKeyable, V> ShortStringHashtableEntryRef<'a, K, V> {
     pub fn key(self) -> &'a K {
         self.0.key()
     }
@@ -498,7 +520,7 @@ impl<'a, K: ?Sized + UnsizedKeyable, V> UnsizedHashtableEntryRef<'a, K, V> {
     }
 }
 
-enum UnsizedHashtableEntryMutRefInner<'a, K: ?Sized, V> {
+enum ShortStringHashtableEntryMutRefInner<'a, K: ?Sized, V> {
     Table0(&'a mut Entry<[u8; 0], V>, PhantomData<K>),
     Table1(&'a mut Entry<InlineKey<0>, V>),
     Table2(&'a mut Entry<InlineKey<1>, V>),
@@ -506,9 +528,9 @@ enum UnsizedHashtableEntryMutRefInner<'a, K: ?Sized, V> {
     Table4(&'a mut Entry<FallbackKey, V>),
 }
 
-impl<'a, K: ?Sized + UnsizedKeyable, V> UnsizedHashtableEntryMutRefInner<'a, K, V> {
+impl<'a, K: ?Sized + UnsizedKeyable, V> ShortStringHashtableEntryMutRefInner<'a, K, V> {
     fn key(&self) -> &'a K {
-        use UnsizedHashtableEntryMutRefInner::*;
+        use ShortStringHashtableEntryMutRefInner::*;
         match self {
             Table0(_, _) => unsafe { &*(UnsizedKeyable::from_bytes(&[]) as *const K) },
             Table1(e) => unsafe {
@@ -553,7 +575,7 @@ impl<'a, K: ?Sized + UnsizedKeyable, V> UnsizedHashtableEntryMutRefInner<'a, K, 
         }
     }
     fn get(&self) -> &V {
-        use UnsizedHashtableEntryMutRefInner::*;
+        use ShortStringHashtableEntryMutRefInner::*;
         match self {
             Table0(e, _) => e.get(),
             Table1(e) => e.get(),
@@ -563,7 +585,7 @@ impl<'a, K: ?Sized + UnsizedKeyable, V> UnsizedHashtableEntryMutRefInner<'a, K, 
         }
     }
     fn get_ptr(&self) -> *const V {
-        use UnsizedHashtableEntryMutRefInner::*;
+        use ShortStringHashtableEntryMutRefInner::*;
         match self {
             Table0(e, _) => e.val.as_ptr(),
             Table1(e) => e.val.as_ptr(),
@@ -573,7 +595,7 @@ impl<'a, K: ?Sized + UnsizedKeyable, V> UnsizedHashtableEntryMutRefInner<'a, K, 
         }
     }
     fn get_mut(&mut self) -> &mut V {
-        use UnsizedHashtableEntryMutRefInner::*;
+        use ShortStringHashtableEntryMutRefInner::*;
         match self {
             Table0(e, _) => e.get_mut(),
             Table1(e) => e.get_mut(),
@@ -583,7 +605,7 @@ impl<'a, K: ?Sized + UnsizedKeyable, V> UnsizedHashtableEntryMutRefInner<'a, K, 
         }
     }
     fn write(&mut self, val: V) {
-        use UnsizedHashtableEntryMutRefInner::*;
+        use ShortStringHashtableEntryMutRefInner::*;
         match self {
             Table0(e, _) => e.write(val),
             Table1(e) => e.write(val),
@@ -594,11 +616,11 @@ impl<'a, K: ?Sized + UnsizedKeyable, V> UnsizedHashtableEntryMutRefInner<'a, K, 
     }
 }
 
-pub struct UnsizedHashtableEntryMutRef<'a, K: ?Sized, V>(
-    UnsizedHashtableEntryMutRefInner<'a, K, V>,
+pub struct ShortStringHashtableEntryMutRef<'a, K: ?Sized, V>(
+    ShortStringHashtableEntryMutRefInner<'a, K, V>,
 );
 
-impl<'a, K: ?Sized + UnsizedKeyable, V> UnsizedHashtableEntryMutRef<'a, K, V> {
+impl<'a, K: ?Sized + UnsizedKeyable, V> ShortStringHashtableEntryMutRef<'a, K, V> {
     pub fn key(&self) -> &'a K {
         self.0.key()
     }
@@ -692,7 +714,7 @@ unsafe impl Keyable for FallbackKey {
 }
 
 impl<'a, K: UnsizedKeyable + ?Sized + 'a, V: 'a> EntryRefLike
-    for UnsizedHashtableEntryRef<'a, K, V>
+    for ShortStringHashtableEntryRef<'a, K, V>
 {
     type KeyRef = &'a K;
     type ValueRef = &'a V;
@@ -706,7 +728,7 @@ impl<'a, K: UnsizedKeyable + ?Sized + 'a, V: 'a> EntryRefLike
 }
 
 impl<'a, K: UnsizedKeyable + ?Sized + 'a, V: 'a> EntryMutRefLike
-    for UnsizedHashtableEntryMutRef<'a, K, V>
+    for ShortStringHashtableEntryMutRef<'a, K, V>
 {
     type Key = K;
     type Value = V;
@@ -728,17 +750,17 @@ impl<'a, K: UnsizedKeyable + ?Sized + 'a, V: 'a> EntryMutRefLike
     }
 }
 
-impl<V, A> HashtableLike for UnsizedHashtable<[u8], V, A>
+impl<V, A> HashtableLike for ShortStringHashtable<[u8], V, A>
 where A: Allocator + Clone + Default
 {
     type Key = [u8];
     type Value = V;
 
-    type EntryRef<'a> = UnsizedHashtableEntryRef<'a, [u8], V> where Self: 'a, V: 'a;
-    type EntryMutRef<'a> = UnsizedHashtableEntryMutRef<'a, [u8], V> where Self: 'a, V: 'a;
+    type EntryRef<'a> = ShortStringHashtableEntryRef<'a, [u8], V> where Self: 'a, V: 'a;
+    type EntryMutRef<'a> = ShortStringHashtableEntryMutRef<'a, [u8], V> where Self: 'a, V: 'a;
 
-    type Iterator<'a> = UnsizedHashtableIter<'a, [u8], V> where Self: 'a, V: 'a;
-    type IteratorMut<'a> = UnsizedHashtableIterMut<'a, [u8], V> where Self: 'a, V: 'a;
+    type Iterator<'a> = ShortStringHashtableIter<'a, [u8], V> where Self: 'a, V: 'a;
+    type IteratorMut<'a> = ShortStringHashtableIterMut<'a, [u8], V> where Self: 'a, V: 'a;
 
     fn len(&self) -> usize {
         self.len()
@@ -762,29 +784,32 @@ where A: Allocator + Clone + Default
         let key = key.as_bytes();
         match key.len() {
             _ if key.last().copied() == Some(0) => unsafe {
-                self.table4
-                    .get(&FallbackKey::new(key))
-                    .map(|x| UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table4(x)))
+                self.table4.get(&FallbackKey::new(key)).map(|x| {
+                    ShortStringHashtableEntryRef(ShortStringHashtableEntryRefInner::Table4(x))
+                })
             },
             0 => self.table0.get().map(|x| {
-                UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table0(x, PhantomData))
+                ShortStringHashtableEntryRef(ShortStringHashtableEntryRefInner::Table0(
+                    x,
+                    PhantomData,
+                ))
             }),
             1..=8 => unsafe {
                 let mut t = [0u64; 1];
                 t[0] = read_le(key.as_ptr(), key.len());
                 let t = std::mem::transmute::<_, InlineKey<0>>(t);
-                self.table1
-                    .get(&t)
-                    .map(|x| UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table1(x)))
+                self.table1.get(&t).map(|x| {
+                    ShortStringHashtableEntryRef(ShortStringHashtableEntryRefInner::Table1(x))
+                })
             },
             9..=16 => unsafe {
                 let mut t = [0u64; 2];
                 t[0] = (key.as_ptr() as *const u64).read_unaligned();
                 t[1] = read_le(key.as_ptr().offset(8), key.len() - 8);
                 let t = std::mem::transmute::<_, InlineKey<1>>(t);
-                self.table2
-                    .get(&t)
-                    .map(|x| UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table2(x)))
+                self.table2.get(&t).map(|x| {
+                    ShortStringHashtableEntryRef(ShortStringHashtableEntryRefInner::Table2(x))
+                })
             },
             17..=24 => unsafe {
                 let mut t = [0u64; 3];
@@ -792,14 +817,14 @@ where A: Allocator + Clone + Default
                 t[1] = (key.as_ptr() as *const u64).offset(1).read_unaligned();
                 t[2] = read_le(key.as_ptr().offset(16), key.len() - 16);
                 let t = std::mem::transmute::<_, InlineKey<2>>(t);
-                self.table3
-                    .get(&t)
-                    .map(|x| UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table3(x)))
+                self.table3.get(&t).map(|x| {
+                    ShortStringHashtableEntryRef(ShortStringHashtableEntryRefInner::Table3(x))
+                })
             },
             _ => unsafe {
-                self.table4
-                    .get(&FallbackKey::new(key))
-                    .map(|x| UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table4(x)))
+                self.table4.get(&FallbackKey::new(key)).map(|x| {
+                    ShortStringHashtableEntryRef(ShortStringHashtableEntryRefInner::Table4(x))
+                })
             },
         }
     }
@@ -808,11 +833,11 @@ where A: Allocator + Clone + Default
         match key.len() {
             _ if key.last().copied() == Some(0) => unsafe {
                 self.table4.get_mut(&FallbackKey::new(key)).map(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
+                    ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table4(x))
                 })
             },
             0 => self.table0.get_mut().map(|x| {
-                UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
+                ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table0(
                     x,
                     PhantomData,
                 ))
@@ -822,7 +847,7 @@ where A: Allocator + Clone + Default
                 t[0] = read_le(key.as_ptr(), key.len());
                 let t = std::mem::transmute::<_, InlineKey<0>>(t);
                 self.table1.get_mut(&t).map(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table1(x))
+                    ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table1(x))
                 })
             },
             9..=16 => unsafe {
@@ -831,7 +856,7 @@ where A: Allocator + Clone + Default
                 t[1] = read_le(key.as_ptr().offset(8), key.len() - 8);
                 let t = std::mem::transmute::<_, InlineKey<1>>(t);
                 self.table2.get_mut(&t).map(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table2(x))
+                    ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table2(x))
                 })
             },
             17..=24 => unsafe {
@@ -841,12 +866,12 @@ where A: Allocator + Clone + Default
                 t[2] = read_le(key.as_ptr().offset(16), key.len() - 16);
                 let t = std::mem::transmute::<_, InlineKey<2>>(t);
                 self.table3.get_mut(&t).map(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table3(x))
+                    ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table3(x))
                 })
             },
             _ => unsafe {
                 self.table4.get_mut(&FallbackKey::new(key)).map(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
+                    ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table4(x))
                 })
             },
         }
@@ -887,30 +912,29 @@ where A: Allocator + Clone + Default
                         e.set_key(FallbackKey::new_with_hash(s, e.key.assume_init_ref().hash));
 
                         self.key_size += key.len();
-                        Ok(UnsizedHashtableEntryMutRef(
-                            UnsizedHashtableEntryMutRefInner::Table4(e),
+                        Ok(ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table4(e),
                         ))
                     }
-                    Err(e) => Err(UnsizedHashtableEntryMutRef(
-                        UnsizedHashtableEntryMutRefInner::Table4(e),
+                    Err(e) => Err(ShortStringHashtableEntryMutRef(
+                        ShortStringHashtableEntryMutRefInner::Table4(e),
                     )),
                 }
             }
-            0 => self
-                .table0
-                .insert()
-                .map(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                })
-                .map_err(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                }),
+            0 => {
+                self.table0
+                    .insert()
+                    .map(|x| {
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table0(x, PhantomData),
+                        )
+                    })
+                    .map_err(|x| {
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table0(x, PhantomData),
+                        )
+                    })
+            }
 
             1..=8 => {
                 self.table1.check_grow();
@@ -921,10 +945,14 @@ where A: Allocator + Clone + Default
                     .insert(t)
                     .map(|x| {
                         self.key_size += key.len();
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table1(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table1(x),
+                        )
                     })
                     .map_err(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table1(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table1(x),
+                        )
                     })
             }
             9..=16 => {
@@ -937,10 +965,14 @@ where A: Allocator + Clone + Default
                     .insert(t)
                     .map(|x| {
                         self.key_size += key.len();
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table2(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table2(x),
+                        )
                     })
                     .map_err(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table2(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table2(x),
+                        )
                     })
             }
             17..=24 => {
@@ -954,10 +986,14 @@ where A: Allocator + Clone + Default
                     .insert(t)
                     .map(|x| {
                         self.key_size += key.len();
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table3(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table3(x),
+                        )
                     })
                     .map_err(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table3(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table3(x),
+                        )
                     })
             }
             _ => {
@@ -969,12 +1005,12 @@ where A: Allocator + Clone + Default
                         e.set_key(FallbackKey::new_with_hash(s, e.key.assume_init_ref().hash));
 
                         self.key_size += key.len();
-                        Ok(UnsizedHashtableEntryMutRef(
-                            UnsizedHashtableEntryMutRefInner::Table4(e),
+                        Ok(ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table4(e),
                         ))
                     }
-                    Err(e) => Err(UnsizedHashtableEntryMutRef(
-                        UnsizedHashtableEntryMutRefInner::Table4(e),
+                    Err(e) => Err(ShortStringHashtableEntryMutRef(
+                        ShortStringHashtableEntryMutRefInner::Table4(e),
                     )),
                 }
             }
@@ -999,31 +1035,30 @@ where A: Allocator + Clone + Default
                         // We need to save the key to avoid drop it.
                         let s = self.arena.alloc_slice_copy(key);
                         e.set_key(FallbackKey::new_with_hash(s, hash));
-                        Ok(UnsizedHashtableEntryMutRef(
-                            UnsizedHashtableEntryMutRefInner::Table4(e),
+                        Ok(ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table4(e),
                         ))
                     }
-                    Err(e) => Err(UnsizedHashtableEntryMutRef(
-                        UnsizedHashtableEntryMutRefInner::Table4(e),
+                    Err(e) => Err(ShortStringHashtableEntryMutRef(
+                        ShortStringHashtableEntryMutRefInner::Table4(e),
                     )),
                 }
             }
-            0 => self
-                .table0
-                .insert()
-                .map(|x| {
-                    self.key_size += key.len();
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                })
-                .map_err(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                }),
+            0 => {
+                self.table0
+                    .insert()
+                    .map(|x| {
+                        self.key_size += key.len();
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table0(x, PhantomData),
+                        )
+                    })
+                    .map_err(|x| {
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table0(x, PhantomData),
+                        )
+                    })
+            }
             1..=8 => {
                 self.table1.check_grow();
                 let mut t = [0u64; 1];
@@ -1033,10 +1068,14 @@ where A: Allocator + Clone + Default
                     .insert_with_hash(t, hash)
                     .map(|x| {
                         self.key_size += key.len();
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table1(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table1(x),
+                        )
                     })
                     .map_err(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table1(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table1(x),
+                        )
                     })
             }
             9..=16 => {
@@ -1049,10 +1088,14 @@ where A: Allocator + Clone + Default
                     .insert_with_hash(t, hash)
                     .map(|x| {
                         self.key_size += key.len();
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table2(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table2(x),
+                        )
                     })
                     .map_err(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table2(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table2(x),
+                        )
                     })
             }
             17..=24 => {
@@ -1066,10 +1109,14 @@ where A: Allocator + Clone + Default
                     .insert_with_hash(t, hash)
                     .map(|x| {
                         self.key_size += key.len();
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table3(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table3(x),
+                        )
                     })
                     .map_err(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table3(x))
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table3(x),
+                        )
                     })
             }
             _ => {
@@ -1084,12 +1131,12 @@ where A: Allocator + Clone + Default
                         e.set_key(FallbackKey::new_with_hash(s, hash));
 
                         self.key_size += key.len();
-                        Ok(UnsizedHashtableEntryMutRef(
-                            UnsizedHashtableEntryMutRefInner::Table4(e),
+                        Ok(ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table4(e),
                         ))
                     }
-                    Err(e) => Err(UnsizedHashtableEntryMutRef(
-                        UnsizedHashtableEntryMutRefInner::Table4(e),
+                    Err(e) => Err(ShortStringHashtableEntryMutRef(
+                        ShortStringHashtableEntryMutRefInner::Table4(e),
                     )),
                 }
             }
@@ -1097,7 +1144,7 @@ where A: Allocator + Clone + Default
     }
 
     fn iter(&self) -> Self::Iterator<'_> {
-        UnsizedHashtableIter {
+        ShortStringHashtableIter {
             it_0: Some(self.table0.iter()),
             it_1: Some(self.table1.iter()),
             it_2: Some(self.table2.iter()),

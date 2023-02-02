@@ -17,8 +17,8 @@ use std::sync::atomic::Ordering;
 
 use common_hashtable::HashMap;
 use common_hashtable::HashtableLike;
+use common_hashtable::ShortStringHashMap;
 use common_hashtable::StackHashMap;
-use common_hashtable::UnsizedHashMap;
 use rand::Rng;
 
 macro_rules! simple_test {
@@ -82,11 +82,6 @@ fn test_stack_hash_map() {
     simple_test!(StackHashMap);
 }
 
-// #[test]
-// fn test_twolevel_hash_map() {
-//     simple_test!(NewTwoLevelHashMap);
-// }
-
 #[test]
 fn test_unsized_hash_map() {
     static COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -118,7 +113,7 @@ fn test_unsized_hash_map() {
             standard.insert(s, 1);
         }
     }
-    let mut hashtable = UnsizedHashMap::<[u8], U64>::new();
+    let mut hashtable = ShortStringHashMap::<[u8], U64>::new();
     for s in sequence.iter() {
         match unsafe { hashtable.insert_and_entry(s) } {
             Ok(mut e) => {
