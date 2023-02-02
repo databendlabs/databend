@@ -244,7 +244,7 @@ async fn init_new_cluster(
             let cmd: Cmd = Cmd::AddNode {
                 node_id: node.0,
                 node: node.1,
-                overriding: false,
+                overriding: true,
             };
 
             let entry: Entry<LogEntry> = Entry::<LogEntry> {
