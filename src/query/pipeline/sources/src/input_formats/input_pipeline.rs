@@ -31,14 +31,14 @@ use futures_util::AsyncReadExt;
 use futures_util::StreamExt;
 use opendal::raw::CompressAlgorithm;
 
-use crate::input_formats::beyond_end_reader::BeyondEndReader;
-use crate::input_formats::input_context::InputPlan;
-use crate::input_formats::input_context::StreamPlan;
-use crate::input_formats::source_aligner::Aligner;
-use crate::input_formats::source_deserializer::DeserializeSource;
-use crate::input_formats::transform_deserializer::DeserializeTransformer;
+use crate::input_formats::Aligner;
+use crate::input_formats::BeyondEndReader;
+use crate::input_formats::DeserializeSource;
+use crate::input_formats::DeserializeTransformer;
 use crate::input_formats::InputContext;
+use crate::input_formats::InputPlan;
 use crate::input_formats::SplitInfo;
+use crate::input_formats::StreamPlan;
 
 pub struct Split<I: InputFormatPipe> {
     pub(crate) info: Arc<SplitInfo>,

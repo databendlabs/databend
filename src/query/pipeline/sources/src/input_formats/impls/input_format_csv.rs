@@ -35,13 +35,13 @@ use common_meta_types::StageFileFormatType;
 use csv_core::ReadRecordResult;
 
 use crate::input_formats::impls::input_format_tsv::format_column_error;
-use crate::input_formats::input_format_text::AligningStateCommon;
-use crate::input_formats::input_format_text::AligningStateTextBased;
-use crate::input_formats::input_format_text::BlockBuilder;
-use crate::input_formats::input_format_text::InputFormatTextBase;
-use crate::input_formats::input_format_text::RowBatch;
+use crate::input_formats::AligningStateCommon;
+use crate::input_formats::AligningStateTextBased;
+use crate::input_formats::BlockBuilder;
 use crate::input_formats::InputContext;
 use crate::input_formats::InputError;
+use crate::input_formats::InputFormatTextBase;
+use crate::input_formats::RowBatch;
 use crate::input_formats::SplitInfo;
 
 pub struct InputFormatCSV {}

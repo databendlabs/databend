@@ -36,13 +36,13 @@ use opendal::raw::DecompressDecoder;
 use opendal::raw::DecompressState;
 use opendal::Operator;
 
-use crate::input_formats::beyond_end_reader::BeyondEndReader;
 use crate::input_formats::input_pipeline::AligningStateTrait;
 use crate::input_formats::input_pipeline::BlockBuilderTrait;
 use crate::input_formats::input_pipeline::InputFormatPipe;
 use crate::input_formats::input_pipeline::RowBatchTrait;
 use crate::input_formats::input_split::FileInfo;
 use crate::input_formats::split_by_size;
+use crate::input_formats::BeyondEndReader;
 use crate::input_formats::InputContext;
 use crate::input_formats::InputError;
 use crate::input_formats::InputFormat;

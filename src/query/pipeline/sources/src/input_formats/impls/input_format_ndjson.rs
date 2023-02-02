@@ -27,11 +27,11 @@ use common_formats::FileFormatOptionsExt;
 use common_meta_types::OnErrorMode;
 use common_meta_types::StageFileFormatType;
 
-use crate::input_formats::input_format_text::AligningStateRowDelimiter;
-use crate::input_formats::input_format_text::BlockBuilder;
-use crate::input_formats::input_format_text::InputFormatTextBase;
-use crate::input_formats::input_format_text::RowBatch;
+use crate::input_formats::AligningStateRowDelimiter;
+use crate::input_formats::BlockBuilder;
 use crate::input_formats::InputError;
+use crate::input_formats::InputFormatTextBase;
+use crate::input_formats::RowBatch;
 
 pub struct InputFormatNDJson {}
 
