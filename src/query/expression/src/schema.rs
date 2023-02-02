@@ -857,11 +857,26 @@ impl TableDataType {
             _ => self.clone(),
         }
     }
-    
+
     pub fn remove_recursive_nullable(&self) -> Self {
         match self {
-            TableDataType::Nullable(ty) => &ty.as_ref().remove_recursive_nullable(),
-            TableDataType::Tuple(ty) => 
+            TableDataType::Nullable(ty) => ty.as_ref().remove_recursive_nullable(),
+            TableDataType::Tuple {
+                fields_name,
+                fields_type,
+            } => {
+                let mut new_fields_type = vec![];
+                for ty in fields_type {
+                    new_fields_type.push(ty.remove_recursive_nullable());
+                }
+                TableDataType::Tuple {
+                    fields_name: fields_name.clone(),
+                    fields_type: new_fields_type,
+                }
+            }
+            TableDataType::Array(ty) => {
+                TableDataType::Array(Box::new(ty.as_ref().remove_recursive_nullable()))
+            }
             _ => self.clone(),
         }
     }
@@ -883,8 +898,7 @@ impl TableDataType {
             _ => format!("{}", self),
         }
     }
-    
-    
+
     pub fn sql_name(&self) -> String {
         match self {
             TableDataType::Number(num_ty) => match num_ty {
