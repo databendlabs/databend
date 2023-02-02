@@ -13,17 +13,9 @@
 // limitations under the License.
 
 pub use common_pipeline_core::processors::*;
-use common_pipeline_sinks::processors::sinks;
 pub(crate) mod transforms;
 
 use common_pipeline_sources::processors::sources;
-pub use sinks::AsyncSink;
-pub use sinks::AsyncSinker;
-pub use sinks::ContextSink;
-pub use sinks::EmptySink;
-pub use sinks::Sink;
-pub use sinks::Sinker;
-pub use sinks::SyncSenderSink;
 pub use sources::AsyncSource;
 pub use sources::AsyncSourcer;
 pub use sources::BlocksSource;
