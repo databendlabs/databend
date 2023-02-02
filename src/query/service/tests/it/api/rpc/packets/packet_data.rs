@@ -37,6 +37,7 @@ async fn test_precommit_ser_and_deser() -> Result<()> {
         ("_b/1.json".to_string(), 1),
         None,
         4,
+        None,
         Compression::Lz4Raw,
     );
     let segment_info = SegmentInfo::new(vec![Arc::new(block_meta)], Statistics::default());

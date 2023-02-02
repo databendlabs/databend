@@ -55,9 +55,9 @@ pub struct BlockMeta {
     pub location: Location,
     /// location of bloom filter index
     pub bloom_filter_index_location: Option<Location>,
-
     #[serde(default)]
     pub bloom_filter_index_size: u64,
+    pub delete_rows_location: Option<Location>,
     pub compression: Compression,
 }
 
@@ -73,6 +73,7 @@ impl BlockMeta {
         location: Location,
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,
+        delete_rows_location: Option<Location>,
         compression: Compression,
     ) -> Self {
         Self {
@@ -85,6 +86,7 @@ impl BlockMeta {
             location,
             bloom_filter_index_location,
             bloom_filter_index_size,
+            delete_rows_location,
             compression,
         }
     }
@@ -193,6 +195,7 @@ impl BlockMeta {
             location: (s.location.path.clone(), 0),
             bloom_filter_index_location: None,
             bloom_filter_index_size: 0,
+            delete_rows_location: None,
             compression: Compression::Lz4,
         }
     }
@@ -219,10 +222,12 @@ impl BlockMeta {
             file_size: s.file_size,
             col_stats,
             col_metas,
+            // Todo: ClusterStatistics::from_v0
             cluster_stats: None,
             location: s.location.clone(),
             bloom_filter_index_location: s.bloom_filter_index_location.clone(),
             bloom_filter_index_size: s.bloom_filter_index_size,
+            delete_rows_location: None,
             compression: s.compression,
         }
     }

@@ -278,6 +278,7 @@ impl Processor for CompactTransform {
                         block_location.clone(),
                         index_location.clone(),
                         index_size,
+                        None,
                         self.write_settings.table_compression.into(),
                     );
                     self.abort_operation.add_block(&new_meta);

@@ -517,6 +517,7 @@ fn test_reduce_block_meta() -> common_exception::Result<()> {
             location.clone(),
             None,
             bloom_filter_index_size,
+            None,
             Compression::Lz4Raw,
         );
         blocks.push(block_meta);

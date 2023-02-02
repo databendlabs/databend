@@ -218,6 +218,7 @@ impl Processor for SerializeDataTransform {
                     block_location.clone(),
                     index_location.clone(),
                     index_size,
+                    None,
                     self.table_compression.into(),
                 ));
 

@@ -86,6 +86,7 @@ impl<'a> BlockWriter<'a> {
             location,
             bloom_filter_index_location,
             bloom_filter_index_size,
+            None,
             Compression::Lz4Raw,
         );
         Ok(block_meta)
