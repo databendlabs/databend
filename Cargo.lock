@@ -2047,6 +2047,7 @@ dependencies = [
  "common-auth",
  "common-base",
  "common-exception",
+ "common-expression",
  "common-meta-types",
  "futures",
  "globiter",

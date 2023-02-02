@@ -23,6 +23,7 @@ use common_arrow::parquet::compression::Compression;
 use common_arrow::parquet::indexes::Interval;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
+use common_catalog::table::ColumnId;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -37,7 +38,7 @@ pub struct ColumnMeta {
 pub struct ParquetRowGroupPart {
     pub location: String,
     pub num_rows: usize,
-    pub column_metas: HashMap<usize, ColumnMeta>,
+    pub column_metas: HashMap<ColumnId, ColumnMeta>,
     pub row_selection: Option<Vec<Interval>>,
 }
 
@@ -65,7 +66,7 @@ impl ParquetRowGroupPart {
     pub fn create(
         location: String,
         num_rows: usize,
-        column_metas: HashMap<usize, ColumnMeta>,
+        column_metas: HashMap<ColumnId, ColumnMeta>,
         row_selection: Option<Vec<Interval>>,
     ) -> Arc<Box<dyn PartInfo>> {
         Arc::new(Box::new(ParquetRowGroupPart {
