@@ -16,6 +16,7 @@ use common_arrow::arrow::compute::merge_sort::MergeSlice;
 use itertools::Itertools;
 
 use crate::types::array::ArrayColumnBuilder;
+use crate::types::decimal::DecimalColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::AnyType;
@@ -29,6 +30,7 @@ use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::types::VariantType;
+use crate::with_decimal_type;
 use crate::with_number_mapped_type;
 use crate::BlockEntry;
 use crate::Column;
@@ -196,6 +198,25 @@ impl Column {
                 NumberColumn::NUM_TYPE(_) => {
                     let builder = NumberType::<NUM_TYPE>::create_builder(result_size, &[]);
                     Self::take_block_value_types::<NumberType<NUM_TYPE>>(columns, builder, indices)
+                }
+            }),
+            Column::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
+                DecimalColumn::DECIMAL_TYPE(_, size) => {
+                    let columns = columns
+                        .iter()
+                        .map(|col| match col {
+                            Column::Decimal(DecimalColumn::DECIMAL_TYPE(col, _)) => col,
+                            _ => unreachable!(),
+                        })
+                        .collect_vec();
+                    let mut builder = Vec::with_capacity(result_size);
+                    for &(block_index, row, times) in indices {
+                        let val = unsafe { columns[block_index].get_unchecked(row) };
+                        for _ in 0..times {
+                            builder.push(*val);
+                        }
+                    }
+                    Column::Decimal(DecimalColumn::DECIMAL_TYPE(builder.into(), *size))
                 }
             }),
             Column::Boolean(_) => {

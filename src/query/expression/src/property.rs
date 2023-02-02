@@ -15,6 +15,7 @@
 use enum_as_inner::EnumAsInner;
 
 use crate::types::boolean::BooleanDomain;
+use crate::types::decimal::DecimalDomain;
 use crate::types::nullable::NullableDomain;
 use crate::types::number::NumberDomain;
 use crate::types::number::NumberScalar;
@@ -67,6 +68,7 @@ pub enum FunctionDomain<T: ValueType> {
 #[derive(Debug, Clone, PartialEq, EnumAsInner)]
 pub enum Domain {
     Number(NumberDomain),
+    Decimal(DecimalDomain),
     Boolean(BooleanDomain),
     String(StringDomain),
     Timestamp(SimpleDomain<i64>),
@@ -137,6 +139,7 @@ impl Domain {
             DataType::Number(NumberDataType::Float64) => {
                 Domain::Number(NumberDomain::Float64(NumberType::<F64>::full_domain()))
             }
+            DataType::Decimal(_) => todo!("decimal"),
             DataType::Timestamp => Domain::Timestamp(TimestampType::full_domain()),
             DataType::Date => Domain::Date(DateType::full_domain()),
             DataType::Null => Domain::Nullable(NullableDomain {
