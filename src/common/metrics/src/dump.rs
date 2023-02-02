@@ -110,7 +110,7 @@ pub fn dump_metric_samples(handle: PrometheusHandle) -> Result<Vec<MetricSample>
 }
 
 #[cfg(not(target_os = "linux"))]
-pub fn dump_proc_stats() -> ProcResult<Vec<MetricSample>> {
+pub fn dump_proc_stats() -> Result<Vec<MetricSample>> {
     Ok(vec![])
 }
 
