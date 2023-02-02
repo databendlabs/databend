@@ -344,7 +344,9 @@ impl DataBlock {
     }
 
     // If use_field_default_vals[i].is_some(), then DataBlock.column[i] = num_rows * DataField.default_value().
-    // else, DataBlock.column[i] = chuck.columns[i].
+    // else, DataBlock.column[i] = chuck.column.
+    // For example, Schema.field is [a,b,c] and use_field_default_vals is [Some(), None, Some()],
+    // then the return block column will be [a.default_value()*num_rows, chunk.column[0], c.default_value()*num_rows].
     pub fn create_with_schema_from_chunk<A: AsRef<dyn Array>>(
         schema: &DataSchemaRef,
         chuck: &ArrowChunk<A>,
