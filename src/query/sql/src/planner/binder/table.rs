@@ -363,7 +363,7 @@ impl Binder {
                         op,
                         files,
                         Default::default(),
-                        Some(user_stage_info.clone()),
+                        user_stage_info.clone(),
                     )
                     .await?;
 

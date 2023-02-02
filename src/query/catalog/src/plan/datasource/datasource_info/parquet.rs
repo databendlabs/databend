@@ -27,7 +27,7 @@ pub struct ParquetTableInfo {
     pub file_locations: Vec<String>,
     pub arrow_schema: ArrowSchema,
     pub read_options: ParquetReadOptions,
-    pub user_stage_info: Option<UserStageInfo>,
+    pub user_stage_info: UserStageInfo,
 }
 
 impl ParquetTableInfo {
@@ -36,9 +36,6 @@ impl ParquetTableInfo {
     }
 
     pub fn desc(&self) -> String {
-        match &self.user_stage_info {
-            Some(info) => info.stage_name.clone(),
-            None => "read_parquet".to_string(),
-        }
+        self.user_stage_info.stage_name.clone()
     }
 }

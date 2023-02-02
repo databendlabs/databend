@@ -46,15 +46,12 @@ pub struct ParquetTable {
     pub(super) arrow_schema: ArrowSchema,
     pub(super) operator: Operator,
     pub(super) read_options: ParquetReadOptions,
-    pub(super) stage_info: Option<UserStageInfo>,
+    pub(super) stage_info: UserStageInfo,
 }
 
 impl ParquetTable {
     pub fn from_info(info: &ParquetTableInfo) -> Result<Arc<dyn Table>> {
-        let operator = match &info.user_stage_info {
-            Some(info) => init_stage_operator(info),
-            None => Self::get_local_operator(),
-        }?;
+        let operator = init_stage_operator(&info.user_stage_info)?;
 
         Ok(Arc::new(ParquetTable {
             file_locations: info.file_locations.clone(),
@@ -64,12 +61,6 @@ impl ParquetTable {
             read_options: info.read_options,
             stage_info: info.user_stage_info.clone(),
         }))
-    }
-
-    fn get_local_operator() -> Result<Operator> {
-        let mut builder = opendal::services::fs::Builder::default();
-        builder.root("/");
-        Ok(Operator::new(builder.build()?))
     }
 }
 

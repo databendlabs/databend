@@ -38,7 +38,7 @@ impl ParquetTable {
         operator: Operator,
         maybe_glob_locations: Vec<String>,
         read_options: ParquetReadOptions,
-        stage_info: Option<UserStageInfo>,
+        stage_info: UserStageInfo,
     ) -> Result<Arc<dyn Table>> {
         if operator.metadata().can_blocking() {
             return Self::blocking_create(

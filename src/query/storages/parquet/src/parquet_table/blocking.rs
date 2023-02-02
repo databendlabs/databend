@@ -36,7 +36,7 @@ impl ParquetTable {
         operator: Operator,
         maybe_glob_locations: Vec<String>,
         read_options: ParquetReadOptions,
-        stage_info: Option<UserStageInfo>,
+        stage_info: UserStageInfo,
     ) -> Result<Arc<dyn Table>> {
         let (file_locations, arrow_schema) =
             Self::blocking_prepare_metas(maybe_glob_locations, operator.clone())?;
