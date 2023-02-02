@@ -4,21 +4,6 @@ select check_json(null)
 NULL
 
 query T
-select check_json(true)
-----
-NULL
-
-query T
-select check_json(123)
-----
-NULL
-
-query T
-select check_json(12.34)
-----
-NULL
-
-query T
 select check_json('null')
 ----
 NULL

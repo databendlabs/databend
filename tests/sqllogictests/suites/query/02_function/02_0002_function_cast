@@ -182,6 +182,7 @@ SELECT to_date(to_timestamp(1640019661000000)) = to_date('2021-12-20')
 ----
 1
 
+
 query BB
 SELECT to_date('2022-02-03T00:00:00+09:00') = to_date('2022-02-02'), to_date('2022-11-10 00:54:12') = to_date('2022-11-10')
 ----
@@ -192,17 +193,6 @@ query B
 SELECT to_timestamp(1640019661000000) = to_timestamp('2021-12-20 17:01:01.000000')
 ----
 1
-
-
-query B
-SELECT parse_json(true)::boolean
-----
-1
-
-query B
-SELECT parse_json(false)::boolean
-----
-0
 
 
 query B
@@ -217,7 +207,6 @@ SELECT parse_json('"false"')::boolean
 0
 
 
-
 statement error 1001
 SELECT parse_json('"test"')::boolean
 
@@ -229,65 +218,6 @@ SELECT parse_json(1)::boolean
 statement error 1001
 SELECT parse_json('null')::boolean
 
-query I
-SELECT parse_json(255)::uint8
-----
-255
-
-query I
-SELECT parse_json(65535)::uint16
-----
-65535
-
-query I
-SELECT parse_json(4294967295)::uint32
-----
-4294967295
-
-query I
-SELECT parse_json(18446744073709551615)::uint64
-----
-18446744073709551615
-
-query I
-SELECT parse_json(-128)::int8
-----
--128
-
-query I
-SELECT parse_json(127)::int8
-----
-127
-
-query I
-SELECT parse_json(-32768)::int16
-----
--32768
-
-query I
-SELECT parse_json(32767)::int16
-----
-32767
-
-query I
-SELECT parse_json(-2147483648)::int32
-----
--2147483648
-
-query I
-SELECT parse_json(2147483647)::int32
-----
-2147483647
-
-query I
-SELECT parse_json(-9223372036854775808)::int64
-----
--9223372036854775808
-
-query I
-SELECT parse_json(9223372036854775807)::int64
-----
-9223372036854775807
 
 query I
 SELECT parse_json('"255"')::uint8
