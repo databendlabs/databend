@@ -117,12 +117,12 @@ mod tests {
     #[test]
     fn test_serde_node_compatible() -> anyhow::Result<()> {
         // Without `grpc_api_addr`
-        let s1 = r#"{"name":"a","endpoint":{"addr":"b","port":3},"grpc_api_advertise_host":"grpc_advertise"}"#;
+        let s1 = r#"{"name":"a","endpoint":{"addr":"b","port":3},"grpc_api_advertise_address":"grpc_advertise"}"#;
         let _n1: Node = serde_json::from_str(s1)?;
         // println!("{n:?}");
 
         // With `grpc_api_addr`
-        let s2 = r#"{"name":"a","endpoint":{"addr":"b","port":3},"grpc_api_addr":"grpc_addr","grpc_api_advertise_host":"grpc_advertise"}"#;
+        let s2 = r#"{"name":"a","endpoint":{"addr":"b","port":3},"grpc_api_addr":"grpc_addr","grpc_api_advertise_address":"grpc_advertise"}"#;
         let _n2: Node = serde_json::from_str(s2)?;
         // println!("{n:?}");
         Ok(())
