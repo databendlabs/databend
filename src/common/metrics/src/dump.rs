@@ -109,10 +109,15 @@ pub fn dump_metric_samples(handle: PrometheusHandle) -> Result<Vec<MetricSample>
     Ok(samples)
 }
 
+#[cfg(not(target_os = "linux"))]
+pub fn dump_proc_stats() -> ProcResult<Vec<MetricSample>> {
+    Ok(vec![])
+}
+
+#[cfg(target_os = "linux")]
 pub fn dump_proc_stats() -> ProcResult<Vec<MetricSample>> {
     let me = procfs::process::Process::myself()?;
     let io = me.io()?;
-
     // ❯ cat /proc/thread-self/io
     // rchar: 4092
     // wchar: 8
