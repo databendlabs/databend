@@ -105,10 +105,7 @@ async fn test_state_machine_apply_add_node() -> anyhow::Result<()> {
         let ss = &sm;
         async move {
             ss.apply(&Entry {
-                log_id: LogId {
-                    term: 1,
-                    index: index,
-                },
+                log_id: LogId { term: 1, index },
                 payload: EntryPayload::Normal(LogEntry {
                     txid: None,
                     time_ms: None,
