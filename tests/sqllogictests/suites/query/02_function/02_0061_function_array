@@ -54,7 +54,7 @@ select remove_first(col1), remove_first(col2), remove_first(col3) from t
 query TTT
 select remove_last(col1), remove_last(col2), remove_last(col3) from t
 ----
-[1,2,3] ['x',x','y'] []
+[1,2,3] ['x','x','y'] []
 
 query TTT
 select prepend(0, col1), prepend('a', col2), prepend('2022-01-01', col3) from t
