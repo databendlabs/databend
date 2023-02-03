@@ -16,10 +16,3 @@
 #![deny(unused_crate_dependencies)]
 
 pub mod kvapi;
-
-pub use kvapi::check_segment;
-pub use kvapi::check_segment_absent;
-pub use kvapi::check_segment_present;
-pub use kvapi::decode_id;
-pub use kvapi::escape;
-pub use kvapi::unescape;

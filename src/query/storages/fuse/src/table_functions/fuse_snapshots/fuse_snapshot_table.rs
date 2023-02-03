@@ -27,8 +27,8 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_sources::processors::sources::AsyncSource;
-use common_pipeline_sources::processors::sources::AsyncSourcer;
+use common_pipeline_sources::AsyncSource;
+use common_pipeline_sources::AsyncSourcer;
 
 use super::fuse_snapshot::FuseSnapshot;
 use super::table_args::parse_func_history_args;

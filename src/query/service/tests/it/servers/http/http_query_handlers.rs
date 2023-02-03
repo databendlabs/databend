@@ -155,7 +155,10 @@ async fn test_simple_sql() -> Result<()> {
     let response = get_uri(&ep, &page_1_uri).await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND, "{:?}", result);
     let body = response.into_body().into_string().await.unwrap();
-    assert_eq!(body, "wrong page number 1");
+    assert_eq!(
+        body,
+        r#"{"error":{"code":"404","message":"wrong page number 1"}}"#
+    );
 
     // final
     let (status, result) = get_uri_checked(&ep, &final_uri).await?;
@@ -364,7 +367,10 @@ async fn test_pagination() -> Result<()> {
     let response = get_uri(&ep, &uri).await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND, "{:?}", result);
     let body = response.into_body().into_string().await.unwrap();
-    assert_eq!(body, "wrong page number 6");
+    assert_eq!(
+        body,
+        r#"{"error":{"code":"404","message":"wrong page number 6"}}"#
+    );
 
     let mut next_uri = result.next_uri.clone().unwrap();
 
@@ -1117,7 +1123,7 @@ async fn test_multi_partition() -> Result<()> {
     ];
 
     for (sql, data_len) in sqls {
-        let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1}});
+        let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 2}});
         let (status, result) = post_json_to_endpoint(&route, &json).await?;
         assert_eq!(status, StatusCode::OK);
         assert!(result.error.is_none(), "{:?}", result.error);

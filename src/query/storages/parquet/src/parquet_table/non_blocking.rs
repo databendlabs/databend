@@ -12,12 +12,16 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::sync::Arc;
+
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::read as pread;
 use common_base::base::tokio;
-use common_catalog::table_args::TableArgs;
+use common_catalog::plan::ParquetReadOptions;
+use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::UserStageInfo;
 use futures::TryStreamExt;
 use glob::Pattern;
 use opendal::raw::get_basename;
@@ -27,29 +31,38 @@ use opendal::Operator;
 
 use super::table::create_parquet_table_info;
 use crate::ParquetTable;
-use crate::ReadOptions;
 
 impl ParquetTable {
     pub async fn create(
         table_id: u64,
-        table_args: TableArgs,
         operator: Operator,
         maybe_glob_locations: Vec<String>,
-        read_options: ReadOptions,
-    ) -> Result<Self> {
+        read_options: ParquetReadOptions,
+        stage_info: Option<UserStageInfo>,
+    ) -> Result<Arc<dyn Table>> {
+        if operator.metadata().can_blocking() {
+            return Self::blocking_create(
+                table_id,
+                operator,
+                maybe_glob_locations,
+                read_options,
+                stage_info,
+            );
+        }
+
         let (file_locations, arrow_schema) =
             Self::prepare_metas(maybe_glob_locations, operator.clone()).await?;
 
         let table_info = create_parquet_table_info(table_id, arrow_schema.clone());
 
-        Ok(ParquetTable {
-            table_args,
+        Ok(Arc::new(ParquetTable {
             file_locations,
             table_info,
             arrow_schema,
             operator,
             read_options,
-        })
+            stage_info,
+        }))
     }
 
     async fn prepare_metas(

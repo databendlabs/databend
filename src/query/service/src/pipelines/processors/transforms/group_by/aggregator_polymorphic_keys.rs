@@ -32,9 +32,9 @@ use common_hashtable::FastHash;
 use common_hashtable::HashMap;
 use common_hashtable::HashtableLike;
 use common_hashtable::LookupHashMap;
-use common_hashtable::SimpleUnsizedHashMap;
-use common_hashtable::TwoLevelHashMap;
-use common_hashtable::UnsizedHashMap;
+use common_hashtable::PartitionedHashMap;
+use common_hashtable::ShortStringHashMap;
+use common_hashtable::StringHashMap;
 use primitive_types::U256;
 use primitive_types::U512;
 
@@ -396,10 +396,10 @@ impl PolymorphicKeysHelper<HashMethodKeysU512> for HashMethodKeysU512 {
 impl PolymorphicKeysHelper<HashMethodSingleString> for HashMethodSingleString {
     const SUPPORT_TWO_LEVEL: bool = true;
 
-    type HashTable = UnsizedHashMap<[u8], usize>;
+    type HashTable = ShortStringHashMap<[u8], usize>;
 
     fn create_hash_table(&self) -> Result<Self::HashTable> {
-        Ok(UnsizedHashMap::new())
+        Ok(ShortStringHashMap::new())
     }
 
     type ColumnBuilder<'a> = StringKeysColumnBuilder<'a>;
@@ -436,10 +436,10 @@ impl PolymorphicKeysHelper<HashMethodSingleString> for HashMethodSingleString {
 impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
     const SUPPORT_TWO_LEVEL: bool = true;
 
-    type HashTable = SimpleUnsizedHashMap<[u8], usize>;
+    type HashTable = StringHashMap<[u8], usize>;
 
     fn create_hash_table(&self) -> Result<Self::HashTable> {
-        Ok(SimpleUnsizedHashMap::new())
+        Ok(StringHashMap::new())
     }
 
     type ColumnBuilder<'a> = StringKeysColumnBuilder<'a>;
@@ -474,22 +474,22 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
 }
 
 #[derive(Clone)]
-pub struct TwoLevelHashMethod<Method: HashMethod + Send> {
+pub struct PartitionedHashMethod<Method: HashMethod + Send> {
     pub(crate) method: Method,
 }
 
-impl<Method: HashMethod + Send> TwoLevelHashMethod<Method> {
-    pub fn create(method: Method) -> TwoLevelHashMethod<Method> {
-        TwoLevelHashMethod::<Method> { method }
+impl<Method: HashMethod + Send> PartitionedHashMethod<Method> {
+    pub fn create(method: Method) -> PartitionedHashMethod<Method> {
+        PartitionedHashMethod::<Method> { method }
     }
 }
 
-impl<Method: HashMethod + Send> HashMethod for TwoLevelHashMethod<Method> {
+impl<Method: HashMethod + Send> HashMethod for PartitionedHashMethod<Method> {
     type HashKey = Method::HashKey;
     type HashKeyIter<'a> = Method::HashKeyIter<'a> where Self: 'a;
 
     fn name(&self) -> String {
-        format!("TwoLevel{}", self.method.name())
+        format!("Partitioned{}", self.method.name())
     }
 
     fn build_keys_state(
@@ -505,16 +505,16 @@ impl<Method: HashMethod + Send> HashMethod for TwoLevelHashMethod<Method> {
     }
 }
 
-impl<Method> PolymorphicKeysHelper<TwoLevelHashMethod<Method>> for TwoLevelHashMethod<Method>
+impl<Method> PolymorphicKeysHelper<PartitionedHashMethod<Method>> for PartitionedHashMethod<Method>
 where
     Self: HashMethod<HashKey = Method::HashKey>,
     Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
     Method::HashKey: FastHash,
 {
-    // Two level cannot be recursive
+    // Partitioned cannot be recursive
     const SUPPORT_TWO_LEVEL: bool = false;
 
-    type HashTable = TwoLevelHashMap<Method::HashTable>;
+    type HashTable = PartitionedHashMap<Method::HashTable>;
 
     fn create_hash_table(&self) -> Result<Self::HashTable> {
         let mut tables = Vec::with_capacity(256);
@@ -523,10 +523,10 @@ where
             tables.push(self.method.create_hash_table()?);
         }
 
-        Ok(TwoLevelHashMap::create(tables))
+        Ok(PartitionedHashMap::create(tables))
     }
 
-    type ColumnBuilder<'a> = Method::ColumnBuilder<'a> where Self: 'a, TwoLevelHashMethod<Method>: 'a;
+    type ColumnBuilder<'a> = Method::ColumnBuilder<'a> where Self: 'a, PartitionedHashMethod<Method>: 'a;
 
     fn keys_column_builder(
         &self,
@@ -542,7 +542,7 @@ where
         self.method.keys_iter_from_column(column)
     }
 
-    type GroupColumnsBuilder<'a> = Method::GroupColumnsBuilder<'a> where Self: 'a, TwoLevelHashMethod<Method>: 'a;
+    type GroupColumnsBuilder<'a> = Method::GroupColumnsBuilder<'a> where Self: 'a, PartitionedHashMethod<Method>: 'a;
 
     fn group_columns_builder(
         &self,

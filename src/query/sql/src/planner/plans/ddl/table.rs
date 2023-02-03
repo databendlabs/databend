@@ -27,7 +27,7 @@ use common_expression::TableSchemaRef;
 use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::UndropTableReq;
-use common_storage::StorageParams;
+use common_meta_types::StorageParams;
 
 use crate::plans::Plan;
 

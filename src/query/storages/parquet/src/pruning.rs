@@ -185,7 +185,7 @@ impl PartitionPruner {
                 for index in columns_to_read {
                     let c = &rg.columns()[*index];
                     let (offset, length) = c.byte_range();
-                    column_metas.insert(*index, ColumnMeta {
+                    column_metas.insert(*index as u32, ColumnMeta {
                         offset,
                         length,
                         compression: c.compression(),
@@ -615,7 +615,7 @@ mod tests {
         let metadata = read_metadata(&mut reader)?;
         let rgs = metadata.row_groups;
         let arrow_schema = schema.to_arrow();
-        let column_nodes = ColumnNodes::new_from_schema(&arrow_schema);
+        let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, None);
 
         let row_group_stats = collect_row_group_stats(&column_nodes, &rgs)?;
 

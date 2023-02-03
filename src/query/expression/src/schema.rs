@@ -14,6 +14,7 @@
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
@@ -72,10 +73,17 @@ pub struct DataField {
     data_type: DataType,
 }
 
+fn uninit_column_id() -> u32 {
+    0
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct TableSchema {
     pub(crate) fields: Vec<TableField>,
     pub(crate) metadata: BTreeMap<String, String>,
+    // next column id that assign to TableField.column_id
+    #[serde(default = "uninit_column_id")]
+    pub(crate) next_column_id: u32,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -83,6 +91,8 @@ pub struct TableField {
     name: String,
     default_expr: Option<String>,
     data_type: TableDataType,
+    #[serde(default = "uninit_column_id")]
+    column_id: u32,
 }
 
 /// DataType with more information that is only available for table field, e.g, the
@@ -242,24 +252,174 @@ impl TableSchema {
         Self {
             fields: vec![],
             metadata: BTreeMap::new(),
+            next_column_id: 0,
         }
     }
 
+    pub fn init_if_need(data_schema: TableSchema) -> Self {
+        // If next_column_id is 0, it is an old version needs to compatibility
+        if data_schema.next_column_id == 0 {
+            Self::new_from(data_schema.fields, data_schema.metadata)
+        } else {
+            data_schema
+        }
+    }
+
+    fn build_members_from_fields(
+        fields: Vec<TableField>,
+        next_column_id: u32,
+    ) -> (u32, Vec<TableField>) {
+        if next_column_id > 0 {
+            // make sure that field column id has been inited.
+            if fields.len() > 1 {
+                assert!(fields[1].column_id() > 0);
+            }
+            return (next_column_id, fields);
+        }
+
+        let mut new_next_column_id = 0;
+        let mut new_fields = Vec::with_capacity(fields.len());
+
+        for field in fields {
+            let new_field = field.build_column_id(&mut new_next_column_id);
+            // check next_column_id value cannot fallback
+            assert!(new_next_column_id >= new_field.column_id());
+            new_fields.push(new_field);
+        }
+
+        // check next_column_id value cannot fallback
+        assert!(new_next_column_id >= next_column_id);
+
+        (new_next_column_id, new_fields)
+    }
+
     pub fn new(fields: Vec<TableField>) -> Self {
+        let (next_column_id, new_fields) = Self::build_members_from_fields(fields, 0);
         Self {
-            fields,
+            fields: new_fields,
             metadata: BTreeMap::new(),
+            next_column_id,
         }
     }
 
     pub fn new_from(fields: Vec<TableField>, metadata: BTreeMap<String, String>) -> Self {
-        Self { fields, metadata }
+        let (next_column_id, new_fields) = Self::build_members_from_fields(fields, 0);
+        Self {
+            fields: new_fields,
+            metadata,
+            next_column_id,
+        }
+    }
+
+    pub fn new_from_column_ids(
+        fields: Vec<TableField>,
+        metadata: BTreeMap<String, String>,
+        next_column_id: u32,
+    ) -> Self {
+        let (next_column_id, new_fields) = Self::build_members_from_fields(fields, next_column_id);
+        Self {
+            fields: new_fields,
+            metadata,
+            next_column_id,
+        }
+    }
+
+    #[inline]
+    pub fn next_column_id(&self) -> u32 {
+        self.next_column_id
+    }
+
+    pub fn column_id_of_index(&self, i: usize) -> Result<u32> {
+        Ok(self.fields[i].column_id())
+    }
+
+    pub fn column_id_of(&self, name: &str) -> Result<u32> {
+        let i = self.index_of(name)?;
+        Ok(self.fields[i].column_id())
+    }
+
+    pub fn is_column_deleted(&self, column_id: u32) -> bool {
+        for field in &self.fields {
+            if field.contain_column_id(column_id) {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    pub fn add_columns(&mut self, fields: &[TableField]) -> Result<()> {
+        for f in fields {
+            if self.index_of(f.name()).is_ok() {
+                return Err(ErrorCode::AddColumnExistError(format!(
+                    "add column {} already exist",
+                    f.name(),
+                )));
+            }
+            let field = f.build_column_id(&mut self.next_column_id);
+            self.fields.push(field);
+        }
+        Ok(())
+    }
+
+    pub fn drop_column(&mut self, column: &str) -> Result<()> {
+        if self.fields.len() == 1 {
+            return Err(ErrorCode::DropColumnEmptyError(
+                "cannot drop table column to empty",
+            ));
+        }
+        let i = self.index_of(column)?;
+        self.fields.remove(i);
+
+        Ok(())
+    }
+
+    pub fn to_column_ids(&self) -> Vec<u32> {
+        let mut column_ids = Vec::with_capacity(self.fields.len());
+
+        self.fields.iter().for_each(|f| {
+            column_ids.extend(f.column_ids());
+        });
+
+        column_ids
+    }
+
+    pub fn to_leaf_column_ids(&self) -> Vec<u32> {
+        let mut column_ids = Vec::with_capacity(self.fields.len());
+
+        self.fields.iter().for_each(|f| {
+            column_ids.extend(f.leaf_column_ids());
+        });
+
+        column_ids
     }
 
     /// Returns an immutable reference of the vector of `Field` instances.
     #[inline]
     pub const fn fields(&self) -> &Vec<TableField> {
         &self.fields
+    }
+
+    #[inline]
+    pub fn field_column_ids(&self) -> Vec<Vec<u32>> {
+        let mut field_column_ids = Vec::with_capacity(self.fields.len());
+
+        self.fields.iter().for_each(|f| {
+            field_column_ids.push(f.column_ids());
+        });
+
+        field_column_ids
+    }
+
+    #[inline]
+    pub fn field_leaf_column_ids(&self) -> Vec<Vec<u32>> {
+        let mut field_column_ids = Vec::with_capacity(self.fields.len());
+
+        self.fields.iter().for_each(|f| {
+            field_column_ids.push(f.leaf_column_ids());
+        });
+
+        field_column_ids
     }
 
     #[inline]
@@ -340,35 +500,51 @@ impl TableSchema {
     /// project will do column pruning.
     #[must_use]
     pub fn project(&self, projection: &[usize]) -> Self {
-        let fields = projection
-            .iter()
-            .map(|idx| self.fields()[*idx].clone())
-            .collect();
-        Self::new_from(fields, self.meta().clone())
+        let mut fields = Vec::with_capacity(projection.len());
+        for idx in projection {
+            fields.push(self.fields[*idx].clone());
+        }
+
+        Self {
+            fields,
+            metadata: self.metadata.clone(),
+            next_column_id: self.next_column_id,
+        }
     }
 
     /// project with inner columns by path.
     pub fn inner_project(&self, path_indices: &BTreeMap<usize, Vec<usize>>) -> Self {
         let paths: Vec<Vec<usize>> = path_indices.values().cloned().collect();
+        let schema_fields = self.fields();
+        let column_ids = self.to_column_ids();
+
         let fields = paths
             .iter()
-            .map(|path| Self::traverse_paths(self.fields(), path).unwrap())
+            .map(|path| Self::traverse_paths(schema_fields, path, &column_ids).unwrap())
             .collect();
-        Self::new_from(fields, self.meta().clone())
+
+        Self {
+            fields,
+            metadata: self.metadata.clone(),
+            next_column_id: self.next_column_id,
+        }
     }
 
-    fn traverse_paths(fields: &[TableField], path: &[usize]) -> Result<TableField> {
+    fn traverse_paths(
+        fields: &[TableField],
+        path: &[usize],
+        column_ids: &[u32],
+    ) -> Result<TableField> {
         if path.is_empty() {
             return Err(ErrorCode::BadArguments(
                 "path should not be empty".to_string(),
             ));
         }
-        let field = &fields[path[0]];
+        let index = path[0];
+        let field = &fields[index];
         if path.len() == 1 {
             return Ok(field.clone());
         }
-
-        let field_name = field.name();
 
         // If the data type is Tuple, we can read the innner columns directly.
         // For example, `select t:a from table`, we can only read column t:a.
@@ -387,15 +563,18 @@ impl TableSchema {
             fields_type,
         } = &field.data_type
         {
+            let field_name = field.name();
+            let mut next_column_id = column_ids[1 + index];
             let fields = fields_name
                 .iter()
                 .zip(fields_type)
                 .map(|(name, ty)| {
                     let inner_name = format!("{}:{}", field_name, name.to_lowercase());
-                    TableField::new(&inner_name, ty.clone())
+                    let field = TableField::new(&inner_name, ty.clone());
+                    field.build_column_id(&mut next_column_id)
                 })
                 .collect::<Vec<_>>();
-            return Self::traverse_paths(&fields, &path[1..]);
+            return Self::traverse_paths(&fields, &path[1..], &column_ids[index + 1..]);
         }
         let valid_fields: Vec<String> = fields.iter().map(|f| f.name.clone()).collect();
         Err(ErrorCode::BadArguments(format!(
@@ -404,40 +583,23 @@ impl TableSchema {
         )))
     }
 
-    pub fn leaf_fields(&self) -> Vec<TableField> {
+    // return leaf fields and column ids
+    pub fn leaf_fields(&self) -> (Vec<u32>, Vec<TableField>) {
         fn collect_in_field(field: &TableField, fields: &mut Vec<TableField>) {
-            match field.data_type().remove_nullable() {
+            match field.data_type() {
                 TableDataType::Tuple {
                     fields_type,
                     fields_name,
                 } => {
                     for (name, ty) in fields_name.iter().zip(fields_type) {
-                        let full_name = format!("{}:{}", field.name(), name);
-                        collect_in_field(&TableField::new(&full_name, ty.clone()), fields);
+                        collect_in_field(&TableField::new(name, ty.clone()), fields);
                     }
                 }
-                TableDataType::Array(inner_type) => {
-                    // TODO proper name for array inner column.
-                    let mut inner_name = format!("{}[]", field.name());
-                    let mut inner_type = inner_type;
-                    // find Tuple type inside an Array type to ensure all leaf fields are collected.
-                    loop {
-                        match inner_type.remove_nullable() {
-                            TableDataType::Tuple { .. } => {
-                                collect_in_field(
-                                    &TableField::new(&inner_name, *inner_type),
-                                    fields,
-                                );
-                            }
-                            TableDataType::Array(array_inner_type) => {
-                                inner_name = format!("{}[]", inner_name);
-                                inner_type = array_inner_type;
-                                continue;
-                            }
-                            _ => fields.push(field.clone()),
-                        }
-                        break;
-                    }
+                TableDataType::Array(ty) => {
+                    collect_in_field(
+                        &TableField::new(&format!("{}:0", field.name()), ty.as_ref().to_owned()),
+                        fields,
+                    );
                 }
                 _ => fields.push(field.clone()),
             }
@@ -447,13 +609,24 @@ impl TableSchema {
         for field in self.fields() {
             collect_in_field(field, &mut fields);
         }
-        fields
+        (self.to_leaf_column_ids(), fields)
     }
 
     /// project will do column pruning.
     #[must_use]
-    pub fn project_by_fields(&self, fields: Vec<TableField>) -> Self {
-        Self::new_from(fields, self.meta().clone())
+    pub fn project_by_fields(&self, fields: &BTreeMap<usize, TableField>) -> Self {
+        let column_ids = self.to_column_ids();
+        let mut new_fields = Vec::with_capacity(fields.len());
+        for (index, f) in fields.iter() {
+            let mut column_id = column_ids[*index];
+            let field = f.build_column_id(&mut column_id);
+            new_fields.push(field);
+        }
+        Self {
+            fields: new_fields,
+            metadata: self.metadata.clone(),
+            next_column_id: self.next_column_id,
+        }
     }
 
     pub fn to_arrow(&self) -> ArrowSchema {
@@ -524,7 +697,88 @@ impl TableField {
             name: name.to_string(),
             default_expr: None,
             data_type,
+            column_id: 0,
         }
+    }
+
+    pub fn new_from_column_id(name: &str, data_type: TableDataType, column_id: u32) -> Self {
+        TableField {
+            name: name.to_string(),
+            default_expr: None,
+            data_type,
+            column_id,
+        }
+    }
+
+    fn build_column_ids_from_data_type(
+        data_type: &TableDataType,
+        column_ids: &mut Vec<u32>,
+        next_column_id: &mut u32,
+    ) {
+        column_ids.push(*next_column_id);
+
+        match data_type {
+            TableDataType::Tuple {
+                fields_name: _,
+                ref fields_type,
+            } => {
+                for inner_type in fields_type {
+                    Self::build_column_ids_from_data_type(inner_type, column_ids, next_column_id);
+                }
+            }
+            TableDataType::Array(a) => {
+                Self::build_column_ids_from_data_type(a.as_ref(), column_ids, next_column_id);
+            }
+            _ => {
+                *next_column_id += 1;
+            }
+        }
+    }
+
+    pub fn build_column_id(&self, next_column_id: &mut u32) -> Self {
+        let data_type = self.data_type();
+
+        let column_id = *next_column_id;
+        let mut new_next_column_id = *next_column_id;
+        let mut column_ids = vec![];
+
+        Self::build_column_ids_from_data_type(data_type, &mut column_ids, &mut new_next_column_id);
+
+        *next_column_id = new_next_column_id;
+        Self {
+            name: self.name.clone(),
+            default_expr: self.default_expr.clone(),
+            data_type: self.data_type.clone(),
+            column_id,
+        }
+    }
+
+    pub fn contain_column_id(&self, column_id: u32) -> bool {
+        self.column_ids().contains(&column_id)
+    }
+
+    // `column_ids` contains nest-type parent column id,
+    // if field is Tuple(t1, t2), it will return a column id vector of 3 column id.
+    // `leaf_column_ids` return only the child column id.
+    pub fn leaf_column_ids(&self) -> Vec<u32> {
+        let h: BTreeSet<u32> = BTreeSet::from_iter(self.column_ids().iter().cloned());
+        h.into_iter().sorted().collect()
+    }
+
+    pub fn column_ids(&self) -> Vec<u32> {
+        let mut column_ids = vec![];
+        let mut new_next_column_id = self.column_id;
+        Self::build_column_ids_from_data_type(
+            self.data_type(),
+            &mut column_ids,
+            &mut new_next_column_id,
+        );
+
+        column_ids
+    }
+
+    pub fn column_id(&self) -> u32 {
+        self.column_id
     }
 
     #[must_use]
@@ -600,6 +854,29 @@ impl TableDataType {
     pub fn remove_nullable(&self) -> Self {
         match self {
             TableDataType::Nullable(ty) => (**ty).clone(),
+            _ => self.clone(),
+        }
+    }
+
+    pub fn remove_recursive_nullable(&self) -> Self {
+        match self {
+            TableDataType::Nullable(ty) => ty.as_ref().remove_recursive_nullable(),
+            TableDataType::Tuple {
+                fields_name,
+                fields_type,
+            } => {
+                let mut new_fields_type = vec![];
+                for ty in fields_type {
+                    new_fields_type.push(ty.remove_recursive_nullable());
+                }
+                TableDataType::Tuple {
+                    fields_name: fields_name.clone(),
+                    fields_type: new_fields_type,
+                }
+            }
+            TableDataType::Array(ty) => {
+                TableDataType::Array(Box::new(ty.as_ref().remove_recursive_nullable()))
+            }
             _ => self.clone(),
         }
     }
@@ -853,6 +1130,7 @@ impl From<&ArrowField> for TableField {
             name: f.name.clone(),
             data_type: f.into(),
             default_expr: None,
+            column_id: 0,
         }
     }
 }
@@ -1094,4 +1372,54 @@ pub fn infer_table_schema(data_schema: &DataSchemaRef) -> Result<TableSchemaRef>
         fields.push(TableField::new(field.name(), field_type));
     }
     Ok(TableSchemaRefExt::create(fields))
+}
+
+// a complex schema to cover all data types tests.
+pub fn create_test_complex_schema() -> TableSchema {
+    let child_field11 = TableDataType::Number(NumberDataType::UInt64);
+    let child_field12 = TableDataType::Number(NumberDataType::UInt64);
+    let child_field22 = TableDataType::Number(NumberDataType::UInt64);
+
+    let s = TableDataType::Tuple {
+        fields_name: vec!["0".to_string(), "1".to_string()],
+        fields_type: vec![child_field11, child_field12],
+    };
+
+    let tuple = TableDataType::Tuple {
+        fields_name: vec!["0".to_string(), "1".to_string()],
+        fields_type: vec![s.clone(), TableDataType::Array(Box::new(child_field22))],
+    };
+
+    let array = TableDataType::Array(Box::new(s));
+    let nullarray = TableDataType::Nullable(Box::new(TableDataType::Array(Box::new(
+        TableDataType::Number(NumberDataType::UInt64),
+    ))));
+    let maparray = TableDataType::Map(Box::new(TableDataType::Array(Box::new(
+        TableDataType::Number(NumberDataType::UInt64),
+    ))));
+
+    let field1 = TableField::new("u64", TableDataType::Number(NumberDataType::UInt64));
+    let field2 = TableField::new("tuplearray", tuple);
+    let field3 = TableField::new("arraytuple", array);
+    let field4 = TableField::new("nullarray", nullarray);
+    let field5 = TableField::new("maparray", maparray);
+    let field6 = TableField::new(
+        "nullu64",
+        TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+    );
+    let field7 = TableField::new(
+        "u64array",
+        TableDataType::Array(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+    );
+    let field8 = TableField::new("tuplesimple", TableDataType::Tuple {
+        fields_name: vec!["a".to_string(), "b".to_string()],
+        fields_type: vec![
+            TableDataType::Number(NumberDataType::Int32),
+            TableDataType::Number(NumberDataType::Int32),
+        ],
+    });
+
+    TableSchema::new(vec![
+        field1, field2, field3, field4, field5, field6, field7, field8,
+    ])
 }

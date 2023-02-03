@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::infer_table_schema;
+use common_expression::types::DataType;
 use common_expression::types::StringType;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
@@ -62,15 +64,15 @@ impl Interpreter for DescribeTableInterpreter {
             if let Some(query) = tbl_info.options().get(QUERY) {
                 let mut planner = Planner::new(self.ctx.clone());
                 let (plan, _, _) = planner.plan_sql(query).await?;
-                plan.schema()
+                infer_table_schema(&plan.schema())
             } else {
                 return Err(ErrorCode::Internal(
                     "Logical error, View Table must have a SelectQuery inside.",
                 ));
             }
         } else {
-            Arc::new((&table.schema()).into())
-        };
+            Ok(table.schema())
+        }?;
 
         let mut names: Vec<Vec<u8>> = vec![];
         let mut types: Vec<Vec<u8>> = vec![];
@@ -81,7 +83,7 @@ impl Interpreter for DescribeTableInterpreter {
         for field in schema.fields().iter() {
             names.push(field.name().to_string().as_bytes().to_vec());
 
-            let non_null_type = field.data_type().remove_nullable();
+            let non_null_type = field.data_type().remove_recursive_nullable();
             types.push(non_null_type.sql_name().as_bytes().to_vec());
             nulls.push(if field.is_nullable() {
                 "YES".to_string().as_bytes().to_vec()
@@ -94,7 +96,8 @@ impl Interpreter for DescribeTableInterpreter {
                 }
 
                 None => {
-                    let value = field.data_type().default_value();
+                    let data_type: DataType = field.data_type().into();
+                    let value = data_type.default_value();
                     default_exprs.push(value.to_string().as_bytes().to_vec());
                 }
             }
