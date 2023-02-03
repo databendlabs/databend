@@ -80,14 +80,14 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         //   - value_start_from = 1
         // thus
         let expected = vec![
-            "+----------+----------------+",
-            "| Column 0 | Column 1       |",
-            "+----------+----------------+",
-            "| 1_i32    | (2_i32, 3_i32) |",
-            "| 1_i32    | (2_i32, 3_i32) |",
-            "| 2_i32    | (4_i32, 6_i32) |",
-            "| 2_i32    | (4_i32, 6_i32) |",
-            "+----------+----------------+",
+            "+----------+----------+",
+            "| Column 0 | Column 1 |",
+            "+----------+----------+",
+            "| 1        | (2, 3)   |",
+            "| 1        | (2, 3)   |",
+            "| 2        | (4, 6)   |",
+            "| 2        | (4, 6)   |",
+            "+----------+----------+",
         ];
         common_expression::block_debug::assert_blocks_sorted_eq(expected, blocks.as_slice());
     }
@@ -136,14 +136,14 @@ async fn test_fuse_table_normal_case() -> Result<()> {
 
         // two block, two rows for each block, value starts with 2
         let expected = vec![
-            "+----------+----------------+",
-            "| Column 0 | Column 1       |",
-            "+----------+----------------+",
-            "| 2_i32    | (4_i32, 6_i32) |",
-            "| 2_i32    | (4_i32, 6_i32) |",
-            "| 3_i32    | (6_i32, 9_i32) |",
-            "| 3_i32    | (6_i32, 9_i32) |",
-            "+----------+----------------+",
+            "+----------+----------+",
+            "| Column 0 | Column 1 |",
+            "+----------+----------+",
+            "| 2        | (4, 6)   |",
+            "| 2        | (4, 6)   |",
+            "| 3        | (6, 9)   |",
+            "| 3        | (6, 9)   |",
+            "+----------+----------+",
         ];
         common_expression::block_debug::assert_blocks_sorted_eq(expected, blocks.as_slice());
     }
