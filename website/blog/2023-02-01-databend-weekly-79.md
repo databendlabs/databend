@@ -110,9 +110,9 @@ We're always open to cutting-edge technologies and innovative ideas. You're more
 
 ### Support Arrow Flight SQL Protocol
 
-Currently Databend support MySQL protocol, as an alternative to this Databend also should support Arrow Flight SQL protocol.
+Currently Databend supports the MySQL protocol, and it would be great if Databend could support the Arrow Flight SQL protocol as well.
 
-Typically lakehouse stores data in parquet file with MySQL protocol Databend has to do deserialization from parquet to arrow and then back to MySQL data types. Again on the caller end people use data frames or MySQL result iterators this also requires serialization of types. With Arrow Flight SQL all of these serialization costs can be avoided.
+Typically a lakehouse stores data in parquet files using the MySQL protocol while Databend has to do deserialization from parquet to arrow and then back to MySQL data types. Again on the caller end users use data frames or MySQL result iterators, which also requires serialization of types. With Arrow Flight SQL all of these back and forth serialization costs can be avoided.
 
 [Issue 9832: Feature: Support Arrow Flight SQL protocol](https://github.com/datafuselabs/databend/issues/9832)
 
