@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+use std::sync::Mutex;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -31,7 +34,14 @@ pub struct SExpr {
     pub(crate) children: Vec<SExpr>,
 
     pub(crate) original_group: Option<IndexType>,
-    pub(crate) rel_prop: Option<Box<RelationalProperty>>,
+
+    /// A cache of relational property of current `SExpr`, will
+    /// be lazily computed as soon as `RelExpr::derive_relational_prop`
+    /// is invoked on current `SExpr`.
+    ///
+    /// Since `SExpr` is `Send + Sync`, we use `Mutex` to protect
+    /// the cache.
+    pub(crate) rel_prop: Arc<Mutex<Option<RelationalProperty>>>,
 
     /// A bitmap to record applied rules on current SExpr, to prevent
     /// redundant transformations.
@@ -43,13 +53,13 @@ impl SExpr {
         plan: RelOperator,
         children: Vec<SExpr>,
         original_group: Option<IndexType>,
-        rel_prop: Option<Box<RelationalProperty>>,
+        rel_prop: Option<RelationalProperty>,
     ) -> Self {
         SExpr {
             plan,
             children,
             original_group,
-            rel_prop,
+            rel_prop: Arc::new(Mutex::new(rel_prop)),
 
             applied_rules: AppliedRules::default(),
         }
@@ -128,11 +138,14 @@ impl SExpr {
         true
     }
 
+    /// Replace children with given new `children`.
+    /// Note that this method will keep the `applied_rules` of
+    /// current `SExpr` unchanged.
     pub fn replace_children(&self, children: Vec<SExpr>) -> Self {
         Self {
             plan: self.plan.clone(),
-            original_group: self.original_group,
-            rel_prop: self.rel_prop.clone(),
+            original_group: None,
+            rel_prop: Arc::new(Mutex::new(None)),
             applied_rules: self.applied_rules.clone(),
             children,
         }
