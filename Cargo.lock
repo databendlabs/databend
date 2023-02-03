@@ -1317,6 +1317,7 @@ dependencies = [
  "dashmap",
  "dyn-clone",
  "goldenfile",
+ "opendal",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -2042,6 +2043,7 @@ name = "common-storage"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
  "backon",
  "bytes",
@@ -2057,6 +2059,7 @@ dependencies = [
  "opendal",
  "parking_lot 0.12.1",
  "percent-encoding",
+ "regex",
  "serde",
 ]
 
@@ -2286,7 +2289,6 @@ dependencies = [
  "common-sql",
  "common-storage",
  "futures",
- "glob",
  "opendal",
  "serde",
  "storages-common-pruner",
@@ -2408,6 +2410,7 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
+ "common-sql",
  "common-storage",
  "common-storages-fuse",
  "common-storages-view",

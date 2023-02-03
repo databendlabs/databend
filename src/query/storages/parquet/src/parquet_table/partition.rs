@@ -93,12 +93,21 @@ impl ParquetTable {
             None
         };
 
+        let file_locations = if self.operator.metadata().can_blocking() {
+            self.files_info.blocking_list(&self.operator, false)
+        } else {
+            self.files_info.list(&self.operator, false).await
+        }?
+        .into_iter()
+        .map(|f| f.path)
+        .collect::<Vec<_>>();
+
         let pruner = PartitionPruner {
             schema,
             row_group_pruner,
             page_pruners,
             operator: self.operator.clone(),
-            locations: self.file_locations.clone(),
+            locations: file_locations,
             columns_to_read,
             column_nodes: projected_column_nodes,
             skip_pruning,

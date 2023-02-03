@@ -52,7 +52,10 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
 
     let meta_node1 = MetaNode::start(&tc1.config).await?;
     let res = meta_node1
-        .join_cluster(&tc1.config.raft_config, tc1.config.grpc_api_address)
+        .join_cluster(
+            &tc1.config.raft_config,
+            tc1.config.grpc_api_advertise_address(),
+        )
         .await?;
     assert_eq!(Ok(()), res);
 
@@ -90,7 +93,10 @@ async fn test_cluster_state() -> anyhow::Result<()> {
 
     let meta_node1 = MetaNode::start(&tc1.config).await?;
     let _ = meta_node1
-        .join_cluster(&tc1.config.raft_config, tc1.config.grpc_api_address)
+        .join_cluster(
+            &tc1.config.raft_config,
+            tc1.config.grpc_api_advertise_address(),
+        )
         .await?;
 
     let cluster_router = Route::new()
@@ -138,7 +144,10 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
 
     let meta_node1 = MetaNode::start(&tc1.config).await?;
     let _ = meta_node1
-        .join_cluster(&tc1.config.raft_config, tc1.config.grpc_api_address.clone())
+        .join_cluster(
+            &tc1.config.raft_config,
+            tc1.config.grpc_api_advertise_address(),
+        )
         .await?;
 
     let mut srv = HttpService::create(tc1.config, meta_node1);

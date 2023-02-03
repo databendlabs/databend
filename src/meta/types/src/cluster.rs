@@ -33,14 +33,37 @@ pub struct Slot {
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq)]
 pub struct Node {
+    /// Node name for display.
     pub name: String,
+
+    /// Raft service endpoint to connect to.
     pub endpoint: Endpoint,
+
+    #[serde(skip)]
+    #[deprecated(note = "it is listening addr, not advertise addr")]
     pub grpc_api_addr: Option<String>,
+
+    pub grpc_api_advertise_address: Option<String>,
+}
+
+impl Node {
+    pub fn new(name: impl ToString, endpoint: Endpoint) -> Self {
+        Self {
+            name: name.to_string(),
+            endpoint,
+            ..Default::default()
+        }
+    }
+
+    pub fn with_grpc_advertise_address(mut self, g: Option<impl ToString>) -> Self {
+        self.grpc_api_advertise_address = g.map(|x| x.to_string());
+        self
+    }
 }
 
 impl fmt::Display for Node {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let grpc_addr_display = if let Some(grpc_addr) = &self.grpc_api_addr {
+        let grpc_addr_display = if let Some(grpc_addr) = &self.grpc_api_advertise_address {
             grpc_addr.to_string()
         } else {
             "".to_string()
@@ -84,5 +107,24 @@ impl NodeInfo {
         let addr = SocketAddr::from_str(&self.flight_address)?;
 
         Ok((addr.ip().to_string(), addr.port()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Node;
+
+    #[test]
+    fn test_serde_node_compatible() -> anyhow::Result<()> {
+        // Without `grpc_api_addr`
+        let s1 = r#"{"name":"a","endpoint":{"addr":"b","port":3},"grpc_api_advertise_address":"grpc_advertise"}"#;
+        let _n1: Node = serde_json::from_str(s1)?;
+        // println!("{n:?}");
+
+        // With `grpc_api_addr`
+        let s2 = r#"{"name":"a","endpoint":{"addr":"b","port":3},"grpc_api_addr":"grpc_addr","grpc_api_advertise_address":"grpc_advertise"}"#;
+        let _n2: Node = serde_json::from_str(s2)?;
+        // println!("{n:?}");
+        Ok(())
     }
 }
