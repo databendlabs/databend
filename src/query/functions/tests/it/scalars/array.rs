@@ -36,6 +36,8 @@ fn test_array() {
     test_prepend(file);
     test_append(file);
     test_indexof(file);
+    test_unique(file);
+    test_distinct(file);
 }
 
 fn test_create(file: &mut impl Write) {
@@ -218,4 +220,38 @@ fn test_indexof(file: &mut impl Write) {
         &columns,
     );
     run_ast(file, "indexof([9,10,null], int8_col)", &columns);
+}
+
+fn test_unique(file: &mut impl Write) {
+    run_ast(file, "array_unique([])", &[]);
+    run_ast(file, "array_unique([1, 1, 2, 2, 3, NULL])", &[]);
+    run_ast(
+        file,
+        "array_unique(['a', NULL, 'a', 'b', NULL, 'c', 'd'])",
+        &[],
+    );
+
+    run_ast(file, "array_unique([a, b, c, d])", &[
+        ("a", Int16Type::from_data(vec![1i16, 1, 2, 4])),
+        ("b", Int16Type::from_data(vec![2i16, 1, 2, 4])),
+        ("c", Int16Type::from_data(vec![3i16, 1, 3, 4])),
+        ("d", Int16Type::from_data(vec![4i16, 2, 3, 4])),
+    ]);
+}
+
+fn test_distinct(file: &mut impl Write) {
+    run_ast(file, "array_distinct([])", &[]);
+    run_ast(file, "array_distinct([1, 1, 2, 2, 3, NULL])", &[]);
+    run_ast(
+        file,
+        "array_distinct(['a', NULL, 'a', 'b', NULL, 'c', 'd'])",
+        &[],
+    );
+
+    run_ast(file, "array_distinct([a, b, c, d])", &[
+        ("a", Int16Type::from_data(vec![1i16, 1, 2, 4])),
+        ("b", Int16Type::from_data(vec![2i16, 1, 2, 4])),
+        ("c", Int16Type::from_data(vec![3i16, 1, 3, 4])),
+        ("d", Int16Type::from_data(vec![4i16, 2, 3, 4])),
+    ]);
 }
