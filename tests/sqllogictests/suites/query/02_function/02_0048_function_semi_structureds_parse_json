@@ -1,20 +1,20 @@
 query T
-select parse_json(null)
+select to_variant(null)
 ----
-NULL
+null
 
 query T
-select parse_json(true)
+select to_variant(true)
 ----
 true
 
 query T
-select parse_json(123)
+select to_variant(123)
 ----
 123
 
 query T
-select parse_json(12.34)
+select to_variant(12.34)
 ----
 12.34
 
@@ -84,22 +84,22 @@ select '==try_parse_json=='
 ==try_parse_json==
 
 query T
-select try_parse_json(null)
+select try_to_variant(null)
 ----
-NULL
+null
 
 query T
-select try_parse_json(true)
+select try_to_variant(true)
 ----
 true
 
 query T
-select try_parse_json(123)
+select try_to_variant(123)
 ----
 123
 
 query T
-select try_parse_json(12.34)
+select try_to_variant(12.34)
 ----
 12.34
 
