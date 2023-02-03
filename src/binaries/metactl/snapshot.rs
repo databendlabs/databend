@@ -168,11 +168,7 @@ fn build_nodes(initial_cluster: Vec<String>, id: u64) -> anyhow::Result<BTreeMap
             addr: url.host_str().unwrap().to_string(),
             port: url.port().unwrap() as u32,
         };
-        let node = Node {
-            name: id.to_string(),
-            endpoint: endpoint.clone(),
-            grpc_api_addr: Some(addrs[1].to_string()),
-        };
+        let node = Node::new(id, endpoint.clone()).with_grpc_advertise_address(Some(&addrs[1]));
         eprintln!("new cluster node:{}", node);
         nodes.insert(id, node);
     }
@@ -248,6 +244,7 @@ async fn init_new_cluster(
             let cmd: Cmd = Cmd::AddNode {
                 node_id: node.0,
                 node: node.1,
+                overriding: true,
             };
 
             let entry: Entry<LogEntry> = Entry::<LogEntry> {
