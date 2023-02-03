@@ -14,22 +14,22 @@ statement ok
 create table t(col1 Array(Int Null), col2 Array(String), col3 Array(Date), col4 Array(Timestamp), col5 Array(Array(Int null)))
 
 statement ok
-insert into t values([1,2],['x','y'], ['2022-02-02'], ['2023-01-01 02:00:01'], [[1,2],[],[null]])
+insert into t values([1,2,3,3],['x','x','y','z'], ['2022-02-02'], ['2023-01-01 02:00:01'], [[1,2],[],[null]])
 
 query T
 select concat(col1, col5) from t
 ----
-['1','2','[1,2]','[]','[null]']
+['1','2','3','3','[1,2]','[]','[null]']
 
 query T
 select concat(col1, col2) from t;
 ----
-['1','2','"x"','"y"']
+['1','2','3','3','"x"','"x"','"y"','"z"']
 
 query T
 select concat(col5, col2) from t;
 ----
-['[1,2]','[]','[null]','"x"','"y"']
+['[1,2]','[]','[null]','"x"','"x"','"y"','"z"']
 
 query T
 select concat(col4, col3) from t;
@@ -45,6 +45,36 @@ query I
 select indexof([1,2,null,2,null], null)
 ----
 3
+
+query TTT
+select remove_first(col1), remove_first(col2), remove_first(col3) from t
+----
+[2,3,3] ['x','y','z'] []
+
+query TTT
+select remove_last(col1), remove_last(col2), remove_last(col3) from t
+----
+[1,2,3] ['x','x','y'] []
+
+query TTT
+select prepend(0, col1), prepend('a', col2), prepend('2022-01-01', col3) from t
+----
+[0,1,2,3,3] ['a','x','x','y','z'] ['2022-01-01','2022-02-02']
+
+query TTT
+select append(col1, 4), append(col2, 'z'), append(col3, '2022-03-03') from t
+----
+[1,2,3,3,4] ['x','x','y','z','z'] ['2022-02-02','2022-03-03']
+
+query III
+select array_unique(col1), array_unique(col2), array_unique(col3) from t
+----
+3 3 1
+
+query TTT
+select array_distinct(col1), array_distinct(col2), array_distinct(col3) from t
+----
+[1,2,3] ['x','y','z'] ['2022-02-02']
 
 statement ok
 DROP DATABASE array_func_test
