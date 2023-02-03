@@ -887,7 +887,7 @@ checked expr   : array_unique<Array(Nothing)>(array<>())
 optimized expr : 0_u64
 output type    : UInt64
 output domain  : {0..=0}
-output         : 0_u64
+output         : 0
 
 
 ast            : array_unique([1, 1, 2, 2, 3, NULL])
@@ -896,7 +896,7 @@ checked expr   : array_unique<T0=UInt8 NULL><Array(T0)>(array<T0=UInt8 NULL><T0,
 optimized expr : 3_u64
 output type    : UInt64
 output domain  : {3..=3}
-output         : 3_u64
+output         : 3
 
 
 ast            : array_unique(['a', NULL, 'a', 'b', NULL, 'c', 'd'])
@@ -905,7 +905,7 @@ checked expr   : array_unique<T0=String NULL><Array(T0)>(array<T0=String NULL><T
 optimized expr : 4_u64
 output type    : UInt64
 output domain  : {4..=4}
-output         : 4_u64
+output         : 4
 
 
 ast            : array_unique([a, b, c, d])
@@ -917,10 +917,10 @@ evaluation:
 +--------+---------+---------+---------+---------+----------------------------+
 | Type   | Int16   | Int16   | Int16   | Int16   | UInt64                     |
 | Domain | {1..=4} | {1..=4} | {1..=4} | {2..=4} | {0..=18446744073709551615} |
-| Row 0  | 1_i16   | 2_i16   | 3_i16   | 4_i16   | 4_u64                      |
-| Row 1  | 1_i16   | 1_i16   | 1_i16   | 2_i16   | 2_u64                      |
-| Row 2  | 2_i16   | 2_i16   | 3_i16   | 3_i16   | 2_u64                      |
-| Row 3  | 4_i16   | 4_i16   | 4_i16   | 4_i16   | 1_u64                      |
+| Row 0  | 1       | 2       | 3       | 4       | 4                          |
+| Row 1  | 1       | 1       | 1       | 2       | 2                          |
+| Row 2  | 2       | 2       | 3       | 3       | 2                          |
+| Row 3  | 4       | 4       | 4       | 4       | 1                          |
 +--------+---------+---------+---------+---------+----------------------------+
 evaluation (internal):
 +--------+----------------------+
@@ -946,10 +946,10 @@ output         : []
 ast            : array_distinct([1, 1, 2, 2, 3, NULL])
 raw expr       : array_distinct(array(1_u8, 1_u8, 2_u8, 2_u8, 3_u8, NULL))
 checked expr   : array_distinct<T0=UInt8 NULL><Array(T0)>(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)))
-optimized expr : [1_u8, 2_u8, 3_u8]
+optimized expr : [1, 2, 3]
 output type    : Array(UInt8 NULL)
 output domain  : [{1..=3}]
-output         : [1_u8, 2_u8, 3_u8]
+output         : [1, 2, 3]
 
 
 ast            : array_distinct(['a', NULL, 'a', 'b', NULL, 'c', 'd'])
@@ -965,16 +965,16 @@ ast            : array_distinct([a, b, c, d])
 raw expr       : array_distinct(array(a::Int16, b::Int16, c::Int16, d::Int16))
 checked expr   : array_distinct<T0=Int16><Array(T0)>(array<T0=Int16><T0, T0, T0, T0>(a, b, c, d))
 evaluation:
-+--------+---------+---------+---------+---------+------------------------------+
-|        | a       | b       | c       | d       | Output                       |
-+--------+---------+---------+---------+---------+------------------------------+
-| Type   | Int16   | Int16   | Int16   | Int16   | Array(Int16)                 |
-| Domain | {1..=4} | {1..=4} | {1..=4} | {2..=4} | [{-32768..=32767}]           |
-| Row 0  | 1_i16   | 2_i16   | 3_i16   | 4_i16   | [1_i16, 2_i16, 3_i16, 4_i16] |
-| Row 1  | 1_i16   | 1_i16   | 1_i16   | 2_i16   | [1_i16, 2_i16]               |
-| Row 2  | 2_i16   | 2_i16   | 3_i16   | 3_i16   | [2_i16, 3_i16]               |
-| Row 3  | 4_i16   | 4_i16   | 4_i16   | 4_i16   | [4_i16]                      |
-+--------+---------+---------+---------+---------+------------------------------+
++--------+---------+---------+---------+---------+--------------------+
+|        | a       | b       | c       | d       | Output             |
++--------+---------+---------+---------+---------+--------------------+
+| Type   | Int16   | Int16   | Int16   | Int16   | Array(Int16)       |
+| Domain | {1..=4} | {1..=4} | {1..=4} | {2..=4} | [{-32768..=32767}] |
+| Row 0  | 1       | 2       | 3       | 4       | [1, 2, 3, 4]       |
+| Row 1  | 1       | 1       | 1       | 2       | [1, 2]             |
+| Row 2  | 2       | 2       | 3       | 3       | [2, 3]             |
+| Row 3  | 4       | 4       | 4       | 4       | [4]                |
++--------+---------+---------+---------+---------+--------------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------------------+
 | Column | Data                                                                                 |
