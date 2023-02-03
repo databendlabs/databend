@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::fs::File;
-use std::io::BufReader;
 use std::io::Cursor;
 use std::ops::Range;
 use std::os::unix::prelude::FileExt;
@@ -23,8 +22,6 @@ use std::time::Instant;
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::native::read::deserialize;
-use common_arrow::native::read::reader::NativeReader;
-use common_arrow::native::read::NativeReadBuf;
 use common_arrow::native::ColumnMeta as NativeColumnMeta;
 use common_cache::Cache;
 use common_catalog::plan::PartInfoPtr;

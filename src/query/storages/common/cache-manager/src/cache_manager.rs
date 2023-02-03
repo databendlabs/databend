@@ -71,7 +71,7 @@ impl CacheManager {
                 Self::new_item_cache(config.table_cache_bloom_index_meta_count);
             let file_meta_data_cache = Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS);
             let fd_cache = Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS);
-            
+
             // 3GB
             let table_data_page_cache = Some(InMemoryCacheBuilder::new_bytes_cache(3_000_000_000));
             GlobalInstance::set(Arc::new(Self {

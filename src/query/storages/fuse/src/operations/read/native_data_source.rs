@@ -15,9 +15,7 @@
 use std::any::Any;
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::fs::File;
 
-use common_arrow::native::read::reader::NativeReader;
 use common_catalog::plan::PartInfoPtr;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
