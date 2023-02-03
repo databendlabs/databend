@@ -26,6 +26,7 @@ pub struct AbortOperation {
     pub segments: Vec<String>,
     pub blocks: Vec<String>,
     pub bloom_filter_indexes: Vec<String>,
+    pub delete_mask: Vec<String>,
 }
 
 impl AbortOperation {
@@ -34,6 +35,7 @@ impl AbortOperation {
         self.blocks.extend(rhs.blocks.clone());
         self.bloom_filter_indexes
             .extend(rhs.bloom_filter_indexes.clone());
+        self.delete_mask.extend(rhs.delete_mask.clone());
     }
 
     pub fn add_block(&mut self, block: &BlockMeta) {
@@ -42,6 +44,10 @@ impl AbortOperation {
         if let Some(index) = block.bloom_filter_index_location.clone() {
             self.bloom_filter_indexes.push(index.0);
         }
+    }
+
+    pub fn add_delete(&mut self, delete: String) {
+        self.delete_mask.push(delete);
     }
 
     pub fn add_segment(&mut self, segment: String) {
@@ -54,6 +60,7 @@ impl AbortOperation {
             .blocks
             .into_iter()
             .chain(self.bloom_filter_indexes.into_iter())
+            .chain(self.delete_mask.into_iter())
             .chain(self.segments.into_iter());
         fuse_file.remove_file_in_batch(locations).await
     }

@@ -34,6 +34,9 @@ pub type BloomIndexFilterCache = InMemoryItemCacheHolder<Xor8Filter>;
 pub struct BloomIndexMeta(pub FileMetaData);
 /// In memory object cache of parquet FileMetaData of bloom index data
 pub type BloomIndexMetaCache = InMemoryItemCacheHolder<BloomIndexMeta>;
+pub struct DeleteMarkMeta(pub FileMetaData);
+/// In memory object cache of parquet FileMetaData of delete mark data
+pub type DeleteMarkMetaCache = InMemoryItemCacheHolder<DeleteMarkMeta>;
 /// In memory object cache of parquet FileMetaData of external parquet files
 pub type FileMetaDataCache = InMemoryItemCacheHolder<FileMetaData>;
 
@@ -79,6 +82,13 @@ impl CachedObject<Xor8Filter> for Xor8Filter {
     type Cache = BloomIndexFilterCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_bloom_index_filter_cache()
+    }
+}
+
+impl CachedObject<DeleteMarkMeta> for DeleteMarkMeta {
+    type Cache = DeleteMarkMetaCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_delete_mark_meta_cache()
     }
 }
 

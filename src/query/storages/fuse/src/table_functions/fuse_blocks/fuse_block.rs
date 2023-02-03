@@ -104,6 +104,7 @@ impl<'a> FuseBlock<'a> {
         let mut bloom_filter_location = vec![];
         let mut bloom_filter_size =
             NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
+        let mut delete_mask_location = vec![];
 
         let segments_io = SegmentsIO::create(
             self.ctx.clone(),
@@ -127,6 +128,12 @@ impl<'a> FuseBlock<'a> {
                         .map(|s| s.0.as_bytes().to_vec()),
                 );
                 bloom_filter_size.push(NumberScalar::UInt64(block.bloom_filter_index_size));
+                delete_mask_location.push(
+                    block
+                        .delete_mask_location
+                        .as_ref()
+                        .map(|s| s.0.as_bytes().to_vec()),
+                );
             });
         }
 
@@ -164,6 +171,10 @@ impl<'a> FuseBlock<'a> {
                     data_type: DataType::Number(NumberDataType::UInt64),
                     value: Value::Column(Column::Number(bloom_filter_size.build())),
                 },
+                BlockEntry {
+                    data_type: DataType::String.wrap_nullable(),
+                    value: Value::Column(StringType::from_opt_data(delete_mask_location)),
+                },
             ],
             len,
         ))
@@ -184,6 +195,10 @@ impl<'a> FuseBlock<'a> {
             TableField::new(
                 "bloom_filter_size",
                 TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "delete_mask_location",
+                TableDataType::String.wrap_nullable(),
             ),
         ])
     }

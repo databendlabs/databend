@@ -27,6 +27,7 @@ use common_exception::Result;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::BloomIndexMeta;
 use storages_common_cache_manager::CachedObject;
+use storages_common_cache_manager::DeleteMarkMeta;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SnapshotId;
@@ -46,6 +47,7 @@ use crate::FuseTable;
 struct LocationTuple {
     block_location: HashSet<String>,
     bloom_location: HashSet<String>,
+    delete_location: HashSet<String>,
 }
 
 impl FuseTable {
@@ -213,6 +215,7 @@ impl FuseTable {
         {
             let mut status_block_to_be_purged_count = 0;
             let mut status_bloom_to_be_purged_count = 0;
+            let mut status_delete_to_be_purged_count = 0;
             let mut status_segment_to_be_purged_count = 0;
 
             let start = Instant::now();
@@ -255,7 +258,27 @@ impl FuseTable {
                     .await?;
                 }
 
-                // 3. Try to purge segment file chunks.
+                // 3. Try to purge delete mask file chunks.
+                {
+                    let mut delete_locations_to_be_pruged = HashSet::new();
+                    for loc in &locations.delete_location {
+                        if keep_last_snapshot
+                            && locations_referenced_by_root.delete_location.contains(loc)
+                        {
+                            continue;
+                        }
+                        delete_locations_to_be_pruged.insert(loc.to_string());
+                    }
+                    status_delete_to_be_purged_count += delete_locations_to_be_pruged.len();
+                    // todo(zhyass): add cache
+                    self.try_purge_location_files_and_cache::<DeleteMarkMeta>(
+                        ctx.clone(),
+                        delete_locations_to_be_pruged,
+                    )
+                    .await?;
+                }
+
+                // 4. Try to purge segment file chunks.
                 {
                     let segment_locations_to_be_purged = HashSet::from_iter(
                         chunk
@@ -274,11 +297,12 @@ impl FuseTable {
                 {
                     status_segment_to_be_purged_count += chunk.len();
                     let status = format!(
-                        "gc: scan snapshot:{} takes:{} sec. block files purged:{}, bloom files purged:{}, segment files purged:{}, take:{} sec",
+                        "gc: scan snapshot:{} takes:{} sec. block files purged:{}, bloom files purged:{}, delete_mask files purged:{}, segment files purged:{}, take:{} sec",
                         status_snapshot_scan_count,
                         status_snapshot_scan_cost,
                         status_block_to_be_purged_count,
                         status_bloom_to_be_purged_count,
+                        status_delete_to_be_purged_count,
                         status_segment_to_be_purged_count,
                         start.elapsed().as_secs()
                     );
@@ -432,6 +456,7 @@ impl FuseTable {
     ) -> Result<LocationTuple> {
         let mut blocks = HashSet::new();
         let mut blooms = HashSet::new();
+        let mut deletes = HashSet::new();
 
         let fuse_segments = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
         let segments = fuse_segments.read_segments(segment_locations).await?;
@@ -459,12 +484,20 @@ impl FuseTable {
                         .unwrap_or_default()
                         .0,
                 );
+                deletes.insert(
+                    block_meta
+                        .delete_mask_location
+                        .clone()
+                        .unwrap_or_default()
+                        .0,
+                );
             }
         }
 
         Ok(LocationTuple {
             block_location: blocks,
             bloom_location: blooms,
+            delete_location: deletes,
         })
     }
 }
