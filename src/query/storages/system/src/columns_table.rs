@@ -143,19 +143,20 @@ impl ColumnsTable {
                 .list_tables(tenant.as_str(), database.name())
                 .await?
             {
-                let mut fields = table.schema().fields().clone();
-                if table.engine() == VIEW_ENGINE {
+                let fields = if table.engine() == VIEW_ENGINE {
                     if let Some(query) = table.options().get(QUERY) {
                         let mut planner = Planner::new(ctx.clone());
                         let (plan, _, _) = planner.plan_sql(query).await?;
-                        let schema = infer_table_schema(&plan.schema()).unwrap();
-                        fields = schema.fields().clone();
+                        let schema = infer_table_schema(&plan.schema())?;
+                        schema.fields().clone()
                     } else {
                         return Err(ErrorCode::Internal(
                             "Logical error, View Table must have a SelectQuery inside.",
                         ));
                     }
-                }
+                } else {
+                    table.schema().fields().clone()
+                };
                 for field in fields {
                     rows.push((database.name().into(), table.name().into(), field.clone()))
                 }
