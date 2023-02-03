@@ -16,6 +16,7 @@ use std::marker::PhantomData;
 
 use common_exception::Result;
 use common_expression::DataBlock;
+use storages_common_table_meta::meta::DeleteMask;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SnapshotVersion;
@@ -28,6 +29,7 @@ use crate::constants::FUSE_TBL_SEGMENT_PREFIX;
 use crate::constants::FUSE_TBL_SNAPSHOT_PREFIX;
 use crate::constants::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use crate::index::filters::BlockFilter;
+use crate::FUSE_TBL_DELETE_MARK_PREFIX;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use crate::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 
@@ -88,6 +90,20 @@ impl TableMetaLocationGenerator {
                 BlockFilter::VERSION,
             ),
             BlockFilter::VERSION,
+        )
+    }
+
+    pub fn gen_delete_mark_location(&self) -> Location {
+        let delete_uuid = Uuid::new_v4().simple().to_string();
+        (
+            format!(
+                "{}/{}/{}_v{}.parquet",
+                &self.prefix,
+                FUSE_TBL_DELETE_MARK_PREFIX,
+                delete_uuid,
+                DeleteMask::VERSION,
+            ),
+            DeleteMask::VERSION,
         )
     }
 

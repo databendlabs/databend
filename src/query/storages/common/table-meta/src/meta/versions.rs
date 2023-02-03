@@ -78,6 +78,8 @@ impl Versioned<0> for v1::TableSnapshotStatistics {}
 
 impl Versioned<2> for DataBlock {}
 
+impl Versioned<0> for v2::DeleteMask {}
+
 pub enum TableSnapshotStatisticsVersion {
     V0(PhantomData<v1::TableSnapshotStatistics>),
 }

@@ -232,3 +232,5 @@ impl BlockMeta {
         }
     }
 }
+
+pub struct DeleteMask {}
