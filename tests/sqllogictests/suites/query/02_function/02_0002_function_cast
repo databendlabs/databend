@@ -212,7 +212,7 @@ SELECT parse_json('"test"')::boolean
 
 
 statement error 1001
-SELECT parse_json(1)::boolean
+SELECT to_variant(1)::boolean
 
 
 statement error 1001
