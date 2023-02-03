@@ -2209,7 +2209,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                     children.push(FormatTreeNode::new(AstFormatContext::new(files)))
                 }
                 if let Some(pattern) = &options.pattern {
-                    let pattern = format!("patter = {}", pattern);
+                    let pattern = format!("pattern = {}", pattern);
                     children.push(FormatTreeNode::new(AstFormatContext::new(pattern)))
                 }
                 let stage_name = format!("Stage {:?}", location);
