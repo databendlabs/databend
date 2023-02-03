@@ -23,11 +23,11 @@ pub trait CacheAccessor<K, V> {
 /// The minimum interface that cache providers should implement
 pub trait StorageCache<K, V> {
     type Meter;
-    type CachedItem;
+    type CacheEntry;
 
     fn put(&mut self, key: K, value: Arc<V>);
 
-    fn get(&mut self, k: &str) -> Option<Self::CachedItem>;
+    fn get(&mut self, k: &str) -> Option<Self::CacheEntry>;
 
     fn evict(&mut self, k: &str) -> bool;
 }
@@ -41,9 +41,9 @@ mod impls {
     use crate::cache::StorageCache;
 
     impl<V, C> CacheAccessor<String, V> for Arc<RwLock<C>>
-    where C: StorageCache<String, V, CachedItem = Arc<V>>
+    where C: StorageCache<String, V, CacheEntry = Arc<V>>
     {
-        fn get(&self, k: &str) -> Option<C::CachedItem> {
+        fn get(&self, k: &str) -> Option<C::CacheEntry> {
             let mut guard = self.write();
             guard.get(k)
         }

@@ -23,6 +23,7 @@ use std::path::PathBuf;
 use siphasher::sip128;
 use siphasher::sip128::Hasher128;
 use tracing::error;
+use tracing::warn;
 use walkdir::WalkDir;
 
 use crate::Cache;
@@ -187,8 +188,20 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
 
     /// Add a file with `bytes` as its contents to the cache at path `key`.
     pub fn insert_bytes<K: AsRef<str>>(&mut self, key: K, bytes: &[u8]) -> Result<()> {
-        if !self.can_store(bytes.len() as u64) {
+        let item_len = bytes.len() as u64;
+        // check if this chunk of bytes itself is too large
+        if !self.can_store(item_len) {
             return Err(Error::FileTooLarge);
+        }
+
+        // check eviction
+        if self.cache.size() + item_len > self.cache.capacity() {
+            if let Some((rel_path, _)) = self.cache.pop_by_policy() {
+                let remove_path = self.rel_to_abs_path(rel_path);
+                fs::remove_file(&remove_path).unwrap_or_else(|e| {
+                    warn!("Error removing file from cache: `{:?}`: {}", remove_path, e)
+                });
+            }
         }
 
         let cache_key = self.cache_key(key.as_ref());

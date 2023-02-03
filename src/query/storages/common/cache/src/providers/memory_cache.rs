@@ -51,13 +51,13 @@ where
     S: BuildHasher,
 {
     type Meter = M;
-    type CachedItem = Arc<V>;
+    type CacheEntry = Arc<V>;
 
     fn put(&mut self, key: String, value: Arc<V>) {
         Cache::put(self, key, value);
     }
 
-    fn get(&mut self, k: &str) -> Option<Self::CachedItem> {
+    fn get(&mut self, k: &str) -> Option<Self::CacheEntry> {
         Cache::get(self, k).cloned()
     }
 
