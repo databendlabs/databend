@@ -24,14 +24,12 @@ use common_base::base::tokio;
 use common_base::base::tokio::sync::watch;
 use common_base::base::tokio::sync::watch::error::RecvError;
 use common_base::base::tokio::sync::Mutex;
-use common_base::base::tokio::sync::RwLockReadGuard;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::tokio::time::Instant;
 use common_grpc::ConnectionFactory;
 use common_grpc::DNSResolver;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::key_spaces::GenericKV;
-use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::error::AddLearnerError;
 use common_meta_sled_store::openraft::DefensiveCheck;
@@ -745,32 +743,6 @@ impl MetaNode {
         )))
     }
 
-    /// Check if a node is allowed to leave the cluster.
-    ///
-    /// A cluster must have at least one node in it.
-    pub async fn can_leave(&self, id: NodeId) -> Result<Result<(), String>, MetaStorageError> {
-        let m = {
-            let sm = self.sto.get_state_machine().await;
-            sm.get_membership()?
-        };
-        info!("check can_leave: id: {}, membership: {:?}", id, m);
-
-        let membership = match m {
-            None => {
-                return Ok(Err("no membership, can not leave".to_string()));
-            }
-            Some(x) => x.membership,
-        };
-
-        let config0 = membership.get_ith_config(0).unwrap();
-
-        if config0.contains(&id) && config0.len() == 1 {
-            return Ok(Err(format!("can not remove the last node: {:?}", config0)));
-        }
-
-        Ok(Ok(()))
-    }
-
     async fn do_start(conf: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
         let raft_conf = &conf.raft_config;
 
@@ -843,8 +815,8 @@ impl MetaNode {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
-        let ns = sm.get_nodes()?;
-        Ok(ns)
+        let nodes = sm.get_nodes()?;
+        Ok(nodes)
     }
 
     pub async fn get_status(&self) -> Result<MetaNodeStatus, MetaError> {
@@ -1049,10 +1021,6 @@ impl MetaNode {
                 AddLearnerError::Fatal(e) => MetaAPIError::DataError(MetaDataError::WriteError(e)),
             })?;
         Ok(resp)
-    }
-
-    pub async fn get_state_machine(&self) -> RwLockReadGuard<'_, StateMachine> {
-        self.sto.state_machine.read().await
     }
 
     /// Submit a write request to the known leader. Returns the response after applying the request.
