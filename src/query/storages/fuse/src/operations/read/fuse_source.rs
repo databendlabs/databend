@@ -34,7 +34,7 @@ pub fn build_fuse_native_source_pipeline(
     plan: &DataSourcePlan,
     max_io_requests: usize,
 ) -> Result<()> {
-    match block_reader.support_blocking_api() {
+    match block_reader.is_fs_backend() {
         true => {
             pipeline.add_source(
                 |output| {

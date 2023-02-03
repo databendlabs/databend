@@ -20,7 +20,8 @@ mod snapshot_history_reader;
 
 pub use block::BlockReader;
 pub use block::MergeIOReadResult;
-pub use block::NativeReaderExt;
+pub use block::PagesReader;
+pub use block::ReaderData;
 pub use block::UncompressedBuffer;
 pub use bloom::BloomBlockFilterReader;
 pub use meta::MetaReaders;

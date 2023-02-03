@@ -14,8 +14,15 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
+use std::fs::File;
+use std::io::Bytes;
+use std::os::unix::prelude::FileExt;
 use std::sync::Arc;
 
+use common_arrow::arrow::array::Array;
+use common_arrow::native::read::deserialize;
+use common_arrow::native::ColumnMeta;
+use common_arrow::native::PageMeta;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::DataSourcePlan;
@@ -35,18 +42,25 @@ use common_expression::FunctionContext;
 use common_expression::TopKSorter;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_io::prelude::BytesMut;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use opendal::Object;
+use serde_json::map::Iter;
+use storages_common_cache::CacheAccessor;
+use storages_common_cache::InMemoryCacheBuilder;
+use storages_common_cache_manager::CacheManager;
 use storages_common_index::Index;
 use storages_common_index::RangeIndex;
 
+use super::native_data_source::DataChunks;
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
+use crate::io::PagesReader;
 use crate::metrics::metrics_inc_pruning_prewhere_nums;
-use crate::operations::read::native_data_source::DataChunks;
 use crate::operations::read::native_data_source::NativeDataSourceMeta;
 
 pub struct NativeDeserializeDataTransform {
@@ -216,7 +230,7 @@ impl NativeDeserializeDataTransform {
             if read_columns.contains(&index) {
                 continue;
             }
-            chunk.1.skip_page()?;
+            chunk.1.skip_page();
         }
         Ok(())
     }

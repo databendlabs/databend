@@ -153,6 +153,10 @@ impl BlockReader {
         self.operator.metadata().can_blocking()
     }
 
+    pub fn is_fs_backend(&self) -> bool {
+        matches!(self.operator.metadata().scheme(), opendal::Scheme::Fs)
+    }
+
     /// This is an optimized for data read, works like the Linux kernel io-scheduler IO merging.
     /// If the distance between two IO request ranges to be read is less than storage_io_min_bytes_for_seek(Default is 48Bytes),
     /// will read the range that contains both ranges, thus avoiding extra seek.

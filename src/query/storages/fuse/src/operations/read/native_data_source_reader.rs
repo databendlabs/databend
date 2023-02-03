@@ -27,8 +27,8 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_sources::SyncSource;
 use common_pipeline_sources::SyncSourcer;
 
+use super::native_data_source::DataChunks;
 use crate::io::BlockReader;
-use crate::operations::read::native_data_source::DataChunks;
 use crate::operations::read::native_data_source::NativeDataSourceMeta;
 
 pub struct ReadNativeDataSource<const BLOCKING_IO: bool> {

@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fs::File;
+
 use common_arrow::parquet::metadata::FileMetaData;
 use storages_common_cache::CacheAccessor;
+use storages_common_cache::InMemoryBytesCacheHolder;
 use storages_common_cache::InMemoryItemCacheHolder;
 use storages_common_index::filters::Xor8Filter;
 use storages_common_table_meta::meta::SegmentInfo;
@@ -36,6 +39,10 @@ pub struct BloomIndexMeta(pub FileMetaData);
 pub type BloomIndexMetaCache = InMemoryItemCacheHolder<BloomIndexMeta>;
 /// In memory object cache of parquet FileMetaData of external parquet files
 pub type FileMetaDataCache = InMemoryItemCacheHolder<FileMetaData>;
+
+/// In memory object cache of parquet FileMetaData of external parquet files
+pub type TableDataPageCache = InMemoryBytesCacheHolder;
+pub type FdCache = InMemoryItemCacheHolder<File>;
 
 // Bind Type of cached objects to Caches
 //

@@ -12,20 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fs::File;
 use std::io::BufReader;
+use std::io::Cursor;
 use std::ops::Range;
+use std::os::unix::prelude::FileExt;
+use std::sync::Arc;
 use std::time::Instant;
 
 use common_arrow::arrow::array::Array;
+use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_arrow::native::read::deserialize;
 use common_arrow::native::read::reader::NativeReader;
 use common_arrow::native::read::NativeReadBuf;
+use common_arrow::native::ColumnMeta as NativeColumnMeta;
+use common_cache::Cache;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::Result;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::Value;
+use opendal::raw::build_rooted_abs_path;
 use opendal::Object;
+use storages_common_cache::CacheAccessor;
+use storages_common_cache_manager::CacheManager;
 use storages_common_table_meta::meta::ColumnMeta;
 
 use crate::fuse_part::FusePartInfo;
@@ -35,18 +46,18 @@ use crate::metrics::metrics_inc_remote_io_read_milliseconds;
 use crate::metrics::metrics_inc_remote_io_read_parts;
 use crate::metrics::metrics_inc_remote_io_seeks;
 
+#[derive(Clone)]
+pub enum ReaderData {
+    Bytes(Arc<Vec<u8>>),
+    File(Arc<File>),
+}
+
 // Native storage format
-
-pub trait NativeReaderExt: NativeReadBuf + std::io::Seek + Send + Sync {}
-impl<T: NativeReadBuf + std::io::Seek + Send + Sync> NativeReaderExt for T {}
-
-pub type Reader = Box<dyn NativeReaderExt>;
-
 impl BlockReader {
     pub async fn async_read_native_columns_data(
         &self,
         part: PartInfoPtr,
-    ) -> Result<Vec<(usize, NativeReader<Reader>)>> {
+    ) -> Result<Vec<(usize, PagesReader)>> {
         // Perf
         {
             metrics_inc_remote_io_read_parts(1);
@@ -91,42 +102,57 @@ impl BlockReader {
         meta: &ColumnMeta,
         range: &Option<Range<usize>>,
         data_type: common_arrow::arrow::datatypes::DataType,
-    ) -> Result<(usize, NativeReader<Reader>)> {
+    ) -> Result<(usize, PagesReader)> {
         use backon::ExponentialBackoff;
         use backon::Retryable;
 
-        let (offset, length) = meta.offset_length();
         let mut meta = meta.as_native().unwrap().clone();
-
         if let Some(range) = range {
             meta = meta.slice(range.start, range.end);
         }
 
-        let reader = { || async { o.range_read(offset..offset + length).await } }
-            .retry(ExponentialBackoff::default())
-            .when(|err| err.is_temporary())
-            .await?;
+        let reader = {
+            || async {
+                o.range_read(meta.offset..meta.offset + meta.total_len())
+                    .await
+            }
+        }
+        .retry(ExponentialBackoff::default())
+        .when(|err| err.is_temporary())
+        .await?;
 
-        let reader: Reader = Box::new(std::io::Cursor::new(reader));
-        let fuse_reader = NativeReader::new(reader, data_type, meta.pages.clone(), vec![]);
-        Ok((index, fuse_reader))
+        let reader = PagesReader::new(ReaderData::Bytes(Arc::new(reader)), meta, o, data_type);
+        Ok((index, reader))
     }
 
     pub fn sync_read_native_columns_data(
         &self,
         part: PartInfoPtr,
-    ) -> Result<Vec<(usize, NativeReader<Reader>)>> {
+    ) -> Result<Vec<(usize, PagesReader)>> {
         let part = FusePartInfo::from_part(&part)?;
 
         let mut results = Vec::with_capacity(self.project_indices.len());
+        let object = self.operator.object(&part.location);
+        let abs_path = build_rooted_abs_path(self.operator.metadata().root(), &part.location);
+
+        let cache = CacheManager::instance().get_fd_cache();
+        let file = if let Some(cache) = cache {
+            if let Some(file) = cache.get(&abs_path) {
+                file.clone()
+            } else {
+                let file = Arc::new(File::open(&abs_path).unwrap());
+                cache.put(abs_path.clone(), file.clone());
+                file
+            }
+        } else {
+            Arc::new(File::open(&abs_path).unwrap())
+        };
 
         for (index, (column_id, field, _)) in self.project_indices.iter() {
             if let Some(column_meta) = part.columns_meta.get(column_id) {
-                let op = self.operator.clone();
-
-                let location = part.location.clone();
                 let result = Self::sync_read_native_column(
-                    op.object(&location),
+                    object.clone(),
+                    file.clone(),
                     *index,
                     column_meta,
                     &part.range,
@@ -142,25 +168,19 @@ impl BlockReader {
 
     pub fn sync_read_native_column(
         o: Object,
+        fd: Arc<File>,
         index: usize,
         column_meta: &ColumnMeta,
         range: &Option<Range<usize>>,
         data_type: common_arrow::arrow::datatypes::DataType,
-    ) -> Result<(usize, NativeReader<Reader>)> {
+    ) -> Result<(usize, PagesReader)> {
         let mut column_meta = column_meta.as_native().unwrap().clone();
-
         if let Some(range) = range {
             column_meta = column_meta.slice(range.start, range.end);
         }
 
-        let (offset, length) = (
-            column_meta.offset,
-            column_meta.pages.iter().map(|p| p.length).sum::<u64>(),
-        );
-        let reader = o.blocking_range_reader(offset..offset + length)?;
-        let reader: Reader = Box::new(BufReader::new(reader));
-        let fuse_reader = NativeReader::new(reader, data_type, column_meta.pages, vec![]);
-        Ok((index, fuse_reader))
+        let reader = PagesReader::new(ReaderData::File(fd), column_meta, o, data_type);
+        Ok((index, reader))
     }
 
     pub fn build_block(&self, chunks: Vec<(usize, Box<dyn Array>)>) -> Result<DataBlock> {
@@ -179,4 +199,118 @@ impl BlockReader {
         }
         Ok(DataBlock::new(entries, rows))
     }
+}
+
+pub struct PagesReader {
+    pub(crate) data: ReaderData,
+    pub(crate) meta: NativeColumnMeta,
+
+    pub(crate) page_id: usize,
+    pub(crate) object: Object,
+    pub(crate) data_type: ArrowType,
+}
+
+impl PagesReader {
+    pub fn new(
+        data: ReaderData,
+        meta: NativeColumnMeta,
+        object: Object,
+        data_type: ArrowType,
+    ) -> Self {
+        Self {
+            data,
+            meta,
+            object,
+            data_type,
+            page_id: 0,
+        }
+    }
+
+    pub fn skip_page(&mut self) {
+        self.page_id += 1;
+    }
+
+    pub fn has_next(&self) -> bool {
+        self.page_id < self.meta.pages.len()
+    }
+
+    pub fn next_array(&mut self) -> Result<Box<dyn Array>> {
+        self.page_id += 1;
+        read_page(
+            self.object.clone(),
+            self.data.clone(),
+            self.page_id - 1,
+            &self.meta,
+            self.data_type.clone(),
+        )
+    }
+}
+
+fn read_page(
+    object: Object,
+    data: ReaderData,
+    page_id: usize,
+    meta: &NativeColumnMeta,
+    data_type: ArrowType,
+) -> Result<Box<dyn Array>> {
+    let page = &meta.pages[page_id as usize];
+    let offset: u64 = meta
+        .pages
+        .iter()
+        .take(page_id)
+        .map(|p| p.length)
+        .sum::<u64>()
+        + meta.offset;
+
+    let mut scatch = vec![];
+    let cache_key = format!("{}_{}_{}", object.path(), offset, page.length);
+    let cache = CacheManager::instance().get_table_data_page_cache();
+
+    if let Some(data) = cache
+        .as_ref()
+        .map(|c| c.get(&cache_key))
+        .unwrap_or_default()
+    {
+        let mut reader = Cursor::new(data.as_slice());
+        return Ok(deserialize::read(
+            &mut reader,
+            data_type,
+            page.num_values as usize,
+            &mut scatch,
+        )?);
+    }
+
+    let result = match data {
+        ReaderData::Bytes(bytes) => {
+            let reader = &bytes.as_slice()[offset as usize..(offset + page.length) as usize];
+            let mut reader = Cursor::new(reader);
+            deserialize::read(
+                &mut reader,
+                data_type,
+                page.num_values as usize,
+                &mut scatch,
+            )
+        }
+        ReaderData::File(file) => {
+            let mut buf = vec![0; page.length as usize];
+            let _ = file.read_at(buf.as_mut(), offset);
+            let buf = Arc::new(buf);
+
+            if let Some(cache) = cache {
+                let c = &mut cache.write();
+                c.put(cache_key.clone(), buf.clone());
+            }
+
+            let reader = buf.as_slice();
+            let mut reader = Cursor::new(reader);
+            deserialize::read(
+                &mut reader,
+                data_type,
+                page.num_values as usize,
+                &mut scatch,
+            )
+        }
+    }?;
+
+    Ok(result)
 }

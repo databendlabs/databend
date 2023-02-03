@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::fs::File;
 
 use common_arrow::native::read::reader::NativeReader;
 use common_catalog::plan::PartInfoPtr;
@@ -23,9 +24,9 @@ use common_expression::BlockMetaInfoPtr;
 use serde::Deserializer;
 use serde::Serializer;
 
-use crate::io::NativeReaderExt;
+use crate::io::PagesReader;
 
-pub type DataChunks = Vec<(usize, NativeReader<Box<dyn NativeReaderExt>>)>;
+pub type DataChunks = Vec<(usize, PagesReader)>;
 
 pub struct NativeDataSourceMeta {
     pub part: Vec<PartInfoPtr>,
