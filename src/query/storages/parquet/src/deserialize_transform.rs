@@ -33,6 +33,7 @@ use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
+use common_expression::TopKSorter;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::InputPort;
@@ -46,10 +47,12 @@ use crate::parquet_reader::IndexedReaders;
 use crate::parquet_reader::ParquetReader;
 use crate::parquet_source::ParquetSourceMeta;
 
+#[derive(Clone)]
 pub struct ParquetPrewhereInfo {
     pub func_ctx: FunctionContext,
     pub reader: Arc<ParquetReader>,
     pub filter: Expr,
+    pub top_k: Option<(usize, TopKSorter)>, /* the usize is the index of the column in ParquetReader.schema */
 }
 
 pub struct ParquetDeserializeTransform {
@@ -67,13 +70,12 @@ pub struct ParquetDeserializeTransform {
     output_schema: DataSchemaRef,
 
     // Used for prewhere reading and filtering
-    prewhere_info: Arc<Option<ParquetPrewhereInfo>>,
+    prewhere_info: Option<ParquetPrewhereInfo>,
 
     // Used for remain reading
     remain_reader: Arc<ParquetReader>,
     // Used for top k optimization
-    // top_k: Option<(TopK, TopKSorter, usize)>,
-    // top_k_finished: bool,
+    top_k_finished: bool,
 }
 
 impl ParquetDeserializeTransform {
@@ -83,27 +85,10 @@ impl ParquetDeserializeTransform {
         output: Arc<OutputPort>,
         src_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
-        prewhere_info: Arc<Option<ParquetPrewhereInfo>>,
+        prewhere_info: Option<ParquetPrewhereInfo>,
         remain_reader: Arc<ParquetReader>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
-
-        // let top_k = plan
-        //     .push_downs
-        //     .as_ref()
-        //     .map(|p| p.top_k(table_schema.as_ref(), RangeIndex::supported_type))
-        //     .unwrap_or_default();
-
-        // let top_k = top_k.map(|top_k| {
-        //     let index = src_schema.index_of(top_k.order_by.name()).unwrap();
-        //     let sorter = TopKSorter::new(top_k.limit, top_k.asc);
-
-        //     if !prewhere_columns.contains(&index) {
-        //         prewhere_columns.push(index);
-        //         prewhere_columns.sort();
-        //     }
-        //     (top_k, sorter, index)
-        // });
 
         Ok(ProcessorPtr::create(Box::new(
             ParquetDeserializeTransform {
@@ -120,6 +105,8 @@ impl ParquetDeserializeTransform {
 
                 prewhere_info,
                 remain_reader,
+
+                top_k_finished: false,
             },
         )))
     }
@@ -138,21 +125,25 @@ impl ParquetDeserializeTransform {
         Ok(())
     }
 
-    // /// check topk should return finished or not
-    // fn check_topn(&mut self) {
-    //     if let Some((_, sorter, _)) = &mut self.top_k {
-    //         if let Some(next_part) = self.parts.front() {
-    //             let next_part = next_part
-    //                 .as_any()
-    //                 .downcast_ref::<ParquetRowGroupPart>()
-    //                 .unwrap();
+    /// check topk should return finished or not
+    fn check_topn(&mut self) {
+        if let Some(ParquetPrewhereInfo {
+            top_k: Some((_, sorter)),
+            ..
+        }) = &mut self.prewhere_info.as_mut()
+        {
+            if let Some(next_part) = self.parts.front() {
+                let next_part = next_part
+                    .as_any()
+                    .downcast_ref::<ParquetRowGroupPart>()
+                    .unwrap();
 
-    //             if let Some(sort_min_max) = &next_part.sort_min_max {
-    //                 self.top_k_finished = sorter.never_match(sort_min_max);
-    //             }
-    //         }
-    //     }
-    // }
+                if let Some(sort_min_max) = &next_part.sort_min_max {
+                    self.top_k_finished = sorter.never_match(sort_min_max);
+                }
+            }
+        }
+    }
 }
 
 impl Processor for ParquetDeserializeTransform {
@@ -187,11 +178,11 @@ impl Processor for ParquetDeserializeTransform {
             return Ok(Event::Sync);
         }
 
-        // if self.top_k_finished {
-        //     self.input.finish();
-        //     self.output.finish();
-        //     return Ok(Event::Finished);
-        // }
+        if self.top_k_finished {
+            self.input.finish();
+            self.output.finish();
+            return Ok(Event::Finished);
+        }
 
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
@@ -203,12 +194,13 @@ impl Processor for ParquetDeserializeTransform {
 
             self.parts = VecDeque::from(std::mem::take(&mut source_meta.parts));
 
-            // self.check_topn();
-            // if self.top_k_finished {
-            //     self.input.finish();
-            //     self.output.finish();
-            //     return Ok(Event::Finished);
-            // }
+            self.check_topn();
+            if self.top_k_finished {
+                self.input.finish();
+                self.output.finish();
+                return Ok(Event::Finished);
+            }
+
             self.data_readers = VecDeque::from(std::mem::take(&mut source_meta.readers));
             return Ok(Event::Sync);
         }
@@ -238,34 +230,29 @@ impl Processor for ParquetDeserializeTransform {
                 return Ok(());
             }
 
-            // Step 1: Check TOP_K, if prewhere_columns contains not only TOP_K, we can check if TOP_K column can satisfy the heap.
-            // if self.prewhere_columns.len() > 1 {
-            //     if let Some((top_k, sorter, index)) = self.top_k.as_mut() {
-            //         let chunk = chunks.get_mut(*index).unwrap();
-            //         let array = chunk.1.next_array()?;
-            //         self.read_columns.push(*index);
-
-            //         let data_type = top_k.order_by.datatype().into();
-            //         let col = Column::from_arrow(array.a_s_ref(), &data_type);
-
-            //         arrays.push((chunk.0, array));
-            //         if sorter.never_match_any(&col) {
-            //             return;
-            //         }
-            //     }
-            // }
-
-            // Step 2: Read Prewhere columns and get the filter
-
-            let data_block = match self.prewhere_info.as_ref() {
+            let data_block = match self.prewhere_info.as_mut() {
                 Some(ParquetPrewhereInfo {
                     func_ctx,
                     reader,
                     filter,
+                    top_k,
                 }) => {
                     let chunks = reader.read_from_readers(&mut readers)?;
                     let mut prewhere_block =
                         reader.deserialize(part, chunks, row_selection.clone())?;
+                    // Step 1: Check TOP_K, if prewhere_columns contains not only TOP_K, we can check if TOP_K column can satisfy the heap.
+                    if let Some((index, sorter)) = top_k {
+                        let col = prewhere_block
+                            .get_by_offset(*index)
+                            .value
+                            .as_column()
+                            .unwrap();
+                        if sorter.never_match_any(col) {
+                            return Ok(());
+                        }
+                    }
+
+                    // Step 2: Read Prewhere columns and get the filter
                     let evaluator = Evaluator::new(&prewhere_block, *func_ctx, &BUILTIN_FUNCTIONS);
                     let result = evaluator
                         .run(filter)
@@ -289,29 +276,23 @@ impl Processor for ParquetDeserializeTransform {
                     }
 
                     // Step 5: Apply the filter to topk and update the bitmap, this will filter more results
-                    // let filter = if let Some((_, sorter, index)) = &mut self.top_k {
-                    //     let index_prewhere = self
-                    //         .prewhere_columns
-                    //         .iter()
-                    //         .position(|x| x == index)
-                    //         .unwrap();
-                    //     let top_k_column = prewhere_block
-                    //         .get_by_offset(index_prewhere)
-                    //         .value
-                    //         .as_column()
-                    //         .unwrap();
+                    let filter = if let Some((index, sorter)) = top_k {
+                        let top_k_column = prewhere_block
+                            .get_by_offset(*index)
+                            .value
+                            .as_column()
+                            .unwrap();
+                        let mut bitmap =
+                            FilterHelpers::filter_to_bitmap(filter, prewhere_block.num_rows());
+                        sorter.push_column(top_k_column, &mut bitmap);
+                        Value::Column(bitmap.into())
+                    } else {
+                        filter
+                    };
 
-                    //     let mut bitmap =
-                    //         FilterHelpers::filter_to_bitmap(filter, prewhere_block.num_rows());
-                    //     sorter.push_column(top_k_column, &mut bitmap);
-                    //     Value::Column(bitmap.into())
-                    // } else {
-                    //     filter
-                    // };
-
-                    // if FilterHelpers::is_all_unset(&filter) {
-                    //     return Self::skip_chunks_page(&self.read_columns, chunks);
-                    // }
+                    if FilterHelpers::is_all_unset(&filter) {
+                        return Ok(());
+                    }
 
                     // Step 6: Read remain columns.
                     let chunks = self.remain_reader.read_from_readers(&mut readers)?;

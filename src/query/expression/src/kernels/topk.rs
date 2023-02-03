@@ -24,6 +24,7 @@ use crate::with_number_mapped_type;
 use crate::Column;
 use crate::Scalar;
 
+#[derive(Clone)]
 pub struct TopKSorter {
     data: Vec<Scalar>,
     limit: usize,
@@ -147,6 +148,12 @@ impl TopKSorter {
 fn make_heap<T, F>(v: &mut [T], is_less: &mut F)
 where F: FnMut(&T, &T) -> bool {
     let len = v.len();
+
+    if len < 2 {
+        // no need to adjust heap
+        return;
+    }
+
     let mut parent = (len - 2) / 2;
 
     loop {

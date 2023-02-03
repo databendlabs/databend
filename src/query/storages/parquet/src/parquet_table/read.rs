@@ -26,8 +26,12 @@ use common_expression::DataSchemaRefExt;
 use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
+use common_expression::TableSchemaRef;
+use common_expression::TopKSorter;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
+use storages_common_index::Index;
+use storages_common_index::RangeIndex;
 
 use super::ParquetTable;
 use crate::deserialize_transform::ParquetDeserializeTransform;
@@ -60,8 +64,9 @@ impl ParquetTable {
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
+        let table_schema: TableSchemaRef = self.table_info.schema();
         let source_projection =
-            PushDownInfo::projection_of_push_downs(&self.table_info.schema(), &plan.push_downs);
+            PushDownInfo::projection_of_push_downs(&table_schema, &plan.push_downs);
 
         // The front of the src_fields are prewhere columns (if exist).
         // The back of the src_fields are remain columns.
@@ -77,7 +82,31 @@ impl ParquetTable {
             source_projection,
         )?;
 
-        let push_down_prewhere = PushDownInfo::prewhere_of_push_downs(&plan.push_downs);
+        // build top k information
+        let top_k = plan
+            .push_downs
+            .as_ref()
+            .map(|p| p.top_k(&table_schema, RangeIndex::supported_type))
+            .unwrap_or_default();
+
+        // Build prewhere info.
+        let mut push_down_prewhere = PushDownInfo::prewhere_of_push_downs(&plan.push_downs);
+
+        let top_k = if let Some((prewhere, top_k)) = push_down_prewhere.as_mut().zip(top_k) {
+            // If there is a top k, we need to add the top k columns to the prewhere columns.
+            if let RemoteExpr::<String>::ColumnRef { id, .. } =
+                &plan.push_downs.as_ref().unwrap().order_by[0].0
+            {
+                let index = table_schema.index_of(id)?;
+                prewhere.remain_columns.remove_col(index);
+                prewhere.prewhere_columns.add_col(index);
+                Some((id.clone(), top_k))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
 
         // Build remain reader.
         // If there is no prewhere filter, remain reader is the same as source reader  (no prewhere phase, deserialize directly).
@@ -91,27 +120,30 @@ impl ParquetTable {
             source_reader.clone()
         };
 
-        // Build prewhere info.
-
-        let prewhere_info = Arc::new(
-            PushDownInfo::prewhere_of_push_downs(&plan.push_downs)
-                .map(|p| {
-                    let reader = ParquetReader::create(
-                        self.operator.clone(),
-                        self.arrow_schema.clone(),
-                        p.prewhere_columns,
-                    )?;
-                    src_fields.extend_from_slice(reader.output_schema.fields());
-                    let func_ctx = ctx.get_function_context()?;
-                    let filter = Self::build_filter(func_ctx, &p.filter, &reader.output_schema);
-                    Ok::<_, ErrorCode>(ParquetPrewhereInfo {
-                        func_ctx,
-                        reader,
-                        filter,
-                    })
+        let prewhere_info = push_down_prewhere
+            .map(|p| {
+                let reader = ParquetReader::create(
+                    self.operator.clone(),
+                    self.arrow_schema.clone(),
+                    p.prewhere_columns,
+                )?;
+                src_fields.extend_from_slice(reader.output_schema.fields());
+                let func_ctx = ctx.get_function_context()?;
+                let filter = Self::build_filter(func_ctx, &p.filter, &reader.output_schema);
+                let top_k = top_k.map(|(name, top_k)| {
+                    (
+                        reader.output_schema.index_of(&name).unwrap(),
+                        TopKSorter::new(top_k.limit, top_k.asc),
+                    )
+                });
+                Ok::<_, ErrorCode>(ParquetPrewhereInfo {
+                    func_ctx,
+                    reader,
+                    filter,
+                    top_k,
                 })
-                .transpose()?,
-        );
+            })
+            .transpose()?;
 
         src_fields.extend_from_slice(remain_reader.output_schema.fields());
         let src_schema = DataSchemaRefExt::create(src_fields);
@@ -135,6 +167,7 @@ impl ParquetTable {
             )?;
             pipeline.resize(std::cmp::min(max_threads, max_io_requests))?;
         }
+
         pipeline.add_transform(|input, output| {
             ParquetDeserializeTransform::create(
                 ctx.clone(),

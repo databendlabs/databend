@@ -41,15 +41,12 @@ pub struct ParquetRowGroupPart {
     pub num_rows: usize,
     pub column_metas: HashMap<usize, ColumnMeta>,
     pub row_selection: Option<Vec<Interval>>,
-    /// If all row group parts have min/max stats. This is used for topk push down optimization.
-    ///
-    /// If there is one row group part does not have min/max stats, we cannot conduct topk push down optimization.
-    pub all_have_minmax: bool,
+
+    pub sort_min_max: Option<(Scalar, Scalar)>,
 }
 
 impl ParquetRowGroupPart {
-    pub fn convert_to_part_info(mut self, all_have_minmax: bool) -> PartInfoPtr {
-        self.all_have_minmax = all_have_minmax;
+    pub fn convert_to_part_info(self) -> PartInfoPtr {
         Arc::new(Box::new(self))
     }
 }

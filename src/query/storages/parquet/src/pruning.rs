@@ -225,7 +225,7 @@ impl PartitionPruner {
                     num_rows: rg.num_rows(),
                     column_metas,
                     row_selection,
-                    all_have_minmax: false,
+                    sort_min_max: None,
                 })
             }
         }
@@ -256,6 +256,14 @@ impl PartitionPruner {
                     (b_max.as_ref(), b_min.as_ref()).cmp(&(a_max.as_ref(), a_min.as_ref()))
                 }
             });
+            for part in partitions.iter_mut() {
+                part.sort_min_max = part
+                    .column_metas
+                    .get(&(top_k.column_id as usize))
+                    .unwrap()
+                    .min_max
+                    .clone();
+            }
             PartitionsShuffleKind::Seq
         } else {
             PartitionsShuffleKind::Mod
@@ -263,7 +271,7 @@ impl PartitionPruner {
 
         let partitions = partitions
             .into_iter()
-            .map(|p| p.convert_to_part_info(all_have_minmax))
+            .map(|p| p.convert_to_part_info())
             .collect();
 
         Ok((
