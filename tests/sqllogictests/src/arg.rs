@@ -98,4 +98,11 @@ pub struct SqlLogicTestArgs {
         help = "The arg is used to enable debug mode which would print some debug messages"
     )]
     pub debug: bool,
+
+    #[arg(
+        long = "tpch",
+        default_missing_value = "true",
+        help = "The arg is used to enable tpch benchmark"
+    )]
+    pub tpch: bool,
 }
