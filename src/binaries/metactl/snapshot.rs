@@ -162,7 +162,7 @@ fn build_nodes(initial_cluster: Vec<String>, id: u64) -> anyhow::Result<BTreeMap
         let id = u64::from_str(id_addrs[0])?;
 
         let addrs: Vec<&str> = id_addrs[1].split(',').collect();
-        if addrs.len() > 2 || addrs.len() < 1 {
+        if addrs.len() > 2 || addrs.is_empty() {
             return Err(anyhow::anyhow!(
                 "require 1 or 2 addresses in peer str: {}",
                 peer
