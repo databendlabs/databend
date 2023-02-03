@@ -62,6 +62,11 @@ use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
 
 pub fn register(registry: &mut FunctionRegistry) {
+    registry.register_aliases("contains", &["array_contains"]);
+    registry.register_aliases("get", &["array_get"]);
+    registry.register_aliases("length", &["array_length"]);
+    registry.register_aliases("slice", &["array_slice"]);
+
     registry.register_0_arg_core::<EmptyArrayType, _, _>(
         "array",
         FunctionProperty::default(),
@@ -177,14 +182,14 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_2_arg_core::<NullType, NullType, NullType, _, _>(
-        "indexof",
+        "array_indexof",
         FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         |_, _, _| Value::Scalar(()),
     );
 
     registry.register_passthrough_nullable_2_arg::<ArrayType<GenericType<0>>, GenericType<0>, UInt64Type, _, _>(
-        "indexof",
+        "array_indexof",
         FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, GenericType<0>, UInt64Type>(
@@ -195,14 +200,14 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_2_arg_core::<NullableType<EmptyArrayType>, NullableType<EmptyArrayType>, EmptyArrayType, _, _>(
-        "concat",
+        "array_concat",
         FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         |_, _, _| Value::Scalar(()),
     );
 
     registry.register_passthrough_nullable_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
-        "concat",
+        "array_concat",
         FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(
@@ -254,7 +259,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_passthrough_nullable_1_arg::<EmptyArrayType, EmptyArrayType, _, _>(
-        "remove_first",
+        "array_remove_first",
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<EmptyArrayType, EmptyArrayType>(|_, output, _| {
@@ -263,7 +268,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_passthrough_nullable_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
-        "remove_first",
+        "array_remove_first",
         FunctionProperty::default(),
         |domain| FunctionDomain::Domain(domain.clone()),
         vectorize_with_builder_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(
@@ -280,7 +285,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_passthrough_nullable_1_arg::<EmptyArrayType, EmptyArrayType, _, _>(
-        "remove_last",
+        "array_remove_last",
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<EmptyArrayType, EmptyArrayType>(|_, output, _| {
@@ -289,7 +294,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_passthrough_nullable_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
-        "remove_last",
+        "array_remove_last",
         FunctionProperty::default(),
         |domain| FunctionDomain::Domain(domain.clone()),
         vectorize_with_builder_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(
@@ -306,7 +311,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_2_arg_core::<GenericType<0>, ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
-        "prepend",
+        "array_prepend",
         FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         vectorize_2_arg::<GenericType<0>, ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(|val, arr, _| {
@@ -319,7 +324,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_2_arg_core::<ArrayType<GenericType<0>>, GenericType<0>, ArrayType<GenericType<0>>, _, _>(
-        "append",
+        "array_append",
         FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         vectorize_2_arg::<ArrayType<GenericType<0>>, GenericType<0>, ArrayType<GenericType<0>>>(|arr, val, _| {

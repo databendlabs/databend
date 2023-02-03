@@ -39,7 +39,8 @@ rm -fr .databend/
 echo " === import old meta node data to new cluster"
 ./target/debug/databend-metactl --import --raft-dir ./.databend/new_meta1 --id=4 --db meta.db --initial-cluster 4=localhost:29103,127.0.0.1:19191 5=localhost:29203,127.0.0.1:29191 6=localhost:29303,127.0.0.1:39191
 ./target/debug/databend-metactl --import --raft-dir ./.databend/new_meta2 --id=5 --db meta.db --initial-cluster 4=localhost:29103,127.0.0.1:19191 5=localhost:29203,127.0.0.1:29191 6=localhost:29303,127.0.0.1:39191
-./target/debug/databend-metactl --import --raft-dir ./.databend/new_meta3 --id=6 --db meta.db --initial-cluster 4=localhost:29103,127.0.0.1:19191 5=localhost:29203,127.0.0.1:29191 6=localhost:29303,127.0.0.1:39191
+# test cluster config without grpc address
+./target/debug/databend-metactl --import --raft-dir ./.databend/new_meta3 --id=6 --db meta.db --initial-cluster 4=localhost:29103 5=localhost:29203 6=localhost:29303
 
 echo " === check if state machine is complete by checking key 'LastMembership'"
 if ./target/debug/databend-metactl --export --raft-dir ./.databend/new_meta1 | grep LastMembership; then

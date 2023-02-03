@@ -132,11 +132,10 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Join result: {:?}", join_res);
 
-    if join_res.is_err() {
-        info!(
-            "Already in cluster, register node to update raft_api_advertise_host_endpoint and grpc_api_advertise_host"
-        );
-
+    info!(
+        "Register node to update raft_api_advertise_host_endpoint and grpc_api_advertise_address"
+    );
+    {
         info!("Wait for active leader to register node");
         let wait = meta_node.raft.wait(Some(Duration::from_secs(20)));
         let metrics = wait

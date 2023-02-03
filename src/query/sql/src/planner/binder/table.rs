@@ -319,7 +319,7 @@ impl Binder {
             TableReference::Stage {
                 span: _,
                 location,
-                files: _,
+                options,
                 alias,
             } => {
                 let (user_stage_info, path) = match location.clone() {
@@ -346,8 +346,8 @@ impl Binder {
                 ) {
                     let files_info = StageFilesInfo {
                         path,
-                        pattern: None,
-                        files: None,
+                        pattern: options.pattern.clone(),
+                        files: options.files.clone(),
                     };
                     let read_options = ParquetReadOptions::default();
 
