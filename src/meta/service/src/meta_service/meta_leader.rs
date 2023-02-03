@@ -63,7 +63,7 @@ impl<'a> MetaLeader<'a> {
     }
 
     #[tracing::instrument(level = "debug", skip(self, req), fields(target=%req.forward_to_leader))]
-    pub async fn handle_forwardable_req(
+    pub async fn handle_request(
         &self,
         req: ForwardRequest,
     ) -> Result<ForwardResponse, MetaOperationError> {

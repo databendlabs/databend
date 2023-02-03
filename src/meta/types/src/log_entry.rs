@@ -58,3 +58,17 @@ impl Display for LogEntry {
         write!(f, " cmd: {}", self.cmd)
     }
 }
+
+impl LogEntry {
+    pub fn new(cmd: Cmd) -> Self {
+        Self {
+            txid: None,
+            time_ms: None,
+            cmd,
+        }
+    }
+    pub fn with_txid(mut self, txid: Option<RaftTxId>) -> Self {
+        self.txid = txid;
+        self
+    }
+}

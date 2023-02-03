@@ -938,7 +938,7 @@ impl MetaNode {
         // Handle the request locally or return a ForwardToLeader error
         let op_err = match assume_leader_res {
             Ok(leader) => {
-                let res = leader.handle_forwardable_req(req.clone()).await;
+                let res = leader.handle_request(req.clone()).await;
                 match res {
                     Ok(x) => return Ok(x),
                     Err(e) => e,
@@ -1001,17 +1001,12 @@ impl MetaNode {
         node: Node,
     ) -> Result<AppliedState, MetaAPIError> {
         // TODO: use txid?
-        let resp = self
-            .write(LogEntry {
-                txid: None,
-                time_ms: None,
-                cmd: Cmd::AddNode {
-                    node_id,
-                    node,
-                    overriding: false,
-                },
-            })
-            .await?;
+        let cmd = Cmd::AddNode {
+            node_id,
+            node,
+            overriding: false,
+        };
+        let resp = self.write(LogEntry::new(cmd)).await?;
 
         self.raft
             .add_learner(node_id, false)
