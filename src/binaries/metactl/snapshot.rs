@@ -144,32 +144,44 @@ fn import_from(restore: String) -> anyhow::Result<Option<LogId>> {
     }
 }
 
+/// Build `Node` for cluster with new addresses configured.
+///
+/// Raw config is: `<NodeId>=<raft-api-host>:<raft-api-port>[,...]`, e.g. `1=localhost:29103` or `1=localhost:29103,0.0.0.0:19191`
+/// The second part is obsolete grpc api address and will be just ignored. Databend-meta loads Grpc address from config file when starting up.
 fn build_nodes(initial_cluster: Vec<String>, id: u64) -> anyhow::Result<BTreeMap<NodeId, Node>> {
     eprintln!("init-cluster: id={}, {:?}", id, initial_cluster);
 
     let mut nodes = BTreeMap::new();
     for peer in initial_cluster {
         eprintln!("peer:{}", peer);
-        let node_info: Vec<&str> = peer.split('=').collect();
-        if node_info.len() != 2 {
+
+        let id_addrs: Vec<&str> = peer.split('=').collect();
+        if id_addrs.len() != 2 {
             return Err(anyhow::anyhow!("invalid peer str: {}", peer));
         }
-        let id = u64::from_str(node_info[0])?;
+        let id = u64::from_str(id_addrs[0])?;
 
-        let addrs: Vec<&str> = node_info[1].split(',').collect();
-        if addrs.len() != 2 {
-            return Err(anyhow::anyhow!("invalid peer str: {}", peer));
+        let addrs: Vec<&str> = id_addrs[1].split(',').collect();
+        if addrs.len() > 2 || addrs.is_empty() {
+            return Err(anyhow::anyhow!(
+                "require 1 or 2 addresses in peer str: {}",
+                peer
+            ));
         }
         let url = Url::parse(&format!("http://{}", addrs[0]))?;
-        if url.host_str().is_none() || url.port().is_none() {
-            return Err(anyhow::anyhow!("invalid peer raft addr: {}", addrs[0]));
-        }
-        let endpoint = Endpoint {
-            addr: url.host_str().unwrap().to_string(),
-            port: url.port().unwrap() as u32,
+        let endpoint = match (url.host_str(), url.port()) {
+            (Some(addr), Some(port)) => Endpoint {
+                addr: addr.to_string(),
+                port: port as u32,
+            },
+            _ => {
+                return Err(anyhow::anyhow!("invalid peer raft addr: {}", addrs[0]));
+            }
         };
-        let node = Node::new(id, endpoint.clone()).with_grpc_advertise_address(Some(&addrs[1]));
+
+        let node = Node::new(id, endpoint.clone());
         eprintln!("new cluster node:{}", node);
+
         nodes.insert(id, node);
     }
 
