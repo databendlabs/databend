@@ -111,7 +111,6 @@ pub struct TransformConvertGrouping<Method: HashMethod + PolymorphicKeysHelper<M
     method: Method,
     working_bucket: isize,
     pushing_bucket: isize,
-    all_inputs_is_finished: bool,
     initialized_all_inputs: bool,
     params: Arc<AggregatorParams>,
     buckets_blocks: HashMap<isize, Vec<DataBlock>>,
@@ -141,7 +140,6 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
             pushing_bucket: 0,
             output: OutputPort::create(),
             buckets_blocks: HashMap::new(),
-            all_inputs_is_finished: false,
             unsplitted_blocks: vec![],
             initialized_all_inputs: false,
         })
@@ -295,9 +293,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
     }
 
     fn event(&mut self) -> Result<Event> {
-        if self.all_inputs_is_finished || self.output.is_finished() {
-            self.output.finish();
-
+        if self.output.is_finished() {
             for input_state in &self.inputs {
                 input_state.port.finish();
             }
@@ -353,7 +349,6 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
             }
 
             if all_inputs_is_finished {
-                self.all_inputs_is_finished = true;
                 break;
             }
 
