@@ -51,8 +51,9 @@ mod cache;
 pub use cache::FuseCachePolicy;
 
 mod column_node;
-
-mod stage;
 pub use column_node::ColumnNode;
 pub use column_node::ColumnNodes;
+
+mod stage;
 pub use stage::init_stage_operator;
+pub use stage::StageFilesInfo;

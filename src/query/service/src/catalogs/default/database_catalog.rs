@@ -474,10 +474,6 @@ impl Catalog for DatabaseCatalog {
         self.table_function_factory.get(func_name, tbl_args)
     }
 
-    fn get_table_function_id(&self, func_name: &str) -> Result<MetaId> {
-        self.table_function_factory.get_id(func_name)
-    }
-
     fn get_table_engines(&self) -> Vec<StorageDescription> {
         // only return mutable_catalog storage table engines
         self.mutable_catalog.get_table_engines()
