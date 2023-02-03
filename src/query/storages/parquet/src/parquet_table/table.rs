@@ -38,15 +38,18 @@ use common_meta_app::schema::TableMeta;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use common_storage::init_stage_operator;
+use common_storage::StageFilesInfo;
 use opendal::Operator;
 
 pub struct ParquetTable {
-    pub(super) file_locations: Vec<String>,
-    pub(super) table_info: TableInfo,
-    pub(super) arrow_schema: ArrowSchema,
-    pub(super) operator: Operator,
     pub(super) read_options: ParquetReadOptions,
     pub(super) stage_info: UserStageInfo,
+    pub(super) files_info: StageFilesInfo,
+
+    pub(super) operator: Operator,
+
+    pub(super) table_info: TableInfo,
+    pub(super) arrow_schema: ArrowSchema,
 }
 
 impl ParquetTable {
@@ -54,12 +57,12 @@ impl ParquetTable {
         let operator = init_stage_operator(&info.user_stage_info)?;
 
         Ok(Arc::new(ParquetTable {
-            file_locations: info.file_locations.clone(),
             table_info: info.table_info.clone(),
             arrow_schema: info.arrow_schema.clone(),
             operator,
             read_options: info.read_options,
             stage_info: info.user_stage_info.clone(),
+            files_info: info.files_info.clone(),
         }))
     }
 }
@@ -89,10 +92,10 @@ impl Table for ParquetTable {
     fn get_data_source_info(&self) -> DataSourceInfo {
         DataSourceInfo::ParquetSource(ParquetTableInfo {
             table_info: self.table_info.clone(),
-            file_locations: self.file_locations.clone(),
             arrow_schema: self.arrow_schema.clone(),
             read_options: self.read_options,
             user_stage_info: self.stage_info.clone(),
+            files_info: self.files_info.clone(),
         })
     }
 

@@ -31,6 +31,7 @@ use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
+use common_catalog::plan::ParquetReadOptions;
 use common_catalog::table::ColumnId;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::NavigationPoint;
@@ -46,9 +47,8 @@ use common_expression::Scalar;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
+use common_storage::StageFilesInfo;
 use common_storages_parquet::ParquetTable;
-use common_storages_stage::list_file;
-use common_storages_stage::StageTable;
 use common_storages_view::view_table::QUERY;
 
 use crate::binder::copy::parse_stage_location_v2;
@@ -340,25 +340,20 @@ impl Binder {
                     }
                 };
 
-                let op = StageTable::get_op(&user_stage_info)?;
-
                 if matches!(
                     user_stage_info.file_format_options.format,
                     StageFileFormatType::Parquet
                 ) {
-                    let files = list_file(&op, &path)
-                        .await?
-                        .into_iter()
-                        .map(|x| x.path)
-                        .collect();
+                    let files_info = StageFilesInfo {
+                        path,
+                        pattern: None,
+                        files: None,
+                    };
+                    let read_options = ParquetReadOptions::default();
 
-                    let table = ParquetTable::create(
-                        op,
-                        files,
-                        Default::default(),
-                        user_stage_info.clone(),
-                    )
-                    .await?;
+                    let table =
+                        ParquetTable::create(user_stage_info.clone(), files_info, read_options)
+                            .await?;
 
                     let table_alias_name = if let Some(table_alias) = alias {
                         Some(

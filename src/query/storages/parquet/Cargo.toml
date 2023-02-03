@@ -28,7 +28,6 @@ storages-common-table-meta = { path = "../common/table-meta" }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }
 futures = "0.3.24"
-glob = "0.3.1"
 opendal = { workspace = true }
 serde = { workspace = true }
 typetag = "0.2.3"
