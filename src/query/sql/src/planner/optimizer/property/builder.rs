@@ -43,18 +43,17 @@ impl<'a> RelExpr<'a> {
     }
 
     pub fn derive_relational_prop(&self) -> Result<RelationalProperty> {
-        let plan = match self {
+        match self {
             RelExpr::SExpr { expr } => {
-                if let Some(rel_prop) = &expr.rel_prop {
-                    return Ok(*rel_prop.clone());
+                if let Some(rel_prop) = expr.rel_prop.lock().unwrap().as_ref() {
+                    return Ok(rel_prop.clone());
                 }
-                expr.plan()
+                let rel_prop = expr.plan.derive_relational_prop(self)?;
+                *expr.rel_prop.lock().unwrap() = Some(rel_prop.clone());
+                Ok(rel_prop)
             }
-            RelExpr::MExpr { expr, .. } => &expr.plan,
-        };
-
-        let prop = plan.derive_relational_prop(self)?;
-        Ok(prop)
+            RelExpr::MExpr { expr, .. } => expr.plan.derive_relational_prop(self),
+        }
     }
 
     pub fn derive_relational_prop_child(&self, index: usize) -> Result<RelationalProperty> {
