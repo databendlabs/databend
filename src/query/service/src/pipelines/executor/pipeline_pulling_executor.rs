@@ -24,6 +24,8 @@ use common_base::runtime::Thread;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_pipeline_sinks::Sink;
+use common_pipeline_sinks::Sinker;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
 use tracing::warn;
@@ -32,8 +34,6 @@ use crate::pipelines::executor::executor_settings::ExecutorSettings;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::Sink;
-use crate::pipelines::processors::Sinker;
 use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
 

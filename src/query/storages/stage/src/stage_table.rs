@@ -36,14 +36,11 @@ use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_meta_app::schema::TableInfo;
-use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
-use common_pipeline_sources::processors::sources::input_formats::InputContext;
-use common_pipeline_sources::processors::sources::input_formats::SplitInfo;
-use common_storage::init_operator;
-use common_storage::DataOperator;
-use opendal::layers::SubdirLayer;
+use common_pipeline_sources::input_formats::InputContext;
+use common_pipeline_sources::input_formats::SplitInfo;
+use common_storage::init_stage_operator;
 use opendal::Operator;
 use parking_lot::Mutex;
 use regex::Regex;
@@ -75,12 +72,7 @@ impl StageTable {
 
     /// Get operator with correctly prefix.
     pub fn get_op(stage: &UserStageInfo) -> Result<Operator> {
-        if stage.stage_type == StageType::External {
-            Ok(init_operator(&stage.stage_params.storage)?)
-        } else {
-            let pop = DataOperator::instance().operator();
-            Ok(pop.layer(SubdirLayer::new(&stage.stage_prefix())))
-        }
+        init_stage_operator(stage)
     }
 
     pub async fn list_files(stage_info: &StageTableInfo) -> Result<Vec<StageFileInfo>> {

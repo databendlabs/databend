@@ -291,13 +291,7 @@ pub struct ListDatabaseReq {
 }
 
 mod kvapi_key_impl {
-    use common_meta_kvapi::check_segment;
-    use common_meta_kvapi::check_segment_absent;
-    use common_meta_kvapi::check_segment_present;
-    use common_meta_kvapi::decode_id;
-    use common_meta_kvapi::escape;
     use common_meta_kvapi::kvapi;
-    use common_meta_kvapi::unescape;
 
     use crate::schema::DatabaseId;
     use crate::schema::DatabaseIdToName;
@@ -313,28 +307,18 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_DATABASE;
 
         fn to_string_key(&self) -> String {
-            format!(
-                "{}/{}/{}",
-                Self::PREFIX,
-                escape(&self.tenant),
-                escape(&self.db_name),
-            )
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_str(&self.tenant)
+                .push_str(&self.db_name)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut elts = s.split('/');
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-            let prefix = check_segment_present(elts.next(), 0, s)?;
-            check_segment(prefix, 0, Self::PREFIX)?;
-
-            let tenant = check_segment_present(elts.next(), 1, s)?;
-
-            let db_name = check_segment_present(elts.next(), 2, s)?;
-
-            check_segment_absent(elts.next(), 3, s)?;
-
-            let tenant = unescape(tenant)?;
-            let db_name = unescape(db_name)?;
+            let tenant = p.next_str()?;
+            let db_name = p.next_str()?;
+            p.done()?;
 
             Ok(DatabaseNameIdent { tenant, db_name })
         }
@@ -345,19 +329,16 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_DATABASE_BY_ID;
 
         fn to_string_key(&self) -> String {
-            format!("{}/{}", Self::PREFIX, self.db_id,)
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.db_id)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut elts = s.split('/');
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-            let prefix = check_segment_present(elts.next(), 0, s)?;
-            check_segment(prefix, 0, Self::PREFIX)?;
-
-            let db_id = check_segment_present(elts.next(), 1, s)?;
-            let db_id = decode_id(db_id)?;
-
-            check_segment_absent(elts.next(), 2, s)?;
+            let db_id = p.next_u64()?;
+            p.done()?;
 
             Ok(DatabaseId { db_id })
         }
@@ -368,19 +349,16 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_DATABASE_ID_TO_NAME;
 
         fn to_string_key(&self) -> String {
-            format!("{}/{}", Self::PREFIX, self.db_id,)
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.db_id)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut elts = s.split('/');
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-            let prefix = check_segment_present(elts.next(), 0, s)?;
-            check_segment(prefix, 0, Self::PREFIX)?;
-
-            let db_id = check_segment_present(elts.next(), 1, s)?;
-            let db_id = decode_id(db_id)?;
-
-            check_segment_absent(elts.next(), 2, s)?;
+            let db_id = p.next_u64()?;
+            p.done()?;
 
             Ok(DatabaseIdToName { db_id })
         }
@@ -391,28 +369,18 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_DB_ID_LIST;
 
         fn to_string_key(&self) -> String {
-            format!(
-                "{}/{}/{}",
-                Self::PREFIX,
-                escape(&self.tenant),
-                escape(&self.db_name),
-            )
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_str(&self.tenant)
+                .push_str(&self.db_name)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut elts = s.split('/');
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-            let prefix = check_segment_present(elts.next(), 0, s)?;
-            check_segment(prefix, 0, Self::PREFIX)?;
-
-            let tenant = check_segment_present(elts.next(), 1, s)?;
-
-            let db_name = check_segment_present(elts.next(), 2, s)?;
-
-            check_segment_absent(elts.next(), 3, s)?;
-
-            let tenant = unescape(tenant)?;
-            let db_name = unescape(db_name)?;
+            let tenant = p.next_str()?;
+            let db_name = p.next_str()?;
+            p.done()?;
 
             Ok(DbIdListKey { tenant, db_name })
         }

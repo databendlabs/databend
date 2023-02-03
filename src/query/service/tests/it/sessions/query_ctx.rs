@@ -14,9 +14,9 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
-use common_storage::StorageFsConfig;
-use common_storage::StorageParams;
-use common_storage::StorageS3Config;
+use common_meta_types::StorageFsConfig;
+use common_meta_types::StorageParams;
+use common_meta_types::StorageS3Config;
 use databend_query::sessions::TableContext;
 use wiremock::matchers::method;
 use wiremock::matchers::path;

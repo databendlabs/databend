@@ -194,6 +194,8 @@ dependencies = [
  "regex",
  "regex-syntax",
  "rustc_version",
+ "serde",
+ "serde_derive",
  "simdutf8",
  "streaming-iterator",
  "strength_reduce",
@@ -1302,6 +1304,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "common-arrow",
  "common-base",
  "common-exception",
  "common-expression",
@@ -1314,6 +1317,7 @@ dependencies = [
  "dashmap",
  "dyn-clone",
  "goldenfile",
+ "opendal",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -1615,7 +1619,6 @@ dependencies = [
  "common-expression",
  "common-meta-kvapi",
  "common-meta-types",
- "common-storage",
  "enumflags2",
  "maplit",
  "num-derive",
@@ -1771,13 +1774,13 @@ dependencies = [
  "common-exception",
  "common-io",
  "common-meta-stoerr",
- "common-storage",
  "derive_more",
  "enumflags2",
  "hex",
  "num-derive",
  "num-traits",
  "once_cell",
+ "opendal",
  "openraft",
  "prost",
  "prost-build",
@@ -1801,6 +1804,7 @@ dependencies = [
  "metrics-exporter-prometheus",
  "once_cell",
  "parking_lot 0.12.1",
+ "procfs",
  "prometheus-parse",
  "serde",
  "tokio",
@@ -1968,6 +1972,7 @@ dependencies = [
  "bytes",
  "chrono",
  "chrono-tz",
+ "common-arrow",
  "common-ast",
  "common-base",
  "common-catalog",
@@ -1991,6 +1996,7 @@ dependencies = [
  "common-pipeline-transforms",
  "common-settings",
  "common-storage",
+ "common-storages-parquet",
  "common-storages-stage",
  "common-storages-view",
  "common-tracing",
@@ -2036,6 +2042,7 @@ name = "common-storage"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
  "backon",
  "bytes",
@@ -2043,12 +2050,15 @@ dependencies = [
  "common-auth",
  "common-base",
  "common-exception",
+ "common-expression",
+ "common-meta-types",
  "futures",
  "globiter",
  "once_cell",
  "opendal",
  "parking_lot 0.12.1",
  "percent-encoding",
+ "regex",
  "serde",
 ]
 
@@ -2269,15 +2279,15 @@ dependencies = [
  "common-arrow",
  "common-base",
  "common-catalog",
- "common-config",
  "common-exception",
  "common-expression",
  "common-functions",
  "common-meta-app",
+ "common-meta-types",
  "common-pipeline-core",
  "common-sql",
  "common-storage",
- "glob",
+ "futures",
  "opendal",
  "serde",
  "storages-common-pruner",
@@ -2399,6 +2409,7 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
+ "common-sql",
  "common-storage",
  "common-storages-fuse",
  "common-storages-view",
@@ -4029,9 +4040,9 @@ dependencies = [
 
 [[package]]
 name = "glob"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
+checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
 name = "globiter"
@@ -6422,6 +6433,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "procfs"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0941606b9934e2d98a3677759a971756eb821f75764d0e0d26946d08e74d9104"
+dependencies = [
+ "bitflags",
+ "byteorder",
+ "chrono",
+ "flate2",
+ "hex",
+ "lazy_static",
+ "libc",
+]
+
+[[package]]
 name = "prometheus-parse"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7495,6 +7521,7 @@ dependencies = [
  "common-base",
  "common-config",
  "common-exception",
+ "common-meta-types",
  "common-storage",
  "once_cell",
  "opendal",

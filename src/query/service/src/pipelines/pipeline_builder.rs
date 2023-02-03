@@ -27,8 +27,9 @@ use common_expression::SortColumnDescription;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
-use common_pipeline_sinks::processors::sinks::EmptySink;
-use common_pipeline_sinks::processors::sinks::UnionReceiveSink;
+use common_pipeline_sinks::EmptySink;
+use common_pipeline_sinks::Sinker;
+use common_pipeline_sinks::UnionReceiveSink;
 use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
@@ -66,7 +67,6 @@ use crate::pipelines::processors::LeftJoinCompactor;
 use crate::pipelines::processors::MarkJoinCompactor;
 use crate::pipelines::processors::RightJoinCompactor;
 use crate::pipelines::processors::SinkBuildHashTable;
-use crate::pipelines::processors::Sinker;
 use crate::pipelines::processors::SortMergeCompactor;
 use crate::pipelines::processors::TransformAggregator;
 use crate::pipelines::processors::TransformCastSchema;
@@ -323,14 +323,23 @@ impl PipelineBuilder {
             None,
         )?;
 
+        let pass_state_to_final = self.enable_memory_efficient_aggregator(&params);
+
         self.main_pipeline.add_transform(|input, output| {
             TransformAggregator::try_create_partial(
                 AggregatorTransformParams::try_create(input, output, &params)?,
                 self.ctx.clone(),
+                pass_state_to_final,
             )
         })?;
 
         Ok(())
+    }
+
+    fn enable_memory_efficient_aggregator(&self, params: &Arc<AggregatorParams>) -> bool {
+        self.ctx.get_cluster().is_empty()
+            && !params.group_columns.is_empty()
+            && self.main_pipeline.output_len() > 1
     }
 
     fn build_aggregate_final(&mut self, aggregate: &AggregateFinal) -> Result<()> {
@@ -344,10 +353,7 @@ impl PipelineBuilder {
             aggregate.limit,
         )?;
 
-        if self.ctx.get_cluster().is_empty()
-            && !params.group_columns.is_empty()
-            && self.main_pipeline.output_len() > 1
-        {
+        if self.enable_memory_efficient_aggregator(&params) {
             return efficiently_memory_final_aggregator(params, &mut self.main_pipeline);
         }
 

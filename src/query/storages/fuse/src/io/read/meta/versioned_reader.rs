@@ -16,6 +16,7 @@
 use std::marker::PhantomData;
 
 use common_exception::Result;
+use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use futures::AsyncRead;
 use serde::de::DeserializeOwned;
@@ -38,7 +39,11 @@ impl VersionedReader<TableSnapshot> for SnapshotVersion {
     async fn read<R>(&self, reader: R) -> Result<TableSnapshot>
     where R: AsyncRead + Unpin + Send {
         let r = match self {
-            SnapshotVersion::V2(v) => load_by_version(reader, v).await?,
+            SnapshotVersion::V2(v) => {
+                let mut ts = load_by_version(reader, v).await?;
+                ts.schema = TableSchema::init_if_need(ts.schema);
+                ts
+            }
             SnapshotVersion::V1(v) => load_by_version(reader, v).await?.into(),
             SnapshotVersion::V0(v) => load_by_version(reader, v).await?.into(),
         };
@@ -66,12 +71,12 @@ impl VersionedReader<SegmentInfo> for (SegmentInfoVersion, TableSchemaRef) {
             SegmentInfoVersion::V2(v) => load_by_version(reader, v).await?,
             SegmentInfoVersion::V1(v) => {
                 let data = load_by_version(reader, v).await?;
-                let fields = schema.leaf_fields();
+                let (_, fields) = schema.leaf_fields();
                 SegmentInfo::from_v1(data, &fields)
             }
             SegmentInfoVersion::V0(v) => {
                 let data = load_by_version(reader, v).await?;
-                let fields = schema.leaf_fields();
+                let (_, fields) = schema.leaf_fields();
                 SegmentInfo::from_v0(data, &fields)
             }
         };

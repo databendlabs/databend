@@ -20,16 +20,16 @@ use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::schema_projection as ap;
+use common_base::base::tokio;
 use common_catalog::plan::Projection;
 use common_exception::Result;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_storage::ColumnNodes;
-use opendal::Object;
 use opendal::Operator;
 
 use crate::parquet_part::ParquetRowGroupPart;
-use crate::table_function::arrow_to_table_schema;
+use crate::parquet_table::arrow_to_table_schema;
 
 pub type IndexedChunk = (usize, Vec<u8>);
 
@@ -101,10 +101,6 @@ impl ParquetReader {
         &self.output_schema
     }
 
-    pub fn columns_to_read(&self) -> &HashSet<usize> {
-        &self.columns_to_read
-    }
-
     /// Project the schema and get the needed column leaves.
     #[allow(clippy::type_complexity)]
     pub fn do_projection(
@@ -117,7 +113,8 @@ impl ParquetReader {
         HashSet<usize>,
     )> {
         // Full schema and column leaves.
-        let column_nodes = ColumnNodes::new_from_schema(schema);
+
+        let column_nodes = ColumnNodes::new_from_schema(schema, None);
         let schema_descriptors = to_parquet_schema(schema)?;
         // Project schema
         let projected_arrow_schema = match projection {
@@ -157,18 +154,39 @@ impl ParquetReader {
         let mut chunks = Vec::with_capacity(self.columns_to_read.len());
 
         for index in &self.columns_to_read {
-            let meta = &part.column_metas[index];
-            let op = self.operator.clone();
-            let chunk =
-                Self::sync_read_one_column(op.object(&part.location), meta.offset, meta.length)?;
+            let obj = self.operator.object(&part.location);
+            // in `read_parquet` function, there is no `TableSchema`, so index treated as column id
+            let meta = &part.column_metas[&(*index as u32)];
+            let chunk = obj.blocking_range_read(meta.offset..meta.offset + meta.length)?;
+
             chunks.push((*index, chunk));
         }
 
         Ok(chunks)
     }
 
+    /// Read columns data of one row group (but async).
+    pub async fn read_columns(&self, part: &ParquetRowGroupPart) -> Result<Vec<IndexedChunk>> {
+        let mut chunks = Vec::with_capacity(self.columns_to_read.len());
+
+        for &index in &self.columns_to_read {
+            // in `read_parquet` function, there is no `TableSchema`, so index treated as column id
+            let meta = &part.column_metas[&(index as u32)];
+            let obj = self.operator.object(&part.location);
+            let range = meta.offset..meta.offset + meta.length;
+            chunks.push(async move {
+                tokio::spawn(async move { obj.range_read(range).await.map(|chunk| (index, chunk)) })
+                    .await
+                    .unwrap()
+            });
+        }
+
+        let chunks = futures::future::try_join_all(chunks).await?;
+        Ok(chunks)
+    }
+
     #[inline]
-    pub fn sync_read_one_column(o: Object, offset: u64, length: u64) -> Result<Vec<u8>> {
-        Ok(o.blocking_range_read(offset..offset + length)?)
+    pub fn support_blocking(&self) -> bool {
+        self.operator.metadata().can_blocking()
     }
 }

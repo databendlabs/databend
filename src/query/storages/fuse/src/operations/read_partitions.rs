@@ -153,7 +153,7 @@ impl FuseTable {
         pruning_stats: PruningStatistics,
     ) -> Result<(PartStatistics, Partitions)> {
         let arrow_schema = schema.to_arrow();
-        let column_nodes = ColumnNodes::new_from_schema(&arrow_schema);
+        let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&schema));
 
         let partitions_scanned = block_metas.len();
 
@@ -162,7 +162,7 @@ impl FuseTable {
             .map(|p| p.top_k(self.schema().as_ref(), RangeIndex::supported_type))
             .unwrap_or_default();
         let (mut statistics, parts) =
-            Self::to_partitions(block_metas, &column_nodes, top_k, push_downs);
+            Self::to_partitions(Some(&schema), block_metas, &column_nodes, top_k, push_downs);
 
         // Update planner statistics.
         statistics.partitions_total = partitions_total;
@@ -179,6 +179,7 @@ impl FuseTable {
     }
 
     pub fn to_partitions(
+        schema: Option<&TableSchemaRef>,
         block_metas: &[(Option<Range<usize>>, Arc<BlockMeta>)],
         column_nodes: &ColumnNodes,
         top_k: Option<TopK>,
@@ -205,9 +206,9 @@ impl FuseTable {
         }
 
         let (mut statistics, mut partitions) = match &push_down {
-            None => Self::all_columns_partitions(&block_metas, top_k.clone(), limit),
+            None => Self::all_columns_partitions(schema, &block_metas, top_k.clone(), limit),
             Some(extras) => match &extras.projection {
-                None => Self::all_columns_partitions(&block_metas, top_k.clone(), limit),
+                None => Self::all_columns_partitions(schema, &block_metas, top_k.clone(), limit),
                 Some(projection) => Self::projection_partitions(
                     &block_metas,
                     column_nodes,
@@ -234,6 +235,7 @@ impl FuseTable {
     }
 
     pub fn all_columns_partitions(
+        schema: Option<&TableSchemaRef>,
         block_metas: &[(Option<Range<usize>>, Arc<BlockMeta>)],
         top_k: Option<TopK>,
         limit: usize,
@@ -248,9 +250,12 @@ impl FuseTable {
         let mut remaining = limit;
         for (range, block_meta) in block_metas.iter() {
             let rows = block_meta.row_count as usize;
-            partitions
-                .partitions
-                .push(Self::all_columns_part(range.clone(), &top_k, block_meta));
+            partitions.partitions.push(Self::all_columns_part(
+                schema,
+                range.clone(),
+                &top_k,
+                block_meta,
+            ));
             statistics.read_rows += rows;
             statistics.read_bytes += block_meta.block_size as usize;
 
@@ -298,10 +303,14 @@ impl FuseTable {
             let columns = projection.project_column_nodes(column_nodes).unwrap();
             for column in &columns {
                 let indices = &column.leaf_ids;
-                for index in indices {
-                    let col_metas = &block_meta.col_metas[&(*index as u32)];
-                    let (_, len) = col_metas.offset_length();
-                    statistics.read_bytes += len as usize;
+                for (i, _index) in indices.iter().enumerate() {
+                    // ignore all deleted field
+                    let column_id = column.leaf_column_id(i);
+
+                    if let Some(col_metas) = block_meta.col_metas.get(&column_id) {
+                        let (_, len) = col_metas.offset_length();
+                        statistics.read_bytes += len as usize;
+                    }
                 }
             }
 
@@ -319,14 +328,25 @@ impl FuseTable {
     }
 
     pub fn all_columns_part(
+        schema: Option<&TableSchemaRef>,
         range: Option<Range<usize>>,
         top_k: &Option<TopK>,
         meta: &BlockMeta,
     ) -> PartInfoPtr {
         let mut columns_meta = HashMap::with_capacity(meta.col_metas.len());
 
-        for (idx, column_meta) in &meta.col_metas {
-            columns_meta.insert(*idx as usize, column_meta.clone());
+        for column_id in meta.col_metas.keys() {
+            // ignore all deleted field
+            if let Some(schema) = schema {
+                if schema.is_column_deleted(*column_id) {
+                    continue;
+                }
+            }
+
+            // ignore column this block dose not exist
+            if let Some(meta) = meta.col_metas.get(column_id) {
+                columns_meta.insert(*column_id, meta.clone());
+            }
         }
 
         let rows_count = meta.row_count;
@@ -361,10 +381,13 @@ impl FuseTable {
         let columns = projection.project_column_nodes(column_nodes).unwrap();
         for column in &columns {
             let indices = &column.leaf_ids;
-            for index in indices {
-                let column_meta = &meta.col_metas[&(*index as u32)];
+            for (i, _index) in indices.iter().enumerate() {
+                let column_id = column.leaf_column_id(i);
 
-                columns_meta.insert(*index, column_meta.clone());
+                // ignore column this block dose not exist
+                if let Some(column_meta) = meta.col_metas.get(&column_id) {
+                    columns_meta.insert(column_id, column_meta.clone());
+                }
             }
         }
 

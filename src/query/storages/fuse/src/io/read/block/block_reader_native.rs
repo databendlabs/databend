@@ -55,22 +55,22 @@ impl BlockReader {
         let part = FusePartInfo::from_part(&part)?;
         let mut join_handlers = Vec::with_capacity(self.project_indices.len());
 
-        for (index, (field, _)) in self.project_indices.iter() {
-            let column_meta = &part.columns_meta[index];
+        for (index, (column_id, field, _)) in self.project_indices.iter() {
+            if let Some(column_meta) = part.columns_meta.get(column_id) {
+                join_handlers.push(Self::read_native_columns_data(
+                    self.operator.object(&part.location),
+                    *index,
+                    column_meta,
+                    &part.range,
+                    field.data_type().clone(),
+                ));
 
-            join_handlers.push(Self::read_native_columns_data(
-                self.operator.object(&part.location),
-                *index,
-                column_meta,
-                &part.range,
-                field.data_type().clone(),
-            ));
-
-            // Perf
-            {
-                let (_, len) = column_meta.offset_length();
-                metrics_inc_remote_io_seeks(1);
-                metrics_inc_remote_io_read_bytes(len);
+                // Perf
+                {
+                    let (_, len) = column_meta.offset_length();
+                    metrics_inc_remote_io_seeks(1);
+                    metrics_inc_remote_io_read_bytes(len);
+                }
             }
         }
 
@@ -120,20 +120,21 @@ impl BlockReader {
 
         let mut results = Vec::with_capacity(self.project_indices.len());
 
-        for (index, (field, _)) in self.project_indices.iter() {
-            let column_meta = &part.columns_meta[index];
-            let op = self.operator.clone();
+        for (index, (column_id, field, _)) in self.project_indices.iter() {
+            if let Some(column_meta) = part.columns_meta.get(column_id) {
+                let op = self.operator.clone();
 
-            let location = part.location.clone();
-            let result = Self::sync_read_native_column(
-                op.object(&location),
-                *index,
-                column_meta,
-                &part.range,
-                field.data_type().clone(),
-            );
+                let location = part.location.clone();
+                let result = Self::sync_read_native_column(
+                    op.object(&location),
+                    *index,
+                    column_meta,
+                    &part.range,
+                    field.data_type().clone(),
+                );
 
-            results.push(result?);
+                results.push(result?);
+            }
         }
 
         Ok(results)
@@ -167,8 +168,8 @@ impl BlockReader {
         // they are already the leaf columns without inner
         // TODO support tuple in native storage
         let mut rows = 0;
-        for (id, (_, f)) in self.project_indices.iter() {
-            if let Some(array) = chunks.iter().find(|c| c.0 == *id).map(|c| c.1.clone()) {
+        for (index, (_, _, f)) in self.project_indices.iter() {
+            if let Some(array) = chunks.iter().find(|c| c.0 == *index).map(|c| c.1.clone()) {
                 entries.push(BlockEntry {
                     data_type: f.clone(),
                     value: Value::Column(Column::from_arrow(array.as_ref(), f)),

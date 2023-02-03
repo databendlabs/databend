@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
+use common_pipeline_sinks::Sink;
 
 use super::hash_join::ProbeState;
 use crate::pipelines::processors::port::InputPort;
@@ -27,7 +28,6 @@ use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::transforms::hash_join::HashJoinState;
 use crate::pipelines::processors::Processor;
-use crate::pipelines::processors::Sink;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 

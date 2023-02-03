@@ -1,0 +1,118 @@
+//  Copyright 2023 Datafuse Labs.
+//
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
+
+use std::sync::Arc;
+
+use common_catalog::plan::PartStatistics;
+use common_catalog::plan::Partitions;
+use common_catalog::plan::Projection;
+use common_catalog::plan::PushDownInfo;
+use common_catalog::table_context::TableContext;
+use common_exception::Result;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
+use storages_common_pruner::RangePrunerCreator;
+
+use super::table::arrow_to_table_schema;
+use crate::parquet_reader::ParquetReader;
+use crate::pruning::build_column_page_pruners;
+use crate::pruning::PartitionPruner;
+use crate::ParquetTable;
+
+impl ParquetTable {
+    #[inline]
+    pub(super) async fn do_read_partitions(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_down: Option<PushDownInfo>,
+    ) -> Result<(PartStatistics, Partitions)> {
+        // `plan.source_info.schema()` is the same as `TableSchema::from(&self.arrow_schema)`
+        let projection = if let Some(PushDownInfo {
+            projection: Some(prj),
+            ..
+        }) = &push_down
+        {
+            prj.clone()
+        } else {
+            let indices = (0..self.arrow_schema.fields.len())
+                .into_iter()
+                .collect::<Vec<usize>>();
+            Projection::Columns(indices)
+        };
+
+        // Currently, arrow2 doesn't support reading stats of a inner column of a nested type.
+        // Therefore, if there is inner fields in projection, we skip the row group pruning.
+        let skip_pruning = matches!(projection, Projection::InnerColumns(_));
+
+        // Use `projected_column_nodes` to collect stats from row groups for pruning.
+        // `projected_column_nodes` contains the smallest column set that is needed for the query.
+        // Use `projected_arrow_schema` to create `row_group_pruner` (`RangePruner`).
+        //
+        // During pruning evaluation,
+        // `RangePruner` will use field name to find the offset in the schema,
+        // and use the offset to find the column stat from `StatisticsOfColumns` (HashMap<offset, stat>).
+        //
+        // How the stats are collected can be found in `ParquetReader::collect_row_group_stats`.
+        let (projected_arrow_schema, projected_column_nodes, _, columns_to_read) =
+            ParquetReader::do_projection(&self.arrow_schema, &projection)?;
+        let schema = Arc::new(arrow_to_table_schema(projected_arrow_schema));
+        let filters = push_down.as_ref().map(|extra| {
+            extra
+                .filters
+                .iter()
+                .map(|f| f.as_expr(&BUILTIN_FUNCTIONS))
+                .collect::<Vec<_>>()
+        });
+
+        let func_ctx = ctx.get_function_context()?;
+
+        let row_group_pruner = if self.read_options.prune_row_groups() {
+            Some(RangePrunerCreator::try_create(
+                func_ctx,
+                &schema,
+                filters.as_deref(),
+            )?)
+        } else {
+            None
+        };
+
+        let page_pruners = if self.read_options.prune_pages() && filters.is_some() {
+            let filters = filters.as_ref().unwrap();
+            Some(build_column_page_pruners(func_ctx, &schema, filters)?)
+        } else {
+            None
+        };
+
+        let file_locations = if self.operator.metadata().can_blocking() {
+            self.files_info.blocking_list(&self.operator, false)
+        } else {
+            self.files_info.list(&self.operator, false).await
+        }?
+        .into_iter()
+        .map(|f| f.path)
+        .collect::<Vec<_>>();
+
+        let pruner = PartitionPruner {
+            schema,
+            row_group_pruner,
+            page_pruners,
+            operator: self.operator.clone(),
+            locations: file_locations,
+            columns_to_read,
+            column_nodes: projected_column_nodes,
+            skip_pruning,
+        };
+
+        pruner.read_and_prune_partitions().await
+    }
+}

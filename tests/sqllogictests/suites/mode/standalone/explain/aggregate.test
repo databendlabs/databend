@@ -85,7 +85,7 @@ query T
 explain select count(3), type, name, trim(name) as a from system.columns group by name, type, a, concat(name, trim(name)), concat(type, name), length(name);
 ----
 EvalScalar
-├── expressions: [count(3) (#14), trim_both(group_item (#0), " ")]
+├── expressions: [count(3) (#15), trim_both(group_item (#0), " ")]
 ├── estimated rows: 0.00
 └── AggregateFinal
     ├── group by: [name, type]

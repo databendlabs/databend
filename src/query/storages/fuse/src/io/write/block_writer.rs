@@ -41,7 +41,7 @@ pub fn write_block(
         FuseStorageFormat::Parquet => {
             let result =
                 blocks_to_parquet(schema, vec![block], buf, write_settings.table_compression)?;
-            let meta = util::column_metas(&result.1)?;
+            let meta = util::column_metas(&result.1, schema)?;
             Ok((result.0, meta))
         }
         FuseStorageFormat::Native => {
@@ -61,12 +61,13 @@ pub fn write_block(
             writer.write(&batch)?;
             writer.finish()?;
 
-            let metas = writer
-                .metas
-                .iter()
-                .enumerate()
-                .map(|(idx, meta)| (idx as ColumnId, ColumnMeta::Native(meta.clone())))
-                .collect();
+            let mut metas = HashMap::with_capacity(writer.metas.len());
+            for (idx, meta) in writer.metas.iter().enumerate() {
+                // use column id as key instead of index
+                let column_id = schema.column_id_of_index(idx)?;
+                metas.insert(column_id, ColumnMeta::Native(meta.clone()));
+            }
+
             Ok((writer.total_size() as u64, metas))
         }
     }

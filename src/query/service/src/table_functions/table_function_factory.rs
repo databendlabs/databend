@@ -19,7 +19,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Scalar;
 use common_meta_types::MetaId;
-use common_storages_parquet::ParquetTable;
 use parking_lot::RwLock;
 
 use crate::catalogs::SYS_TBL_FUC_ID_END;
@@ -61,6 +60,18 @@ where
     ) -> Result<Arc<dyn TableFunction>> {
         self(db_name, tbl_func_name, tbl_id, arg)
     }
+}
+
+fn create_disabled_table_function(
+    _database_name: &str,
+    table_func_name: &str,
+    _table_id: u64,
+    _table_args: TableArgs,
+) -> Result<Arc<dyn TableFunction>> {
+    Err(ErrorCode::UnknownFunction(format!(
+        "table function `{}` cannot be called",
+        table_func_name
+    )))
 }
 
 #[derive(Default)]
@@ -134,7 +145,7 @@ impl TableFunctionFactory {
 
         creators.insert(
             "read_parquet".to_string(),
-            (next_id(), Arc::new(ParquetTable::create)),
+            (next_id(), Arc::new(create_disabled_table_function)),
         );
 
         TableFunctionFactory {

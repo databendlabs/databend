@@ -15,11 +15,11 @@
 //! Test UserStageInfo
 
 use common_meta_types as mt;
-use common_storage::StorageFsConfig;
-use common_storage::StorageGcsConfig;
-use common_storage::StorageOssConfig;
-use common_storage::StorageParams;
-use common_storage::StorageS3Config;
+use common_meta_types::StorageFsConfig;
+use common_meta_types::StorageGcsConfig;
+use common_meta_types::StorageOssConfig;
+use common_meta_types::StorageParams;
+use common_meta_types::StorageS3Config;
 
 use crate::common;
 use crate::user_proto_conv::test_fs_stage_info;

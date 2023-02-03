@@ -12,15 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod aggregate_hashstate_info;
 mod aggregate_info;
 mod aggregator_final;
 mod aggregator_final_parallel;
 mod aggregator_params;
 mod aggregator_partial;
+mod aggregator_partitioned;
 mod aggregator_single_key;
-mod aggregator_twolevel;
 mod utils;
 
+pub use aggregate_hashstate_info::AggregateHashStateInfo;
 pub use aggregate_info::AggregateInfo;
 pub use aggregate_info::OverflowInfo;
 pub use aggregator_final_parallel::BucketAggregator;
@@ -28,9 +30,9 @@ pub use aggregator_final_parallel::ParallelFinalAggregator;
 pub use aggregator_params::AggregatorParams;
 pub use aggregator_params::AggregatorTransformParams;
 pub use aggregator_partial::PartialAggregator;
+pub use aggregator_partitioned::PartitionedAggregator;
+pub use aggregator_partitioned::PartitionedAggregatorLike;
 pub use aggregator_single_key::FinalSingleStateAggregator;
 pub use aggregator_single_key::PartialSingleStateAggregator;
 pub use aggregator_single_key::SingleStateAggregator;
-pub use aggregator_twolevel::TwoLevelAggregator;
-pub use aggregator_twolevel::TwoLevelAggregatorLike;
 pub use utils::*;

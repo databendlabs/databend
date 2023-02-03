@@ -614,6 +614,9 @@ pub fn is_null(value: &[u8]) -> bool {
 /// If the `JSONB` is a Null, returns (). Returns None otherwise.
 pub fn as_null(value: &[u8]) -> Option<()> {
     if !is_jsonb(value) {
+        if value.is_empty() {
+            return Some(());
+        }
         let v = value.first().unwrap();
         if *v == b'n' {
             return Some(());
