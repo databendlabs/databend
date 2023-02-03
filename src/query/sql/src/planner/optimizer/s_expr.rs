@@ -138,11 +138,14 @@ impl SExpr {
         true
     }
 
+    /// Replace children with given new `children`.
+    /// Note that this method will keep the `applied_rules` of
+    /// current `SExpr` unchanged.
     pub fn replace_children(&self, children: Vec<SExpr>) -> Self {
         Self {
             plan: self.plan.clone(),
-            original_group: self.original_group,
-            rel_prop: self.rel_prop.clone(),
+            original_group: None,
+            rel_prop: Arc::new(Mutex::new(None)),
             applied_rules: self.applied_rules.clone(),
             children,
         }
