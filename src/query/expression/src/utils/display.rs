@@ -168,8 +168,8 @@ impl<'a> Display for ScalarRef<'a> {
         match self {
             ScalarRef::Null => write!(f, "NULL"),
             ScalarRef::EmptyArray => write!(f, "[]"),
-            ScalarRef::Number(val) => write!(f, "{:?}", val),
-            ScalarRef::Decimal(val) => write!(f, "{:?}", val),
+            ScalarRef::Number(val) => write!(f, "{val}"),
+            ScalarRef::Decimal(val) => write!(f, "{val}"),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
             ScalarRef::String(s) => match std::str::from_utf8(s) {
                 Ok(v) => write!(f, "{:?}", v),

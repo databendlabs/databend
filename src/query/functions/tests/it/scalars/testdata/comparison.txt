@@ -187,17 +187,17 @@ evaluation:
 +--------+----------+-----------+---------------+
 | Type   | UInt8    | Int64     | Boolean       |
 | Domain | {0..=10} | {-1..=10} | {FALSE, TRUE} |
-| Row 0  | 0_u8     | 0_i64     | true          |
-| Row 1  | 1_u8     | -1_i64    | false         |
-| Row 2  | 2_u8     | 2_i64     | true          |
-| Row 3  | 3_u8     | 3_i64     | true          |
-| Row 4  | 4_u8     | 4_i64     | true          |
-| Row 5  | 5_u8     | 5_i64     | true          |
-| Row 6  | 6_u8     | 6_i64     | true          |
-| Row 7  | 7_u8     | 7_i64     | true          |
-| Row 8  | 8_u8     | 8_i64     | true          |
-| Row 9  | 9_u8     | 9_i64     | true          |
-| Row 10 | 10_u8    | 10_i64    | true          |
+| Row 0  | 0        | 0         | true          |
+| Row 1  | 1        | -1        | false         |
+| Row 2  | 2        | 2         | true          |
+| Row 3  | 3        | 3         | true          |
+| Row 4  | 4        | 4         | true          |
+| Row 5  | 5        | 5         | true          |
+| Row 6  | 6        | 6         | true          |
+| Row 7  | 7        | 7         | true          |
+| Row 8  | 8        | 8         | true          |
+| Row 9  | 9        | 9         | true          |
+| Row 10 | 10       | 10        | true          |
 +--------+----------+-----------+---------------+
 evaluation (internal):
 +--------+--------------------------------------------+
