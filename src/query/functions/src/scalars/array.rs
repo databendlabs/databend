@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::hash::Hash;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -35,6 +36,7 @@ use common_expression::types::StringType;
 use common_expression::types::TimestampType;
 use common_expression::types::ValueType;
 use common_expression::types::ALL_NUMERICS_TYPES;
+use common_expression::vectorize_1_arg;
 use common_expression::vectorize_2_arg;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
@@ -49,12 +51,15 @@ use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::Scalar;
+use common_expression::ScalarRef;
 use common_expression::Value;
 use common_expression::ValueRef;
 use common_hashtable::HashtableKeyable;
 use common_hashtable::KeysRef;
 use common_hashtable::StackHashSet;
 use itertools::Itertools;
+use siphasher::sip128::Hasher128;
+use siphasher::sip128::SipHasher24;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_0_arg_core::<EmptyArrayType, _, _>(
@@ -150,24 +155,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_2_arg_core::<NullType, NullType, NullType, _, _>(
-        "indexof",
-        FunctionProperty::default(),
-        |_, _| FunctionDomain::Full,
-        |_, _, _| Value::Scalar(()),
-    );
-
-    registry.register_passthrough_nullable_2_arg::<ArrayType<GenericType<0>>, GenericType<0>, UInt64Type, _, _>(
-        "indexof",
-        FunctionProperty::default(),
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, GenericType<0>, UInt64Type>(
-            |arr, val, output, _| {
-                output.push(arr.iter().position(|item| item == val).map(|pos| pos+1).unwrap_or(0) as u64);
-            },
-        ),
-    );
-
     registry.register_combine_nullable_2_arg::<ArrayType<GenericType<0>>, UInt64Type, GenericType<0>, _, _>(
         "get",
         FunctionProperty::default(),
@@ -186,6 +173,24 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
             }
+        ),
+    );
+
+    registry.register_2_arg_core::<NullType, NullType, NullType, _, _>(
+        "indexof",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        |_, _, _| Value::Scalar(()),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<ArrayType<GenericType<0>>, GenericType<0>, UInt64Type, _, _>(
+        "indexof",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, GenericType<0>, UInt64Type>(
+            |arr, val, output, _| {
+                output.push(arr.iter().position(|item| item == val).map(|pos| pos+1).unwrap_or(0) as u64);
+            },
         ),
     );
 
@@ -528,6 +533,72 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_2_arg::<ArrayType<GenericType<0>>, GenericType<0>, BooleanType>(|lhs, rhs, _| {
             lhs.iter().contains(&rhs)
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<EmptyArrayType, UInt64Type, _, _>(
+        "array_unique",
+        FunctionProperty::default(),
+        |_| FunctionDomain::Domain(SimpleDomain { min: 0, max: 0 }),
+        vectorize_1_arg::<EmptyArrayType, UInt64Type>(|_, _| 0),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<ArrayType<GenericType<0>>, UInt64Type, _, _>(
+        "array_unique",
+        FunctionProperty::default(),
+        |_| FunctionDomain::Full,
+        vectorize_1_arg::<ArrayType<GenericType<0>>, UInt64Type>(|arr, _| {
+            if arr.len() > 0 {
+                let mut set: StackHashSet<u128, 16> = StackHashSet::with_capacity(arr.len());
+                for val in arr.iter() {
+                    if val == ScalarRef::Null {
+                        continue;
+                    }
+                    let mut hasher = SipHasher24::new();
+                    val.hash(&mut hasher);
+                    let hash128 = hasher.finish128();
+                    let _ = set.set_insert(hash128.into());
+                }
+                set.len() as u64
+            } else {
+                0
+            }
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<EmptyArrayType, EmptyArrayType, _, _>(
+        "array_distinct",
+        FunctionProperty::default(),
+        |_| FunctionDomain::Full,
+        vectorize_1_arg::<EmptyArrayType, EmptyArrayType>(|arr, _| arr),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
+        "array_distinct",
+        FunctionProperty::default(),
+        |_| FunctionDomain::Full,
+        vectorize_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(|arr, _| {
+            if arr.len() > 0 {
+                let data_type = arr.data_type().remove_nullable();
+                let mut builder = ColumnBuilder::with_capacity(&data_type, arr.len());
+                let mut set: StackHashSet<u128, 16> = StackHashSet::with_capacity(arr.len());
+                for val in arr.iter() {
+                    if val == ScalarRef::Null {
+                        continue;
+                    }
+                    let mut hasher = SipHasher24::new();
+                    val.hash(&mut hasher);
+                    let hash128 = hasher.finish128();
+                    let key = hash128.into();
+                    if !set.contains(&key) {
+                        let _ = set.set_insert(key);
+                        builder.push(val);
+                    }
+                }
+                builder.build()
+            } else {
+                arr
+            }
         }),
     );
 }
