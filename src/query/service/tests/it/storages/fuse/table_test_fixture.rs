@@ -546,7 +546,7 @@ pub async fn history_should_have_item(
     // check history
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
-    let count_str = format!("| {}_u64    |", item_cnt);
+    let count_str = format!("| {}        |", item_cnt);
     let expected = vec![
         "+----------+",
         "| Column 0 |",
