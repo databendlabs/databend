@@ -579,7 +579,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| FunctionDomain::Full,
         vectorize_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(|arr, _| {
             if arr.len() > 0 {
-                let data_type = arr.data_type().remove_nullable();
+                let data_type = arr.data_type();
                 let mut builder = ColumnBuilder::with_capacity(&data_type, arr.len());
                 let mut set: StackHashSet<u128, 16> = StackHashSet::with_capacity(arr.len());
                 for val in arr.iter() {
