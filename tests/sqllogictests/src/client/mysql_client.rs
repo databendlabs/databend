@@ -51,10 +51,10 @@ impl MySQLClient {
         let rows: Vec<Row> = self.conn.query(sql).await?;
         let elapsed = start.elapsed();
         if self.tpch {
-            println!("{:?}", elapsed);
+            println!("{elapsed:?}");
         }
         if self.debug {
-            println!("Running sql with mysql client: [{sql}] ({:?})", elapsed);
+            println!("Running sql with mysql client: [{sql}] ({elapsed:?})");
         };
         let types = vec![ColumnType::Any; rows.len()];
         let mut parsed_rows = Vec::with_capacity(rows.len());
