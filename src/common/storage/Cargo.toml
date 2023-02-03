@@ -14,6 +14,7 @@ common-arrow = { path = "../arrow" }
 common-auth = { path = "../auth" }
 common-base = { path = "../base" }
 common-exception = { path = "../exception" }
+common-expression = { path = "../../query/expression" }
 common-meta-types = { path = "../../meta/types" }
 
 anyhow = { workspace = true }
@@ -37,3 +38,5 @@ opendal = { workspace = true, features = [
 parking_lot = "0.12.1"
 percent-encoding = "2"
 serde = { workspace = true }
+
+[dev-dependencies]

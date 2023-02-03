@@ -41,6 +41,7 @@ use common_expression::vectorize_with_builder_2_arg;
 use common_expression::vectorize_with_builder_3_arg;
 use common_expression::with_number_mapped_type;
 use common_expression::Column;
+use common_expression::ColumnBuilder;
 use common_expression::Domain;
 use common_expression::Function;
 use common_expression::FunctionDomain;
@@ -149,6 +150,24 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
+    registry.register_2_arg_core::<NullType, NullType, NullType, _, _>(
+        "indexof",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        |_, _, _| Value::Scalar(()),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<ArrayType<GenericType<0>>, GenericType<0>, UInt64Type, _, _>(
+        "indexof",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, GenericType<0>, UInt64Type>(
+            |arr, val, output, _| {
+                output.push(arr.iter().position(|item| item == val).map(|pos| pos+1).unwrap_or(0) as u64);
+            },
+        ),
+    );
+
     registry.register_combine_nullable_2_arg::<ArrayType<GenericType<0>>, UInt64Type, GenericType<0>, _, _>(
         "get",
         FunctionProperty::default(),
@@ -175,28 +194,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         |_, _, _| Value::Scalar(()),
-    );
-
-    registry.register_passthrough_nullable_2_arg::<EmptyArrayType, ArrayType<NullableType<GenericType<0>>>, ArrayType<NullableType<GenericType<0>>>, _, _>(
-        "concat",
-        FunctionProperty::default(),
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_2_arg::<EmptyArrayType, ArrayType<NullableType<GenericType<0>>>, ArrayType<NullableType<GenericType<0>>>>(
-            |_, arr, output, _| {
-                output.push(arr)
-            }
-        ),
-    );
-
-    registry.register_passthrough_nullable_2_arg::<ArrayType<NullableType<GenericType<0>>>, EmptyArrayType, ArrayType<NullableType<GenericType<0>>>, _, _>(
-        "concat",
-        FunctionProperty::default(),
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_2_arg::<ArrayType<NullableType<GenericType<0>>>, EmptyArrayType, ArrayType<NullableType<GenericType<0>>>>(
-            |arr, _, output, _| {
-                output.push(arr)
-            }
-        ),
     );
 
     registry.register_passthrough_nullable_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
@@ -301,6 +298,32 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
         ),
+    );
+
+    registry.register_2_arg_core::<GenericType<0>, ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
+        "prepend",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        vectorize_2_arg::<GenericType<0>, ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(|val, arr, _| {
+            let data_type = arr.data_type();
+            let mut builder = ColumnBuilder::with_capacity(&data_type, arr.len() + 1);
+            builder.push(val);
+            builder.append_column(&arr);
+            builder.build()
+        }),
+    );
+
+    registry.register_2_arg_core::<ArrayType<GenericType<0>>, GenericType<0>, ArrayType<GenericType<0>>, _, _>(
+        "append",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        vectorize_2_arg::<ArrayType<GenericType<0>>, GenericType<0>, ArrayType<GenericType<0>>>(|arr, val, _| {
+            let data_type = arr.data_type();
+            let mut builder = ColumnBuilder::with_capacity(&data_type, arr.len() + 1);
+            builder.append_column(&arr);
+            builder.push(val);
+            builder.build()
+        }),
     );
 
     fn eval_contains<T: ArgType>(

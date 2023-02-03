@@ -39,6 +39,7 @@ and(Boolean, Boolean) :: Boolean
 and(Boolean NULL, Boolean NULL) :: Boolean NULL
 and_filters(Boolean, Boolean) :: Boolean
 and_filters(Boolean NULL, Boolean NULL) :: Boolean NULL
+append(Array(T0), T0) :: Array(T0)
 array() :: Array(Nothing)
 as_array(Variant) :: Variant NULL
 as_array(Variant NULL) :: Variant NULL
@@ -414,10 +415,6 @@ city64withseed(Variant NULL, Float64 NULL) :: UInt64 NULL
 city64withseed(Variant, Float32) :: UInt64
 city64withseed(Variant NULL, Float32 NULL) :: UInt64 NULL
 concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing)
-concat(Array(Nothing), Array(T0 NULL)) :: Array(T0 NULL)
-concat(Array(Nothing) NULL, Array(T0 NULL) NULL) :: Array(T0 NULL) NULL
-concat(Array(T0 NULL), Array(Nothing)) :: Array(T0 NULL)
-concat(Array(T0 NULL) NULL, Array(Nothing) NULL) :: Array(T0 NULL) NULL
 concat(Array(T0), Array(T0)) :: Array(T0)
 concat(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL
 contains(Array(UInt8), UInt8) :: Boolean
@@ -1015,6 +1012,9 @@ humanize_number(Float64) :: String
 humanize_number(Float64 NULL) :: String NULL
 humanize_size(Float64) :: String
 humanize_size(Float64 NULL) :: String NULL
+indexof(NULL, NULL) :: NULL
+indexof(Array(T0), T0) :: UInt64
+indexof(Array(T0) NULL, T0 NULL) :: UInt64 NULL
 inet_aton(String) :: UInt32
 inet_aton(String NULL) :: UInt32 NULL
 inet_ntoa(Int64) :: String
@@ -2127,6 +2127,7 @@ position(String, String) :: UInt64
 position(String NULL, String NULL) :: UInt64 NULL
 pow(Float64, Float64) :: Float64
 pow(Float64 NULL, Float64 NULL) :: Float64 NULL
+prepend(T0, Array(T0)) :: Array(T0)
 quote(String) :: String
 quote(String NULL) :: String NULL
 radians(Float64) :: Float64

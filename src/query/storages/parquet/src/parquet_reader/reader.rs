@@ -101,10 +101,6 @@ impl ParquetReader {
         &self.output_schema
     }
 
-    pub fn columns_to_read(&self) -> &HashSet<usize> {
-        &self.columns_to_read
-    }
-
     /// Project the schema and get the needed column leaves.
     #[allow(clippy::type_complexity)]
     pub fn do_projection(
@@ -117,7 +113,8 @@ impl ParquetReader {
         HashSet<usize>,
     )> {
         // Full schema and column leaves.
-        let column_nodes = ColumnNodes::new_from_schema(schema);
+
+        let column_nodes = ColumnNodes::new_from_schema(schema, None);
         let schema_descriptors = to_parquet_schema(schema)?;
         // Project schema
         let projected_arrow_schema = match projection {
@@ -158,8 +155,10 @@ impl ParquetReader {
 
         for index in &self.columns_to_read {
             let obj = self.operator.object(&part.location);
-            let meta = &part.column_metas[index];
+            // in `read_parquet` function, there is no `TableSchema`, so index treated as column id
+            let meta = &part.column_metas[&(*index as u32)];
             let chunk = obj.blocking_range_read(meta.offset..meta.offset + meta.length)?;
+
             chunks.push((*index, chunk));
         }
 
@@ -171,7 +170,8 @@ impl ParquetReader {
         let mut chunks = Vec::with_capacity(self.columns_to_read.len());
 
         for &index in &self.columns_to_read {
-            let meta = &part.column_metas[&index];
+            // in `read_parquet` function, there is no `TableSchema`, so index treated as column id
+            let meta = &part.column_metas[&(index as u32)];
             let obj = self.operator.object(&part.location);
             let range = meta.offset..meta.offset + meta.length;
             chunks.push(async move {

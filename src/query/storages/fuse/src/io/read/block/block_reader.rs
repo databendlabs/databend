@@ -25,6 +25,7 @@ use common_base::rangemap::RangeMerger;
 use common_base::runtime::UnlimitedFuture;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
+use common_catalog::table::ColumnId;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -42,7 +43,6 @@ use storages_common_cache::metrics_inc_cache_hit_count;
 use storages_common_cache::metrics_inc_cache_miss_count;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CacheManager;
-use storages_common_table_meta::meta::ColumnId;
 use storages_common_table_meta::meta::ColumnMeta;
 
 use crate::fuse_part::FusePartInfo;
@@ -55,7 +55,7 @@ pub struct BlockReader {
     pub(crate) operator: Operator,
     pub(crate) projection: Projection,
     pub(crate) projected_schema: TableSchemaRef,
-    pub(crate) project_indices: BTreeMap<usize, (Field, DataType)>,
+    pub(crate) project_indices: BTreeMap<usize, (ColumnId, Field, DataType)>,
     pub(crate) column_nodes: ColumnNodes,
     pub(crate) parquet_schema_descriptor: SchemaDescriptor,
 }
@@ -150,7 +150,8 @@ impl BlockReader {
 
         let arrow_schema = schema.to_arrow();
         let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
-        let column_nodes = ColumnNodes::new_from_schema(&arrow_schema);
+
+        let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&schema));
         let project_column_nodes: Vec<ColumnNode> = projection
             .project_column_nodes(&column_nodes)?
             .iter()
@@ -183,7 +184,7 @@ impl BlockReader {
     pub async fn merge_io_read(
         read_settings: &ReadSettings,
         object: Object,
-        raw_ranges: Vec<(usize, Range<u64>)>,
+        raw_ranges: Vec<(ColumnId, Range<u64>)>,
     ) -> Result<MergeIOReadResult> {
         let path = object.path().to_string();
 
@@ -306,7 +307,7 @@ impl BlockReader {
         &self,
         settings: &ReadSettings,
         location: &str,
-        columns_meta: &HashMap<usize, ColumnMeta>,
+        columns_meta: &HashMap<ColumnId, ColumnMeta>,
     ) -> Result<MergeIOReadResult> {
         // Perf
         {
@@ -316,7 +317,7 @@ impl BlockReader {
         let mut ranges = vec![];
         let block_data_cache = CacheManager::instance().get_block_data_cache();
         let mut data_from_cache = vec![];
-        for column_id in self.project_indices.keys() {
+        for (_index, (column_id, ..)) in self.project_indices.iter() {
             // TODO encapsulate this in another component
             let column_cache_key = format!("{location}-{column_id}");
             let cache_name = "data_block_cache";
@@ -326,14 +327,16 @@ impl BlockReader {
                 data_from_cache.push((*column_id as ColumnId, cached_column_raw_data));
             } else {
                 metrics_inc_cache_miss_count(1, cache_name);
-                let column_meta = &columns_meta[column_id];
-                let (offset, len) = column_meta.offset_length();
-                ranges.push((*column_id, offset..(offset + len)));
+                // TODO , where is the None branch?
+                if let Some(column_meta) = columns_meta.get(column_id) {
+                    let (offset, len) = column_meta.offset_length();
+                    ranges.push((*column_id, offset..(offset + len)));
 
-                // Perf
-                {
-                    metrics_inc_remote_io_seeks(1);
-                    metrics_inc_remote_io_read_bytes(len);
+                    // Perf
+                    {
+                        metrics_inc_remote_io_seeks(1);
+                        metrics_inc_remote_io_read_bytes(len);
+                    }
                 }
             }
         }
@@ -353,10 +356,11 @@ impl BlockReader {
         let part = FusePartInfo::from_part(&part)?;
 
         let mut ranges = vec![];
-        for index in self.project_indices.keys() {
-            let column_meta = &part.columns_meta[index];
-            let (offset, len) = column_meta.offset_length();
-            ranges.push((*index, offset..(offset + len)));
+        for (index, (column_id, ..)) in self.project_indices.iter() {
+            if let Some(column_meta) = part.columns_meta.get(column_id) {
+                let (offset, len) = column_meta.offset_length();
+                ranges.push((*index, offset..(offset + len)));
+            }
         }
 
         let object = self.operator.object(&part.location);
@@ -366,13 +370,16 @@ impl BlockReader {
     // Build non duplicate leaf_ids to avoid repeated read column from parquet
     pub(crate) fn build_projection_indices(
         columns: &[ColumnNode],
-    ) -> BTreeMap<usize, (Field, DataType)> {
+    ) -> BTreeMap<usize, (ColumnId, Field, DataType)> {
         let mut indices = BTreeMap::new();
         for column in columns {
-            for index in &column.leaf_ids {
+            for (i, index) in column.leaf_ids.iter().enumerate() {
                 let f: TableField = (&column.field).into();
                 let data_type: DataType = f.data_type().into();
-                indices.insert(*index, (column.field.clone(), data_type));
+                indices.insert(
+                    *index,
+                    (column.leaf_column_id(i), column.field.clone(), data_type),
+                );
             }
         }
         indices

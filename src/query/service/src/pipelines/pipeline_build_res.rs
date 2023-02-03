@@ -17,7 +17,7 @@ use common_expression::DataBlock;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
-use common_pipeline_sources::processors::sources::OneBlockSource;
+use common_pipeline_sources::OneBlockSource;
 
 pub struct PipelineBuildResult {
     pub main_pipeline: Pipeline,

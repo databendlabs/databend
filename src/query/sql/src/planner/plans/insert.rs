@@ -20,7 +20,7 @@ use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::MetaId;
-use common_pipeline_sources::processors::sources::input_formats::InputContext;
+use common_pipeline_sources::input_formats::InputContext;
 
 use super::Plan;
 

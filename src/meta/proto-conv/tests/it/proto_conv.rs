@@ -20,6 +20,9 @@ use ce::types::NumberDataType;
 use chrono::TimeZone;
 use chrono::Utc;
 use common_expression as ce;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchema;
 use common_meta_app::schema as mt;
 use common_meta_app::share;
 use common_proto_conv::FromToProto;
@@ -331,6 +334,30 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("copied_file_lock:{:?}", buf);
+    }
+
+    // schema
+    {
+        let b1 = TableDataType::Tuple {
+            fields_name: vec!["b11".to_string(), "b12".to_string()],
+            fields_type: vec![TableDataType::Boolean, TableDataType::String],
+        };
+        let b = TableDataType::Tuple {
+            fields_name: vec!["b1".to_string(), "b2".to_string()],
+            fields_type: vec![b1, TableDataType::Number(NumberDataType::Int64)],
+        };
+        let fields = vec![
+            TableField::new("a", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("b", b),
+            TableField::new("c", TableDataType::Number(NumberDataType::UInt64)),
+        ];
+        let schema = TableSchema::new(fields);
+
+        let p = schema.to_pb()?;
+
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
+        println!("schema:{:?}", buf);
     }
 
     Ok(())

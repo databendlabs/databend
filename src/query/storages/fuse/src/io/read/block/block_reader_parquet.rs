@@ -25,11 +25,11 @@ use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
 use common_catalog::plan::PartInfoPtr;
+use common_catalog::table::ColumnId;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::ColumnId;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::Compression;
 
@@ -52,7 +52,7 @@ impl BlockReader {
         let columns_meta = meta
             .col_metas
             .iter()
-            .map(|(index, meta)| (*index as usize, meta.clone()))
+            .map(|(column_id, meta)| (*column_id, meta.clone()))
             .collect::<HashMap<_, _>>();
 
         // Get the merged IO read result.
@@ -121,7 +121,7 @@ impl BlockReader {
         &self,
         num_rows: usize,
         compression: &Compression,
-        columns_meta: &HashMap<usize, ColumnMeta>,
+        columns_meta: &HashMap<ColumnId, ColumnMeta>,
         columns_chunks: Vec<(ColumnId, &[u8])>,
         uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
     ) -> Result<DataBlock> {
@@ -140,14 +140,18 @@ impl BlockReader {
             let mut column_metas = Vec::with_capacity(indices.len());
             let mut column_chunks = Vec::with_capacity(indices.len());
             let mut column_descriptors = Vec::with_capacity(indices.len());
-            for index in indices {
-                let column_id = *index as ColumnId;
-                let column_read = <&[u8]>::clone(&chunk_map[&column_id]);
-                let column_meta = &columns_meta[index];
-                let column_descriptor = &self.parquet_schema_descriptor.columns()[*index];
-                column_metas.push(column_meta);
-                column_chunks.push(column_read);
-                column_descriptors.push(column_descriptor);
+            for (i, index) in indices.iter().enumerate() {
+                let column_id = column.leaf_column_id(i);
+                // TODO where is the None branch?
+                if let Some(column_meta) = columns_meta.get(&column_id) {
+                    // TODO why index is used here?
+                    let column_id_in_question = *index as ColumnId;
+                    let column_read = <&[u8]>::clone(&chunk_map[&column_id_in_question]);
+                    let column_descriptor = &self.parquet_schema_descriptor.columns()[*index];
+                    column_metas.push(column_meta);
+                    column_chunks.push(column_read);
+                    column_descriptors.push(column_descriptor);
+                }
             }
 
             columns_array_iter.push(Self::chunks_to_parquet_array_iter(
