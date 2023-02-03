@@ -331,15 +331,21 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
         TableReference::Stage {
             span: _,
             location,
-            files,
+            options,
             alias,
         } => RcDoc::text(location.to_string())
-            .append(if files.is_empty() {
-                RcDoc::nil()
-            } else {
+            .append(if let Some(files) = options.files {
                 let files = files.join(",");
                 let files = format!("FILES {}", files);
                 RcDoc::text(files)
+            } else {
+                RcDoc::nil()
+            })
+            .append(if let Some(pattern) = options.pattern {
+                let pattern = format!("Pattern {pattern}");
+                RcDoc::text(pattern)
+            } else {
+                RcDoc::nil()
             })
             .append(if let Some(a) = alias {
                 RcDoc::text(format!(" AS {a}"))
