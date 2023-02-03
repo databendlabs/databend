@@ -17,15 +17,18 @@
 use std::env;
 use std::ops::Deref;
 use std::sync::Arc;
+use std::time::Duration;
 
 use common_base::base::tokio;
 use common_base::base::StopHandle;
 use common_base::base::Stoppable;
 use common_base::mem_allocator::GlobalAllocator;
-use common_exception::ErrorCode;
 use common_grpc::RpcClientConf;
 use common_meta_sled_store::init_sled_db;
 use common_meta_store::MetaStoreProvider;
+use common_meta_types::Cmd;
+use common_meta_types::LogEntry;
+use common_meta_types::Node;
 use common_metrics::init_default_metrics_recorder;
 use common_tracing::init_logging;
 use common_tracing::set_panic_hook;
@@ -48,8 +51,9 @@ pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
 const CMD_KVAPI_PREFIX: &str = "kvapi::";
 
 #[tokio::main]
-async fn main() -> Result<(), ErrorCode> {
+async fn main() -> anyhow::Result<()> {
     let conf = Config::load()?;
+    conf.validate()?;
 
     if run_cmd(&conf).await {
         return Ok(());
@@ -123,10 +127,42 @@ async fn main() -> Result<(), ErrorCode> {
 
     // Join a raft cluster only after all service started.
     let join_res = meta_node
-        .join_cluster(&conf.raft_config, conf.grpc_api_address.clone())
+        .join_cluster(&conf.raft_config, conf.grpc_api_advertise_address())
         .await?;
 
-    info!("join result: {:?}", join_res);
+    info!("Join result: {:?}", join_res);
+
+    info!(
+        "Register node to update raft_api_advertise_host_endpoint and grpc_api_advertise_address"
+    );
+    {
+        info!("Wait for active leader to register node");
+        let wait = meta_node.raft.wait(Some(Duration::from_secs(20)));
+        let metrics = wait
+            .metrics(|x| x.current_leader.is_some(), "receive an active leader")
+            .await?;
+
+        info!("Current raft node metrics: {:?}", metrics);
+
+        let node_id = meta_node.sto.id;
+        let raft_endpoint = conf.raft_config.raft_api_advertise_host_endpoint();
+        let node = Node::new(node_id, raft_endpoint)
+            .with_grpc_advertise_address(conf.grpc_api_advertise_address());
+
+        let ent = LogEntry {
+            txid: None,
+            time_ms: None,
+            cmd: Cmd::AddNode {
+                node_id,
+                node,
+                overriding: true,
+            },
+        };
+        info!("Raft log entry for updating node: {:?}", ent);
+
+        meta_node.write(ent).await?;
+        info!("Done register")
+    }
 
     // Print information to users.
     println!("Databend Metasrv");

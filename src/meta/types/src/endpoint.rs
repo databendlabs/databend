@@ -23,6 +23,15 @@ pub struct Endpoint {
     pub port: u32,
 }
 
+impl Endpoint {
+    pub fn new(addr: impl ToString, port: u32) -> Self {
+        Self {
+            addr: addr.to_string(),
+            port,
+        }
+    }
+}
+
 impl fmt::Display for Endpoint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}:{}", self.addr, self.port)

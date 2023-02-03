@@ -258,8 +258,11 @@ impl Binder {
                 if let Entry::Occupied(entry) = scalar_items.entry(order.index) {
                     let (index, item) = entry.remove_entry();
                     let mut scalar = item.scalar;
-
-                    if from_context.in_grouping {
+                    let mut need_group_check = false;
+                    if let ScalarExpr::AggregateFunction(_) = scalar {
+                        need_group_check = true;
+                    }
+                    if from_context.in_grouping || need_group_check {
                         let mut group_checker = GroupingChecker::new(from_context);
                         scalar = group_checker.resolve(&scalar, None)?;
                     }

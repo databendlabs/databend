@@ -39,91 +39,30 @@ async fn test_sled_txn_tree_key_space_insert_get_remove() -> anyhow::Result<()> 
         // sub tree key space
         let nodes_ks = txn_tree.key_space::<Nodes>();
 
-        let got = nodes_ks.insert(&101, &Node {
-            name: "foo".to_string(),
-            endpoint: Endpoint {
-                addr: "".to_string(),
-                port: 100,
-            },
-            grpc_api_addr: Some("0.0.0.0:9191".to_string()),
-        })?;
+        let got = nodes_ks.insert(&101, &Node::new("foo", Endpoint::new("", 100)))?;
 
         assert!(got.is_none());
 
-        let got = nodes_ks.insert(&k, &Node {
-            name: "n".to_string(),
-            endpoint: Endpoint {
-                addr: "".to_string(),
-                port: 100,
-            },
-            grpc_api_addr: Some("0.0.0.0:9191".to_string()),
-        })?;
+        let got = nodes_ks.insert(&k, &Node::new("n", Endpoint::new("", 100)))?;
 
         assert!(got.is_none());
 
         let got = nodes_ks.get(&k)?;
 
-        assert_eq!(
-            Some(Node {
-                name: "n".to_string(),
-                endpoint: Endpoint {
-                    addr: "".to_string(),
-                    port: 100,
-                },
-                grpc_api_addr: Some("0.0.0.0:9191".to_string()),
-            }),
-            got
-        );
+        assert_eq!(Some(Node::new("n", Endpoint::new("", 100))), got);
 
-        let got = nodes_ks.insert(&k, &Node {
-            name: "m".to_string(),
-            endpoint: Endpoint {
-                addr: "".to_string(),
-                port: 101,
-            },
-            grpc_api_addr: Some("0.0.0.0:9192".to_string()),
-        })?;
+        let got = nodes_ks.insert(&k, &Node::new("m", Endpoint::new("", 101)))?;
 
-        assert_eq!(
-            Some(Node {
-                name: "n".to_string(),
-                endpoint: Endpoint {
-                    addr: "".to_string(),
-                    port: 100,
-                },
-                grpc_api_addr: Some("0.0.0.0:9191".to_string()),
-            }),
-            got
-        );
+        assert_eq!(Some(Node::new("n", Endpoint::new("", 100))), got);
 
         Ok(())
     })?;
 
     let got = tree.key_space::<Nodes>().get(&k)?;
-    assert_eq!(
-        Some(Node {
-            name: "m".to_string(),
-            endpoint: Endpoint {
-                addr: "".to_string(),
-                port: 101,
-            },
-            grpc_api_addr: Some("0.0.0.0:9192".to_string()),
-        }),
-        got
-    );
+    assert_eq!(Some(Node::new("m", Endpoint::new("", 101))), got);
 
     let got = tree.key_space::<Nodes>().get(&101)?;
-    assert_eq!(
-        Some(Node {
-            name: "foo".to_string(),
-            endpoint: Endpoint {
-                addr: "".to_string(),
-                port: 100,
-            },
-            grpc_api_addr: Some("0.0.0.0:9191".to_string()),
-        }),
-        got
-    );
+    assert_eq!(Some(Node::new("foo", Endpoint::new("", 100))), got);
 
     Ok(())
 }
@@ -145,45 +84,15 @@ async fn test_sled_txn_tree_key_space_remove() -> anyhow::Result<()> {
         // sub tree key space
         let nodes_ks = txn_tree.key_space::<Nodes>();
 
-        let _got = nodes_ks.insert(&k, &Node {
-            name: "n".to_string(),
-            endpoint: Endpoint {
-                addr: "".to_string(),
-                port: 100,
-            },
-            grpc_api_addr: Some("0.0.0.0:9191".to_string()),
-        })?;
+        let _got = nodes_ks.insert(&k, &Node::new("n", Endpoint::new("", 100)))?;
 
         let got = nodes_ks.get(&k)?;
-
-        assert_eq!(
-            Some(Node {
-                name: "n".to_string(),
-                endpoint: Endpoint {
-                    addr: "".to_string(),
-                    port: 100,
-                },
-                grpc_api_addr: Some("0.0.0.0:9191".to_string()),
-            }),
-            got
-        );
+        assert_eq!(Some(Node::new("n", Endpoint::new("", 100))), got);
 
         let got = nodes_ks.remove(&k)?;
-
-        assert_eq!(
-            Some(Node {
-                name: "n".to_string(),
-                endpoint: Endpoint {
-                    addr: "".to_string(),
-                    port: 100,
-                },
-                grpc_api_addr: Some("0.0.0.0:9191".to_string()),
-            }),
-            got
-        );
+        assert_eq!(Some(Node::new("n", Endpoint::new("", 100))), got);
 
         let got = nodes_ks.get(&k)?;
-
         assert!(got.is_none());
 
         Ok(())

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::net::SocketAddr;
+
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_types::MetaStartupError;
 use common_meta_types::Node;
@@ -34,6 +36,7 @@ pub struct Config {
     pub admin_tls_server_cert: String,
     pub admin_tls_server_key: String,
     pub grpc_api_address: String,
+    pub grpc_api_advertise_host: Option<String>,
     /// Certificate for server to identify itself
     pub grpc_tls_server_cert: String,
     pub grpc_tls_server_key: String,
@@ -56,6 +59,7 @@ impl Default for Config {
             admin_tls_server_cert: "".to_string(),
             admin_tls_server_key: "".to_string(),
             grpc_api_address: "127.0.0.1:9191".to_string(),
+            grpc_api_advertise_host: None,
             grpc_tls_server_cert: "".to_string(),
             grpc_tls_server_key: "".to_string(),
             raft_config: Default::default(),
@@ -71,6 +75,16 @@ impl Config {
         let cfg = OuterV0Config::load(true)?.into();
 
         Ok(cfg)
+    }
+
+    pub fn validate(&self) -> Result<(), MetaStartupError> {
+        let _a: SocketAddr = self.grpc_api_address.parse().map_err(|e| {
+            MetaStartupError::InvalidConfig(format!(
+                "{} while parsing {}",
+                e, self.grpc_api_address
+            ))
+        })?;
+        Ok(())
     }
 
     /// # NOTE
@@ -96,10 +110,22 @@ impl Config {
 
     /// Create `Node` from config
     pub fn get_node(&self) -> Node {
-        Node {
-            name: self.raft_config.id.to_string(),
-            endpoint: self.raft_config.raft_api_advertise_host_endpoint(),
-            grpc_api_addr: Some(self.grpc_api_address.clone()),
+        Node::new(
+            self.raft_config.id,
+            self.raft_config.raft_api_advertise_host_endpoint(),
+        )
+        .with_grpc_advertise_address(self.grpc_api_advertise_address())
+    }
+
+    pub fn grpc_api_advertise_address(&self) -> Option<String> {
+        if let Some(h) = &self.grpc_api_advertise_host {
+            // Safe unwrap(): Self::validate() ensures it is valid.
+            let a: SocketAddr = self.grpc_api_address.parse().unwrap();
+
+            let addr = format!("{}:{}", h, a.port());
+            Some(addr)
+        } else {
+            None
         }
     }
 
