@@ -19,7 +19,7 @@ Check out what we've done this week to make Databend even better for you.
 
 **SQL**
 
-- eliminate extra group by scalars ([#9706](https://github.com/datafuselabs/databend/pull/9706))
+- eliminate extra group by scalars ([#9708](https://github.com/datafuselabs/databend/pull/9708))
 
 **Query**
 
@@ -78,7 +78,7 @@ Stay connected with the latest news about Databend.
 
 Databend Docker Image now supports setting up MinIO storage and external AWS S3 storage.
 
-Now you can easily use a Docker image for your first experiment with Databend.***
+Now you can easily use a Docker image for your first experiment with Databend.
 
 **Run with MinIO as backend**
 
@@ -131,8 +131,6 @@ You can check the changelog of Databend Nightly for details about our latest dev
 - [v0.9.09-nightly](https://github.com/datafuselabs/databend/releases/tag/v0.9.9-nightly)
 - [v0.9.08-nightly](https://github.com/datafuselabs/databend/releases/tag/v0.9.8-nightly)
 - [v0.9.07-nightly](https://github.com/datafuselabs/databend/releases/tag/v0.9.7-nightly)
-
-We're gearing up for the v0.9 release of Databend. Stay tuned.
 
 ## Contributors
 
