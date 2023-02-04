@@ -231,8 +231,10 @@ run_test() {
         rm -fr suites/*
         mv 05_ddl suites/
         # FIXME:(everpcpc) sometimes old logic test fails but we can't time travel back to fix it.
-        python3 main.py
+        #       Confirm the test always pass then delete this workaround in
+        #       comment:
         # python3 main.py || true
+        python3 main.py
         cd -
     fi
 }
