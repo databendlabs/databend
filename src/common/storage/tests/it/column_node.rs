@@ -18,13 +18,24 @@ use common_expression::types::NumberDataType;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
+use common_storage::ColumnNode;
 use common_storage::ColumnNodes;
 
-fn test_leaf_index_match_column_ids(schema: &TableSchema, column_leaves: &ColumnNodes) {
+fn test_node_leaf_index_match_column_ids(schema: &TableSchema, column_node: &ColumnNode) {
     let leaf_column_ids = schema.to_leaf_column_ids();
-    for column_leaf in &column_leaves.column_nodes {
-        for (j, lead_index) in column_leaf.leaf_ids.iter().enumerate() {
-            assert_eq!(leaf_column_ids[*lead_index], column_leaf.leaf_column_ids[j]);
+
+    for (j, lead_index) in column_node.leaf_ids.iter().enumerate() {
+        assert_eq!(leaf_column_ids[*lead_index], column_node.leaf_column_ids[j]);
+    }
+}
+
+fn test_column_nodes_index_match_column_ids(schema: &TableSchema, column_leaves: &ColumnNodes) {
+    for column_node in &column_leaves.column_nodes {
+        test_node_leaf_index_match_column_ids(schema, column_node);
+        if let Some(ref children) = column_node.children {
+            for child in children {
+                test_node_leaf_index_match_column_ids(schema, child);
+            }
         }
     }
 }
@@ -59,7 +70,7 @@ fn test_column_leaf_schema_from_struct() -> Result<()> {
         assert_eq!(*expeted_column_id.1, column_leaf.leaf_column_ids);
     }
 
-    test_leaf_index_match_column_ids(&schema, &column_leaves);
+    test_column_nodes_index_match_column_ids(&schema, &column_leaves);
 
     Ok(())
 }
@@ -109,7 +120,7 @@ fn test_alter_schema_column() -> Result<()> {
         schema.add_columns(&[TableField::new(field.name(), field.data_type().to_owned())])?;
 
         let column_leaves = ColumnNodes::new_from_schema(&schema.to_arrow(), Some(&schema));
-        test_leaf_index_match_column_ids(&schema, &column_leaves);
+        test_column_nodes_index_match_column_ids(&schema, &column_leaves);
     }
 
     // test drop column
@@ -117,7 +128,7 @@ fn test_alter_schema_column() -> Result<()> {
         schema.drop_column(field.name())?;
 
         let column_leaves = ColumnNodes::new_from_schema(&schema.to_arrow(), Some(&schema));
-        test_leaf_index_match_column_ids(&schema, &column_leaves);
+        test_column_nodes_index_match_column_ids(&schema, &column_leaves);
     }
 
     Ok(())

@@ -339,7 +339,7 @@ impl BlockReader {
                 let data_type: DataType = f.data_type().into();
                 indices.insert(
                     *index,
-                    (column.leaf_column_id(i), column.field.clone(), data_type),
+                    (column.leaf_column_ids[i], column.field.clone(), data_type),
                 );
             }
         }
