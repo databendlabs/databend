@@ -474,10 +474,7 @@ fn transform_data_type(target_type: common_ast::ast::TypeName) -> DataType {
         common_ast::ast::TypeName::Float32 => DataType::Number(NumberDataType::Float32),
         common_ast::ast::TypeName::Float64 => DataType::Number(NumberDataType::Float64),
         common_ast::ast::TypeName::Decimal { precision, scale } => {
-            DataType::Decimal(DecimalDataType::from_size(DecimalSize {
-                precision: *precision,
-                scale: *scale,
-            }))
+            DataType::Decimal(DecimalDataType::from_size(DecimalSize { precision, scale }))
         }
         common_ast::ast::TypeName::String => DataType::String,
         common_ast::ast::TypeName::Timestamp => DataType::Timestamp,
