@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use moka::sync::Cache as MokaCache;
 
-use crate::cache::CacheAccessor;
 use crate::cache::StorageCache;
 
 pub type ItemCache<V> = MokaCache<String, Arc<V>>;
@@ -30,8 +29,7 @@ pub type InMemoryBytesCacheHolder = BytesCache;
 pub struct InMemoryCacheBuilder;
 impl InMemoryCacheBuilder {
     pub fn new_item_cache<V: Send + Sync + 'static>(capacity: u64) -> InMemoryItemCacheHolder<V> {
-        let cache = MokaCache::<String, Arc<V>>::new(capacity);
-        cache
+        MokaCache::<String, Arc<V>>::new(capacity)
     }
 
     pub fn new_bytes_cache(capacity: u64) -> InMemoryBytesCacheHolder {
