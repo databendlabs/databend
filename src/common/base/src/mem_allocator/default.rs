@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::mem_allocator::JEAllocator;
+use crate::mem_allocator::RpAllocator;
 
 // Default allocator is jemalloc, you can change it to std:
 // pub type DefaultAllocator = StdAllocator;
-pub type DefaultAllocator = JEAllocator;
+pub type DefaultAllocator = RpAllocator;

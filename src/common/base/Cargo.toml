@@ -42,6 +42,7 @@ pprof = { version = "0.10.1", features = [
     "protobuf-codec",
     "protobuf",
 ] }
+rpmalloc-sys = "0.2.3+b097fd0"
 semver = "1.0.10"
 serde = { workspace = true }
 state = "0.5"

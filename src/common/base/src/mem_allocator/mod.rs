@@ -15,12 +15,14 @@
 mod global;
 mod jemalloc;
 mod mmap;
+mod rpmalloc;
 mod std_;
 
 pub use default::DefaultAllocator;
 pub use global::GlobalAllocator;
 pub use jemalloc::JEAllocator;
 pub use mmap::MmapAllocator;
+pub use rpmalloc::RpAllocator;
 pub use std_::StdAllocator;
 
 mod default;
