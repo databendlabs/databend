@@ -260,23 +260,7 @@ fn read_page(
         + meta.offset;
 
     let mut scatch = vec![];
-    let cache_key = format!("{}_{}_{}", object.path(), offset, page.length);
-    let cache = CacheManager::instance().get_table_data_page_cache();
-
-    if let Some(data) = cache
-        .as_ref()
-        .map(|c| c.get(&cache_key))
-        .unwrap_or_default()
-    {
-        let mut reader = Cursor::new(data.as_slice());
-        return Ok(deserialize::read(
-            &mut reader,
-            data_type,
-            page.num_values as usize,
-            &mut scatch,
-        )?);
-    }
-
+  
     let result = match data {
         ReaderData::Bytes(bytes) => {
             let reader = &bytes.as_slice()[offset as usize..(offset + page.length) as usize];
@@ -292,12 +276,6 @@ fn read_page(
             let mut buf = vec![0; page.length as usize];
             let _ = file.read_at(buf.as_mut(), offset);
             let buf = Arc::new(buf);
-
-            if let Some(cache) = cache {
-                let c = &mut cache.write();
-                c.put(cache_key.clone(), buf.clone());
-            }
-
             let reader = buf.as_slice();
             let mut reader = Cursor::new(reader);
             deserialize::read(

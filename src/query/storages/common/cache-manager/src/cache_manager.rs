@@ -28,7 +28,6 @@ use crate::caches::SegmentInfoCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
 use crate::FdCache;
-use crate::TableDataPageCache;
 
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
 
@@ -41,7 +40,6 @@ pub struct CacheManager {
     bloom_index_meta_cache: Option<BloomIndexMetaCache>,
     file_meta_data_cache: Option<FileMetaDataCache>,
 
-    table_data_page_cache: Option<TableDataPageCache>,
     fd_cache: Option<FdCache>,
 }
 
@@ -58,7 +56,6 @@ impl CacheManager {
                 bloom_index_meta_cache: None,
                 file_meta_data_cache: None,
                 table_statistic_cache: None,
-                table_data_page_cache: None,
                 fd_cache: None,
             }));
         } else {
@@ -71,9 +68,7 @@ impl CacheManager {
                 Self::new_item_cache(config.table_cache_bloom_index_meta_count);
             let file_meta_data_cache = Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS);
             let fd_cache = Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS);
-
-            // 3GB
-            let table_data_page_cache = Some(InMemoryCacheBuilder::new_bytes_cache(3_000_000_000));
+            
             GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache,
                 segment_info_cache,
@@ -81,7 +76,6 @@ impl CacheManager {
                 bloom_index_meta_cache,
                 file_meta_data_cache,
                 table_statistic_cache,
-                table_data_page_cache,
                 fd_cache,
             }));
         }
@@ -115,10 +109,6 @@ impl CacheManager {
 
     pub fn get_file_meta_data_cache(&self) -> Option<FileMetaDataCache> {
         self.file_meta_data_cache.clone()
-    }
-
-    pub fn get_table_data_page_cache(&self) -> Option<TableDataPageCache> {
-        self.table_data_page_cache.clone()
     }
 
     pub fn get_fd_cache(&self) -> Option<FdCache> {

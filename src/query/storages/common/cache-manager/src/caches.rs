@@ -40,8 +40,6 @@ pub type BloomIndexMetaCache = InMemoryItemCacheHolder<BloomIndexMeta>;
 /// In memory object cache of parquet FileMetaData of external parquet files
 pub type FileMetaDataCache = InMemoryItemCacheHolder<FileMetaData>;
 
-/// In memory object cache of parquet FileMetaData of external parquet files
-pub type TableDataPageCache = InMemoryBytesCacheHolder;
 pub type FdCache = InMemoryItemCacheHolder<File>;
 
 // Bind Type of cached objects to Caches
