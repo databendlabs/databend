@@ -33,6 +33,9 @@ pub struct ColumnMeta {
     pub length: u64,
     pub compression: Compression,
     pub min_max: Option<(Scalar, Scalar)>,
+
+    // if has dictionary, we can not push down predicate to deserialization.
+    pub has_dictionary: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]

@@ -65,8 +65,8 @@ pub struct PartitionPruner {
     pub column_nodes: ColumnNodes,
     /// Whether to skip pruning.
     pub skip_pruning: bool,
-    /// top k information from pushed down information.
-    pub top_k: Option<TopK>,
+    /// top k information from pushed down information. The usize is the offset of top k column in `schema`.
+    pub top_k: Option<(TopK, usize)>,
     // TODO: use limit information for pruning
     // /// Limit of this query. If there is order by and filter, it will not be used (assign to `usize::MAX`).
     // pub limit: usize,
@@ -149,7 +149,9 @@ impl PartitionPruner {
                     .any(|c| c.metadata().statistics.is_none())
             });
 
-            let row_group_stats = if row_group_pruner.is_some() && !skip_pruning && !no_stats {
+            let row_group_stats = if no_stats {
+                None
+            } else if row_group_pruner.is_some() && !skip_pruning {
                 let pruner = row_group_pruner.as_ref().unwrap();
                 // If collecting stats fails or `should_keep` is true, we still read the row group.
                 // Otherwise, the row group will be pruned.
@@ -207,16 +209,21 @@ impl PartitionPruner {
                     let c = &rg.columns()[*index];
                     let (offset, length) = c.byte_range();
 
-                    let min_max = row_group_stats.as_ref().map(|stats| {
-                        let stat = stats[rg_idx].get(&(*index as u32)).unwrap();
-                        (stat.min.clone(), stat.max.clone())
-                    });
+                    let min_max = top_k
+                        .as_ref()
+                        .filter(|(tk, _)| tk.column_id as usize == *index)
+                        .zip(row_group_stats.as_ref())
+                        .map(|((_, offset), stats)| {
+                            let stat = stats[rg_idx].get(&(*offset as u32)).unwrap();
+                            (stat.min.clone(), stat.max.clone())
+                        });
 
                     column_metas.insert(*index, ColumnMeta {
                         offset,
                         length,
                         compression: c.compression(),
                         min_max,
+                        has_dictionary: c.dictionary_page_offset().is_some(),
                     });
                 }
 
@@ -233,7 +240,7 @@ impl PartitionPruner {
         // 3. Check if can conduct topk push down optimization.
         // Only all row groups have min/max stats can we use topk optimization.
         // If we can use topk optimization, we should use `PartitionsShuffleKind::Seq`.
-        let partition_kind = if let (Some(top_k), true) = (top_k, all_have_minmax) {
+        let partition_kind = if let (Some((top_k, _)), true) = (top_k, all_have_minmax) {
             partitions.sort_by(|a, b| {
                 let (a_min, a_max) = a
                     .column_metas

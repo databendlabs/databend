@@ -80,6 +80,14 @@ impl ParquetTable {
                 .map(|f| f.as_expr(&BUILTIN_FUNCTIONS))
                 .collect::<Vec<_>>()
         });
+        let top_k = top_k.map(|top_k| {
+            let offset = projected_column_nodes
+                .column_nodes
+                .iter()
+                .position(|node| node.leaf_ids[0] == top_k.column_id as usize)
+                .unwrap();
+            (top_k, offset)
+        });
 
         let func_ctx = ctx.get_function_context()?;
 

@@ -238,8 +238,18 @@ impl Processor for ParquetDeserializeTransform {
                     top_k,
                 }) => {
                     let chunks = reader.read_from_readers(&mut readers)?;
-                    let mut prewhere_block =
-                        reader.deserialize(part, chunks, row_selection.clone())?;
+
+                    // only if there is not dictionary page, we can push down the row selection
+                    let can_push_down = chunks
+                        .iter()
+                        .all(|(id, _)| !part.column_metas[id].has_dictionary);
+                    let push_down = if can_push_down {
+                        row_selection.clone()
+                    } else {
+                        None
+                    };
+
+                    let mut prewhere_block = reader.deserialize(part, chunks, push_down)?;
                     // Step 1: Check TOP_K, if prewhere_columns contains not only TOP_K, we can check if TOP_K column can satisfy the heap.
                     if let Some((index, sorter)) = top_k {
                         let col = prewhere_block
@@ -264,18 +274,7 @@ impl Processor for ParquetDeserializeTransform {
                         return Ok(());
                     }
 
-                    // Step 4: Remove columns that are not needed for output. Use dummy column to replce them.
-                    let mut columns = prewhere_block.columns().to_vec();
-                    for (col, f) in columns.iter_mut().zip(reader.output_schema.fields()) {
-                        if !self.output_schema.has_field(f.name()) {
-                            *col = BlockEntry {
-                                data_type: DataType::Null,
-                                value: Value::Scalar(Scalar::Null),
-                            };
-                        }
-                    }
-
-                    // Step 5: Apply the filter to topk and update the bitmap, this will filter more results
+                    // Step 4: Apply the filter to topk and update the bitmap, this will filter more results
                     let filter = if let Some((index, sorter)) = top_k {
                         let top_k_column = prewhere_block
                             .get_by_offset(*index)
@@ -294,12 +293,26 @@ impl Processor for ParquetDeserializeTransform {
                         return Ok(());
                     }
 
+                    // Step 5 Remove columns that are not needed for output. Use dummy column to replce them.
+                    let mut columns = prewhere_block.columns().to_vec();
+                    for (col, f) in columns.iter_mut().zip(reader.output_schema.fields()) {
+                        if !self.output_schema.has_field(f.name()) {
+                            *col = BlockEntry {
+                                data_type: DataType::Null,
+                                value: Value::Scalar(Scalar::Null),
+                            };
+                        }
+                    }
+
                     // Step 6: Read remain columns.
                     let chunks = self.remain_reader.read_from_readers(&mut readers)?;
-                    if row_selection.is_some() {
+                    let can_push_down = chunks
+                        .iter()
+                        .all(|(id, _)| !part.column_metas[id].has_dictionary);
+                    let push_down = if can_push_down { row_selection } else { None };
+                    if push_down.is_some() || !can_push_down {
                         let remain_block =
-                            self.remain_reader
-                                .deserialize(part, chunks, row_selection)?;
+                            self.remain_reader.deserialize(part, chunks, push_down)?;
 
                         // Combine two blocks.
                         for col in remain_block.columns() {
