@@ -44,6 +44,7 @@ unsafe impl Allocator for RpAllocator {
 
     #[inline(always)]
     unsafe fn deallocate(&self, ptr: NonNull<u8>, _layout: Layout) {
-        ffi::rpfree(ptr.as_ptr() as *mut ffi::c_void);
+        let ptr = ptr.as_ptr();
+        ffi::rpfree(ptr.cast::<ffi::c_void>());
     }
 }
