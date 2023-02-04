@@ -62,7 +62,7 @@ impl CacheAccessor<String, Vec<u8>> for DiskBytesCache {
     fn put(&self, k: String, v: Arc<Vec<u8>>) {
         if let Err(e) = {
             let mut inner = self.inner.write();
-            inner.insert_bytes(k, &v)
+            inner.insert_bytes(&k, &v)
         } {
             error!("populate disk cache failed {}", e);
         }

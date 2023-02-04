@@ -14,7 +14,6 @@
 
 use std::fs;
 use std::fs::File;
-use std::hash::Hash;
 use std::hash::Hasher;
 use std::io::prelude::*;
 use std::path::Path;
@@ -23,7 +22,6 @@ use std::path::PathBuf;
 use siphasher::sip128;
 use siphasher::sip128::Hasher128;
 use tracing::error;
-use tracing::warn;
 use walkdir::WalkDir;
 
 use crate::Cache;
@@ -58,8 +56,31 @@ pub struct DiskCache<C> {
     root: PathBuf,
 }
 
-#[derive(Hash)]
-struct CacheKey(String);
+// make it public for IT
+pub struct CacheKey(String);
+
+impl<S> From<S> for CacheKey
+where S: AsRef<str>
+{
+    // convert key string into hex string of SipHash 2-4 128
+    fn from(key: S) -> Self {
+        let mut sip = sip128::SipHasher24::new();
+        let key = key.as_ref();
+        sip.write(key.as_bytes());
+        let hash = sip.finish128();
+        let hex_hash = hex::encode(hash.as_bytes());
+        CacheKey(hex_hash)
+    }
+}
+
+impl From<&CacheKey> for PathBuf {
+    fn from(cache_key: &CacheKey) -> Self {
+        let prefix = &cache_key.0[0..3];
+        let mut path_buf = PathBuf::from(prefix);
+        path_buf.push(Path::new(&cache_key.0));
+        path_buf
+    }
+}
 
 impl<C> DiskCache<C>
 where C: Cache<String, u64, DefaultHashBuilder, FileSize>
@@ -132,10 +153,12 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
                         .cache
                         .pop_by_policy()
                         .expect("Unexpectedly empty cache!");
-                    // FIX ME, this path is not right :)
-                    let remove_path = self.rel_to_abs_path(&rel_path);
-                    fs::remove_file(&remove_path).unwrap_or_else(|e| {
-                        panic!("Error removing file from cache: `{:?}`: {}", remove_path, e)
+                    let cache_item_path = self.cache_absolute_path(&CacheKey(rel_path));
+                    fs::remove_file(&cache_item_path).unwrap_or_else(|e| {
+                        error!(
+                            "Error removing file from cache: `{:?}`: {}",
+                            cache_item_path, e
+                        )
                     });
                 }
                 let relative_path = file
@@ -170,24 +193,17 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
         key_string
     }
 
-    // convert key string into hex string of SipHash 2-4 128
-    fn cache_key(&self, str: &str) -> CacheKey {
-        let mut sip = sip128::SipHasher24::new();
-        sip.write(str.as_bytes());
-        let hash = sip.finish128();
-        let hex_hash = hex::encode(hash.as_bytes());
-        CacheKey(hex_hash)
+    fn cache_key(&self, key: &str) -> CacheKey {
+        CacheKey::from(key)
     }
 
-    fn cache_path(&self, cache_key: &CacheKey) -> PathBuf {
-        let prefix = &cache_key.0[0..3];
-        let mut path_buf = PathBuf::from(prefix);
-        path_buf.push(Path::new(&cache_key.0));
-        self.rel_to_abs_path(path_buf)
+    fn cache_absolute_path(&self, cache_key: &CacheKey) -> PathBuf {
+        let path = PathBuf::from(cache_key);
+        self.rel_to_abs_path(path)
     }
 
     /// Add a file with `bytes` as its contents to the cache at path `key`.
-    pub fn insert_bytes<K: AsRef<str>>(&mut self, key: K, bytes: &[u8]) -> Result<()> {
+    pub fn insert_bytes(&mut self, key: &str, bytes: &[u8]) -> Result<()> {
         let item_len = bytes.len() as u64;
         // check if this chunk of bytes itself is too large
         if !self.can_store(item_len) {
@@ -197,17 +213,21 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
         // check eviction
         if self.cache.size() + item_len > self.cache.capacity() {
             if let Some((rel_path, _)) = self.cache.pop_by_policy() {
-                let remove_path = self.rel_to_abs_path(rel_path);
-                fs::remove_file(&remove_path).unwrap_or_else(|e| {
-                    warn!("Error removing file from cache: `{:?}`: {}", remove_path, e)
+                let cached_item_path = self.cache_absolute_path(&CacheKey(rel_path));
+                fs::remove_file(&cached_item_path).unwrap_or_else(|e| {
+                    error!(
+                        "Error removing file from cache: `{:?}`: {}",
+                        cached_item_path, e
+                    )
                 });
             }
         }
 
         let cache_key = self.cache_key(key.as_ref());
-        let path = self.cache_path(&cache_key);
-        // TODO rm this panic, no nested dirs here
-        fs::create_dir_all(path.parent().expect("Bad path?"))?;
+        let path = self.cache_absolute_path(&cache_key);
+        if let Some(parent_path) = path.parent() {
+            fs::create_dir_all(parent_path)?;
+        }
         let mut f = File::create(&path)?;
         f.write_all(bytes)?;
         self.cache.put(cache_key.0, bytes.len() as u64);
@@ -224,7 +244,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
     /// of the file if present. Avoid using this method if at all possible, prefer `.get`.
     pub fn get_file(&mut self, key: &str) -> Result<File> {
         let cache_key = self.cache_key(key);
-        let path = self.cache_path(&cache_key);
+        let path = self.cache_absolute_path(&cache_key);
         self.cache
             .get(&cache_key.0)
             .ok_or(Error::FileNotInCache)
@@ -236,7 +256,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
         let cache_key = self.cache_key(key);
         match self.cache.pop(&cache_key.0) {
             Some(_) => {
-                let path = self.cache_path(&cache_key);
+                let path = self.cache_absolute_path(&cache_key);
                 fs::remove_file(&path).map_err(|e| {
                     error!("Error removing file from cache: `{:?}`: {}", path, e);
                     Into::into(e)

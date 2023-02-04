@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
-#![deny(unused_crate_dependencies)]
 
 #[cfg(feature = "heapsize")]
 #[cfg(not(target_os = "macos"))]

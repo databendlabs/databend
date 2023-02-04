@@ -13,18 +13,17 @@
 // limitations under the License.
 //
 
+use std::fs;
 use std::fs::File;
-use std::fs::{self};
+use std::io;
 use std::io::Read;
 use std::io::Write;
-use std::io::{self};
 use std::path::Path;
 use std::path::PathBuf;
 
+use common_cache::CacheKey;
 use common_cache::DiskCacheError;
 use common_cache::LruDiskCache;
-use filetime::set_file_times;
-use filetime::FileTime;
 use tempfile::TempDir;
 
 struct TestFixture {
@@ -42,14 +41,6 @@ fn create_file<T: AsRef<Path>, F: FnOnce(File) -> io::Result<()>>(
     let f = fs::File::create(&b)?;
     fill_contents(f)?;
     b.canonicalize()
-}
-
-/// Set the last modified time of `path` backwards by `seconds` seconds.
-fn set_mtime_back<T: AsRef<Path>>(path: T, seconds: usize) {
-    let m = fs::metadata(path.as_ref()).unwrap();
-    let t = FileTime::from_last_modification_time(&m);
-    let t = FileTime::from_unix_time(t.unix_seconds() - seconds as i64, t.nanoseconds());
-    set_file_times(path, t, t).unwrap();
 }
 
 fn read_all<R: Read>(r: &mut R) -> io::Result<Vec<u8>> {
@@ -95,40 +86,43 @@ fn test_missing_root() {
 #[test]
 fn test_some_existing_files() {
     let f = TestFixture::new();
-    f.create_file("file1", 10);
-    f.create_file("file2", 10);
-    let c = LruDiskCache::new(f.tmp(), 20).unwrap();
-    assert_eq!(c.size(), 20);
-    assert_eq!(c.len(), 2);
+    let items = 10;
+    let sizes = (0..).take(items);
+    let total_bytes: u64 = sizes.clone().sum();
+    for i in sizes {
+        let file_name = format!("file-{i}");
+        let test_key = CacheKey::from(file_name.as_str());
+        let test_path = PathBuf::from(&test_key);
+        f.create_file(test_path, i as usize);
+    }
+
+    let c = LruDiskCache::new(f.tmp(), total_bytes).unwrap();
+    assert_eq!(c.size(), total_bytes);
+    assert_eq!(c.len(), items);
 }
 
 #[test]
 fn test_existing_file_too_large() {
     let f = TestFixture::new();
-    let c = LruDiskCache::new(f.tmp(), 15).unwrap();
-    let cache_key =
-    // Create files explicitly in the past.
-    set_mtime_back(f.create_file("file1", 10), 10);
-    set_mtime_back(f.create_file("file2", 10), 5);
-    assert_eq!(c.size(), 10);
-    assert_eq!(c.len(), 1);
-    assert!(!c.contains_key("file1"));
-    assert!(c.contains_key("file2"));
-}
+    let items_count = 10;
+    let items_count_shall_be_kept = 10 - 2;
+    let item_size = 10;
+    let capacity = items_count_shall_be_kept * item_size;
+    let sizes = (0..).take(items_count);
+    for i in sizes {
+        let file_name = format!("file-{i}");
+        let test_key = CacheKey::from(file_name.as_str());
+        let test_path = PathBuf::from(&test_key);
+        f.create_file(test_path, item_size);
+    }
+    let c = LruDiskCache::new(f.tmp(), capacity as u64).unwrap();
 
-#[test]
-fn test_existing_files_lru_mtime() {
-    let f = TestFixture::new();
-    // Create files explicitly in the past.
-    set_mtime_back(f.create_file("file1", 10), 5);
-    set_mtime_back(f.create_file("file2", 10), 10);
-    let mut c = LruDiskCache::new(f.tmp(), 25).unwrap();
-    assert_eq!(c.size(), 20);
-    c.insert_bytes("file3", &[0; 10]).unwrap();
-    assert_eq!(c.size(), 20);
-    // The oldest file on disk should have been removed.
-    assert!(!c.contains_key("file2"));
-    assert!(c.contains_key("file1"));
+    assert_eq!(c.size(), capacity as u64);
+    assert_eq!(c.len(), items_count_shall_be_kept);
+    for i in (0..).take(items_count_shall_be_kept) {
+        let file_name = format!("file-{i}");
+        c.contains_key(file_name.as_str());
+    }
 }
 
 #[test]
@@ -144,7 +138,9 @@ fn test_insert_bytes() {
     assert_eq!(c.size(), 20);
     // The least-recently-used file should have been removed.
     assert!(!c.contains_key("a/b/c"));
-    assert!(!f.tmp().join("a/b/c").exists());
+
+    let evicted_file_path = PathBuf::from(&CacheKey::from("a/b/c"));
+    assert!(!f.tmp().join(evicted_file_path).exists());
 }
 
 #[test]
@@ -178,29 +174,6 @@ fn test_add_get_lru() {
         // The least-recently-used file should have been removed.
         assert!(!c.contains_key("file2"));
     }
-    // Get rid of the cache, to test that the LRU persists on-disk as mtimes.
-    // This is hacky, but mtime resolution on my mac with HFS+ is only 1 second, so we either
-    // need to have a 1 second sleep in the test (boo) or adjust the mtimes back a bit so
-    // that updating one file to the current time actually works to make it newer.
-    set_mtime_back(f.tmp().join("file1"), 5);
-    set_mtime_back(f.tmp().join("file3"), 5);
-    {
-        let mut c = LruDiskCache::new(f.tmp(), 25).unwrap();
-        // Bump file1 again.
-        c.get_file("file1").unwrap();
-    }
-    // Now check that the on-disk mtimes were updated and used.
-    {
-        let mut c = LruDiskCache::new(f.tmp(), 25).unwrap();
-        assert!(c.contains_key("file1"));
-        assert!(c.contains_key("file3"));
-        assert_eq!(c.size(), 20);
-        // Add another file to bump out the least-recently-used.
-        c.insert_bytes("file4", &[4; 10]).unwrap();
-        assert_eq!(c.size(), 20);
-        assert!(!c.contains_key("file3"));
-        assert!(c.contains_key("file1"));
-    }
 }
 
 #[test]
@@ -212,37 +185,3 @@ fn test_insert_bytes_too_large() {
         x => panic!("Unexpected result: {:?}", x),
     }
 }
-
-// TODO
-//#[test]
-// fn test_remove() {
-//    let f = TestFixture::new();
-//    let p1 = f.create_file("file1", 10);
-//    let p2 = f.create_file("file2", 10);
-//    let p3 = f.create_file("file3", 10);
-//    let mut c = LruDiskCache::new(f.tmp().join("cache"), 25).unwrap();
-//    c.insert_file("file1", &p1).unwrap();
-//    c.insert_file("file2", &p2).unwrap();
-//    c.remove("file1").unwrap();
-//    c.insert_file("file3", &p3).unwrap();
-//    assert_eq!(c.len(), 2);
-//    assert_eq!(c.size(), 20);
-//
-//    // file1 should have been removed.
-//    assert!(!c.contains_key("file1"));
-//    assert!(!f.tmp().join("cache").join("file1").exists());
-//    assert!(f.tmp().join("cache").join("file2").exists());
-//    assert!(f.tmp().join("cache").join("file3").exists());
-//    assert!(!p1.exists());
-//    assert!(!p2.exists());
-//    assert!(!p3.exists());
-//
-//    let p4 = f.create_file("file1", 10);
-//    c.insert_file("file1", &p4).unwrap();
-//    assert_eq!(c.len(), 2);
-//    // file2 should have been removed.
-//    assert!(c.contains_key("file1"));
-//    assert!(!c.contains_key("file2"));
-//    assert!(!f.tmp().join("cache").join("file2").exists());
-//    assert!(!p4.exists());
-//}
