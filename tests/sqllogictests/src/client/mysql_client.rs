@@ -50,7 +50,7 @@ impl MySQLClient {
         let start = Instant::now();
         let rows: Vec<Row> = self.conn.query(sql).await?;
         let elapsed = start.elapsed();
-        if self.tpch {
+        if self.tpch && !sql.trim_start().starts_with("set") {
             println!("{elapsed:?}");
         }
         if self.debug {
