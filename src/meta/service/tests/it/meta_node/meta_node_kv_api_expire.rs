@@ -21,9 +21,9 @@ use common_meta_types::Cmd;
 use common_meta_types::KVMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
-use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKV;
+use common_meta_types::With;
 use databend_meta::init_meta_ut;
 use tracing::info;
 
@@ -56,20 +56,11 @@ async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
 
     info!("--- write a kv expiring in 3 sec");
     {
-        leader
-            .write(LogEntry {
-                txid: None,
-                time_ms: None,
-                cmd: Cmd::UpsertKV(UpsertKV {
-                    key: key.to_string(),
-                    seq: MatchSeq::Any,
-                    value: Operation::Update(key.to_string().into_bytes()),
-                    value_meta: Some(KVMeta {
-                        expire_at: Some(now_sec + 3),
-                    }),
-                }),
-            })
-            .await?;
+        let upsert = UpsertKV::update(key, key.as_bytes()).with(KVMeta {
+            expire_at: Some(now_sec + 3),
+        });
+
+        leader.write(LogEntry::new(Cmd::UpsertKV(upsert))).await?;
         log_index += 1;
     }
 
@@ -88,20 +79,12 @@ async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
 
     info!("--- update kv with exact seq matching, should work before expiration");
     {
-        leader
-            .write(LogEntry {
-                txid: None,
-                time_ms: None,
-                cmd: Cmd::UpsertKV(UpsertKV {
-                    key: key.to_string(),
-                    seq: MatchSeq::Exact(seq),
-                    value: Operation::Update(value2.to_string().into_bytes()),
-                    value_meta: Some(KVMeta {
-                        expire_at: Some(now_sec + 1000),
-                    }),
-                }),
-            })
-            .await?;
+        let upsert = UpsertKV::update(key, value2.as_bytes())
+            .with(MatchSeq::Exact(seq))
+            .with(KVMeta {
+                expire_at: Some(now_sec + 1000),
+            });
+        leader.write(LogEntry::new(Cmd::UpsertKV(upsert))).await?;
         log_index += 1;
     }
 

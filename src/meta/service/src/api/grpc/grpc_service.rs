@@ -164,14 +164,6 @@ impl MetaService for MetaServiceImpl {
         }
     }
 
-    async fn write_msg(&self, r: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
-        self.kv_api(r).await
-    }
-
-    async fn read_msg(&self, r: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
-        self.kv_api(r).await
-    }
-
     async fn kv_api(&self, r: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
         let _guard = RequestInFlight::guard();
 
