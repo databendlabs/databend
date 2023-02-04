@@ -120,7 +120,7 @@ reqwest = { version = "0.11", default-features = false, features = [
 ] }
 
 # runtime
-tokio = { version = "1.23.1", features = ["full"] }
+tokio = { version = "1.24.2", features = ["full"] }
 
 [profile.release]
 debug = 1
