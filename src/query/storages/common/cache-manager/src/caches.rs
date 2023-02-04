@@ -43,7 +43,7 @@ pub type FileMetaDataCache = InMemoryItemCacheHolder<FileMetaData>;
 // - cache item s of Type `T`
 // - and implement `CacheAccessor` properly
 pub trait CachedObject<T> {
-    type Cache: CacheAccessor<String, T>;
+    type Cache: CacheAccessor<String, T> + Clone;
     fn cache() -> Option<Self::Cache>;
 }
 

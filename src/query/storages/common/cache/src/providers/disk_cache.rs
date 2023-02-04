@@ -19,16 +19,15 @@ use std::sync::Arc;
 use crate::cache::StorageCache;
 
 // TODO: local disk file based LRU/LFU/xxxx cache
+#[derive(Clone)]
 pub struct DiskCache {}
 
 impl<K, V> StorageCache<K, V> for DiskCache {
-    type Meter = ();
-
-    fn put(&mut self, _key: K, _value: Arc<V>) {
+    fn put(&self, _key: K, _value: Arc<V>) {
         todo!()
     }
 
-    fn get<Q>(&mut self, _k: &Q) -> Option<&Arc<V>>
+    fn get<Q>(&self, _k: &Q) -> Option<Arc<V>>
     where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
@@ -36,7 +35,7 @@ impl<K, V> StorageCache<K, V> for DiskCache {
         todo!()
     }
 
-    fn evict<Q>(&mut self, _k: &Q) -> bool
+    fn evict<Q>(&self, _k: &Q)
     where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,

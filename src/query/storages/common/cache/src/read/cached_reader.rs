@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_exception::Result;
-use parking_lot::RwLock;
 
 use super::loader::LoadParams;
 use super::loader::Loader;
@@ -34,19 +33,19 @@ use crate::metrics::metrics_inc_cache_miss_load_millisecond;
 /// by using [LoaderWithCacheKey], and populate the cache item into [StorageCache] by using
 /// the loaded `T` and the key that [LoaderWithCacheKey] provides.
 pub struct CachedReader<T, L, C> {
-    cache: Option<Arc<RwLock<C>>>,
+    cache: Option<C>,
     loader: L,
     /// name of this cache instance
     name: String,
     _p: PhantomData<T>,
 }
 
-impl<T, L, C, M> CachedReader<T, L, C>
+impl<T, L, C> CachedReader<T, L, C>
 where
     L: Loader<T> + Sync,
-    C: StorageCache<String, T, Meter = M>,
+    C: StorageCache<String, T>,
 {
-    pub fn new(cache: Option<Arc<RwLock<C>>>, name: impl Into<String>, loader: L) -> Self {
+    pub fn new(cache: Option<C>, name: impl Into<String>, loader: L) -> Self {
         Self {
             cache,
             name: name.into(),
@@ -66,7 +65,7 @@ where
                 }
 
                 let cache_key = self.loader.cache_key(params);
-                match self.get_cached(cache_key.as_ref(), labeled_cache) {
+                match labeled_cache.get(cache_key.as_str()) {
                     Some(item) => {
                         // Perf.
                         {
@@ -90,8 +89,7 @@ where
                             );
                         }
 
-                        let mut cache_guard = labeled_cache.write();
-                        cache_guard.put(cache_key, item.clone());
+                        labeled_cache.put(cache_key, item.clone());
                         Ok(item)
                     }
                 }
@@ -101,9 +99,5 @@ where
 
     pub fn name(&self) -> &str {
         self.name.as_str()
-    }
-
-    fn get_cached(&self, key: &str, cache: &RwLock<C>) -> Option<Arc<T>> {
-        cache.write().get(key).cloned()
     }
 }

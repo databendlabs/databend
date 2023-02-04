@@ -13,65 +13,59 @@
 // limitations under the License.
 
 use std::borrow::Borrow;
-use std::hash::BuildHasher;
 use std::hash::Hash;
 use std::sync::Arc;
 
-use common_cache::BytesMeter;
-use common_cache::Cache;
-use common_cache::Count;
-use common_cache::CountableMeter;
-use common_cache::DefaultHashBuilder;
-use common_cache::LruCache;
-use parking_lot::RwLock;
+use moka::sync::Cache as MokaCache;
 
+use crate::cache::CacheAccessor;
 use crate::cache::StorageCache;
 
-pub type ItemCache<V> = LruCache<String, Arc<V>, DefaultHashBuilder, Count>;
-pub type BytesCache = LruCache<String, Arc<Vec<u8>>, DefaultHashBuilder, BytesMeter>;
+pub type ItemCache<V> = MokaCache<String, Arc<V>>;
+pub type BytesCache = MokaCache<String, Arc<Vec<u8>>>;
 
-pub type InMemoryItemCacheHolder<T> = Arc<RwLock<ItemCache<T>>>;
-pub type InMemoryBytesCacheHolder = Arc<RwLock<BytesCache>>;
+pub type InMemoryItemCacheHolder<T> = ItemCache<T>;
+pub type InMemoryBytesCacheHolder = BytesCache;
 
 pub struct InMemoryCacheBuilder;
 impl InMemoryCacheBuilder {
-    pub fn new_item_cache<V>(capacity: u64) -> InMemoryItemCacheHolder<V> {
-        let cache = LruCache::new(capacity);
-        Arc::new(RwLock::new(cache))
+    pub fn new_item_cache<V: Send + Sync + 'static>(capacity: u64) -> InMemoryItemCacheHolder<V> {
+        let cache = MokaCache::<String, Arc<V>>::new(capacity);
+        cache
     }
 
     pub fn new_bytes_cache(capacity: u64) -> InMemoryBytesCacheHolder {
-        let cache =
-            LruCache::with_meter_and_hasher(capacity, BytesMeter, DefaultHashBuilder::new());
-        Arc::new(RwLock::new(cache))
+        MokaCache::builder()
+            .weigher(|_key, value: &Arc<Vec<u8>>| -> u32 {
+                value.len().try_into().unwrap_or(u32::MAX)
+            })
+            .max_capacity(capacity)
+            .build()
     }
 }
 
-impl<K, V, S, M> StorageCache<K, V> for LruCache<K, Arc<V>, S, M>
+impl<K, V> StorageCache<K, V> for MokaCache<K, Arc<V>>
 where
-    M: CountableMeter<K, Arc<V>>,
-    S: BuildHasher,
-    K: Eq + Hash,
+    K: Hash + Eq + Send + Sync + 'static,
+    V: Send + Sync + 'static,
 {
-    type Meter = M;
-
-    fn put(&mut self, key: K, value: Arc<V>) {
-        Cache::put(self, key, value);
+    fn put(&self, key: K, value: Arc<V>) {
+        MokaCache::insert(self, key, value);
     }
 
-    fn get<Q>(&mut self, k: &Q) -> Option<&Arc<V>>
+    fn get<Q>(&self, k: &Q) -> Option<Arc<V>>
     where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
     {
-        Cache::get(self, k)
+        MokaCache::get(self, k)
     }
 
-    fn evict<Q>(&mut self, k: &Q) -> bool
+    fn evict<Q>(&self, k: &Q)
     where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
     {
-        self.pop(k).is_some()
+        MokaCache::invalidate(self, k);
     }
 }

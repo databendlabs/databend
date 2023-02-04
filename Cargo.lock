@@ -7798,6 +7798,7 @@ dependencies = [
  "common-cache",
  "common-exception",
  "metrics",
+ "moka",
  "opendal",
  "parking_lot 0.12.1",
  "serde",

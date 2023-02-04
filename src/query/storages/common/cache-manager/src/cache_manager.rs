@@ -104,7 +104,9 @@ impl CacheManager {
         self.file_meta_data_cache.clone()
     }
 
-    fn new_item_cache<T>(capacity: u64) -> Option<InMemoryItemCacheHolder<T>> {
+    fn new_item_cache<T: Send + Sync + 'static>(
+        capacity: u64,
+    ) -> Option<InMemoryItemCacheHolder<T>> {
         if capacity > 0 {
             Some(InMemoryCacheBuilder::new_item_cache(capacity))
         } else {
