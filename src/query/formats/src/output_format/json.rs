@@ -78,7 +78,6 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
             NumberScalar::UInt16(v) => JsonValue::Number(v.into()),
             NumberScalar::UInt32(v) => JsonValue::Number(v.into()),
             NumberScalar::UInt64(v) => JsonValue::Number(v.into()),
-
             NumberScalar::Float32(v) => {
                 JsonValue::Number(serde_json::Number::from_f64(f32::from(v) as f64).unwrap())
             }
@@ -86,6 +85,7 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
                 JsonValue::Number(serde_json::Number::from_f64(v.into()).unwrap())
             }
         },
+        ScalarRef::Decimal(_) => todo!("decimal"),
         ScalarRef::Date(v) => {
             let dt = DateConverter::to_date(&v, format.timezone);
             serde_json::to_value(dt.format("%Y-%m-%d").to_string()).unwrap()

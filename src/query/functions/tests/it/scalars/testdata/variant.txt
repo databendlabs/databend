@@ -359,7 +359,7 @@ checked expr   : length<Variant NULL>(CAST(parse_json<String>("[1,2,3,4]") AS Va
 optimized expr : 4_u32
 output type    : UInt32 NULL
 output domain  : {4..=4}
-output         : 4_u32
+output         : 4
 
 
 ast            : length(parse_json('{"k":"v"}'))
@@ -381,8 +381,8 @@ evaluation:
 | Type   | String                           | UInt32 NULL |
 | Domain | {"[\"a\",\"b\",\"c\"]"..="true"} | Unknown     |
 | Row 0  | "true"                           | NULL        |
-| Row 1  | "[1,2,3,4]"                      | 4_u32       |
-| Row 2  | "[\"a\",\"b\",\"c\"]"            | 3_u32       |
+| Row 1  | "[1,2,3,4]"                      | 4           |
+| Row 2  | "[\"a\",\"b\",\"c\"]"            | 3           |
 +--------+----------------------------------+-------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------+
@@ -403,9 +403,9 @@ evaluation:
 | Type   | String NULL            | UInt32 NULL |
 | Domain | {""..="true"} ∪ {NULL} | Unknown     |
 | Row 0  | "true"                 | NULL        |
-| Row 1  | "[1,2,3,4]"            | 4_u32       |
+| Row 1  | "[1,2,3,4]"            | 4           |
 | Row 2  | NULL                   | NULL        |
-| Row 3  | "[\"a\",\"b\",\"c\"]"  | 3_u32       |
+| Row 3  | "[\"a\",\"b\",\"c\"]"  | 3           |
 +--------+------------------------+-------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -551,9 +551,9 @@ evaluation:
 +--------+----------------------------------+---------+--------------+
 | Type   | String                           | UInt64  | Variant NULL |
 | Domain | {"[\"a\",\"b\",\"c\"]"..="true"} | {0..=1} | Unknown      |
-| Row 0  | "true"                           | 0_u64   | NULL         |
-| Row 1  | "[1,2,3,4]"                      | 0_u64   | 1            |
-| Row 2  | "[\"a\",\"b\",\"c\"]"            | 1_u64   | "b"          |
+| Row 0  | "true"                           | 0       | NULL         |
+| Row 1  | "[1,2,3,4]"                      | 0       | 1            |
+| Row 2  | "[\"a\",\"b\",\"c\"]"            | 1       | "b"          |
 +--------+----------------------------------+---------+--------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------+
@@ -575,9 +575,9 @@ evaluation:
 | Type   | String NULL            | UInt64 NULL      | Variant NULL |
 | Domain | {""..="true"} ∪ {NULL} | {0..=2} ∪ {NULL} | Unknown      |
 | Row 0  | "true"                 | NULL             | NULL         |
-| Row 1  | "[1,2,3,4]"            | 2_u64            | 3            |
+| Row 1  | "[1,2,3,4]"            | 2                | 3            |
 | Row 2  | NULL                   | NULL             | NULL         |
-| Row 3  | "[\"a\",\"b\",\"c\"]"  | 1_u64            | "b"          |
+| Row 3  | "[\"a\",\"b\",\"c\"]"  | 1                | "b"          |
 +--------+------------------------+------------------+--------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -981,7 +981,7 @@ checked expr   : as_integer<Variant>(parse_json<String>("123"))
 optimized expr : 123_i64
 output type    : Int64 NULL
 output domain  : {123..=123}
-output         : 123_i64
+output         : 123
 
 
 ast            : as_float(parse_json('"ab"'))
@@ -999,7 +999,7 @@ checked expr   : as_float<Variant>(parse_json<String>("12.34"))
 optimized expr : 12.34_f64
 output type    : Float64 NULL
 output domain  : {12.34..=12.34}
-output         : 12.34_f64
+output         : 12.34
 
 
 ast            : as_string(parse_json('"ab"'))
@@ -1116,7 +1116,7 @@ evaluation:
 | Type   | String                       | Int64 NULL |
 | Domain | {"\"ab\""..="{\"a\":\"b\"}"} | Unknown    |
 | Row 0  | "true"                       | NULL       |
-| Row 1  | "123"                        | 123_i64    |
+| Row 1  | "123"                        | 123        |
 | Row 2  | "12.34"                      | NULL       |
 | Row 3  | "\"ab\""                     | NULL       |
 | Row 4  | "[1,2,3]"                    | NULL       |
@@ -1141,7 +1141,7 @@ evaluation:
 | Type   | String                       | Int64 NULL                                            |
 | Domain | {"\"ab\""..="{\"a\":\"b\"}"} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
 | Row 0  | "true"                       | NULL                                                  |
-| Row 1  | "123"                        | 123_i64                                               |
+| Row 1  | "123"                        | 123                                                   |
 | Row 2  | "12.34"                      | NULL                                                  |
 | Row 3  | "\"ab\""                     | NULL                                                  |
 | Row 4  | "[1,2,3]"                    | NULL                                                  |
@@ -1166,8 +1166,8 @@ evaluation:
 | Type   | String                       | Float64 NULL |
 | Domain | {"\"ab\""..="{\"a\":\"b\"}"} | Unknown      |
 | Row 0  | "true"                       | NULL         |
-| Row 1  | "123"                        | 123_f64      |
-| Row 2  | "12.34"                      | 12.34_f64    |
+| Row 1  | "123"                        | 123          |
+| Row 2  | "12.34"                      | 12.34        |
 | Row 3  | "\"ab\""                     | NULL         |
 | Row 4  | "[1,2,3]"                    | NULL         |
 | Row 5  | "{\"a\":\"b\"}"              | NULL         |
@@ -1191,8 +1191,8 @@ evaluation:
 | Type   | String                       | Float64 NULL          |
 | Domain | {"\"ab\""..="{\"a\":\"b\"}"} | {-inf..=NaN} ∪ {NULL} |
 | Row 0  | "true"                       | NULL                  |
-| Row 1  | "123"                        | 123_f64               |
-| Row 2  | "12.34"                      | 12.34_f64             |
+| Row 1  | "123"                        | 123                   |
+| Row 2  | "12.34"                      | 12.34                 |
 | Row 3  | "\"ab\""                     | NULL                  |
 | Row 4  | "[1,2,3]"                    | NULL                  |
 | Row 5  | "{\"a\":\"b\"}"              | NULL                  |

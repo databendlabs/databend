@@ -44,7 +44,7 @@ query T
 explain select 1 from numbers(10) group by 1;
 ----
 EvalScalar
-├── expressions: [1_u8]
+├── expressions: [1]
 ├── estimated rows: 10.00
 └── TableScan
     ├── table: default.system.numbers
@@ -61,7 +61,7 @@ query T
 explain select 1, number, number + 1, number -1 from numbers(10) group by number, abs(number), cast(number as int);
 ----
 EvalScalar
-├── expressions: [1_u8, plus(group_item (#0), 1_u8), minus(group_item (#0), 1_u8)]
+├── expressions: [1, plus(group_item (#0), 1), minus(group_item (#0), 1)]
 ├── estimated rows: 10.00
 └── AggregateFinal
     ├── group by: [number]

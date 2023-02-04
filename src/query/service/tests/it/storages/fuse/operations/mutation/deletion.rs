@@ -63,7 +63,7 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
         "+----------+----------+",
         "| Column 0 | Column 1 |",
         "+----------+----------+",
-        "| 9_u64    | 9_u64    |",
+        "| 9        | 9        |",
         "+----------+----------+",
     ];
     let qry = format!(
