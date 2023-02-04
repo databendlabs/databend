@@ -23,7 +23,6 @@ use common_arrow::arrow::array::Array;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::native::read::deserialize;
 use common_arrow::native::ColumnMeta as NativeColumnMeta;
-use common_cache::Cache;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::Result;
 use common_expression::BlockEntry;
@@ -203,7 +202,7 @@ pub struct PagesReader {
     pub(crate) meta: NativeColumnMeta,
 
     pub(crate) page_id: usize,
-    pub(crate) object: Object,
+    pub(crate) _object: Object,
     pub(crate) data_type: ArrowType,
 }
 
@@ -217,7 +216,7 @@ impl PagesReader {
         Self {
             data,
             meta,
-            object,
+            _object: object,
             data_type,
             page_id: 0,
         }
@@ -234,7 +233,6 @@ impl PagesReader {
     pub fn next_array(&mut self) -> Result<Box<dyn Array>> {
         self.page_id += 1;
         read_page(
-            self.object.clone(),
             self.data.clone(),
             self.page_id - 1,
             &self.meta,
@@ -244,7 +242,6 @@ impl PagesReader {
 }
 
 fn read_page(
-    object: Object,
     data: ReaderData,
     page_id: usize,
     meta: &NativeColumnMeta,
