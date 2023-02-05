@@ -29,10 +29,10 @@ pub struct Entry<K, V> {
 }
 
 impl<K: Keyable, V> Entry<K, V> {
-    #[inline(always)]
-    pub(crate) fn is_zero(&self) -> bool {
-        K::is_zero(&self.key)
-    }
+    // #[inline(always)]
+    // pub(crate) fn is_zero(&self) -> bool {
+    //     K::is_zero(&self.key)
+    // }
     // this function can only be used in external crates
     #[inline(always)]
     pub fn key(&self) -> &K {
@@ -70,6 +70,7 @@ where
     A: Allocator + Clone,
 {
     pub(crate) len: usize,
+    pub(crate) zeros: Vec<bool>,
     #[allow(dead_code)]
     pub(crate) allocator: A,
     pub(crate) entries: C,
@@ -83,15 +84,12 @@ where
     A: Allocator + Clone,
 {
     pub fn with_capacity_in(capacity: usize, allocator: A) -> Self {
+        let capacity = std::cmp::max(8, capacity.next_power_of_two());
         Self {
-            entries: unsafe {
-                C::new_zeroed(
-                    std::cmp::max(8, capacity.next_power_of_two()),
-                    allocator.clone(),
-                )
-            },
+            entries: unsafe { C::new_zeroed(capacity, allocator.clone()) },
             len: 0,
             allocator,
+            zeros: vec![true; capacity],
             dropped: false,
         }
     }
@@ -127,7 +125,7 @@ where
         let index = (hash as usize) & (self.entries.len() - 1);
         for i in (index..self.entries.len()).chain(0..index) {
             assume(i < self.entries.len());
-            if self.entries[i].is_zero() {
+            if self.zeros[i] {
                 return None;
             }
             if self.entries[i].key.assume_init_ref().borrow() == key {
@@ -153,7 +151,7 @@ where
         let index = (hash as usize) & (self.entries.len() - 1);
         for i in (index..self.entries.len()).chain(0..index) {
             assume(i < self.entries.len());
-            if self.entries[i].is_zero() {
+            if self.zeros[i] {
                 return None;
             }
             if self.entries[i].key.assume_init_ref().borrow() == key {
@@ -192,11 +190,15 @@ where
         let index = (hash as usize) & (self.entries.len() - 1);
         for i in (index..self.entries.len()).chain(0..index) {
             assume(i < self.entries.len());
-            if self.entries[i].is_zero() {
+
+            if self.zeros[i] {
                 self.len += 1;
                 self.entries[i].key.write(key);
+                self.zeros[i] = false;
+
                 return Ok(&mut self.entries[i]);
             }
+
             if self.entries[i].key.assume_init_ref() == &key {
                 return Err(&mut self.entries[i]);
             }
@@ -206,6 +208,7 @@ where
     pub fn iter(&self) -> Table0Iter<'_, K, V> {
         Table0Iter {
             slice: self.entries.as_ref(),
+            zeros: &self.zeros,
             i: 0,
         }
     }
@@ -215,8 +218,9 @@ where
             self.len = 0;
 
             if std::mem::needs_drop::<V>() {
-                for entry in self.entries.as_mut() {
-                    if !entry.is_zero() {
+                for i in 0..self.len() {
+                    if !self.zeros[i] {
+                        let entry = self.entries.get_unchecked_mut(i);
                         std::ptr::drop_in_place(entry.get_mut());
                     }
                 }
@@ -241,13 +245,15 @@ where
         let old_capacity = self.entries.len();
         let new_capacity = self.entries.len() << shift;
         unsafe {
-            self.entries.grow_zeroed(new_capacity);
+            self.entries.grow(new_capacity);
         }
+        self.zeros.resize(new_capacity, true);
+
         for i in 0..old_capacity {
             unsafe {
                 assume(i < self.entries.len());
             }
-            if K::is_zero(&self.entries[i].key) {
+            if self.zeros[i] {
                 continue;
             }
             let key = unsafe { self.entries[i].key.assume_init_ref() };
@@ -260,10 +266,12 @@ where
                 if j == i {
                     break;
                 }
-                if self.entries[j].is_zero() {
+
+                if self.zeros[j] {
                     unsafe {
                         self.entries[j] = std::ptr::read(&self.entries[i]);
-                        self.entries[i].key = MaybeUninit::zeroed();
+                        self.zeros[j] = false;
+                        self.zeros[i] = true;
                     }
                     break;
                 }
@@ -273,9 +281,11 @@ where
             unsafe {
                 assume(i < self.entries.len());
             }
-            if K::is_zero(&self.entries[i].key) {
+
+            if self.zeros[i] {
                 break;
             }
+
             let key = unsafe { self.entries[i].key.assume_init_ref() };
             let hash = K::hash(key);
             let index = (hash as usize) & (self.entries.len() - 1);
@@ -286,10 +296,11 @@ where
                 if j == i {
                     break;
                 }
-                if self.entries[j].is_zero() {
+                if self.zeros[j] {
                     unsafe {
                         self.entries[j] = std::ptr::read(&self.entries[i]);
-                        self.entries[i].key = MaybeUninit::zeroed();
+                        self.zeros[j] = false;
+                        self.zeros[i] = true;
                     }
                     break;
                 }
@@ -328,8 +339,9 @@ where
     fn drop(&mut self) {
         if std::mem::needs_drop::<V>() && !self.dropped {
             unsafe {
-                for entry in self.entries.as_mut() {
-                    if !entry.is_zero() {
+                for i in 0..self.len() {
+                    if !self.zeros[i] {
+                        let entry = self.entries.get_unchecked_mut(i);
                         std::ptr::drop_in_place(entry.get_mut());
                     }
                 }
@@ -341,6 +353,7 @@ where
 pub struct Table0Iter<'a, K, V> {
     slice: &'a [Entry<K, V>],
     i: usize,
+    zeros: &'a [bool],
 }
 
 impl<'a, K, V> Iterator for Table0Iter<'a, K, V>
@@ -349,7 +362,7 @@ where K: Keyable
     type Item = &'a Entry<K, V>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while self.i < self.slice.len() && self.slice[self.i].is_zero() {
+        while self.i < self.slice.len() && self.zeros[self.i] {
             self.i += 1;
         }
         if self.i == self.slice.len() {
@@ -364,6 +377,7 @@ where K: Keyable
 
 pub struct Table0IterMut<'a, K, V> {
     slice: &'a mut [Entry<K, V>],
+    zeros: &'a [bool],
     i: usize,
 }
 
@@ -373,7 +387,7 @@ where K: Keyable
     type Item = &'a mut Entry<K, V>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while self.i < self.slice.len() && self.slice[self.i].is_zero() {
+        while self.i < self.slice.len() && self.zeros[self.i] {
             self.i += 1;
         }
         if self.i == self.slice.len() {

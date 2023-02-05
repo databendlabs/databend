@@ -37,7 +37,7 @@ where Self: Deref<Target = [Self::T]> + DerefMut
 
     unsafe fn new_zeroed(len: usize, allocator: Self::A) -> Self;
 
-    unsafe fn grow_zeroed(&mut self, new_len: usize);
+    unsafe fn grow(&mut self, new_len: usize);
 }
 
 #[derive(Debug)]
@@ -77,14 +77,14 @@ unsafe impl<T, A: Allocator> Container for HeapContainer<T, A> {
         Self(Box::new_zeroed_slice_in(len, allocator).assume_init())
     }
 
-    unsafe fn grow_zeroed(&mut self, new_len: usize) {
+    unsafe fn grow(&mut self, new_len: usize) {
         debug_assert!(self.len() <= new_len);
         let old_layout = Layout::array::<T>(self.len()).unwrap();
         let new_layout = Layout::array::<T>(new_len).unwrap();
         let old_box = std::ptr::read(&self.0);
         let (old_raw, allocator) = Box::into_raw_with_allocator(old_box);
         let old_ptr = NonNull::new(old_raw).unwrap().cast();
-        let grow_res = allocator.grow_zeroed(old_ptr, old_layout, new_layout);
+        let grow_res = allocator.grow(old_ptr, old_layout, new_layout);
 
         match grow_res {
             Err(_) => handle_alloc_error(new_layout),
@@ -180,7 +180,7 @@ unsafe impl<T, const N: usize, A: Allocator + Clone> Container for StackContaine
         }
     }
 
-    unsafe fn grow_zeroed(&mut self, new_len: usize) {
+    unsafe fn grow(&mut self, new_len: usize) {
         debug_assert!(self.len <= new_len);
         if new_len <= N {
             self.len = new_len;
@@ -205,7 +205,7 @@ unsafe impl<T, const N: usize, A: Allocator + Clone> Container for StackContaine
             let new_layout = Layout::array::<T>(new_len).unwrap();
 
             let old_ptr = NonNull::new_unchecked(self.ptr).cast();
-            let reallocated_bytes = self.allocator.grow_zeroed(old_ptr, old_layout, new_layout);
+            let reallocated_bytes = self.allocator.grow(old_ptr, old_layout, new_layout);
 
             match reallocated_bytes {
                 Err(_) => handle_alloc_error(new_layout),
