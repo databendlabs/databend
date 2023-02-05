@@ -40,8 +40,6 @@ use common_expression::infer_schema_type;
 use common_expression::type_check;
 use common_expression::type_check::check_literal;
 use common_expression::type_check::common_super_type;
-use common_expression::types::decimal::DecimalDataType;
-use common_expression::types::decimal::DecimalSize;
 use common_expression::types::number::F64;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
