@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use common_exception::Result;
+use roaring::RoaringBitmap;
+use strum::IntoEnumIterator;
 
 use super::rewrite::RuleEliminateEvalScalar;
 use super::rewrite::RuleFoldCountAggregate;
@@ -25,6 +27,7 @@ use super::rewrite::RulePushDownLimitExpression;
 use super::transform::RuleCommuteJoin;
 use super::transform::RuleLeftAssociateJoin;
 use super::transform::RuleRightAssociateJoin;
+use super::RuleSet;
 use crate::optimizer::rule::rewrite::RuleEliminateFilter;
 use crate::optimizer::rule::rewrite::RuleMergeEvalScalar;
 use crate::optimizer::rule::rewrite::RuleMergeFilter;
@@ -43,11 +46,34 @@ use crate::optimizer::rule::transform::RuleRightExchangeJoin;
 use crate::optimizer::rule::RuleID;
 use crate::optimizer::rule::RulePtr;
 
-pub struct RuleFactory;
+pub struct RuleFactory {
+    rule_set: RuleSet,
+
+    transformation_rules: roaring::RoaringBitmap,
+    exploration_rules: roaring::RoaringBitmap,
+}
 
 impl RuleFactory {
     pub fn create() -> Self {
-        RuleFactory {}
+        RuleFactory {
+            rule_set: RuleSet::create(),
+            transformation_rules: RoaringBitmap::new(),
+            exploration_rules: RoaringBitmap::new(),
+        }
+    }
+
+    pub fn init_rules(&mut self) {
+        for id in RuleID::iter() {
+            self.rule_set.insert(self.create_rule(id).unwrap())
+        }
+
+        for rule in self.rule_set.iter() {
+            if rule.transformation() {
+                self.transformation_rules.insert(rule.id() as u32);
+            } else {
+                self.exploration_rules.insert(rule.id() as u32);
+            }
+        }
     }
 
     pub fn create_rule(&self, id: RuleID) -> Result<RulePtr> {

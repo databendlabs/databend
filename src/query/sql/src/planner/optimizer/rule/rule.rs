@@ -16,6 +16,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use common_exception::Result;
+use strum_macros::EnumIter;
 
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::SExpr;
@@ -28,9 +29,11 @@ pub trait Rule {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()>;
 
     fn pattern(&self) -> &SExpr;
+
+    fn transformation(&self) -> bool;
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, EnumIter)]
 pub enum RuleID {
     // Rewrite rules
     NormalizeScalarFilter,

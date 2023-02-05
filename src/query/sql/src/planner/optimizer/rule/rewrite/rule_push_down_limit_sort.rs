@@ -84,4 +84,8 @@ impl Rule for RulePushDownLimitSort {
     fn pattern(&self) -> &SExpr {
         &self.pattern
     }
+
+    fn transformation(&self) -> bool {
+        return true;
+    }
 }

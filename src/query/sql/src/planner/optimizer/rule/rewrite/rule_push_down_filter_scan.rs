@@ -75,4 +75,8 @@ impl Rule for RulePushDownFilterScan {
     fn pattern(&self) -> &SExpr {
         &self.pattern
     }
+
+    fn transformation(&self) -> bool {
+        return true;
+    }
 }

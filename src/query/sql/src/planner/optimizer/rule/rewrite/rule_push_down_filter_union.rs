@@ -124,6 +124,10 @@ impl Rule for RulePushDownFilterUnion {
     fn pattern(&self) -> &SExpr {
         &self.pattern
     }
+
+    fn transformation(&self) -> bool {
+        return true;
+    }
 }
 
 fn replace_column_binding(

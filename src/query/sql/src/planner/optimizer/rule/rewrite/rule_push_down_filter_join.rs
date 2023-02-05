@@ -317,6 +317,10 @@ impl Rule for RulePushDownFilterJoin {
     fn pattern(&self) -> &SExpr {
         &self.pattern
     }
+
+    fn transformation(&self) -> bool {
+        return true;
+    }
 }
 
 fn rewrite_predicates(s_expr: &SExpr) -> Result<Vec<ScalarExpr>> {

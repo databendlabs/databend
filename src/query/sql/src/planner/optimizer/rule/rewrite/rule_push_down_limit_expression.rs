@@ -82,4 +82,8 @@ impl Rule for RulePushDownLimitExpression {
     fn pattern(&self) -> &SExpr {
         &self.pattern
     }
+
+    fn transformation(&self) -> bool {
+        return true;
+    }
 }

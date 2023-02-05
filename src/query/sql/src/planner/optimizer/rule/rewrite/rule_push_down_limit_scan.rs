@@ -84,4 +84,8 @@ impl Rule for RulePushDownLimitScan {
     fn pattern(&self) -> &SExpr {
         &self.pattern
     }
+
+    fn transformation(&self) -> bool {
+        return true;
+    }
 }
