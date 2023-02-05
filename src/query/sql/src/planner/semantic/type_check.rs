@@ -2292,12 +2292,14 @@ impl<'a> TypeChecker<'a> {
             TypeName::Int64 => TableDataType::Number(NumberDataType::Int64),
             TypeName::Float32 => TableDataType::Number(NumberDataType::Float32),
             TypeName::Float64 => TableDataType::Number(NumberDataType::Float64),
-            TypeName::Decimal { precision, scale } => {
-                TableDataType::Decimal(DecimalDataType::from_size(DecimalSize {
-                    precision: *precision,
-                    scale: *scale,
-                }))
-            }
+            // todo!("decimal")
+            // commented until from_size() doesn't panic
+            // TypeName::Decimal { precision, scale } => {
+            //     TableDataType::Decimal(DecimalDataType::from_size(DecimalSize {
+            //         precision: *precision,
+            //         scale: *scale,
+            //     })?)
+            // }
             TypeName::String => TableDataType::String,
             TypeName::Timestamp => TableDataType::Timestamp,
             TypeName::Date => TableDataType::Date,
