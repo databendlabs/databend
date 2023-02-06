@@ -22,9 +22,6 @@ use crate::HashtableKeyable;
 use crate::HashtableLike;
 use crate::PartitionedHashSet;
 
-// const BUCKETS_LG2: u32 = 8;
-// const BUCKETS: usize = 1 << BUCKETS_LG2;
-
 pub struct PartitionedHashtable<Impl, const BUCKETS_LG2: u32 = 8> {
     tables: Vec<Impl>,
 }
