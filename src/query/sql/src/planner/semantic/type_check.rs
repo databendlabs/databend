@@ -40,6 +40,8 @@ use common_expression::infer_schema_type;
 use common_expression::type_check;
 use common_expression::type_check::check_literal;
 use common_expression::type_check::common_super_type;
+use common_expression::types::decimal::DecimalDataType;
+use common_expression::types::decimal::DecimalSize;
 use common_expression::types::number::F64;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
@@ -2290,14 +2292,12 @@ impl<'a> TypeChecker<'a> {
             TypeName::Int64 => TableDataType::Number(NumberDataType::Int64),
             TypeName::Float32 => TableDataType::Number(NumberDataType::Float32),
             TypeName::Float64 => TableDataType::Number(NumberDataType::Float64),
-            // todo!("decimal")
-            // commented until from_size() doesn't panic
-            // TypeName::Decimal { precision, scale } => {
-            //     TableDataType::Decimal(DecimalDataType::from_size(DecimalSize {
-            //         precision: *precision,
-            //         scale: *scale,
-            //     })?)
-            // }
+            TypeName::Decimal { precision, scale } => {
+                TableDataType::Decimal(DecimalDataType::from_size(DecimalSize {
+                    precision: *precision,
+                    scale: *scale,
+                })?)
+            }
             TypeName::String => TableDataType::String,
             TypeName::Timestamp => TableDataType::Timestamp,
             TypeName::Date => TableDataType::Date,

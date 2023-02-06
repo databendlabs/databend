@@ -16,6 +16,7 @@ use std::fmt::Debug;
 use std::ops::Range;
 
 use common_arrow::arrow::buffer::Buffer;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
@@ -64,7 +65,8 @@ pub struct DecimalSize {
 
 impl DecimalDataType {
     pub fn from_size(_size: DecimalSize) -> Result<DecimalDataType> {
-        todo!("decimal")
+        // todo!("decimal")
+        Err(ErrorCode::Unimplemented("decimal"))
     }
 }
 

@@ -1,4 +1,4 @@
-statement error 1005
+statement error 1002
 CREATE TABLE test_num_data (id integer, val decimal(18,10))
 
 statement error 1025
