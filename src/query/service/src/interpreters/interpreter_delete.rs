@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_pipeline_core::Pipeline;
@@ -63,6 +64,11 @@ impl Interpreter for DeleteInterpreter {
             let col_indices = scalar.used_columns().into_iter().collect();
             (Some(filter), col_indices)
         } else {
+            if self.plan.input_expr.is_some() {
+                return Err(ErrorCode::Unimplemented(
+                    "Delete with subquery isn't supported",
+                ));
+            }
             (None, vec![])
         };
 
