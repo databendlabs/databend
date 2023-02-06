@@ -91,12 +91,12 @@ impl Interpreter for UpdateInterpreter {
         let update_list = self.plan.update_list.iter().try_fold(
             Vec::with_capacity(self.plan.update_list.len()),
             |mut acc, (id, scalar)| {
-                let filed = schema.field(*id);
+                let field = schema.field(*id);
                 let left = ScalarExpr::CastExpr(CastExpr {
                     is_try: false,
                     argument: Box::new(scalar.clone()),
                     from_type: Box::new(scalar.data_type()),
-                    target_type: Box::new(filed.data_type().clone()),
+                    target_type: Box::new(field.data_type().clone()),
                 });
                 let scalar = if col_indices.is_empty() {
                     // The condition is always true.
@@ -111,7 +111,7 @@ impl Interpreter for UpdateInterpreter {
                         if BindContext::match_column_binding(
                             Some(db_name),
                             Some(tbl_name),
-                            filed.name(),
+                            field.name(),
                             column_binding,
                         ) {
                             right = Some(ScalarExpr::BoundColumnRef(BoundColumnRef {

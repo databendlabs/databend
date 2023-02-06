@@ -187,7 +187,7 @@ impl FuseTable {
             (Arc::new(None), vec![])
         };
 
-        self.mutation_block_purning(ctx.clone(), filters, projection, base_snapshot)
+        self.mutation_block_pruning(ctx.clone(), filters, projection, base_snapshot)
             .await?;
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
