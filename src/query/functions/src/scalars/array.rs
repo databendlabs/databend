@@ -19,10 +19,10 @@ use std::sync::Arc;
 use common_expression::types::array::ArrayColumnBuilder;
 use common_expression::types::boolean::BooleanDomain;
 use common_expression::types::nullable::NullableDomain;
-use common_expression::types::number::Float64Type;
-use common_expression::types::number::Int64Type;
+use common_expression::types::number::NumberScalar;
 use common_expression::types::number::SimpleDomain;
 use common_expression::types::number::UInt64Type;
+use common_expression::types::AnyType;
 use common_expression::types::ArgType;
 use common_expression::types::ArrayType;
 use common_expression::types::BooleanType;
@@ -37,10 +37,7 @@ use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::types::TimestampType;
 use common_expression::types::ValueType;
-use common_expression::types::ALL_FLOAT_TYPES;
 use common_expression::types::ALL_NUMERICS_TYPES;
-use common_expression::types::ALL_SIGNED_INTEGER_TYPES;
-use common_expression::types::ALL_UNSIGNED_INTEGER_TYPES;
 use common_expression::vectorize_1_arg;
 use common_expression::vectorize_2_arg;
 use common_expression::vectorize_with_builder_1_arg;
@@ -50,6 +47,7 @@ use common_expression::with_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Domain;
+use common_expression::EvalContext;
 use common_expression::Function;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
@@ -67,6 +65,7 @@ use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
 
 use crate::aggregates::eval_aggr;
+use crate::AggregateFunctionFactory;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("contains", &["array_contains"]);
@@ -614,380 +613,142 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    for left in ALL_SIGNED_INTEGER_TYPES {
-        with_number_mapped_type!(|NUM_TYPE| match left {
-            NumberDataType::NUM_TYPE => {
-                registry.register_combine_nullable_1_arg::<ArrayType<NullableType<NumberType<NUM_TYPE>>>, Int64Type, _, _>(
-                    "array_sum",
-                    FunctionProperty::default(),
-                    |_| FunctionDomain::MayThrow,
-                    vectorize_with_builder_1_arg::<ArrayType<NullableType<NumberType<NUM_TYPE>>>, NullableType<Int64Type>>(|arr, output, ctx| {
-                        let len = arr.len();
-                        if len > 0 {
-                            let column = Column::Nullable(Box::new(arr.upcast()));
-                            match eval_aggr("sum", vec![], &[column], len) {
-                                Ok((col, _)) => {
-                                    let val = unsafe { col.index_unchecked(0) };
-                                    match Int64Type::try_downcast_scalar(&val) {
-                                        Some(v) => output.push(v),
-                                        None => output.push_null(),
-                                    }
-                                }
-                                Err(err) => {
-                                    ctx.set_error(output.len(), err.to_string());
-                                }
-                            }
-                        } else {
-                            output.push_null()
-                        }
-                    }),
-                );
-
-                registry.register_combine_nullable_1_arg::<ArrayType<NumberType<NUM_TYPE>>, Int64Type, _, _>(
-                    "array_sum",
-                    FunctionProperty::default(),
-                    |_| FunctionDomain::MayThrow,
-                    vectorize_with_builder_1_arg::<ArrayType<NumberType<NUM_TYPE>>, NullableType<Int64Type>>(|arr, output, ctx| {
-                        let len = arr.len();
-                        if len > 0 {
-                            let column = NumberType::<NUM_TYPE>::upcast_column(arr);
-                            match eval_aggr("sum", vec![], &[column], len) {
-                                Ok((col, _)) => {
-                                    let val = unsafe { col.index_unchecked(0) };
-                                    match Int64Type::try_downcast_scalar(&val) {
-                                        Some(v) => output.push(v),
-                                        None => output.push_null(),
-                                    }
-                                }
-                                Err(err) => {
-                                    ctx.set_error(output.len(), err.to_string());
-                                }
-                            }
-                        } else {
-                            output.push_null()
-                        }
-                    }),
-                );
+    fn eval_aggr_return_type(name: &str, args_type: &[DataType]) -> Option<DataType> {
+        if args_type.len() != 1 {
+            return None;
+        }
+        let arg_type = args_type[0].remove_nullable();
+        if arg_type == DataType::EmptyArray {
+            if name == "count" {
+                return Some(DataType::Number(NumberDataType::UInt64));
             }
-        });
+            return Some(DataType::Null);
+        }
+        let array_type = arg_type.as_array()?;
+        let factory = AggregateFunctionFactory::instance();
+        let func = factory.get(name, vec![], vec![*array_type.clone()]).ok()?;
+        let return_type = func.return_type().ok()?;
+
+        Some(return_type)
     }
 
-    for left in ALL_UNSIGNED_INTEGER_TYPES {
-        with_number_mapped_type!(|NUM_TYPE| match left {
-            NumberDataType::NUM_TYPE => {
-                registry.register_combine_nullable_1_arg::<ArrayType<NullableType<NumberType<NUM_TYPE>>>, UInt64Type, _, _>(
-                    "array_sum",
-                    FunctionProperty::default(),
-                    |_| FunctionDomain::MayThrow,
-                    vectorize_with_builder_1_arg::<ArrayType<NullableType<NumberType<NUM_TYPE>>>, NullableType<UInt64Type>>(|arr, output, ctx| {
-                        let len = arr.len();
-                        if len > 0 {
-                            let column = Column::Nullable(Box::new(arr.upcast()));
-                            match eval_aggr("sum", vec![], &[column], len) {
-                                Ok((col, _)) => {
-                                    let val = unsafe { col.index_unchecked(0) };
-                                    match UInt64Type::try_downcast_scalar(&val) {
-                                        Some(v) => output.push(v),
-                                        None => output.push_null(),
-                                    }
-                                }
-                                Err(err) => {
-                                    ctx.set_error(output.len(), err.to_string());
-                                }
-                            }
-                        } else {
-                            output.push_null()
-                        }
-                    }),
-                );
-
-                registry.register_combine_nullable_1_arg::<ArrayType<NumberType<NUM_TYPE>>, UInt64Type, _, _>(
-                    "array_sum",
-                    FunctionProperty::default(),
-                    |_| FunctionDomain::MayThrow,
-                    vectorize_with_builder_1_arg::<ArrayType<NumberType<NUM_TYPE>>, NullableType<UInt64Type>>(|arr, output, ctx| {
-                        let len = arr.len();
-                        if len > 0 {
-                            let column = NumberType::<NUM_TYPE>::upcast_column(arr);
-                            match eval_aggr("sum", vec![], &[column], len) {
-                                Ok((col, _)) => {
-                                    let val = unsafe { col.index_unchecked(0) };
-                                    match UInt64Type::try_downcast_scalar(&val) {
-                                        Some(v) => output.push(v),
-                                        None => output.push_null(),
-                                    }
-                                }
-                                Err(err) => {
-                                    ctx.set_error(output.len(), err.to_string());
-                                }
-                            }
-                        } else {
-                            output.push_null()
-                        }
-                    }),
-                );
-            }
-        });
-    }
-
-    for left in ALL_FLOAT_TYPES {
-        with_number_mapped_type!(|NUM_TYPE| match left {
-            NumberDataType::NUM_TYPE => {
-                registry.register_combine_nullable_1_arg::<ArrayType<NullableType<NumberType<NUM_TYPE>>>, Float64Type, _, _>(
-                    "array_sum",
-                    FunctionProperty::default(),
-                    |_| FunctionDomain::MayThrow,
-                    vectorize_with_builder_1_arg::<ArrayType<NullableType<NumberType<NUM_TYPE>>>, NullableType<Float64Type>>(|arr, output, ctx| {
-                        let len = arr.len();
-                        if len > 0 {
-                            let column = Column::Nullable(Box::new(arr.upcast()));
-                            match eval_aggr("sum", vec![], &[column], len) {
-                                Ok((col, _)) => {
-                                    let val = unsafe { col.index_unchecked(0) };
-                                    match Float64Type::try_downcast_scalar(&val) {
-                                        Some(v) => output.push(v),
-                                        None => output.push_null(),
-                                    }
-                                }
-                                Err(err) => {
-                                    ctx.set_error(output.len(), err.to_string());
-                                }
-                            }
-                        } else {
-                            output.push_null()
-                        }
-                    }),
-                );
-
-                registry.register_combine_nullable_1_arg::<ArrayType<NumberType<NUM_TYPE>>, Float64Type, _, _>(
-                    "array_sum",
-                    FunctionProperty::default(),
-                    |_| FunctionDomain::MayThrow,
-                    vectorize_with_builder_1_arg::<ArrayType<NumberType<NUM_TYPE>>, NullableType<Float64Type>>(|arr, output, ctx| {
-                        let len = arr.len();
-                        if len > 0 {
-                            let column = NumberType::<NUM_TYPE>::upcast_column(arr);
-                            match eval_aggr("sum", vec![], &[column], len) {
-                                Ok((col, _)) => {
-                                    let val = unsafe { col.index_unchecked(0) };
-                                    match Float64Type::try_downcast_scalar(&val) {
-                                        Some(v) => output.push(v),
-                                        None => output.push_null(),
-                                    }
-                                }
-                                Err(err) => {
-                                    ctx.set_error(output.len(), err.to_string());
-                                }
-                            }
-                        } else {
-                            output.push_null()
-                        }
-                    }),
-                );
-            }
-        });
-    }
-
-    for left in ALL_NUMERICS_TYPES {
-        with_number_mapped_type!(|NUM_TYPE| match left {
-            NumberDataType::NUM_TYPE => {
-                registry.register_combine_nullable_1_arg::<ArrayType<NullableType<NumberType<NUM_TYPE>>>, Float64Type, _, _>(
-                    "array_avg",
-                    FunctionProperty::default(),
-                    |_| FunctionDomain::MayThrow,
-                    vectorize_with_builder_1_arg::<ArrayType<NullableType<NumberType<NUM_TYPE>>>, NullableType<Float64Type>>(|arr, output, ctx| {
-                        let len = arr.len();
-                        if len > 0 {
-                            let column = Column::Nullable(Box::new(arr.upcast()));
-                            match eval_aggr("avg", vec![], &[column], len) {
-                                Ok((col, _)) => {
-                                    let val = unsafe { col.index_unchecked(0) };
-                                    match Float64Type::try_downcast_scalar(&val) {
-                                        Some(v) => output.push(v),
-                                        None => output.push_null(),
-                                    }
-                                }
-                                Err(err) => {
-                                    ctx.set_error(output.len(), err.to_string());
-                                }
-                            }
-                        } else {
-                            output.push_null()
-                        }
-                    }),
-                );
-
-                registry.register_combine_nullable_1_arg::<ArrayType<NumberType<NUM_TYPE>>, Float64Type, _, _>(
-                    "array_avg",
-                    FunctionProperty::default(),
-                    |_| FunctionDomain::MayThrow,
-                    vectorize_with_builder_1_arg::<ArrayType<NumberType<NUM_TYPE>>, NullableType<Float64Type>>(|arr, output, ctx| {
-                        let len = arr.len();
-                        if len > 0 {
-                            let column = NumberType::<NUM_TYPE>::upcast_column(arr);
-                            match eval_aggr("avg", vec![], &[column], len) {
-                                Ok((col, _)) => {
-                                    let val = unsafe { col.index_unchecked(0) };
-                                    match Float64Type::try_downcast_scalar(&val) {
-                                        Some(v) => output.push(v),
-                                        None => output.push_null(),
-                                    }
-                                }
-                                Err(err) => {
-                                    ctx.set_error(output.len(), err.to_string());
-                                }
-                            }
-                        } else {
-                            output.push_null()
-                        }
-                    }),
-                );
-            }
-        });
-    }
-
-    registry.register_passthrough_nullable_1_arg::<EmptyArrayType, UInt64Type, _, _>(
-        "array_count",
-        FunctionProperty::default(),
-        |_| FunctionDomain::Domain(SimpleDomain { min: 0, max: 0 }),
-        vectorize_1_arg::<EmptyArrayType, UInt64Type>(|_, _| 0),
-    );
-
-    registry.register_passthrough_nullable_1_arg::<ArrayType<GenericType<0>>, UInt64Type, _, _>(
-        "array_count",
-        FunctionProperty::default(),
-        |_| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<ArrayType<GenericType<0>>, UInt64Type>(
-            |arr, output, ctx| {
-                let len = arr.len();
-                if len > 0 {
-                    match eval_aggr("count", vec![], &[arr], len) {
-                        Ok((col, _)) => {
-                            let val = unsafe { col.index_unchecked(0) };
-                            output.push(val.cast_to_u64().unwrap());
+    fn eval_array_aggr(
+        name: &str,
+        args: &[ValueRef<AnyType>],
+        ctx: &mut EvalContext,
+    ) -> Value<AnyType> {
+        match &args[0] {
+            ValueRef::Scalar(scalar) => match scalar {
+                ScalarRef::EmptyArray | ScalarRef::Null => {
+                    if name == "count" {
+                        Value::Scalar(Scalar::Number(NumberScalar::UInt64(0)))
+                    } else {
+                        Value::Scalar(Scalar::Null)
+                    }
+                }
+                ScalarRef::Array(col) => {
+                    let len = col.len();
+                    match eval_aggr(name, vec![], &[col.clone()], len) {
+                        Ok((res_col, _)) => {
+                            let val = unsafe { res_col.index_unchecked(0) };
+                            Value::Scalar(val.to_owned())
                         }
                         Err(err) => {
-                            ctx.set_error(output.len(), err.to_string());
+                            ctx.set_error(0, err.to_string());
+                            Value::Scalar(Scalar::Null)
                         }
                     }
-                } else {
-                    output.push(0);
                 }
+                _ => unreachable!(),
             },
-        ),
-    );
-
-    registry.register_1_arg_core::<EmptyArrayType, NullType, _, _>(
-        "array_max",
-        FunctionProperty::default(),
-        |_| FunctionDomain::Domain(()),
-        |_, _| Value::Scalar(()),
-    );
-
-    registry.register_combine_nullable_1_arg::<ArrayType<NullableType<GenericType<0>>>, GenericType<0>, _, _>(
-        "array_max",
-        FunctionProperty::default(),
-        |_| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<ArrayType<NullableType<GenericType<0>>>, NullableType<GenericType<0>>>(|arr, output, ctx| {
-            let len = arr.len();
-            if len > 0 {
-                let column = Column::Nullable(Box::new(arr.upcast()));
-                match eval_aggr("max", vec![], &[column], len) {
-                    Ok((col, _)) => {
-                        let val = unsafe { col.index_unchecked(0) };
-                        match val {
-                            ScalarRef::Null => output.push_null(),
-                            _ => output.push(val),
-                        }
-                    }
-                    Err(err) => {
-                        ctx.set_error(output.len(), err.to_string());
-                    }
-                }
-            } else {
-                output.push_null();
-            }
-        }),
-    );
-
-    registry.register_combine_nullable_1_arg::<ArrayType<GenericType<0>>, GenericType<0>, _, _>(
-        "array_max",
-        FunctionProperty::default(),
-        |_| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<ArrayType<GenericType<0>>, NullableType<GenericType<0>>>(
-            |arr, output, ctx| {
-                let len = arr.len();
-                if len > 0 {
-                    match eval_aggr("max", vec![], &[arr], len) {
+            ValueRef::Column(column) => {
+                let return_type = eval_aggr_return_type(name, &[column.data_type()]).unwrap();
+                let mut builder = ColumnBuilder::with_capacity(&return_type, column.len());
+                for arr in column.iter() {
+                    let array_column = arr.as_array().unwrap();
+                    let len = array_column.len();
+                    match eval_aggr(name, vec![], &[array_column.clone()], len) {
                         Ok((col, _)) => {
                             let val = unsafe { col.index_unchecked(0) };
-                            output.push(val);
+                            builder.push(val)
                         }
                         Err(err) => {
-                            ctx.set_error(output.len(), err.to_string());
+                            ctx.set_error(builder.len(), err.to_string());
                         }
                     }
-                } else {
-                    output.push_null();
                 }
-            },
-        ),
-    );
-
-    registry.register_1_arg_core::<EmptyArrayType, NullType, _, _>(
-        "array_min",
-        FunctionProperty::default(),
-        |_| FunctionDomain::Domain(()),
-        |_, _| Value::Scalar(()),
-    );
-
-    registry.register_combine_nullable_1_arg::<ArrayType<NullableType<GenericType<0>>>, GenericType<0>, _, _>(
-        "array_min",
-        FunctionProperty::default(),
-        |_| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<ArrayType<NullableType<GenericType<0>>>, NullableType<GenericType<0>>>(|arr, output, ctx| {
-            let len = arr.len();
-            if len > 0 {
-                let column = Column::Nullable(Box::new(arr.upcast()));
-                match eval_aggr("min", vec![], &[column], len) {
-                    Ok((col, _)) => {
-                        let val = unsafe { col.index_unchecked(0) };
-                        match val {
-                            ScalarRef::Null => output.push_null(),
-                            _ => output.push(val),
-                        }
-                    }
-                    Err(err) => {
-                        ctx.set_error(output.len(), err.to_string());
-                    }
-                }
-            } else {
-                output.push_null();
+                Value::Column(builder.build())
             }
-        }),
-    );
+        }
+    }
 
-    registry.register_combine_nullable_1_arg::<ArrayType<GenericType<0>>, GenericType<0>, _, _>(
-        "array_min",
-        FunctionProperty::default(),
-        |_| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<ArrayType<GenericType<0>>, NullableType<GenericType<0>>>(
-            |arr, output, ctx| {
-                let len = arr.len();
-                if len > 0 {
-                    match eval_aggr("min", vec![], &[arr], len) {
-                        Ok((col, _)) => {
-                            let val = unsafe { col.index_unchecked(0) };
-                            output.push(val);
-                        }
-                        Err(err) => {
-                            ctx.set_error(output.len(), err.to_string());
-                        }
-                    }
-                } else {
-                    output.push_null();
-                }
+    registry.register_function_factory("array_sum", |_, args_type| {
+        let return_type = eval_aggr_return_type("sum", args_type)?;
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "array_sum".to_string(),
+                args_type: vec![args_type[0].clone()],
+                return_type,
+                property: FunctionProperty::default(),
             },
-        ),
-    );
+            calc_domain: Box::new(move |_| FunctionDomain::MayThrow),
+            eval: Box::new(|args, ctx| eval_array_aggr("sum", args, ctx)),
+        }))
+    });
+
+    registry.register_function_factory("array_avg", |_, args_type| {
+        let return_type = eval_aggr_return_type("avg", args_type)?;
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "array_avg".to_string(),
+                args_type: vec![args_type[0].clone()],
+                return_type,
+                property: FunctionProperty::default(),
+            },
+            calc_domain: Box::new(move |_| FunctionDomain::MayThrow),
+            eval: Box::new(|args, ctx| eval_array_aggr("avg", args, ctx)),
+        }))
+    });
+
+    registry.register_function_factory("array_count", |_, args_type| {
+        let return_type = eval_aggr_return_type("count", args_type)?;
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "array_count".to_string(),
+                args_type: vec![args_type[0].clone()],
+                return_type,
+                property: FunctionProperty::default(),
+            },
+            calc_domain: Box::new(move |_| FunctionDomain::MayThrow),
+            eval: Box::new(|args, ctx| eval_array_aggr("count", args, ctx)),
+        }))
+    });
+
+    registry.register_function_factory("array_max", |_, args_type| {
+        let return_type = eval_aggr_return_type("max", args_type)?;
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "array_max".to_string(),
+                args_type: vec![args_type[0].clone()],
+                return_type,
+                property: FunctionProperty::default(),
+            },
+            calc_domain: Box::new(move |_| FunctionDomain::MayThrow),
+            eval: Box::new(|args, ctx| eval_array_aggr("max", args, ctx)),
+        }))
+    });
+
+    registry.register_function_factory("array_min", |_, args_type| {
+        let return_type = eval_aggr_return_type("min", args_type)?;
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "array_min".to_string(),
+                args_type: vec![args_type[0].clone()],
+                return_type,
+                property: FunctionProperty::default(),
+            },
+            calc_domain: Box::new(move |_| FunctionDomain::MayThrow),
+            eval: Box::new(|args, ctx| eval_array_aggr("min", args, ctx)),
+        }))
+    });
 }

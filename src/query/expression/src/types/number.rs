@@ -40,13 +40,6 @@ use crate::ScalarRef;
 pub type F32 = OrderedFloat<f32>;
 pub type F64 = OrderedFloat<f64>;
 
-pub const ALL_SIGNED_INTEGER_TYPES: &[NumberDataType; 4] = &[
-    NumberDataType::Int8,
-    NumberDataType::Int16,
-    NumberDataType::Int32,
-    NumberDataType::Int64,
-];
-
 pub const ALL_UNSIGNED_INTEGER_TYPES: &[NumberDataType; 4] = &[
     NumberDataType::UInt8,
     NumberDataType::UInt16,
@@ -54,8 +47,16 @@ pub const ALL_UNSIGNED_INTEGER_TYPES: &[NumberDataType; 4] = &[
     NumberDataType::UInt64,
 ];
 
-pub const ALL_INTEGER_TYPES: &[NumberDataType; 8] =
-    &concat_array(ALL_UNSIGNED_INTEGER_TYPES, ALL_SIGNED_INTEGER_TYPES);
+pub const ALL_INTEGER_TYPES: &[NumberDataType; 8] = &[
+    NumberDataType::UInt8,
+    NumberDataType::UInt16,
+    NumberDataType::UInt32,
+    NumberDataType::UInt64,
+    NumberDataType::Int8,
+    NumberDataType::Int16,
+    NumberDataType::Int32,
+    NumberDataType::Int64,
+];
 
 pub const ALL_FLOAT_TYPES: &[NumberDataType; 2] =
     &[NumberDataType::Float32, NumberDataType::Float64];
