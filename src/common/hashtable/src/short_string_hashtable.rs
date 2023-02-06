@@ -652,11 +652,6 @@ unsafe impl<const N: usize> Keyable for InlineKey<N> {
     }
 
     #[inline(always)]
-    fn is_zero(this: &MaybeUninit<Self>) -> bool {
-        unsafe { *(this as *const _ as *const u64).add(N) == 0 }
-    }
-
-    #[inline(always)]
     fn hash(&self) -> u64 {
         (self.0, self.1).fast_hash()
     }
@@ -700,11 +695,6 @@ unsafe impl Keyable for FallbackKey {
     #[inline(always)]
     fn equals_zero(_: &Self) -> bool {
         false
-    }
-
-    #[inline(always)]
-    fn is_zero(this: &MaybeUninit<Self>) -> bool {
-        unsafe { this.assume_init_ref().key.is_none() }
     }
 
     #[inline(always)]

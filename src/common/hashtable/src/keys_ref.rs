@@ -56,10 +56,6 @@ impl PartialEq for KeysRef {
 }
 
 unsafe impl HashtableKeyable for KeysRef {
-    fn is_zero(this: &MaybeUninit<Self>) -> bool {
-        unsafe { this.assume_init_ref().address == 0 }
-    }
-
     fn equals_zero(this: &Self) -> bool {
         this.address == 0
     }

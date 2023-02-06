@@ -42,14 +42,6 @@ impl<K: Keyable> Hashed<K> {
 
 unsafe impl<K: Keyable> Keyable for Hashed<K> {
     #[inline(always)]
-    fn is_zero(this: &MaybeUninit<Self>) -> bool {
-        unsafe {
-            let addr = std::ptr::addr_of!((*this.as_ptr()).key);
-            K::is_zero(&*(addr as *const MaybeUninit<K>))
-        }
-    }
-
-    #[inline(always)]
     fn equals_zero(this: &Self) -> bool {
         K::equals_zero(&this.key)
     }

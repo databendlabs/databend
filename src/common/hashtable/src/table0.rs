@@ -29,10 +29,6 @@ pub struct Entry<K, V> {
 }
 
 impl<K: Keyable, V> Entry<K, V> {
-    // #[inline(always)]
-    // pub(crate) fn is_zero(&self) -> bool {
-    //     K::is_zero(&self.key)
-    // }
     // this function can only be used in external crates
     #[inline(always)]
     pub fn key(&self) -> &K {
@@ -227,6 +223,7 @@ where
             }
 
             self.entries = C::new_zeroed(0, self.allocator.clone());
+            self.zeros.clear();
         }
     }
 

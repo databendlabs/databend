@@ -26,8 +26,6 @@ use primitive_types::U512;
 ///
 /// All functions must be implemented correctly.
 pub unsafe trait Keyable: Sized + Copy + Eq {
-    fn is_zero(this: &MaybeUninit<Self>) -> bool;
-
     fn equals_zero(this: &Self) -> bool;
 
     fn hash(&self) -> u64;
@@ -52,11 +50,6 @@ macro_rules! impl_key_for_primitive_types {
             #[inline(always)]
             fn equals_zero(this: &Self) -> bool {
                 *this == 0
-            }
-
-            #[inline(always)]
-            fn is_zero(this: &MaybeUninit<Self>) -> bool {
-                unsafe { this.assume_init() == 0 }
             }
 
             #[inline(always)]
@@ -85,22 +78,12 @@ unsafe impl Keyable for U256 {
     }
 
     #[inline(always)]
-    fn is_zero(this: &MaybeUninit<Self>) -> bool {
-        U256::is_zero(unsafe { this.assume_init_ref() })
-    }
-
-    #[inline(always)]
     fn hash(&self) -> u64 {
         self.fast_hash()
     }
 }
 
 unsafe impl Keyable for U512 {
-    #[inline(always)]
-    fn is_zero(this: &MaybeUninit<Self>) -> bool {
-        U512::is_zero(unsafe { this.assume_init_ref() })
-    }
-
     #[inline(always)]
     fn equals_zero(this: &Self) -> bool {
         U512::is_zero(this)
@@ -114,11 +97,6 @@ unsafe impl Keyable for U512 {
 
 unsafe impl Keyable for OrderedFloat<f32> {
     #[inline(always)]
-    fn is_zero(this: &MaybeUninit<Self>) -> bool {
-        unsafe { this.assume_init() == 0.0 }
-    }
-
-    #[inline(always)]
     fn equals_zero(this: &Self) -> bool {
         *this == 0.0
     }
@@ -131,11 +109,6 @@ unsafe impl Keyable for OrderedFloat<f32> {
 
 unsafe impl Keyable for OrderedFloat<f64> {
     #[inline(always)]
-    fn is_zero(this: &MaybeUninit<Self>) -> bool {
-        unsafe { this.assume_init() == 0.0 }
-    }
-
-    #[inline(always)]
     fn equals_zero(this: &Self) -> bool {
         *this == 0.0
     }
@@ -147,11 +120,6 @@ unsafe impl Keyable for OrderedFloat<f64> {
 }
 
 unsafe impl<const N: usize> Keyable for [u8; N] {
-    #[inline(always)]
-    fn is_zero(this: &MaybeUninit<Self>) -> bool {
-        unsafe { this.assume_init() == [0; N] }
-    }
-
     #[inline(always)]
     fn equals_zero(this: &Self) -> bool {
         *this == [0; N]
