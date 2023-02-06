@@ -21,6 +21,8 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
+use storages_common_index::Index;
+use storages_common_index::RangeIndex;
 use storages_common_pruner::RangePrunerCreator;
 
 use super::table::arrow_to_table_schema;
@@ -50,6 +52,11 @@ impl ParquetTable {
             Projection::Columns(indices)
         };
 
+        let top_k = push_down
+            .as_ref()
+            .map(|p| p.top_k(&self.table_info.schema(), RangeIndex::supported_type))
+            .unwrap_or_default();
+
         // Currently, arrow2 doesn't support reading stats of a inner column of a nested type.
         // Therefore, if there is inner fields in projection, we skip the row group pruning.
         let skip_pruning = matches!(projection, Projection::InnerColumns(_));
@@ -72,6 +79,14 @@ impl ParquetTable {
                 .iter()
                 .map(|f| f.as_expr(&BUILTIN_FUNCTIONS))
                 .collect::<Vec<_>>()
+        });
+        let top_k = top_k.map(|top_k| {
+            let offset = projected_column_nodes
+                .column_nodes
+                .iter()
+                .position(|node| node.leaf_ids[0] == top_k.column_id as usize)
+                .unwrap();
+            (top_k, offset)
         });
 
         let func_ctx = ctx.get_function_context()?;
@@ -111,6 +126,7 @@ impl ParquetTable {
             columns_to_read,
             column_nodes: projected_column_nodes,
             skip_pruning,
+            top_k,
         };
 
         pruner.read_and_prune_partitions().await
