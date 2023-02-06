@@ -25,65 +25,18 @@ use common_expression::BlockMetaInfoPtr;
 use common_pipeline_core::Pipeline;
 use serde::Deserializer;
 use serde::Serializer;
+use common_pipeline_core::pipe::{Pipe, PipeItem};
+use common_pipeline_core::processors::port::{InputPort, OutputPort};
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
-use crate::api::rpc::exchange::exchange_source_deserializer;
+use crate::api::rpc::exchange::serde::exchange_deserializer;
 use crate::api::rpc::exchange::exchange_source_reader;
 use crate::api::DataPacket;
+use crate::api::rpc::exchange::serde::exchange_deserializer::{create_deserializer_items, TransformExchangeDeserializer};
 use crate::clusters::ClusterHelper;
+use crate::pipelines::processors::TransformDummy;
 use crate::sessions::QueryContext;
-
-pub struct ExchangeSourceMeta {
-    pub packet: Option<DataPacket>,
-}
-
-impl ExchangeSourceMeta {
-    pub fn create(packet: DataPacket) -> BlockMetaInfoPtr {
-        Box::new(ExchangeSourceMeta {
-            packet: Some(packet),
-        })
-    }
-}
-
-impl Debug for ExchangeSourceMeta {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ExchangeSourceMeta").finish()
-    }
-}
-
-impl serde::Serialize for ExchangeSourceMeta {
-    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
-        unimplemented!("Unimplemented serialize ExchangeSourceMeta")
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for ExchangeSourceMeta {
-    fn deserialize<D>(_: D) -> Result<Self, D::Error>
-    where D: Deserializer<'de> {
-        unimplemented!("Unimplemented deserialize ExchangeSourceMeta")
-    }
-}
-
-#[typetag::serde(name = "exchange_source")]
-impl BlockMetaInfo for ExchangeSourceMeta {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals ExchangeSourceMeta")
-    }
-
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unimplemented!("Unimplemented clone ExchangeSourceMeta")
-    }
-}
 
 pub fn via_exchange_source(
     ctx: Arc<QueryContext>,
@@ -113,12 +66,23 @@ pub fn via_exchange_source(
     let last_output_len = pipeline.output_len();
     let flight_exchanges_len = flight_exchanges.len();
     exchange_source_reader::via_reader(last_output_len, flight_exchanges, pipeline);
-    exchange_source_deserializer::via_deserializer(
-        last_output_len,
-        flight_exchanges_len,
-        params,
-        pipeline,
-    );
+
+    let mut items = Vec::with_capacity(last_output_len + flight_exchanges_len);
+
+    for _index in 0..last_output_len {
+        let input = InputPort::create();
+        let output = OutputPort::create();
+
+        items.push(PipeItem::create(
+            TransformDummy::create(input.clone(), output.clone()),
+            vec![input],
+            vec![output],
+        ));
+    }
+
+    items.extend(create_deserializer_items(flight_exchanges_len, &params.schema));
+
+    pipeline.add_pipe(Pipe::create(items.len(), items.len(), items));
 
     Ok(())
 }

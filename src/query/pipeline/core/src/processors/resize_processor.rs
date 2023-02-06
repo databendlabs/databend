@@ -16,10 +16,11 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_exception::Result;
+use crate::pipe::PipeItem;
 
 use crate::processors::port::InputPort;
 use crate::processors::port::OutputPort;
-use crate::processors::processor::Event;
+use crate::processors::processor::{Event, ProcessorPtr};
 use crate::processors::Processor;
 
 pub struct ResizeProcessor {
@@ -168,4 +169,11 @@ impl Processor for ResizeProcessor {
 
         Ok(Event::NeedConsume)
     }
+}
+
+pub fn create_resize_item(inputs: usize, outputs: usize) -> PipeItem {
+    let resize = ResizeProcessor::create(inputs, outputs);
+    let inputs = resize.get_inputs().to_vec();
+    let outputs = resize.get_outputs().to_vec();
+    PipeItem::create(ProcessorPtr::create(Box::new(resize)), inputs, outputs)
 }

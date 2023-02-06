@@ -72,3 +72,5 @@ pub use transform_right_semi_anti_join::TransformRightSemiAntiJoin;
 pub use transform_sort_merge::SortMergeCompactor;
 pub use transform_sort_merge::TransformSortMerge;
 pub use transform_sort_partial::TransformSortPartial;
+pub use transform_dummy::create_dummy_item;
+pub use transform_dummy::create_dummy_items;
