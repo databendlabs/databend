@@ -16,6 +16,7 @@ use std::fs;
 use std::fs::File;
 use std::hash::Hasher;
 use std::io::prelude::*;
+use std::io::IoSlice;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -30,7 +31,6 @@ use crate::FileSize;
 use crate::LruCache;
 
 // TODO doc the disk cache path layout
-// TODO checksum of cached data
 
 /// Return an iterator of `(path, size)` of files under `path` sorted by ascending last-modified
 /// time, such that the oldest modified file is returned first.
@@ -153,7 +153,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
                         .cache
                         .pop_by_policy()
                         .expect("Unexpectedly empty cache!");
-                    let cache_item_path = self.cache_absolute_path(&CacheKey(rel_path));
+                    let cache_item_path = self.abs_path_of_cache_key(&CacheKey(rel_path));
                     fs::remove_file(&cache_item_path).unwrap_or_else(|e| {
                         error!(
                             "Error removing file from cache: `{:?}`: {}",
@@ -197,23 +197,22 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
         CacheKey::from(key)
     }
 
-    fn cache_absolute_path(&self, cache_key: &CacheKey) -> PathBuf {
+    fn abs_path_of_cache_key(&self, cache_key: &CacheKey) -> PathBuf {
         let path = PathBuf::from(cache_key);
         self.rel_to_abs_path(path)
     }
 
-    /// Add a file with `bytes` as its contents to the cache at path `key`.
-    pub fn insert_bytes(&mut self, key: &str, bytes: &[u8]) -> Result<()> {
-        let item_len = bytes.len() as u64;
+    pub fn insert_bytes(&mut self, key: &str, bytes: &[&[u8]]) -> Result<()> {
+        let bytes_len = bytes.iter().map(|x| x.len() as u64).sum::<u64>();
         // check if this chunk of bytes itself is too large
-        if !self.can_store(item_len) {
+        if !self.can_store(bytes_len) {
             return Err(Error::FileTooLarge);
         }
 
         // check eviction
-        if self.cache.size() + item_len > self.cache.capacity() {
+        if self.cache.size() + bytes_len > self.cache.capacity() {
             if let Some((rel_path, _)) = self.cache.pop_by_policy() {
-                let cached_item_path = self.cache_absolute_path(&CacheKey(rel_path));
+                let cached_item_path = self.abs_path_of_cache_key(&CacheKey(rel_path));
                 fs::remove_file(&cached_item_path).unwrap_or_else(|e| {
                     error!(
                         "Error removing file from cache: `{:?}`: {}",
@@ -224,13 +223,17 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
         }
 
         let cache_key = self.cache_key(key.as_ref());
-        let path = self.cache_absolute_path(&cache_key);
+        let path = self.abs_path_of_cache_key(&cache_key);
         if let Some(parent_path) = path.parent() {
             fs::create_dir_all(parent_path)?;
         }
         let mut f = File::create(&path)?;
-        f.write_all(bytes)?;
-        self.cache.put(cache_key.0, bytes.len() as u64);
+        let mut bufs = Vec::with_capacity(bytes.len());
+        for x in bytes {
+            bufs.push(IoSlice::new(x));
+        }
+        f.write_all_vectored(&mut bufs)?;
+        self.cache.put(cache_key.0, bytes_len);
         Ok(())
     }
 
@@ -244,7 +247,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
     /// of the file if present. Avoid using this method if at all possible, prefer `.get`.
     pub fn get_file(&mut self, key: &str) -> Result<File> {
         let cache_key = self.cache_key(key);
-        let path = self.cache_absolute_path(&cache_key);
+        let path = self.abs_path_of_cache_key(&cache_key);
         self.cache
             .get(&cache_key.0)
             .ok_or(Error::FileNotInCache)
@@ -256,7 +259,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
         let cache_key = self.cache_key(key);
         match self.cache.pop(&cache_key.0) {
             Some(_) => {
-                let path = self.cache_absolute_path(&cache_key);
+                let path = self.abs_path_of_cache_key(&cache_key);
                 fs::remove_file(&path).map_err(|e| {
                     error!("Error removing file from cache: `{:?}`: {}", path, e);
                     Into::into(e)

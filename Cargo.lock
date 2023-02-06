@@ -1293,6 +1293,7 @@ dependencies = [
 name = "common-cache"
 version = "0.1.0"
 dependencies = [
+ "crc32fast",
  "heapsize",
  "hex",
  "ritelinked",
@@ -7799,6 +7800,7 @@ dependencies = [
  "common-base",
  "common-cache",
  "common-exception",
+ "crc32fast",
  "metrics",
  "opendal",
  "parking_lot 0.12.1",

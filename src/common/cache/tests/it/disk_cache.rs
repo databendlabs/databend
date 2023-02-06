@@ -23,12 +23,24 @@ use std::path::PathBuf;
 
 use common_cache::CacheKey;
 use common_cache::DiskCacheError;
+use common_cache::DiskCacheResult;
 use common_cache::LruDiskCache;
 use tempfile::TempDir;
 
 struct TestFixture {
     /// Temp directory.
     pub tempdir: TempDir,
+}
+
+// helper trait to simplify the test case
+trait InsertSingleSlice {
+    fn insert_single_slice(&mut self, key: &str, bytes: &[u8]) -> DiskCacheResult<()>;
+}
+
+impl InsertSingleSlice for LruDiskCache {
+    fn insert_single_slice(&mut self, key: &str, bytes: &[u8]) -> DiskCacheResult<()> {
+        self.insert_bytes(key, &[bytes])
+    }
 }
 
 fn create_file<T: AsRef<Path>, F: FnOnce(File) -> io::Result<()>>(
@@ -129,12 +141,12 @@ fn test_existing_file_too_large() {
 fn test_insert_bytes() {
     let f = TestFixture::new();
     let mut c = LruDiskCache::new(f.tmp(), 25).unwrap();
-    c.insert_bytes("a/b/c", &[0; 10]).unwrap();
+    c.insert_single_slice("a/b/c", &[0; 10]).unwrap();
     assert!(c.contains_key("a/b/c"));
-    c.insert_bytes("a/b/d", &[0; 10]).unwrap();
+    c.insert_single_slice("a/b/d", &[0; 10]).unwrap();
     assert_eq!(c.size(), 20);
     // Adding this third file should put the cache above the limit.
-    c.insert_bytes("x/y/z", &[0; 10]).unwrap();
+    c.insert_single_slice("x/y/z", &[0; 10]).unwrap();
     assert_eq!(c.size(), 20);
     // The least-recently-used file should have been removed.
     assert!(!c.contains_key("a/b/c"));
@@ -148,10 +160,10 @@ fn test_insert_bytes_exact() {
     // Test that files adding up to exactly the size limit works.
     let f = TestFixture::new();
     let mut c = LruDiskCache::new(f.tmp(), 20).unwrap();
-    c.insert_bytes("file1", &[1; 10]).unwrap();
-    c.insert_bytes("file2", &[2; 10]).unwrap();
+    c.insert_single_slice("file1", &[1; 10]).unwrap();
+    c.insert_single_slice("file2", &[2; 10]).unwrap();
     assert_eq!(c.size(), 20);
-    c.insert_bytes("file3", &[3; 10]).unwrap();
+    c.insert_single_slice("file3", &[3; 10]).unwrap();
     assert_eq!(c.size(), 20);
     assert!(!c.contains_key("file1"));
 }
@@ -161,15 +173,15 @@ fn test_add_get_lru() {
     let f = TestFixture::new();
     {
         let mut c = LruDiskCache::new(f.tmp(), 25).unwrap();
-        c.insert_bytes("file1", &[1; 10]).unwrap();
-        c.insert_bytes("file2", &[2; 10]).unwrap();
+        c.insert_single_slice("file1", &[1; 10]).unwrap();
+        c.insert_single_slice("file2", &[2; 10]).unwrap();
         // Get the file to bump its LRU status.
         assert_eq!(read_all(&mut c.get_file("file1").unwrap()).unwrap(), vec![
             1u8;
             10
         ]);
         // Adding this third file should put the cache above the limit.
-        c.insert_bytes("file3", &[3; 10]).unwrap();
+        c.insert_single_slice("file3", &[3; 10]).unwrap();
         assert_eq!(c.size(), 20);
         // The least-recently-used file should have been removed.
         assert!(!c.contains_key("file2"));
@@ -180,7 +192,7 @@ fn test_add_get_lru() {
 fn test_insert_bytes_too_large() {
     let f = TestFixture::new();
     let mut c = LruDiskCache::new(f.tmp(), 1).unwrap();
-    match c.insert_bytes("a/b/c", &[0; 2]) {
+    match c.insert_single_slice("a/b/c", &[0; 2]) {
         Err(DiskCacheError::FileTooLarge) => {}
         x => panic!("Unexpected result: {:?}", x),
     }

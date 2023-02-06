@@ -51,7 +51,22 @@ impl CacheAccessor<String, Vec<u8>> for DiskBytesCache {
         };
 
         match read_file() {
-            Ok(bytes) => Some(Arc::new(bytes)),
+            Ok(mut bytes) => {
+                if let Err(e) = validate_checksum(bytes.as_slice()) {
+                    error!("data cache, of key {k},  crc validation failure: {e}");
+                    {
+                        // remove the invalid cache, error of removal ignored
+                        let mut inner = self.inner.write();
+                        let _ = inner.remove(k);
+                    }
+                    return None;
+                }
+                // return the bytes without the checksum bytes
+                let total_len = bytes.len();
+                let body_len = total_len - 4;
+                bytes.truncate(body_len);
+                Some(Arc::new(bytes))
+            }
             Err(e) => {
                 error!("get disk cache item failed, {}", e);
                 None
@@ -61,8 +76,10 @@ impl CacheAccessor<String, Vec<u8>> for DiskBytesCache {
 
     fn put(&self, k: String, v: Arc<Vec<u8>>) {
         if let Err(e) = {
+            let crc = crc32fast::hash(v.as_slice());
+            let crc_bytes = crc.to_le_bytes();
             let mut inner = self.inner.write();
-            inner.insert_bytes(&k, &v)
+            inner.insert_bytes(&k, &[v.as_slice(), &crc_bytes])
         } {
             error!("populate disk cache failed {}", e);
         }
@@ -77,6 +94,30 @@ impl CacheAccessor<String, Vec<u8>> for DiskBytesCache {
             false
         } else {
             true
+        }
+    }
+}
+
+/// Assuming that the crc32 is at the end of `bytes` and encoded as le u32.
+// Although parquet page has built-in crc, but it is optional (and not generated in parquet2)
+// Later, if cache data is put into redis, we can reuse the checksum logic
+fn validate_checksum(bytes: &[u8]) -> Result<()> {
+    let total_len = bytes.len();
+    if total_len <= 4 {
+        Err(ErrorCode::StorageOther(format!(
+            "crc checksum validation failure: invalid file length {total_len}"
+        )))
+    } else {
+        // checksum validation
+        let crc_bytes: [u8; 4] = bytes[total_len - 4..].try_into().unwrap();
+        let crc = u32::from_le_bytes(crc_bytes);
+        let crc_calculated = crc32fast::hash(&bytes[4..]);
+        if crc == crc_calculated {
+            Ok(())
+        } else {
+            Err(ErrorCode::StorageOther(format!(
+                "crc checksum validation failure, key : crc checksum not match, crc kept in file {crc}, crc calculated {crc_calculated}"
+            )))
         }
     }
 }
