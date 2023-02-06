@@ -1,3 +1,6 @@
+statement ok
+set enable_bushy_join = 1
+
 # Q1
 statement ok
 select
@@ -118,6 +121,9 @@ group by
 order by
     o_orderpriority;
 
+statement ok
+set enable_bushy_join = 0
+
 # Q5
 statement ok
 select
@@ -144,6 +150,9 @@ group by
     n_name
 order by
     revenue desc;
+
+statement ok
+set enable_bushy_join = 1
 
 # Q6
 statement ok
@@ -239,6 +248,9 @@ group by
 order by
     o_year;
 
+statement ok
+set enable_bushy_join = 0
+
 # Q9
 statement ok
 select
@@ -273,6 +285,9 @@ group by
 order by
     sum_profit
 limit 5;
+
+statement ok
+set enable_bushy_join = 1
 
 # Q10
 statement ok

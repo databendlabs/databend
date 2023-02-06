@@ -47,9 +47,6 @@ pub use metrics::StorageMetricsLayer;
 
 mod runtime_layer;
 
-mod cache;
-pub use cache::FuseCachePolicy;
-
 mod column_node;
 pub use column_node::ColumnNode;
 pub use column_node::ColumnNodes;

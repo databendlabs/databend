@@ -199,7 +199,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         GlobalIORuntime::instance().spawn(async move {
             for splits in ctx_clone.splits.chunks(p) {
                 let ctx_clone2 = ctx_clone.clone();
-                let data_tx2 = data_tx.clone();
+                let row_batch_tx = data_tx.clone();
                 let splits = splits.to_owned().clone();
                 tokio::spawn(async move {
                     let mut futs = FuturesUnordered::new();
@@ -211,16 +211,12 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                     while let Some(row_batch) = futs.next().await {
                         match row_batch {
                             Ok(row_batch) => {
-                                if row_batch.is_ok() {
-                                    if data_tx2.send(row_batch).await.is_err() {
-                                        break;
-                                    }
-                                } else {
+                                if row_batch_tx.send(row_batch).await.is_err() {
                                     break;
                                 }
                             }
                             Err(cause) => {
-                                data_tx2.send(Err(cause)).await.ok();
+                                row_batch_tx.send(Err(cause)).await.ok();
                                 break;
                             }
                         }

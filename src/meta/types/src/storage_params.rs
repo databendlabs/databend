@@ -74,6 +74,29 @@ impl StorageParams {
         }
     }
 
+    /// map the given root with.
+    pub fn map_root(mut self, f: impl Fn(&str) -> String) -> Self {
+        match &mut self {
+            StorageParams::Azblob(v) => v.root = f(&v.root),
+            StorageParams::Fs(v) => v.root = f(&v.root),
+            StorageParams::Ftp(v) => v.root = f(&v.root),
+            #[cfg(feature = "storage-hdfs")]
+            StorageParams::Hdfs(v) => v.root = f(&v.root),
+            StorageParams::Http(_) => {}
+            StorageParams::Ipfs(v) => v.root = f(&v.root),
+            StorageParams::Memory => {}
+            StorageParams::Moka(_) => {}
+            StorageParams::Obs(v) => v.root = f(&v.root),
+            StorageParams::Oss(v) => v.root = f(&v.root),
+            StorageParams::S3(v) => v.root = f(&v.root),
+            StorageParams::Gcs(v) => v.root = f(&v.root),
+            StorageParams::Redis(v) => v.root = f(&v.root),
+            StorageParams::None => {}
+        };
+
+        self
+    }
+
     pub fn is_fs(&self) -> bool {
         matches!(self, StorageParams::Fs(_))
     }
