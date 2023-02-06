@@ -18,9 +18,11 @@ common-exception = { path = "../../../../common/exception" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 crc32fast = "1.3.2"
+crossbeam-channel = "0.5.6"
 metrics = "0.20.1"
 opendal = { workspace = true }
 parking_lot = "0.12.1"
+ringbuffer = "0.12.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = "0.1.36"

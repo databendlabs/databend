@@ -1,6 +1,6 @@
 - cache data crc
 - metrics
-- performance evaluation
+- performance evaluation (done)
     - without threshold
     - just put bytes to disk (no sync)
     - what happens if cache is full? will performance degrade significantly?

@@ -6969,6 +6969,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ringbuffer"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1973f95452ec56a4b2c683f5eabc15617e38f4faf2776ed4a0011d5070ecb37e"
+
+[[package]]
 name = "rio"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7801,9 +7807,11 @@ dependencies = [
  "common-cache",
  "common-exception",
  "crc32fast",
+ "crossbeam-channel",
  "metrics",
  "opendal",
  "parking_lot 0.12.1",
+ "ringbuffer",
  "serde",
  "serde_json",
  "tracing",
