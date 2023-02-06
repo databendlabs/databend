@@ -987,3 +987,542 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------------------+
 
 
+ast            : array_sum([])
+raw expr       : array_sum(array())
+checked expr   : array_sum<Array(Int8 NULL)>(CAST(array<>() AS Array(Int8 NULL)))
+optimized expr : NULL
+output type    : Int64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_sum([1, 2, 3, 4, 5, 6, 7])
+raw expr       : array_sum(array(1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
+checked expr   : array_sum<Array(Int16 NULL)>(CAST(array<T0=UInt8><T0, T0, T0, T0, T0, T0, T0>(1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8) AS Array(Int16 NULL)))
+optimized expr : 28_i64
+output type    : Int64 NULL
+output domain  : {28..=28}
+output         : 28
+
+
+ast            : array_sum([1, 2, 3, 4, 5, NULL, 6])
+raw expr       : array_sum(array(1_u8, 2_u8, 3_u8, 4_u8, 5_u8, NULL, 6_u8))
+checked expr   : array_sum<Array(Int16 NULL)>(CAST(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(4_u8 AS UInt8 NULL), CAST(5_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(6_u8 AS UInt8 NULL)) AS Array(Int16 NULL)))
+optimized expr : 21_i64
+output type    : Int64 NULL
+output domain  : {21..=21}
+output         : 21
+
+
+ast            : array_sum([1.2, 3.4, 5.6, 7.8])
+raw expr       : array_sum(array(1.2_f64, 3.4_f64, 5.6_f64, 7.8_f64))
+checked expr   : array_sum<Array(Float64 NULL)>(CAST(array<T0=Float64><T0, T0, T0, T0>(1.2_f64, 3.4_f64, 5.6_f64, 7.8_f64) AS Array(Float64 NULL)))
+optimized expr : 18_f64
+output type    : Float64 NULL
+output domain  : {18..=18}
+output         : 18
+
+
+ast            : array_sum([1.2, NULL, 3.4, 5.6, NULL])
+raw expr       : array_sum(array(1.2_f64, NULL, 3.4_f64, 5.6_f64, NULL))
+checked expr   : array_sum<Array(Float64 NULL)>(array<T0=Float64 NULL><T0, T0, T0, T0, T0>(CAST(1.2_f64 AS Float64 NULL), CAST(NULL AS Float64 NULL), CAST(3.4_f64 AS Float64 NULL), CAST(5.6_f64 AS Float64 NULL), CAST(NULL AS Float64 NULL)))
+optimized expr : 10.2_f64
+output type    : Float64 NULL
+output domain  : {10.2..=10.2}
+output         : 10.2
+
+
+ast            : array_sum([a, b, c, d])
+raw expr       : array_sum(array(a::Int16, b::Int16, c::Int16, d::Int16))
+checked expr   : array_sum<Array(Int16 NULL)>(CAST(array<T0=Int16><T0, T0, T0, T0>(a, b, c, d) AS Array(Int16 NULL)))
+evaluation:
++--------+---------+---------+---------+---------+------------+
+|        | a       | b       | c       | d       | Output     |
++--------+---------+---------+---------+---------+------------+
+| Type   | Int16   | Int16   | Int16   | Int16   | Int64 NULL |
+| Domain | {1..=8} | {1..=6} | {3..=7} | {1..=9} | Unknown    |
+| Row 0  | 1       | 2       | 3       | 4       | 10         |
+| Row 1  | 5       | 6       | 7       | 8       | 26         |
+| Row 2  | 8       | 1       | 7       | 1       | 17         |
+| Row 3  | 3       | 2       | 6       | 9       | 20         |
++--------+---------+---------+---------+---------+------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| a      | Int16([1, 5, 8, 3])                                                        |
+| b      | Int16([2, 6, 1, 2])                                                        |
+| c      | Int16([3, 7, 7, 6])                                                        |
+| d      | Int16([4, 8, 1, 9])                                                        |
+| Output | NullableColumn { column: Int64([10, 26, 17, 20]), validity: [0b____1111] } |
++--------+----------------------------------------------------------------------------+
+
+
+ast            : array_sum([a, b, c, d])
+raw expr       : array_sum(array(a::UInt64 NULL, b::UInt64 NULL, c::UInt64 NULL, d::UInt64 NULL))
+checked expr   : array_sum<Array(Int64 NULL)>(CAST(array<T0=UInt64 NULL><T0, T0, T0, T0>(a, b, c, d) AS Array(Int64 NULL)))
+evaluation:
++--------+------------------+------------------+-------------+------------------+------------+
+|        | a                | b                | c           | d                | Output     |
++--------+------------------+------------------+-------------+------------------+------------+
+| Type   | UInt64 NULL      | UInt64 NULL      | UInt64 NULL | UInt64 NULL      | Int64 NULL |
+| Domain | {0..=4} ∪ {NULL} | {0..=6} ∪ {NULL} | {3..=9}     | {0..=6} ∪ {NULL} | Unknown    |
+| Row 0  | 1                | 2                | 3           | 4                | 10         |
+| Row 1  | 2                | NULL             | 7           | 6                | 15         |
+| Row 2  | NULL             | 5                | 8           | 5                | 18         |
+| Row 3  | 4                | 6                | 9           | NULL             | 19         |
++--------+------------------+------------------+-------------+------------------+------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt64([1, 2, 0, 4]), validity: [0b____1011] }    |
+| b      | NullableColumn { column: UInt64([2, 0, 5, 6]), validity: [0b____1101] }    |
+| c      | NullableColumn { column: UInt64([3, 7, 8, 9]), validity: [0b____1111] }    |
+| d      | NullableColumn { column: UInt64([4, 6, 5, 0]), validity: [0b____0111] }    |
+| Output | NullableColumn { column: Int64([10, 15, 18, 19]), validity: [0b____1111] } |
++--------+----------------------------------------------------------------------------+
+
+
+ast            : array_avg([])
+raw expr       : array_avg(array())
+checked expr   : array_avg<Array(UInt8 NULL)>(CAST(array<>() AS Array(UInt8 NULL)))
+optimized expr : NULL
+output type    : Float64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_avg([1, 2, 3, 4, 5, 6, 7])
+raw expr       : array_avg(array(1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
+checked expr   : array_avg<Array(UInt8 NULL)>(CAST(array<T0=UInt8><T0, T0, T0, T0, T0, T0, T0>(1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8) AS Array(UInt8 NULL)))
+optimized expr : 4_f64
+output type    : Float64 NULL
+output domain  : {4..=4}
+output         : 4
+
+
+ast            : array_avg([1, 2, 3, 4, 5, NULL, 6])
+raw expr       : array_avg(array(1_u8, 2_u8, 3_u8, 4_u8, 5_u8, NULL, 6_u8))
+checked expr   : array_avg<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(4_u8 AS UInt8 NULL), CAST(5_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(6_u8 AS UInt8 NULL)))
+optimized expr : 3.5_f64
+output type    : Float64 NULL
+output domain  : {3.5..=3.5}
+output         : 3.5
+
+
+ast            : array_avg([1.2, 3.4, 5.6, 7.8])
+raw expr       : array_avg(array(1.2_f64, 3.4_f64, 5.6_f64, 7.8_f64))
+checked expr   : array_avg<Array(Float64 NULL)>(CAST(array<T0=Float64><T0, T0, T0, T0>(1.2_f64, 3.4_f64, 5.6_f64, 7.8_f64) AS Array(Float64 NULL)))
+optimized expr : 4.5_f64
+output type    : Float64 NULL
+output domain  : {4.5..=4.5}
+output         : 4.5
+
+
+ast            : array_avg([1.2, NULL, 3.4, 5.6, NULL])
+raw expr       : array_avg(array(1.2_f64, NULL, 3.4_f64, 5.6_f64, NULL))
+checked expr   : array_avg<Array(Float64 NULL)>(array<T0=Float64 NULL><T0, T0, T0, T0, T0>(CAST(1.2_f64 AS Float64 NULL), CAST(NULL AS Float64 NULL), CAST(3.4_f64 AS Float64 NULL), CAST(5.6_f64 AS Float64 NULL), CAST(NULL AS Float64 NULL)))
+optimized expr : 3.4_f64
+output type    : Float64 NULL
+output domain  : {3.4..=3.4}
+output         : 3.4
+
+
+ast            : array_avg([a, b, c, d])
+raw expr       : array_avg(array(a::Int16, b::Int16, c::Int16, d::Int16))
+checked expr   : array_avg<Array(Int16 NULL)>(CAST(array<T0=Int16><T0, T0, T0, T0>(a, b, c, d) AS Array(Int16 NULL)))
+evaluation:
++--------+---------+---------+---------+---------+--------------+
+|        | a       | b       | c       | d       | Output       |
++--------+---------+---------+---------+---------+--------------+
+| Type   | Int16   | Int16   | Int16   | Int16   | Float64 NULL |
+| Domain | {1..=8} | {1..=6} | {3..=7} | {1..=9} | Unknown      |
+| Row 0  | 1       | 2       | 3       | 4       | 2.5          |
+| Row 1  | 5       | 6       | 7       | 8       | 6.5          |
+| Row 2  | 8       | 1       | 7       | 1       | 4.25         |
+| Row 3  | 3       | 2       | 6       | 9       | 5            |
++--------+---------+---------+---------+---------+--------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------+
+| Column | Data                                                                            |
++--------+---------------------------------------------------------------------------------+
+| a      | Int16([1, 5, 8, 3])                                                             |
+| b      | Int16([2, 6, 1, 2])                                                             |
+| c      | Int16([3, 7, 7, 6])                                                             |
+| d      | Int16([4, 8, 1, 9])                                                             |
+| Output | NullableColumn { column: Float64([2.5, 6.5, 4.25, 5]), validity: [0b____1111] } |
++--------+---------------------------------------------------------------------------------+
+
+
+ast            : array_avg([a, b, c, d])
+raw expr       : array_avg(array(a::UInt64 NULL, b::UInt64 NULL, c::UInt64 NULL, d::UInt64 NULL))
+checked expr   : array_avg<Array(UInt64 NULL)>(array<T0=UInt64 NULL><T0, T0, T0, T0>(a, b, c, d))
+evaluation:
++--------+------------------+------------------+-------------+------------------+--------------+
+|        | a                | b                | c           | d                | Output       |
++--------+------------------+------------------+-------------+------------------+--------------+
+| Type   | UInt64 NULL      | UInt64 NULL      | UInt64 NULL | UInt64 NULL      | Float64 NULL |
+| Domain | {0..=4} ∪ {NULL} | {0..=6} ∪ {NULL} | {3..=9}     | {0..=6} ∪ {NULL} | Unknown      |
+| Row 0  | 1                | 2                | 3           | 4                | 2.5          |
+| Row 1  | 2                | NULL             | 7           | 6                | 5            |
+| Row 2  | NULL             | 5                | 8           | 5                | 6            |
+| Row 3  | 4                | 6                | 9           | NULL             | 6.3333333333 |
++--------+------------------+------------------+-------------+------------------+--------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------+
+| Column | Data                                                                                  |
++--------+---------------------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt64([1, 2, 0, 4]), validity: [0b____1011] }               |
+| b      | NullableColumn { column: UInt64([2, 0, 5, 6]), validity: [0b____1101] }               |
+| c      | NullableColumn { column: UInt64([3, 7, 8, 9]), validity: [0b____1111] }               |
+| d      | NullableColumn { column: UInt64([4, 6, 5, 0]), validity: [0b____0111] }               |
+| Output | NullableColumn { column: Float64([2.5, 5, 6, 6.3333333333]), validity: [0b____1111] } |
++--------+---------------------------------------------------------------------------------------+
+
+
+ast            : array_count([])
+raw expr       : array_count(array())
+checked expr   : array_count<Array(Nothing)>(array<>())
+optimized expr : 0_u64
+output type    : UInt64
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : array_count([1, 2, 3, 4, 5, 6, 7])
+raw expr       : array_count(array(1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
+checked expr   : array_count<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0, T0, T0, T0, T0>(1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
+optimized expr : 7_u64
+output type    : UInt64
+output domain  : {7..=7}
+output         : 7
+
+
+ast            : array_count([1, 2, 3, 4, 5, NULL, 6])
+raw expr       : array_count(array(1_u8, 2_u8, 3_u8, 4_u8, 5_u8, NULL, 6_u8))
+checked expr   : array_count<T0=UInt8 NULL><Array(T0)>(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(4_u8 AS UInt8 NULL), CAST(5_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(6_u8 AS UInt8 NULL)))
+optimized expr : 6_u64
+output type    : UInt64
+output domain  : {6..=6}
+output         : 6
+
+
+ast            : array_count([1.2, 3.4, 5.6, 7.8])
+raw expr       : array_count(array(1.2_f64, 3.4_f64, 5.6_f64, 7.8_f64))
+checked expr   : array_count<T0=Float64><Array(T0)>(array<T0=Float64><T0, T0, T0, T0>(1.2_f64, 3.4_f64, 5.6_f64, 7.8_f64))
+optimized expr : 4_u64
+output type    : UInt64
+output domain  : {4..=4}
+output         : 4
+
+
+ast            : array_count([1.2, NULL, 3.4, 5.6, NULL])
+raw expr       : array_count(array(1.2_f64, NULL, 3.4_f64, 5.6_f64, NULL))
+checked expr   : array_count<T0=Float64 NULL><Array(T0)>(array<T0=Float64 NULL><T0, T0, T0, T0, T0>(CAST(1.2_f64 AS Float64 NULL), CAST(NULL AS Float64 NULL), CAST(3.4_f64 AS Float64 NULL), CAST(5.6_f64 AS Float64 NULL), CAST(NULL AS Float64 NULL)))
+optimized expr : 3_u64
+output type    : UInt64
+output domain  : {3..=3}
+output         : 3
+
+
+ast            : array_count(['a', 'b', 'c', 'd', 'e'])
+raw expr       : array_count(array("a", "b", "c", "d", "e"))
+checked expr   : array_count<T0=String><Array(T0)>(array<T0=String><T0, T0, T0, T0, T0>("a", "b", "c", "d", "e"))
+optimized expr : 5_u64
+output type    : UInt64
+output domain  : {5..=5}
+output         : 5
+
+
+ast            : array_count(['a', 'b', NULL, 'c', 'd', NULL])
+raw expr       : array_count(array("a", "b", NULL, "c", "d", NULL))
+checked expr   : array_count<T0=String NULL><Array(T0)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0>(CAST("a" AS String NULL), CAST("b" AS String NULL), CAST(NULL AS String NULL), CAST("c" AS String NULL), CAST("d" AS String NULL), CAST(NULL AS String NULL)))
+optimized expr : 4_u64
+output type    : UInt64
+output domain  : {4..=4}
+output         : 4
+
+
+ast            : array_count([a, b, c, d])
+raw expr       : array_count(array(a::Int16, b::Int16, c::Int16, d::Int16))
+checked expr   : array_count<T0=Int16><Array(T0)>(array<T0=Int16><T0, T0, T0, T0>(a, b, c, d))
+evaluation:
++--------+---------+---------+---------+---------+---------+
+|        | a       | b       | c       | d       | Output  |
++--------+---------+---------+---------+---------+---------+
+| Type   | Int16   | Int16   | Int16   | Int16   | UInt64  |
+| Domain | {1..=8} | {1..=6} | {3..=7} | {1..=9} | Unknown |
+| Row 0  | 1       | 2       | 3       | 4       | 4       |
+| Row 1  | 5       | 6       | 7       | 8       | 4       |
+| Row 2  | 8       | 1       | 7       | 1       | 4       |
+| Row 3  | 3       | 2       | 6       | 9       | 4       |
++--------+---------+---------+---------+---------+---------+
+evaluation (internal):
++--------+----------------------+
+| Column | Data                 |
++--------+----------------------+
+| a      | Int16([1, 5, 8, 3])  |
+| b      | Int16([2, 6, 1, 2])  |
+| c      | Int16([3, 7, 7, 6])  |
+| d      | Int16([4, 8, 1, 9])  |
+| Output | UInt64([4, 4, 4, 4]) |
++--------+----------------------+
+
+
+ast            : array_count([a, b, c, d])
+raw expr       : array_count(array(a::UInt64 NULL, b::UInt64 NULL, c::UInt64 NULL, d::UInt64 NULL))
+checked expr   : array_count<T0=UInt64 NULL><Array(T0)>(array<T0=UInt64 NULL><T0, T0, T0, T0>(a, b, c, d))
+evaluation:
++--------+------------------+------------------+-------------+------------------+---------+
+|        | a                | b                | c           | d                | Output  |
++--------+------------------+------------------+-------------+------------------+---------+
+| Type   | UInt64 NULL      | UInt64 NULL      | UInt64 NULL | UInt64 NULL      | UInt64  |
+| Domain | {0..=4} ∪ {NULL} | {0..=6} ∪ {NULL} | {3..=9}     | {0..=6} ∪ {NULL} | Unknown |
+| Row 0  | 1                | 2                | 3           | 4                | 4       |
+| Row 1  | 2                | NULL             | 7           | 6                | 3       |
+| Row 2  | NULL             | 5                | 8           | 5                | 3       |
+| Row 3  | 4                | 6                | 9           | NULL             | 3       |
++--------+------------------+------------------+-------------+------------------+---------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------+
+| Column | Data                                                                    |
++--------+-------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt64([1, 2, 0, 4]), validity: [0b____1011] } |
+| b      | NullableColumn { column: UInt64([2, 0, 5, 6]), validity: [0b____1101] } |
+| c      | NullableColumn { column: UInt64([3, 7, 8, 9]), validity: [0b____1111] } |
+| d      | NullableColumn { column: UInt64([4, 6, 5, 0]), validity: [0b____0111] } |
+| Output | UInt64([4, 3, 3, 3])                                                    |
++--------+-------------------------------------------------------------------------+
+
+
+ast            : array_max([])
+raw expr       : array_max(array())
+checked expr   : array_max<Array(Nothing)>(array<>())
+optimized expr : NULL
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_max([1, 2, 3, 4, 5, 6, 7])
+raw expr       : array_max(array(1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
+checked expr   : array_max<T0=UInt8><Array(T0 NULL)>(CAST(array<T0=UInt8><T0, T0, T0, T0, T0, T0, T0>(1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8) AS Array(UInt8 NULL)))
+optimized expr : 7_u8
+output type    : UInt8 NULL
+output domain  : {7..=7}
+output         : 7
+
+
+ast            : array_max([1, 2, 3, 4, 5, NULL, 6])
+raw expr       : array_max(array(1_u8, 2_u8, 3_u8, 4_u8, 5_u8, NULL, 6_u8))
+checked expr   : array_max<T0=UInt8><Array(T0 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(4_u8 AS UInt8 NULL), CAST(5_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(6_u8 AS UInt8 NULL)))
+optimized expr : 6_u8
+output type    : UInt8 NULL
+output domain  : {6..=6}
+output         : 6
+
+
+ast            : array_max([1.2, 3.4, 5.6, 7.8])
+raw expr       : array_max(array(1.2_f64, 3.4_f64, 5.6_f64, 7.8_f64))
+checked expr   : array_max<T0=Float64><Array(T0 NULL)>(CAST(array<T0=Float64><T0, T0, T0, T0>(1.2_f64, 3.4_f64, 5.6_f64, 7.8_f64) AS Array(Float64 NULL)))
+optimized expr : 7.8_f64
+output type    : Float64 NULL
+output domain  : {7.8..=7.8}
+output         : 7.8
+
+
+ast            : array_max([1.2, NULL, 3.4, 5.6, NULL])
+raw expr       : array_max(array(1.2_f64, NULL, 3.4_f64, 5.6_f64, NULL))
+checked expr   : array_max<T0=Float64><Array(T0 NULL)>(array<T0=Float64 NULL><T0, T0, T0, T0, T0>(CAST(1.2_f64 AS Float64 NULL), CAST(NULL AS Float64 NULL), CAST(3.4_f64 AS Float64 NULL), CAST(5.6_f64 AS Float64 NULL), CAST(NULL AS Float64 NULL)))
+optimized expr : 5.6_f64
+output type    : Float64 NULL
+output domain  : {5.6..=5.6}
+output         : 5.6
+
+
+ast            : array_max(['a', 'b', 'c', 'd', 'e'])
+raw expr       : array_max(array("a", "b", "c", "d", "e"))
+checked expr   : array_max<T0=String><Array(T0 NULL)>(CAST(array<T0=String><T0, T0, T0, T0, T0>("a", "b", "c", "d", "e") AS Array(String NULL)))
+optimized expr : "e"
+output type    : String NULL
+output domain  : {"e"..="e"}
+output         : "e"
+
+
+ast            : array_max(['a', 'b', NULL, 'c', 'd', NULL])
+raw expr       : array_max(array("a", "b", NULL, "c", "d", NULL))
+checked expr   : array_max<T0=String><Array(T0 NULL)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0>(CAST("a" AS String NULL), CAST("b" AS String NULL), CAST(NULL AS String NULL), CAST("c" AS String NULL), CAST("d" AS String NULL), CAST(NULL AS String NULL)))
+optimized expr : "d"
+output type    : String NULL
+output domain  : {"d"..="d"}
+output         : "d"
+
+
+ast            : array_max([a, b, c, d])
+raw expr       : array_max(array(a::Int16, b::Int16, c::Int16, d::Int16))
+checked expr   : array_max<T0=Int16><Array(T0 NULL)>(CAST(array<T0=Int16><T0, T0, T0, T0>(a, b, c, d) AS Array(Int16 NULL)))
+evaluation:
++--------+---------+---------+---------+---------+------------+
+|        | a       | b       | c       | d       | Output     |
++--------+---------+---------+---------+---------+------------+
+| Type   | Int16   | Int16   | Int16   | Int16   | Int16 NULL |
+| Domain | {1..=8} | {1..=6} | {3..=7} | {1..=9} | Unknown    |
+| Row 0  | 1       | 2       | 3       | 4       | 4          |
+| Row 1  | 5       | 6       | 7       | 8       | 8          |
+| Row 2  | 8       | 1       | 7       | 1       | 8          |
+| Row 3  | 3       | 2       | 6       | 9       | 9          |
++--------+---------+---------+---------+---------+------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------+
+| Column | Data                                                                   |
++--------+------------------------------------------------------------------------+
+| a      | Int16([1, 5, 8, 3])                                                    |
+| b      | Int16([2, 6, 1, 2])                                                    |
+| c      | Int16([3, 7, 7, 6])                                                    |
+| d      | Int16([4, 8, 1, 9])                                                    |
+| Output | NullableColumn { column: Int16([4, 8, 8, 9]), validity: [0b____1111] } |
++--------+------------------------------------------------------------------------+
+
+
+ast            : array_max([a, b, c, d])
+raw expr       : array_max(array(a::UInt64 NULL, b::UInt64 NULL, c::UInt64 NULL, d::UInt64 NULL))
+checked expr   : array_max<T0=UInt64><Array(T0 NULL)>(array<T0=UInt64 NULL><T0, T0, T0, T0>(a, b, c, d))
+evaluation:
++--------+------------------+------------------+-------------+------------------+-------------+
+|        | a                | b                | c           | d                | Output      |
++--------+------------------+------------------+-------------+------------------+-------------+
+| Type   | UInt64 NULL      | UInt64 NULL      | UInt64 NULL | UInt64 NULL      | UInt64 NULL |
+| Domain | {0..=4} ∪ {NULL} | {0..=6} ∪ {NULL} | {3..=9}     | {0..=6} ∪ {NULL} | Unknown     |
+| Row 0  | 1                | 2                | 3           | 4                | 4           |
+| Row 1  | 2                | NULL             | 7           | 6                | 7           |
+| Row 2  | NULL             | 5                | 8           | 5                | 8           |
+| Row 3  | 4                | 6                | 9           | NULL             | 9           |
++--------+------------------+------------------+-------------+------------------+-------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------+
+| Column | Data                                                                    |
++--------+-------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt64([1, 2, 0, 4]), validity: [0b____1011] } |
+| b      | NullableColumn { column: UInt64([2, 0, 5, 6]), validity: [0b____1101] } |
+| c      | NullableColumn { column: UInt64([3, 7, 8, 9]), validity: [0b____1111] } |
+| d      | NullableColumn { column: UInt64([4, 6, 5, 0]), validity: [0b____0111] } |
+| Output | NullableColumn { column: UInt64([4, 7, 8, 9]), validity: [0b____1111] } |
++--------+-------------------------------------------------------------------------+
+
+
+ast            : array_min([])
+raw expr       : array_min(array())
+checked expr   : array_min<Array(Nothing)>(array<>())
+optimized expr : NULL
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_min([1, 2, 3, 4, 5, 6, 7])
+raw expr       : array_min(array(1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
+checked expr   : array_min<T0=UInt8><Array(T0 NULL)>(CAST(array<T0=UInt8><T0, T0, T0, T0, T0, T0, T0>(1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8) AS Array(UInt8 NULL)))
+optimized expr : 1_u8
+output type    : UInt8 NULL
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : array_min([1, 2, 3, 4, 5, NULL, 6])
+raw expr       : array_min(array(1_u8, 2_u8, 3_u8, 4_u8, 5_u8, NULL, 6_u8))
+checked expr   : array_min<T0=UInt8><Array(T0 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0, T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(4_u8 AS UInt8 NULL), CAST(5_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL), CAST(6_u8 AS UInt8 NULL)))
+optimized expr : 1_u8
+output type    : UInt8 NULL
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : array_min([1.2, 3.4, 5.6, 7.8])
+raw expr       : array_min(array(1.2_f64, 3.4_f64, 5.6_f64, 7.8_f64))
+checked expr   : array_min<T0=Float64><Array(T0 NULL)>(CAST(array<T0=Float64><T0, T0, T0, T0>(1.2_f64, 3.4_f64, 5.6_f64, 7.8_f64) AS Array(Float64 NULL)))
+optimized expr : 1.2_f64
+output type    : Float64 NULL
+output domain  : {1.2..=1.2}
+output         : 1.2
+
+
+ast            : array_min([1.2, NULL, 3.4, 5.6, NULL])
+raw expr       : array_min(array(1.2_f64, NULL, 3.4_f64, 5.6_f64, NULL))
+checked expr   : array_min<T0=Float64><Array(T0 NULL)>(array<T0=Float64 NULL><T0, T0, T0, T0, T0>(CAST(1.2_f64 AS Float64 NULL), CAST(NULL AS Float64 NULL), CAST(3.4_f64 AS Float64 NULL), CAST(5.6_f64 AS Float64 NULL), CAST(NULL AS Float64 NULL)))
+optimized expr : 1.2_f64
+output type    : Float64 NULL
+output domain  : {1.2..=1.2}
+output         : 1.2
+
+
+ast            : array_min(['a', 'b', 'c', 'd', 'e'])
+raw expr       : array_min(array("a", "b", "c", "d", "e"))
+checked expr   : array_min<T0=String><Array(T0 NULL)>(CAST(array<T0=String><T0, T0, T0, T0, T0>("a", "b", "c", "d", "e") AS Array(String NULL)))
+optimized expr : "a"
+output type    : String NULL
+output domain  : {"a"..="a"}
+output         : "a"
+
+
+ast            : array_min(['a', 'b', NULL, 'c', 'd', NULL])
+raw expr       : array_min(array("a", "b", NULL, "c", "d", NULL))
+checked expr   : array_min<T0=String><Array(T0 NULL)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0>(CAST("a" AS String NULL), CAST("b" AS String NULL), CAST(NULL AS String NULL), CAST("c" AS String NULL), CAST("d" AS String NULL), CAST(NULL AS String NULL)))
+optimized expr : "a"
+output type    : String NULL
+output domain  : {"a"..="a"}
+output         : "a"
+
+
+ast            : array_min([a, b, c, d])
+raw expr       : array_min(array(a::Int16, b::Int16, c::Int16, d::Int16))
+checked expr   : array_min<T0=Int16><Array(T0 NULL)>(CAST(array<T0=Int16><T0, T0, T0, T0>(a, b, c, d) AS Array(Int16 NULL)))
+evaluation:
++--------+---------+---------+---------+---------+------------+
+|        | a       | b       | c       | d       | Output     |
++--------+---------+---------+---------+---------+------------+
+| Type   | Int16   | Int16   | Int16   | Int16   | Int16 NULL |
+| Domain | {1..=8} | {1..=6} | {3..=7} | {1..=9} | Unknown    |
+| Row 0  | 1       | 2       | 3       | 4       | 1          |
+| Row 1  | 5       | 6       | 7       | 8       | 5          |
+| Row 2  | 8       | 1       | 7       | 1       | 1          |
+| Row 3  | 3       | 2       | 6       | 9       | 2          |
++--------+---------+---------+---------+---------+------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------+
+| Column | Data                                                                   |
++--------+------------------------------------------------------------------------+
+| a      | Int16([1, 5, 8, 3])                                                    |
+| b      | Int16([2, 6, 1, 2])                                                    |
+| c      | Int16([3, 7, 7, 6])                                                    |
+| d      | Int16([4, 8, 1, 9])                                                    |
+| Output | NullableColumn { column: Int16([1, 5, 1, 2]), validity: [0b____1111] } |
++--------+------------------------------------------------------------------------+
+
+
+ast            : array_min([a, b, c, d])
+raw expr       : array_min(array(a::UInt64 NULL, b::UInt64 NULL, c::UInt64 NULL, d::UInt64 NULL))
+checked expr   : array_min<T0=UInt64><Array(T0 NULL)>(array<T0=UInt64 NULL><T0, T0, T0, T0>(a, b, c, d))
+evaluation:
++--------+------------------+------------------+-------------+------------------+-------------+
+|        | a                | b                | c           | d                | Output      |
++--------+------------------+------------------+-------------+------------------+-------------+
+| Type   | UInt64 NULL      | UInt64 NULL      | UInt64 NULL | UInt64 NULL      | UInt64 NULL |
+| Domain | {0..=4} ∪ {NULL} | {0..=6} ∪ {NULL} | {3..=9}     | {0..=6} ∪ {NULL} | Unknown     |
+| Row 0  | 1                | 2                | 3           | 4                | 1           |
+| Row 1  | 2                | NULL             | 7           | 6                | 2           |
+| Row 2  | NULL             | 5                | 8           | 5                | 5           |
+| Row 3  | 4                | 6                | 9           | NULL             | 4           |
++--------+------------------+------------------+-------------+------------------+-------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------+
+| Column | Data                                                                    |
++--------+-------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt64([1, 2, 0, 4]), validity: [0b____1011] } |
+| b      | NullableColumn { column: UInt64([2, 0, 5, 6]), validity: [0b____1101] } |
+| c      | NullableColumn { column: UInt64([3, 7, 8, 9]), validity: [0b____1111] } |
+| d      | NullableColumn { column: UInt64([4, 6, 5, 0]), validity: [0b____0111] } |
+| Output | NullableColumn { column: UInt64([1, 2, 5, 4]), validity: [0b____1111] } |
++--------+-------------------------------------------------------------------------+
+
+
