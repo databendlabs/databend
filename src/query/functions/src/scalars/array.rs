@@ -192,9 +192,9 @@ pub fn register(registry: &mut FunctionRegistry) {
         "array_indexof",
         FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
-        vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, GenericType<0>, UInt64Type>(
-            |arr, val, output, _| {
-                output.push(arr.iter().position(|item| item == val).map(|pos| pos+1).unwrap_or(0) as u64);
+        vectorize_2_arg::<ArrayType<GenericType<0>>, GenericType<0>, UInt64Type>(
+            |arr, val, _| {
+                arr.iter().position(|item| item == val).map(|pos| pos+1).unwrap_or(0) as u64
             },
         ),
     );

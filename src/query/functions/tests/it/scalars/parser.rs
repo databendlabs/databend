@@ -22,6 +22,8 @@ use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
+use common_expression::types::decimal::DecimalDataType;
+use common_expression::types::decimal::DecimalSize;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::Literal;
@@ -471,6 +473,9 @@ fn transform_data_type(target_type: common_ast::ast::TypeName) -> DataType {
         common_ast::ast::TypeName::Int64 => DataType::Number(NumberDataType::Int64),
         common_ast::ast::TypeName::Float32 => DataType::Number(NumberDataType::Float32),
         common_ast::ast::TypeName::Float64 => DataType::Number(NumberDataType::Float64),
+        common_ast::ast::TypeName::Decimal { precision, scale } => {
+            DataType::Decimal(DecimalDataType::from_size(DecimalSize { precision, scale }).unwrap())
+        }
         common_ast::ast::TypeName::String => DataType::String,
         common_ast::ast::TypeName::Timestamp => DataType::Timestamp,
         common_ast::ast::TypeName::Date => DataType::Date,

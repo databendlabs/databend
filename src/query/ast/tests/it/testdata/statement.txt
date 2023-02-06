@@ -321,6 +321,54 @@ Some(
     "TabSeparatedWithNamesAndTypes",
 )
 ---------- Input ----------
+create table a (c decimal(38, 0))
+---------- Output ---------
+CREATE TABLE a (c Decimal(38, 0) NOT NULL)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "a",
+            quote: None,
+            span: Some(
+                13..14,
+            ),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c",
+                            quote: None,
+                            span: Some(
+                                16..17,
+                            ),
+                        },
+                        data_type: Decimal {
+                            precision: 38,
+                            scale: 0,
+                        },
+                        default_expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
 create table if not exists a.b (c integer not null default 1, b varchar);
 ---------- Output ---------
 CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING NOT NULL)
