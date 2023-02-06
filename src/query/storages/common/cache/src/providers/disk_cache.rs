@@ -44,9 +44,10 @@ pub struct DiskBytesCache {
     inner_memory_cache: InMemoryBytesCacheHolder,
     inner_external_cache: Arc<RwLock<DiskCache>>,
     population_queue: crossbeam_channel::Sender<CacheItem>,
-    _cache_pupulator: DiskCachePopulator,
+    _cache_populator: DiskCachePopulator,
 }
 
+// TODO new settings please
 const DEFAULT_POPULATION_CHAN_CAP: usize = 100_000;
 const DEFAULT_IN_MEMORY_BLOCK_DATA_CACHE_CAP: u64 = 1024 * 1024 * 1024 * 10;
 
@@ -63,7 +64,7 @@ impl DiskCacheBuilder {
             ),
             inner_external_cache: inner.clone(),
             population_queue: rx,
-            _cache_pupulator: DiskCachePopulator::new(tx, inner, 1)?,
+            _cache_populator: DiskCachePopulator::new(tx, inner, 1)?,
         })
     }
 }
@@ -97,13 +98,17 @@ impl CacheAccessor<String, Vec<u8>> for DiskBytesCache {
                         let mut inner = self.inner_external_cache.write();
                         let _ = inner.remove(k);
                     }
-                    return None;
+                    None
+                } else {
+                    // trim the checksum bytes and return
+                    let total_len = bytes.len();
+                    let body_len = total_len - 4;
+                    bytes.truncate(body_len);
+                    let item = Arc::new(bytes);
+                    // also put the cached item into in-memory cache
+                    self.inner_memory_cache.put(k.to_owned(), item.clone());
+                    Some(item)
                 }
-                // return the bytes without the checksum bytes
-                let total_len = bytes.len();
-                let body_len = total_len - 4;
-                bytes.truncate(body_len);
-                Some(Arc::new(bytes))
             }
             Err(e) => {
                 error!("get disk cache item failed, {}", e);
@@ -122,6 +127,7 @@ impl CacheAccessor<String, Vec<u8>> for DiskBytesCache {
             let in_memory_cache = self.inner_memory_cache.read();
             if in_memory_cache.contains(&k) {
                 // if already cached in memory, it is already attempted to be written to disk cache
+                // TODO check this, shall we return here?
                 return;
             }
         }
@@ -132,17 +138,14 @@ impl CacheAccessor<String, Vec<u8>> for DiskBytesCache {
         }
 
         let inner = self.inner_external_cache.read();
-        if inner.contains_key(&k) {
-            // check if k in disk cache already.
-            // note that cache is being accessed concurrently, the cached item that associated
-            // whit `k` might be evicted at this time, but we ignore this situation for performance
-            // concerns.
-        } else {
+        // in our case, the value associated with a specific key never change, thus
+        // only when cache is missing, we try to populate it.
+        if !inner.contains_key(&k) {
             let msg = CacheItem { key: k, value: v };
             match self.population_queue.try_send(msg) {
                 Ok(_) => {}
                 Err(TrySendError::Full(_)) => {
-                    // TODO metric, record missed cache writing
+                    self::metrics::metrics_inc_population_overflow_count(1);
                     warn!("disk cache population queue is full");
                 }
                 Err(TrySendError::Disconnected(_)) => {
@@ -189,6 +192,8 @@ impl CachePopulationWorker {
                         inner.insert_bytes(&key, &[value.as_slice(), &crc_bytes])
                     } {
                         error!("populate disk cache failed {}", e);
+                    } else {
+                        self::metrics::metrics_inc_disk_cache_population_count(1);
                     }
                 }
                 Err(_) => {
@@ -256,5 +261,19 @@ fn validate_checksum(bytes: &[u8]) -> Result<()> {
                 "crc checksum validation failure, key : crc checksum not match, crc kept in file {crc}, crc calculated {crc_calculated}"
             )))
         }
+    }
+}
+
+mod metrics {
+    use metrics::increment_gauge;
+
+    #[inline]
+    pub fn metrics_inc_population_overflow_count(c: u64) {
+        increment_gauge!("data_block_cache_population_overflow", c as f64);
+    }
+
+    #[inline]
+    pub fn metrics_inc_disk_cache_population_count(c: u64) {
+        increment_gauge!("data_block_cache_population_overflow", c as f64);
     }
 }
