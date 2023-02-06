@@ -46,15 +46,15 @@ pub struct CacheManager {
 impl CacheManager {
     /// Initialize the caches according to the relevant configurations.
     pub fn init(config: &QueryConfig) -> Result<()> {
-        let block_data_cache = if config.table_data_cache_enabled {
+        let block_data_cache = if config.table_data_cache_disabled {
+            None
+        } else {
             Self::new_block_data_cache(
                 &config.table_disk_cache_root,
                 config.table_data_cache_in_memory_mb_size,
                 config.table_data_cache_population_queue_size,
                 config.table_disk_cache_mb_size,
             )?
-        } else {
-            None
         };
         if !config.table_meta_cache_enabled {
             GlobalInstance::set(Arc::new(Self {

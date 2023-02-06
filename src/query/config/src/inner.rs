@@ -163,8 +163,8 @@ pub struct QueryConfig {
     pub table_cache_bloom_index_meta_count: u64,
     /// Max number of cached bloom index filters
     pub table_cache_bloom_index_filter_count: u64,
-    /// Table data cache enabled
-    pub table_data_cache_enabled: bool,
+    /// Table data cache disabled
+    pub table_data_cache_disabled: bool,
     /// Max bytes of table data cached in memory (MB)
     pub table_data_cache_in_memory_mb_size: u64,
     /// Table disk cache folder root
@@ -231,7 +231,7 @@ impl Default for QueryConfig {
             table_cache_segment_count: 10240,
             table_cache_bloom_index_meta_count: 3000,
             table_cache_bloom_index_filter_count: 1024 * 1024,
-            table_data_cache_enabled: false,
+            table_data_cache_disabled: true,
             management_mode: false,
             jwt_key_file: "".to_string(),
             async_insert_max_data_size: 10000,

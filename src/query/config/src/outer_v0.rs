@@ -1301,9 +1301,9 @@ pub struct QueryConfig {
     #[clap(long, default_value = "1048576")]
     pub table_cache_bloom_index_filter_count: u64,
 
-    /// Table data cached enabled, default false
-    #[clap(long, default_value = "false")]
-    pub table_data_cache_enabled: bool,
+    /// Table data cached disabled, default true
+    #[clap(long, default_value = "true")]
+    pub table_data_cache_disabled: bool,
 
     /// Max bytes of table data cached in memory (MB)
     /// default value 10240 MB, or 10G
@@ -1402,7 +1402,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             table_cache_segment_count: self.table_cache_segment_count,
             table_cache_bloom_index_meta_count: self.table_cache_bloom_index_meta_count,
             table_cache_bloom_index_filter_count: self.table_cache_bloom_index_filter_count,
-            table_data_cache_enabled: self.table_data_cache_enabled,
+            table_data_cache_disabled: self.table_data_cache_disabled,
             management_mode: self.management_mode,
             jwt_key_file: self.jwt_key_file,
             async_insert_max_data_size: self.async_insert_max_data_size,
@@ -1469,7 +1469,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_cache_segment_count: inner.table_cache_segment_count,
             table_cache_bloom_index_meta_count: inner.table_cache_bloom_index_meta_count,
             table_cache_bloom_index_filter_count: inner.table_cache_bloom_index_filter_count,
-            table_data_cache_enabled: inner.table_meta_cache_enabled,
+            table_data_cache_disabled: inner.table_meta_cache_enabled,
             table_data_cache_in_memory_mb_size: inner.table_data_cache_in_memory_mb_size,
             table_data_cache_population_queue_size: inner.table_data_cache_population_queue_size,
             management_mode: inner.management_mode,
