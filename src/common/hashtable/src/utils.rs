@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::intrinsics::assume;
-use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::ops::DerefMut;
 

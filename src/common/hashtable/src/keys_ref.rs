@@ -14,7 +14,6 @@
 
 use std::hash::Hash;
 use std::hash::Hasher;
-use std::mem::MaybeUninit;
 
 use super::FastHash;
 use super::HashtableKeyable;
