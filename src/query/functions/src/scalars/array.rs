@@ -67,11 +67,21 @@ use siphasher::sip128::SipHasher24;
 use crate::aggregates::eval_aggr;
 use crate::AggregateFunctionFactory;
 
+const ARRAY_AGGREGATE_FUNCTIONS: &[(&str, &str); 5] = &[
+    ("array_avg", "avg"),
+    ("array_count", "count"),
+    ("array_max", "max"),
+    ("array_min", "min"),
+    ("array_sum", "sum"),
+];
+
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("contains", &["array_contains"]);
     registry.register_aliases("get", &["array_get"]);
     registry.register_aliases("length", &["array_length"]);
     registry.register_aliases("slice", &["array_slice"]);
+
+    register_array_aggr(registry);
 
     registry.register_0_arg_core::<EmptyArrayType, _, _>(
         "array",
@@ -612,7 +622,9 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         }),
     );
+}
 
+fn register_array_aggr(registry: &mut FunctionRegistry) {
     fn eval_aggr_return_type(name: &str, args_type: &[DataType]) -> Option<DataType> {
         if args_type.len() != 1 {
             return None;
@@ -682,73 +694,19 @@ pub fn register(registry: &mut FunctionRegistry) {
         }
     }
 
-    registry.register_function_factory("array_sum", |_, args_type| {
-        let return_type = eval_aggr_return_type("sum", args_type)?;
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "array_sum".to_string(),
-                args_type: vec![args_type[0].clone()],
-                return_type,
-                property: FunctionProperty::default(),
-            },
-            calc_domain: Box::new(move |_| FunctionDomain::MayThrow),
-            eval: Box::new(|args, ctx| eval_array_aggr("sum", args, ctx)),
-        }))
-    });
-
-    registry.register_function_factory("array_avg", |_, args_type| {
-        let return_type = eval_aggr_return_type("avg", args_type)?;
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "array_avg".to_string(),
-                args_type: vec![args_type[0].clone()],
-                return_type,
-                property: FunctionProperty::default(),
-            },
-            calc_domain: Box::new(move |_| FunctionDomain::MayThrow),
-            eval: Box::new(|args, ctx| eval_array_aggr("avg", args, ctx)),
-        }))
-    });
-
-    registry.register_function_factory("array_count", |_, args_type| {
-        let return_type = eval_aggr_return_type("count", args_type)?;
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "array_count".to_string(),
-                args_type: vec![args_type[0].clone()],
-                return_type,
-                property: FunctionProperty::default(),
-            },
-            calc_domain: Box::new(move |_| FunctionDomain::MayThrow),
-            eval: Box::new(|args, ctx| eval_array_aggr("count", args, ctx)),
-        }))
-    });
-
-    registry.register_function_factory("array_max", |_, args_type| {
-        let return_type = eval_aggr_return_type("max", args_type)?;
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "array_max".to_string(),
-                args_type: vec![args_type[0].clone()],
-                return_type,
-                property: FunctionProperty::default(),
-            },
-            calc_domain: Box::new(move |_| FunctionDomain::MayThrow),
-            eval: Box::new(|args, ctx| eval_array_aggr("max", args, ctx)),
-        }))
-    });
-
-    registry.register_function_factory("array_min", |_, args_type| {
-        let return_type = eval_aggr_return_type("min", args_type)?;
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "array_min".to_string(),
-                args_type: vec![args_type[0].clone()],
-                return_type,
-                property: FunctionProperty::default(),
-            },
-            calc_domain: Box::new(move |_| FunctionDomain::MayThrow),
-            eval: Box::new(|args, ctx| eval_array_aggr("min", args, ctx)),
-        }))
-    });
+    for (func_name, name) in ARRAY_AGGREGATE_FUNCTIONS {
+        registry.register_function_factory(func_name, |_, args_type| {
+            let return_type = eval_aggr_return_type(name.clone(), args_type)?;
+            Some(Arc::new(Function {
+                signature: FunctionSignature {
+                    name: func_name.to_string(),
+                    args_type: vec![args_type[0].clone()],
+                    return_type,
+                    property: FunctionProperty::default(),
+                },
+                calc_domain: Box::new(move |_| FunctionDomain::MayThrow),
+                eval: Box::new(|args, ctx| eval_array_aggr(name, args, ctx)),
+            }))
+        });
+    }
 }
