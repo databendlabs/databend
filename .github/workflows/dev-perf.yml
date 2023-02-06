@@ -100,7 +100,7 @@ jobs:
             --test-dir ./scripts/benchmark/query/benchmarks/ \
             --output-format json,md \
             --output-dir /tmp/databend-perf/ \
-            --size 'c5.4xlarge' \
+            --size 'c5.4xlarge'
           cat /tmp/databend-perf/hits.md
       - name: Upload artifact
         uses: actions/upload-artifact@v3
