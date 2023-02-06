@@ -46,6 +46,16 @@ pub struct CacheManager {
 impl CacheManager {
     /// Initialize the caches according to the relevant configurations.
     pub fn init(config: &QueryConfig) -> Result<()> {
+        let block_data_cache = if config.table_data_cache_enabled {
+            Self::new_block_data_cache(
+                &config.table_disk_cache_root,
+                config.table_data_cache_in_memory_mb_size,
+                config.table_data_cache_population_queue_size,
+                config.table_disk_cache_mb_size,
+            )?
+        } else {
+            None
+        };
         if !config.table_meta_cache_enabled {
             GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache: None,
@@ -65,10 +75,6 @@ impl CacheManager {
             let bloom_index_meta_cache =
                 Self::new_item_cache(config.table_cache_bloom_index_meta_count);
             let file_meta_data_cache = Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS);
-            let block_data_cache = Self::new_block_data_cache(
-                &config.table_disk_cache_root,
-                config.table_disk_cache_mb_size * 1024 * 1024,
-            )?;
             GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache,
                 segment_info_cache,
@@ -123,9 +129,19 @@ impl CacheManager {
         }
     }
 
-    fn new_block_data_cache(path: &str, capacity: u64) -> Result<Option<DiskBytesCache>> {
-        if capacity > 0 {
-            let cache_holder = DiskCacheBuilder::new_disk_cache(path, capacity)?;
+    fn new_block_data_cache(
+        path: &str,
+        in_memory_cache_mb_size: u64,
+        population_queue_size: u32,
+        disk_cache_mb_size: u64,
+    ) -> Result<Option<DiskBytesCache>> {
+        if in_memory_cache_mb_size > 0 {
+            let cache_holder = DiskCacheBuilder::new_disk_cache(
+                path,
+                in_memory_cache_mb_size,
+                population_queue_size,
+                disk_cache_mb_size,
+            )?;
             Ok(Some(cache_holder))
         } else {
             Ok(None)

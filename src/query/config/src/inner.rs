@@ -147,16 +147,12 @@ pub struct QueryConfig {
     pub table_engine_memory_enabled: bool,
     pub wait_timeout_mills: u64,
     pub max_query_log_size: usize,
-    /// Table Cached enabled
+    /// Table Meta Cached enabled
     pub table_meta_cache_enabled: bool,
     /// Max number of cached table block meta
     pub table_cache_block_meta_count: u64,
-    /// Table memory cache size (mb)
+    /// Table memory cache size (MB)
     pub table_memory_cache_mb_size: u64,
-    /// Table disk cache folder root
-    pub table_disk_cache_root: String,
-    /// Table disk cache size (mb)
-    pub table_disk_cache_mb_size: u64,
     /// Max number of cached table snapshot
     pub table_cache_snapshot_count: u64,
     /// Max number of cached table statistic
@@ -167,6 +163,18 @@ pub struct QueryConfig {
     pub table_cache_bloom_index_meta_count: u64,
     /// Max number of cached bloom index filters
     pub table_cache_bloom_index_filter_count: u64,
+    /// Table data cache enabled
+    pub table_data_cache_enabled: bool,
+    /// Max bytes of table data cached in memory (MB)
+    pub table_data_cache_in_memory_mb_size: u64,
+    /// Table disk cache folder root
+    pub table_disk_cache_root: String,
+    /// Max size of external cache population queue length
+    /// TODO explain this, how it effect the memory usage
+    /// the item being queued are typically referencing items that inside in-memory cached data cache
+    pub table_data_cache_population_queue_size: u32,
+    /// Table disk cache size (MB)
+    pub table_disk_cache_mb_size: u64,
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
     pub management_mode: bool,
     pub jwt_key_file: String,
@@ -211,17 +219,19 @@ impl Default for QueryConfig {
             rpc_tls_query_service_domain_name: "localhost".to_string(),
             table_engine_memory_enabled: true,
             wait_timeout_mills: 5000,
-            max_query_log_size: 10000,
+            max_query_log_size: 10_000,
             table_meta_cache_enabled: true,
             table_cache_block_meta_count: 102400,
             table_memory_cache_mb_size: 256,
             table_disk_cache_root: "_cache".to_string(),
-            table_disk_cache_mb_size: 1024,
+            table_data_cache_population_queue_size: 65536,
+            table_disk_cache_mb_size: 10240,
             table_cache_snapshot_count: 256,
             table_cache_statistic_count: 256,
             table_cache_segment_count: 10240,
             table_cache_bloom_index_meta_count: 3000,
             table_cache_bloom_index_filter_count: 1024 * 1024,
+            table_data_cache_enabled: false,
             management_mode: false,
             jwt_key_file: "".to_string(),
             async_insert_max_data_size: 10000,
@@ -232,6 +242,7 @@ impl Default for QueryConfig {
             share_endpoint_auth_token_file: "".to_string(),
             tenant_quota: None,
             internal_enable_sandbox_tenant: false,
+            table_data_cache_in_memory_mb_size: 1024 * 10,
         }
     }
 }

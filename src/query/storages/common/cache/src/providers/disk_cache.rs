@@ -47,20 +47,21 @@ pub struct DiskBytesCache {
     _cache_populator: DiskCachePopulator,
 }
 
-// TODO new settings please
-const DEFAULT_POPULATION_CHAN_CAP: usize = 100_000;
-const DEFAULT_IN_MEMORY_BLOCK_DATA_CACHE_CAP: u64 = 1024 * 1024 * 1024 * 10;
-
 pub struct DiskCacheBuilder;
 impl DiskCacheBuilder {
-    pub fn new_disk_cache(path: &str, capacity: u64) -> Result<DiskBytesCache> {
-        let cache = DiskCache::new(path, capacity)
+    pub fn new_disk_cache(
+        path: &str,
+        in_memory_cache_mb_size: u64,
+        population_queue_size: u32,
+        disk_cache_size: u64,
+    ) -> Result<DiskBytesCache> {
+        let external_cache = DiskCache::new(path, disk_cache_size * 1024 * 1024)
             .map_err(|e| ErrorCode::StorageOther(format!("create disk cache failed, {e}")))?;
-        let inner = Arc::new(RwLock::new(cache));
-        let (rx, tx) = crossbeam_channel::bounded(DEFAULT_POPULATION_CHAN_CAP);
+        let inner = Arc::new(RwLock::new(external_cache));
+        let (rx, tx) = crossbeam_channel::bounded(population_queue_size as usize);
         Ok(DiskBytesCache {
             inner_memory_cache: InMemoryCacheBuilder::new_bytes_cache(
-                DEFAULT_IN_MEMORY_BLOCK_DATA_CACHE_CAP,
+                in_memory_cache_mb_size * 1024 * 1024,
             ),
             inner_external_cache: inner.clone(),
             population_queue: rx,
@@ -118,29 +119,20 @@ impl CacheAccessor<String, Vec<u8>> for DiskBytesCache {
     }
 
     fn put(&self, k: String, v: Arc<Vec<u8>>) {
-        // try put the cached item into in-memory cache first
-
-        // check in memory cache first
-        // note: upgradable guard is not used here , since probability of concurrent
-        // modification os some key is rather low, and will not affect the integrity of cache.
+        // put it into the in-memory cache first
         {
-            let in_memory_cache = self.inner_memory_cache.read();
-            if in_memory_cache.contains(&k) {
-                // if already cached in memory, it is already attempted to be written to disk cache
-                // TODO check this, shall we return here?
-                return;
-            }
+            let mut in_memory_cache = self.inner_memory_cache.write();
+            in_memory_cache.put(k.clone(), v.clone());
         }
 
-        {
-            let mut cache = self.inner_memory_cache.write();
-            cache.put(k.clone(), v.clone());
-        }
+        // check if external(disk/redis) already have it.
+        let contains = {
+            let external_cache = self.inner_external_cache.read();
+            external_cache.contains_key(&k)
+        };
 
-        let inner = self.inner_external_cache.read();
-        // in our case, the value associated with a specific key never change, thus
-        // only when cache is missing, we try to populate it.
-        if !inner.contains_key(&k) {
+        if !contains {
+            // populate the cache to external cache(disk/redis) asyncly
             let msg = CacheItem { key: k, value: v };
             match self.population_queue.try_send(msg) {
                 Ok(_) => {}
@@ -157,6 +149,7 @@ impl CacheAccessor<String, Vec<u8>> for DiskBytesCache {
 
     fn evict(&self, k: &str) -> bool {
         if let Err(e) = {
+            self.inner_memory_cache.evict(k);
             let mut inner = self.inner_external_cache.write();
             inner.remove(k)
         } {

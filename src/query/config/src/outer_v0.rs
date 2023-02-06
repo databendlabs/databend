@@ -1274,7 +1274,7 @@ pub struct QueryConfig {
     pub table_disk_cache_root: String,
 
     /// Table disk cache size (mb)
-    #[clap(long, default_value = "1024")]
+    #[clap(long, default_value = "10240")]
     pub table_disk_cache_mb_size: u64,
 
     /// Max number of cached table snapshot
@@ -1300,6 +1300,21 @@ pub struct QueryConfig {
     /// table filter on 2 columns, might populate 2 * 800 bloom index filter cache items (at most)
     #[clap(long, default_value = "1048576")]
     pub table_cache_bloom_index_filter_count: u64,
+
+    /// Table data cached enabled, default false
+    #[clap(long, default_value = "false")]
+    pub table_data_cache_enabled: bool,
+
+    /// Max bytes of table data cached in memory (MB)
+    /// default value 10240 MB, or 10G
+    #[clap(long, default_value = "10240")]
+    pub table_data_cache_in_memory_mb_size: u64,
+
+    /// Max item that could be pending in the external cache population queue
+    /// default value 65536 items. Increase this value if it takes too much times
+    /// to fully populate the disk cache.
+    #[clap(long, default_value = "65536")]
+    pub table_data_cache_population_queue_size: u32,
 
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
     #[clap(long)]
@@ -1380,12 +1395,14 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             table_cache_block_meta_count: self.table_cache_block_meta_count,
             table_memory_cache_mb_size: self.table_memory_cache_mb_size,
             table_disk_cache_root: self.table_disk_cache_root,
+            table_data_cache_population_queue_size: self.table_data_cache_population_queue_size,
             table_disk_cache_mb_size: self.table_disk_cache_mb_size,
             table_cache_snapshot_count: self.table_cache_snapshot_count,
             table_cache_statistic_count: self.table_cache_statistic_count,
             table_cache_segment_count: self.table_cache_segment_count,
             table_cache_bloom_index_meta_count: self.table_cache_bloom_index_meta_count,
             table_cache_bloom_index_filter_count: self.table_cache_bloom_index_filter_count,
+            table_data_cache_enabled: self.table_data_cache_enabled,
             management_mode: self.management_mode,
             jwt_key_file: self.jwt_key_file,
             async_insert_max_data_size: self.async_insert_max_data_size,
@@ -1398,6 +1415,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             share_endpoint_auth_token_file: self.share_endpoint_auth_token_file,
             tenant_quota: self.quota,
             internal_enable_sandbox_tenant: self.internal_enable_sandbox_tenant,
+            table_data_cache_in_memory_mb_size: self.table_data_cache_in_memory_mb_size,
         })
     }
 }
@@ -1451,6 +1469,9 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_cache_segment_count: inner.table_cache_segment_count,
             table_cache_bloom_index_meta_count: inner.table_cache_bloom_index_meta_count,
             table_cache_bloom_index_filter_count: inner.table_cache_bloom_index_filter_count,
+            table_data_cache_enabled: inner.table_meta_cache_enabled,
+            table_data_cache_in_memory_mb_size: inner.table_data_cache_in_memory_mb_size,
+            table_data_cache_population_queue_size: inner.table_data_cache_population_queue_size,
             management_mode: inner.management_mode,
             jwt_key_file: inner.jwt_key_file,
             async_insert_max_data_size: inner.async_insert_max_data_size,
