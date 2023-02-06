@@ -26,6 +26,8 @@ use common_base::runtime::UnlimitedFuture;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
 use common_catalog::table::ColumnId;
+use common_catalog::table::Table;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -53,6 +55,8 @@ pub struct BlockReader {
     pub(crate) project_indices: BTreeMap<usize, (ColumnId, Field, DataType)>,
     pub(crate) column_nodes: ColumnNodes,
     pub(crate) parquet_schema_descriptor: SchemaDescriptor,
+    pub(crate) table: Arc<dyn Table>,
+    pub(crate) ctx: Arc<dyn TableContext>,
 }
 
 pub struct OwnerMemory {
@@ -120,6 +124,8 @@ impl BlockReader {
         operator: Operator,
         schema: TableSchemaRef,
         projection: Projection,
+        table: Arc<dyn Table>,
+        ctx: Arc<dyn TableContext>,
     ) -> Result<Arc<BlockReader>> {
         let projected_schema = match projection {
             Projection::Columns(ref indices) => TableSchemaRef::new(schema.project(indices)),
@@ -146,6 +152,8 @@ impl BlockReader {
             parquet_schema_descriptor,
             column_nodes,
             project_indices,
+            table,
+            ctx,
         }))
     }
 

@@ -24,12 +24,22 @@ use common_arrow::parquet::compression::Compression as ParquetCompression;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
+use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table::ColumnId;
+use common_catalog::table::Table;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::DataBlock;
+use common_expression::DataSchema;
+use common_expression::Expr;
+use common_expression::Scalar;
+use common_pipeline_transforms::processors::transforms::Transform;
+use common_sql::evaluator::BlockOperator;
+use common_sql::evaluator::CompoundBlockOperator;
+use common_sql::parse_exprs;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::Compression;
@@ -117,6 +127,45 @@ impl BlockReader {
         deserialized_res
     }
 
+    fn schema_default_vals(
+        data_schema: DataSchema,
+        table: Arc<dyn Table>,
+        ctx: Arc<dyn TableContext>,
+    ) -> Result<Vec<Scalar>> {
+        let fields_num = data_schema.num_fields();
+        let mut ops = Vec::with_capacity(fields_num);
+        for field in data_schema.fields() {
+            let expr = if let Some(default_expr) = field.default_expr() {
+                let mut expr = parse_exprs(ctx.clone(), table.clone(), false, default_expr)?;
+                expr.remove(0)
+            } else {
+                let default_value = field.data_type().default_value();
+                Expr::Constant {
+                    span: None,
+                    scalar: default_value,
+                    data_type: field.data_type().clone(),
+                }
+            };
+            ops.push(BlockOperator::Map { expr });
+        }
+
+        let func_ctx = ctx.get_function_context()?;
+        let mut expression_transform = CompoundBlockOperator {
+            ctx: func_ctx,
+            operators: ops,
+        };
+
+        let one_row_chunk = DataBlock::empty_with_schema(Arc::new(data_schema));
+        let res = expression_transform.transform(one_row_chunk)?;
+
+        Ok(res
+            .columns()
+            .iter()
+            .skip(fields_num)
+            .map(|col| unsafe { col.value.as_ref().index_unchecked(0).to_owned() })
+            .collect())
+    }
+
     /// Deserialize column chunks data from parquet format to DataBlock with a uncompressed buffer.
     pub fn deserialize_parquet_chunks_with_buffer(
         &self,
@@ -128,12 +177,12 @@ impl BlockReader {
     ) -> Result<DataBlock> {
         if columns_chunks.is_empty() {
             let data_schema = self.data_schema();
-            let mut default_vals = Vec::with_capacity(data_schema.num_fields());
-            for schema_field in self.projected_schema.fields() {
-                let table_data_type = schema_field.data_type();
-                let data_type: DataType = table_data_type.into();
-                default_vals.push(data_type.default_value());
-            }
+            let ctx = self.ctx.clone();
+            let table = self.table.clone();
+            let default_vals = GlobalIORuntime::instance()
+                .block_on(async move { Self::schema_default_vals(data_schema, table, ctx) })?;
+            // let default_vals = self.schema_default_vals(&data_schema)?;
+            let data_schema = self.data_schema();
             return Ok(DataBlock::create_with_default_value(
                 &data_schema,
                 &default_vals,
