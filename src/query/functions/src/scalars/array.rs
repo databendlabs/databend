@@ -694,12 +694,12 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
         }
     }
 
-    for (func_name, name) in ARRAY_AGGREGATE_FUNCTIONS {
-        registry.register_function_factory(func_name, |_, args_type| {
-            let return_type = eval_aggr_return_type(name.clone(), args_type)?;
+    for (fn_name, name) in ARRAY_AGGREGATE_FUNCTIONS {
+        registry.register_function_factory(fn_name, |_, args_type| {
+            let return_type = eval_aggr_return_type(name, args_type)?;
             Some(Arc::new(Function {
                 signature: FunctionSignature {
-                    name: func_name.to_string(),
+                    name: fn_name.to_string(),
                     args_type: vec![args_type[0].clone()],
                     return_type,
                     property: FunctionProperty::default(),
