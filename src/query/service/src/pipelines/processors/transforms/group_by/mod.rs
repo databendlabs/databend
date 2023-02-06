@@ -30,4 +30,4 @@ pub use aggregator_state::ArenaHolder;
 pub use aggregator_state_entity::StateEntityMutRef;
 pub use aggregator_state_entity::StateEntityRef;
 
-pub const BUCKETS_LG2: u32 = 9;
+pub const BUCKETS_LG2: u32 = 8;

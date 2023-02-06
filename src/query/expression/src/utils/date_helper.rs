@@ -18,6 +18,7 @@ use chrono::Datelike;
 use chrono::Duration;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
+use chrono::Offset;
 use chrono::TimeZone;
 use chrono::Timelike;
 use chrono::Utc;
@@ -292,30 +293,24 @@ pub enum Round {
 
 pub fn round_timestamp(ts: i64, tz: Tz, round: Round) -> i64 {
     let dt = tz.timestamp(ts / 1_000_000, 0_u32);
+    if matches!(round, Round::Minute) && dt.offset().fix().local_minus_utc() % 60 == 0 {
+        return (ts / 1_000_000 / 60) * 60 * 1_000_000;
+    }
+
     let res = match round {
         Round::Second => dt,
         Round::Minute => {
-            tz.ymd(dt.year(), dt.month(), dt.day())
-                .and_hms_micro(dt.hour(), dt.minute(), 0, 0)
+            return ts - dt.second() as i64 * 1_000_000;
         }
-        Round::FiveMinutes => tz.ymd(dt.year(), dt.month(), dt.day()).and_hms_micro(
-            dt.hour(),
-            dt.minute() / 5 * 5,
-            0,
-            0,
-        ),
-        Round::TenMinutes => tz.ymd(dt.year(), dt.month(), dt.day()).and_hms_micro(
-            dt.hour(),
-            dt.minute() / 10 * 10,
-            0,
-            0,
-        ),
-        Round::FifteenMinutes => tz.ymd(dt.year(), dt.month(), dt.day()).and_hms_micro(
-            dt.hour(),
-            dt.minute() / 15 * 15,
-            0,
-            0,
-        ),
+        Round::FiveMinutes => {
+            return ts - (dt.second() as i64 + (dt.minute() % 5) as i64 * 60) * 1_000_000;
+        }
+        Round::TenMinutes => {
+            return ts - (dt.second() as i64 + (dt.minute() % 10) as i64 * 60) * 1_000_000;
+        }
+        Round::FifteenMinutes => {
+            return ts - (dt.second() as i64 + (dt.minute() % 15) as i64 * 60) * 1_000_000;
+        }
         Round::TimeSlot => tz.ymd(dt.year(), dt.month(), dt.day()).and_hms_micro(
             dt.hour(),
             dt.minute() / 30 * 30,

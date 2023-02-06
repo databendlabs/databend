@@ -67,8 +67,8 @@ impl<K: HashtableKeyable + FastHash, const BUCKETS_LG2: u32> PartitionedHashSet<
     }
 }
 
-impl<K: ?Sized + FastHash, V, Impl: HashtableLike<Key = K, Value = V>, const BUCKETS_LG2: u32> HashtableLike
-    for PartitionedHashtable<Impl, BUCKETS_LG2>
+impl<K: ?Sized + FastHash, V, Impl: HashtableLike<Key = K, Value = V>, const BUCKETS_LG2: u32>
+    HashtableLike for PartitionedHashtable<Impl, BUCKETS_LG2>
 {
     type Key = Impl::Key;
     type Value = Impl::Value;
