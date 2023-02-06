@@ -20,10 +20,6 @@ on:
   #   # Run base perf at 08:00 UTC+8
   #   - cron: "0 0 * * *"
 
-permissions:
-  pull-requests: write
-  contents: read
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
