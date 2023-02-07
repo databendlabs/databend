@@ -210,9 +210,6 @@ impl ParquetReader {
     }
 
     pub async fn readers_from_non_blocking_io(&self, part: PartInfoPtr) -> Result<IndexedReaders> {
-        use backon::ExponentialBackoff;
-        use backon::Retryable;
-
         let part = ParquetRowGroupPart::from_part(&part)?;
 
         let mut join_handlers = Vec::with_capacity(self.columns_to_read.len());
@@ -224,10 +221,7 @@ impl ParquetReader {
             let (offset, length) = (meta.offset, meta.length);
 
             join_handlers.push(async move {
-                let data = { || async { obj.range_read(offset..offset + length).await } }
-                    .retry(ExponentialBackoff::default())
-                    .when(|err| err.is_temporary())
-                    .await?;
+                let data = obj.range_read(offset..offset + length).await?;
                 Ok::<_, ErrorCode>((
                     *index,
                     DataReader::new(Box::new(std::io::Cursor::new(data)), length as usize),
