@@ -110,7 +110,6 @@ pub use errors::meta_raft_errors::ForwardToLeader;
 pub use errors::meta_raft_errors::InitializeError;
 pub use errors::meta_raft_errors::RaftChangeMembershipError;
 pub use errors::meta_raft_errors::RaftWriteError;
-pub use errors::meta_raft_errors::RetryableError;
 pub use errors::meta_startup_errors::MetaStartupError;
 pub use errors::rpc_errors::ForwardRPCError;
 pub use kv_message::GetKVReply;
