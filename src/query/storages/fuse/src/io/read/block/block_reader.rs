@@ -42,6 +42,7 @@ use storages_common_cache::metrics_inc_cache_access_count;
 use storages_common_cache::metrics_inc_cache_hit_count;
 use storages_common_cache::metrics_inc_cache_miss_count;
 use storages_common_cache::CacheAccessor;
+use storages_common_cache::TableDataColumnCacheKey;
 use storages_common_cache_manager::CacheManager;
 use storages_common_table_meta::meta::ColumnMeta;
 
@@ -316,8 +317,7 @@ impl BlockReader {
         let block_data_cache = CacheManager::instance().get_block_data_cache();
         let mut data_from_cache = vec![];
         for (_index, (column_id, ..)) in self.project_indices.iter() {
-            // TODO encapsulate this in another component
-            let column_cache_key = format!("{location}-{column_id}");
+            let column_cache_key = TableDataColumnCacheKey::new(location, *column_id);
             let cache_name = "data_block_cache";
             metrics_inc_cache_access_count(1, cache_name);
             if let Some(cached_column_raw_data) = block_data_cache.get(&column_cache_key) {

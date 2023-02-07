@@ -26,6 +26,7 @@ pub use providers::InMemoryCacheBuilder;
 pub use providers::InMemoryItemCacheHolder;
 pub use providers::TableDataCache;
 pub use providers::TableDataCacheBuilder;
+pub use providers::TableDataColumnCacheKey;
 pub use read::CacheKey;
 pub use read::DiskCacheReader;
 pub use read::InMemoryBytesCacheReader;

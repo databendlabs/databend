@@ -36,3 +36,7 @@ pub fn metrics_inc_cache_miss_load_millisecond(c: u64, cache_name: &str) {
 pub fn metrics_inc_cache_hit_count(c: u64, cache_name: &str) {
     increment_gauge!(key_str(cache_name, "memory_hit_count"), c as f64);
 }
+
+pub fn metrics_inc_cache_population_pending_count(c: i64, cache_name: &str) {
+    increment_gauge!(key_str(cache_name, "memory_hit_count"), c as f64);
+}

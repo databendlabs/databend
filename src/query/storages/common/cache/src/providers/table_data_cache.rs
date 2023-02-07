@@ -23,6 +23,10 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
+use crate::metrics_inc_cache_access_count;
+use crate::metrics_inc_cache_hit_count;
+use crate::metrics_inc_cache_miss_count;
+use crate::metrics_inc_cache_population_pending_count;
 use crate::CacheAccessor;
 use crate::DiskBytesCache;
 use crate::DiskCacheBuilder;
@@ -32,6 +36,24 @@ use crate::InMemoryCacheBuilder;
 struct CacheItem {
     key: String,
     value: Arc<Vec<u8>>,
+}
+
+pub struct TableDataColumnCacheKey {
+    cache_key: String,
+}
+
+impl TableDataColumnCacheKey {
+    pub fn new(block_path: &str, column_id: u32) -> Self {
+        Self {
+            cache_key: format!("{block_path}-{column_id}"),
+        }
+    }
+}
+
+impl AsRef<str> for TableDataColumnCacheKey {
+    fn as_ref(&self) -> &str {
+        &self.cache_key
+    }
 }
 
 /// Tiered cache which consist of
@@ -45,6 +67,8 @@ pub struct TableDataCache<T = DiskBytesCache> {
     population_queue: crossbeam_channel::Sender<CacheItem>,
     _cache_populator: DiskCachePopulator,
 }
+
+const TABLE_DATA_CACHE_NAME: &str = "table_data_cache";
 
 pub struct TableDataCacheBuilder;
 impl TableDataCacheBuilder {
@@ -68,10 +92,13 @@ impl TableDataCacheBuilder {
 }
 
 impl CacheAccessor<String, Vec<u8>> for TableDataCache {
-    fn get(&self, k: &str) -> Option<Arc<Vec<u8>>> {
+    fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Vec<u8>>> {
+        metrics_inc_cache_access_count(1, TABLE_DATA_CACHE_NAME);
+        let k = k.as_ref();
         // check in memory cache first
         {
             if let Some(item) = self.in_memory_cache.get(k) {
+                metrics_inc_cache_hit_count(1, TABLE_DATA_CACHE_NAME);
                 return Some(item);
             }
         }
@@ -79,8 +106,10 @@ impl CacheAccessor<String, Vec<u8>> for TableDataCache {
         if let Some(item) = self.external_cache.get(k) {
             // put item into in-memory cache
             self.in_memory_cache.put(k.to_owned(), item.clone());
+            metrics_inc_cache_hit_count(1, TABLE_DATA_CACHE_NAME);
             Some(item)
         } else {
+            metrics_inc_cache_miss_count(1, TABLE_DATA_CACHE_NAME);
             None
         }
     }
@@ -96,7 +125,7 @@ impl CacheAccessor<String, Vec<u8>> for TableDataCache {
             match self.population_queue.try_send(msg) {
                 Ok(_) => {}
                 Err(TrySendError::Full(_)) => {
-                    self::metrics::metrics_inc_population_overflow_count(1);
+                    metrics_inc_cache_population_pending_count(1, TABLE_DATA_CACHE_NAME);
                     warn!("external cache population queue is full");
                 }
                 Err(TrySendError::Disconnected(_)) => {
@@ -136,7 +165,7 @@ where T: CacheAccessor<String, Vec<u8>> + Send + Sync + 'static
                         }
                     }
                     self.cache.put(key, value);
-                    self::metrics::metrics_inc_disk_cache_population_count(1);
+                    metrics_inc_cache_population_pending_count(-1, TABLE_DATA_CACHE_NAME);
                 }
                 Err(_) => {
                     info!("cache work shutdown");
@@ -170,21 +199,7 @@ impl DiskCachePopulator {
             cache,
             population_queue: incoming,
         });
-        let _join_handler = worker.clone().start()?;
+        let _join_handler = worker.start()?;
         Ok(Self)
-    }
-}
-
-mod metrics {
-    use metrics::increment_gauge;
-
-    #[inline]
-    pub fn metrics_inc_population_overflow_count(c: u64) {
-        increment_gauge!("data_block_cache_population_overflow", c as f64);
-    }
-
-    #[inline]
-    pub fn metrics_inc_disk_cache_population_count(c: u64) {
-        increment_gauge!("data_block_cache_population_overflow", c as f64);
     }
 }

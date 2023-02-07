@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 // The cache accessor, crate users usually working on this interface while manipulating caches
 pub trait CacheAccessor<K, V> {
-    fn get(&self, k: &str) -> Option<Arc<V>>;
+    fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<V>>;
     fn put(&self, key: K, value: Arc<V>);
     fn evict(&self, k: &str) -> bool;
     fn contains_key(&self, _k: &str) -> bool;
@@ -26,12 +26,11 @@ pub trait CacheAccessor<K, V> {
 //  note this interface working on mutable self reference
 pub trait StorageCache<K, V> {
     type Meter;
-    // TODO: remove this assoc type
     type CacheEntry;
 
-    fn put(&mut self, key: K, value: Arc<V>);
-
     fn get(&mut self, k: &str) -> Option<Self::CacheEntry>;
+
+    fn put(&mut self, key: K, value: Arc<V>);
 
     fn evict(&mut self, k: &str) -> bool;
 
@@ -51,9 +50,9 @@ mod impls {
     impl<V, C> CacheAccessor<String, V> for Arc<RwLock<C>>
     where C: StorageCache<String, V, CacheEntry = Arc<V>>
     {
-        fn get(&self, k: &str) -> Option<C::CacheEntry> {
+        fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<V>> {
             let mut guard = self.write();
-            guard.get(k)
+            guard.get(k.as_ref())
         }
 
         fn put(&self, k: String, v: Arc<V>) {
@@ -76,7 +75,7 @@ mod impls {
     impl<V, C> CacheAccessor<String, V> for Option<C>
     where C: CacheAccessor<String, V>
     {
-        fn get(&self, k: &str) -> Option<Arc<V>> {
+        fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<V>> {
             self.as_ref().and_then(|cache| cache.get(k))
         }
 

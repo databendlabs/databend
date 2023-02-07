@@ -43,7 +43,8 @@ impl DiskCacheBuilder {
 }
 
 impl CacheAccessor<String, Vec<u8>> for DiskBytesCache {
-    fn get(&self, k: &str) -> Option<Arc<Vec<u8>>> {
+    fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Vec<u8>>> {
+        let k = k.as_ref();
         // check disk cache
         let read_file = || {
             let mut file = {
