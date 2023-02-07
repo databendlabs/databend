@@ -224,7 +224,9 @@ impl UserApiProvider {
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client(tenant)?;
         let update_user = client
-            .update_user(user, auth_info, user_option, MatchSeq::GE(1))
+            .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
+                ui.update_auth_option(auth_info, user_option)
+            })
             .await;
 
         match update_user {

@@ -13,12 +13,10 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_meta_types::AuthInfo;
 use common_meta_types::MatchSeq;
 use common_meta_types::SeqV;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserInfo;
-use common_meta_types::UserOption;
 
 #[async_trait::async_trait]
 pub trait UserApi: Sync + Send {
@@ -30,9 +28,13 @@ pub trait UserApi: Sync + Send {
 
     /// General user's grants update.
     ///
-    /// It fetches the role that matches the specified seq number, update it in place, then write it back with the seq it sees.
+    /// It fetches the user that matches the specified seq number, update it in place, then write it back with the seq it sees.
     ///
     /// Seq number ensures there is no other write happens between get and set.
+    /// Example:
+    /// ```ignore
+    /// self.update_user_with(user_ident, MatchSeq::GE(1), |ui: &mut UserInfo| ui.update_auth_option(foo())).await;
+    /// ```
     async fn update_user_with<F>(
         &self,
         user: UserIdentity,
@@ -41,14 +43,6 @@ pub trait UserApi: Sync + Send {
     ) -> Result<Option<u64>>
     where
         F: FnOnce(&mut UserInfo) + Send;
-
-    async fn update_user(
-        &self,
-        user: UserIdentity,
-        auth_info: Option<AuthInfo>,
-        user_option: Option<UserOption>,
-        seq: MatchSeq,
-    ) -> Result<Option<u64>>;
 
     async fn drop_user(&self, user: UserIdentity, seq: MatchSeq) -> Result<()>;
 }
