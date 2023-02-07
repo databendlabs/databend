@@ -23,7 +23,7 @@ openraft = { workspace = true }
 
 anyerror = { workspace = true }
 chrono = { workspace = true }
-derive_more = "0.99.17"
+derive_more = { workspace = true }
 enumflags2 = { version = "0.7.5", features = ["serde"] }
 hex = "0.4.3"
 num-derive = "0.3.3"

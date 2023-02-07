@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_meta_kvapi::kvapi;
-use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::GetKVReply;
 use common_meta_types::KVAppError;
@@ -26,6 +25,7 @@ use common_meta_types::UpsertKVReply;
 use common_meta_types::UpsertKVReq;
 use tracing::debug;
 
+use crate::applied_state::AppliedState;
 use crate::state_machine::StateMachine;
 
 #[async_trait::async_trait]

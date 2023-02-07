@@ -14,7 +14,7 @@
 
 use async_trait::async_trait;
 use common_meta_kvapi::kvapi;
-use common_meta_types::AppliedState;
+use common_meta_raft_store::applied_state::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::GetKVReply;
 use common_meta_types::GetKVReq;

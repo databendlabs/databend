@@ -48,7 +48,7 @@ where
     }
 
     pub fn with_id(mut self, id: ID) -> Self {
-        self.id = id;
+        self.ident = Some(id);
         self
     }
 
