@@ -25,6 +25,7 @@ use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::TableStatistics;
+use common_catalog::table_args::TableArgs;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::number::NumberScalar;
@@ -51,7 +52,6 @@ use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::TableContext;
 use crate::storages::Table;
-use crate::table_functions::table_function_factory::TableArgs;
 use crate::table_functions::TableFunction;
 
 pub struct NumbersTable {
@@ -66,20 +66,14 @@ impl NumbersTable {
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        let mut total = None;
-        if let Some(args) = table_args {
-            if args.len() == 1 {
-                total = args[0].as_ref().cast_to_u64();
-            }
-        }
-
+        let args = table_args.expect_all_positioned(table_func_name, Some(1))?;
+        let total = args[0].as_ref().cast_to_u64();
         let total = total.ok_or_else(|| {
             ErrorCode::BadArguments(format!(
-                "Must have exactly one number argument for table function.{}",
+                "the arg must be a number for table function {}",
                 &table_func_name
             ))
         })?;
-
         let engine = match table_func_name {
             "numbers" => "SystemNumbers",
             "numbers_mt" => "SystemNumbersMt",
@@ -165,8 +159,10 @@ impl Table for NumbersTable {
         Ok((statistics, parts))
     }
 
-    fn table_args(&self) -> Option<Vec<Scalar>> {
-        Some(vec![Scalar::Number(NumberScalar::UInt64(self.total))])
+    fn table_args(&self) -> Option<TableArgs> {
+        Some(TableArgs::new_positioned(vec![Scalar::Number(
+            NumberScalar::UInt64(self.total),
+        )]))
     }
 
     fn read_data(

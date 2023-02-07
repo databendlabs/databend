@@ -15,9 +15,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_catalog::table_args::TableArgs;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Scalar;
 use common_meta_types::MetaId;
 use parking_lot::RwLock;
 
@@ -33,7 +33,6 @@ use crate::table_functions::numbers::NumbersTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::TableFunction;
 
-pub type TableArgs = Option<Vec<Scalar>>;
 type TableFunctionCreators = RwLock<HashMap<String, (MetaId, Arc<dyn TableFunctionCreator>)>>;
 
 pub trait TableFunctionCreator: Send + Sync {

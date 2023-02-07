@@ -38,6 +38,7 @@ mod setting;
 mod show;
 mod sort;
 mod table;
+mod table_args;
 mod update;
 
 pub use aggregate::AggregateInfo;
