@@ -207,14 +207,8 @@ impl HiveBlockReader {
         length: u64,
         semaphore: Arc<Semaphore>,
     ) -> Result<Vec<u8>> {
-        use backon::ExponentialBackoff;
-        use backon::Retryable;
-
         let handler = common_base::base::tokio::spawn(async move {
-            let chunk = { || async { o.range_read(offset..offset + length).await } }
-                .retry(ExponentialBackoff::default())
-                .when(|err| err.is_temporary())
-                .await?;
+            let chunk = o.range_read(offset..offset + length).await?;
 
             let _semaphore_permit = semaphore.acquire().await.unwrap();
             Ok(chunk)
