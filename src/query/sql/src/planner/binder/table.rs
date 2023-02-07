@@ -436,6 +436,7 @@ impl Binder {
         let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
         let columns = self.metadata.read().columns_by_table_index(table_index);
         let table = self.metadata.read().table(table_index).clone();
+        let statistics_provider = table.table().column_statistics_provider().await?;
 
         let mut col_stats: HashMap<IndexType, Option<ColumnStatistics>> = HashMap::new();
         for column in columns.iter() {
@@ -463,11 +464,8 @@ impl Binder {
                     bind_context.add_column_binding(column_binding);
                     if path_indices.is_none() {
                         if let Some(col_id) = *leaf_index {
-                            let col_stat = table
-                                .table()
-                                .column_statistics_provider()
-                                .await?
-                                .column_statistics(col_id as ColumnId);
+                            let col_stat =
+                                statistics_provider.column_statistics(col_id as ColumnId);
                             col_stats.insert(*column_index, col_stat);
                         }
                     }
