@@ -297,7 +297,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
                     &Cmd::UpsertKV(UpsertKV {
                         key: c.key.clone(),
                         seq: c.seq,
-                        value: Some(c.value.clone()).into(),
+                        value: Operation::Update(c.value.clone()),
                         value_meta: c.value_meta.clone(),
                     }),
                     &mut t,
