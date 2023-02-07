@@ -203,7 +203,7 @@ impl TzLUT {
 
     pub fn to_minute(&self, ts: i64) -> u8 {
         if ts >= 0 && self.offset_round_hour {
-            (ts % 60) as u8
+            ((ts / 60) % 60) as u8
         } else {
             let datetime = self.tz.timestamp(ts, 0);
             datetime.minute() as u8
