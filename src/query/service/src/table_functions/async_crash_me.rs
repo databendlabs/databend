@@ -58,7 +58,7 @@ impl AsyncCrashMeTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let mut panic_message = None;
-        let args = table_args.expect_all_positioned("async_crash_me")?;
+        let args = table_args.expect_all_positioned("async_crash_me", None)?;
         if args.len() == 1 {
             let arg = args[0].clone();
             panic_message =

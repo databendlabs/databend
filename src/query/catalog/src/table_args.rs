@@ -36,12 +36,25 @@ impl TableArgs {
         }
     }
 
-    pub fn expect_all_positioned(&self, func_name: &str) -> Result<Vec<Scalar>> {
+    pub fn expect_all_positioned(
+        &self,
+        func_name: &str,
+        num: Option<usize>,
+    ) -> Result<Vec<Scalar>> {
         if !self.named.is_empty() {
             Err(ErrorCode::BadArguments(format!(
                 "{} accept positioned args only",
                 func_name
             )))
+        } else if let Some(n) = num {
+            if n != self.positioned.len() {
+                Err(ErrorCode::BadArguments(format!(
+                    "{} must accept exactly {} positioned args",
+                    func_name, n
+                )))
+            } else {
+                Ok(self.positioned.clone())
+            }
         } else {
             Ok(self.positioned.clone())
         }

@@ -66,19 +66,14 @@ impl NumbersTable {
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        let mut total = None;
-        let args = table_args.expect_all_positioned("numbers")?;
-        if args.len() == 1 {
-            total = args[0].as_ref().cast_to_u64();
-        }
-
+        let args = table_args.expect_all_positioned(table_func_name, Some(1))?;
+        let total = args[0].as_ref().cast_to_u64();
         let total = total.ok_or_else(|| {
             ErrorCode::BadArguments(format!(
-                "Must have exactly one number argument for table function.{}",
+                "the arg must be a number for table function {}",
                 &table_func_name
             ))
         })?;
-
         let engine = match table_func_name {
             "numbers" => "SystemNumbers",
             "numbers_mt" => "SystemNumbersMt",

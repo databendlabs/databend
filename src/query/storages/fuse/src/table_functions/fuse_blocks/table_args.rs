@@ -21,7 +21,7 @@ use crate::table_functions::TableArgs;
 pub(crate) fn parse_func_table_args(
     table_args: &TableArgs,
 ) -> Result<(String, String, Option<String>)> {
-    let args = table_args.expect_all_positioned("fuse_blocks")?;
+    let args = table_args.expect_all_positioned("fuse_blocks", None)?;
     match args.len() {
         3 => {
             let db = string_value(&args[0])?;
