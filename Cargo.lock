@@ -2132,7 +2132,6 @@ version = "0.1.0"
 dependencies = [
  "async-recursion",
  "async-trait",
- "backon",
  "chrono",
  "common-arrow",
  "common-base",
@@ -2278,7 +2277,6 @@ name = "common-storages-parquet"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
- "backon",
  "chrono",
  "common-arrow",
  "common-base",
@@ -5626,9 +5624,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.26.0"
+version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7358a83a79a6479e1edf91272bc968ba10d92c68f6c5697be186b321e14da3e8"
+checksum = "c40ed33cc9fed187ce8293587416e0afd6ac9fcde17f2a20ad0dca14dd685ebe"
 dependencies = [
  "anyhow",
  "async-compat",

@@ -2420,6 +2420,8 @@ to_int32(Boolean) :: Int32
 to_int32(Boolean NULL) :: Int32 NULL
 to_int32(String) :: Int32
 to_int32(String NULL) :: Int32 NULL
+to_int32(Date) :: Int32
+to_int32(Date NULL) :: Int32 NULL
 to_int32(Variant) :: Int32
 to_int32(Variant NULL) :: Int32 NULL
 to_int64(UInt8) :: Int64
@@ -2870,6 +2872,8 @@ try_to_int32(Boolean) :: Int32 NULL
 try_to_int32(Boolean NULL) :: Int32 NULL
 try_to_int32(String) :: Int32 NULL
 try_to_int32(String NULL) :: Int32 NULL
+try_to_int32(Date) :: Int32 NULL
+try_to_int32(Date NULL) :: Int32 NULL
 try_to_int32(Variant) :: Int32 NULL
 try_to_int32(Variant NULL) :: Int32 NULL
 try_to_int64(UInt8) :: Int64 NULL

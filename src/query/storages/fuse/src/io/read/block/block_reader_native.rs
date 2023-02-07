@@ -92,9 +92,6 @@ impl BlockReader {
         range: &Option<Range<usize>>,
         data_type: common_arrow::arrow::datatypes::DataType,
     ) -> Result<(usize, NativeReader<Reader>)> {
-        use backon::ExponentialBackoff;
-        use backon::Retryable;
-
         let (offset, length) = meta.offset_length();
         let mut meta = meta.as_native().unwrap().clone();
 
@@ -102,10 +99,7 @@ impl BlockReader {
             meta = meta.slice(range.start, range.end);
         }
 
-        let reader = { || async { o.range_read(offset..offset + length).await } }
-            .retry(ExponentialBackoff::default())
-            .when(|err| err.is_temporary())
-            .await?;
+        let reader = o.range_read(offset..offset + length).await?;
 
         let reader: Reader = Box::new(std::io::Cursor::new(reader));
         let fuse_reader = NativeReader::new(reader, data_type, meta.pages.clone(), vec![]);

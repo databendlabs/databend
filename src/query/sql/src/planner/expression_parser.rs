@@ -26,8 +26,16 @@ use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::DataBlock;
+use common_expression::Evaluator;
 use common_expression::Expr;
+use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
+use common_expression::Scalar;
+use common_expression::TableField;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_meta_app::schema::TableInfo;
 use common_settings::Settings;
 use parking_lot::RwLock;
 
@@ -128,4 +136,61 @@ pub fn parse_to_remote_string_exprs(
         .collect();
 
     Ok(exprs)
+}
+
+#[derive(Default)]
+struct DummyTable {
+    info: TableInfo,
+}
+impl Table for DummyTable {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn get_table_info(&self) -> &common_meta_app::schema::TableInfo {
+        &self.info
+    }
+}
+
+pub fn field_default_value(ctx: Arc<dyn TableContext>, field: &TableField) -> Result<Scalar> {
+    let data_type = field.data_type();
+    let data_type = DataType::from(data_type);
+
+    match field.default_expr() {
+        Some(default_expr) => {
+            let table: Arc<dyn Table> = Arc::new(DummyTable::default());
+            let mut expr = parse_exprs(ctx.clone(), table.clone(), false, default_expr)?;
+            let mut expr = expr.remove(0);
+
+            if expr.data_type() != &data_type {
+                expr = Expr::Cast {
+                    span: None,
+                    is_try: data_type.is_nullable(),
+                    expr: Box::new(expr),
+                    dest_type: data_type,
+                };
+            }
+
+            let dummy_block = DataBlock::new(vec![], 1);
+            let evaluator =
+                Evaluator::new(&dummy_block, FunctionContext::default(), &BUILTIN_FUNCTIONS);
+            let result = evaluator.run(&expr)?;
+
+            match result {
+                common_expression::Value::Scalar(s) => Ok(s),
+                common_expression::Value::Column(c) if c.len() == 1 => {
+                    let value = unsafe { c.index_unchecked(0) };
+                    Ok(value.to_owned())
+                }
+                _ => {
+                    return Err(ErrorCode::BadDataValueType(format!(
+                        "Invalid default value for column: {}, must be constant, actual: {}",
+                        field.name(),
+                        result
+                    )));
+                }
+            }
+        }
+        None => Ok(data_type.default_value()),
+    }
 }
