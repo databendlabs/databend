@@ -159,7 +159,7 @@ impl UserApiProvider {
         let client = self.get_role_api_client(tenant)?;
         client
             .update_role_with(role, MatchSeq::GE(1), |ri: &mut RoleInfo| {
-                ri.grants.revoke_role(&revoke_role)
+                ri.grants.revoke_role(revoke_role)
             })
             .await
             .map_err(|e| e.add_message_back("(while revoke role from role)"))

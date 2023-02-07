@@ -21,6 +21,7 @@ use common_meta_types::SeqV;
 pub trait RoleApi: Sync + Send {
     async fn add_role(&self, role_info: RoleInfo) -> Result<u64>;
 
+    #[allow(clippy::ptr_arg)]
     async fn get_role(&self, role: &String, seq: MatchSeq) -> Result<SeqV<RoleInfo>>;
 
     async fn get_roles(&self) -> Result<Vec<SeqV<RoleInfo>>>;
@@ -30,6 +31,7 @@ pub trait RoleApi: Sync + Send {
     /// It fetches the role that matches the specified seq number, update it in place, then write it back with the seq it sees.
     ///
     /// Seq number ensures there is no other write happens between get and set.
+    #[allow(clippy::ptr_arg)]
     async fn update_role_with<F>(&self, role: &String, seq: MatchSeq, f: F) -> Result<Option<u64>>
     where F: FnOnce(&mut RoleInfo) + Send;
 
