@@ -36,6 +36,10 @@ impl TableArgs {
         }
     }
 
+    /// Check TableArgs only contain positioned args.
+    /// Also check num of positioned if num is not None.
+    ///
+    /// Returns the vec of positioned args.
     pub fn expect_all_positioned(
         &self,
         func_name: &str,
@@ -60,6 +64,9 @@ impl TableArgs {
         }
     }
 
+    /// Check TableArgs only contain named args.
+    ///
+    /// Returns the map of named args.
     pub fn expect_all_named(&self, func_name: &str) -> Result<HashMap<String, Scalar>> {
         if !self.positioned.is_empty() {
             Err(ErrorCode::BadArguments(format!(
