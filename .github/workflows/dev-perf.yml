@@ -102,6 +102,8 @@ jobs:
             --output-dir /tmp/databend-perf/ \
             --size 'c5.4xlarge'
           cat /tmp/databend-perf/hits.md
+          echo 'PR_NUMBER=${{ github.event.number }}' > /tmp/databend-perf/metadata.info
+          echo 'INSTANCE_TYPE=c5.4xlarge' > /tmp/databend-perf/metadata.info
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
