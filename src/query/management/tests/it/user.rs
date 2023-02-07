@@ -421,7 +421,7 @@ mod drop {
         kv.expect_upsert_kv()
             .with(predicate::eq(UpsertKVReq::new(
                 &test_key,
-                MatchSeq::Any,
+                MatchSeq::GE(1),
                 Operation::Delete,
                 None,
             )))
@@ -447,7 +447,7 @@ mod drop {
         kv.expect_upsert_kv()
             .with(predicate::eq(UpsertKVReq::new(
                 &test_key,
-                MatchSeq::Any,
+                MatchSeq::GE(1),
                 Operation::Delete,
                 None,
             )))
@@ -499,7 +499,7 @@ mod update {
             "__fd_users/tenant1/{}",
             escape_for_key(&format_user_key(test_user_name, test_hostname))?
         );
-        let test_seq = MatchSeq::GE(0);
+        let test_seq = MatchSeq::GE(1);
 
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
         let prev_value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
@@ -511,7 +511,7 @@ mod update {
             kv.expect_get_kv()
                 .with(predicate::function(move |v| v == test_key.as_str()))
                 .times(1)
-                .return_once(move |_k| Ok(Some(SeqV::new(0, prev_value))));
+                .return_once(move |_k| Ok(Some(SeqV::new(1, prev_value))));
         }
 
         // and then, update_kv should be called
@@ -522,12 +522,12 @@ mod update {
         kv.expect_upsert_kv()
             .with(predicate::eq(UpsertKVReq::new(
                 &test_key,
-                MatchSeq::GE(1),
+                MatchSeq::Exact(1),
                 Operation::Update(new_value_with_old_salt.clone()),
                 None,
             )))
             .times(1)
-            .return_once(|_| Ok(UpsertKVReply::new(None, Some(SeqV::new(0, vec![])))));
+            .return_once(|_| Ok(UpsertKVReply::new(None, Some(SeqV::new(1, vec![])))));
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
@@ -585,7 +585,7 @@ mod update {
             "__fd_users/tenant1/{}",
             escape_for_key(&format_user_key(test_user_name, test_hostname))?
         );
-        let test_seq = MatchSeq::GE(0);
+        let test_seq = MatchSeq::GE(1);
 
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
         let prev_value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
@@ -597,13 +597,13 @@ mod update {
             kv.expect_get_kv()
                 .with(predicate::function(move |v| v == test_key.as_str()))
                 .times(1)
-                .return_once(move |_k| Ok(Some(SeqV::new(0, prev_value))));
+                .return_once(move |_k| Ok(Some(SeqV::new(2, prev_value))));
         }
 
         // upsert should be called
         kv.expect_upsert_kv()
             .with(predicate::function(move |act: &UpsertKVReq| {
-                act.key == test_key.as_str() && act.seq == MatchSeq::GE(1)
+                act.key == test_key.as_str() && act.seq == MatchSeq::Exact(2)
             }))
             .times(1)
             .returning(|_| Ok(UpsertKVReply::new(None, None)));
@@ -652,7 +652,7 @@ mod set_user_privileges {
             kv.expect_get_kv()
                 .with(predicate::function(move |v| v == test_key.as_str()))
                 .times(1)
-                .return_once(move |_k| Ok(Some(SeqV::new(0, prev_value))));
+                .return_once(move |_k| Ok(Some(SeqV::new(1, prev_value))));
         }
         // - update_kv should be called
         let mut privileges = UserPrivilegeSet::empty();
@@ -665,12 +665,12 @@ mod set_user_privileges {
         kv.expect_upsert_kv()
             .with(predicate::eq(UpsertKVReq::new(
                 &test_key,
-                MatchSeq::GE(1),
+                MatchSeq::Exact(1),
                 Operation::Update(new_value),
                 None,
             )))
             .times(1)
-            .return_once(|_| Ok(UpsertKVReply::new(None, Some(SeqV::new(0, vec![])))));
+            .return_once(|_| Ok(UpsertKVReply::new(None, Some(SeqV::new(1, vec![])))));
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
