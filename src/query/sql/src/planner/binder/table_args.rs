@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use common_ast::ast::Expr;
 use common_catalog::table_args::TableArgs;
 use common_exception::ErrorCode;
@@ -49,7 +51,7 @@ pub async fn bind_table_args(
         })
         .collect::<Result<Vec<_>>>()?;
 
-    let named_args: Vec<(String, Scalar)> = named_args
+    let named_args: HashMap<String, Scalar> = named_args
         .into_iter()
         .map(|(name, scalar)| match scalar {
             ScalarExpr::ConstantExpr(ConstantExpr { value, .. }) => {
@@ -60,10 +62,10 @@ pub async fn bind_table_args(
                 scalar
             ))),
         })
-        .collect::<Result<Vec<_>>>()?;
+        .collect::<Result<HashMap<_, _>>>()?;
 
     Ok(TableArgs {
         positioned: positioned_args,
-        named: named_args.into_iter().collect(),
+        named: named_args,
     })
 }
