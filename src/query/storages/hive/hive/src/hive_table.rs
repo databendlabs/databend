@@ -28,6 +28,7 @@ use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table::TableStatistics;
+use common_catalog::table_args::TableArgs;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -37,7 +38,6 @@ use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Expr;
 use common_expression::RemoteExpr;
-use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
@@ -586,7 +586,7 @@ impl Table for HiveTable {
         self.do_read_partitions(ctx, push_downs).await
     }
 
-    fn table_args(&self) -> Option<Vec<Scalar>> {
+    fn table_args(&self) -> Option<TableArgs> {
         None
     }
 

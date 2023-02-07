@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_expression::Scalar;
 use common_expression::TableField;
 use common_expression::TableSchema;
 
@@ -24,6 +23,7 @@ use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::Projection;
 use crate::plan::PushDownInfo;
+use crate::table_args::TableArgs;
 
 // TODO: Delete the scan plan field, but it depends on plan_parser:L394
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -44,7 +44,7 @@ pub struct DataSourcePlan {
     pub statistics: PartStatistics,
     pub description: String,
 
-    pub tbl_args: Option<Vec<Scalar>>,
+    pub tbl_args: Option<TableArgs>,
     pub push_downs: Option<PushDownInfo>,
 }
 

@@ -12,6 +12,69 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashMap;
+
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_expression::Scalar;
 
-pub type TableArgs = Option<Vec<Scalar>>;
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct TableArgs {
+    pub positioned: Vec<Scalar>,
+    pub named: HashMap<String, Scalar>,
+}
+
+impl TableArgs {
+    pub fn is_empty(&self) -> bool {
+        self.named.is_empty() && self.positioned.is_empty()
+    }
+
+    pub fn new_positioned(args: Vec<Scalar>) -> Self {
+        Self {
+            positioned: args,
+            named: HashMap::new(),
+        }
+    }
+
+    /// Check TableArgs only contain positioned args.
+    /// Also check num of positioned if num is not None.
+    ///
+    /// Returns the vec of positioned args.
+    pub fn expect_all_positioned(
+        &self,
+        func_name: &str,
+        num: Option<usize>,
+    ) -> Result<Vec<Scalar>> {
+        if !self.named.is_empty() {
+            Err(ErrorCode::BadArguments(format!(
+                "{} accept positioned args only",
+                func_name
+            )))
+        } else if let Some(n) = num {
+            if n != self.positioned.len() {
+                Err(ErrorCode::BadArguments(format!(
+                    "{} must accept exactly {} positioned args",
+                    func_name, n
+                )))
+            } else {
+                Ok(self.positioned.clone())
+            }
+        } else {
+            Ok(self.positioned.clone())
+        }
+    }
+
+    /// Check TableArgs only contain named args.
+    ///
+    /// Returns the map of named args.
+    pub fn expect_all_named(&self, func_name: &str) -> Result<HashMap<String, Scalar>> {
+        if !self.positioned.is_empty() {
+            Err(ErrorCode::BadArguments(format!(
+                "{} accept named args only",
+                func_name
+            )))
+        } else {
+            Ok(self.named.clone())
+        }
+    }
+}
