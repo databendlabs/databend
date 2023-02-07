@@ -167,7 +167,7 @@ pub fn field_default_value(ctx: Arc<dyn TableContext>, field: &TableField) -> Re
                     span: None,
                     is_try: data_type.is_nullable(),
                     expr: Box::new(expr),
-                    dest_type: data_type.clone(),
+                    dest_type: data_type,
                 };
             }
 
