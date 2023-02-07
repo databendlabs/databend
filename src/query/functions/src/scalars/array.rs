@@ -19,8 +19,10 @@ use std::sync::Arc;
 use common_expression::types::array::ArrayColumnBuilder;
 use common_expression::types::boolean::BooleanDomain;
 use common_expression::types::nullable::NullableDomain;
+use common_expression::types::number::NumberScalar;
 use common_expression::types::number::SimpleDomain;
 use common_expression::types::number::UInt64Type;
+use common_expression::types::AnyType;
 use common_expression::types::ArgType;
 use common_expression::types::ArrayType;
 use common_expression::types::BooleanType;
@@ -45,6 +47,7 @@ use common_expression::with_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Domain;
+use common_expression::EvalContext;
 use common_expression::Function;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
@@ -61,11 +64,24 @@ use itertools::Itertools;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
 
+use crate::aggregates::eval_aggr;
+use crate::AggregateFunctionFactory;
+
+const ARRAY_AGGREGATE_FUNCTIONS: &[(&str, &str); 5] = &[
+    ("array_avg", "avg"),
+    ("array_count", "count"),
+    ("array_max", "max"),
+    ("array_min", "min"),
+    ("array_sum", "sum"),
+];
+
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("contains", &["array_contains"]);
     registry.register_aliases("get", &["array_get"]);
     registry.register_aliases("length", &["array_length"]);
     registry.register_aliases("slice", &["array_slice"]);
+
+    register_array_aggr(registry);
 
     registry.register_0_arg_core::<EmptyArrayType, _, _>(
         "array",
@@ -192,9 +208,9 @@ pub fn register(registry: &mut FunctionRegistry) {
         "array_indexof",
         FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
-        vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, GenericType<0>, UInt64Type>(
-            |arr, val, output, _| {
-                output.push(arr.iter().position(|item| item == val).map(|pos| pos+1).unwrap_or(0) as u64);
+        vectorize_2_arg::<ArrayType<GenericType<0>>, GenericType<0>, UInt64Type>(
+            |arr, val, _| {
+                arr.iter().position(|item| item == val).map(|pos| pos+1).unwrap_or(0) as u64
             },
         ),
     );
@@ -433,10 +449,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 },
                 ValueRef::Column(array_column) => {
                     let result = match rhs {
-                        ValueRef::Scalar(c) =>  BooleanType::column_from_iter(array_column
+                        ValueRef::Scalar(c) => BooleanType::column_from_iter(array_column
                             .iter()
                             .map(|array| StringType::iter_column(&array).contains(&c)), &[]),
-                        ValueRef::Column(col) =>  BooleanType::column_from_iter(array_column
+                        ValueRef::Column(col) => BooleanType::column_from_iter(array_column
                             .iter()
                             .zip(StringType::iter_column(&col))
                             .map(|(array, c)| StringType::iter_column(&array).contains(&c)), &[]),
@@ -487,8 +503,8 @@ pub fn register(registry: &mut FunctionRegistry) {
             match lhs {
                 Some(lhs) => {
                     FunctionDomain::Domain(BooleanDomain {
-                        has_false:  (lhs.has_false && rhs.has_true) || (lhs.has_true && rhs.has_false),
-                        has_true:   (lhs.has_false && rhs.has_false) || (lhs.has_true && rhs.has_true),
+                        has_false: (lhs.has_false && rhs.has_true) || (lhs.has_true && rhs.has_false),
+                        has_true: (lhs.has_false && rhs.has_false) || (lhs.has_true && rhs.has_true),
                     })
                 },
                 None => FunctionDomain::Domain(BooleanDomain {
@@ -506,7 +522,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                     match rhs {
                         ValueRef::Scalar(val) =>  {
-                            Value::Scalar(set.contains( &(val as u8)))
+                            Value::Scalar(set.contains(&(val as u8)))
                         },
                         ValueRef::Column(col) => {
                             let result = BooleanType::column_from_iter(BooleanType::iter_column(&col).map(|val| {
@@ -518,10 +534,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 },
                 ValueRef::Column(array_column) => {
                     let result = match rhs {
-                        ValueRef::Scalar(c) =>  BooleanType::column_from_iter(array_column
+                        ValueRef::Scalar(c) => BooleanType::column_from_iter(array_column
                             .iter()
                             .map(|array| BooleanType::iter_column(&array).contains(&c)), &[]),
-                        ValueRef::Column(col) =>  BooleanType::column_from_iter(array_column
+                        ValueRef::Column(col) => BooleanType::column_from_iter(array_column
                             .iter()
                             .zip(BooleanType::iter_column(&col))
                             .map(|(array, c)| BooleanType::iter_column(&array).contains(&c)), &[]),
@@ -606,4 +622,91 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         }),
     );
+}
+
+fn register_array_aggr(registry: &mut FunctionRegistry) {
+    fn eval_aggr_return_type(name: &str, args_type: &[DataType]) -> Option<DataType> {
+        if args_type.len() != 1 {
+            return None;
+        }
+        let arg_type = args_type[0].remove_nullable();
+        if arg_type == DataType::EmptyArray {
+            if name == "count" {
+                return Some(DataType::Number(NumberDataType::UInt64));
+            }
+            return Some(DataType::Null);
+        }
+        let array_type = arg_type.as_array()?;
+        let factory = AggregateFunctionFactory::instance();
+        let func = factory.get(name, vec![], vec![*array_type.clone()]).ok()?;
+        let return_type = func.return_type().ok()?;
+
+        Some(return_type)
+    }
+
+    fn eval_array_aggr(
+        name: &str,
+        args: &[ValueRef<AnyType>],
+        ctx: &mut EvalContext,
+    ) -> Value<AnyType> {
+        match &args[0] {
+            ValueRef::Scalar(scalar) => match scalar {
+                ScalarRef::EmptyArray | ScalarRef::Null => {
+                    if name == "count" {
+                        Value::Scalar(Scalar::Number(NumberScalar::UInt64(0)))
+                    } else {
+                        Value::Scalar(Scalar::Null)
+                    }
+                }
+                ScalarRef::Array(col) => {
+                    let len = col.len();
+                    match eval_aggr(name, vec![], &[col.clone()], len) {
+                        Ok((res_col, _)) => {
+                            let val = unsafe { res_col.index_unchecked(0) };
+                            Value::Scalar(val.to_owned())
+                        }
+                        Err(err) => {
+                            ctx.set_error(0, err.to_string());
+                            Value::Scalar(Scalar::Null)
+                        }
+                    }
+                }
+                _ => unreachable!(),
+            },
+            ValueRef::Column(column) => {
+                let return_type = eval_aggr_return_type(name, &[column.data_type()]).unwrap();
+                let mut builder = ColumnBuilder::with_capacity(&return_type, column.len());
+                for arr in column.iter() {
+                    let array_column = arr.as_array().unwrap();
+                    let len = array_column.len();
+                    match eval_aggr(name, vec![], &[array_column.clone()], len) {
+                        Ok((col, _)) => {
+                            let val = unsafe { col.index_unchecked(0) };
+                            builder.push(val)
+                        }
+                        Err(err) => {
+                            ctx.set_error(builder.len(), err.to_string());
+                        }
+                    }
+                }
+                Value::Column(builder.build())
+            }
+        }
+    }
+
+    for (fn_name, name) in ARRAY_AGGREGATE_FUNCTIONS {
+        registry.register_function_factory(fn_name, |_, args_type| {
+            let return_type = eval_aggr_return_type(name, args_type)?;
+            Some(Arc::new(Function {
+                signature: FunctionSignature {
+                    name: fn_name.to_string(),
+                    args_type: vec![args_type[0].clone()],
+                    return_type,
+                    property: FunctionProperty::default(),
+                },
+                calc_domain: Box::new(move |_| FunctionDomain::MayThrow),
+                eval: Box::new(|args, ctx| eval_array_aggr(name, args, ctx)),
+            }))
+        });
+    }
 }

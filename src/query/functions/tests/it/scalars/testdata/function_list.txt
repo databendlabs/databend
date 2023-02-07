@@ -3141,6 +3141,11 @@ yesterday() :: Date
 
 Factory functions:
 array
+array_avg
+array_count
+array_max
+array_min
+array_sum
 char
 concat
 concat_ws

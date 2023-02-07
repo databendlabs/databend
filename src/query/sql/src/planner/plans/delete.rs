@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 
+use crate::optimizer::SExpr;
 use crate::plans::ScalarExpr;
 
 #[derive(Clone, Debug)]
@@ -25,6 +26,8 @@ pub struct DeletePlan {
     pub database_name: String,
     pub table_name: String,
     pub selection: Option<ScalarExpr>,
+    // The case: selection is subquery
+    pub input_expr: Option<SExpr>,
 }
 
 impl DeletePlan {
