@@ -25,7 +25,6 @@ use num_traits::AsPrimitive;
 
 use super::number::SimpleDomain;
 use crate::date_helper::DateConverter;
-
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;

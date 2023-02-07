@@ -23,7 +23,6 @@ use common_io::cursor_ext::BufferReadDateTimeExt;
 use common_io::cursor_ext::ReadBytesExt;
 
 use super::number::SimpleDomain;
-
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;

@@ -143,18 +143,18 @@ impl TzLUT {
 
     #[allow(dead_code)]
     #[inline]
-    fn to_start_of_seconds(&self, ts: i64, seconds: i64) -> i64 {
+    fn start_of_second(&self, ts: i64, seconds: i64) -> i64 {
         if seconds == 1 {
             return ts;
         }
         if seconds % 60 == 0 {
-            return self.to_start_of_minutes(ts, seconds);
+            return self.start_of_minutes(ts, seconds);
         }
         self.round_down(ts, seconds)
     }
 
     #[inline]
-    fn to_start_of_minutes(&self, ts: i64, seconds_div: i64) -> i64 {
+    fn start_of_minutes(&self, ts: i64, seconds_div: i64) -> i64 {
         if self.offset_round_minute {
             return if ts > 0 {
                 ts / seconds_div * seconds_div
@@ -190,12 +190,12 @@ impl TzLUT {
     #[inline]
     pub fn round_timestamp(&self, ts: i64, round: Round) -> i64 {
         match round {
-            Round::Second => return ts,
-            Round::Minute => self.to_start_of_minutes(ts, 60),
-            Round::FiveMinutes => self.to_start_of_minutes(ts, 15 * 60),
-            Round::TenMinutes => self.to_start_of_minutes(ts, 10 * 60),
-            Round::FifteenMinutes => self.to_start_of_minutes(ts, 15 * 60),
-            Round::TimeSlot => self.to_start_of_minutes(ts, 30 * 60),
+            Round::Second => ts,
+            Round::Minute => self.start_of_minutes(ts, 60),
+            Round::FiveMinutes => self.start_of_minutes(ts, 15 * 60),
+            Round::TenMinutes => self.start_of_minutes(ts, 10 * 60),
+            Round::FifteenMinutes => self.start_of_minutes(ts, 15 * 60),
+            Round::TimeSlot => self.start_of_minutes(ts, 30 * 60),
             Round::Hour => self.round_down(ts, 3600),
             Round::Day => self.round_down(ts, 3600 * 24),
         }

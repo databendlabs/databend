@@ -14,8 +14,6 @@
 
 use std::ops::Range;
 
-
-
 use super::date::date_to_string;
 use super::number::NumberScalar;
 use super::timestamp::timestamp_to_string;
