@@ -26,6 +26,7 @@ use crate::SeqV;
 /// Any conditioned or non-conditioned write operation can be done through the corresponding MatchSeq.
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum MatchSeq {
+    // TODO(xp): remove Any, it is equivalent to GE(0)
     /// Any value is acceptable, i.e. does not check seq at all.
     Any,
 
@@ -37,15 +38,6 @@ pub enum MatchSeq {
     /// To match a seq that is greater-or-equal some value.
     /// E.g., GE(1) perform an update on any existent value.
     GE(u64),
-}
-
-impl From<Option<u64>> for MatchSeq {
-    fn from(s: Option<u64>) -> Self {
-        match s {
-            None => MatchSeq::Any,
-            Some(s) => MatchSeq::Exact(s),
-        }
-    }
 }
 
 impl Display for MatchSeq {

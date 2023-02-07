@@ -69,7 +69,7 @@ async fn test_role_manager() -> Result<()> {
         role_mgr
             .grant_privileges_to_role(
                 tenant,
-                role_name.clone(),
+                &role_name,
                 GrantObject::Global,
                 UserPrivilegeSet::all_privileges(),
             )
@@ -86,7 +86,7 @@ async fn test_role_manager() -> Result<()> {
         role_mgr
             .revoke_privileges_from_role(
                 tenant,
-                role_name.clone(),
+                &role_name,
                 GrantObject::Global,
                 UserPrivilegeSet::all_privileges(),
             )

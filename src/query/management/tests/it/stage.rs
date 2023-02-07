@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_management::*;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_kvapi::kvapi::KVApi;
+use common_meta_types::MatchSeq;
 use common_meta_types::SeqV;
 use common_meta_types::StageFile;
 use common_meta_types::StageParams;
@@ -136,7 +137,10 @@ async fn test_add_stage_file() -> Result<()> {
 
     let stage_info = create_test_stage_info();
     let seq = stage_api.add_stage(stage_info.clone()).await?;
-    let mystage = stage_api.get_stage("mystage", Some(seq)).await?.data;
+    let mystage = stage_api
+        .get_stage("mystage", MatchSeq::Exact(seq))
+        .await?
+        .data;
     assert_eq!(mystage.number_of_files, 0);
 
     let stage_file = StageFile {
@@ -163,7 +167,7 @@ async fn test_add_stage_file() -> Result<()> {
         catch => panic!("GetKVActionReply{:?}", catch),
     }
 
-    let new_mystage = stage_api.get_stage("mystage", None).await?.data;
+    let new_mystage = stage_api.get_stage("mystage", MatchSeq::GE(0)).await?.data;
     assert_eq!(mystage.number_of_files + 1, new_mystage.number_of_files);
     Ok(())
 }
@@ -173,7 +177,10 @@ async fn test_remove_files() -> Result<()> {
     let (_kv_api, stage_api) = new_stage_api().await?;
     let stage_info = create_test_stage_info();
     let seq = stage_api.add_stage(stage_info.clone()).await?;
-    let mystage = stage_api.get_stage("mystage", Some(seq)).await?.data;
+    let mystage = stage_api
+        .get_stage("mystage", MatchSeq::Exact(seq))
+        .await?
+        .data;
     assert_eq!(mystage.number_of_files, 0);
 
     stage_api
@@ -198,7 +205,7 @@ async fn test_remove_files() -> Result<()> {
     assert_eq!(files.len(), 1);
     assert_eq!(files[0].path, "test/books.csv".to_string());
 
-    let new_mystage = stage_api.get_stage("mystage", None).await?.data;
+    let new_mystage = stage_api.get_stage("mystage", MatchSeq::GE(0)).await?.data;
     assert_eq!(new_mystage.number_of_files, 1);
     Ok(())
 }

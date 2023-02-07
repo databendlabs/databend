@@ -26,6 +26,7 @@ use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
 use common_expression::Value;
+use common_meta_types::MatchSeq;
 use common_meta_types::TenantQuota;
 use common_meta_types::UserOptionFlag;
 use common_users::UserApiProvider;
@@ -76,7 +77,7 @@ impl OneBlockProcedure for TenantQuotaProcedure {
             tenant = args[0].clone();
         }
         let quota_api = UserApiProvider::instance().get_tenant_quota_api_client(&tenant)?;
-        let res = quota_api.get_quota(None).await?;
+        let res = quota_api.get_quota(MatchSeq::GE(0)).await?;
         let mut quota = res.data;
 
         if args.len() <= 1 {
@@ -94,7 +95,9 @@ impl OneBlockProcedure for TenantQuotaProcedure {
             quota.max_files_per_stage = max_files_per_stage.parse::<u32>()?
         };
 
-        quota_api.set_quota(&quota, Some(res.seq)).await?;
+        quota_api
+            .set_quota(&quota, MatchSeq::Exact(res.seq))
+            .await?;
 
         self.to_block(&quota)
     }

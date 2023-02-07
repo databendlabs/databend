@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_meta_types::MatchSeq;
 use common_meta_types::UserSetting;
 
 use crate::UserApiProvider;
@@ -33,6 +34,8 @@ impl UserApiProvider {
     // Drop a setting by name.
     pub async fn drop_setting(&self, tenant: &str, name: &str) -> Result<()> {
         let setting_api_provider = self.get_setting_api_client(tenant)?;
-        setting_api_provider.drop_setting(name, None).await
+        setting_api_provider
+            .drop_setting(name, MatchSeq::GE(1))
+            .await
     }
 }

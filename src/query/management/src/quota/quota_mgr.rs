@@ -52,10 +52,10 @@ impl QuotaMgr {
 
 #[async_trait::async_trait]
 impl QuotaApi for QuotaMgr {
-    async fn get_quota(&self, seq: Option<u64>) -> Result<SeqV<TenantQuota>> {
+    async fn get_quota(&self, seq: MatchSeq) -> Result<SeqV<TenantQuota>> {
         let res = self.kv_api.get_kv(&self.key).await?;
         match res {
-            Some(seq_value) => match MatchSeq::from(seq).match_seq(&seq_value) {
+            Some(seq_value) => match seq.match_seq(&seq_value) {
                 Ok(_) => Ok(seq_value.into_seqv()?),
                 Err(_) => Err(ErrorCode::TenantQuotaUnknown("seq not match")),
             },
@@ -63,17 +63,13 @@ impl QuotaApi for QuotaMgr {
         }
     }
 
-    async fn set_quota(&self, quota: &TenantQuota, seq: Option<u64>) -> Result<u64> {
+    async fn set_quota(&self, quota: &TenantQuota, seq: MatchSeq) -> Result<u64> {
         let value = serde_json::to_vec(quota)?;
-        let match_seq = match seq {
-            None => MatchSeq::Any,
-            Some(seq) => MatchSeq::Exact(seq),
-        };
         let res = self
             .kv_api
             .upsert_kv(UpsertKVReq::new(
                 &self.key,
-                match_seq,
+                seq,
                 Operation::Update(value),
                 None,
             ))

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_meta_types::MatchSeq;
 use common_meta_types::SeqV;
 use common_meta_types::UserSetting;
 
@@ -24,8 +25,8 @@ pub trait SettingApi: Sync + Send {
     // Get all the settings for tenant/cluster.
     async fn get_settings(&self) -> Result<Vec<UserSetting>>;
 
-    async fn get_setting(&self, name: &str, seq: Option<u64>) -> Result<SeqV<UserSetting>>;
+    async fn get_setting(&self, name: &str, seq: MatchSeq) -> Result<SeqV<UserSetting>>;
 
     // Drop the setting by name.
-    async fn drop_setting(&self, name: &str, seq: Option<u64>) -> Result<()>;
+    async fn drop_setting(&self, name: &str, seq: MatchSeq) -> Result<()>;
 }

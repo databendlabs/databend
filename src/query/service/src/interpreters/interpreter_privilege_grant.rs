@@ -65,7 +65,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
             }
             PrincipalIdentity::Role(role) => {
                 user_mgr
-                    .grant_privileges_to_role(&tenant, role, plan.on, plan.priv_types)
+                    .grant_privileges_to_role(&tenant, &role, plan.on, plan.priv_types)
                     .await?;
             }
         }

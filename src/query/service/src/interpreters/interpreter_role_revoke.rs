@@ -55,7 +55,7 @@ impl Interpreter for RevokeRoleInterpreter {
             }
             PrincipalIdentity::Role(role) => {
                 UserApiProvider::instance()
-                    .revoke_role_from_role(&tenant, role.clone(), plan.role)
+                    .revoke_role_from_role(&tenant, &role, &plan.role)
                     .await?;
             }
         }

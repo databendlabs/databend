@@ -34,6 +34,7 @@ use common_meta_store::MetaStore;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::AuthInfo;
 use common_meta_types::KVAppError;
+use common_meta_types::MatchSeq;
 use common_meta_types::TenantQuota;
 
 use crate::idm_config::IDMConfig;
@@ -55,8 +56,8 @@ impl UserApiProvider {
 
         if let Some(q) = quota {
             let i = UserApiProvider::instance().get_tenant_quota_api_client(tenant)?;
-            let res = i.get_quota(None).await?;
-            i.set_quota(&q, Some(res.seq)).await?;
+            let res = i.get_quota(MatchSeq::GE(0)).await?;
+            i.set_quota(&q, MatchSeq::Exact(res.seq)).await?;
         }
         Ok(())
     }
@@ -81,11 +82,11 @@ impl UserApiProvider {
         GlobalInstance::get()
     }
 
-    pub fn get_user_api_client(&self, tenant: &str) -> Result<Arc<dyn UserApi>> {
+    pub fn get_user_api_client(&self, tenant: &str) -> Result<Arc<impl UserApi>> {
         Ok(Arc::new(UserMgr::create(self.client.clone(), tenant)?))
     }
 
-    pub fn get_role_api_client(&self, tenant: &str) -> Result<Arc<dyn RoleApi>> {
+    pub fn get_role_api_client(&self, tenant: &str) -> Result<Arc<impl RoleApi>> {
         Ok(Arc::new(RoleMgr::create(self.client.clone(), tenant)?))
     }
 

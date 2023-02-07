@@ -61,7 +61,7 @@ impl Interpreter for GrantRoleInterpreter {
             }
             PrincipalIdentity::Role(role) => {
                 user_mgr
-                    .grant_role_to_role(&tenant, role, plan.role)
+                    .grant_role_to_role(&tenant, &role, plan.role)
                     .await?;
             }
         }

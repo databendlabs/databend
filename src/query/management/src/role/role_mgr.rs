@@ -18,7 +18,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_meta_kvapi::kvapi;
-use common_meta_types::GrantObject;
 use common_meta_types::IntoSeqV;
 use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
@@ -27,7 +26,6 @@ use common_meta_types::Operation;
 use common_meta_types::RoleInfo;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVReq;
-use common_meta_types::UserPrivilegeSet;
 
 use crate::role::role_api::RoleApi;
 
@@ -55,24 +53,14 @@ impl RoleMgr {
     async fn upsert_role_info(
         &self,
         role_info: &RoleInfo,
-        seq: Option<u64>,
+        seq: MatchSeq,
     ) -> common_exception::Result<u64> {
         let key = self.make_role_key(role_info.identity());
         let value = serde_json::to_vec(&role_info)?;
 
-        let match_seq = match seq {
-            None => MatchSeq::GE(1),
-            Some(s) => MatchSeq::Exact(s),
-        };
-
         let kv_api = self.kv_api.clone();
         let res = kv_api
-            .upsert_kv(UpsertKVReq::new(
-                &key,
-                match_seq,
-                Operation::Update(value),
-                None,
-            ))
+            .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Update(value), None))
             .await?;
         match res.result {
             Some(SeqV { seq: s, .. }) => Ok(s),
@@ -110,14 +98,13 @@ impl RoleApi for RoleMgr {
         Ok(res.seq)
     }
 
-    async fn get_role(&self, role: String, seq: Option<u64>) -> Result<SeqV<RoleInfo>> {
-        let key = self.make_role_key(&role);
-        let kv_api = self.kv_api.clone();
-        let res = kv_api.get_kv(&key).await?;
+    async fn get_role(&self, role: &String, seq: MatchSeq) -> Result<SeqV<RoleInfo>> {
+        let key = self.make_role_key(role);
+        let res = self.kv_api.get_kv(&key).await?;
         let seq_value =
             res.ok_or_else(|| ErrorCode::UnknownRole(format!("unknown role {}", role)))?;
 
-        match MatchSeq::from(seq).match_seq(&seq_value) {
+        match seq.match_seq(&seq_value) {
             Ok(_) => Ok(seq_value.into_seqv()?),
             Err(_) => Err(ErrorCode::UnknownRole(format!("unknown role {}", role))),
         }
@@ -139,65 +126,32 @@ impl RoleApi for RoleMgr {
         Ok(r)
     }
 
-    async fn grant_privileges(
-        &self,
-        role: String,
-        object: GrantObject,
-        privileges: UserPrivilegeSet,
-        seq: Option<u64>,
-    ) -> Result<Option<u64>> {
-        let role_val_seq = self.get_role(role, seq);
-        let mut role_info = role_val_seq.await?.data;
-        role_info.grants.grant_privileges(&object, privileges);
-        let seq = self.upsert_role_info(&role_info, seq).await?;
+    /// General role update.
+    ///
+    /// It fetch the role that matches the specified seq number, update it in place, then write it back with the seq it sees.
+    ///
+    /// Seq number ensures there is no other write happens between get and set.
+    async fn update_role_with<F>(&self, role: &String, seq: MatchSeq, f: F) -> Result<Option<u64>>
+    where F: FnOnce(&mut RoleInfo) + Send {
+        let SeqV {
+            seq,
+            data: mut role_info,
+            ..
+        } = self.get_role(role, seq).await?;
+
+        f(&mut role_info);
+
+        let seq = self
+            .upsert_role_info(&role_info, MatchSeq::Exact(seq))
+            .await?;
         Ok(Some(seq))
     }
 
-    async fn revoke_privileges(
-        &self,
-        role: String,
-        object: GrantObject,
-        privileges: UserPrivilegeSet,
-        seq: Option<u64>,
-    ) -> Result<Option<u64>> {
-        let role_val_seq = self.get_role(role, seq);
-        let mut role_info = role_val_seq.await?.data;
-        role_info.grants.revoke_privileges(&object, privileges);
-        let seq = self.upsert_role_info(&role_info, seq).await?;
-        Ok(Some(seq))
-    }
-
-    async fn grant_role(
-        &self,
-        role: String,
-        grant_role: String,
-        seq: Option<u64>,
-    ) -> Result<Option<u64>> {
-        let role_val_seq = self.get_role(role, seq);
-        let mut role_info = role_val_seq.await?.data;
-        role_info.grants.grant_role(grant_role);
-        let seq = self.upsert_role_info(&role_info, seq).await?;
-        Ok(Some(seq))
-    }
-
-    async fn revoke_role(
-        &self,
-        role: String,
-        revoke_role: String,
-        seq: Option<u64>,
-    ) -> Result<Option<u64>> {
-        let role_val_seq = self.get_role(role, seq);
-        let mut role_info = role_val_seq.await?.data;
-        role_info.grants.revoke_role(&revoke_role);
-        let seq = self.upsert_role_info(&role_info, seq).await?;
-        Ok(Some(seq))
-    }
-
-    async fn drop_role(&self, role: String, seq: Option<u64>) -> Result<()> {
+    async fn drop_role(&self, role: String, seq: MatchSeq) -> Result<()> {
         let key = self.make_role_key(&role);
         let kv_api = self.kv_api.clone();
         let res = kv_api
-            .upsert_kv(UpsertKVReq::new(&key, seq.into(), Operation::Delete, None))
+            .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Delete, None))
             .await?;
         if res.prev.is_some() && res.result.is_none() {
             Ok(())
