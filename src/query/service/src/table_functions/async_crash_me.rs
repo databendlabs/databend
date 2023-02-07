@@ -53,12 +53,12 @@ pub struct AsyncCrashMeTable {
 impl AsyncCrashMeTable {
     pub fn create(
         database_name: &str,
-        _table_func_name: &str,
+        table_func_name: &str,
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let mut panic_message = None;
-        let args = table_args.expect_all_positioned("async_crash_me", None)?;
+        let args = table_args.expect_all_positioned(table_func_name, None)?;
         if args.len() == 1 {
             let arg = args[0].clone();
             panic_message =
@@ -69,11 +69,11 @@ impl AsyncCrashMeTable {
 
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
-            desc: format!("'{}'.'{}'", database_name, "async_crash_me"),
+            desc: format!("'{}'.'{}'", database_name, table_func_name),
             name: String::from("async_crash_me"),
             meta: TableMeta {
                 schema: Arc::new(TableSchema::empty()),
-                engine: String::from("async_crash_me"),
+                engine: String::from(table_func_name),
                 // Assuming that created_on is unnecessary for function table,
                 // we could make created_on fixed to pass test_shuffle_action_try_into.
                 created_on: Utc.from_utc_datetime(&NaiveDateTime::from_timestamp(0, 0)),
