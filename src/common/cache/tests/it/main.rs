@@ -15,4 +15,4 @@
 #![allow(clippy::uninlined_format_args)]
 
 mod cache;
-mod disk_cache;
+mod lru_disk_cache;

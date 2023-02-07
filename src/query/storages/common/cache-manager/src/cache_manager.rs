@@ -18,10 +18,10 @@ use std::sync::Arc;
 use common_base::base::GlobalInstance;
 use common_config::QueryConfig;
 use common_exception::Result;
-use storages_common_cache::DiskBytesCache;
-use storages_common_cache::DiskCacheBuilder;
 use storages_common_cache::InMemoryCacheBuilder;
 use storages_common_cache::InMemoryItemCacheHolder;
+use storages_common_cache::TableDataCache;
+use storages_common_cache::TableDataCacheBuilder;
 
 use crate::caches::BloomIndexFilterCache;
 use crate::caches::BloomIndexMetaCache;
@@ -40,7 +40,7 @@ pub struct CacheManager {
     bloom_index_filter_cache: Option<BloomIndexFilterCache>,
     bloom_index_meta_cache: Option<BloomIndexMetaCache>,
     file_meta_data_cache: Option<FileMetaDataCache>,
-    block_data_cache: Option<DiskBytesCache>,
+    table_data_cache: Option<TableDataCache>,
 }
 
 impl CacheManager {
@@ -64,7 +64,7 @@ impl CacheManager {
                 bloom_index_meta_cache: None,
                 file_meta_data_cache: None,
                 table_statistic_cache: None,
-                block_data_cache: None,
+                table_data_cache: None,
             }));
         } else {
             let table_snapshot_cache = Self::new_item_cache(config.table_cache_snapshot_count);
@@ -82,7 +82,7 @@ impl CacheManager {
                 bloom_index_meta_cache,
                 file_meta_data_cache,
                 table_statistic_cache,
-                block_data_cache,
+                table_data_cache: block_data_cache,
             }));
         }
 
@@ -117,8 +117,8 @@ impl CacheManager {
         self.file_meta_data_cache.clone()
     }
 
-    pub fn get_block_data_cache(&self) -> Option<DiskBytesCache> {
-        self.block_data_cache.clone()
+    pub fn get_block_data_cache(&self) -> Option<TableDataCache> {
+        self.table_data_cache.clone()
     }
 
     fn new_item_cache<T>(capacity: u64) -> Option<InMemoryItemCacheHolder<T>> {
@@ -134,9 +134,9 @@ impl CacheManager {
         in_memory_cache_mb_size: u64,
         population_queue_size: u32,
         disk_cache_mb_size: u64,
-    ) -> Result<Option<DiskBytesCache>> {
+    ) -> Result<Option<TableDataCache>> {
         if in_memory_cache_mb_size > 0 {
-            let cache_holder = DiskCacheBuilder::new_disk_cache(
+            let cache_holder = TableDataCacheBuilder::new_table_data_disk_cache(
                 path,
                 in_memory_cache_mb_size,
                 population_queue_size,

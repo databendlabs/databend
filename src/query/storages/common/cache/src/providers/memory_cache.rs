@@ -64,4 +64,8 @@ where
     fn evict(&mut self, k: &str) -> bool {
         self.pop(k).is_some()
     }
+
+    fn contains_key(&self, k: &str) -> bool {
+        Cache::contains(self, k)
+    }
 }

@@ -14,15 +14,19 @@
 
 use std::sync::Arc;
 
+// The cache accessor, crate users usually working on this interface while manipulating caches
 pub trait CacheAccessor<K, V> {
     fn get(&self, k: &str) -> Option<Arc<V>>;
     fn put(&self, key: K, value: Arc<V>);
     fn evict(&self, k: &str) -> bool;
+    fn contains_key(&self, _k: &str) -> bool;
 }
 
-/// The minimum interface that cache providers should implement
+// The minimum interface that cache providers should implement
+//  note this interface working on mutable self reference
 pub trait StorageCache<K, V> {
     type Meter;
+    // TODO: remove this assoc type
     type CacheEntry;
 
     fn put(&mut self, key: K, value: Arc<V>);
@@ -30,8 +34,11 @@ pub trait StorageCache<K, V> {
     fn get(&mut self, k: &str) -> Option<Self::CacheEntry>;
 
     fn evict(&mut self, k: &str) -> bool;
+
+    fn contains_key(&self, k: &str) -> bool;
 }
 
+// default impls
 mod impls {
     use std::sync::Arc;
 
@@ -40,6 +47,7 @@ mod impls {
     use crate::cache::CacheAccessor;
     use crate::cache::StorageCache;
 
+    // Wrap a StorageCache with RwLock, and impl CacheAccessor for it
     impl<V, C> CacheAccessor<String, V> for Arc<RwLock<C>>
     where C: StorageCache<String, V, CacheEntry = Arc<V>>
     {
@@ -57,8 +65,14 @@ mod impls {
             let mut guard = self.write();
             guard.evict(k)
         }
+
+        fn contains_key(&self, k: &str) -> bool {
+            let guard = self.read();
+            guard.contains_key(k)
+        }
     }
 
+    // Wrap an Option<CacheAccessor>, and impl CacheAccessor for it
     impl<V, C> CacheAccessor<String, V> for Option<C>
     where C: CacheAccessor<String, V>
     {
@@ -75,6 +89,14 @@ mod impls {
         fn evict(&self, k: &str) -> bool {
             if let Some(cache) = self {
                 cache.evict(k)
+            } else {
+                false
+            }
+        }
+
+        fn contains_key(&self, k: &str) -> bool {
+            if let Some(cache) = self {
+                cache.contains_key(k)
             } else {
                 false
             }

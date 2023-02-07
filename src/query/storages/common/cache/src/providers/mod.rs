@@ -14,6 +14,7 @@
 
 mod disk_cache;
 mod memory_cache;
+mod table_data_cache;
 pub use disk_cache::DiskBytesCache;
 pub use disk_cache::DiskCache;
 pub use disk_cache::DiskCacheBuilder;
@@ -22,3 +23,5 @@ pub use memory_cache::InMemoryBytesCacheHolder;
 pub use memory_cache::InMemoryCacheBuilder;
 pub use memory_cache::InMemoryItemCacheHolder;
 pub use memory_cache::ItemCache;
+pub use table_data_cache::TableDataCache;
+pub use table_data_cache::TableDataCacheBuilder;
