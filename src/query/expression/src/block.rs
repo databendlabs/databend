@@ -356,26 +356,20 @@ impl DataBlock {
         default_vals: &[Option<Scalar>],
         num_rows: usize,
     ) -> Result<DataBlock> {
-        assert_eq!(schema.fields().len(), default_vals.len());
-        let mut data_block = DataBlock::empty();
-        data_block.num_rows = num_rows;
         let mut chunk_idx: usize = 0;
         let chunk_columns = chuck.arrays();
         let schema_fields = schema.fields();
 
+        let mut columns = Vec::with_capacity(default_vals.len());
         for (i, default_val) in default_vals.iter().enumerate() {
             let field = &schema_fields[i];
             let data_type = field.data_type();
 
-            let block = match default_val {
-                Some(default_val) => {
-                    let builder = ColumnBuilder::repeat(&default_val.as_ref(), num_rows, data_type);
-                    let col = builder.build();
-                    BlockEntry {
-                        data_type: data_type.clone(),
-                        value: Value::Column(col),
-                    }
-                }
+            let column = match default_val {
+                Some(default_val) => BlockEntry {
+                    data_type: data_type.clone(),
+                    value: Value::Scalar(default_val.to_owned()),
+                },
                 None => {
                     let chunk_column = &chunk_columns[chunk_idx];
                     chunk_idx += 1;
@@ -386,10 +380,10 @@ impl DataBlock {
                 }
             };
 
-            data_block.add_column(block);
+            columns.push(column);
         }
 
-        Ok(data_block)
+        Ok(DataBlock::new(columns, num_rows))
     }
 
     pub fn create_with_default_value(
@@ -401,27 +395,27 @@ impl DataBlock {
         data_block.num_rows = num_rows;
         let schema_fields = schema.fields();
 
+        let mut columns = Vec::with_capacity(default_vals.len());
         for (i, default_val) in default_vals.iter().enumerate() {
             let field = &schema_fields[i];
             let data_type = field.data_type();
 
-            let builder = ColumnBuilder::repeat(&default_val.as_ref(), num_rows, data_type);
-            let col = builder.build();
-            let block = BlockEntry {
+            let column = BlockEntry {
                 data_type: data_type.clone(),
-                value: Value::Column(col),
+                value: Value::Scalar(default_val.to_owned()),
             };
 
-            data_block.add_column(block);
+            columns.push(column);
         }
 
-        data_block
+        DataBlock::new(columns, num_rows)
     }
 
     pub fn create_with_default_value_and_block(
         schema: &TableSchemaRef,
         data_block: &DataBlock,
         block_column_ids: &HashSet<u32>,
+        default_vals: &[Scalar],
         num_rows: usize,
     ) -> Result<DataBlock> {
         let mut new_data_block = DataBlock::empty();
@@ -429,17 +423,17 @@ impl DataBlock {
         let mut data_block_columns_idx: usize = 0;
         let data_block_columns = data_block.columns();
 
-        for field in schema.fields() {
+        let schema_fields = schema.fields();
+        let mut columns = Vec::with_capacity(default_vals.len());
+        for (i, field) in schema_fields.iter().enumerate() {
             let column_id = field.column_id();
-            let table_data_type = field.data_type();
-            let data_type: DataType = table_data_type.into();
-            let block = if !block_column_ids.contains(&column_id) {
-                let default_value = data_type.default_value();
-                let builder = ColumnBuilder::repeat(&default_value.as_ref(), num_rows, &data_type);
-                let col = builder.build();
+            let column = if !block_column_ids.contains(&column_id) {
+                let default_val = &default_vals[i];
+                let table_data_type = field.data_type();
+                let data_type: DataType = table_data_type.into();
                 BlockEntry {
                     data_type,
-                    value: Value::Column(col),
+                    value: Value::Scalar(default_val.to_owned()),
                 }
             } else {
                 let chunk_column = &data_block_columns[data_block_columns_idx];
@@ -447,10 +441,9 @@ impl DataBlock {
                 chunk_column.clone()
             };
 
-            new_data_block.add_column(block);
+            columns.push(column);
         }
-
-        Ok(new_data_block)
+        Ok(DataBlock::new(columns, num_rows))
     }
 }
 

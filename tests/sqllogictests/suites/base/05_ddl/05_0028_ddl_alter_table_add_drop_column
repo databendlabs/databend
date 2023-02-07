@@ -79,7 +79,7 @@ statement error 1108
 ALTER TABLE `05_0028_at_t0` ADD COLUMN c float
 
 statement ok
-ALTER TABLE `05_0028_at_t0` ADD COLUMN a float
+ALTER TABLE `05_0028_at_t0` ADD COLUMN a float default 101
 
 statement ok
 INSERT INTO TABLE `05_0028_at_t0` values([4,5],5.0)
@@ -87,8 +87,8 @@ INSERT INTO TABLE `05_0028_at_t0` values([4,5],5.0)
 query IF
 SELECT * FROM `05_0028_at_t0` order by a 
 ----
-[101,2] 0.0
 [4,5] 5.0
+[101,2] 101.0
 
 statement ok
 ALTER TABLE `05_0028_at_t0` ADD COLUMN b Tuple(double, int)
@@ -102,9 +102,9 @@ INSERT INTO TABLE `05_0028_at_t0` values([9,10],6.0,(111.0,2),202)
 query IFTI
 SELECT * FROM `05_0028_at_t0` order by a
 ----
-[101,2] 0.0 (0.0,0) 0
 [4,5] 5.0 (0.0,0) 0
 [9,10] 6.0 (111.0,2) 202
+[101,2] 101.0 (0.0,0) 0
 
 statement ok
 ALTER TABLE `05_0028_at_t0` DROP COLUMN c
@@ -112,16 +112,16 @@ ALTER TABLE `05_0028_at_t0` DROP COLUMN c
 query FTI
 SELECT * FROM `05_0028_at_t0` order by a
 ----
-0.0 (0.0,0) 0
 5.0 (0.0,0) 0
 6.0 (111.0,2) 202
+101.0 (0.0,0) 0
 
 query FFI
 SELECT b.1,a,b.2 FROM `05_0028_at_t0` order by a
 ----
-0.0 0.0 0
 0.0 5.0 0
 111.0 6.0 2
+0.0 101.0 0
 
 statement ok
 ALTER TABLE `05_0028_at_t0` DROP COLUMN e
@@ -129,6 +129,6 @@ ALTER TABLE `05_0028_at_t0` DROP COLUMN e
 query FT
 SELECT * FROM `05_0028_at_t0` order by a
 ----
-0.0 (0.0,0)
 5.0 (0.0,0)
 6.0 (111.0,2)
+101.0 (0.0,0)

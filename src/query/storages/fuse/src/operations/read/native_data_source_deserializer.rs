@@ -299,17 +299,9 @@ impl Processor for NativeDeserializeDataTransform {
             if chunks.is_empty() {
                 let _ = self.chunks.pop_front();
                 let part = self.parts.pop_front().unwrap();
-
                 let part = FusePartInfo::from_part(&part)?;
                 let num_rows = part.nums_rows;
-                let data_schema = &self.output_schema;
-                let mut default_vals = Vec::with_capacity(data_schema.num_fields());
-                for schema_field in data_schema.fields() {
-                    let data_type = schema_field.data_type();
-                    default_vals.push(data_type.default_value());
-                }
-                let data_block =
-                    DataBlock::create_with_default_value(data_schema, &default_vals, num_rows);
+                let data_block = self.block_reader.build_default_values_block(num_rows)?;
                 self.add_block(data_block)?;
                 return Ok(());
             }

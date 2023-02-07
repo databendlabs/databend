@@ -31,7 +31,6 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::DataType;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::Expr;
@@ -127,43 +126,68 @@ impl BlockReader {
         deserialized_res
     }
 
-    fn schema_default_vals(
+    pub(crate) fn schema_default_vals(
         data_schema: DataSchema,
         table: Arc<dyn Table>,
         ctx: Arc<dyn TableContext>,
     ) -> Result<Vec<Scalar>> {
-        let fields_num = data_schema.num_fields();
-        let mut ops = Vec::with_capacity(fields_num);
-        for field in data_schema.fields() {
-            let expr = if let Some(default_expr) = field.default_expr() {
-                let mut expr = parse_exprs(ctx.clone(), table.clone(), false, default_expr)?;
-                expr.remove(0)
-            } else {
-                let default_value = field.data_type().default_value();
-                Expr::Constant {
-                    span: None,
-                    scalar: default_value,
-                    data_type: field.data_type().clone(),
-                }
+        GlobalIORuntime::instance().block_on(async move {
+            let fields_num = data_schema.num_fields();
+            let mut ops = Vec::with_capacity(fields_num);
+            for field in data_schema.fields() {
+                let expr = if let Some(default_expr) = field.default_expr() {
+                    let mut expr = parse_exprs(ctx.clone(), table.clone(), false, default_expr)?;
+                    let mut expr = expr.remove(0);
+                    let data_type = field.data_type();
+                    if expr.data_type() != data_type {
+                        expr = Expr::Cast {
+                            span: None,
+                            is_try: data_type.is_nullable(),
+                            expr: Box::new(expr),
+                            dest_type: data_type.to_owned(),
+                        };
+                    }
+
+                    expr
+                } else {
+                    let default_value = field.data_type().default_value();
+                    Expr::Constant {
+                        span: None,
+                        scalar: default_value,
+                        data_type: field.data_type().clone(),
+                    }
+                };
+                ops.push(BlockOperator::Map { expr });
+            }
+
+            let func_ctx = ctx.get_function_context()?;
+            let mut expression_transform = CompoundBlockOperator {
+                ctx: func_ctx,
+                operators: ops,
             };
-            ops.push(BlockOperator::Map { expr });
-        }
 
-        let func_ctx = ctx.get_function_context()?;
-        let mut expression_transform = CompoundBlockOperator {
-            ctx: func_ctx,
-            operators: ops,
-        };
+            let one_row_chunk = DataBlock::empty_with_schema(Arc::new(data_schema));
+            let res = expression_transform.transform(one_row_chunk)?;
 
-        let one_row_chunk = DataBlock::empty_with_schema(Arc::new(data_schema));
-        let res = expression_transform.transform(one_row_chunk)?;
+            Ok(res
+                .columns()
+                .iter()
+                .skip(fields_num)
+                .map(|col| unsafe { col.value.as_ref().index_unchecked(0).to_owned() })
+                .collect())
+        })
+    }
 
-        Ok(res
-            .columns()
-            .iter()
-            .skip(fields_num)
-            .map(|col| unsafe { col.value.as_ref().index_unchecked(0).to_owned() })
-            .collect())
+    pub fn build_default_values_block(&self, num_rows: usize) -> Result<DataBlock> {
+        let data_schema = self.data_schema();
+        let ctx = self.ctx.clone();
+        let table = self.table.clone();
+        let default_vals = Self::schema_default_vals(data_schema.clone(), table, ctx)?;
+        Ok(DataBlock::create_with_default_value(
+            &data_schema,
+            &default_vals,
+            num_rows,
+        ))
     }
 
     /// Deserialize column chunks data from parquet format to DataBlock with a uncompressed buffer.
@@ -176,28 +200,17 @@ impl BlockReader {
         uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
     ) -> Result<DataBlock> {
         if columns_chunks.is_empty() {
-            let data_schema = self.data_schema();
-            let ctx = self.ctx.clone();
-            let table = self.table.clone();
-            let default_vals = GlobalIORuntime::instance()
-                .block_on(async move { Self::schema_default_vals(data_schema, table, ctx) })?;
-            // let default_vals = self.schema_default_vals(&data_schema)?;
-            let data_schema = self.data_schema();
-            return Ok(DataBlock::create_with_default_value(
-                &data_schema,
-                &default_vals,
-                num_rows,
-            ));
+            return self.build_default_values_block(num_rows);
         }
 
         let chunk_map: HashMap<usize, &[u8]> = columns_chunks.into_iter().collect();
         let mut columns_array_iter = Vec::with_capacity(self.projection.len());
 
         let columns = self.projection.project_column_nodes(&self.column_nodes)?;
-        let mut default_vals = Vec::with_capacity(columns.len());
+        let mut need_default_vals = Vec::with_capacity(columns.len());
         let mut need_to_fill_default_val = false;
 
-        for (i, column) in columns.iter().enumerate() {
+        for column in columns {
             let field = column.field.clone();
             let indices = &column.leaf_ids;
             let mut column_metas = Vec::with_capacity(indices.len());
@@ -232,12 +245,9 @@ impl BlockReader {
                         .clone()
                         .unwrap_or_else(|| UncompressedBuffer::new(0)),
                 )?);
-                default_vals.push(None);
+                need_default_vals.push(None);
             } else {
-                let schema_field = &self.projected_schema.fields()[i];
-                let table_data_type = schema_field.data_type();
-                let data_type: DataType = table_data_type.into();
-                default_vals.push(Some(data_type.default_value()));
+                need_default_vals.push(Some(()));
                 need_to_fill_default_val = true;
             }
         }
@@ -253,6 +263,18 @@ impl BlockReader {
         if !need_to_fill_default_val {
             DataBlock::from_arrow_chunk(&chunk, &self.data_schema())
         } else {
+            let data_schema = self.data_schema();
+            let ctx = self.ctx.clone();
+            let table = self.table.clone();
+            let schema_default_vals = Self::schema_default_vals(data_schema, table, ctx)?;
+            let mut default_vals = Vec::with_capacity(need_default_vals.len());
+            for (i, need_default_val) in need_default_vals.iter().enumerate() {
+                if need_default_val.is_none() {
+                    default_vals.push(None);
+                } else {
+                    default_vals.push(Some(schema_default_vals[i].clone()));
+                }
+            }
             DataBlock::create_with_default_value_and_chunk(
                 &self.data_schema(),
                 &chunk,
