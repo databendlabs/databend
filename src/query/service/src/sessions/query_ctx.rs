@@ -23,7 +23,6 @@ use std::sync::Arc;
 use std::sync::Weak;
 use std::time::SystemTime;
 
-use chrono_tz::Tz;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
@@ -37,6 +36,7 @@ use common_catalog::table_context::StageAttachment;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::date_helper::TzFactory;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
@@ -335,9 +335,7 @@ impl TableContext for QueryContext {
 
     fn get_function_context(&self) -> Result<FunctionContext> {
         let tz = self.get_settings().get_timezone()?;
-        let tz = tz.parse::<Tz>().map_err(|_| {
-            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
-        })?;
+        let tz = TzFactory::instance().get_by_name(&tz)?;
         Ok(FunctionContext { tz })
     }
 

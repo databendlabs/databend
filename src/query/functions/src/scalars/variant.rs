@@ -466,7 +466,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, DateType>(|val, output, ctx| {
-            match as_str(val).and_then(|val| string_to_date(val.as_bytes(), ctx.tz)) {
+            match as_str(val).and_then(|val| string_to_date(val.as_bytes(), ctx.tz.tz)) {
                 Some(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
                 None => {
                     ctx.set_error(output.len(), "unable to cast to type `DATE`");
@@ -481,7 +481,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<DateType>>(|val, output, ctx| {
-            match as_str(val).and_then(|str_value| string_to_date(str_value.as_bytes(), ctx.tz)) {
+            match as_str(val).and_then(|str_value| string_to_date(str_value.as_bytes(), ctx.tz.tz))
+            {
                 Some(date) => output.push(date.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
                 None => output.push_null(),
             }
@@ -494,7 +495,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, TimestampType>(
             |val, output, ctx| match as_str(val)
-                .and_then(|val| string_to_timestamp(val.as_bytes(), ctx.tz))
+                .and_then(|val| string_to_timestamp(val.as_bytes(), ctx.tz.tz))
             {
                 Some(ts) => output.push(ts.timestamp_micros()),
                 None => {
@@ -512,7 +513,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_1_arg::<VariantType, NullableType<TimestampType>>(
             |val, output, ctx| match as_str(val) {
                 Some(str_val) => {
-                    let timestamp = string_to_timestamp(str_val.as_bytes(), ctx.tz)
+                    let timestamp = string_to_timestamp(str_val.as_bytes(), ctx.tz.tz)
                         .map(|ts| ts.timestamp_micros());
                     match timestamp {
                         Some(timestamp) => output.push(timestamp),

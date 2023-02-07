@@ -16,17 +16,205 @@ use chrono::Date;
 use chrono::DateTime;
 use chrono::Datelike;
 use chrono::Duration;
+use chrono::LocalResult;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
+use chrono::NaiveTime;
 use chrono::Offset;
 use chrono::TimeZone;
 use chrono::Timelike;
 use chrono::Utc;
 use chrono_tz::Tz;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use num_traits::AsPrimitive;
+use once_cell::sync::Lazy;
 
 use crate::types::date::check_date;
 use crate::types::timestamp::check_timestamp;
+use crate::types::timestamp::MICROS_IN_A_SEC;
+
+#[derive(Debug, Clone, Copy)]
+pub struct TzLUT {
+    pub tz: Tz,
+    pub offset_round_hour: bool,
+    pub offset_round_minute: bool,
+}
+
+impl Default for TzLUT {
+    fn default() -> Self {
+        Self {
+            tz: Tz::UTC,
+            offset_round_hour: true,
+            offset_round_minute: true,
+        }
+    }
+}
+
+static TZ_FACTORY: Lazy<TzFactory> = Lazy::new(|| {
+    let factory = TzFactory {
+        luts: dashmap::DashMap::new(),
+    };
+    let _ = factory.get(Tz::UTC);
+    let _ = factory.get(Tz::Asia__Shanghai);
+    let _ = factory.get(Tz::Asia__Tokyo);
+    let _ = factory.get(Tz::America__New_York);
+    let _ = factory.get(Tz::Europe__London);
+    factory
+});
+
+pub struct TzFactory {
+    pub luts: dashmap::DashMap<String, TzLUT>,
+}
+
+impl TzFactory {
+    pub fn instance() -> &'static TzFactory {
+        &TZ_FACTORY
+    }
+
+    pub fn get_by_name(&self, tz_name: &str) -> Result<TzLUT> {
+        if let Some(lut) = self.luts.get(tz_name) {
+            return Ok(*lut.value());
+        }
+
+        let tz = tz_name.parse::<Tz>().map_err(|_| {
+            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+        })?;
+        let lut = TzLUT::new(tz);
+        self.luts.insert(tz_name.to_string(), lut);
+        Ok(lut)
+    }
+
+    pub fn get(&self, tz: Tz) -> TzLUT {
+        let tz_name = tz.name();
+        if let Some(lut) = self.luts.get(tz_name) {
+            return *lut.value();
+        }
+        let lut = TzLUT::new(tz);
+        self.luts.insert(tz_name.to_string(), lut);
+        lut
+    }
+}
+
+impl TzLUT {
+    // it's very heavy to initial a TzLUT
+    fn new(tz: Tz) -> Self {
+        static DATE_LUT_MIN_YEAR: i32 = 1925;
+        static DATE_LUT_MAX_YEAR: i32 = 2283;
+
+        let mut offset_round_hour = true;
+        let mut offset_round_minute = true;
+
+        let date = NaiveDate::from_ymd(DATE_LUT_MIN_YEAR, 1, 1);
+        let mut days = date.num_days_from_ce();
+
+        loop {
+            let time = NaiveDateTime::new(
+                NaiveDate::from_num_days_from_ce(days),
+                NaiveTime::from_hms(0, 0, 0),
+            );
+            if time.year() > DATE_LUT_MAX_YEAR {
+                break;
+            }
+
+            days += 1;
+
+            match tz.offset_from_local_datetime(&time) {
+                LocalResult::Single(offset) => {
+                    let offset = offset.fix();
+                    if offset_round_hour && offset.local_minus_utc() % 3600 != 0 {
+                        offset_round_hour = false;
+                    }
+                    if offset_round_minute && offset.local_minus_utc() % 60 != 0 {
+                        offset_round_minute = false;
+                    }
+                }
+                _ => {
+                    continue;
+                }
+            }
+        }
+        Self {
+            tz,
+            offset_round_hour,
+            offset_round_minute,
+        }
+    }
+
+    #[allow(dead_code)]
+    #[inline]
+    fn to_start_of_seconds(&self, ts: i64, seconds: i64) -> i64 {
+        if seconds == 1 {
+            return ts;
+        }
+        if seconds % 60 == 0 {
+            return self.to_start_of_minutes(ts, seconds);
+        }
+        self.round_down(ts, seconds)
+    }
+
+    #[inline]
+    fn to_start_of_minutes(&self, ts: i64, seconds_div: i64) -> i64 {
+        if self.offset_round_minute {
+            return if ts > 0 {
+                ts / seconds_div * seconds_div
+            } else {
+                (ts + 1 - seconds_div) / seconds_div * seconds_div
+            };
+        }
+        let datetime = self.tz.timestamp(ts, 0);
+
+        let fix = datetime.offset().fix().local_minus_utc() as i64;
+        fix + (ts - fix) / seconds_div * seconds_div
+    }
+
+    #[inline]
+    fn round_down(&self, ts: i64, seconds_div: i64) -> i64 {
+        if self.offset_round_hour {
+            return if ts > 0 {
+                ts / seconds_div * seconds_div
+            } else {
+                (ts + 1 - seconds_div) / seconds_div * seconds_div
+            };
+        }
+        let datetime = self.tz.timestamp(ts, 0);
+        let fix = datetime.offset().fix().local_minus_utc() as i64;
+        fix + (ts - fix) / seconds_div * seconds_div
+    }
+
+    #[inline]
+    pub fn round_timestamp_micros(&self, micros: i64, round: Round) -> i64 {
+        self.round_timestamp(micros / MICROS_IN_A_SEC, round) * MICROS_IN_A_SEC
+    }
+
+    #[inline]
+    pub fn round_timestamp(&self, ts: i64, round: Round) -> i64 {
+        match round {
+            Round::Second => return ts,
+            Round::Minute => self.to_start_of_minutes(ts, 60),
+            Round::FiveMinutes => self.to_start_of_minutes(ts, 15 * 60),
+            Round::TenMinutes => self.to_start_of_minutes(ts, 10 * 60),
+            Round::FifteenMinutes => self.to_start_of_minutes(ts, 15 * 60),
+            Round::TimeSlot => self.to_start_of_minutes(ts, 30 * 60),
+            Round::Hour => self.round_down(ts, 3600),
+            Round::Day => self.round_down(ts, 3600 * 24),
+        }
+    }
+
+    pub fn to_minute(&self, ts: i64) -> u8 {
+        if ts >= 0 && self.offset_round_hour {
+            (ts % 60) as u8
+        } else {
+            let datetime = self.tz.timestamp(ts, 0);
+            datetime.minute() as u8
+        }
+    }
+
+    pub fn to_hour(&self, ts: i64) -> u8 {
+        let datetime = self.tz.timestamp(ts, 0);
+        datetime.hour() as u8
+    }
+}
 
 pub trait DateConverter {
     fn to_date(&self, tz: Tz) -> Date<Tz>;
@@ -45,10 +233,7 @@ where T: AsPrimitive<i64>
     fn to_timestamp(&self, tz: Tz) -> DateTime<Tz> {
         // Can't use `tz.timestamp_nanos(self.as_() * 1000)` directly, is may cause multiply with overflow.
         let micros = self.as_();
-        let (mut secs, mut nanos) = (
-            micros / ROUND_MICRO_SECOND,
-            (micros % ROUND_MICRO_SECOND) * 1_000,
-        );
+        let (mut secs, mut nanos) = (micros / MICROS_IN_A_SEC, (micros % MICROS_IN_A_SEC) * 1_000);
         if nanos < 0 {
             secs -= 1;
             nanos += 1_000_000_000;
@@ -115,10 +300,10 @@ macro_rules! impl_interval_year_month {
         impl $name {
             pub fn eval_date(
                 date: i32,
-                tz: Tz,
+                tz: TzLUT,
                 delta: impl AsPrimitive<i64>,
             ) -> Result<i32, String> {
-                let date = date.to_date(tz);
+                let date = date.to_date(tz.tz);
                 let new_date = $op(date.year(), date.month(), date.day(), delta.as_())?;
                 check_date(
                     new_date
@@ -129,10 +314,10 @@ macro_rules! impl_interval_year_month {
 
             pub fn eval_timestamp(
                 ts: i64,
-                tz: Tz,
+                tz: TzLUT,
                 delta: impl AsPrimitive<i64>,
             ) -> Result<i64, String> {
-                let ts = ts.to_timestamp(tz);
+                let ts = ts.to_timestamp(tz.tz);
                 let new_ts = $op(ts.year(), ts.month(), ts.day(), delta.as_())?;
                 check_timestamp(NaiveDateTime::new(new_ts, ts.time()).timestamp_micros())
             }
@@ -151,7 +336,7 @@ impl AddDaysImpl {
     }
 
     pub fn eval_timestamp(date: i64, delta: impl AsPrimitive<i64>) -> Result<i64, String> {
-        check_timestamp(date.wrapping_add(delta.as_() * 24 * 3600 * ROUND_MICRO_SECOND))
+        check_timestamp(date.wrapping_add(delta.as_() * 24 * 3600 * MICROS_IN_A_SEC))
     }
 }
 
@@ -160,8 +345,8 @@ pub struct AddTimesImpl;
 impl AddTimesImpl {
     pub fn eval_date(date: i32, delta: impl AsPrimitive<i64>, factor: i64) -> Result<i32, String> {
         check_date(
-            (date as i64 * 3600 * 24 * ROUND_MICRO_SECOND)
-                .wrapping_add(delta.as_() * factor * ROUND_MICRO_SECOND),
+            (date as i64 * 3600 * 24 * MICROS_IN_A_SEC)
+                .wrapping_add(delta.as_() * factor * MICROS_IN_A_SEC),
         )
     }
 
@@ -170,7 +355,7 @@ impl AddTimesImpl {
         delta: impl AsPrimitive<i64>,
         factor: i64,
     ) -> Result<i64, String> {
-        check_timestamp(ts.wrapping_add(delta.as_() * factor * ROUND_MICRO_SECOND))
+        check_timestamp(ts.wrapping_add(delta.as_() * factor * MICROS_IN_A_SEC))
     }
 }
 
@@ -189,13 +374,13 @@ pub trait ToNumber<N> {
 pub struct ToNumberImpl;
 
 impl ToNumberImpl {
-    pub fn eval_timestamp<T: ToNumber<R>, R>(ts: i64, tz: Tz) -> R {
-        let dt = ts.to_timestamp(tz);
+    pub fn eval_timestamp<T: ToNumber<R>, R>(ts: i64, tz: TzLUT) -> R {
+        let dt = ts.to_timestamp(tz.tz);
         T::to_number(&dt)
     }
 
-    pub fn eval_date<T: ToNumber<R>, R>(date: i32, tz: Tz) -> R {
-        let dt = date.to_date(tz).and_hms(0, 0, 0);
+    pub fn eval_date<T: ToNumber<R>, R>(date: i32, tz: TzLUT) -> R {
+        let dt = date.to_date(tz.tz).and_hms(0, 0, 0);
         T::to_number(&dt)
     }
 }
@@ -265,24 +450,6 @@ impl ToNumber<u8> for ToDayOfWeek {
     }
 }
 
-impl ToNumber<u8> for ToHour {
-    fn to_number(dt: &DateTime<Tz>) -> u8 {
-        dt.hour() as u8
-    }
-}
-
-impl ToNumber<u8> for ToMinute {
-    fn to_number(dt: &DateTime<Tz>) -> u8 {
-        dt.minute() as u8
-    }
-}
-
-impl ToNumber<u8> for ToSecond {
-    fn to_number(dt: &DateTime<Tz>) -> u8 {
-        dt.second() as u8
-    }
-}
-
 #[derive(Clone, Copy)]
 pub enum Round {
     Second,
@@ -295,57 +462,16 @@ pub enum Round {
     Day,
 }
 
-const ROUND_MICRO_SECOND: i64 = 1_000_000;
-pub fn round_timestamp(ts: i64, tz: Tz, round: Round) -> i64 {
-    let second = ts / ROUND_MICRO_SECOND;
-    let dt = tz.timestamp(second, 0_u32);
-    if matches!(round, Round::Minute) && dt.offset().fix().local_minus_utc() % 60 == 0 {
-        return (second / 60) * 60 * ROUND_MICRO_SECOND;
-    }
-
-    let res = match round {
-        Round::Second => dt,
-        Round::Minute => {
-            return (second - dt.second() as i64) * ROUND_MICRO_SECOND;
-        }
-        Round::FiveMinutes => {
-            return (second - (dt.second() as i64 + (dt.minute() % 5) as i64 * 60))
-                * ROUND_MICRO_SECOND;
-        }
-        Round::TenMinutes => {
-            return (second - (dt.second() as i64 + (dt.minute() % 10) as i64 * 60))
-                * ROUND_MICRO_SECOND;
-        }
-        Round::FifteenMinutes => {
-            return (second - (dt.second() as i64 + (dt.minute() % 15) as i64 * 60))
-                * ROUND_MICRO_SECOND;
-        }
-        Round::TimeSlot => tz.ymd(dt.year(), dt.month(), dt.day()).and_hms_micro(
-            dt.hour(),
-            dt.minute() / 30 * 30,
-            0,
-            0,
-        ),
-        Round::Hour => tz
-            .ymd(dt.year(), dt.month(), dt.day())
-            .and_hms_micro(dt.hour(), 0, 0, 0),
-        Round::Day => tz
-            .ymd(dt.year(), dt.month(), dt.day())
-            .and_hms_micro(0, 0, 0, 0),
-    };
-    res.timestamp_micros()
-}
-
 pub struct DateRounder;
 
 impl DateRounder {
-    pub fn eval_timestamp<T: ToNumber<i32>>(ts: i64, tz: Tz) -> i32 {
-        let dt = ts.to_timestamp(tz);
+    pub fn eval_timestamp<T: ToNumber<i32>>(ts: i64, tz: TzLUT) -> i32 {
+        let dt = ts.to_timestamp(tz.tz);
         T::to_number(&dt)
     }
 
-    pub fn eval_date<T: ToNumber<i32>>(date: i32, tz: Tz) -> i32 {
-        let dt = date.to_date(tz).and_hms(0, 0, 0);
+    pub fn eval_date<T: ToNumber<i32>>(date: i32, tz: TzLUT) -> i32 {
+        let dt = date.to_date(tz.tz).and_hms(0, 0, 0);
         T::to_number(&dt)
     }
 }

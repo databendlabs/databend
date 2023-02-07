@@ -141,7 +141,7 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
         ctx: &mut EvalContext,
     ) -> Value<TimestampType> {
         vectorize_with_builder_1_arg::<StringType, TimestampType>(|val, output, ctx| {
-            match string_to_timestamp(val, ctx.tz) {
+            match string_to_timestamp(val, ctx.tz.tz) {
                 Some(ts) => output.push(ts.timestamp_micros()),
                 None => {
                     ctx.set_error(output.len(), "unable to parse string to type `TIMESTAMP`");
@@ -249,7 +249,7 @@ fn register_string_to_date(registry: &mut FunctionRegistry) {
 
     fn eval_string_to_date(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<DateType> {
         vectorize_with_builder_1_arg::<StringType, DateType>(
-            |val, output, ctx| match string_to_date(val, ctx.tz) {
+            |val, output, ctx| match string_to_date(val, ctx.tz.tz) {
                 Some(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
                 None => {
                     ctx.set_error(output.len(), "unable to parse string to type `DATE`");
@@ -343,7 +343,7 @@ fn register_to_string(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<TimestampType, StringType>(|val, output, ctx| {
-            write!(output.data, "{}", timestamp_to_string(val, ctx.tz)).unwrap();
+            write!(output.data, "{}", timestamp_to_string(val, ctx.tz.tz)).unwrap();
             output.commit_row();
         }),
     );
@@ -353,7 +353,7 @@ fn register_to_string(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<DateType, StringType>(|val, output, ctx| {
-            write!(output.data, "{}", date_to_string(val, ctx.tz)).unwrap();
+            write!(output.data, "{}", date_to_string(val, ctx.tz.tz)).unwrap();
             output.commit_row();
         }),
     );
@@ -372,7 +372,12 @@ fn register_to_string(registry: &mut FunctionRegistry) {
         },
         vectorize_with_builder_1_arg::<TimestampType, NullableType<StringType>>(
             |val, output, ctx| {
-                write!(output.builder.data, "{}", timestamp_to_string(val, ctx.tz)).unwrap();
+                write!(
+                    output.builder.data,
+                    "{}",
+                    timestamp_to_string(val, ctx.tz.tz)
+                )
+                .unwrap();
                 output.builder.commit_row();
                 output.validity.push(true);
             },
@@ -392,7 +397,7 @@ fn register_to_string(registry: &mut FunctionRegistry) {
             })
         },
         vectorize_with_builder_1_arg::<DateType, NullableType<StringType>>(|val, output, ctx| {
-            write!(output.builder.data, "{}", date_to_string(val, ctx.tz)).unwrap();
+            write!(output.builder.data, "{}", date_to_string(val, ctx.tz.tz)).unwrap();
             output.builder.commit_row();
             output.validity.push(true);
         }),
@@ -891,12 +896,13 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
             ToNumberImpl::eval_timestamp::<ToDayOfWeek, _>(val, ctx.tz)
         }),
     );
+
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt8Type, _, _>(
         "to_hour",
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, UInt8Type>(|val, ctx| {
-            ToNumberImpl::eval_timestamp::<ToHour, _>(val, ctx.tz)
+            ctx.tz.to_hour(val / MICROS_IN_A_SEC)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt8Type, _, _>(
@@ -904,16 +910,14 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, UInt8Type>(|val, ctx| {
-            ToNumberImpl::eval_timestamp::<ToMinute, _>(val, ctx.tz)
+            ctx.tz.to_minute(val / MICROS_IN_A_SEC)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt8Type, _, _>(
         "to_second",
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
-        vectorize_1_arg::<TimestampType, UInt8Type>(|val, ctx| {
-            ToNumberImpl::eval_timestamp::<ToSecond, _>(val, ctx.tz)
-        }),
+        vectorize_1_arg::<TimestampType, UInt8Type>(|val, _ctx| (val / MICROS_IN_A_SEC % 60) as u8),
     );
 }
 
@@ -1084,7 +1088,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            round_timestamp(val, ctx.tz, Round::Second)
+            ctx.tz.round_timestamp_micros(val, Round::Second)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
@@ -1092,7 +1096,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            round_timestamp(val, ctx.tz, Round::Minute)
+            ctx.tz.round_timestamp_micros(val, Round::Minute)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
@@ -1100,7 +1104,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            round_timestamp(val, ctx.tz, Round::FiveMinutes)
+            ctx.tz.round_timestamp_micros(val, Round::FiveMinutes)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
@@ -1108,7 +1112,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            round_timestamp(val, ctx.tz, Round::TenMinutes)
+            ctx.tz.round_timestamp_micros(val, Round::TenMinutes)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
@@ -1116,7 +1120,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            round_timestamp(val, ctx.tz, Round::FifteenMinutes)
+            ctx.tz.round_timestamp_micros(val, Round::FifteenMinutes)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
@@ -1124,7 +1128,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            round_timestamp(val, ctx.tz, Round::Hour)
+            ctx.tz.round_timestamp_micros(val, Round::Hour)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
@@ -1132,7 +1136,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            round_timestamp(val, ctx.tz, Round::Day)
+            ctx.tz.round_timestamp_micros(val, Round::Day)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
@@ -1140,7 +1144,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            round_timestamp(val, ctx.tz, Round::TimeSlot)
+            ctx.tz.round_timestamp_micros(val, Round::TimeSlot)
         }),
     );
 
