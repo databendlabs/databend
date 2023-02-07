@@ -25,6 +25,7 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::table_args::TableArgs;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -42,7 +43,6 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
 use crate::storages::Table;
-use crate::table_functions::table_function_factory::TableArgs;
 use crate::table_functions::TableFunction;
 
 pub struct SyncCrashMeTable {
@@ -58,14 +58,13 @@ impl SyncCrashMeTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let mut panic_message = None;
-        if let Some(args) = table_args {
-            if args.len() == 1 {
-                let arg = args[0].clone();
-                panic_message =
-                    Some(String::from_utf8(arg.into_string().map_err(|_| {
-                        ErrorCode::BadArguments("Expected string argument.")
-                    })?)?);
-            }
+        let args = table_args.expect_all_positioned("sync_crash_me")?;
+        if args.len() == 1 {
+            let arg = args[0].clone();
+            panic_message =
+                Some(String::from_utf8(arg.into_string().map_err(|_| {
+                    ErrorCode::BadArguments("Expected string argument.")
+                })?)?);
         }
 
         let table_info = TableInfo {
@@ -114,10 +113,10 @@ impl Table for SyncCrashMeTable {
         Ok((PartStatistics::new_exact(1, 1, 1, 1), Partitions::default()))
     }
 
-    fn table_args(&self) -> Option<Vec<Scalar>> {
+    fn table_args(&self) -> Option<TableArgs> {
         self.panic_message
             .clone()
-            .map(|s| vec![Scalar::String(s.as_bytes().to_vec())])
+            .map(|s| TableArgs::new_positioned(vec![Scalar::String(s.as_bytes().to_vec())]))
     }
 
     fn read_data(

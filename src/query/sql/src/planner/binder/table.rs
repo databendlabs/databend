@@ -36,6 +36,7 @@ use common_catalog::table::ColumnId;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
+use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
@@ -238,7 +239,7 @@ impl Binder {
                     named_args.push((name.clone(), scalar_binder.bind(arg).await?.0));
                 }
 
-                let mut args = args
+                let positioned_args = args
                     .into_iter()
                     .map(|scalar| match scalar {
                         ScalarExpr::ConstantExpr(ConstantExpr { value, .. }) => {
@@ -251,26 +252,23 @@ impl Binder {
                     })
                     .collect::<Result<Vec<_>>>()?;
 
-                // Convert named params into Tuple(String, Scalar) and append to `args`.
-                args.reserve(named_args.len());
-                for (name, scalar) in named_args.into_iter() {
-                    match scalar {
+                let named_args: Vec<(String, Scalar)> = named_args
+                    .into_iter()
+                    .map(|(name, scalar)| match scalar {
                         ScalarExpr::ConstantExpr(ConstantExpr { value, .. }) => {
-                            args.push(Scalar::Tuple(vec![
-                                Scalar::String(name.into_bytes()),
-                                check_literal(&value).0,
-                            ]))
+                            Ok((name, check_literal(&value).0))
                         }
-                        _ => {
-                            return Err(ErrorCode::Unimplemented(format!(
-                                "Unsupported table named argument type: {:?}",
-                                scalar
-                            )));
-                        }
-                    }
-                }
+                        _ => Err(ErrorCode::Unimplemented(format!(
+                            "Unsupported table named argument type: {:?}",
+                            scalar
+                        ))),
+                    })
+                    .collect::<Result<Vec<_>>>()?;
 
-                let table_args = Some(args);
+                let table_args = TableArgs {
+                    positioned: positioned_args,
+                    named: named_args.into_iter().collect(),
+                };
 
                 // Table functions always reside is default catalog
                 let table_meta: Arc<dyn TableFunction> = self
