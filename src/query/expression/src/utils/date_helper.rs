@@ -192,7 +192,7 @@ impl TzLUT {
         match round {
             Round::Second => ts,
             Round::Minute => self.start_of_minutes(ts, 60),
-            Round::FiveMinutes => self.start_of_minutes(ts, 15 * 60),
+            Round::FiveMinutes => self.start_of_minutes(ts, 5 * 60),
             Round::TenMinutes => self.start_of_minutes(ts, 10 * 60),
             Round::FifteenMinutes => self.start_of_minutes(ts, 15 * 60),
             Round::TimeSlot => self.start_of_minutes(ts, 30 * 60),

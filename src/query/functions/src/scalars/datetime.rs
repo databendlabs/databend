@@ -917,7 +917,7 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         "to_second",
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
-        vectorize_1_arg::<TimestampType, UInt8Type>(|val, _ctx| (val / MICROS_IN_A_SEC % 60) as u8),
+        vectorize_1_arg::<TimestampType, UInt8Type>(|val, _ctx| (val / MICROS_IN_A_SEC) as u8),
     );
 }
 
