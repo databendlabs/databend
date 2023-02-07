@@ -70,12 +70,8 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
 
     for i in 0..n_req {
         let key = format!("test_meta_node_snapshot_replication-key-{}", i);
-        mn.write(LogEntry {
-            txid: None,
-            time_ms: None,
-            cmd: Cmd::UpsertKV(UpsertKV::update(&key, b"v")),
-        })
-        .await?;
+        mn.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(&key, b"v"))))
+            .await?;
     }
     log_index += n_req;
 

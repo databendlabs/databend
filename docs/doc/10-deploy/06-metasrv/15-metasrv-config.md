@@ -27,9 +27,10 @@ admin_tls_server_key     = "admin.key"
 #
 # GRPC client API endpoint
 #
-grpc_api_address         = "0.0.0.0:9191"
-grpc_tls_server_cert     = "grpc.cert" 
-grpc_tls_server_key      = "grpc.key"
+grpc_api_address           = "0.0.0.0:9191"
+grpc_api_advertise_host    = "1.2.3.4"
+grpc_tls_server_cert       = "grpc.cert" 
+grpc_tls_server_key        = "grpc.key"
 #
 # Internal raft communication
 #
@@ -70,7 +71,8 @@ Admin API provides cluster information such as node list, the currently active l
 
 GRPC API is application API a `databend-meta` client connects to, for reading and writing metadata.
 
-- `grpc_api_address` is the HTTP server address for reading and writing metadata.
+- `grpc_api_address` is the HTTP server address to listen for incoming business request, e.g., `0.0.0.0:9191`.
+- `grpc_api_advertise_host` is the HTTP server address published for databend-query to connect to, e.g., `1.2.3.4`.
 - `grpc_tls_server_cert` specifies the path to load tls certificate.
 - `grpc_tls_server_key` specifies the path to load tls key.
 

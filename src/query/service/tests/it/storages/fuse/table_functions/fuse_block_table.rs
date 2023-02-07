@@ -35,7 +35,7 @@ async fn test_fuse_block_table() -> Result<()> {
             "+----------+",
             "| Column 0 |",
             "+----------+",
-            "| 0_u64    |",
+            "| 0        |",
             "+----------+",
         ];
         let qry = format!(
@@ -60,7 +60,7 @@ async fn test_fuse_block_table() -> Result<()> {
             "+----------+",
             "| Column 0 |",
             "+----------+",
-            "| 2_u64    |",
+            "| 2        |",
             "+----------+",
         ];
 

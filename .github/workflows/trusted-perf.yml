@@ -1,0 +1,32 @@
+name: Perf Commentator (trusted)
+
+on:
+  workflow_run:
+    workflows: ["Dev Perf"]
+    types:
+      - completed
+
+# TODO: compare with baseline
+jobs:
+  check_result:
+    runs-on: ubuntu-latest
+    if: >
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Download benchmark results
+        run: |
+          gh run download ${{github.event.workflow_run.id }} --dir benchmark/results --name benchmark-results
+          while read line; do
+            echo "$line" >> $GITHUB_ENV
+          done <benchmark/results/metadata.info
+      - name: Comment on PR
+        uses: everpcpc/comment-on-pr-action@v1
+        with:
+          number: ${{ env.PR_NUMBER }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          identifier: benchmark
+          body: |
+            ![platform](https://img.shields.io/static/v1?label=AWS%20EC2&message=${{ env.INSTANCE_TYPE }}&color=orange&logo=amazonec2)
+          files: benchmark/results/hits.md
+          file-titles: "Hits"

@@ -19,9 +19,13 @@ use common_exception::Result;
 
 use crate::binder::Binder;
 use crate::binder::ScalarBinder;
+use crate::optimizer::SExpr;
+use crate::optimizer::SubqueryRewriter;
 use crate::plans::DeletePlan;
+use crate::plans::Filter;
 use crate::plans::Plan;
 use crate::BindContext;
+use crate::ScalarExpr;
 
 impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_delete(
@@ -53,7 +57,7 @@ impl<'a> Binder {
             ));
         };
 
-        let (_, context) = self
+        let (table_expr, context) = self
             .bind_table_reference(bind_context, table_reference)
             .await?;
 
@@ -65,11 +69,22 @@ impl<'a> Binder {
             &[],
         );
 
-        let selection = if let Some(expr) = filter {
+        let (selection, input_expr) = if let Some(expr) = filter {
             let (scalar, _) = scalar_binder.bind(expr).await?;
-            Some(scalar)
+            if let ScalarExpr::SubqueryExpr(_) = scalar {
+                let filter = Filter {
+                    predicates: vec![scalar],
+                    is_having: false,
+                };
+                let filter_expr = SExpr::create_unary(filter.into(), table_expr);
+                let mut rewriter = SubqueryRewriter::new(self.metadata.clone());
+                let rewrote_expr = rewriter.rewrite(&filter_expr)?;
+                (None, Some(rewrote_expr))
+            } else {
+                (Some(scalar), None)
+            }
         } else {
-            None
+            (None, None)
         };
 
         let plan = DeletePlan {
@@ -77,6 +92,7 @@ impl<'a> Binder {
             database_name,
             table_name,
             selection,
+            input_expr,
         };
         Ok(Plan::Delete(Box::new(plan)))
     }

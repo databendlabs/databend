@@ -164,14 +164,6 @@ impl MetaService for MetaServiceImpl {
         }
     }
 
-    async fn write_msg(&self, r: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
-        self.kv_api(r).await
-    }
-
-    async fn read_msg(&self, r: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
-        self.kv_api(r).await
-    }
-
     async fn kv_api(&self, r: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
         let _guard = RequestInFlight::guard();
 
@@ -281,10 +273,11 @@ impl MetaService for MetaServiceImpl {
         request: Request<MemberListRequest>,
     ) -> Result<Response<MemberListReply>, Status> {
         self.check_token(request.metadata())?;
+
         let _guard = RequestInFlight::guard();
 
         let meta_node = &self.meta_node;
-        let members = meta_node.get_meta_addrs().await.map_err(|e| {
+        let members = meta_node.get_grpc_advertise_addrs().await.map_err(|e| {
             Status::internal(format!("Cannot get metasrv member list, error: {:?}", e))
         })?;
 

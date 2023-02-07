@@ -227,11 +227,14 @@ run_test() {
 
         # logictest pattern argument change after v0.7.140
         # old logic test does not support pattern filter
-        mv suites/gen/05_ddl .
+        mv suites/base/05_ddl .
         rm -fr suites/*
         mv 05_ddl suites/
         # FIXME:(everpcpc) sometimes old logic test fails but we can't time travel back to fix it.
-        python3 main.py || true
+        #       Confirm the test always pass then delete this workaround in
+        #       comment:
+        # python3 main.py || true
+        python3 main.py
         cd -
     fi
 }

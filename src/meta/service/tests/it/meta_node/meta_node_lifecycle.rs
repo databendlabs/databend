@@ -115,7 +115,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     let admin_req = join_req(
         node_id,
         tc2.config.raft_config.raft_api_addr().await?,
-        tc2.config.grpc_api_address.clone(),
+        tc2.config.grpc_api_advertise_address(),
         0,
     );
     leader.handle_forwardable_request(admin_req).await?;
@@ -146,7 +146,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
         let admin_req = join_req(
             node_id,
             tc3.config.raft_config.raft_api_addr().await?,
-            tc3.config.grpc_api_address.clone(),
+            tc3.config.grpc_api_advertise_address(),
             1,
         );
         client.forward(admin_req).await?;
@@ -216,7 +216,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     let req = join_req(
         node_id,
         tc1.config.raft_config.raft_api_addr().await?,
-        tc1.config.grpc_api_address,
+        tc1.config.grpc_api_advertise_address(),
         1,
     );
     leader.handle_forwardable_request(req).await?;
@@ -245,7 +245,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
         let req = join_req(
             node_id,
             tc2.config.raft_config.raft_api_addr().await?,
-            tc2.config.grpc_api_address.clone(),
+            tc2.config.grpc_api_advertise_address(),
             1,
         );
         leader.handle_forwardable_request(req).await?;
@@ -255,7 +255,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
         let req = join_req(
             node_id,
             tc2.config.raft_config.raft_api_addr().await?,
-            tc2.config.grpc_api_address,
+            tc2.config.grpc_api_advertise_address(),
             1,
         );
         mn1.handle_forwardable_request(req).await?;
@@ -300,13 +300,19 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     let mut log_index = 2;
 
     let res = meta_node
-        .join_cluster(&tc0.config.raft_config, tc0.config.grpc_api_address)
+        .join_cluster(
+            &tc0.config.raft_config,
+            tc0.config.grpc_api_advertise_address(),
+        )
         .await?;
     assert_eq!(Err("Did not join: --join is empty".to_string()), res);
 
     let meta_node1 = MetaNode::start(&tc1.config).await?;
     let res = meta_node1
-        .join_cluster(&tc1.config.raft_config, tc1.config.grpc_api_address.clone())
+        .join_cluster(
+            &tc1.config.raft_config,
+            tc1.config.grpc_api_advertise_address(),
+        )
         .await?;
     assert_eq!(Ok(()), res);
 
@@ -328,7 +334,10 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     {
         let n2 = MetaNode::start(&tc2.config).await?;
         let res = n2
-            .join_cluster(&tc2.config.raft_config, tc2.config.grpc_api_address.clone())
+            .join_cluster(
+                &tc2.config.raft_config,
+                tc2.config.grpc_api_advertise_address(),
+            )
             .await?;
         assert_eq!(Ok(()), res);
 
@@ -350,7 +359,10 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     {
         let n2 = MetaNode::start(&tc2.config).await?;
         let res = n2
-            .join_cluster(&tc2.config.raft_config, tc2.config.grpc_api_address)
+            .join_cluster(
+                &tc2.config.raft_config,
+                tc2.config.grpc_api_advertise_address(),
+            )
             .await?;
         assert_eq!(
             Err("Did not join: node 2 already in cluster".to_string()),
@@ -688,16 +700,16 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
 fn join_req(
     node_id: NodeId,
     endpoint: Endpoint,
-    grpc_api_addr: String,
+    grpc_api_advertise_address: Option<String>,
     forward: u64,
 ) -> ForwardRequest {
     ForwardRequest {
         forward_to_leader: forward,
-        body: ForwardRequestBody::Join(JoinRequest {
+        body: ForwardRequestBody::Join(JoinRequest::new(
             node_id,
             endpoint,
-            grpc_api_addr,
-        }),
+            grpc_api_advertise_address,
+        )),
     }
 }
 

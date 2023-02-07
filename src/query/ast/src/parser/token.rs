@@ -355,6 +355,8 @@ pub enum TokenKind {
     DAY,
     #[token("DECADE", ignore(ascii_case))]
     DECADE,
+    #[token("DECIMAL", ignore(ascii_case))]
+    DECIMAL,
     #[token("DEFAULT", ignore(ascii_case))]
     DEFAULT,
     #[token("DEFLATE", ignore(ascii_case))]

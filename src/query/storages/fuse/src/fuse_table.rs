@@ -44,13 +44,10 @@ use common_meta_app::schema::TableInfo;
 use common_sharing::create_share_table_operator;
 use common_sql::parse_exprs;
 use common_storage::init_operator;
-use common_storage::CacheOperator;
 use common_storage::DataOperator;
-use common_storage::FuseCachePolicy;
 use common_storage::ShareTableConfig;
 use common_storage::StorageMetrics;
 use common_storage::StorageMetricsLayer;
-use opendal::layers::CacheLayer;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::ClusterKey;
@@ -126,11 +123,6 @@ impl FuseTable {
 
         let data_metrics = Arc::new(StorageMetrics::default());
         operator = operator.layer(StorageMetricsLayer::new(data_metrics.clone()));
-        // If cache op is valid, layered with ContentCacheLayer.
-        if let Some(cache_op) = CacheOperator::instance() {
-            operator =
-                operator.layer(CacheLayer::new(cache_op).with_policy(FuseCachePolicy::new()));
-        }
 
         let storage_format = table_info
             .options()

@@ -1,9 +1,10 @@
 # Usage:
 # databend-meta -c databend-meta-node-3.toml
 
-log_dir            = "./.databend/new_logs3"
-admin_api_address  = "0.0.0.0:28301"
-grpc_api_address   = "0.0.0.0:39191"
+log_dir                 = "./.databend/new_logs3"
+admin_api_address       = "0.0.0.0:28301"
+grpc_api_address        = "0.0.0.0:39191"
+grpc_api_advertise_host = "127.0.0.1"
 
 [raft_config]
 id            = 6

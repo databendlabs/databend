@@ -86,3 +86,13 @@ C --------+-------------+------+------------>
 S ---------------+------+------+------------>
 S.ver:           2      3      4
 ```
+
+### Compatibility status
+
+The following is an illustration of current query-meta compatibility.
+It shows that:
+- meta-0.8.30 is compatible with query-0.7.59 upto query-0.8.79;
+- query-0.8.79 is compatible with meta-0.8.30 upto meta-0.9.22; 
+- query-0.8.80 is compatible with meta-0.8.35 upto the latest version;
+
+<img src="/img/deploy/compatibility.excalidraw.png"/>

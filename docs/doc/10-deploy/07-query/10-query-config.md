@@ -53,6 +53,7 @@ You can find [sample configuration files](https://github.com/datafuselabs/databe
 ### endpoints
 
 * Sets one or more meta server endpoints that this query server can connect to. For a robust connection to Meta, include multiple meta servers within the cluster as backups if possible, for example, `["192.168.0.1:9191", "192.168.0.2:9191"]`.
+* It is a list of `grpc_api_advertise_host:<grpc-api-port>` of databend-meta config. See [Databend-meta config: `grpc_api_advertise_host`](../06-metasrv/15-metasrv-config.md). 
 * This setting only takes effect when Databend works in cluster mode. You don't need to configure it for standalone Databend.
 * Default: `["0.0.0.0:9191"]`
 * Env variable: `META_ENDPOINTS`
@@ -64,9 +65,11 @@ You can find [sample configuration files](https://github.com/datafuselabs/databe
 
 ### auto_sync_interval
 
-* Sets how often (in seconds) this query server should automatically sync up with the meta servers within the cluster to check their availability.
+* Sets how often (in seconds) this query server should automatically sync up `endpoints` from the meta servers within the cluster. When enabled, databend-query tries to contact one of the databend-meta server to get a list of `grpc_api_advertise_host:<grpc-api-port>` periodically.
+* If a databend-meta is **NOT** configured with `grpc_api_advertise_host`, it fills blank string `""` in the returned endpoint list. See [Databend-meta config: `grpc_api_advertise_host`](../06-metasrv/15-metasrv-config.md).
+* If the returned endpoints list contains more than half invalid addresses, e.g., 2/3 are `""`: `["127.0.0.1:9191", "",""]`, databend-query will not update the `endpoint`.
 * To disable the sync up, set it to 0.
-* This setting only takes effect when Databend works in cluster mode. You don't need to configure it for standalone Databend.
+* This setting only takes effect when Databend-query works with remote meta service(`endpoints` is not empty). You don't need to configure it for standalone Databend.
 * Default: 60
 
 ## 3. Query config

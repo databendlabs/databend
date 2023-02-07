@@ -4,7 +4,7 @@ checked expr   : abs<UInt64>(to_uint64<UInt8>(1_u8))
 optimized expr : 1_u64
 output type    : UInt64
 output domain  : {1..=1}
-output         : 1_u64
+output         : 1
 
 
 ast            : abs(-1)
@@ -13,7 +13,7 @@ checked expr   : abs<Int64>(to_int64<Int16>(minus<UInt8>(1_u8)))
 optimized expr : 1_u64
 output type    : UInt64
 output domain  : {1..=1}
-output         : 1_u64
+output         : 1
 
 
 ast            : abs(null)
@@ -34,9 +34,9 @@ evaluation:
 +--------+--------------+------------+
 | Type   | Int64        | UInt64     |
 | Domain | {-30..=1024} | {0..=1024} |
-| Row 0  | 1_i64        | 1_u64      |
-| Row 1  | -30_i64      | 30_u64     |
-| Row 2  | 1024_i64     | 1024_u64   |
+| Row 0  | 1            | 1          |
+| Row 1  | -30          | 30         |
+| Row 2  | 1024         | 1024       |
 +--------+--------------+------------+
 evaluation (internal):
 +--------+-----------------------+
@@ -53,7 +53,7 @@ checked expr   : sign<Float64>(to_float64<UInt8>(1_u8))
 optimized expr : 1_i8
 output type    : Int8
 output domain  : {1..=1}
-output         : 1_i8
+output         : 1
 
 
 ast            : sign(-1)
@@ -62,7 +62,7 @@ checked expr   : sign<Float64>(to_float64<Int16>(minus<UInt8>(1_u8)))
 optimized expr : -1_i8
 output type    : Int8
 output domain  : {-1..=-1}
-output         : -1_i8
+output         : -1
 
 
 ast            : sign(null)
@@ -83,9 +83,9 @@ evaluation:
 +--------+--------------+----------+
 | Type   | Int64        | Int8     |
 | Domain | {-30..=1024} | {-1..=1} |
-| Row 0  | 1_i64        | 1_i8     |
-| Row 1  | -30_i64      | -1_i8    |
-| Row 2  | 1024_i64     | 1_i8     |
+| Row 0  | 1            | 1        |
+| Row 1  | -30          | -1       |
+| Row 2  | 1024         | 1        |
 +--------+--------------+----------+
 evaluation (internal):
 +--------+-----------------------+
@@ -102,7 +102,7 @@ checked expr   : sin<Float64>(to_float64<UInt8>(1_u8))
 optimized expr : 0.8414709848_f64
 output type    : Float64
 output domain  : {0.8414709848..=0.8414709848}
-output         : 0.8414709848_f64
+output         : 0.8414709848
 
 
 ast            : cos(1)
@@ -111,7 +111,7 @@ checked expr   : cos<Float64>(to_float64<UInt8>(1_u8))
 optimized expr : 0.5403023058_f64
 output type    : Float64
 output domain  : {0.5403023058..=0.5403023058}
-output         : 0.5403023058_f64
+output         : 0.5403023058
 
 
 ast            : tan(1)
@@ -120,7 +120,7 @@ checked expr   : tan<Float64>(to_float64<UInt8>(1_u8))
 optimized expr : 1.5574077246_f64
 output type    : Float64
 output domain  : {1.5574077246..=1.5574077246}
-output         : 1.5574077246_f64
+output         : 1.5574077246
 
 
 ast            : atan(0.5)
@@ -129,7 +129,7 @@ checked expr   : atan<Float64>(0.5_f64)
 optimized expr : 0.463647609_f64
 output type    : Float64
 output domain  : {0.463647609..=0.463647609}
-output         : 0.463647609_f64
+output         : 0.463647609
 
 
 ast            : cot(-1.0)
@@ -138,7 +138,7 @@ checked expr   : cot<Float64>(minus<Float64>(1_f64))
 optimized expr : -0.6420926159_f64
 output type    : Float64
 output domain  : {-0.6420926159..=-0.6420926159}
-output         : -0.6420926159_f64
+output         : -0.6420926159
 
 
 ast            : asin(1)
@@ -147,7 +147,7 @@ checked expr   : asin<Float64>(to_float64<UInt8>(1_u8))
 optimized expr : 1.5707963267_f64
 output type    : Float64
 output domain  : {1.5707963267..=1.5707963267}
-output         : 1.5707963267_f64
+output         : 1.5707963267
 
 
 ast            : acos(0)
@@ -156,7 +156,7 @@ checked expr   : acos<Float64>(to_float64<UInt8>(0_u8))
 optimized expr : 1.5707963267_f64
 output type    : Float64
 output domain  : {1.5707963267..=1.5707963267}
-output         : 1.5707963267_f64
+output         : 1.5707963267
 
 
 ast            : atan(null)
@@ -178,9 +178,9 @@ evaluation:
 +--------+-------------+--------------------------------+
 | Type   | Int64       | Float64                        |
 | Domain | {-1..=1024} | {-3.1415926535..=3.1415926535} |
-| Row 0  | 1_i64       | 0.2449786631_f64               |
-| Row 1  | -1_i64      | -0.2449786631_f64              |
-| Row 2  | 1024_i64    | 1.5668900966_f64               |
+| Row 0  | 1           | 0.2449786631                   |
+| Row 1  | -1          | -0.2449786631                  |
+| Row 2  | 1024        | 1.5668900966                   |
 +--------+-------------+--------------------------------+
 evaluation (internal):
 +--------+------------------------------------------------------+
@@ -197,7 +197,7 @@ checked expr   : ceil<UInt8>(5_u8)
 optimized expr : 5_u8
 output type    : UInt8
 output domain  : {5..=5}
-output         : 5_u8
+output         : 5
 
 
 ast            : ceil(5.6)
@@ -206,7 +206,7 @@ checked expr   : ceil<Float64>(5.6_f64)
 optimized expr : 6_f64
 output type    : Float64
 output domain  : {6..=6}
-output         : 6_f64
+output         : 6
 
 
 ast            : ceil(a)
@@ -218,8 +218,8 @@ evaluation:
 +--------+----------------+--------------+
 | Type   | Float64        | Float64      |
 | Domain | {-1.23..=1.23} | {-inf..=NaN} |
-| Row 0  | 1.23_f64       | 2_f64        |
-| Row 1  | -1.23_f64      | -1_f64       |
+| Row 0  | 1.23           | 2            |
+| Row 1  | -1.23          | -1           |
 +--------+----------------+--------------+
 evaluation (internal):
 +--------+------------------------+
@@ -236,7 +236,7 @@ checked expr   : exp<UInt8>(2_u8)
 optimized expr : 7.3890560989_f64
 output type    : Float64
 output domain  : {7.3890560989..=7.3890560989}
-output         : 7.3890560989_f64
+output         : 7.3890560989
 
 
 ast            : exp(-2)
@@ -245,7 +245,7 @@ checked expr   : exp<Int16>(minus<UInt8>(2_u8))
 optimized expr : 0.1353352832_f64
 output type    : Float64
 output domain  : {0.1353352832..=0.1353352832}
-output         : 0.1353352832_f64
+output         : 0.1353352832
 
 
 ast            : exp(0)
@@ -254,22 +254,22 @@ checked expr   : exp<UInt8>(0_u8)
 optimized expr : 1_f64
 output type    : Float64
 output domain  : {1..=1}
-output         : 1_f64
+output         : 1
 
 
 ast            : exp(a)
 raw expr       : exp(a::Int64)
 checked expr   : exp<Int64>(a)
 evaluation:
-+--------+-----------+----------------------+
-|        | a         | Output               |
-+--------+-----------+----------------------+
-| Type   | Int64     | Float64              |
-| Domain | {-2..=10} | {-inf..=NaN}         |
-| Row 0  | 4_i64     | 54.5981500331_f64    |
-| Row 1  | -2_i64    | 0.1353352832_f64     |
-| Row 2  | 10_i64    | 22026.4657948067_f64 |
-+--------+-----------+----------------------+
++--------+-----------+------------------+
+|        | a         | Output           |
++--------+-----------+------------------+
+| Type   | Int64     | Float64          |
+| Domain | {-2..=10} | {-inf..=NaN}     |
+| Row 0  | 4         | 54.5981500331    |
+| Row 1  | -2        | 0.1353352832     |
+| Row 2  | 10        | 22026.4657948067 |
++--------+-----------+------------------+
 evaluation (internal):
 +--------+----------------------------------------------------------+
 | Column | Data                                                     |
@@ -285,7 +285,7 @@ checked expr   : round<Float64>(minus<Float64>(1.23_f64))
 optimized expr : -1_f64
 output type    : Float64
 output domain  : {-1..=-1}
-output         : -1_f64
+output         : -1
 
 
 ast            : round(1.298, 1)
@@ -294,7 +294,7 @@ checked expr   : round<Float64, Int64>(1.298_f64, to_int64<UInt8>(1_u8))
 optimized expr : 1.3_f64
 output type    : Float64
 output domain  : {1.3..=1.3}
-output         : 1.3_f64
+output         : 1.3
 
 
 ast            : round(1.298, 0)
@@ -303,7 +303,7 @@ checked expr   : round<Float64, Int64>(1.298_f64, to_int64<UInt8>(0_u8))
 optimized expr : 1_f64
 output type    : Float64
 output domain  : {1..=1}
-output         : 1_f64
+output         : 1
 
 
 ast            : round(23.298, -1)
@@ -312,7 +312,7 @@ checked expr   : round<Float64, Int64>(23.298_f64, to_int64<Int16>(minus<UInt8>(
 optimized expr : 20_f64
 output type    : Float64
 output domain  : {20..=20}
-output         : 20_f64
+output         : 20
 
 
 ast            : round(0.12345678901234567890123456789012345, 35)
@@ -321,7 +321,7 @@ checked expr   : round<Float64, Int64>(0.123456789_f64, to_int64<UInt8>(35_u8))
 optimized expr : 0.123456789_f64
 output type    : Float64
 output domain  : {0.123456789..=0.123456789}
-output         : 0.123456789_f64
+output         : 0.123456789
 
 
 ast            : round(a)
@@ -333,9 +333,9 @@ evaluation:
 +--------+------------------+--------------+
 | Type   | Float64          | Float64      |
 | Domain | {-22.23..=22.22} | {-inf..=NaN} |
-| Row 0  | 22.22_f64        | 22_f64       |
-| Row 1  | -22.23_f64       | -22_f64      |
-| Row 2  | 10_f64           | 10_f64       |
+| Row 0  | 22.22            | 22           |
+| Row 1  | -22.23           | -22          |
+| Row 2  | 10               | 10           |
 +--------+------------------+--------------+
 evaluation (internal):
 +--------+------------------------------+
@@ -352,22 +352,22 @@ checked expr   : sqrt<UInt8>(4_u8)
 optimized expr : 2_f64
 output type    : Float64
 output domain  : {2..=2}
-output         : 2_f64
+output         : 2
 
 
 ast            : sqrt(a)
 raw expr       : sqrt(a::Int64)
 checked expr   : sqrt<Int64>(a)
 evaluation:
-+--------+-------------+------------------+
-|        | a           | Output           |
-+--------+-------------+------------------+
-| Type   | Int64       | Float64          |
-| Domain | {10..=1024} | {-inf..=NaN}     |
-| Row 0  | 22_i64      | 4.6904157598_f64 |
-| Row 1  | 1024_i64    | 32_f64           |
-| Row 2  | 10_i64      | 3.1622776601_f64 |
-+--------+-------------+------------------+
++--------+-------------+--------------+
+|        | a           | Output       |
++--------+-------------+--------------+
+| Type   | Int64       | Float64      |
+| Domain | {10..=1024} | {-inf..=NaN} |
+| Row 0  | 22          | 4.6904157598 |
+| Row 1  | 1024        | 32           |
+| Row 2  | 10          | 3.1622776601 |
++--------+-------------+--------------+
 evaluation (internal):
 +--------+-------------------------------------------+
 | Column | Data                                      |
@@ -383,7 +383,7 @@ checked expr   : truncate<Float64, Int64>(1.223_f64, to_int64<UInt8>(1_u8))
 optimized expr : 1.2_f64
 output type    : Float64
 output domain  : {1.2..=1.2}
-output         : 1.2_f64
+output         : 1.2
 
 
 ast            : truncate(1.999)
@@ -392,7 +392,7 @@ checked expr   : truncate<Float64>(1.999_f64)
 optimized expr : 1_f64
 output type    : Float64
 output domain  : {1..=1}
-output         : 1_f64
+output         : 1
 
 
 ast            : truncate(1.999, 1)
@@ -401,7 +401,7 @@ checked expr   : truncate<Float64, Int64>(1.999_f64, to_int64<UInt8>(1_u8))
 optimized expr : 1.9_f64
 output type    : Float64
 output domain  : {1.9..=1.9}
-output         : 1.9_f64
+output         : 1.9
 
 
 ast            : truncate(122, -2)
@@ -410,7 +410,7 @@ checked expr   : truncate<UInt8, Int64>(122_u8, to_int64<Int16>(minus<UInt8>(2_u
 optimized expr : 100_f64
 output type    : Float64
 output domain  : {100..=100}
-output         : 100_f64
+output         : 100
 
 
 ast            : truncate(10.28*100, 0)
@@ -419,7 +419,7 @@ checked expr   : truncate<Float64, Int64>(multiply<Float64, UInt8>(10.28_f64, 10
 optimized expr : 1028_f64
 output type    : Float64
 output domain  : {1028..=1028}
-output         : 1028_f64
+output         : 1028
 
 
 ast            : truncate(a, 1)
@@ -432,9 +432,9 @@ evaluation:
 +--------+------------------+--------------+
 | Type   | Float64          | Float64      |
 | Domain | {-22.23..=22.22} | {-inf..=NaN} |
-| Row 0  | 22.22_f64        | 22.2_f64     |
-| Row 1  | -22.23_f64       | -22.2_f64    |
-| Row 2  | 10_f64           | 10_f64       |
+| Row 0  | 22.22            | 22.2         |
+| Row 1  | -22.23           | -22.2        |
+| Row 2  | 10               | 10           |
 +--------+------------------+--------------+
 evaluation (internal):
 +--------+------------------------------+
@@ -451,7 +451,7 @@ checked expr   : log<UInt8>(2_u8)
 optimized expr : 0.6931471805_f64
 output type    : Float64
 output domain  : {0.6931471805..=0.6931471805}
-output         : 0.6931471805_f64
+output         : 0.6931471805
 
 
 ast            : log(2, 65536)
@@ -460,7 +460,7 @@ checked expr   : log<UInt8, Float64>(2_u8, to_float64<UInt32>(65536_u32))
 optimized expr : 16_f64
 output type    : Float64
 output domain  : {16..=16}
-output         : 16_f64
+output         : 16
 
 
 ast            : log2(65536)
@@ -469,7 +469,7 @@ checked expr   : log2<UInt32>(65536_u32)
 optimized expr : 16_f64
 output type    : Float64
 output domain  : {16..=16}
-output         : 16_f64
+output         : 16
 
 
 ast            : log10(100)
@@ -478,7 +478,7 @@ checked expr   : log10<UInt8>(100_u8)
 optimized expr : 2_f64
 output type    : Float64
 output domain  : {2..=2}
-output         : 2_f64
+output         : 2
 
 
 ast            : ln(2)
@@ -487,7 +487,7 @@ checked expr   : ln<UInt8>(2_u8)
 optimized expr : 0.6931471805_f64
 output type    : Float64
 output domain  : {0.6931471805..=0.6931471805}
-output         : 0.6931471805_f64
+output         : 0.6931471805
 
 
 ast            : round(2, a)
@@ -499,9 +499,9 @@ evaluation:
 +--------+--------------+--------------+
 | Type   | Int64        | Float64      |
 | Domain | {10..=65536} | {-inf..=NaN} |
-| Row 0  | 22_i64       | 2_f64        |
-| Row 1  | 65536_i64    | 2_f64        |
-| Row 2  | 10_i64       | 2_f64        |
+| Row 0  | 22           | 2            |
+| Row 1  | 65536        | 2            |
+| Row 2  | 10           | 2            |
 +--------+--------------+--------------+
 evaluation (internal):
 +--------+------------------------+

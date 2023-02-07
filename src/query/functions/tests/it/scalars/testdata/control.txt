@@ -13,7 +13,7 @@ checked expr   : multi_if<T0=UInt8 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>
 optimized expr : 1_u8
 output type    : UInt8 NULL
 output domain  : {1..=1}
-output         : 1_u8
+output         : 1
 
 
 ast            : multi_if(false, 1, true, 2, NULL)
@@ -22,7 +22,7 @@ checked expr   : multi_if<T0=UInt8 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>
 optimized expr : 2_u8
 output type    : UInt8 NULL
 output domain  : {2..=2}
-output         : 2_u8
+output         : 2
 
 
 ast            : multi_if(true, 1, true, 2, NULL)
@@ -31,7 +31,7 @@ checked expr   : multi_if<T0=UInt8 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>
 optimized expr : 1_u8
 output type    : UInt8 NULL
 output domain  : {1..=1}
-output         : 1_u8
+output         : 1
 
 
 ast            : multi_if(true, 1, true, NULL, 2)
@@ -40,7 +40,7 @@ checked expr   : multi_if<T0=UInt8 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>
 optimized expr : 1_u8
 output type    : UInt8 NULL
 output domain  : {1..=1}
-output         : 1_u8
+output         : 1
 
 
 ast            : multi_if(true, 1, NULL)
@@ -49,7 +49,7 @@ checked expr   : multi_if<T0=UInt8 NULL><Boolean NULL, T0, T0>(CAST(true AS Bool
 optimized expr : 1_u8
 output type    : UInt8 NULL
 output domain  : {1..=1}
-output         : 1_u8
+output         : 1
 
 
 ast            : multi_if(false, 1, NULL)
@@ -70,10 +70,10 @@ evaluation:
 +--------+---------------+-----------+------------------+------------------+
 | Type   | Boolean       | Int64     | Int64 NULL       | Int64 NULL       |
 | Domain | {FALSE, TRUE} | {1..=4}   | {5..=8} ∪ {NULL} | {1..=8} ∪ {NULL} |
-| Row 0  | true          | 1_i64     | 5_i64            | 1_i64            |
-| Row 1  | true          | 2_i64     | NULL             | 2_i64            |
-| Row 2  | false         | 3_i64     | 7_i64            | 7_i64            |
-| Row 3  | false         | 4_i64     | NULL             | NULL             |
+| Row 0  | true          | 1         | 5                | 1                |
+| Row 1  | true          | 2         | NULL             | 2                |
+| Row 2  | false         | 3         | 7                | 7                |
+| Row 3  | false         | 4         | NULL             | NULL             |
 +--------+---------------+-----------+------------------+------------------+
 evaluation (internal):
 +-----------+------------------------------------------------------------------------+
@@ -95,10 +95,10 @@ evaluation:
 +--------+---------------+-----------+------------------+------------------+
 | Type   | Boolean       | Int64     | Int64 NULL       | Int64 NULL       |
 | Domain | {FALSE, TRUE} | {1..=4}   | {5..=8} ∪ {NULL} | {1..=8} ∪ {NULL} |
-| Row 0  | false         | 1_i64     | 5_i64            | 5_i64            |
-| Row 1  | false         | 2_i64     | 6_i64            | 6_i64            |
-| Row 2  | true          | 3_i64     | NULL             | 3_i64            |
-| Row 3  | true          | 4_i64     | NULL             | 4_i64            |
+| Row 0  | false         | 1         | 5                | 5                |
+| Row 1  | false         | 2         | 6                | 6                |
+| Row 2  | true          | 3         | NULL             | 3                |
+| Row 3  | true          | 4         | NULL             | 4                |
 +--------+---------------+-----------+------------------+------------------+
 evaluation (internal):
 +-----------+------------------------------------------------------------------------+
@@ -120,10 +120,10 @@ evaluation:
 +--------+---------------+---------+-----------------+---------+-------------------+-------------------+
 | Type   | Boolean       | Int64   | Boolean NULL    | Int64   | Int64 NULL        | Int64 NULL        |
 | Domain | {FALSE, TRUE} | {1..=4} | {TRUE} ∪ {NULL} | {5..=8} | {9..=12} ∪ {NULL} | {1..=12} ∪ {NULL} |
-| Row 0  | true          | 1_i64   | NULL            | 5_i64   | 9_i64             | 1_i64             |
-| Row 1  | true          | 2_i64   | true            | 6_i64   | 10_i64            | 2_i64             |
-| Row 2  | false         | 3_i64   | NULL            | 7_i64   | NULL              | NULL              |
-| Row 3  | false         | 4_i64   | true            | 8_i64   | NULL              | 8_i64             |
+| Row 0  | true          | 1       | NULL            | 5       | 9                 | 1                 |
+| Row 1  | true          | 2       | true            | 6       | 10                | 2                 |
+| Row 2  | false         | 3       | NULL            | 7       | NULL              | NULL              |
+| Row 3  | false         | 4       | true            | 8       | NULL              | 8                 |
 +--------+---------------+---------+-----------------+---------+-------------------+-------------------+
 evaluation (internal):
 +-----------+---------------------------------------------------------------------------+
@@ -147,10 +147,10 @@ evaluation:
 +--------+---------------+---------+---------------+---------+-----------+----------+
 | Type   | Boolean       | Int64   | Boolean       | Int64   | Int64     | Int64    |
 | Domain | {FALSE, TRUE} | {1..=4} | {FALSE, TRUE} | {5..=8} | {9..=12}  | {1..=12} |
-| Row 0  | true          | 1_i64   | true          | 5_i64   | 9_i64     | 1_i64    |
-| Row 1  | true          | 2_i64   | false         | 6_i64   | 10_i64    | 2_i64    |
-| Row 2  | false         | 3_i64   | true          | 7_i64   | 11_i64    | 7_i64    |
-| Row 3  | false         | 4_i64   | false         | 8_i64   | 12_i64    | 12_i64   |
+| Row 0  | true          | 1       | true          | 5       | 9         | 1        |
+| Row 1  | true          | 2       | false         | 6       | 10        | 2        |
+| Row 2  | false         | 3       | true          | 7       | 11        | 7        |
+| Row 3  | false         | 4       | false         | 8       | 12        | 12       |
 +--------+---------------+---------+---------------+---------+-----------+----------+
 evaluation (internal):
 +-----------+------------------------+
@@ -238,10 +238,10 @@ evaluation:
 +--------+-----------+---------+
 | Type   | Int64     | Boolean |
 | Domain | {5..=8}   | {TRUE}  |
-| Row 0  | 5_i64     | true    |
-| Row 1  | 6_i64     | true    |
-| Row 2  | 7_i64     | true    |
-| Row 3  | 8_i64     | true    |
+| Row 0  | 5         | true    |
+| Row 1  | 6         | true    |
+| Row 2  | 7         | true    |
+| Row 3  | 8         | true    |
 +--------+-----------+---------+
 evaluation (internal):
 +-----------+-----------------------+
@@ -261,8 +261,8 @@ evaluation:
 +--------+-------------------+---------------+
 | Type   | Int64 NULL        | Boolean       |
 | Domain | {9..=12} ∪ {NULL} | {FALSE, TRUE} |
-| Row 0  | 9_i64             | true          |
-| Row 1  | 10_i64            | true          |
+| Row 0  | 9                 | true          |
+| Row 1  | 10                | true          |
 | Row 2  | NULL              | false         |
 | Row 3  | NULL              | false         |
 +--------+-------------------+---------------+

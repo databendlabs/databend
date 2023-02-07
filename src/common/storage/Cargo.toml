@@ -18,6 +18,7 @@ common-expression = { path = "../../query/expression" }
 common-meta-types = { path = "../../meta/types" }
 
 anyhow = { workspace = true }
+async-stream = "0.3.3"
 async-trait = "0.1"
 backon = "0.2"
 bytes = "1"
@@ -37,6 +38,7 @@ opendal = { workspace = true, features = [
 ] }
 parking_lot = "0.12.1"
 percent-encoding = "2"
+regex = "1.6.0"
 serde = { workspace = true }
 
 [dev-dependencies]

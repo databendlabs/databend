@@ -226,6 +226,7 @@ impl FromToProto for ex::TableDataType {
                 let x = n.to_pb()?;
                 new_pb_dt24(Dt24::NumberT(x))
             }
+            TableDataType::Decimal(_) => unimplemented!("decimal type is not supported"),
             TableDataType::Timestamp => new_pb_dt24(Dt24::TimestampT(pb::Empty {})),
             TableDataType::Date => new_pb_dt24(Dt24::DateT(pb::Empty {})),
             TableDataType::Nullable(v) => {

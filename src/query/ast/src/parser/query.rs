@@ -21,6 +21,7 @@ use pratt::Associativity;
 use pratt::PrattParser;
 use pratt::Precedence;
 
+use super::stage::select_stage_option;
 use super::stage::stage_location;
 use super::stage::uri_location;
 use crate::ast::*;
@@ -283,7 +284,7 @@ pub enum TableReferenceElement {
     Group(TableReference),
     Stage {
         location: FileLocation,
-        files: Vec<String>,
+        options: Vec<SelectStageOption>,
         alias: Option<TableAlias>,
     },
 }
@@ -368,12 +369,18 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
 
     let aliased_stage = map(
         rule! {
-            (#stage_location | #uri_location) ~ ( FILES ~ "=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")")? ~ #table_alias?
+            (#stage_location | #uri_location) ~  ("(" ~ ( #select_stage_option )* ~")")? ~ #table_alias?
         },
-        |(location, files, alias)| TableReferenceElement::Stage {
-            location,
-            alias,
-            files: files.map(|v| v.3).unwrap_or_default(),
+        |(location, options, alias)| {
+            let options = match options {
+                None => vec![],
+                Some((_, v, _)) => v,
+            };
+            TableReferenceElement::Stage {
+                location,
+                alias,
+                options,
+            }
         },
     );
 
@@ -459,14 +466,17 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
             },
             TableReferenceElement::Stage {
                 location,
-                files,
+                options,
                 alias,
-            } => TableReference::Stage {
-                span: transform_span(input.span.0),
-                location,
-                files,
-                alias,
-            },
+            } => {
+                let options = SelectStageOptions::from(options);
+                TableReference::Stage {
+                    span: transform_span(input.span.0),
+                    location,
+                    options,
+                    alias,
+                }
+            }
             _ => unreachable!(),
         };
         Ok(table_ref)

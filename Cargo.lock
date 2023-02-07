@@ -1322,6 +1322,7 @@ dependencies = [
  "dashmap",
  "dyn-clone",
  "goldenfile",
+ "opendal",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -1396,6 +1397,7 @@ dependencies = [
  "educe",
  "enum-as-inner",
  "enum_dispatch",
+ "ethnum",
  "futures",
  "goldenfile",
  "hex",
@@ -2046,6 +2048,7 @@ name = "common-storage"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
  "backon",
  "bytes",
@@ -2061,6 +2064,7 @@ dependencies = [
  "opendal",
  "parking_lot 0.12.1",
  "percent-encoding",
+ "regex",
  "serde",
 ]
 
@@ -2277,6 +2281,7 @@ name = "common-storages-parquet"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
+ "backon",
  "chrono",
  "common-arrow",
  "common-base",
@@ -2287,12 +2292,13 @@ dependencies = [
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
+ "common-pipeline-sources",
  "common-sql",
  "common-storage",
  "futures",
- "glob",
  "opendal",
  "serde",
+ "storages-common-index",
  "storages-common-pruner",
  "storages-common-table-meta",
  "typetag",
@@ -3547,6 +3553,9 @@ name = "ethnum"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0198b9d0078e0f30dedc7acbb21c974e838fc8fae3ee170128658a98cb2c1c04"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "event-listener"
@@ -5620,9 +5629,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.25.2"
+version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2059246a452d8d6bee6c8f61873a554c10db2e51feb17b6f95277114444c738"
+checksum = "7358a83a79a6479e1edf91272bc968ba10d92c68f6c5697be186b321e14da3e8"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -8247,9 +8256,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.23.1"
+version = "1.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38a54aca0c15d014013256222ba0ebed095673f89345dd79119d912eb561b7a8"
+checksum = "597a12a59981d9e3c38d216785b0c37399f6e415e8d0712047620f189371b0bb"
 dependencies = [
  "autocfg",
  "bytes",

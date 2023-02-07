@@ -155,7 +155,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_1_arg::<NumberType<u64>, NumberType<u64>, _, _>(
         "abs",
         FunctionProperty::default(),
-        |domain| FunctionDomain::Domain(domain.clone()),
+        |domain| FunctionDomain::Domain(*domain),
         |val, _| val,
     );
 

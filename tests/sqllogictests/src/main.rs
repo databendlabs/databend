@@ -134,9 +134,14 @@ async fn run_ck_http_client() -> Result<()> {
 // Create new databend with client type
 async fn create_databend(client_type: &ClientType) -> Result<Databend> {
     let mut client: Client;
+    let args = SqlLogicTestArgs::parse();
     match client_type {
         ClientType::MySQL => {
-            client = Client::MySQL(MySQLClient::create().await?);
+            let mut mysql_client = MySQLClient::create().await?;
+            if args.tpch {
+                mysql_client.enable_tpch();
+            }
+            client = Client::MySQL(mysql_client);
         }
         ClientType::Http => {
             client = Client::Http(HttpClient::create()?);
@@ -145,7 +150,6 @@ async fn create_databend(client_type: &ClientType) -> Result<Databend> {
             client = Client::Clickhouse(ClickhouseHttpClient::create()?);
         }
     }
-    let args = SqlLogicTestArgs::parse();
     if args.enable_sandbox {
         client.create_sandbox().await?;
     }
@@ -271,13 +275,15 @@ async fn run_file_async(
         true => "✅",
         false => "❌",
     };
-    println!(
-        "Completed {} test for file: {} {} ({:?})",
-        client_type,
-        filename.as_ref().display(),
-        run_file_status,
-        start.elapsed(),
-    );
+    if !SqlLogicTestArgs::parse().tpch {
+        println!(
+            "Completed {} test for file: {} {} ({:?})",
+            client_type,
+            filename.as_ref().display(),
+            run_file_status,
+            start.elapsed(),
+        );
+    }
     Ok(error_records)
 }
 

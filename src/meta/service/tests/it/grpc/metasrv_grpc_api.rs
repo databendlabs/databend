@@ -358,7 +358,7 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
     info!("--- check endpoints are equal");
     {
         tokio::time::sleep(Duration::from_secs(20)).await;
-        let res = client.get_endpoints().await?;
+        let res = client.get_cached_endpoints().await?;
         let res: HashSet<String> = HashSet::from_iter(res.into_iter());
 
         assert_eq!(addrs, res, "endpoints should be equal");
@@ -389,7 +389,7 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
 
             debug!("got leader, metrics: {metrics:?}");
         }
-        let res = client.get_endpoints().await?;
+        let res = client.get_cached_endpoints().await?;
         let res: HashSet<String> = HashSet::from_iter(res.into_iter());
 
         assert_eq!(3, res.len());
@@ -422,7 +422,7 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
         let mut i = 0;
         let mut res = vec![];
         while i < 15 {
-            res = client.get_endpoints().await?;
+            res = client.get_cached_endpoints().await?;
             if res.contains(&addr3) {
                 break;
             } else {
