@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_catalog::table_args::TableArgs;
 use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -56,7 +57,6 @@ use crate::catalogs::default::MutableCatalog;
 use crate::databases::Database;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
-use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
 use crate::table_functions::TableFunctionFactory;
 

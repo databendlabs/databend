@@ -21,21 +21,22 @@ use crate::table_functions::TableArgs;
 pub(crate) fn parse_func_table_args(
     table_args: &TableArgs,
 ) -> Result<(String, String, Option<String>)> {
-    match table_args {
-        Some(args) if args.len() == 3 => {
+    let args = table_args.expect_all_positioned("fuse_blocks", None)?;
+    match args.len() {
+        3 => {
             let db = string_value(&args[0])?;
             let tbl = string_value(&args[1])?;
             let snapshot_id = string_value(&args[2])?;
             Ok((db, tbl, Some(snapshot_id)))
         }
-        Some(args) if args.len() == 2 => {
+        2 => {
             let db = string_value(&args[0])?;
             let tbl = string_value(&args[1])?;
             Ok((db, tbl, None))
         }
         _ => Err(ErrorCode::BadArguments(format!(
             "expecting <database>, <table_name> and <snapshot_id> (as string literals), but got {:?}",
-            table_args
+            args
         ))),
     }
 }

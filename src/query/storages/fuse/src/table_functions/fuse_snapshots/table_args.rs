@@ -12,22 +12,14 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::table_functions::string_value;
 use crate::table_functions::TableArgs;
 
 pub fn parse_func_history_args(table_args: &TableArgs) -> Result<(String, String)> {
-    match table_args {
-        Some(args) if args.len() == 2 => {
-            let db = string_value(&args[0])?;
-            let tbl = string_value(&args[1])?;
-            Ok((db, tbl))
-        }
-        _ => Err(ErrorCode::BadArguments(format!(
-            "expecting database and table name (as two string literals), but got {:?}",
-            table_args
-        ))),
-    }
+    let args = table_args.expect_all_positioned("fuse_blocks", Some(2))?;
+    let db = string_value(&args[0])?;
+    let tbl = string_value(&args[1])?;
+    Ok((db, tbl))
 }
