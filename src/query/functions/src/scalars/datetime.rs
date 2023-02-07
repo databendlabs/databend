@@ -901,23 +901,19 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         "to_hour",
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
-        vectorize_1_arg::<TimestampType, UInt8Type>(|val, ctx| {
-            ctx.tz.to_hour(val / MICROS_IN_A_SEC)
-        }),
+        vectorize_1_arg::<TimestampType, UInt8Type>(|val, ctx| ctx.tz.to_hour(val)),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt8Type, _, _>(
         "to_minute",
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
-        vectorize_1_arg::<TimestampType, UInt8Type>(|val, ctx| {
-            ctx.tz.to_minute(val / MICROS_IN_A_SEC)
-        }),
+        vectorize_1_arg::<TimestampType, UInt8Type>(|val, ctx| ctx.tz.to_minute(val)),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt8Type, _, _>(
         "to_second",
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
-        vectorize_1_arg::<TimestampType, UInt8Type>(|val, _ctx| (val / MICROS_IN_A_SEC % 60) as u8),
+        vectorize_1_arg::<TimestampType, UInt8Type>(|val, ctx| ctx.tz.to_second(val)),
     );
 }
 
@@ -1088,7 +1084,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            ctx.tz.round_timestamp_micros(val, Round::Second)
+            ctx.tz.round_us(val, Round::Second)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
@@ -1096,7 +1092,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            ctx.tz.round_timestamp_micros(val, Round::Minute)
+            ctx.tz.round_us(val, Round::Minute)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
@@ -1104,7 +1100,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            ctx.tz.round_timestamp_micros(val, Round::FiveMinutes)
+            ctx.tz.round_us(val, Round::FiveMinutes)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
@@ -1112,7 +1108,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            ctx.tz.round_timestamp_micros(val, Round::TenMinutes)
+            ctx.tz.round_us(val, Round::TenMinutes)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
@@ -1120,7 +1116,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            ctx.tz.round_timestamp_micros(val, Round::FifteenMinutes)
+            ctx.tz.round_us(val, Round::FifteenMinutes)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
@@ -1128,7 +1124,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            ctx.tz.round_timestamp_micros(val, Round::Hour)
+            ctx.tz.round_us(val, Round::Hour)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
@@ -1136,7 +1132,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            ctx.tz.round_timestamp_micros(val, Round::Day)
+            ctx.tz.round_us(val, Round::Day)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
@@ -1144,7 +1140,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            ctx.tz.round_timestamp_micros(val, Round::TimeSlot)
+            ctx.tz.round_us(val, Round::TimeSlot)
         }),
     );
 

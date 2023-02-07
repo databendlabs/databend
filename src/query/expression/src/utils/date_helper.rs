@@ -37,7 +37,9 @@ use crate::types::timestamp::MICROS_IN_A_SEC;
 #[derive(Debug, Clone, Copy)]
 pub struct TzLUT {
     pub tz: Tz,
+    // whether the timezone offset is round hour, offset % 3600 == 0
     pub offset_round_hour: bool,
+    // whether the timezone offset is round minute, offset % 60 == 0
     pub offset_round_minute: bool,
 }
 
@@ -143,75 +145,88 @@ impl TzLUT {
 
     #[allow(dead_code)]
     #[inline]
-    fn start_of_second(&self, ts: i64, seconds: i64) -> i64 {
+    fn start_of_second(&self, us: i64, seconds: i64) -> i64 {
         if seconds == 1 {
-            return ts;
+            return us / MICROS_IN_A_SEC * MICROS_IN_A_SEC;
         }
         if seconds % 60 == 0 {
-            return self.start_of_minutes(ts, seconds);
+            return self.start_of_minutes(us, seconds / 60);
         }
-        self.round_down(ts, seconds)
+        self.round_down(us, seconds)
     }
 
     #[inline]
-    fn start_of_minutes(&self, ts: i64, seconds_div: i64) -> i64 {
+    fn start_of_minutes(&self, us: i64, minus: i64) -> i64 {
+        let us_div = minus * 60 * MICROS_IN_A_SEC;
         if self.offset_round_minute {
-            return if ts > 0 {
-                ts / seconds_div * seconds_div
+            return if us > 0 {
+                us / us_div * us_div
             } else {
-                (ts + 1 - seconds_div) / seconds_div * seconds_div
+                (us + MICROS_IN_A_SEC - us_div) / us_div * us_div
             };
         }
-        let datetime = self.tz.timestamp(ts, 0);
-
+        let datetime = self.to_datetime_from_us(us);
         let fix = datetime.offset().fix().local_minus_utc() as i64;
-        fix + (ts - fix) / seconds_div * seconds_div
+        fix + (us - fix * MICROS_IN_A_SEC) / us_div * us_div
     }
 
     #[inline]
-    fn round_down(&self, ts: i64, seconds_div: i64) -> i64 {
+    fn round_down(&self, us: i64, seconds: i64) -> i64 {
+        let us_div = seconds * MICROS_IN_A_SEC;
         if self.offset_round_hour {
-            return if ts > 0 {
-                ts / seconds_div * seconds_div
+            return if us > 0 {
+                us / us_div * us_div
             } else {
-                (ts + 1 - seconds_div) / seconds_div * seconds_div
+                (us + MICROS_IN_A_SEC - us_div) / us_div * us_div
             };
         }
-        let datetime = self.tz.timestamp(ts, 0);
+        let datetime = self.to_datetime_from_us(us);
         let fix = datetime.offset().fix().local_minus_utc() as i64;
-        fix + (ts - fix) / seconds_div * seconds_div
+        fix + (us - fix * MICROS_IN_A_SEC) / us_div * us_div
     }
 
     #[inline]
-    pub fn round_timestamp_micros(&self, micros: i64, round: Round) -> i64 {
-        self.round_timestamp(micros / MICROS_IN_A_SEC, round) * MICROS_IN_A_SEC
-    }
-
-    #[inline]
-    pub fn round_timestamp(&self, ts: i64, round: Round) -> i64 {
+    pub fn round_us(&self, us: i64, round: Round) -> i64 {
         match round {
-            Round::Second => ts,
-            Round::Minute => self.start_of_minutes(ts, 60),
-            Round::FiveMinutes => self.start_of_minutes(ts, 5 * 60),
-            Round::TenMinutes => self.start_of_minutes(ts, 10 * 60),
-            Round::FifteenMinutes => self.start_of_minutes(ts, 15 * 60),
-            Round::TimeSlot => self.start_of_minutes(ts, 30 * 60),
-            Round::Hour => self.round_down(ts, 3600),
-            Round::Day => self.round_down(ts, 3600 * 24),
+            Round::Second => self.start_of_second(us, 1),
+            Round::Minute => self.start_of_minutes(us, 1),
+            Round::FiveMinutes => self.start_of_minutes(us, 5),
+            Round::TenMinutes => self.start_of_minutes(us, 10),
+            Round::FifteenMinutes => self.start_of_minutes(us, 15),
+            Round::TimeSlot => self.start_of_minutes(us, 30),
+            Round::Hour => self.round_down(us, 3600),
+            Round::Day => self.round_down(us, 24 * 3600),
         }
     }
 
-    pub fn to_minute(&self, ts: i64) -> u8 {
-        if ts >= 0 && self.offset_round_hour {
-            ((ts / 60) % 60) as u8
+    #[inline]
+    pub fn to_minute(&self, us: i64) -> u8 {
+        if us >= 0 && self.offset_round_hour {
+            ((us / MICROS_IN_A_SEC / 60) % 60) as u8
         } else {
-            let datetime = self.tz.timestamp(ts, 0);
+            let datetime = self.to_datetime_from_us(us);
             datetime.minute() as u8
         }
     }
 
-    pub fn to_hour(&self, ts: i64) -> u8 {
-        let datetime = self.tz.timestamp(ts, 0);
+    #[inline]
+    pub fn to_second(&self, us: i64) -> u8 {
+        if us >= 0 {
+            (us / MICROS_IN_A_SEC % 60) as u8
+        } else {
+            let datetime = self.to_datetime_from_us(us);
+            datetime.second() as u8
+        }
+    }
+
+    #[inline]
+    pub fn to_datetime_from_us(&self, us: i64) -> DateTime<Tz> {
+        us.to_timestamp(self.tz)
+    }
+
+    #[inline]
+    pub fn to_hour(&self, us: i64) -> u8 {
+        let datetime = self.to_datetime_from_us(us);
         datetime.hour() as u8
     }
 }
@@ -313,11 +328,11 @@ macro_rules! impl_interval_year_month {
             }
 
             pub fn eval_timestamp(
-                ts: i64,
+                us: i64,
                 tz: TzLUT,
                 delta: impl AsPrimitive<i64>,
             ) -> Result<i64, String> {
-                let ts = ts.to_timestamp(tz.tz);
+                let ts = us.to_timestamp(tz.tz);
                 let new_ts = $op(ts.year(), ts.month(), ts.day(), delta.as_())?;
                 check_timestamp(NaiveDateTime::new(new_ts, ts.time()).timestamp_micros())
             }
@@ -351,11 +366,11 @@ impl AddTimesImpl {
     }
 
     pub fn eval_timestamp(
-        ts: i64,
+        us: i64,
         delta: impl AsPrimitive<i64>,
         factor: i64,
     ) -> Result<i64, String> {
-        check_timestamp(ts.wrapping_add(delta.as_() * factor * MICROS_IN_A_SEC))
+        check_timestamp(us.wrapping_add(delta.as_() * factor * MICROS_IN_A_SEC))
     }
 }
 
@@ -374,8 +389,8 @@ pub trait ToNumber<N> {
 pub struct ToNumberImpl;
 
 impl ToNumberImpl {
-    pub fn eval_timestamp<T: ToNumber<R>, R>(ts: i64, tz: TzLUT) -> R {
-        let dt = ts.to_timestamp(tz.tz);
+    pub fn eval_timestamp<T: ToNumber<R>, R>(us: i64, tz: TzLUT) -> R {
+        let dt = us.to_timestamp(tz.tz);
         T::to_number(&dt)
     }
 
@@ -465,8 +480,8 @@ pub enum Round {
 pub struct DateRounder;
 
 impl DateRounder {
-    pub fn eval_timestamp<T: ToNumber<i32>>(ts: i64, tz: TzLUT) -> i32 {
-        let dt = ts.to_timestamp(tz.tz);
+    pub fn eval_timestamp<T: ToNumber<i32>>(us: i64, tz: TzLUT) -> i32 {
+        let dt = us.to_timestamp(tz.tz);
         T::to_number(&dt)
     }
 
