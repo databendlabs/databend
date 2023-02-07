@@ -16,8 +16,6 @@ mod data_exchange;
 mod exchange_manager;
 mod exchange_params;
 mod exchange_sink;
-mod exchange_sink_merge;
-mod exchange_sink_shuffle;
 mod exchange_sink_writer;
 mod exchange_source;
 mod exchange_source_reader;

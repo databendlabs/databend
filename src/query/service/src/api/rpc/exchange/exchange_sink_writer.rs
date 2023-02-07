@@ -67,3 +67,7 @@ pub fn create_writer_item(exchange: FlightExchange) -> PipeItem {
         vec![],
     )
 }
+
+pub fn create_writer_items(exchanges: Vec<FlightExchange>) -> Vec<PipeItem> {
+    exchanges.into_iter().map(create_writer_item).collect()
+}

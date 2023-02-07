@@ -223,7 +223,18 @@ impl ExchangeShuffleTransform {
     }
 }
 
+// Scatter the data block and push it to the corresponding output port
 pub fn exchange_shuffle(params: &ShuffleExchangeParams, pipeline: &mut Pipeline) -> Result<()> {
+    // UpstreamTransform+                                   +---->DownstreamTransform
+    //                  |                                   |
+    //                  |                                   +---->DownStreamTransform
+    //                  |                                   |
+    // UpstreamTransform+----->ExchangeShuffleTransform-----+---->DownStreamTransform
+    //                  |                                   |
+    //                  |                                   +---->DownStreamTransform
+    //                  |                                   |
+    // UpstreamTransform+                                   +---->DownStreamTransform
+
     let output_len = pipeline.output_len();
     let new_output_len = params.destination_ids.len();
     let shuffle_scatter = params.shuffle_scatter.clone();
