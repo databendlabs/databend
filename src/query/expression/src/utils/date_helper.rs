@@ -18,6 +18,7 @@ use chrono::Datelike;
 use chrono::Duration;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
+use chrono::Offset;
 use chrono::TimeZone;
 use chrono::Timelike;
 use chrono::Utc;
@@ -44,7 +45,10 @@ where T: AsPrimitive<i64>
     fn to_timestamp(&self, tz: Tz) -> DateTime<Tz> {
         // Can't use `tz.timestamp_nanos(self.as_() * 1000)` directly, is may cause multiply with overflow.
         let micros = self.as_();
-        let (mut secs, mut nanos) = (micros / 1_000_000, (micros % 1_000_000) * 1_000);
+        let (mut secs, mut nanos) = (
+            micros / ROUND_MICRO_SECOND,
+            (micros % ROUND_MICRO_SECOND) * 1_000,
+        );
         if nanos < 0 {
             secs -= 1;
             nanos += 1_000_000_000;
@@ -147,7 +151,7 @@ impl AddDaysImpl {
     }
 
     pub fn eval_timestamp(date: i64, delta: impl AsPrimitive<i64>) -> Result<i64, String> {
-        check_timestamp(date.wrapping_add(delta.as_() * 24 * 3600 * 1_000_000))
+        check_timestamp(date.wrapping_add(delta.as_() * 24 * 3600 * ROUND_MICRO_SECOND))
     }
 }
 
@@ -156,7 +160,8 @@ pub struct AddTimesImpl;
 impl AddTimesImpl {
     pub fn eval_date(date: i32, delta: impl AsPrimitive<i64>, factor: i64) -> Result<i32, String> {
         check_date(
-            (date as i64 * 3600 * 24 * 1_000_000).wrapping_add(delta.as_() * factor * 1_000_000),
+            (date as i64 * 3600 * 24 * ROUND_MICRO_SECOND)
+                .wrapping_add(delta.as_() * factor * ROUND_MICRO_SECOND),
         )
     }
 
@@ -165,7 +170,7 @@ impl AddTimesImpl {
         delta: impl AsPrimitive<i64>,
         factor: i64,
     ) -> Result<i64, String> {
-        check_timestamp(ts.wrapping_add(delta.as_() * factor * 1_000_000))
+        check_timestamp(ts.wrapping_add(delta.as_() * factor * ROUND_MICRO_SECOND))
     }
 }
 
@@ -290,32 +295,31 @@ pub enum Round {
     Day,
 }
 
+const ROUND_MICRO_SECOND: i64 = 1_000_000;
 pub fn round_timestamp(ts: i64, tz: Tz, round: Round) -> i64 {
-    let dt = tz.timestamp(ts / 1_000_000, 0_u32);
+    let second = ts / ROUND_MICRO_SECOND;
+    let dt = tz.timestamp(second, 0_u32);
+    if matches!(round, Round::Minute) && dt.offset().fix().local_minus_utc() % 60 == 0 {
+        return (second / 60) * 60 * ROUND_MICRO_SECOND;
+    }
+
     let res = match round {
         Round::Second => dt,
         Round::Minute => {
-            tz.ymd(dt.year(), dt.month(), dt.day())
-                .and_hms_micro(dt.hour(), dt.minute(), 0, 0)
+            return (second - dt.second() as i64) * ROUND_MICRO_SECOND;
         }
-        Round::FiveMinutes => tz.ymd(dt.year(), dt.month(), dt.day()).and_hms_micro(
-            dt.hour(),
-            dt.minute() / 5 * 5,
-            0,
-            0,
-        ),
-        Round::TenMinutes => tz.ymd(dt.year(), dt.month(), dt.day()).and_hms_micro(
-            dt.hour(),
-            dt.minute() / 10 * 10,
-            0,
-            0,
-        ),
-        Round::FifteenMinutes => tz.ymd(dt.year(), dt.month(), dt.day()).and_hms_micro(
-            dt.hour(),
-            dt.minute() / 15 * 15,
-            0,
-            0,
-        ),
+        Round::FiveMinutes => {
+            return (second - (dt.second() as i64 + (dt.minute() % 5) as i64 * 60))
+                * ROUND_MICRO_SECOND;
+        }
+        Round::TenMinutes => {
+            return (second - (dt.second() as i64 + (dt.minute() % 10) as i64 * 60))
+                * ROUND_MICRO_SECOND;
+        }
+        Round::FifteenMinutes => {
+            return (second - (dt.second() as i64 + (dt.minute() % 15) as i64 * 60))
+                * ROUND_MICRO_SECOND;
+        }
         Round::TimeSlot => tz.ymd(dt.year(), dt.month(), dt.day()).and_hms_micro(
             dt.hour(),
             dt.minute() / 30 * 30,
