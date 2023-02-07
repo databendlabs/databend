@@ -35,15 +35,15 @@ struct CacheItem {
 }
 
 /// Tiered cache which consist of
-/// A in-memory cache
-/// A bounded channel that keep the references of items being cached
-/// A disk or redis based external cache
+/// - a in-memory cache
+/// - a disk or redis based external cache
+/// - a bounded channel that keep the references of items being cached
 #[derive(Clone)]
 pub struct TableDataCache<T = DiskBytesCache> {
     in_memory_cache: InMemoryBytesCacheHolder,
     external_cache: T,
     population_queue: crossbeam_channel::Sender<CacheItem>,
-    _cache_populator: DiskCachePopulator<T>,
+    _cache_populator: DiskCachePopulator,
 }
 
 pub struct TableDataCacheBuilder;
@@ -56,11 +56,10 @@ impl TableDataCacheBuilder {
     ) -> Result<TableDataCache<DiskBytesCache>> {
         let disk_cache = DiskCacheBuilder::new_disk_cache(path, disk_cache_mb_size)?;
         let (rx, tx) = crossbeam_channel::bounded(population_queue_size as usize);
+        let in_memory_cache_bytes_size = in_memory_cache_mb_size * 1024 * 1024;
         let num_population_thread = 1;
         Ok(TableDataCache {
-            in_memory_cache: InMemoryCacheBuilder::new_bytes_cache(
-                in_memory_cache_mb_size * 1024 * 1024,
-            ),
+            in_memory_cache: InMemoryCacheBuilder::new_bytes_cache(in_memory_cache_bytes_size),
             external_cache: disk_cache.clone(),
             population_queue: rx,
             _cache_populator: DiskCachePopulator::new(tx, disk_cache, num_population_thread)?,
@@ -156,26 +155,23 @@ where T: CacheAccessor<String, Vec<u8>> + Send + Sync + 'static
 }
 
 #[derive(Clone)]
-struct DiskCachePopulator<T> {
-    _workers: Vec<Arc<CachePopulationWorker<T>>>,
-}
+struct DiskCachePopulator;
 
-impl<T> DiskCachePopulator<T>
-where T: CacheAccessor<String, Vec<u8>> + Send + Sync + 'static
-{
-    fn new(
+impl DiskCachePopulator {
+    fn new<T>(
         incoming: crossbeam_channel::Receiver<CacheItem>,
         cache: T,
         _num_worker_thread: usize,
-    ) -> Result<Self> {
+    ) -> Result<Self>
+    where
+        T: CacheAccessor<String, Vec<u8>> + Send + Sync + 'static,
+    {
         let worker = Arc::new(CachePopulationWorker {
             cache,
             population_queue: incoming,
         });
         let _join_handler = worker.clone().start()?;
-        Ok(Self {
-            _workers: vec![worker],
-        })
+        Ok(Self)
     }
 }
 

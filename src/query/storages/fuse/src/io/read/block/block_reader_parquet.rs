@@ -142,9 +142,8 @@ impl BlockReader {
             let mut column_descriptors = Vec::with_capacity(indices.len());
             for (i, index) in indices.iter().enumerate() {
                 let column_id = column.leaf_column_id(i);
-                // TODO where is the None branch?
                 if let Some(column_meta) = columns_meta.get(&column_id) {
-                    // TODO why index is used here?
+                    // TODO why index is used here? need @LiChuang review
                     let column_id_in_question = *index as ColumnId;
                     let column_read = <&[u8]>::clone(&chunk_map[&column_id_in_question]);
                     let column_descriptor = &self.parquet_schema_descriptor.columns()[*index];
