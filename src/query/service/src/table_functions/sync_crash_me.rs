@@ -114,9 +114,11 @@ impl Table for SyncCrashMeTable {
     }
 
     fn table_args(&self) -> Option<TableArgs> {
-        self.panic_message
-            .clone()
-            .map(|s| TableArgs::new_positioned(vec![Scalar::String(s.as_bytes().to_vec())]))
+        let args = match &self.panic_message {
+            Some(s) => vec![Scalar::String(s.as_bytes().to_vec())],
+            None => vec![],
+        };
+        Some(TableArgs::new_positioned(args))
     }
 
     fn read_data(
