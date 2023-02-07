@@ -353,13 +353,7 @@ impl BlockReader {
         start: u64,
         end: u64,
     ) -> Result<(usize, Vec<u8>)> {
-        use backon::ExponentialBackoff;
-        use backon::Retryable;
-
-        let chunk = { || async { o.range_read(start..end).await } }
-            .retry(ExponentialBackoff::default())
-            .when(|err| err.is_temporary())
-            .await?;
+        let chunk = o.range_read(start..end).await?;
         Ok((index, chunk))
     }
 
