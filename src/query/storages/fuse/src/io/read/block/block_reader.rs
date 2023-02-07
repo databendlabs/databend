@@ -170,9 +170,7 @@ impl BlockReader {
     }
 
     pub fn support_blocking_api(&self) -> bool {
-        // TODO for testing purpose only, remove this in the final PR
-        let revert_sync_read = std::env::var("DATABEND_DEBUG_REVERT_SYNC_READ").is_ok();
-        revert_sync_read && self.operator.metadata().can_blocking()
+        self.operator.metadata().can_blocking()
     }
 
     /// This is an optimized for data read, works like the Linux kernel io-scheduler IO merging.
