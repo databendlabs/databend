@@ -22,6 +22,7 @@ use common_exception::Result;
 
 use crate::filter_helper::FilterHelpers;
 use crate::types::array::ArrayColumnBuilder;
+use crate::types::decimal::DecimalColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumnBuilder;
@@ -31,6 +32,7 @@ use crate::types::BooleanType;
 use crate::types::StringType;
 use crate::types::ValueType;
 use crate::types::VariantType;
+use crate::with_decimal_type;
 use crate::with_number_type;
 use crate::BlockEntry;
 use crate::Column;
@@ -113,6 +115,14 @@ impl Column {
                     Column::Number(NumberColumn::NUM_TYPE(Self::filter_primitive_types(
                         values, filter,
                     )))
+                }
+            }),
+            Column::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
+                DecimalColumn::DECIMAL_TYPE(values, size) => {
+                    Column::Decimal(DecimalColumn::DECIMAL_TYPE(
+                        Self::filter_primitive_types(values, filter),
+                        *size,
+                    ))
                 }
             }),
             Column::Boolean(bm) => Self::filter_scalar_types::<BooleanType>(

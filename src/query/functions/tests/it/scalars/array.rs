@@ -29,9 +29,20 @@ fn test_array() {
     test_length(file);
     test_get(file);
     test_slice(file);
-    test_remove_first(file);
-    test_remove_last(file);
     test_contains(file);
+    test_array_remove_first(file);
+    test_array_remove_last(file);
+    test_array_concat(file);
+    test_array_prepend(file);
+    test_array_append(file);
+    test_array_indexof(file);
+    test_array_unique(file);
+    test_array_distinct(file);
+    test_array_sum(file);
+    test_array_avg(file);
+    test_array_count(file);
+    test_array_max(file);
+    test_array_min(file);
 }
 
 fn test_create(file: &mut impl Write) {
@@ -80,22 +91,35 @@ fn test_slice(file: &mut impl Write) {
     run_ast(file, "slice(['a', 'b', 'c', 'd'], 0, 2)", &[]);
     run_ast(file, "slice(['a', 'b', 'c', 'd'], 1, 4)", &[]);
     run_ast(file, "slice(['a', 'b', 'c', 'd'], 2, 6)", &[]);
+    run_ast(file, "slice([a, b, c], 1, 2)", &[
+        ("a", Int16Type::from_data(vec![0i16, 1, 2])),
+        ("b", Int16Type::from_data(vec![3i16, 4, 5])),
+        ("c", Int16Type::from_data(vec![7i16, 8, 9])),
+    ]);
 }
 
-fn test_remove_first(file: &mut impl Write) {
-    run_ast(file, "remove_first([])", &[]);
-    run_ast(file, "remove_first([1])", &[]);
-    run_ast(file, "remove_first([0, 1, 2, NULL])", &[]);
-    run_ast(file, "remove_first([0, 1, 2, 3])", &[]);
-    run_ast(file, "remove_first(['a', 'b', 'c', 'd'])", &[]);
+fn test_array_remove_first(file: &mut impl Write) {
+    run_ast(file, "array_remove_first([])", &[]);
+    run_ast(file, "array_remove_first([1])", &[]);
+    run_ast(file, "array_remove_first([0, 1, 2, NULL])", &[]);
+    run_ast(file, "array_remove_first([0, 1, 2, 3])", &[]);
+    run_ast(file, "array_remove_first(['a', 'b', 'c', 'd'])", &[]);
+    run_ast(file, "array_remove_first([a, b])", &[
+        ("a", Int16Type::from_data(vec![0i16, 1, 2])),
+        ("b", Int16Type::from_data(vec![3i16, 4, 5])),
+    ]);
 }
 
-fn test_remove_last(file: &mut impl Write) {
-    run_ast(file, "remove_last([])", &[]);
-    run_ast(file, "remove_last([1])", &[]);
-    run_ast(file, "remove_last([0, 1, 2, NULL])", &[]);
-    run_ast(file, "remove_last([0, 1, 2, 3])", &[]);
-    run_ast(file, "remove_last(['a', 'b', 'c', 'd'])", &[]);
+fn test_array_remove_last(file: &mut impl Write) {
+    run_ast(file, "array_remove_last([])", &[]);
+    run_ast(file, "array_remove_last([1])", &[]);
+    run_ast(file, "array_remove_last([0, 1, 2, NULL])", &[]);
+    run_ast(file, "array_remove_last([0, 1, 2, 3])", &[]);
+    run_ast(file, "array_remove_last(['a', 'b', 'c', 'd'])", &[]);
+    run_ast(file, "array_remove_last([a, b])", &[
+        ("a", Int16Type::from_data(vec![0i16, 1, 2])),
+        ("b", Int16Type::from_data(vec![3i16, 4, 5])),
+    ]);
 }
 
 fn test_contains(file: &mut impl Write) {
@@ -126,4 +150,289 @@ fn test_contains(file: &mut impl Write) {
         "nullable_col in (1, '9', 3, 10, 12, true, [1,2,3])",
         &columns,
     );
+}
+
+fn test_array_concat(file: &mut impl Write) {
+    run_ast(file, "array_concat([], [])", &[]);
+    run_ast(file, "array_concat([], [1,2])", &[]);
+    run_ast(file, "array_concat([false, true], [])", &[]);
+    run_ast(file, "array_concat([false, true], [1,2])", &[]);
+    run_ast(file, "array_concat([1,2,3], ['s', null])", &[]);
+
+    let columns = [
+        ("int8_col", Int8Type::from_data(vec![1i8, 2, 7, 8])),
+        (
+            "nullable_col",
+            Int64Type::from_data_with_validity(vec![9i64, 10, 11, 12], vec![
+                true, true, false, false,
+            ]),
+        ),
+    ];
+
+    run_ast(
+        file,
+        "array_concat([1, 2, 3, 4, 5, null], [nullable_col])",
+        &columns,
+    );
+    run_ast(file, "array_concat([1,2,null], [int8_col])", &columns);
+}
+
+fn test_array_prepend(file: &mut impl Write) {
+    run_ast(file, "array_prepend(1, [])", &[]);
+    run_ast(file, "array_prepend(1, [2, 3, NULL, 4])", &[]);
+    run_ast(file, "array_prepend('a', ['b', NULL, NULL, 'c', 'd'])", &[]);
+    run_ast(file, "array_prepend(a, [b, c])", &[
+        ("a", Int16Type::from_data(vec![0i16, 1, 2])),
+        ("b", Int16Type::from_data(vec![3i16, 4, 5])),
+        ("c", Int16Type::from_data(vec![6i16, 7, 8])),
+    ]);
+}
+
+fn test_array_append(file: &mut impl Write) {
+    run_ast(file, "array_append([], 1)", &[]);
+    run_ast(file, "array_append([2, 3, NULL, 4], 5)", &[]);
+    run_ast(file, "array_append(['b', NULL, NULL, 'c', 'd'], 'e')", &[]);
+    run_ast(file, "array_append([b, c], a)", &[
+        ("a", Int16Type::from_data(vec![0i16, 1, 2])),
+        ("b", Int16Type::from_data(vec![3i16, 4, 5])),
+        ("c", Int16Type::from_data(vec![6i16, 7, 8])),
+    ]);
+}
+
+fn test_array_indexof(file: &mut impl Write) {
+    run_ast(file, "array_indexof([], NULL)", &[]);
+    run_ast(file, "array_indexof(NULL, NULL)", &[]);
+    run_ast(file, "array_indexof([false, true], false)", &[]);
+    run_ast(file, "array_indexof([], false)", &[]);
+    run_ast(file, "array_indexof([false, true], null)", &[]);
+    run_ast(file, "array_indexof([false, true], 0)", &[]);
+    run_ast(file, "array_indexof([1,2,3,'s'], 's')", &[]);
+    run_ast(file, "array_indexof([1,'x',null,'x'], 'x')", &[]);
+
+    let columns = [
+        ("int8_col", Int8Type::from_data(vec![1i8, 2, 7, 8])),
+        (
+            "nullable_col",
+            Int64Type::from_data_with_validity(vec![9i64, 10, 11, 12], vec![
+                true, true, false, false,
+            ]),
+        ),
+    ];
+
+    run_ast(
+        file,
+        "array_indexof([1, 2, 3, 4, 5, null], nullable_col)",
+        &columns,
+    );
+    run_ast(file, "array_indexof([9,10,null], int8_col)", &columns);
+}
+
+fn test_array_unique(file: &mut impl Write) {
+    run_ast(file, "array_unique([])", &[]);
+    run_ast(file, "array_unique([1, 1, 2, 2, 3, NULL])", &[]);
+    run_ast(
+        file,
+        "array_unique(['a', NULL, 'a', 'b', NULL, 'c', 'd'])",
+        &[],
+    );
+
+    run_ast(file, "array_unique([a, b, c, d])", &[
+        ("a", Int16Type::from_data(vec![1i16, 1, 2, 4])),
+        ("b", Int16Type::from_data(vec![2i16, 1, 2, 4])),
+        ("c", Int16Type::from_data(vec![3i16, 1, 3, 4])),
+        ("d", Int16Type::from_data(vec![4i16, 2, 3, 4])),
+    ]);
+}
+
+fn test_array_distinct(file: &mut impl Write) {
+    run_ast(file, "array_distinct([])", &[]);
+    run_ast(file, "array_distinct([1, 1, 2, 2, 3, NULL])", &[]);
+    run_ast(
+        file,
+        "array_distinct(['a', NULL, 'a', 'b', NULL, 'c', 'd'])",
+        &[],
+    );
+
+    run_ast(file, "array_distinct([a, b, c, d])", &[
+        ("a", Int16Type::from_data(vec![1i16, 1, 2, 4])),
+        ("b", Int16Type::from_data(vec![2i16, 1, 2, 4])),
+        ("c", Int16Type::from_data(vec![3i16, 1, 3, 4])),
+        ("d", Int16Type::from_data(vec![4i16, 2, 3, 4])),
+    ]);
+}
+
+fn test_array_sum(file: &mut impl Write) {
+    run_ast(file, "array_sum([])", &[]);
+    run_ast(file, "array_sum([1, 2, 3, 4, 5, 6, 7])", &[]);
+    run_ast(file, "array_sum([1, 2, 3, 4, 5, NULL, 6])", &[]);
+    run_ast(file, "array_sum([1.2, 3.4, 5.6, 7.8])", &[]);
+    run_ast(file, "array_sum([1.2, NULL, 3.4, 5.6, NULL])", &[]);
+
+    run_ast(file, "array_sum([a, b, c, d])", &[
+        ("a", Int16Type::from_data(vec![1i16, 5, 8, 3])),
+        ("b", Int16Type::from_data(vec![2i16, 6, 1, 2])),
+        ("c", Int16Type::from_data(vec![3i16, 7, 7, 6])),
+        ("d", Int16Type::from_data(vec![4i16, 8, 1, 9])),
+    ]);
+
+    run_ast(file, "array_sum([a, b, c, d])", &[
+        (
+            "a",
+            UInt64Type::from_data_with_validity(vec![1u64, 2, 0, 4], vec![true, true, false, true]),
+        ),
+        (
+            "b",
+            UInt64Type::from_data_with_validity(vec![2u64, 0, 5, 6], vec![true, false, true, true]),
+        ),
+        (
+            "c",
+            UInt64Type::from_data_with_validity(vec![3u64, 7, 8, 9], vec![true, true, true, true]),
+        ),
+        (
+            "d",
+            UInt64Type::from_data_with_validity(vec![4u64, 6, 5, 0], vec![true, true, true, false]),
+        ),
+    ]);
+}
+
+fn test_array_avg(file: &mut impl Write) {
+    run_ast(file, "array_avg([])", &[]);
+    run_ast(file, "array_avg([1, 2, 3, 4, 5, 6, 7])", &[]);
+    run_ast(file, "array_avg([1, 2, 3, 4, 5, NULL, 6])", &[]);
+    run_ast(file, "array_avg([1.2, 3.4, 5.6, 7.8])", &[]);
+    run_ast(file, "array_avg([1.2, NULL, 3.4, 5.6, NULL])", &[]);
+
+    run_ast(file, "array_avg([a, b, c, d])", &[
+        ("a", Int16Type::from_data(vec![1i16, 5, 8, 3])),
+        ("b", Int16Type::from_data(vec![2i16, 6, 1, 2])),
+        ("c", Int16Type::from_data(vec![3i16, 7, 7, 6])),
+        ("d", Int16Type::from_data(vec![4i16, 8, 1, 9])),
+    ]);
+
+    run_ast(file, "array_avg([a, b, c, d])", &[
+        (
+            "a",
+            UInt64Type::from_data_with_validity(vec![1u64, 2, 0, 4], vec![true, true, false, true]),
+        ),
+        (
+            "b",
+            UInt64Type::from_data_with_validity(vec![2u64, 0, 5, 6], vec![true, false, true, true]),
+        ),
+        (
+            "c",
+            UInt64Type::from_data_with_validity(vec![3u64, 7, 8, 9], vec![true, true, true, true]),
+        ),
+        (
+            "d",
+            UInt64Type::from_data_with_validity(vec![4u64, 6, 5, 0], vec![true, true, true, false]),
+        ),
+    ]);
+}
+
+fn test_array_count(file: &mut impl Write) {
+    run_ast(file, "array_count([])", &[]);
+    run_ast(file, "array_count([1, 2, 3, 4, 5, 6, 7])", &[]);
+    run_ast(file, "array_count([1, 2, 3, 4, 5, NULL, 6])", &[]);
+    run_ast(file, "array_count([1.2, 3.4, 5.6, 7.8])", &[]);
+    run_ast(file, "array_count([1.2, NULL, 3.4, 5.6, NULL])", &[]);
+    run_ast(file, "array_count(['a', 'b', 'c', 'd', 'e'])", &[]);
+    run_ast(file, "array_count(['a', 'b', NULL, 'c', 'd', NULL])", &[]);
+
+    run_ast(file, "array_count([a, b, c, d])", &[
+        ("a", Int16Type::from_data(vec![1i16, 5, 8, 3])),
+        ("b", Int16Type::from_data(vec![2i16, 6, 1, 2])),
+        ("c", Int16Type::from_data(vec![3i16, 7, 7, 6])),
+        ("d", Int16Type::from_data(vec![4i16, 8, 1, 9])),
+    ]);
+
+    run_ast(file, "array_count([a, b, c, d])", &[
+        (
+            "a",
+            UInt64Type::from_data_with_validity(vec![1u64, 2, 0, 4], vec![true, true, false, true]),
+        ),
+        (
+            "b",
+            UInt64Type::from_data_with_validity(vec![2u64, 0, 5, 6], vec![true, false, true, true]),
+        ),
+        (
+            "c",
+            UInt64Type::from_data_with_validity(vec![3u64, 7, 8, 9], vec![true, true, true, true]),
+        ),
+        (
+            "d",
+            UInt64Type::from_data_with_validity(vec![4u64, 6, 5, 0], vec![true, true, true, false]),
+        ),
+    ]);
+}
+
+fn test_array_max(file: &mut impl Write) {
+    run_ast(file, "array_max([])", &[]);
+    run_ast(file, "array_max([1, 2, 3, 4, 5, 6, 7])", &[]);
+    run_ast(file, "array_max([1, 2, 3, 4, 5, NULL, 6])", &[]);
+    run_ast(file, "array_max([1.2, 3.4, 5.6, 7.8])", &[]);
+    run_ast(file, "array_max([1.2, NULL, 3.4, 5.6, NULL])", &[]);
+    run_ast(file, "array_max(['a', 'b', 'c', 'd', 'e'])", &[]);
+    run_ast(file, "array_max(['a', 'b', NULL, 'c', 'd', NULL])", &[]);
+
+    run_ast(file, "array_max([a, b, c, d])", &[
+        ("a", Int16Type::from_data(vec![1i16, 5, 8, 3])),
+        ("b", Int16Type::from_data(vec![2i16, 6, 1, 2])),
+        ("c", Int16Type::from_data(vec![3i16, 7, 7, 6])),
+        ("d", Int16Type::from_data(vec![4i16, 8, 1, 9])),
+    ]);
+
+    run_ast(file, "array_max([a, b, c, d])", &[
+        (
+            "a",
+            UInt64Type::from_data_with_validity(vec![1u64, 2, 0, 4], vec![true, true, false, true]),
+        ),
+        (
+            "b",
+            UInt64Type::from_data_with_validity(vec![2u64, 0, 5, 6], vec![true, false, true, true]),
+        ),
+        (
+            "c",
+            UInt64Type::from_data_with_validity(vec![3u64, 7, 8, 9], vec![true, true, true, true]),
+        ),
+        (
+            "d",
+            UInt64Type::from_data_with_validity(vec![4u64, 6, 5, 0], vec![true, true, true, false]),
+        ),
+    ]);
+}
+
+fn test_array_min(file: &mut impl Write) {
+    run_ast(file, "array_min([])", &[]);
+    run_ast(file, "array_min([1, 2, 3, 4, 5, 6, 7])", &[]);
+    run_ast(file, "array_min([1, 2, 3, 4, 5, NULL, 6])", &[]);
+    run_ast(file, "array_min([1.2, 3.4, 5.6, 7.8])", &[]);
+    run_ast(file, "array_min([1.2, NULL, 3.4, 5.6, NULL])", &[]);
+    run_ast(file, "array_min(['a', 'b', 'c', 'd', 'e'])", &[]);
+    run_ast(file, "array_min(['a', 'b', NULL, 'c', 'd', NULL])", &[]);
+
+    run_ast(file, "array_min([a, b, c, d])", &[
+        ("a", Int16Type::from_data(vec![1i16, 5, 8, 3])),
+        ("b", Int16Type::from_data(vec![2i16, 6, 1, 2])),
+        ("c", Int16Type::from_data(vec![3i16, 7, 7, 6])),
+        ("d", Int16Type::from_data(vec![4i16, 8, 1, 9])),
+    ]);
+
+    run_ast(file, "array_min([a, b, c, d])", &[
+        (
+            "a",
+            UInt64Type::from_data_with_validity(vec![1u64, 2, 0, 4], vec![true, true, false, true]),
+        ),
+        (
+            "b",
+            UInt64Type::from_data_with_validity(vec![2u64, 0, 5, 6], vec![true, false, true, true]),
+        ),
+        (
+            "c",
+            UInt64Type::from_data_with_validity(vec![3u64, 7, 8, 9], vec![true, true, true, true]),
+        ),
+        (
+            "d",
+            UInt64Type::from_data_with_validity(vec![4u64, 6, 5, 0], vec![true, true, true, false]),
+        ),
+    ]);
 }

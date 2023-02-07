@@ -289,3 +289,100 @@ impl GetDatabaseReq {
 pub struct ListDatabaseReq {
     pub tenant: String,
 }
+
+mod kvapi_key_impl {
+    use common_meta_kvapi::kvapi;
+
+    use crate::schema::DatabaseId;
+    use crate::schema::DatabaseIdToName;
+    use crate::schema::DatabaseNameIdent;
+    use crate::schema::DbIdListKey;
+    use crate::schema::PREFIX_DATABASE;
+    use crate::schema::PREFIX_DATABASE_BY_ID;
+    use crate::schema::PREFIX_DATABASE_ID_TO_NAME;
+    use crate::schema::PREFIX_DB_ID_LIST;
+
+    /// __fd_database/<tenant>/<db_name> -> <db_id>
+    impl kvapi::Key for DatabaseNameIdent {
+        const PREFIX: &'static str = PREFIX_DATABASE;
+
+        fn to_string_key(&self) -> String {
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_str(&self.tenant)
+                .push_str(&self.db_name)
+                .done()
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
+            let tenant = p.next_str()?;
+            let db_name = p.next_str()?;
+            p.done()?;
+
+            Ok(DatabaseNameIdent { tenant, db_name })
+        }
+    }
+
+    /// "__fd_database_by_id/<db_id>"
+    impl kvapi::Key for DatabaseId {
+        const PREFIX: &'static str = PREFIX_DATABASE_BY_ID;
+
+        fn to_string_key(&self) -> String {
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.db_id)
+                .done()
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
+            let db_id = p.next_u64()?;
+            p.done()?;
+
+            Ok(DatabaseId { db_id })
+        }
+    }
+
+    /// "__fd_database_id_to_name/<db_id> -> DatabaseNameIdent"
+    impl kvapi::Key for DatabaseIdToName {
+        const PREFIX: &'static str = PREFIX_DATABASE_ID_TO_NAME;
+
+        fn to_string_key(&self) -> String {
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.db_id)
+                .done()
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
+            let db_id = p.next_u64()?;
+            p.done()?;
+
+            Ok(DatabaseIdToName { db_id })
+        }
+    }
+
+    /// "_fd_db_id_list/<tenant>/<db_name> -> db_id_list"
+    impl kvapi::Key for DbIdListKey {
+        const PREFIX: &'static str = PREFIX_DB_ID_LIST;
+
+        fn to_string_key(&self) -> String {
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_str(&self.tenant)
+                .push_str(&self.db_name)
+                .done()
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
+            let tenant = p.next_str()?;
+            let db_name = p.next_str()?;
+            p.done()?;
+
+            Ok(DbIdListKey { tenant, db_name })
+        }
+    }
+}

@@ -403,7 +403,7 @@ fn register_to_number(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<TimestampType, NumberType<i64>, _, _>(
         "to_int64",
         FunctionProperty::default(),
-        |domain| FunctionDomain::Domain(domain.clone()),
+        |domain| FunctionDomain::Domain(*domain),
         |val, _| match val {
             ValueRef::Scalar(scalar) => Value::Scalar(scalar),
             ValueRef::Column(col) => Value::Column(col),
@@ -423,7 +423,7 @@ fn register_to_number(registry: &mut FunctionRegistry) {
         |domain| {
             FunctionDomain::Domain(NullableDomain {
                 has_null: false,
-                value: Some(Box::new(domain.clone())),
+                value: Some(Box::new(*domain)),
             })
         },
         |val, _| match val {

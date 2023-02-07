@@ -75,7 +75,9 @@ jobs:
 
   test_unit:
     timeout-minutes: 30
-    runs-on: [self-hosted, X64, Linux]
+    runs-on: [self-hosted, X64, Linux, dev]
+    env:
+      RUNNER_PROVIDER: aws
     steps:
       - uses: actions/checkout@v3
         with:

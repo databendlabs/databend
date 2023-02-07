@@ -36,6 +36,32 @@ runs:
         export CARGO_INCREMENTAL=0
         export CARGO_TERM_COLOR=always
         export BYPASS_ENV_VARS=${{ inputs.bypass_env_vars }},CARGO_INCREMENTAL,CARGO_TERM_COLOR,BUILD_PROFILE
+        EOF
+
+        RUNNER_PROVIDER="${RUNNER_PROVIDER:-github}"
+        case ${RUNNER_PROVIDER} in
+          aws)
+            echo "setting up sccache for AWS S3..."
+            cat <<EOF >>$BIN_LOCAL/build-tool
+        export ENABLE_SCCACHE=true
+        export SCCACHE_BUCKET=databend-ci
+        export SCCACHE_REGION=us-east-2
+        export SCCACHE_S3_KEY_PREFIX="cache/"
+        export SCCACHE_S3_USE_SSL="true"
+        EOF
+            ;;
+
+          github)
+            echo "sccache disabled on GitHub-hosted Runner"
+            ;;
+
+          *)
+            echo "unknown runner provider"
+            exit 1
+            ;;
+        esac
+
+        cat <<EOF >>$BIN_LOCAL/build-tool
         if [[ \${script_name} == "build-tool" ]]; then
           scripts/setup/run_build_tool.sh \$@
         else

@@ -72,20 +72,22 @@ impl PushDownInfo {
             }
 
             if let RemoteExpr::<String>::ColumnRef { id, .. } = &order.0 {
+                // TODO: support sub column of nested type.
                 let field = schema.field_with_name(id).unwrap();
                 let data_type: DataType = field.data_type().into();
                 if !support(&data_type) {
                     return None;
                 }
 
-                let leaf_fields = schema.leaf_fields();
-                let column_id = leaf_fields.iter().position(|p| p == field).unwrap();
+                let (leaf_column_ids, leaf_fields) = schema.leaf_fields();
+                let index = leaf_fields.iter().position(|p| p == field).unwrap();
+                let column_id = leaf_column_ids[index];
 
                 let top_k = TopK {
                     limit: self.limit.unwrap(),
                     order_by: field.clone(),
                     asc: order.1,
-                    column_id: column_id as u32,
+                    column_id,
                 };
                 Some(top_k)
             } else {

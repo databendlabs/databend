@@ -13,47 +13,47 @@
 // limitations under the License.
 
 use common_base::base::tokio;
-use common_meta_api::KVApiTestSuite;
 use common_meta_embedded::MetaEmbedded;
+use common_meta_kvapi::kvapi;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_kv_write_read() -> anyhow::Result<()> {
     let kv = MetaEmbedded::new_temp().await?;
-    KVApiTestSuite {}.kv_write_read(&kv).await
+    kvapi::TestSuite {}.kv_write_read(&kv).await
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_kv_delete() -> anyhow::Result<()> {
     let kv = MetaEmbedded::new_temp().await?;
-    KVApiTestSuite {}.kv_delete(&kv).await
+    kvapi::TestSuite {}.kv_delete(&kv).await
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_kv_update() -> anyhow::Result<()> {
     let kv = MetaEmbedded::new_temp().await?;
-    KVApiTestSuite {}.kv_update(&kv).await
+    kvapi::TestSuite {}.kv_update(&kv).await
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_kv_timeout() -> anyhow::Result<()> {
     let kv = MetaEmbedded::new_temp().await?;
-    KVApiTestSuite {}.kv_timeout(&kv).await
+    kvapi::TestSuite {}.kv_timeout(&kv).await
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_kv_meta() -> anyhow::Result<()> {
     let kv = MetaEmbedded::new_temp().await?;
-    KVApiTestSuite {}.kv_meta(&kv).await
+    kvapi::TestSuite {}.kv_meta(&kv).await
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_kv_list() -> anyhow::Result<()> {
     let kv = MetaEmbedded::new_temp().await?;
-    KVApiTestSuite {}.kv_list(&kv).await
+    kvapi::TestSuite {}.kv_list(&kv).await
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_kv_mget() -> anyhow::Result<()> {
     let kv = MetaEmbedded::new_temp().await?;
-    KVApiTestSuite {}.kv_mget(&kv).await
+    kvapi::TestSuite {}.kv_mget(&kv).await
 }

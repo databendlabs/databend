@@ -16,7 +16,7 @@ explain select t1.a from t1 where a > 0;
 Exchange
 ├── exchange type: Merge
 └── Filter
-    ├── filters: [gt(t1.a (#0), to_int32(0_u8))]
+    ├── filters: [gt(t1.a (#0), to_int32(0))]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
@@ -24,7 +24,7 @@ Exchange
         ├── read bytes: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [gt(t1.a (#0), 0_i32)], limit: NONE]
+        ├── push downs: [filters: [gt(t1.a (#0), 0)], limit: NONE]
         ├── output columns: [0]
         └── estimated rows: 0.00
 
@@ -34,7 +34,7 @@ explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a an
 Exchange
 ├── exchange type: Merge
 └── Filter
-    ├── filters: [or(gt(t1.a (#0), to_int32(3_u8)), and(gt(t2.a (#2), to_int32(5_u8)), gt(t1.a (#0), to_int32(1_u8))))]
+    ├── filters: [or(gt(t1.a (#0), to_int32(3)), and(gt(t2.a (#2), to_int32(5)), gt(t1.a (#0), to_int32(1))))]
     ├── estimated rows: 0.00
     └── HashJoin
         ├── join type: INNER
@@ -55,7 +55,7 @@ Exchange
         └── Exchange(Probe)
             ├── exchange type: Hash(t1.a (#0))
             └── Filter
-                ├── filters: [or(gt(t1.a (#0), to_int32(3_u8)), gt(t1.a (#0), to_int32(1_u8)))]
+                ├── filters: [or(gt(t1.a (#0), to_int32(3)), gt(t1.a (#0), to_int32(1)))]
                 ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.default.t1
@@ -63,7 +63,7 @@ Exchange
                     ├── read bytes: 0
                     ├── partitions total: 0
                     ├── partitions scanned: 0
-                    ├── push downs: [filters: [or(gt(t1.a (#0), 3_i32), gt(t1.a (#0), 1_i32))], limit: NONE]
+                    ├── push downs: [filters: [or(gt(t1.a (#0), 3), gt(t1.a (#0), 1))], limit: NONE]
                     └── estimated rows: 0.00
 
 query T
@@ -188,7 +188,7 @@ Limit
             ├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
             ├── estimated rows: 0.00
             └── EvalScalar
-                ├── expressions: [plus(t1.a (#0), 1_u8), plus(t1.b (#1), 1_u8), plus(t2.a (#2), 1_u8)]
+                ├── expressions: [plus(t1.a (#0), 1), plus(t1.b (#1), 1), plus(t2.a (#2), 1)]
                 ├── estimated rows: 0.00
                 └── HashJoin
                     ├── join type: INNER

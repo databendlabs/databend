@@ -20,18 +20,51 @@ use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::schema_projection as ap;
+use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_storage::ColumnNodes;
-use opendal::Object;
 use opendal::Operator;
 
 use crate::parquet_part::ParquetRowGroupPart;
-use crate::table_function::arrow_to_table_schema;
+use crate::parquet_table::arrow_to_table_schema;
+
+pub trait SeekRead: std::io::Read + std::io::Seek {}
+
+impl<T> SeekRead for T where T: std::io::Read + std::io::Seek {}
+
+pub struct DataReader {
+    bytes: usize,
+    inner: Box<dyn SeekRead + Sync + Send>,
+}
+
+impl DataReader {
+    pub fn new(inner: Box<dyn SeekRead + Sync + Send>, bytes: usize) -> Self {
+        Self { inner, bytes }
+    }
+
+    pub fn read_all(&mut self) -> Result<Vec<u8>> {
+        let mut data = Vec::with_capacity(self.bytes);
+        // `DataReader` might be reused if there is nested-type data, example:
+        // Table: t Tuple(a int, b int);
+        // Query: select t from table where t:a > 1;
+        // The query will create two readers: Reader(a), Reader(b).
+        // Prewhere phase: Reader(a).read_all();
+        // Remain phase: Reader(a).read_all(); Reader(b).read_all();
+        // If we don't seek to the start of the reader, the second read_all will read nothing.
+        self.inner.rewind()?;
+        // TODO(1): don't seek and read, but reuse the data (reduce IO).
+        // TODO(2): for nested types, merge sub columns into one column (reduce deserialization).
+        self.inner.read_to_end(&mut data)?;
+        Ok(data)
+    }
+}
 
 pub type IndexedChunk = (usize, Vec<u8>);
+pub type IndexedReaders = HashMap<usize, DataReader>;
 
 /// The reader to parquet files with a projected schema.
 ///
@@ -97,14 +130,6 @@ impl ParquetReader {
         }))
     }
 
-    pub fn output_schema(&self) -> &DataSchema {
-        &self.output_schema
-    }
-
-    pub fn columns_to_read(&self) -> &HashSet<usize> {
-        &self.columns_to_read
-    }
-
     /// Project the schema and get the needed column leaves.
     #[allow(clippy::type_complexity)]
     pub fn do_projection(
@@ -117,7 +142,8 @@ impl ParquetReader {
         HashSet<usize>,
     )> {
         // Full schema and column leaves.
-        let column_nodes = ColumnNodes::new_from_schema(schema);
+
+        let column_nodes = ColumnNodes::new_from_schema(schema, None);
         let schema_descriptors = to_parquet_schema(schema)?;
         // Project schema
         let projected_arrow_schema = match projection {
@@ -152,23 +178,65 @@ impl ParquetReader {
         ))
     }
 
-    /// Read columns data of one row group.
-    pub fn sync_read_columns(&self, part: &ParquetRowGroupPart) -> Result<Vec<IndexedChunk>> {
+    pub fn read_from_readers(&self, readers: &mut IndexedReaders) -> Result<Vec<IndexedChunk>> {
         let mut chunks = Vec::with_capacity(self.columns_to_read.len());
 
         for index in &self.columns_to_read {
-            let meta = &part.column_metas[index];
-            let op = self.operator.clone();
-            let chunk =
-                Self::sync_read_one_column(op.object(&part.location), meta.offset, meta.length)?;
-            chunks.push((*index, chunk));
+            let reader = readers.get_mut(index).unwrap();
+            let data = reader.read_all()?;
+
+            chunks.push((*index, data));
         }
 
         Ok(chunks)
     }
 
-    #[inline]
-    pub fn sync_read_one_column(o: Object, offset: u64, length: u64) -> Result<Vec<u8>> {
-        Ok(o.blocking_range_read(offset..offset + length)?)
+    pub fn readers_from_blocking_io(&self, part: PartInfoPtr) -> Result<IndexedReaders> {
+        let part = ParquetRowGroupPart::from_part(&part)?;
+
+        let mut readers: HashMap<usize, DataReader> =
+            HashMap::with_capacity(self.columns_to_read.len());
+
+        for index in &self.columns_to_read {
+            let obj = self.operator.object(&part.location);
+            let meta = &part.column_metas[index];
+            let reader = obj.blocking_range_reader(meta.offset..meta.offset + meta.length)?;
+            readers.insert(
+                *index,
+                DataReader::new(Box::new(reader), meta.length as usize),
+            );
+        }
+        Ok(readers)
+    }
+
+    pub async fn readers_from_non_blocking_io(&self, part: PartInfoPtr) -> Result<IndexedReaders> {
+        use backon::ExponentialBackoff;
+        use backon::Retryable;
+
+        let part = ParquetRowGroupPart::from_part(&part)?;
+
+        let mut join_handlers = Vec::with_capacity(self.columns_to_read.len());
+        let obj = self.operator.object(&part.location);
+
+        for index in self.columns_to_read.iter() {
+            let meta = &part.column_metas[index];
+            let obj = obj.clone();
+            let (offset, length) = (meta.offset, meta.length);
+
+            join_handlers.push(async move {
+                let data = { || async { obj.range_read(offset..offset + length).await } }
+                    .retry(ExponentialBackoff::default())
+                    .when(|err| err.is_temporary())
+                    .await?;
+                Ok::<_, ErrorCode>((
+                    *index,
+                    DataReader::new(Box::new(std::io::Cursor::new(data)), length as usize),
+                ))
+            });
+        }
+
+        let res = futures::future::try_join_all(join_handlers).await?;
+
+        Ok(res.into_iter().collect())
     }
 }

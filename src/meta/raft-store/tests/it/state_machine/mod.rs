@@ -16,15 +16,17 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use common_base::base::tokio;
-use common_meta_api::KVApi;
+use common_meta_kvapi::kvapi::KVApi;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::openraft;
 use common_meta_types::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
+use common_meta_types::Endpoint;
 use common_meta_types::KVMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
+use common_meta_types::Node;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKV;
@@ -84,6 +86,81 @@ async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
                 .unwrap())
         })?;
         assert_eq!(AppliedState::Seq { seq: i + 1 }, resp);
+    }
+
+    Ok(())
+}
+
+#[async_entry::test(
+    worker_threads = 3,
+    init = "init_raft_store_ut!()",
+    tracing_span = "debug"
+)]
+async fn test_state_machine_apply_add_node() -> anyhow::Result<()> {
+    let tc = new_raft_test_context();
+    let sm = StateMachine::open(&tc.raft_config, 1).await?;
+
+    let apply = |index: u64, n: Node, overriding| {
+        //
+        let ss = &sm;
+        async move {
+            ss.apply(&Entry {
+                log_id: LogId { term: 1, index },
+                payload: EntryPayload::Normal(LogEntry {
+                    txid: None,
+                    time_ms: None,
+                    cmd: Cmd::AddNode {
+                        node_id: 1,
+                        node: n,
+                        overriding,
+                    },
+                }),
+            })
+            .await
+        }
+    };
+
+    let n1 = || Node::new("a", Endpoint::new("1", 1));
+    let n2 = || Node::new("b", Endpoint::new("1", 2));
+
+    // Add node without overriding
+    {
+        let resp = apply(5, n1(), false).await?;
+        assert_eq!(
+            AppliedState::Node {
+                prev: None,
+                result: Some(n1())
+            },
+            resp
+        );
+
+        assert_eq!(Some(n1()), sm.get_node(&1)?);
+    }
+
+    // Add node without overriding, no update
+    {
+        let resp = apply(6, n2(), false).await?;
+        assert_eq!(
+            AppliedState::Node {
+                prev: Some(n1()),
+                result: Some(n1())
+            },
+            resp
+        );
+        assert_eq!(Some(n1()), sm.get_node(&1)?);
+    }
+
+    // Add node with overriding, updated
+    {
+        let resp = apply(7, n2(), true).await?;
+        assert_eq!(
+            AppliedState::Node {
+                prev: Some(n1()),
+                result: Some(n2())
+            },
+            resp
+        );
+        assert_eq!(Some(n2()), sm.get_node(&1)?);
     }
 
     Ok(())

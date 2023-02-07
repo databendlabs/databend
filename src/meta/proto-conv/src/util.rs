@@ -81,6 +81,10 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
         "2023-01-07: Add: new-schema pb::DataType to/from TableDataType",
     ),
     (25, "2023-01-05: Add: user.proto/OnErrorMode::AbortNum"),
+    (
+        26,
+        "2023-01-16: Add: metadata.proto/DataSchema::next_column_id",
+    ),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

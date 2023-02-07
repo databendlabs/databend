@@ -10,6 +10,7 @@ header:
     - "website"
     - "tests"
     - "tools"
+    - "benchmark"
     # Ignore hidden files
     - ".cargo"
     - ".databend"

@@ -21,9 +21,9 @@ use async_trait::async_trait;
 use common_base::base::tokio;
 use common_base::base::GlobalSequence;
 use common_base::base::Stoppable;
-use common_meta_api::ApiBuilder;
 use common_meta_client::ClientHandle;
 use common_meta_client::MetaGrpcClient;
+use common_meta_kvapi::kvapi;
 use common_meta_sled_store::openraft::NodeId;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::ForwardRequest;
@@ -49,7 +49,10 @@ pub async fn start_metasrv() -> Result<(MetaSrvTestContext, String)> {
 pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<()> {
     let mn = MetaNode::start(&tc.config).await?;
     let _ = mn
-        .join_cluster(&tc.config.raft_config, tc.config.grpc_api_address.clone())
+        .join_cluster(
+            &tc.config.raft_config,
+            tc.config.grpc_api_advertise_address(),
+        )
         .await?;
 
     let mut srv = GrpcServer::create(tc.config.clone(), mn);
@@ -134,6 +137,7 @@ impl MetaSrvTestContext {
         {
             let grpc_port = next_port();
             config.grpc_api_address = format!("{}:{}", host, grpc_port);
+            config.grpc_api_advertise_host = Some(host.to_string());
         }
 
         {
@@ -208,7 +212,7 @@ pub struct MetaSrvBuilder {
 }
 
 #[async_trait]
-impl ApiBuilder<Arc<ClientHandle>> for MetaSrvBuilder {
+impl kvapi::ApiBuilder<Arc<ClientHandle>> for MetaSrvBuilder {
     async fn build(&self) -> Arc<ClientHandle> {
         let (tc, addr) = start_metasrv().await.unwrap();
 

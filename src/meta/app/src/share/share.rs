@@ -664,3 +664,147 @@ pub struct ShareSpec {
     pub tables: Vec<ShareTableSpec>,
     pub tenants: Vec<String>,
 }
+
+mod kvapi_key_impl {
+    use common_meta_kvapi::kvapi;
+
+    use crate::share::ShareAccountNameIdent;
+    use crate::share::ShareGrantObject;
+    use crate::share::ShareId;
+    use crate::share::ShareIdToName;
+    use crate::share::ShareNameIdent;
+
+    const PREFIX_SHARE: &str = "__fd_share";
+    const PREFIX_SHARE_BY: &str = "__fd_share_by";
+    const PREFIX_SHARE_ID: &str = "__fd_share_id";
+    const PREFIX_SHARE_ID_TO_NAME: &str = "__fd_share_id_to_name";
+    const PREFIX_SHARE_ACCOUNT_ID: &str = "__fd_share_account_id";
+
+    /// __fd_share_by/{db|table}/<object_id> -> ObjectSharedByShareIds
+    impl kvapi::Key for ShareGrantObject {
+        const PREFIX: &'static str = PREFIX_SHARE_BY;
+
+        fn to_string_key(&self) -> String {
+            match *self {
+                ShareGrantObject::Database(db_id) => kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                    .push_raw("db")
+                    .push_u64(db_id)
+                    .done(),
+                ShareGrantObject::Table(table_id) => kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                    .push_raw("table")
+                    .push_u64(table_id)
+                    .done(),
+            }
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
+            let kind = p.next_raw()?;
+            let id = p.next_u64()?;
+            p.done()?;
+
+            if kind == "db" {
+                Ok(ShareGrantObject::Database(id))
+            } else if kind == "table" {
+                Ok(ShareGrantObject::Table(id))
+            } else {
+                return Err(kvapi::KeyError::InvalidSegment {
+                    i: 1,
+                    expect: "db or table".to_string(),
+                    got: kind.to_string(),
+                });
+            }
+        }
+    }
+
+    /// __fd_share/<tenant>/<share_name> -> <share_id>
+    impl kvapi::Key for ShareNameIdent {
+        const PREFIX: &'static str = PREFIX_SHARE;
+
+        fn to_string_key(&self) -> String {
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_str(&self.tenant)
+                .push_str(&self.share_name)
+                .done()
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
+            let tenant = p.next_str()?;
+            let share_name = p.next_str()?;
+            p.done()?;
+
+            Ok(ShareNameIdent { tenant, share_name })
+        }
+    }
+
+    /// __fd_share_id/<share_id> -> <share_meta>
+    impl kvapi::Key for ShareId {
+        const PREFIX: &'static str = PREFIX_SHARE_ID;
+
+        fn to_string_key(&self) -> String {
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.share_id)
+                .done()
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
+            let share_id = p.next_u64()?;
+            p.done()?;
+
+            Ok(ShareId { share_id })
+        }
+    }
+
+    // __fd_share_account/tenant/id -> ShareAccountMeta
+    impl kvapi::Key for ShareAccountNameIdent {
+        const PREFIX: &'static str = PREFIX_SHARE_ACCOUNT_ID;
+
+        fn to_string_key(&self) -> String {
+            if self.share_id != 0 {
+                kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                    .push_str(&self.account)
+                    .push_u64(self.share_id)
+                    .done()
+            } else {
+                kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                    .push_str(&self.account)
+                    .done()
+            }
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
+            let account = p.next_str()?;
+            let share_id = p.next_u64()?;
+            p.done()?;
+
+            Ok(ShareAccountNameIdent { account, share_id })
+        }
+    }
+
+    /// __fd_share_id_to_name/<share_id> -> ShareNameIdent
+    impl kvapi::Key for ShareIdToName {
+        const PREFIX: &'static str = PREFIX_SHARE_ID_TO_NAME;
+
+        fn to_string_key(&self) -> String {
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.share_id)
+                .done()
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
+            let share_id = p.next_u64()?;
+            p.done()?;
+
+            Ok(ShareIdToName { share_id })
+        }
+    }
+}

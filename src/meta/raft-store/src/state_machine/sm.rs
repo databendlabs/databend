@@ -389,18 +389,25 @@ impl StateMachine {
         &self,
         node_id: &u64,
         node: &Node,
+        overriding: bool,
         txn_tree: &TransactionSledTree,
     ) -> Result<AppliedState, MetaStorageError> {
         let sm_nodes = txn_tree.key_space::<Nodes>();
 
         let prev = sm_nodes.get(node_id)?;
 
-        if prev.is_some() {
-            Ok((prev, None).into())
-        } else {
+        if prev.is_none() {
             sm_nodes.insert(node_id, node)?;
-            info!("applied AddNode: {}={:?}", node_id, node);
+            info!("applied AddNode(non-overriding): {}={:?}", node_id, node);
+            return Ok((prev, Some(node.clone())).into());
+        }
+
+        if overriding {
+            sm_nodes.insert(node_id, node)?;
+            info!("applied AddNode(overriding): {}={:?}", node_id, node);
             Ok((prev, Some(node.clone())).into())
+        } else {
+            Ok((prev.clone(), prev).into())
         }
     }
 
@@ -543,7 +550,7 @@ impl StateMachine {
     ) -> Result<(), MetaStorageError> {
         let sub_tree = txn_tree.key_space::<GenericKV>();
         let sv = sub_tree.get(&get.key)?;
-        let value = sv.map(pb::SeqV::from);
+        let value = sv.map(to_pb_seq_v);
         let get_resp = TxnGetResponse {
             key: get.key.clone(),
             value,
@@ -579,7 +586,7 @@ impl StateMachine {
         let put_resp = TxnPutResponse {
             key: put.key.clone(),
             prev_value: if put.prev_value {
-                prev.map(pb::SeqV::from)
+                prev.map(to_pb_seq_v)
             } else {
                 None
             },
@@ -611,7 +618,7 @@ impl StateMachine {
             key: delete.key.clone(),
             success: prev.is_some(),
             prev_value: if delete.prev_value {
-                prev.map(pb::SeqV::from)
+                prev.map(to_pb_seq_v)
             } else {
                 None
             },
@@ -764,7 +771,8 @@ impl StateMachine {
             Cmd::AddNode {
                 ref node_id,
                 ref node,
-            } => self.apply_add_node_cmd(node_id, node, txn_tree),
+                overriding,
+            } => self.apply_add_node_cmd(node_id, node, *overriding, txn_tree),
 
             Cmd::RemoveNode { ref node_id } => self.apply_remove_node_cmd(node_id, txn_tree),
 
@@ -1087,6 +1095,14 @@ impl StateMachine {
     /// storage of client last resp to keep idempotent.
     pub fn client_last_resps(&self) -> AsKeySpace<ClientLastResps> {
         self.sm_tree.key_space()
+    }
+}
+
+/// Convert SeqV defined in rust types to SeqV defined in protobuf.
+fn to_pb_seq_v(seq_v: SeqV) -> pb::SeqV {
+    pb::SeqV {
+        seq: seq_v.seq,
+        data: seq_v.data,
     }
 }
 

@@ -10,12 +10,15 @@ edition = { workspace = true }
 doctest = false
 test = false
 
+[features]
+storage-hdfs = ["opendal/services-hdfs"]
+
 [dependencies]
 common-exception = { path = "../../common/exception" }
 common-io = { path = "../../common/io" }
 common-meta-stoerr = { path = "../stoerr" }
-common-storage = { path = "../../common/storage" }
 
+opendal = { workspace = true }
 openraft = { workspace = true }
 
 anyerror = { workspace = true }

@@ -20,6 +20,7 @@ use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::TableSchema;
 
 #[derive(Debug, Clone)]
 pub struct ColumnNodes {
@@ -27,12 +28,17 @@ pub struct ColumnNodes {
 }
 
 impl ColumnNodes {
-    pub fn new_from_schema(schema: &ArrowSchema) -> Self {
+    pub fn new_from_schema(schema: &ArrowSchema, table_schema: Option<&TableSchema>) -> Self {
         let mut leaf_id = 0;
         let mut column_nodes = Vec::with_capacity(schema.fields.len());
 
-        for field in &schema.fields {
-            let column_node = Self::traverse_fields_dfs(field, &mut leaf_id);
+        let field_column_ids =
+            table_schema.map(|table_schema| table_schema.field_leaf_column_ids());
+        for (i, field) in schema.fields.iter().enumerate() {
+            let mut column_node = Self::traverse_fields_dfs(field, &mut leaf_id);
+            if let Some(ref field_column_ids) = field_column_ids {
+                column_node.leaf_column_ids = field_column_ids[i].to_owned();
+            }
             column_nodes.push(column_node);
         }
 
@@ -105,6 +111,7 @@ pub struct ColumnNode {
     pub leaf_ids: Vec<usize>,
     // Optional children column for nested types.
     pub children: Option<Vec<ColumnNode>>,
+    pub leaf_column_ids: Vec<u32>,
 }
 
 impl ColumnNode {
@@ -113,6 +120,16 @@ impl ColumnNode {
             field,
             leaf_ids,
             children,
+            leaf_column_ids: vec![],
+        }
+    }
+
+    // Handle the case that leaf_column_ids is empty
+    pub fn leaf_column_id(&self, i: usize) -> u32 {
+        if self.leaf_ids.len() == self.leaf_column_ids.len() {
+            self.leaf_column_ids[i]
+        } else {
+            self.leaf_ids[i] as u32
         }
     }
 }

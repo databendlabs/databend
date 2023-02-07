@@ -81,7 +81,7 @@ Limit
             ├── aggregate functions: []
             ├── estimated rows: 0.33
             └── Filter
-                ├── filters: [eq(CAST(t.number (#0) AS UInt64 NULL), TRY_CAST(if(CAST(is_not_null(scalar_subquery_4 (#4)) AS Boolean NULL), CAST(scalar_subquery_4 (#4) AS Int64 NULL), CAST(0_i64 AS Int64 NULL)) AS UInt64 NULL))]
+                ├── filters: [eq(CAST(t.number (#0) AS UInt64 NULL), TRY_CAST(if(CAST(is_not_null(scalar_subquery_4 (#4)) AS Boolean NULL), CAST(scalar_subquery_4 (#4) AS Int64 NULL), CAST(0 AS Int64 NULL)) AS UInt64 NULL))]
                 ├── estimated rows: 0.33
                 └── HashJoin
                     ├── join type: SINGLE

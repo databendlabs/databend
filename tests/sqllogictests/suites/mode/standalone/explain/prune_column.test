@@ -41,7 +41,7 @@ Limit
     ├── sort keys: [number ASC NULLS LAST]
     ├── estimated rows: 0.33
     └── Filter
-        ├── filters: [gt(numbers.b (#0), to_uint64(1_u8))]
+        ├── filters: [gt(numbers.b (#0), to_uint64(1))]
         ├── estimated rows: 0.33
         └── AggregateFinal
             ├── group by: [number, number, number, number]
@@ -70,10 +70,10 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 0.33
 ├── Filter(Build)
-│   ├── filters: [eq(t1.c (#3), to_uint64(1_u8))]
+│   ├── filters: [eq(t1.c (#3), to_uint64(1))]
 │   ├── estimated rows: 0.33
 │   └── EvalScalar
-│       ├── expressions: [plus(numbers.number (#0), 1_u8), plus(numbers.number (#0), 1_u8), plus(numbers.number (#0), 1_u8)]
+│       ├── expressions: [plus(numbers.number (#0), 1), plus(numbers.number (#0), 1), plus(numbers.number (#0), 1)]
 │       ├── estimated rows: 1.00
 │       └── TableScan
 │           ├── table: default.system.numbers
@@ -84,7 +84,7 @@ HashJoin
 │           ├── push downs: [filters: [], limit: NONE]
 │           └── estimated rows: 1.00
 └── EvalScalar(Probe)
-    ├── expressions: [plus(numbers.number (#9), 1_u8)]
+    ├── expressions: [plus(numbers.number (#9), 1)]
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.system.numbers
@@ -125,10 +125,10 @@ Filter
     │               ├── filters: []
     │               ├── estimated rows: 0.33
     │               ├── Filter(Build)
-    │               │   ├── filters: [eq(t2.c (#8), to_uint64(1_u8))]
+    │               │   ├── filters: [eq(t2.c (#8), to_uint64(1))]
     │               │   ├── estimated rows: 0.33
     │               │   └── EvalScalar
-    │               │       ├── expressions: [plus(numbers.number (#5), 1_u8), plus(numbers.number (#5), 1_u8)]
+    │               │       ├── expressions: [plus(numbers.number (#5), 1), plus(numbers.number (#5), 1)]
     │               │       ├── estimated rows: 1.00
     │               │       └── TableScan
     │               │           ├── table: default.system.numbers
@@ -139,7 +139,7 @@ Filter
     │               │           ├── push downs: [filters: [], limit: NONE]
     │               │           └── estimated rows: 1.00
     │               └── EvalScalar(Probe)
-    │                   ├── expressions: [plus(numbers.number (#14), 1_u8)]
+    │                   ├── expressions: [plus(numbers.number (#14), 1)]
     │                   ├── estimated rows: 1.00
     │                   └── TableScan
     │                       ├── table: default.system.numbers
@@ -150,7 +150,7 @@ Filter
     │                       ├── push downs: [filters: [], limit: NONE]
     │                       └── estimated rows: 1.00
     └── EvalScalar(Probe)
-        ├── expressions: [plus(numbers.number (#0), 1_u8)]
+        ├── expressions: [plus(numbers.number (#0), 1)]
         ├── estimated rows: 1.00
         └── TableScan
             ├── table: default.system.numbers
@@ -186,7 +186,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 3.33
 ├── Filter(Build)
-│   ├── filters: [eq(count(*) (#2), 1_u64)]
+│   ├── filters: [eq(count(*) (#2), 1)]
 │   ├── estimated rows: 0.33
 │   └── AggregateFinal
 │       ├── group by: []
@@ -242,7 +242,7 @@ EvalScalar
         ├── aggregate functions: [count()]
         ├── estimated rows: 1.00
         └── Filter
-            ├── filters: [eq(t.b (#1), to_int32(2_u8))]
+            ├── filters: [eq(t.b (#1), to_int32(2))]
             ├── estimated rows: 0.67
             └── TableScan
                 ├── table: default.default.t
@@ -251,7 +251,7 @@ EvalScalar
                 ├── partitions total: 1
                 ├── partitions scanned: 1
                 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-                ├── push downs: [filters: [eq(t.b (#1), 2_i32)], limit: NONE]
+                ├── push downs: [filters: [eq(t.b (#1), 2)], limit: NONE]
                 ├── output columns: [1]
                 └── estimated rows: 2.00
 

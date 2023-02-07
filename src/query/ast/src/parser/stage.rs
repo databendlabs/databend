@@ -13,9 +13,11 @@
 // limitations under the License.
 use std::collections::BTreeMap;
 
+use nom::branch::alt;
 use nom::combinator::map;
 use url::Url;
 
+use crate::ast::SelectStageOption;
 use crate::ast::StageLocation;
 use crate::ast::UriLocation;
 use crate::input::Input;
@@ -45,8 +47,9 @@ pub fn connection_options(i: Input) -> IResult<BTreeMap<String, String>> {
         rule! {
             (AWS_KEY_ID
                 | AWS_SECRET_KEY
-                | ENDPOINT_URL
                 | ACCESS_KEY_ID
+                | ACCESS_KEY_SECRET
+                | ENDPOINT_URL
                 | SECRET_ACCESS_KEY
                 | SESSION_TOKEN
                 | REGION
@@ -198,4 +201,17 @@ pub fn uri_location(i: Input) -> IResult<UriLocation> {
             Ok(UriLocation::new(protocol, name, path, part_prefix, conns))
         },
     )(i)
+}
+
+pub fn select_stage_option(i: Input) -> IResult<SelectStageOption> {
+    alt((
+        map(
+            rule! { FILES ~ "=>" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")" },
+            |(_, _, _, files, _)| SelectStageOption::Files(files),
+        ),
+        map(
+            rule! { PATTERN ~ "=>" ~ #literal_string },
+            |(_, _, pattern)| SelectStageOption::Pattern(pattern),
+        ),
+    ))(i)
 }

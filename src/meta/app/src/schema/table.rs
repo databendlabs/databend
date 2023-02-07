@@ -24,7 +24,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_expression::TableSchema;
 use common_meta_types::MatchSeq;
-use common_storage::StorageParams;
+use common_meta_types::StorageParams;
 use maplit::hashmap;
 
 use crate::schema::database::DatabaseNameIdent;
@@ -708,3 +708,225 @@ pub struct TableCopiedFileLockKey {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct TableCopiedFileLock {}
+
+mod kvapi_key_impl {
+    use common_meta_kvapi::kvapi;
+
+    use crate::schema::CountTablesKey;
+    use crate::schema::DBIdTableName;
+    use crate::schema::TableCopiedFileLockKey;
+    use crate::schema::TableCopiedFileNameIdent;
+    use crate::schema::TableId;
+    use crate::schema::TableIdListKey;
+    use crate::schema::TableIdToName;
+    use crate::schema::PREFIX_TABLE;
+    use crate::schema::PREFIX_TABLE_BY_ID;
+    use crate::schema::PREFIX_TABLE_COPIED_FILES;
+    use crate::schema::PREFIX_TABLE_COPIED_FILES_LOCK;
+    use crate::schema::PREFIX_TABLE_COUNT;
+    use crate::schema::PREFIX_TABLE_ID_LIST;
+    use crate::schema::PREFIX_TABLE_ID_TO_NAME;
+
+    /// "__fd_table/<db_id>/<tb_name>"
+    impl kvapi::Key for DBIdTableName {
+        const PREFIX: &'static str = PREFIX_TABLE;
+
+        fn to_string_key(&self) -> String {
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.db_id)
+                .push_str(&self.table_name)
+                .done()
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
+            let db_id = p.next_u64()?;
+            let table_name = p.next_str()?;
+            p.done()?;
+
+            Ok(DBIdTableName { db_id, table_name })
+        }
+    }
+
+    /// "__fd_table_id_to_name/<table_id> -> DBIdTableName"
+    impl kvapi::Key for TableIdToName {
+        const PREFIX: &'static str = PREFIX_TABLE_ID_TO_NAME;
+
+        fn to_string_key(&self) -> String {
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.table_id)
+                .done()
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
+            let table_id = p.next_u64()?;
+            p.done()?;
+
+            Ok(TableIdToName { table_id })
+        }
+    }
+
+    /// "__fd_table_by_id/<tb_id> -> TableMeta"
+    impl kvapi::Key for TableId {
+        const PREFIX: &'static str = PREFIX_TABLE_BY_ID;
+
+        fn to_string_key(&self) -> String {
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.table_id)
+                .done()
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
+            let table_id = p.next_u64()?;
+            p.done()?;
+
+            Ok(TableId { table_id })
+        }
+    }
+
+    /// "_fd_table_id_list/<db_id>/<tb_name> -> id_list"
+    impl kvapi::Key for TableIdListKey {
+        const PREFIX: &'static str = PREFIX_TABLE_ID_LIST;
+
+        fn to_string_key(&self) -> String {
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.db_id)
+                .push_str(&self.table_name)
+                .done()
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
+            let db_id = p.next_u64()?;
+            let table_name = p.next_str()?;
+            p.done()?;
+
+            Ok(TableIdListKey { db_id, table_name })
+        }
+    }
+
+    /// "__fd_table_count/<tenant>" -> <table_count>
+    impl kvapi::Key for CountTablesKey {
+        const PREFIX: &'static str = PREFIX_TABLE_COUNT;
+
+        fn to_string_key(&self) -> String {
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_raw(&self.tenant)
+                .done()
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
+            let tenant = p.next_str()?;
+            p.done()?;
+
+            Ok(CountTablesKey { tenant })
+        }
+    }
+
+    // __fd_table_copied_files/table_id/file_name -> TableCopiedFileInfo
+    impl kvapi::Key for TableCopiedFileNameIdent {
+        const PREFIX: &'static str = PREFIX_TABLE_COPIED_FILES;
+
+        fn to_string_key(&self) -> String {
+            // TODO: file is not escaped!!!
+            //       There already are non escaped data stored on disk.
+            //       We can not change it anymore.
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.table_id)
+                .push_raw(&self.file)
+                .done()
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
+            let table_id = p.next_u64()?;
+            let file = p.tail_raw()?.to_string();
+
+            Ok(TableCopiedFileNameIdent { table_id, file })
+        }
+    }
+
+    /// __fd_table_copied_file_lock/table_id -> ""
+    impl kvapi::Key for TableCopiedFileLockKey {
+        const PREFIX: &'static str = PREFIX_TABLE_COPIED_FILES_LOCK;
+
+        fn to_string_key(&self) -> String {
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.table_id)
+                .done()
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
+            let table_id = p.next_u64()?;
+            p.done()?;
+
+            Ok(TableCopiedFileLockKey { table_id })
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use common_meta_kvapi::kvapi;
+    use common_meta_kvapi::kvapi::Key;
+
+    use crate::schema::TableCopiedFileNameIdent;
+
+    #[test]
+    fn test_table_copied_file_name_ident_conversion() -> Result<(), kvapi::KeyError> {
+        // test with a key has a file has multi path
+        {
+            let name = TableCopiedFileNameIdent {
+                table_id: 2,
+                file: "/path/to/file".to_owned(),
+            };
+
+            let key = name.to_string_key();
+            assert_eq!(
+                key,
+                format!(
+                    "{}/{}/{}",
+                    TableCopiedFileNameIdent::PREFIX,
+                    name.table_id,
+                    name.file,
+                )
+            );
+            let from = TableCopiedFileNameIdent::from_str_key(&key)?;
+            assert_eq!(from, name);
+        }
+
+        // test with a key has only 2 sub-path
+        {
+            let key = format!("{}/{}", TableCopiedFileNameIdent::PREFIX, 2,);
+            let res = TableCopiedFileNameIdent::from_str_key(&key);
+            assert!(res.is_err());
+            let err = res.unwrap_err();
+            assert_eq!(err, kvapi::KeyError::AtleastSegments {
+                expect: 3,
+                actual: 2,
+            });
+        }
+
+        // test with a key has 5 sub-path but an empty file string
+        {
+            let key = format!("{}/{}/{}", TableCopiedFileNameIdent::PREFIX, 2, "");
+            let res = TableCopiedFileNameIdent::from_str_key(&key)?;
+            assert_eq!(res, TableCopiedFileNameIdent {
+                table_id: 2,
+                file: "".to_string(),
+            });
+        }
+        Ok(())
+    }
+}

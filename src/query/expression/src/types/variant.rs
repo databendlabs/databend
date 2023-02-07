@@ -186,6 +186,7 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: Tz, buf: &mut Vec<u8>) {
             NumberScalar::Float32(n) => n.0.into(),
             NumberScalar::Float64(n) => n.0.into(),
         },
+        ScalarRef::Decimal(_) => todo!("decimal"),
         ScalarRef::Boolean(b) => common_jsonb::Value::Bool(b),
         ScalarRef::String(s) => common_jsonb::Value::String(String::from_utf8_lossy(s)),
         ScalarRef::Timestamp(ts) => timestamp_to_string(ts, tz).to_string().into(),

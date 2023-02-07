@@ -57,9 +57,9 @@ mod rewrite;
 
 use anyhow::Error;
 use clap::Parser;
-use common_meta_api::KVApiKey;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableMeta;
+use common_meta_kvapi::kvapi::Key;
 use common_meta_raft_store::key_spaces::RaftStoreEntry;
 use common_meta_sled_store::init_sled_db;
 use common_meta_types::txn_condition::Target;

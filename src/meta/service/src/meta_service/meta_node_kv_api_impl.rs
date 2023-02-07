@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use async_trait::async_trait;
-use common_meta_api::KVApi;
+use common_meta_kvapi::kvapi;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::GetKVReply;
@@ -33,26 +33,22 @@ use tracing::info;
 
 use crate::meta_service::MetaNode;
 
-/// Impl KVApi for MetaNode.
+/// Impl kvapi::KVApi for MetaNode.
 ///
 /// Write through raft-log.
 /// Read through local state machine, which may not be consistent.
 /// E.g. Read is not guaranteed to see a write.
 #[async_trait]
-impl KVApi for MetaNode {
+impl kvapi::KVApi for MetaNode {
     type Error = KVAppError;
 
     async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, KVAppError> {
-        let ent = LogEntry {
-            txid: None,
-            time_ms: None,
-            cmd: Cmd::UpsertKV(UpsertKV {
-                key: act.key,
-                seq: act.seq,
-                value: act.value,
-                value_meta: act.value_meta,
-            }),
-        };
+        let ent = LogEntry::new(Cmd::UpsertKV(UpsertKV {
+            key: act.key,
+            seq: act.seq,
+            value: act.value,
+            value_meta: act.value_meta,
+        }));
         let rst = self.write(ent).await?;
 
         match rst {
@@ -99,11 +95,7 @@ impl KVApi for MetaNode {
     #[tracing::instrument(level = "debug", skip(self, txn))]
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, KVAppError> {
         info!("MetaNode::transaction(): {}", txn);
-        let ent = LogEntry {
-            txid: None,
-            time_ms: None,
-            cmd: Cmd::Transaction(txn),
-        };
+        let ent = LogEntry::new(Cmd::Transaction(txn));
         let rst = self.write(ent).await?;
 
         match rst {

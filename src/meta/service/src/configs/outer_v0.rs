@@ -103,8 +103,17 @@ pub struct Config {
     #[clap(long, default_value = "")]
     pub admin_tls_server_key: String,
 
+    /// Listening address for public APIs
+    ///
+    /// This address is only used by meta service to build a listening endpoint.
     #[clap(long, default_value = "127.0.0.1:9191")]
     pub grpc_api_address: String,
+
+    /// Connecting address for public APIs
+    ///
+    /// This address is published to meta service client to connect to.
+    #[clap(long)]
+    pub grpc_api_advertise_host: Option<String>,
 
     /// Certificate for server to identify itself
     #[clap(long, default_value = "")]
@@ -124,32 +133,33 @@ impl Default for Config {
 }
 
 impl From<Config> for InnerConfig {
-    fn from(x: Config) -> Self {
-        let mut log: InnerLogConfig = x.log.into();
-        if x.log_level != "INFO" {
-            log.file.level = x.log_level.to_string();
+    fn from(outer: Config) -> Self {
+        let mut log: InnerLogConfig = outer.log.into();
+        if outer.log_level != "INFO" {
+            log.file.level = outer.log_level.to_string();
         }
-        if x.log_dir != "./.databend/logs" {
-            log.file.dir = x.log_dir.to_string();
+        if outer.log_dir != "./.databend/logs" {
+            log.file.dir = outer.log_dir.to_string();
         }
 
         InnerConfig {
-            cmd: x.cmd,
-            key: x.key,
-            value: x.value,
-            expire_after: x.expire_after,
-            prefix: x.prefix,
-            username: x.username,
-            password: x.password,
-            config_file: x.config_file,
+            cmd: outer.cmd,
+            key: outer.key,
+            value: outer.value,
+            expire_after: outer.expire_after,
+            prefix: outer.prefix,
+            username: outer.username,
+            password: outer.password,
+            config_file: outer.config_file,
             log,
-            admin_api_address: x.admin_api_address,
-            admin_tls_server_cert: x.admin_tls_server_cert,
-            admin_tls_server_key: x.admin_tls_server_key,
-            grpc_api_address: x.grpc_api_address,
-            grpc_tls_server_cert: x.grpc_tls_server_cert,
-            grpc_tls_server_key: x.grpc_tls_server_key,
-            raft_config: x.raft_config.into(),
+            admin_api_address: outer.admin_api_address,
+            admin_tls_server_cert: outer.admin_tls_server_cert,
+            admin_tls_server_key: outer.admin_tls_server_key,
+            grpc_api_address: outer.grpc_api_address,
+            grpc_api_advertise_host: outer.grpc_api_advertise_host,
+            grpc_tls_server_cert: outer.grpc_tls_server_cert,
+            grpc_tls_server_key: outer.grpc_tls_server_key,
+            raft_config: outer.raft_config.into(),
         }
     }
 }
@@ -172,6 +182,7 @@ impl From<InnerConfig> for Config {
             admin_tls_server_cert: inner.admin_tls_server_cert,
             admin_tls_server_key: inner.admin_tls_server_key,
             grpc_api_address: inner.grpc_api_address,
+            grpc_api_advertise_host: inner.grpc_api_advertise_host,
             grpc_tls_server_cert: inner.grpc_tls_server_cert,
             grpc_tls_server_key: inner.grpc_tls_server_key,
             raft_config: inner.raft_config.into(),
@@ -253,6 +264,7 @@ pub struct ConfigViaEnv {
     pub admin_tls_server_cert: String,
     pub admin_tls_server_key: String,
     pub metasrv_grpc_api_address: String,
+    pub metasrv_grpc_api_advertise_host: Option<String>,
     pub grpc_tls_server_cert: String,
     pub grpc_tls_server_key: String,
 
@@ -296,6 +308,7 @@ impl From<Config> for ConfigViaEnv {
             admin_tls_server_cert: cfg.admin_tls_server_cert,
             admin_tls_server_key: cfg.admin_tls_server_key,
             metasrv_grpc_api_address: cfg.grpc_api_address,
+            metasrv_grpc_api_advertise_host: cfg.grpc_api_advertise_host,
             grpc_tls_server_cert: cfg.grpc_tls_server_cert,
             grpc_tls_server_key: cfg.grpc_tls_server_key,
             config_id: cfg.raft_config.config_id,
@@ -373,6 +386,7 @@ impl Into<Config> for ConfigViaEnv {
             admin_tls_server_cert: self.admin_tls_server_cert,
             admin_tls_server_key: self.admin_tls_server_key,
             grpc_api_address: self.metasrv_grpc_api_address,
+            grpc_api_advertise_host: self.metasrv_grpc_api_advertise_host,
             grpc_tls_server_cert: self.grpc_tls_server_cert,
             grpc_tls_server_key: self.grpc_tls_server_key,
             raft_config,

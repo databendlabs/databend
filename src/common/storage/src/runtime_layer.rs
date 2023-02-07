@@ -18,8 +18,9 @@ use async_trait::async_trait;
 use common_base::base::tokio::runtime::Handle;
 use common_base::runtime::TrackedFuture;
 use opendal::raw::input;
-use opendal::raw::output;
 use opendal::raw::Accessor;
+use opendal::raw::Layer;
+use opendal::raw::LayeredAccessor;
 use opendal::raw::ObjectPager;
 use opendal::raw::RpCreate;
 use opendal::raw::RpDelete;
@@ -27,7 +28,6 @@ use opendal::raw::RpList;
 use opendal::raw::RpRead;
 use opendal::raw::RpStat;
 use opendal::raw::RpWrite;
-use opendal::Layer;
 use opendal::OpCreate;
 use opendal::OpDelete;
 use opendal::OpList;
@@ -55,25 +55,31 @@ impl RuntimeLayer {
     }
 }
 
-impl Layer for RuntimeLayer {
-    fn layer(&self, inner: Arc<dyn Accessor>) -> Arc<dyn Accessor> {
-        Arc::new(RuntimeAccessor {
-            inner,
+impl<A: Accessor> Layer<A> for RuntimeLayer {
+    type LayeredAccessor = RuntimeAccessor<A>;
+
+    fn layer(&self, inner: A) -> Self::LayeredAccessor {
+        RuntimeAccessor {
+            inner: Arc::new(inner),
             runtime: self.runtime.clone(),
-        })
+        }
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct RuntimeAccessor {
-    inner: Arc<dyn Accessor>,
+pub struct RuntimeAccessor<A> {
+    inner: Arc<A>,
     runtime: Handle,
 }
 
 #[async_trait]
-impl Accessor for RuntimeAccessor {
-    fn inner(&self) -> Option<Arc<dyn Accessor>> {
-        Some(self.inner.clone())
+impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
+    type Inner = A;
+    type Reader = A::Reader;
+    type BlockingReader = A::BlockingReader;
+
+    fn inner(&self) -> &Self::Inner {
+        &self.inner
     }
 
     async fn create(&self, path: &str, args: OpCreate) -> Result<RpCreate> {
@@ -84,7 +90,7 @@ impl Accessor for RuntimeAccessor {
         self.runtime.spawn(future).await.expect("join must success")
     }
 
-    async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, output::Reader)> {
+    async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::Reader)> {
         let op = self.inner.clone();
         let path = path.to_string();
         let future = async move { op.read(&path, args).await };
@@ -122,5 +128,9 @@ impl Accessor for RuntimeAccessor {
         let future = async move { op.list(&path, args).await };
         let future = TrackedFuture::create(future);
         self.runtime.spawn(future).await.expect("join must success")
+    }
+
+    fn blocking_read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::BlockingReader)> {
+        self.inner.blocking_read(path, args)
     }
 }
