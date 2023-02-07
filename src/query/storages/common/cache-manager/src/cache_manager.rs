@@ -46,7 +46,7 @@ pub struct CacheManager {
 impl CacheManager {
     /// Initialize the caches according to the relevant configurations.
     pub fn init(config: &QueryConfig) -> Result<()> {
-        let block_data_cache = if config.table_data_cache_disabled {
+        let block_data_cache = if config.table_data_cache_enabled {
             None
         } else {
             Self::new_block_data_cache(

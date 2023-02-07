@@ -325,7 +325,6 @@ impl BlockReader {
                 data_from_cache.push((*column_id as ColumnId, cached_column_raw_data));
             } else {
                 metrics_inc_cache_miss_count(1, cache_name);
-                // TODO , where is the None branch?
                 if let Some(column_meta) = columns_meta.get(column_id) {
                     let (offset, len) = column_meta.offset_length();
                     ranges.push((*column_id, offset..(offset + len)));

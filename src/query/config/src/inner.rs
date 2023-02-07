@@ -163,8 +163,8 @@ pub struct QueryConfig {
     pub table_cache_bloom_index_meta_count: u64,
     /// Max number of cached bloom index filters
     pub table_cache_bloom_index_filter_count: u64,
-    /// Table data cache disabled
-    pub table_data_cache_disabled: bool,
+    /// Indicates if table data cache is enabled
+    pub table_data_cache_enabled: bool,
     /// Max bytes of table data cached in memory (MB)
     pub table_data_cache_in_memory_mb_size: u64,
     /// Table disk cache folder root
@@ -223,15 +223,16 @@ impl Default for QueryConfig {
             table_meta_cache_enabled: true,
             table_cache_block_meta_count: 102400,
             table_memory_cache_mb_size: 256,
-            table_disk_cache_root: "_cache".to_string(),
-            table_data_cache_population_queue_size: 65536,
-            table_disk_cache_mb_size: 10240,
             table_cache_snapshot_count: 256,
             table_cache_statistic_count: 256,
             table_cache_segment_count: 10240,
             table_cache_bloom_index_meta_count: 3000,
             table_cache_bloom_index_filter_count: 1024 * 1024,
-            table_data_cache_disabled: true,
+            table_data_cache_enabled: false,
+            table_data_cache_population_queue_size: 65536,
+            table_disk_cache_root: "_cache".to_string(),
+            table_disk_cache_mb_size: 20 * 1024,
+            table_data_cache_in_memory_mb_size: 2 * 1024,
             management_mode: false,
             jwt_key_file: "".to_string(),
             async_insert_max_data_size: 10000,
@@ -242,7 +243,6 @@ impl Default for QueryConfig {
             share_endpoint_auth_token_file: "".to_string(),
             tenant_quota: None,
             internal_enable_sandbox_tenant: false,
-            table_data_cache_in_memory_mb_size: 1024 * 10,
         }
     }
 }
