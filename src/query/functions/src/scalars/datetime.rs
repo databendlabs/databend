@@ -473,7 +473,7 @@ fn register_to_number(registry: &mut FunctionRegistry) {
             ValueRef::Scalar(scalar) => Value::Scalar(Some(scalar)),
             ValueRef::Column(col) => Value::Column(NullableColumn {
                 validity: constant_bitmap(true, col.len()).into(),
-                column: col.iter().map(|val| *val).collect(),
+                column: col.iter().copied().collect(),
             }),
         },
     );
