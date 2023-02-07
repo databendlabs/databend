@@ -13,20 +13,34 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
-use serde::{Deserializer, Serializer};
-use common_arrow::arrow::io::flight::{default_ipc_fields, serialize_batch, WriteOptions};
+
+use common_arrow::arrow::io::flight::default_ipc_fields;
+use common_arrow::arrow::io::flight::serialize_batch;
+use common_arrow::arrow::io::flight::WriteOptions;
 use common_arrow::arrow::io::ipc::IpcField;
-use common_exception::{ErrorCode, Result};
-use common_expression::{BlockMetaInfo, BlockMetaInfoPtr, DataBlock, DataSchemaRef};
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoPtr;
+use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
 use common_io::prelude::BinaryWrite;
 use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::{InputPort, OutputPort};
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::{Transform, Transformer};
-use crate::api::{DataPacket, FragmentData};
-use crate::api::rpc::exchange::serde::exchange_deserializer::{create_deserializer_items, TransformExchangeDeserializer};
+use common_pipeline_transforms::processors::transforms::Transform;
+use common_pipeline_transforms::processors::transforms::Transformer;
+use serde::Deserializer;
+use serde::Serializer;
+
+use crate::api::rpc::exchange::serde::exchange_deserializer::create_deserializer_items;
+use crate::api::rpc::exchange::serde::exchange_deserializer::TransformExchangeDeserializer;
+use crate::api::DataPacket;
+use crate::api::FragmentData;
 
 pub struct ExchangeSerializeMeta {
     pub packet: Option<DataPacket>,
@@ -48,14 +62,14 @@ impl Debug for ExchangeSerializeMeta {
 
 impl serde::Serialize for ExchangeSerializeMeta {
     fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
-        where S: Serializer {
+    where S: Serializer {
         unimplemented!("Unimplemented serialize ExchangeSerializeMeta")
     }
 }
 
 impl<'de> serde::Deserialize<'de> for ExchangeSerializeMeta {
     fn deserialize<D>(_: D) -> Result<Self, D::Error>
-        where D: Deserializer<'de> {
+    where D: Deserializer<'de> {
         unimplemented!("Unimplemented deserialize ExchangeSerializeMeta")
     }
 }
@@ -85,7 +99,11 @@ pub struct TransformExchangeSerializer {
 }
 
 impl TransformExchangeSerializer {
-    pub fn create(input: Arc<InputPort>, output: Arc<OutputPort>, schema: &DataSchemaRef) -> ProcessorPtr {
+    pub fn create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        schema: &DataSchemaRef,
+    ) -> ProcessorPtr {
         let arrow_schema = schema.to_arrow();
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
         Transformer::create(input, output, TransformExchangeSerializer {
@@ -101,9 +119,8 @@ impl Transform for TransformExchangeSerializer {
     fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
         let mut meta = vec![];
         meta.write_scalar_own(data_block.num_rows() as u32)?;
-        bincode::serialize_into(&mut meta, &data_block.get_meta()).map_err(|_| {
-            ErrorCode::BadBytes("block meta serialize error when exchange")
-        })?;
+        bincode::serialize_into(&mut meta, &data_block.get_meta())
+            .map_err(|_| ErrorCode::BadBytes("block meta serialize error when exchange"))?;
 
         let chunks = data_block.try_into()?;
         let (dicts, values) = serialize_batch(&chunks, &self.ipc_fields, &self.options)?;
@@ -115,9 +132,7 @@ impl Transform for TransformExchangeSerializer {
         }
 
         Ok(DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
-            DataPacket::FragmentData(
-                FragmentData::create(meta, values)
-            )
+            DataPacket::FragmentData(FragmentData::create(meta, values)),
         )))
     }
 }
@@ -135,5 +150,8 @@ pub fn create_serializer_item(schema: &DataSchemaRef) -> PipeItem {
 }
 
 pub fn create_serializer_items(size: usize, schema: &DataSchemaRef) -> Vec<PipeItem> {
-    (0..size).into_iter().map(|_| create_serializer_item(schema)).collect()
+    (0..size)
+        .into_iter()
+        .map(|_| create_serializer_item(schema))
+        .collect()
 }

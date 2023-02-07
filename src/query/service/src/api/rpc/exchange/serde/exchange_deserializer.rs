@@ -12,6 +12,9 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::any::Any;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
@@ -20,7 +23,9 @@ use common_arrow::arrow::io::flight::deserialize_batch;
 use common_arrow::arrow::io::ipc::IpcSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::{BlockMetaInfo, BlockMetaInfoPtr, DataBlock};
+use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoPtr;
+use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_io::prelude::BinaryRead;
 use common_pipeline_core::pipe::Pipe;
@@ -31,9 +36,8 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_pipeline_transforms::processors::transforms::Transformer;
-use std::any::Any;
-use serde::{Deserializer, Serializer};
-use std::fmt::{Debug, Formatter};
+use serde::Deserializer;
+use serde::Serializer;
 
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::DataPacket;
@@ -100,8 +104,9 @@ impl Transform for TransformExchangeDeserializer {
 
     fn transform(&mut self, mut data: DataBlock) -> Result<DataBlock> {
         if let Some(mut block_meta) = data.take_meta() {
-            if let Some(exchange_meta) =
-                block_meta.as_mut_any().downcast_mut::<ExchangeDeserializeMeta>()
+            if let Some(exchange_meta) = block_meta
+                .as_mut_any()
+                .downcast_mut::<ExchangeDeserializeMeta>()
             {
                 return match exchange_meta.packet.take().unwrap() {
                     DataPacket::ErrorCode(v) => Err(v),
@@ -139,14 +144,14 @@ impl Debug for ExchangeDeserializeMeta {
 
 impl serde::Serialize for ExchangeDeserializeMeta {
     fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
-        where S: Serializer {
+    where S: Serializer {
         unimplemented!("Unimplemented serialize ExchangeSourceMeta")
     }
 }
 
 impl<'de> serde::Deserialize<'de> for ExchangeDeserializeMeta {
     fn deserialize<D>(_: D) -> Result<Self, D::Error>
-        where D: Deserializer<'de> {
+    where D: Deserializer<'de> {
         unimplemented!("Unimplemented deserialize ExchangeSourceMeta")
     }
 }

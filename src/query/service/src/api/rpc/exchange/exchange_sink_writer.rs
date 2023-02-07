@@ -1,15 +1,20 @@
 use std::any::Any;
 use std::sync::Arc;
+
 use async_trait::async_trait;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::processor::{Event, ProcessorPtr};
-use crate::api::rpc::flight_client::FlightExchange;
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_sinks::{AsyncSink, AsyncSinker};
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
+use common_pipeline_sinks::AsyncSink;
+use common_pipeline_sinks::AsyncSinker;
+
 use crate::api::rpc::exchange::serde::exchange_serializer::ExchangeSerializeMeta;
+use crate::api::rpc::flight_client::FlightExchange;
 
 pub struct ExchangeWriterSink {
     exchange: FlightExchange,
@@ -35,11 +40,18 @@ impl AsyncSink for ExchangeWriterSink {
     #[async_trait::unboxed_simple]
     async fn consume(&mut self, mut data_block: DataBlock) -> Result<()> {
         let packet = match data_block.take_meta() {
-            None => Err(ErrorCode::Internal("ExchangeWriterSink only recv ExchangeSerializeMeta.")),
-            Some(mut block_meta) => match block_meta.as_mut_any().downcast_mut::<ExchangeSerializeMeta>() {
-                None => Err(ErrorCode::Internal("ExchangeWriterSink only recv ExchangeSerializeMeta.")),
+            None => Err(ErrorCode::Internal(
+                "ExchangeWriterSink only recv ExchangeSerializeMeta.",
+            )),
+            Some(mut block_meta) => match block_meta
+                .as_mut_any()
+                .downcast_mut::<ExchangeSerializeMeta>()
+            {
+                None => Err(ErrorCode::Internal(
+                    "ExchangeWriterSink only recv ExchangeSerializeMeta.",
+                )),
                 Some(block_meta) => Ok(block_meta.packet.take().unwrap()),
-            }
+            },
         }?;
 
         self.exchange.send(packet).await?;

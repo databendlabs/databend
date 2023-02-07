@@ -25,28 +25,35 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_io::prelude::BinaryRead;
 use common_io::prelude::BinaryWrite;
-use common_pipeline_core::pipe::{Pipe, PipeItem};
-use common_pipeline_core::Pipeline;
-use common_pipeline_core::processors::{create_resize_item, Processor};
+use common_pipeline_core::pipe::Pipe;
+use common_pipeline_core::pipe::PipeItem;
+use common_pipeline_core::processors::create_resize_item;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
+use common_pipeline_core::Pipeline;
 
-use crate::api::DataPacket;
-use crate::api::FragmentData;
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::SerializeParams;
 use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
 use crate::api::rpc::exchange::exchange_sink_writer::create_writer_item;
 use crate::api::rpc::exchange::exchange_source::via_exchange_source;
-use crate::api::rpc::exchange::exchange_source_reader::{create_reader_item, ExchangeSourceReader};
+use crate::api::rpc::exchange::exchange_source_reader::create_reader_item;
+use crate::api::rpc::exchange::exchange_source_reader::ExchangeSourceReader;
 use crate::api::rpc::exchange::exchange_transform_shuffle::exchange_shuffle;
-use crate::api::rpc::exchange::serde::exchange_deserializer::{create_deserializer_item, create_deserializer_items};
-use crate::api::rpc::exchange::serde::exchange_serializer::{create_serializer_item, create_serializer_items, TransformExchangeSerializer};
+use crate::api::rpc::exchange::serde::exchange_deserializer::create_deserializer_item;
+use crate::api::rpc::exchange::serde::exchange_deserializer::create_deserializer_items;
+use crate::api::rpc::exchange::serde::exchange_serializer::create_serializer_item;
+use crate::api::rpc::exchange::serde::exchange_serializer::create_serializer_items;
+use crate::api::rpc::exchange::serde::exchange_serializer::TransformExchangeSerializer;
 use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::rpc::flight_scatter::FlightScatter;
-use crate::pipelines::processors::{create_dummy_item, create_dummy_items};
+use crate::api::DataPacket;
+use crate::api::FragmentData;
+use crate::pipelines::processors::create_dummy_item;
+use crate::pipelines::processors::create_dummy_items;
 use crate::sessions::QueryContext;
 
 pub struct ExchangeTransform;
@@ -96,11 +103,12 @@ impl ExchangeTransform {
                 let exchanges = flight_exchanges.into_iter();
                 for (destination_id, exchange) in params.destination_ids.iter().zip(exchanges) {
                     if destination_id != &params.executor_id {
+                        exchange.close_output();
                         items.push(create_reader_item(exchange));
                     }
                 }
 
-                let new_outputs = max_threads + params.destination_ids.len();
+                let new_outputs = max_threads + params.destination_ids.len() - 1;
                 pipeline.add_pipe(Pipe::create(len, new_outputs, items));
 
                 let mut items = create_dummy_items(max_threads, new_outputs);

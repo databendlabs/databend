@@ -45,7 +45,11 @@ impl Transform for TransformDummy {
 pub fn create_dummy_item() -> PipeItem {
     let input = InputPort::create();
     let output = OutputPort::create();
-    PipeItem::create(TransformDummy::create(input.clone(), output.clone()), vec![input], vec![output])
+    PipeItem::create(
+        TransformDummy::create(input.clone(), output.clone()),
+        vec![input],
+        vec![output],
+    )
 }
 
 pub fn create_dummy_items(size: usize, capacity: usize) -> Vec<PipeItem> {

@@ -22,18 +22,21 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
+use common_pipeline_core::pipe::Pipe;
+use common_pipeline_core::pipe::PipeItem;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 use serde::Deserializer;
 use serde::Serializer;
-use common_pipeline_core::pipe::{Pipe, PipeItem};
-use common_pipeline_core::processors::port::{InputPort, OutputPort};
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
-use crate::api::rpc::exchange::serde::exchange_deserializer;
 use crate::api::rpc::exchange::exchange_source_reader;
+use crate::api::rpc::exchange::serde::exchange_deserializer;
+use crate::api::rpc::exchange::serde::exchange_deserializer::create_deserializer_items;
+use crate::api::rpc::exchange::serde::exchange_deserializer::TransformExchangeDeserializer;
 use crate::api::DataPacket;
-use crate::api::rpc::exchange::serde::exchange_deserializer::{create_deserializer_items, TransformExchangeDeserializer};
 use crate::clusters::ClusterHelper;
 use crate::pipelines::processors::TransformDummy;
 use crate::sessions::QueryContext;
@@ -80,7 +83,10 @@ pub fn via_exchange_source(
         ));
     }
 
-    items.extend(create_deserializer_items(flight_exchanges_len, &params.schema));
+    items.extend(create_deserializer_items(
+        flight_exchanges_len,
+        &params.schema,
+    ));
 
     pipeline.add_pipe(Pipe::create(items.len(), items.len(), items));
 

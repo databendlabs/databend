@@ -12,18 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
-use serde::{Deserializer, Serializer};
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoPtr;
-use crate::api::DataPacket;
+use serde::Deserializer;
+use serde::Serializer;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_sink_merge::ExchangeMergeSink;
 use crate::api::rpc::exchange::exchange_sink_shuffle::ExchangePublisherSink;
+use crate::api::DataPacket;
 use crate::clusters::ClusterHelper;
 use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
