@@ -36,15 +36,12 @@ use common_catalog::table::ColumnId;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
-use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::type_check::check_literal;
 use common_expression::types::DataType;
 use common_expression::ConstantFolder;
-use common_expression::Scalar;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
@@ -55,6 +52,7 @@ use common_storages_view::view_table::QUERY;
 use crate::binder::copy::parse_stage_location_v2;
 use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
+use crate::binder::table_args::bind_table_args;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
 use crate::binder::CteInfo;
@@ -62,8 +60,6 @@ use crate::binder::Visibility;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
-use crate::plans::ConstantExpr;
-use crate::plans::ScalarExpr;
 use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::BindContext;
@@ -229,46 +225,7 @@ impl Binder {
                     self.metadata.clone(),
                     &[],
                 );
-                let mut args = Vec::with_capacity(params.len());
-                for arg in params.iter() {
-                    args.push(scalar_binder.bind(arg).await?.0);
-                }
-
-                let mut named_args = Vec::with_capacity(named_params.len());
-                for (name, arg) in named_params.iter() {
-                    named_args.push((name.clone(), scalar_binder.bind(arg).await?.0));
-                }
-
-                let positioned_args = args
-                    .into_iter()
-                    .map(|scalar| match scalar {
-                        ScalarExpr::ConstantExpr(ConstantExpr { value, .. }) => {
-                            Ok(check_literal(&value).0)
-                        }
-                        _ => Err(ErrorCode::Unimplemented(format!(
-                            "Unsupported table argument type: {:?}",
-                            scalar
-                        ))),
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-
-                let named_args: Vec<(String, Scalar)> = named_args
-                    .into_iter()
-                    .map(|(name, scalar)| match scalar {
-                        ScalarExpr::ConstantExpr(ConstantExpr { value, .. }) => {
-                            Ok((name, check_literal(&value).0))
-                        }
-                        _ => Err(ErrorCode::Unimplemented(format!(
-                            "Unsupported table named argument type: {:?}",
-                            scalar
-                        ))),
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-
-                let table_args = TableArgs {
-                    positioned: positioned_args,
-                    named: named_args.into_iter().collect(),
-                };
+                let table_args = bind_table_args(&mut scalar_binder, params, named_params).await?;
 
                 // Table functions always reside is default catalog
                 let table_meta: Arc<dyn TableFunction> = self
