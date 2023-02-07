@@ -81,7 +81,7 @@ impl AppliedState {
                 ref prev,
                 ref result,
             } => prev != result,
-            AppliedState::KV(ref ch) => ch.changed(),
+            AppliedState::KV(ref ch) => ch.is_changed(),
             AppliedState::None => false,
             AppliedState::TxnReply(txn) => txn.success,
         }
