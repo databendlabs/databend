@@ -195,7 +195,14 @@ impl TzLUT {
             Round::FifteenMinutes => self.start_of_minutes(us, 15),
             Round::TimeSlot => self.start_of_minutes(us, 30),
             Round::Hour => self.round_down(us, 3600),
-            Round::Day => self.round_down(us, 24 * 3600),
+            Round::Day => {
+                let dt = self.to_datetime_from_us(us);
+                let dt = self
+                    .tz
+                    .ymd(dt.year(), dt.month(), dt.day())
+                    .and_hms_micro(0, 0, 0, 0);
+                dt.timestamp() * MICROS_IN_A_SEC
+            }
         }
     }
 
