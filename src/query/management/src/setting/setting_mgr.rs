@@ -75,7 +75,7 @@ impl SettingApi for SettingMgr {
         Ok(settings)
     }
 
-    async fn get_setting(&self, name: &str, seq: Option<u64>) -> Result<SeqV<UserSetting>> {
+    async fn get_setting(&self, name: &str, seq: MatchSeq) -> Result<SeqV<UserSetting>> {
         let key = format!("{}/{}", self.setting_prefix, name);
         let kv_api = self.kv_api.clone();
         let get_kv = async move { kv_api.get_kv(&key).await };
@@ -83,7 +83,7 @@ impl SettingApi for SettingMgr {
         let seq_value =
             res.ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown setting {}", name)))?;
 
-        match MatchSeq::from(seq).match_seq(&seq_value) {
+        match seq.match_seq(&seq_value) {
             Ok(_) => Ok(seq_value.into_seqv()?),
             Err(_) => Err(ErrorCode::UnknownVariable(format!(
                 "Unknown setting {}",
@@ -92,12 +92,12 @@ impl SettingApi for SettingMgr {
         }
     }
 
-    async fn drop_setting(&self, name: &str, seq: Option<u64>) -> Result<()> {
+    async fn drop_setting(&self, name: &str, seq: MatchSeq) -> Result<()> {
         let key = format!("{}/{}", self.setting_prefix, name);
         let kv_api = self.kv_api.clone();
         let upsert_kv = async move {
             kv_api
-                .upsert_kv(UpsertKVReq::new(&key, seq.into(), Operation::Delete, None))
+                .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Delete, None))
                 .await
         };
         let res = upsert_kv.await?;

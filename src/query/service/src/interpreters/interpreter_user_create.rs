@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::MatchSeq;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
 use common_meta_types::UserQuota;
@@ -55,7 +56,7 @@ impl Interpreter for CreateUserInterpreter {
         let users = user_mgr.get_users(&tenant).await?;
 
         let quota_api = UserApiProvider::instance().get_tenant_quota_api_client(&tenant)?;
-        let quota = quota_api.get_quota(None).await?.data;
+        let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
         if quota.max_users != 0 && users.len() >= quota.max_users as usize {
             return Err(ErrorCode::TenantQuotaExceeded(format!(
                 "Max users quota exceeded: {}",

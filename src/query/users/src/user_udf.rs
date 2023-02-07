@@ -14,6 +14,7 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::MatchSeq;
 use common_meta_types::UserDefinedFunction;
 
 use crate::UserApiProvider;
@@ -44,7 +45,7 @@ impl UserApiProvider {
     // Update a UDF.
     pub async fn update_udf(&self, tenant: &str, info: UserDefinedFunction) -> Result<u64> {
         let udf_api_client = self.get_udf_api_client(tenant)?;
-        let update_udf = udf_api_client.update_udf(info, None);
+        let update_udf = udf_api_client.update_udf(info, MatchSeq::GE(1));
         match update_udf.await {
             Ok(res) => Ok(res),
             Err(e) => Err(e.add_message_back("(while update UDF).")),
@@ -54,7 +55,7 @@ impl UserApiProvider {
     // Get a UDF by name.
     pub async fn get_udf(&self, tenant: &str, udf_name: &str) -> Result<UserDefinedFunction> {
         let udf_api_client = self.get_udf_api_client(tenant)?;
-        let get_udf = udf_api_client.get_udf(udf_name, None);
+        let get_udf = udf_api_client.get_udf(udf_name, MatchSeq::GE(0));
         Ok(get_udf.await?.data)
     }
 
@@ -72,7 +73,7 @@ impl UserApiProvider {
     // Drop a UDF by name.
     pub async fn drop_udf(&self, tenant: &str, udf_name: &str, if_exists: bool) -> Result<()> {
         let udf_api_client = self.get_udf_api_client(tenant)?;
-        let drop_udf = udf_api_client.drop_udf(udf_name, None);
+        let drop_udf = udf_api_client.drop_udf(udf_name, MatchSeq::GE(1));
         match drop_udf.await {
             Ok(res) => Ok(res),
             Err(e) => {

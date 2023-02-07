@@ -199,7 +199,7 @@ mod get {
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
-        let res = user_mgr.get_user(user_info.identity(), Some(1));
+        let res = user_mgr.get_user(user_info.identity(), MatchSeq::Exact(1));
         assert!(res.await.is_ok());
 
         Ok(())
@@ -225,7 +225,7 @@ mod get {
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
-        let res = user_mgr.get_user(user_info.identity(), None);
+        let res = user_mgr.get_user(user_info.identity(), MatchSeq::GE(0));
         assert!(res.await.is_ok());
         Ok(())
     }
@@ -248,7 +248,10 @@ mod get {
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
         let res = user_mgr
-            .get_user(UserIdentity::new(test_user_name, test_hostname), None)
+            .get_user(
+                UserIdentity::new(test_user_name, test_hostname),
+                MatchSeq::GE(0),
+            )
             .await;
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
@@ -273,7 +276,10 @@ mod get {
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
         let res = user_mgr
-            .get_user(UserIdentity::new(test_user_name, test_hostname), Some(2))
+            .get_user(
+                UserIdentity::new(test_user_name, test_hostname),
+                MatchSeq::Exact(2),
+            )
             .await;
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
@@ -297,7 +303,10 @@ mod get {
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
-        let res = user_mgr.get_user(UserIdentity::new(test_user_name, test_hostname), None);
+        let res = user_mgr.get_user(
+            UserIdentity::new(test_user_name, test_hostname),
+            MatchSeq::GE(0),
+        );
         assert_eq!(
             res.await.unwrap_err().code(),
             ErrorCode::IllegalUserInfoFormat("").code()
@@ -412,7 +421,7 @@ mod drop {
         kv.expect_upsert_kv()
             .with(predicate::eq(UpsertKVReq::new(
                 &test_key,
-                MatchSeq::Any,
+                MatchSeq::GE(1),
                 Operation::Delete,
                 None,
             )))
@@ -420,7 +429,7 @@ mod drop {
             .returning(|_k| Ok(UpsertKVReply::new(Some(SeqV::new(1, vec![])), None)));
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
-        let res = user_mgr.drop_user(UserIdentity::new(test_user, test_hostname), None);
+        let res = user_mgr.drop_user(UserIdentity::new(test_user, test_hostname), MatchSeq::GE(1));
         assert!(res.await.is_ok());
 
         Ok(())
@@ -438,7 +447,7 @@ mod drop {
         kv.expect_upsert_kv()
             .with(predicate::eq(UpsertKVReq::new(
                 &test_key,
-                MatchSeq::Any,
+                MatchSeq::GE(1),
                 Operation::Delete,
                 None,
             )))
@@ -446,7 +455,7 @@ mod drop {
             .returning(|_k| Ok(UpsertKVReply::new(None, None)));
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
-        let res = user_mgr.drop_user(UserIdentity::new(test_user, test_hostname), None);
+        let res = user_mgr.drop_user(UserIdentity::new(test_user, test_hostname), MatchSeq::GE(1));
         assert_eq!(
             res.await.unwrap_err().code(),
             ErrorCode::UnknownUser("").code()
@@ -490,7 +499,7 @@ mod update {
             "__fd_users/tenant1/{}",
             escape_for_key(&format_user_key(test_user_name, test_hostname))?
         );
-        let test_seq = None;
+        let test_seq = MatchSeq::GE(1);
 
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
         let prev_value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
@@ -502,7 +511,7 @@ mod update {
             kv.expect_get_kv()
                 .with(predicate::function(move |v| v == test_key.as_str()))
                 .times(1)
-                .return_once(move |_k| Ok(Some(SeqV::new(0, prev_value))));
+                .return_once(move |_k| Ok(Some(SeqV::new(1, prev_value))));
         }
 
         // and then, update_kv should be called
@@ -513,12 +522,12 @@ mod update {
         kv.expect_upsert_kv()
             .with(predicate::eq(UpsertKVReq::new(
                 &test_key,
-                MatchSeq::GE(1),
+                MatchSeq::Exact(1),
                 Operation::Update(new_value_with_old_salt.clone()),
                 None,
             )))
             .times(1)
-            .return_once(|_| Ok(UpsertKVReply::new(None, Some(SeqV::new(0, vec![])))));
+            .return_once(|_| Ok(UpsertKVReply::new(None, Some(SeqV::new(1, vec![])))));
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
@@ -542,7 +551,7 @@ mod update {
             "__fd_users/tenant1/{}",
             escape_for_key(&format_user_key(test_user_name, test_hostname))?
         );
-        let test_seq = None;
+        let test_seq = MatchSeq::GE(0);
 
         // if partial update, and get_kv returns None
         // update_kv should NOT be called
@@ -576,7 +585,7 @@ mod update {
             "__fd_users/tenant1/{}",
             escape_for_key(&format_user_key(test_user_name, test_hostname))?
         );
-        let test_seq = None;
+        let test_seq = MatchSeq::GE(1);
 
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
         let prev_value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
@@ -588,13 +597,13 @@ mod update {
             kv.expect_get_kv()
                 .with(predicate::function(move |v| v == test_key.as_str()))
                 .times(1)
-                .return_once(move |_k| Ok(Some(SeqV::new(0, prev_value))));
+                .return_once(move |_k| Ok(Some(SeqV::new(2, prev_value))));
         }
 
         // upsert should be called
         kv.expect_upsert_kv()
             .with(predicate::function(move |act: &UpsertKVReq| {
-                act.key == test_key.as_str() && act.seq == MatchSeq::GE(1)
+                act.key == test_key.as_str() && act.seq == MatchSeq::Exact(2)
             }))
             .times(1)
             .returning(|_| Ok(UpsertKVReply::new(None, None)));
@@ -632,7 +641,6 @@ mod set_user_privileges {
             "__fd_users/tenant1/{}",
             escape_for_key(&format_user_key(test_user_name, test_hostname))?
         );
-        let test_seq = None;
 
         let mut user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
         let prev_value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
@@ -644,7 +652,7 @@ mod set_user_privileges {
             kv.expect_get_kv()
                 .with(predicate::function(move |v| v == test_key.as_str()))
                 .times(1)
-                .return_once(move |_k| Ok(Some(SeqV::new(0, prev_value))));
+                .return_once(move |_k| Ok(Some(SeqV::new(1, prev_value))));
         }
         // - update_kv should be called
         let mut privileges = UserPrivilegeSet::empty();
@@ -657,21 +665,20 @@ mod set_user_privileges {
         kv.expect_upsert_kv()
             .with(predicate::eq(UpsertKVReq::new(
                 &test_key,
-                MatchSeq::GE(1),
+                MatchSeq::Exact(1),
                 Operation::Update(new_value),
                 None,
             )))
             .times(1)
-            .return_once(|_| Ok(UpsertKVReply::new(None, Some(SeqV::new(0, vec![])))));
+            .return_once(|_| Ok(UpsertKVReply::new(None, Some(SeqV::new(1, vec![])))));
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
 
-        let res = user_mgr.grant_privileges(
+        let res = user_mgr.update_user_with(
             user_info.identity(),
-            GrantObject::Global,
-            privileges,
-            test_seq,
+            MatchSeq::GE(1),
+            |ui: &mut UserInfo| ui.grants.grant_privileges(&GrantObject::Global, privileges),
         );
         assert!(res.await.is_ok());
         Ok(())

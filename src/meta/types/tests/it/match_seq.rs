@@ -86,14 +86,6 @@ fn test_match_seq_match_seq_value() -> Result<(), ()> {
 }
 
 #[test]
-fn test_match_seq_from_opt_u64() -> Result<(), ()> {
-    assert_eq!(MatchSeq::Exact(3), Some(3).into());
-    assert_eq!(MatchSeq::Any, None.into());
-
-    Ok(())
-}
-
-#[test]
 fn test_match_seq_display() -> Result<(), ()> {
     assert_eq!("is any value", MatchSeq::Any.to_string());
     assert_eq!("== 3", MatchSeq::Exact(3).to_string());
