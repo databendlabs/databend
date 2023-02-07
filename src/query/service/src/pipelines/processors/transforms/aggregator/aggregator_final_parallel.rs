@@ -180,7 +180,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
     }
 
     fn merge_partial_hashstates(&mut self, hashtable: &mut Method::HashTable) -> Result<()> {
-        // Note: We can't swap the ptr here, there maybe some bugs in ShortStringHashTable
+        // Note: We can't swap the ptr here, there maybe some bugs if the original hashtable
         // if self.hash_table.len() == 0 {
         //     std::mem::swap(&mut self.hash_table, hashtable);
         //     return Ok(());
