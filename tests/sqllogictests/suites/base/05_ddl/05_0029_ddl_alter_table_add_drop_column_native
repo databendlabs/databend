@@ -17,7 +17,7 @@ statement ok
 INSERT INTO TABLE `05_0029_t0` values(2, 1.0)
 
 query IF
-SELECT * FROM `05_0029_t0`
+SELECT * FROM `05_0029_t0` order by a
 ----
 1 0.0
 2 1.0
