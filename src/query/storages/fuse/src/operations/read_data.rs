@@ -35,13 +35,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
     ) -> Result<Arc<BlockReader>> {
         let table_schema = self.table_info.schema();
-        BlockReader::create(
-            self.operator.clone(),
-            table_schema,
-            projection,
-            Arc::new(self.to_owned()),
-            ctx,
-        )
+        BlockReader::create(self.operator.clone(), table_schema, projection, ctx)
     }
 
     // Build the block reader.

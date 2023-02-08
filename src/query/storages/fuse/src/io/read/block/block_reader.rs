@@ -26,7 +26,6 @@ use common_base::runtime::UnlimitedFuture;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
 use common_catalog::table::ColumnId;
-use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -36,6 +35,7 @@ use common_expression::DataSchema;
 use common_expression::Scalar;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
+use common_sql::field_default_value;
 use common_storage::ColumnNode;
 use common_storage::ColumnNodes;
 use futures::future::try_join_all;
@@ -124,7 +124,6 @@ impl BlockReader {
         operator: Operator,
         schema: TableSchemaRef,
         projection: Projection,
-        table: Arc<dyn Table>,
         ctx: Arc<dyn TableContext>,
     ) -> Result<Arc<BlockReader>> {
         let projected_schema = match projection {
@@ -145,13 +144,10 @@ impl BlockReader {
             .collect();
         let project_indices = Self::build_projection_indices(&project_column_nodes);
 
-        let fields = projected_schema
-            .fields()
-            .iter()
-            .map(DataField::from)
-            .collect();
-        let data_schema = DataSchema::new(fields);
-        let default_vals = Self::schema_default_vals(data_schema, table, ctx)?;
+        let mut default_vals = Vec::with_capacity(projected_schema.fields().len());
+        for field in projected_schema.fields() {
+            default_vals.push(field_default_value(ctx.clone(), field)?);
+        }
 
         Ok(Arc::new(BlockReader {
             operator,
