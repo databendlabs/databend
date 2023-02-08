@@ -44,8 +44,10 @@ use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
 use common_expression::vectorize_with_builder_3_arg;
 use common_expression::with_number_mapped_type;
+use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
+use common_expression::DataBlock;
 use common_expression::Domain;
 use common_expression::EvalContext;
 use common_expression::Function;
@@ -55,6 +57,7 @@ use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::Scalar;
 use common_expression::ScalarRef;
+use common_expression::SortColumnDescription;
 use common_expression::Value;
 use common_expression::ValueRef;
 use common_hashtable::HashtableKeyable;
@@ -134,6 +137,76 @@ pub fn register(registry: &mut FunctionRegistry) {
             }),
         }))
     });
+
+    registry.register_passthrough_nullable_1_arg::<EmptyArrayType, EmptyArrayType, _, _>(
+        "array_sort",
+        FunctionProperty::default(),
+        |_| FunctionDomain::Full,
+        vectorize_1_arg::<EmptyArrayType, EmptyArrayType>(|arr, _| arr),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
+        "array_sort",
+        FunctionProperty::default(),
+        |_| FunctionDomain::Full,
+        vectorize_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(|arr, _| {
+            let data_type = arr.data_type();
+            let mut builder = ColumnBuilder::with_capacity(&data_type.clone(), arr.len());
+            arr.iter().for_each(|val| { builder.push(val) });
+            let sort_desc = vec![SortColumnDescription {
+                offset: 0,
+                asc: true,
+                nulls_first: false,
+            }];
+            let columns = vec![builder.build()];
+            let len = columns.get(0).map_or(1, |c| c.len());
+            let columns = columns
+                .iter()
+                .map(|col| BlockEntry {
+                    data_type: col.data_type(),
+                    value: Value::Column(col.clone()),
+                })
+                .collect();
+            let sort_block = DataBlock::sort(&DataBlock::new(columns, len), &sort_desc, None).unwrap();
+            sort_block.columns()[0].value.convert_to_full_column(&data_type, 1)
+        },
+        ),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<EmptyArrayType, EmptyArrayType, _, _>(
+        "array_reverse_sort",
+        FunctionProperty::default(),
+        |_| FunctionDomain::Full,
+        vectorize_1_arg::<EmptyArrayType, EmptyArrayType>(|arr, _| arr),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
+        "array_reverse_sort",
+        FunctionProperty::default(),
+        |_| FunctionDomain::Full,
+        vectorize_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(|arr, _| {
+            let data_type = arr.data_type();
+            let mut builder = ColumnBuilder::with_capacity(&data_type.clone(), arr.len());
+            arr.iter().for_each(|val| { builder.push(val) });
+            let sort_desc = vec![SortColumnDescription {
+                offset: 0,
+                asc: false,
+                nulls_first: false,
+            }];
+            let columns = vec![builder.build()];
+            let len = columns.get(0).map_or(1, |c| c.len());
+            let columns = columns
+                .iter()
+                .map(|col| BlockEntry {
+                    data_type: col.data_type(),
+                    value: Value::Column(col.clone()),
+                })
+                .collect();
+            let sort_block = DataBlock::sort(&DataBlock::new(columns, len), &sort_desc, None).unwrap();
+            sort_block.columns()[0].value.convert_to_full_column(&data_type, 1)
+        },
+        ),
+    );
 
     registry.register_1_arg::<EmptyArrayType, NumberType<u8>, _, _>(
         "length",

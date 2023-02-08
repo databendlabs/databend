@@ -60,6 +60,14 @@ array_remove_last(Array(Nothing)) :: Array(Nothing)
 array_remove_last(Array(Nothing) NULL) :: Array(Nothing) NULL
 array_remove_last(Array(T0)) :: Array(T0)
 array_remove_last(Array(T0) NULL) :: Array(T0) NULL
+array_reverse_sort(Array(Nothing)) :: Array(Nothing)
+array_reverse_sort(Array(Nothing) NULL) :: Array(Nothing) NULL
+array_reverse_sort(Array(T0)) :: Array(T0)
+array_reverse_sort(Array(T0) NULL) :: Array(T0) NULL
+array_sort(Array(Nothing)) :: Array(Nothing)
+array_sort(Array(Nothing) NULL) :: Array(Nothing) NULL
+array_sort(Array(T0)) :: Array(T0)
+array_sort(Array(T0) NULL) :: Array(T0) NULL
 array_unique(Array(Nothing)) :: UInt64
 array_unique(Array(Nothing) NULL) :: UInt64 NULL
 array_unique(Array(T0)) :: UInt64

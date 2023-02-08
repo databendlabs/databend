@@ -126,5 +126,15 @@ select array_any(col1), array_any(col2), array_any(col3) from t
 ----
 1 x 2022-02-02
 
+query TTTTT
+select array_sort(col1),array_sort(col2),array_sort(col3),array_sort(col4),array_sort(col5) from t
+----
+[1,2,3,3] ['x','x','y','z'] ['2022-02-02'] ['2023-01-01 02:00:01.000000'] [[],[NULL],[1,2]]
+
+query TTTTT
+select array_reverse_sort(col1),array_reverse_sort(col2),array_reverse_sort(col3),array_reverse_sort(col4),array_reverse_sort(col5) from t
+----
+[3,3,2,1] ['z','y','x','x'] ['2022-02-02'] ['2023-01-01 02:00:01.000000'] [[1,2],[NULL],[]]
+
 statement ok
 DROP DATABASE array_func_test
