@@ -24,7 +24,9 @@ use itertools::Itertools;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::AnyType;
 use super::SimpleDomain;
+use crate::Value;
 use crate::utils::arrow::buffer_into_mut;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
@@ -69,14 +71,14 @@ static MAX_DECIMAL256_PRECISION: u8 = 76;
 impl DecimalDataType {
     pub fn from_size(size: DecimalSize) -> Result<DecimalDataType> {
         if size.precision < 1 || size.precision > MAX_DECIMAL256_PRECISION {
-            return Err(ErrorCode::BadDataValueType(format!(
+            return Err(ErrorCode::Overflow(format!(
                 "Decimal precision must be between 1 and {}",
                 MAX_DECIMAL128_PRECISION
             )));
         }
 
         if size.scale > size.precision {
-            return Err(ErrorCode::BadDataValueType(format!(
+            return Err(ErrorCode::Overflow(format!(
                 "Decimal scale must be between 0 and precision {}",
                 size.precision
             )));
@@ -132,6 +134,78 @@ impl DecimalDataType {
         let precision = a.max_result_precision(b);
 
         Self::from_size(DecimalSize { precision, scale })
+    }
+    
+    // if to_scale == from_scale && to_precision >= from_precision {
+    //     // fast path
+    //     return from.clone().to(DataType::Decimal(to_precision, to_scale));
+    // }
+    // // todo: other fast paths include increasing scale and precision by so that
+    // // a number will never overflow (validity is preserved)
+
+    // if from_scale > to_scale {
+    //     let factor = 10_i128.pow((from_scale - to_scale) as u32);
+    //     decimal_to_decimal_impl(
+    //         from,
+    //         |x: i128| x.checked_div(factor),
+    //         to_precision,
+    //         to_scale,
+    //     )
+    // } else {
+    //     let factor = 10_i128.pow((to_scale - from_scale) as u32);
+    //     decimal_to_decimal_impl(
+    //         from,
+    //         |x: i128| x.checked_mul(factor),
+    //         to_precision,
+    //         to_scale,
+    //     )
+    // }
+    
+    pub fn convert_from(&self, col: &DecimalColumn) -> Result<DecimalColumn> {
+        match col {
+            DecimalColumn::Decimal128(buffer, from) => {
+                match self {
+                    DecimalDataType::Decimal128(size) => {
+                        // faster path 
+                        if from.scale == size.scale && from.precision <= size.precision {
+                            return Ok(DecimalColumn::Decimal128(buffer.clone(), *size));
+                        }
+                        if from.scale > size.scale {
+                            let factor = 10_i128.pow((from.scale - size.scale) as u32);
+                            let mut new_buffer = Vec::with_capacity(buffer.len());
+                            for x in buffer {
+                                new_buffer.push(x.checked_div(factor).ok_or_else(|| {
+                                    ErrorCode::Overflow(format!(
+                                        "Decimal overflow when converting from {} to {}",
+                                        from, size
+                                    ))
+                                })?);
+                            }
+                            Ok(DecimalColumn::Decimal128(new_buffer, *size))
+                        } else {
+                            let factor = 10_i128.pow((size.scale - from.scale) as u32);
+                            let mut new_buffer = Vec::with_capacity(buffer.len());
+                            for x in buffer {
+                                new_buffer.push(x.checked_mul(factor).ok_or_else(|| {
+                                    ErrorCode::Overflow(format!(
+                                        "Decimal overflow when converting from {} to {}",
+                                        from, size
+                                    ))
+                                })?);
+                            }
+                            Ok(DecimalColumn::Decimal128(new_buffer, *size))
+                        }
+                    },
+                    DecimalDataType::Decimal256(_) => {}
+                }
+            }
+            DecimalColumn::Decimal256(buffer, from) => {
+                match self {
+                    DecimalDataType::Decimal128(_) => {},
+                    DecimalDataType::Decimal256(_) => {}
+                }
+            },
+        }
     }
 }
 
@@ -335,6 +409,20 @@ macro_rules! with_decimal_type {
     ( | $t:tt | $($tail:tt)* ) => {
         match_template::match_template! {
             $t = [Decimal128, Decimal256],
+            $($tail)*
+        }
+    }
+}
+
+
+
+#[macro_export]
+macro_rules! with_decimal_mapped_type {
+    (| $t:tt | $($tail:tt)*) => {
+        match_template::match_template! {
+            $t = [
+                Decimal128 => i128, Decimal256 => i256
+            ],
             $($tail)*
         }
     }
