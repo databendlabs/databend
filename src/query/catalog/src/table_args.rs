@@ -36,6 +36,13 @@ impl TableArgs {
         }
     }
 
+    pub fn new_named(args: HashMap<String, Scalar>) -> Self {
+        Self {
+            positioned: vec![],
+            named: args,
+        }
+    }
+
     /// Check TableArgs only contain positioned args.
     /// Also check num of positioned if num is not None.
     ///
