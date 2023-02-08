@@ -833,14 +833,17 @@ impl Column {
                 )
                 .unwrap(),
             ),
-            Column::Decimal(DecimalColumn::Decimal256(col, _)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<common_arrow::arrow::types::i256>::try_new(
-                    arrow_type,
-                    col.iter().cloned().map(common_arrow::arrow::types::i256).collect::<Vec<_>>().into(),
-                    None,
+            Column::Decimal(DecimalColumn::Decimal256(col, _)) => {
+                let values = unsafe { std::mem::transmute(col.clone()) };
+                Box::new(
+                    common_arrow::arrow::array::PrimitiveArray::<common_arrow::arrow::types::i256>::try_new(
+                        arrow_type,
+                        values,
+                        None,
+                    )
+                    .unwrap()
                 )
-                .unwrap(),
-            ),
+            }
             Column::Boolean(col) => Box::new(
                 common_arrow::arrow::array::BooleanArray::try_new(arrow_type, col.clone(), None)
                     .unwrap(),

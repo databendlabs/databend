@@ -74,16 +74,64 @@ impl DecimalDataType {
                 MAX_DECIMAL128_PRECISION
             )));
         }
-        
+
         if size.scale > size.precision {
             return Err(ErrorCode::BadDataValueType(format!(
                 "Decimal scale must be between 0 and precision {}",
                 size.precision
             )));
         }
-        
-        // todo!("decimal")
-        Err(ErrorCode::Unimplemented("decimal"))
+        if size.precision <= MAX_DECIMAL128_PRECISION {
+            Ok(DecimalDataType::Decimal128(size))
+        } else {
+            Ok(DecimalDataType::Decimal256(size))
+        }
+    }
+    
+    pub fn scale(&self) -> u8 {
+        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+            DecimalDataType::DECIMAL_TYPE(size) => size.scale,
+        })
+    }
+    
+    pub fn precision(&self) -> u8 {
+        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+            DecimalDataType::DECIMAL_TYPE(size) => size.precision,
+        })
+    }
+
+    pub fn max_precision(&self) -> u8 {
+        match self {
+            DecimalDataType::Decimal128(_) => MAX_DECIMAL128_PRECISION,
+            DecimalDataType::Decimal256(_) => MAX_DECIMAL256_PRECISION,
+        }
+    }
+
+    pub fn max_result_precision(&self, other: &Self) -> u8 {
+        if matches!(self, DecimalDataType::Decimal128(_)) {
+            return self.max_precision();
+        }
+        other.max_precision()
+    }
+
+    pub fn binary_result_type(
+        a: &Self,
+        b: &Self,
+        is_multiply: bool,
+        is_divide: bool,
+        is_plus_minus: bool,
+    ) -> Result<Self> {
+        let mut scale = 0;
+        if is_multiply {
+            scale = a.scale() + b.scale();
+        } else if is_divide {
+            scale = a.scale();
+        } else if is_plus_minus {
+            scale = std::cmp::max(a.scale(), b.scale());
+        }
+        let precision = a.max_result_precision(b);
+
+        Self::from_size(DecimalSize { precision, scale })
     }
 }
 
