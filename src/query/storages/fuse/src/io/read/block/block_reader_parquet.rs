@@ -24,7 +24,6 @@ use common_arrow::parquet::compression::Compression as ParquetCompression;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
-use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table::ColumnId;
 use common_catalog::table::Table;
@@ -131,58 +130,56 @@ impl BlockReader {
         table: Arc<dyn Table>,
         ctx: Arc<dyn TableContext>,
     ) -> Result<Vec<Scalar>> {
-        GlobalIORuntime::instance().block_on(async move {
-            let fields_num = data_schema.num_fields();
-            let mut ops = Vec::with_capacity(fields_num);
-            for field in data_schema.fields() {
-                let expr = if let Some(default_expr) = field.default_expr() {
-                    let mut expr = parse_exprs(ctx.clone(), table.clone(), false, default_expr)?;
-                    let mut expr = expr.remove(0);
-                    let data_type = field.data_type();
-                    if expr.data_type() != data_type {
-                        expr = Expr::Cast {
-                            span: None,
-                            is_try: data_type.is_nullable(),
-                            expr: Box::new(expr),
-                            dest_type: data_type.to_owned(),
-                        };
-                    }
-
-                    expr
-                } else {
-                    let default_value = field.data_type().default_value();
-                    Expr::Constant {
+        // GlobalIORuntime::instance().block_on(async move {
+        let fields_num = data_schema.num_fields();
+        let mut ops = Vec::with_capacity(fields_num);
+        for field in data_schema.fields() {
+            let expr = if let Some(default_expr) = field.default_expr() {
+                let mut expr = parse_exprs(ctx.clone(), table.clone(), false, default_expr)?;
+                let mut expr = expr.remove(0);
+                let data_type = field.data_type();
+                if expr.data_type() != data_type {
+                    expr = Expr::Cast {
                         span: None,
-                        scalar: default_value,
-                        data_type: field.data_type().clone(),
-                    }
-                };
-                ops.push(BlockOperator::Map { expr });
-            }
+                        is_try: data_type.is_nullable(),
+                        expr: Box::new(expr),
+                        dest_type: data_type.to_owned(),
+                    };
+                }
 
-            let func_ctx = ctx.get_function_context()?;
-            let mut expression_transform = CompoundBlockOperator {
-                ctx: func_ctx,
-                operators: ops,
+                expr
+            } else {
+                let default_value = field.data_type().default_value();
+                Expr::Constant {
+                    span: None,
+                    scalar: default_value,
+                    data_type: field.data_type().clone(),
+                }
             };
+            ops.push(BlockOperator::Map { expr });
+        }
 
-            let one_row_chunk = DataBlock::empty_with_schema(Arc::new(data_schema));
-            let res = expression_transform.transform(one_row_chunk)?;
+        let func_ctx = ctx.get_function_context()?;
+        let mut expression_transform = CompoundBlockOperator {
+            ctx: func_ctx,
+            operators: ops,
+        };
 
-            Ok(res
-                .columns()
-                .iter()
-                .skip(fields_num)
-                .map(|col| unsafe { col.value.as_ref().index_unchecked(0).to_owned() })
-                .collect())
-        })
+        let one_row_chunk = DataBlock::empty_with_schema(Arc::new(data_schema));
+        let res = expression_transform.transform(one_row_chunk)?;
+
+        Ok(res
+            .columns()
+            .iter()
+            .skip(fields_num)
+            .map(|col| unsafe { col.value.as_ref().index_unchecked(0).to_owned() })
+            .collect())
+        //})
     }
 
     pub fn build_default_values_block(&self, num_rows: usize) -> Result<DataBlock> {
         let data_schema = self.data_schema();
-        let ctx = self.ctx.clone();
-        let table = self.table.clone();
-        let default_vals = Self::schema_default_vals(data_schema.clone(), table, ctx)?;
+        let default_vals = self.default_vals.clone();
         Ok(DataBlock::create_with_default_value(
             &data_schema,
             &default_vals,
@@ -264,9 +261,7 @@ impl BlockReader {
             DataBlock::from_arrow_chunk(&chunk, &self.data_schema())
         } else {
             let data_schema = self.data_schema();
-            let ctx = self.ctx.clone();
-            let table = self.table.clone();
-            let schema_default_vals = Self::schema_default_vals(data_schema, table, ctx)?;
+            let schema_default_vals = self.default_vals.clone();
             let mut default_vals = Vec::with_capacity(need_default_vals.len());
             for (i, need_default_val) in need_default_vals.iter().enumerate() {
                 if need_default_val.is_none() {
@@ -276,7 +271,7 @@ impl BlockReader {
                 }
             }
             DataBlock::create_with_default_value_and_chunk(
-                &self.data_schema(),
+                &data_schema,
                 &chunk,
                 &default_vals,
                 num_rows,

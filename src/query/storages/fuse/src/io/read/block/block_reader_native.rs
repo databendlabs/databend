@@ -198,10 +198,7 @@ impl BlockReader {
                 num_rows += part.nums_rows;
             }
 
-            let data_schema = self.data_schema();
-            let ctx = self.ctx.clone();
-            let table = self.table.clone();
-            let default_vals = Self::schema_default_vals(data_schema, table, ctx)?;
+            let default_vals = self.default_vals.clone();
 
             Ok(DataBlock::create_with_default_value_and_block(
                 &self.projected_schema,

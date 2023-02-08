@@ -33,6 +33,7 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::DataField;
 use common_expression::DataSchema;
+use common_expression::Scalar;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_storage::ColumnNode;
@@ -55,8 +56,7 @@ pub struct BlockReader {
     pub(crate) project_indices: BTreeMap<usize, (ColumnId, Field, DataType)>,
     pub(crate) column_nodes: ColumnNodes,
     pub(crate) parquet_schema_descriptor: SchemaDescriptor,
-    pub(crate) table: Arc<dyn Table>,
-    pub(crate) ctx: Arc<dyn TableContext>,
+    pub(crate) default_vals: Vec<Scalar>,
 }
 
 pub struct OwnerMemory {
@@ -145,6 +145,14 @@ impl BlockReader {
             .collect();
         let project_indices = Self::build_projection_indices(&project_column_nodes);
 
+        let fields = projected_schema
+            .fields()
+            .iter()
+            .map(DataField::from)
+            .collect();
+        let data_schema = DataSchema::new(fields);
+        let default_vals = Self::schema_default_vals(data_schema, table, ctx)?;
+
         Ok(Arc::new(BlockReader {
             operator,
             projection,
@@ -152,8 +160,7 @@ impl BlockReader {
             parquet_schema_descriptor,
             column_nodes,
             project_indices,
-            table,
-            ctx,
+            default_vals,
         }))
     }
 
