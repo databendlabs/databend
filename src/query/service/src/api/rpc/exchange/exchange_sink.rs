@@ -12,16 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
-use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockMetaInfoPtr;
 use common_pipeline_core::pipe::Pipe;
-use serde::Deserializer;
-use serde::Serializer;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_sink_writer::create_writer_items;
@@ -29,7 +24,6 @@ use crate::api::rpc::exchange::exchange_sink_writer::ExchangeWriterSink;
 use crate::api::rpc::exchange::exchange_transform_shuffle::exchange_shuffle;
 use crate::api::rpc::exchange::serde::exchange_serializer::create_serializer_items;
 use crate::api::rpc::exchange::serde::exchange_serializer::TransformExchangeSerializer;
-use crate::api::DataPacket;
 use crate::clusters::ClusterHelper;
 use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
@@ -44,7 +38,7 @@ impl ExchangeSink {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let exchange_manager = ctx.get_exchange_manager();
-        let flight_exchange = exchange_manager.get_flight_exchanges(&params)?;
+        let flight_exchange = exchange_manager.get_flight_exchanges(params)?;
 
         match params {
             ExchangeParams::MergeExchange(params) => {

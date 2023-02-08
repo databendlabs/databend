@@ -28,21 +28,17 @@ use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_io::prelude::BinaryRead;
-use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_pipeline_transforms::processors::transforms::Transformer;
 use serde::Deserializer;
 use serde::Serializer;
 
-use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::DataPacket;
 use crate::api::FragmentData;
-use crate::pipelines::processors::TransformDummy;
 
 pub struct TransformExchangeDeserializer {
     schema: DataSchemaRef,

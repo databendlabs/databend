@@ -12,51 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::sync::Arc;
-use std::sync::Mutex;
 
-use common_arrow::arrow::io::flight::default_ipc_fields;
-use common_arrow::arrow::io::flight::deserialize_batch;
-use common_arrow::arrow::io::flight::serialize_batch;
-use common_arrow::arrow::io::ipc::IpcSchema;
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::block_debug::pretty_format_blocks;
-use common_expression::DataBlock;
-use common_io::prelude::BinaryRead;
-use common_io::prelude::BinaryWrite;
 use common_pipeline_core::pipe::Pipe;
-use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::create_resize_item;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::transforms::Transform;
-use common_pipeline_transforms::processors::transforms::Transformer;
-use itertools::Itertools;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
-use crate::api::rpc::exchange::exchange_params::SerializeParams;
-use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
 use crate::api::rpc::exchange::exchange_sink_writer::create_writer_item;
 use crate::api::rpc::exchange::exchange_source::via_exchange_source;
 use crate::api::rpc::exchange::exchange_source_reader::create_reader_item;
-use crate::api::rpc::exchange::exchange_source_reader::ExchangeSourceReader;
 use crate::api::rpc::exchange::exchange_transform_shuffle::exchange_shuffle;
-use crate::api::rpc::exchange::serde::exchange_deserializer::create_deserializer_item;
 use crate::api::rpc::exchange::serde::exchange_deserializer::create_deserializer_items;
 use crate::api::rpc::exchange::serde::exchange_serializer::create_serializer_item;
-use crate::api::rpc::exchange::serde::exchange_serializer::create_serializer_items;
-use crate::api::rpc::exchange::serde::exchange_serializer::TransformExchangeSerializer;
-use crate::api::rpc::flight_client::FlightExchange;
-use crate::api::rpc::flight_scatter::FlightScatter;
-use crate::api::DataPacket;
-use crate::api::FragmentData;
 use crate::pipelines::processors::create_dummy_item;
 use crate::pipelines::processors::create_dummy_items;
 use crate::sessions::QueryContext;

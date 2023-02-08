@@ -37,8 +37,6 @@ use common_pipeline_transforms::processors::transforms::Transformer;
 use serde::Deserializer;
 use serde::Serializer;
 
-use crate::api::rpc::exchange::serde::exchange_deserializer::create_deserializer_items;
-use crate::api::rpc::exchange::serde::exchange_deserializer::TransformExchangeDeserializer;
 use crate::api::DataPacket;
 use crate::api::FragmentData;
 
@@ -141,12 +139,11 @@ pub fn create_serializer_item(schema: &DataSchemaRef) -> PipeItem {
     let input = InputPort::create();
     let output = OutputPort::create();
 
-    let item = PipeItem::create(
+    PipeItem::create(
         TransformExchangeSerializer::create(input.clone(), output.clone(), schema),
         vec![input],
         vec![output],
-    );
-    item
+    )
 }
 
 pub fn create_serializer_items(size: usize, schema: &DataSchemaRef) -> Vec<PipeItem> {
