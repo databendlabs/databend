@@ -187,14 +187,7 @@ impl HiveTable {
             |_| 0
         };
 
-        let output_projection = match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
-            None => {
-                PushDownInfo::projection_of_push_downs(&self.table_info.schema(), &plan.push_downs)
-            }
-            Some(v) => v.output_columns,
-        };
-        let output_schema = Arc::new(output_projection.project_schema(&plan.source_info.schema()));
-        let output_schema = Arc::new(DataSchema::from(output_schema));
+        let output_schema = Arc::new(DataSchema::from(plan.schema()));
 
         let prewhere_all_partitions =
             self.is_prewhere_column_partition_keys(self.table_info.schema(), &plan.push_downs)?;
