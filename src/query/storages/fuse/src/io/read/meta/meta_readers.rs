@@ -23,6 +23,7 @@ use storages_common_cache::LoadParams;
 use storages_common_cache::Loader;
 use storages_common_cache_manager::BloomIndexMeta;
 use storages_common_cache_manager::CacheManager;
+use storages_common_cache_manager::DeleteMarkMeta;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SegmentInfoVersion;
 use storages_common_table_meta::meta::SnapshotVersion;
@@ -34,11 +35,11 @@ use super::versioned_reader::VersionedReader;
 
 pub type TableSnapshotStatisticsReader =
     InMemoryItemCacheReader<TableSnapshotStatistics, LoaderWrapper<Operator>>;
-pub type BloomIndexFileMetaDataReader =
-    InMemoryItemCacheReader<BloomIndexMeta, LoaderWrapper<Operator>>;
 pub type TableSnapshotReader = InMemoryItemCacheReader<TableSnapshot, LoaderWrapper<Operator>>;
 pub type SegmentInfoReader =
     InMemoryItemCacheReader<SegmentInfo, LoaderWrapper<(Operator, TableSchemaRef)>>;
+pub type BloomIndexMetaReader = InMemoryItemCacheReader<BloomIndexMeta, LoaderWrapper<Operator>>;
+pub type DeleteMarkMetaReader = InMemoryItemCacheReader<DeleteMarkMeta, LoaderWrapper<Operator>>;
 
 pub struct MetaReaders;
 
@@ -67,10 +68,18 @@ impl MetaReaders {
         )
     }
 
-    pub fn file_meta_data_reader(dal: Operator) -> BloomIndexFileMetaDataReader {
-        BloomIndexFileMetaDataReader::new(
+    pub fn bloom_index_meta_reader(dal: Operator) -> BloomIndexMetaReader {
+        BloomIndexMetaReader::new(
             CacheManager::instance().get_bloom_index_meta_cache(),
-            "bloom_index_file_meta_data_cache".to_owned(),
+            "bloom_index_meta_cache".to_owned(),
+            LoaderWrapper(dal),
+        )
+    }
+
+    pub fn delete_mark_meta_reader(dal: Operator) -> DeleteMarkMetaReader {
+        DeleteMarkMetaReader::new(
+            CacheManager::instance().get_delete_mark_meta_cache(),
+            "delete_mark_meta_cache".to_owned(),
             LoaderWrapper(dal),
         )
     }
@@ -119,11 +128,30 @@ impl Loader<BloomIndexMeta> for LoaderWrapper<Operator> {
         };
         let meta = read_metadata_async(&mut reader).await.map_err(|err| {
             ErrorCode::Internal(format!(
-                "read file meta failed, {}, {:?}",
+                "read bloom index meta failed, {}, {:?}",
                 params.location, err
             ))
         })?;
         Ok(BloomIndexMeta(meta))
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<DeleteMarkMeta> for LoaderWrapper<Operator> {
+    async fn load(&self, params: &LoadParams) -> Result<DeleteMarkMeta> {
+        let object = self.0.object(&params.location);
+        let mut reader = if let Some(len) = params.len_hint {
+            object.range_reader(0..len).await?
+        } else {
+            object.reader().await?
+        };
+        let meta = read_metadata_async(&mut reader).await.map_err(|err| {
+            ErrorCode::Internal(format!(
+                "read delete mark meta failed, {}, {:?}",
+                params.location, err
+            ))
+        })?;
+        Ok(DeleteMarkMeta(meta))
     }
 }
 

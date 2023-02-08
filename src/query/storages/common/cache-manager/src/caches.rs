@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::parquet::metadata::FileMetaData;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::InMemoryItemCacheHolder;
@@ -34,6 +35,8 @@ pub type BloomIndexFilterCache = InMemoryItemCacheHolder<Xor8Filter>;
 pub struct BloomIndexMeta(pub FileMetaData);
 /// In memory object cache of parquet FileMetaData of bloom index data
 pub type BloomIndexMetaCache = InMemoryItemCacheHolder<BloomIndexMeta>;
+
+pub type DeleteMarkDataCache = InMemoryItemCacheHolder<Bitmap>;
 pub struct DeleteMarkMeta(pub FileMetaData);
 /// In memory object cache of parquet FileMetaData of delete mark data
 pub type DeleteMarkMetaCache = InMemoryItemCacheHolder<DeleteMarkMeta>;
@@ -89,6 +92,13 @@ impl CachedObject<DeleteMarkMeta> for DeleteMarkMeta {
     type Cache = DeleteMarkMetaCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_delete_mark_meta_cache()
+    }
+}
+
+impl CachedObject<Bitmap> for Bitmap {
+    type Cache = DeleteMarkDataCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_delete_mark_data_cache()
     }
 }
 

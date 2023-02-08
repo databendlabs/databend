@@ -157,7 +157,7 @@ async fn load_column_xor8_filter<'a>(
 async fn load_index_meta(dal: Operator, path: &str, length: u64) -> Result<Arc<BloomIndexMeta>> {
     let path_owned = path.to_owned();
     async move {
-        let reader = MetaReaders::file_meta_data_reader(dal);
+        let reader = MetaReaders::bloom_index_meta_reader(dal);
         // Format of FileMetaData is not versioned, version argument is ignored by the underlying reader,
         // so we just pass a zero to reader
         let version = 0;
@@ -175,7 +175,7 @@ async fn load_index_meta(dal: Operator, path: &str, length: u64) -> Result<Arc<B
 }
 
 #[async_trait::async_trait]
-trait InRuntime
+pub trait InRuntime
 where Self: Future
 {
     async fn execute_in_runtime(self, runtime: &Runtime) -> Result<Self::Output>;

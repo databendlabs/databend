@@ -27,6 +27,7 @@ use crate::caches::FileMetaDataCache;
 use crate::caches::SegmentInfoCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
+use crate::DeleteMarkDataCache;
 use crate::DeleteMarkMetaCache;
 
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
@@ -39,6 +40,7 @@ pub struct CacheManager {
     bloom_index_filter_cache: Option<BloomIndexFilterCache>,
     bloom_index_meta_cache: Option<BloomIndexMetaCache>,
     delete_mark_meta_cache: Option<DeleteMarkMetaCache>,
+    delete_mark_data_cache: Option<DeleteMarkDataCache>,
     file_meta_data_cache: Option<FileMetaDataCache>,
 }
 
@@ -54,6 +56,7 @@ impl CacheManager {
                 bloom_index_filter_cache: None,
                 bloom_index_meta_cache: None,
                 delete_mark_meta_cache: None,
+                delete_mark_data_cache: None,
                 file_meta_data_cache: None,
                 table_statistic_cache: None,
             }));
@@ -68,6 +71,8 @@ impl CacheManager {
             // todo(zhyass): Add table_cache_delete_mark_meta_count
             let delete_mark_meta_cache =
                 Self::new_item_cache(config.table_cache_bloom_index_meta_count);
+            let delete_mark_data_cache =
+                Self::new_item_cache(config.table_cache_bloom_index_filter_count);
             let file_meta_data_cache = Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS);
             GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache,
@@ -75,6 +80,7 @@ impl CacheManager {
                 bloom_index_filter_cache,
                 bloom_index_meta_cache,
                 delete_mark_meta_cache,
+                delete_mark_data_cache,
                 file_meta_data_cache,
                 table_statistic_cache,
             }));
@@ -109,6 +115,10 @@ impl CacheManager {
 
     pub fn get_delete_mark_meta_cache(&self) -> Option<DeleteMarkMetaCache> {
         self.delete_mark_meta_cache.clone()
+    }
+
+    pub fn get_delete_mark_data_cache(&self) -> Option<DeleteMarkDataCache> {
+        self.delete_mark_data_cache.clone()
     }
 
     pub fn get_file_meta_data_cache(&self) -> Option<FileMetaDataCache> {

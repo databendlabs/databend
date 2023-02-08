@@ -17,3 +17,4 @@ mod block_filter_reader;
 mod column_filter_reader;
 
 pub use block_filter_reader::BloomBlockFilterReader;
+pub use block_filter_reader::InRuntime;
