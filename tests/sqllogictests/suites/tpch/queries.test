@@ -1,4 +1,28 @@
 statement ok
+analyze table customer
+
+statement ok
+analyze table lineitem
+
+statement ok
+analyze table nation
+
+statement ok
+analyze table orders
+
+statement ok
+analyze table partsupp
+
+statement ok
+analyze table part
+
+statement ok
+analyze table region
+
+statement ok
+analyze table supplier
+
+statement ok
 set enable_bushy_join = 1
 
 # Q1

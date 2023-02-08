@@ -80,3 +80,31 @@ select count(*) from bloom_test_t where c1 = 5
 
 statement ok
 drop table bloom_test_t
+
+statement ok
+create table bloom_test_nullable_t(c1 int null, c2 int null);
+
+statement ok
+insert into  bloom_test_nullable_t values(1,1), (5,6), (10,10)
+
+statement ok
+insert into  bloom_test_nullable_t values(1,1), (7,8), (10,10)
+
+query T
+explain select * from bloom_test_nullable_t where c1 = 5 and c2 > 1;
+----
+Filter
+├── filters: [eq(bloom_test_nullable_t.c1 (#0), CAST(5 AS Int32 NULL)), gt(bloom_test_nullable_t.c2 (#1), CAST(1 AS Int32 NULL))]
+├── estimated rows: 0.96
+└── TableScan
+    ├── table: default.default.bloom_test_nullable_t
+    ├── read rows: 3
+    ├── read bytes: 90
+    ├── partitions total: 2
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]
+    ├── push downs: [filters: [eq(bloom_test_nullable_t.c1 (#0), 5), gt(bloom_test_nullable_t.c2 (#1), 1)], limit: NONE]
+    └── estimated rows: 6.00
+
+statement ok
+drop table bloom_test_nullable_t

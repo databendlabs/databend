@@ -25,7 +25,7 @@ Exchange
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [gt(t1.a (#0), 0)], limit: NONE]
-        ├── output columns: [0]
+        ├── output columns: [a]
         └── estimated rows: 0.00
 
 query T
@@ -205,7 +205,7 @@ Limit
                     │       ├── partitions total: 0
                     │       ├── partitions scanned: 0
                     │       ├── push downs: [filters: [], limit: NONE]
-                    │       ├── output columns: [0]
+                    │       ├── output columns: [a]
                     │       └── estimated rows: 0.00
                     └── Exchange(Probe)
                         ├── exchange type: Hash(t1.a (#0))
