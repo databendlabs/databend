@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_pipeline_core::pipe::PipeItem;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -39,4 +40,24 @@ impl Transform for TransformDummy {
     fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
         Ok(data)
     }
+}
+
+pub fn create_dummy_item() -> PipeItem {
+    let input = InputPort::create();
+    let output = OutputPort::create();
+    PipeItem::create(
+        TransformDummy::create(input.clone(), output.clone()),
+        vec![input],
+        vec![output],
+    )
+}
+
+pub fn create_dummy_items(size: usize, capacity: usize) -> Vec<PipeItem> {
+    let mut items = Vec::with_capacity(capacity);
+
+    for _index in 0..size {
+        items.push(create_dummy_item());
+    }
+
+    items
 }

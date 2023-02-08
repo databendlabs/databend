@@ -62,7 +62,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
             .read_data_block_stream(ctx.clone(), &DataSourcePlan {
                 catalog: "default".to_owned(),
                 source_info: DataSourceInfo::TableSource(Default::default()),
-                scan_fields: None,
+                output_schema: Default::default(),
                 parts,
                 statistics: Default::default(),
                 description: "".to_string(),
@@ -122,7 +122,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
             .read_data_block_stream(ctx.clone(), &DataSourcePlan {
                 catalog: "default".to_owned(),
                 source_info: DataSourceInfo::TableSource(Default::default()),
-                scan_fields: None,
+                output_schema: Default::default(),
                 parts,
                 statistics: Default::default(),
                 description: "".to_string(),

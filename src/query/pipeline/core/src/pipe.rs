@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 
 use crate::processors::port::InputPort;
@@ -39,11 +41,27 @@ impl PipeItem {
     }
 }
 
+impl Debug for PipeItem {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PipeItem")
+            .field("name", &unsafe { self.processor.name() })
+            .field("inputs", &self.inputs_port.len())
+            .field("outputs", &self.outputs_port.len())
+            .finish()
+    }
+}
+
 #[derive(Clone)]
 pub struct Pipe {
     pub items: Vec<PipeItem>,
     pub input_length: usize,
     pub output_length: usize,
+}
+
+impl Debug for Pipe {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", &self.items)
+    }
 }
 
 impl Pipe {

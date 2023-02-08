@@ -25,7 +25,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
 
-use crate::api::rpc::exchange::exchange_source::ExchangeSourceMeta;
+use crate::api::rpc::exchange::serde::exchange_deserializer::ExchangeDeserializeMeta;
 use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::DataPacket;
 use crate::pipelines::processors::TransformDummy;
@@ -75,7 +75,7 @@ impl Processor for ExchangeSourceReader {
         }
 
         if let Some(data_packet) = self.output_data.take() {
-            let exchange_source_meta = ExchangeSourceMeta::create(data_packet);
+            let exchange_source_meta = ExchangeDeserializeMeta::create(data_packet);
             self.output
                 .push_data(Ok(DataBlock::empty_with_meta(exchange_source_meta)));
         }
@@ -120,4 +120,13 @@ pub fn via_reader(prefix_size: usize, exchanges: Vec<FlightExchange>, pipeline: 
     }
 
     pipeline.add_pipe(Pipe::create(prefix_size, items.len(), items));
+}
+
+pub fn create_reader_item(exchange: FlightExchange) -> PipeItem {
+    let output = OutputPort::create();
+    PipeItem::create(
+        ExchangeSourceReader::create(output.clone(), exchange),
+        vec![],
+        vec![output],
+    )
 }
