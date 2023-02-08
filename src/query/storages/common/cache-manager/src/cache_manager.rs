@@ -117,7 +117,7 @@ impl CacheManager {
         self.file_meta_data_cache.clone()
     }
 
-    pub fn get_block_data_cache(&self) -> Option<TableDataCache> {
+    pub fn get_table_data_cache(&self) -> Option<TableDataCache> {
         self.table_data_cache.clone()
     }
 

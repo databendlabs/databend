@@ -39,6 +39,7 @@ use futures::future::try_join_all;
 use opendal::Object;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
+use storages_common_cache::TableDataCache;
 use storages_common_cache::TableDataColumnCacheKey;
 use storages_common_cache_manager::CacheManager;
 use storages_common_table_meta::meta::ColumnMeta;
@@ -84,17 +85,24 @@ pub struct MergeIOReadResult {
     columns_chunk_positions: HashMap<ColumnId, (usize, Range<usize>)>,
     owner_memory: OwnerMemory,
     cached_column_data: CachedColumnData,
+    table_data_cache: Option<TableDataCache>,
 }
 
 pub type CachedColumnData = Vec<(ColumnId, Arc<Vec<u8>>)>;
 
 impl MergeIOReadResult {
-    pub fn create(owner_memory: OwnerMemory, capacity: usize, path: String) -> MergeIOReadResult {
+    pub fn create(
+        owner_memory: OwnerMemory,
+        capacity: usize,
+        path: String,
+        table_data_cache: Option<TableDataCache>,
+    ) -> MergeIOReadResult {
         MergeIOReadResult {
             block_path: path,
             columns_chunk_positions: HashMap::with_capacity(capacity),
             owner_memory,
             cached_column_data: vec![],
+            table_data_cache,
         }
     }
 
@@ -123,12 +131,13 @@ impl MergeIOReadResult {
     // TODO 1. pass the cache in 2) let the block reader hold a instance of cache
     fn add_column_chunk(&mut self, chunk: usize, column_id: ColumnId, range: Range<usize>) {
         // TODO doc why put cache operation could be placed here
-        if let Ok(chunk_data) = self.get_chunk(chunk, &self.block_path) {
-            let cache = CacheManager::instance().get_block_data_cache();
-            let cache_key = TableDataColumnCacheKey::new(&self.block_path, column_id);
-            let data = &chunk_data[range.clone()];
-            // TODO api is NOT type safe
-            cache.put(cache_key.as_ref().to_owned(), Arc::new(data.to_vec()));
+        if let Some(cache) = &self.table_data_cache {
+            if let Ok(chunk_data) = self.get_chunk(chunk, &self.block_path) {
+                let cache_key = TableDataColumnCacheKey::new(&self.block_path, column_id);
+                let data = &chunk_data[range.clone()];
+                // TODO api is NOT type safe
+                cache.put(cache_key.as_ref().to_owned(), Arc::new(data.to_vec()));
+            }
         }
         self.columns_chunk_positions
             .insert(column_id, (chunk, range));
@@ -179,7 +188,7 @@ impl BlockReader {
     ///
     /// It will *NOT* merge two requests:
     /// if the last io request size is larger than storage_io_page_bytes_for_read(Default is 512KB).
-    pub async fn merge_io_read(
+    async fn merge_io_read(
         read_settings: &ReadSettings,
         object: Object,
         raw_ranges: Vec<(ColumnId, Range<u64>)>,
@@ -217,7 +226,13 @@ impl BlockReader {
 
         let start = Instant::now();
         let owner_memory = OwnerMemory::create(try_join_all(read_handlers).await?);
-        let mut read_res = MergeIOReadResult::create(owner_memory, raw_ranges.len(), path.clone());
+        let table_data_cache = CacheManager::instance().get_table_data_cache();
+        let mut read_res = MergeIOReadResult::create(
+            owner_memory,
+            raw_ranges.len(),
+            path.clone(),
+            table_data_cache,
+        );
 
         // Perf.
         {
@@ -277,7 +292,15 @@ impl BlockReader {
         }
 
         let owner_memory = OwnerMemory::create(io_res);
-        let mut read_res = MergeIOReadResult::create(owner_memory, raw_ranges.len(), path.clone());
+
+        // for sync read, we disable table data cache
+        let table_data_cache = None;
+        let mut read_res = MergeIOReadResult::create(
+            owner_memory,
+            raw_ranges.len(),
+            path.clone(),
+            table_data_cache,
+        );
 
         for (raw_idx, raw_range) in &raw_ranges {
             let column_id = *raw_idx as ColumnId;
@@ -313,12 +336,12 @@ impl BlockReader {
         }
 
         let mut ranges = vec![];
-        let block_data_cache = CacheManager::instance().get_block_data_cache();
-        let mut data_from_cache = vec![];
+        let block_data_cache = CacheManager::instance().get_table_data_cache();
+        let mut cached_column_data = vec![];
         for (_index, (column_id, ..)) in self.project_indices.iter() {
             let column_cache_key = TableDataColumnCacheKey::new(location, *column_id);
             if let Some(cached_column_raw_data) = block_data_cache.get(&column_cache_key) {
-                data_from_cache.push((*column_id as ColumnId, cached_column_raw_data));
+                cached_column_data.push((*column_id as ColumnId, cached_column_raw_data));
             } else if let Some(column_meta) = columns_meta.get(column_id) {
                 let (offset, len) = column_meta.offset_length();
                 ranges.push((*column_id, offset..(offset + len)));
@@ -334,7 +357,7 @@ impl BlockReader {
         let object = self.operator.object(location);
 
         let mut merge_io_read_res = Self::merge_io_read(settings, object, ranges).await?;
-        merge_io_read_res.cached_column_data = data_from_cache;
+        merge_io_read_res.cached_column_data = cached_column_data;
         Ok(merge_io_read_res)
     }
 
