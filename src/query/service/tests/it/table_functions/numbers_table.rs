@@ -14,6 +14,7 @@
 
 use common_base::base::tokio;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::table_args::TableArgs;
 use common_exception::Result;
 use common_expression::Scalar;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
@@ -27,7 +28,7 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_number_table() -> Result<()> {
-    let tbl_args = Some(vec![Scalar::from(8u64)]);
+    let tbl_args = TableArgs::new_positioned(vec![Scalar::from(8u64)]);
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = NumbersTable::create("system", "numbers_mt", 1, tbl_args)?;
 
@@ -50,14 +51,14 @@ async fn test_number_table() -> Result<()> {
         "+----------+",
         "| Column 0 |",
         "+----------+",
-        "| 0_u64    |",
-        "| 1_u64    |",
-        "| 2_u64    |",
-        "| 3_u64    |",
-        "| 4_u64    |",
-        "| 5_u64    |",
-        "| 6_u64    |",
-        "| 7_u64    |",
+        "| 0        |",
+        "| 1        |",
+        "| 2        |",
+        "| 3        |",
+        "| 4        |",
+        "| 5        |",
+        "| 6        |",
+        "| 7        |",
         "+----------+",
     ];
     common_expression::block_debug::assert_blocks_sorted_eq(expected, result.as_slice());

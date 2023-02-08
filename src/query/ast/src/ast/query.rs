@@ -22,6 +22,7 @@ use crate::ast::write_period_separated_list;
 use crate::ast::Expr;
 use crate::ast::FileLocation;
 use crate::ast::Identifier;
+use crate::ast::SelectStageOptions;
 
 /// Root node of a query tree
 #[derive(Debug, Clone, PartialEq)]
@@ -181,7 +182,7 @@ pub enum TableReference {
     Stage {
         span: Span,
         location: FileLocation,
-        files: Vec<String>,
+        options: SelectStageOptions,
         alias: Option<TableAlias>,
     },
 }
@@ -367,13 +368,16 @@ impl Display for TableReference {
             TableReference::Stage {
                 span: _,
                 location,
-                files,
+                options,
                 alias,
             } => {
                 write!(f, "({location})")?;
-                if !files.is_empty() {
+                if let Some(files) = &options.files {
                     let files = files.join(",");
                     write!(f, " FILES {files}")?;
+                }
+                if let Some(pattern) = &options.pattern {
+                    write!(f, " PATTERN {pattern}")?;
                 }
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;

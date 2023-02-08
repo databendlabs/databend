@@ -26,10 +26,10 @@ use common_meta_client::MetaGrpcClient;
 use common_meta_kvapi::kvapi;
 use common_meta_sled_store::openraft::NodeId;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
-use common_meta_types::ForwardRequest;
-use common_meta_types::ForwardRequestBody;
 use databend_meta::api::GrpcServer;
 use databend_meta::configs;
+use databend_meta::message::ForwardRequest;
+use databend_meta::message::ForwardRequestBody;
 use databend_meta::meta_service::MetaNode;
 use tracing::info;
 use tracing::warn;
@@ -49,7 +49,10 @@ pub async fn start_metasrv() -> Result<(MetaSrvTestContext, String)> {
 pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<()> {
     let mn = MetaNode::start(&tc.config).await?;
     let _ = mn
-        .join_cluster(&tc.config.raft_config, tc.config.grpc_api_address.clone())
+        .join_cluster(
+            &tc.config.raft_config,
+            tc.config.grpc_api_advertise_address(),
+        )
         .await?;
 
     let mut srv = GrpcServer::create(tc.config.clone(), mn);
@@ -134,6 +137,7 @@ impl MetaSrvTestContext {
         {
             let grpc_port = next_port();
             config.grpc_api_address = format!("{}:{}", host, grpc_port);
+            config.grpc_api_advertise_host = Some(host.to_string());
         }
 
         {

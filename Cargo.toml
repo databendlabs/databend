@@ -87,8 +87,11 @@ members = [
 # databend maintains:
 openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.7.4-alpha.3" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
-opendal = { version = "0.25.2" }
+opendal = { version = "0.26.2" }
 ordered-float = { version = "3.4.0", default-features = false }
+
+# type helper
+derive_more = "0.99.17"
 
 # error
 anyhow = { version = "1.0.65" }
@@ -120,7 +123,7 @@ reqwest = { version = "0.11", default-features = false, features = [
 ] }
 
 # runtime
-tokio = { version = "1.23.1", features = ["full"] }
+tokio = { version = "1.24.2", features = ["full"] }
 
 [profile.release]
 debug = 1

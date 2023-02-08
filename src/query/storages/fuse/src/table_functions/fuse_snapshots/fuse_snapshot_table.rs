@@ -22,13 +22,12 @@ use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_expression::Scalar;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_sources::processors::sources::AsyncSource;
-use common_pipeline_sources::processors::sources::AsyncSourcer;
+use common_pipeline_sources::AsyncSource;
+use common_pipeline_sources::AsyncSourcer;
 
 use super::fuse_snapshot::FuseSnapshot;
 use super::table_args::parse_func_history_args;
@@ -98,11 +97,11 @@ impl Table for FuseSnapshotTable {
         Ok((PartStatistics::default(), Partitions::default()))
     }
 
-    fn table_args(&self) -> Option<Vec<Scalar>> {
-        Some(vec![
+    fn table_args(&self) -> Option<TableArgs> {
+        Some(TableArgs::new_positioned(vec![
             string_literal(self.arg_database_name.as_str()),
             string_literal(self.arg_table_name.as_str()),
-        ])
+        ]))
     }
 
     fn read_data(

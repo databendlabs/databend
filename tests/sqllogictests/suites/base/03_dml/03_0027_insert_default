@@ -27,8 +27,12 @@ NULL 2 0.0 d
 statement ok
 drop table t_insert_default
 
+statement error 1001
+create table t_insert_default(a int null, b int default 2, c float, d varchar default 'd', e smallint default -872582066);
+
+
 statement ok
-create table t_insert_default(a int null, b int default 2, c float, d varchar default 'd')
+create table t_insert_default(a int null, b int default 2, c float, d varchar default 'd', e smallint null default -872582066);
 
 statement ok
 insert into t_insert_default(a, c) values (default, default), (1, 1.0)
@@ -36,8 +40,8 @@ insert into t_insert_default(a, c) values (default, default), (1, 1.0)
 query TIFS
 select * from t_insert_default
 ----
-NULL 2 0.0 d
-1 2 1.0 d
+NULL 2 0.0 d NULL
+1 2 1.0 d NULL
 
 statement error 1303
 insert into t_insert_default values (default)
@@ -59,3 +63,21 @@ insert into t_insert_default values (3, 4, 5.0)
 
 statement ok
 drop table t_insert_default
+
+statement ok
+drop table if exists t0
+
+statement ok
+CREATE TABLE t0(c0INT INT16 NULL DEFAULT(-1), c1VARCHAR VARCHAR NULL, c2VARCHAR VARCHAR NULL)
+
+statement ok
+INSERT INTO t0(c2varchar, c1varchar) VALUES ('diu7Pk', '')
+
+
+query TIFS
+SELECT count() FROM t0 WHERE not(t0.c0int)
+----
+0
+
+statement ok
+drop table t0

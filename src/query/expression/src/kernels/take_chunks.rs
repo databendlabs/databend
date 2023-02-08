@@ -16,6 +16,7 @@ use common_arrow::arrow::compute::merge_sort::MergeSlice;
 use itertools::Itertools;
 
 use crate::types::array::ArrayColumnBuilder;
+use crate::types::decimal::DecimalColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::AnyType;
@@ -29,6 +30,7 @@ use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::types::VariantType;
+use crate::with_decimal_type;
 use crate::with_number_mapped_type;
 use crate::BlockEntry;
 use crate::Column;
@@ -38,7 +40,7 @@ use crate::Scalar;
 use crate::TypeDeserializer;
 use crate::Value;
 
-// Chunk idx, row idx in the block, times
+// Block idx, row idx in the block, repeat times
 pub type BlockRowIndex = (usize, usize, usize);
 
 impl DataBlock {
@@ -198,6 +200,25 @@ impl Column {
                     Self::take_block_value_types::<NumberType<NUM_TYPE>>(columns, builder, indices)
                 }
             }),
+            Column::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
+                DecimalColumn::DECIMAL_TYPE(_, size) => {
+                    let columns = columns
+                        .iter()
+                        .map(|col| match col {
+                            Column::Decimal(DecimalColumn::DECIMAL_TYPE(col, _)) => col,
+                            _ => unreachable!(),
+                        })
+                        .collect_vec();
+                    let mut builder = Vec::with_capacity(result_size);
+                    for &(block_index, row, times) in indices {
+                        let val = unsafe { columns[block_index].get_unchecked(row) };
+                        for _ in 0..times {
+                            builder.push(*val);
+                        }
+                    }
+                    Column::Decimal(DecimalColumn::DECIMAL_TYPE(builder.into(), *size))
+                }
+            }),
             Column::Boolean(_) => {
                 let builder = BooleanType::create_builder(result_size, &[]);
                 Self::take_block_value_types::<BooleanType>(columns, builder, indices)
@@ -303,12 +324,14 @@ impl Column {
         mut builder: T::ColumnBuilder,
         indices: &[BlockRowIndex],
     ) -> Column {
-        unsafe {
-            for &(block_index, row, times) in indices {
-                let col = T::try_downcast_column(&columns[block_index]).unwrap();
-                for _ in 0..times {
-                    T::push_item(&mut builder, T::index_column_unchecked(&col, row))
-                }
+        let columns = columns
+            .iter()
+            .map(|col| T::try_downcast_column(col).unwrap())
+            .collect_vec();
+        for &(block_index, row, times) in indices {
+            let val = unsafe { T::index_column_unchecked(&columns[block_index], row) };
+            for _ in 0..times {
+                T::push_item(&mut builder, val.clone())
             }
         }
         T::upcast_column(T::build_column(builder))

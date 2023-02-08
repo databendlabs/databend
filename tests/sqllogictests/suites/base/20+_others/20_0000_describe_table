@@ -54,17 +54,17 @@ f VARCHAR NO '' (empty)
 query TTTTT
 DESC INFORMATION_SCHEMA.COLUMNS
 ----
-table_catalog VARCHAR NO (empty) (empty)
-table_schema VARCHAR NO (empty) (empty)
-table_name VARCHAR NO (empty) (empty)
-column_name VARCHAR NO (empty) (empty)
+table_catalog VARCHAR NO "" (empty)
+table_schema VARCHAR NO "" (empty)
+table_name VARCHAR NO "" (empty)
+column_name VARCHAR NO "" (empty)
 ordinal_position TINYINT UNSIGNED NO 0 (empty)
 column_default NULL NO NULL (empty)
 column_comment NULL NO NULL (empty)
 column_key NULL NO NULL (empty)
-is_nullable VARCHAR NO (empty) (empty)
-data_type VARCHAR NO (empty) (empty)
-column_type VARCHAR NO (empty) (empty)
+is_nullable VARCHAR NO "" (empty)
+data_type VARCHAR NO "" (empty)
+column_type VARCHAR NO "" (empty)
 character_maximum_length NULL NO NULL (empty)
 character_octet_length NULL NO NULL (empty)
 numeric_precision NULL NO NULL (empty)
@@ -87,4 +87,3 @@ DROP TABLE IF EXISTS t
 
 statement ok
 DROP TABLE IF EXISTS t1
-

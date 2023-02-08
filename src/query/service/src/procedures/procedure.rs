@@ -22,7 +22,6 @@ use common_expression::DataSchema;
 use common_expression::SendableDataBlockStream;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
-use common_pipeline_sources::processors::sources::StreamSource;
 use common_sql::validate_function_arg;
 use futures::StreamExt;
 
@@ -133,6 +132,7 @@ where Self: Sized
 mod impls {
     use common_pipeline_core::pipe::Pipe;
     use common_pipeline_core::pipe::PipeItem;
+    use common_pipeline_sources::StreamSource;
 
     use super::*;
     use crate::stream::DataBlockStream;

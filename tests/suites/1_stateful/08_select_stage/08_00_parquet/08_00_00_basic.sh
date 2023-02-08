@@ -13,7 +13,7 @@ echo "create stage s1 FILE_FORMAT = (type = PARQUET);" | $MYSQL_CLIENT_CONNECT
 echo "copy into @s1 from t1;" | $MYSQL_CLIENT_CONNECT
 echo "select * from @s1;" | $MYSQL_CLIENT_CONNECT
 
-DATADIR_PATH="/tmp/00_0004_select_stage"
+DATADIR_PATH="/tmp/08_00_00"
 rm -rf ${DATADIR_PATH}
 DATADIR="fs://$DATADIR_PATH/"
 echo "copy into '${DATADIR}' from t1 FILE_FORMAT = (type = PARQUET);" | $MYSQL_CLIENT_CONNECT

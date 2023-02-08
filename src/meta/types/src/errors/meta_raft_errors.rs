@@ -19,19 +19,10 @@ pub use openraft::error::Fatal;
 pub use openraft::error::ForwardToLeader;
 pub use openraft::error::InProgress;
 pub use openraft::error::InitializeError;
-use openraft::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::MetaOperationError;
-
-#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum RetryableError {
-    /// Trying to write to a non-leader returns the latest leader the raft node knows,
-    /// to indicate the client to retry.
-    #[error("request must be forwarded to leader: {leader}")]
-    ForwardToLeader { leader: NodeId },
-}
 
 /// Collection of errors that occur when writing a raft-log to local raft node.
 /// This does not include the errors raised when writing a membership log.

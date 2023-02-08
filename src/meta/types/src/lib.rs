@@ -18,7 +18,6 @@
 
 //! This crate defines data types used in meta data storage service.
 
-mod applied_state;
 mod change;
 mod cluster;
 mod cmd;
@@ -63,7 +62,6 @@ pub mod protobuf {
 
     pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("meta_descriptor");
 }
-pub use applied_state::AppliedState;
 pub use change::Change;
 pub use cluster::Node;
 pub use cluster::NodeInfo;
@@ -112,7 +110,6 @@ pub use errors::meta_raft_errors::ForwardToLeader;
 pub use errors::meta_raft_errors::InitializeError;
 pub use errors::meta_raft_errors::RaftChangeMembershipError;
 pub use errors::meta_raft_errors::RaftWriteError;
-pub use errors::meta_raft_errors::RetryableError;
 pub use errors::meta_startup_errors::MetaStartupError;
 pub use errors::rpc_errors::ForwardRPCError;
 pub use kv_message::GetKVReply;
@@ -126,11 +123,6 @@ pub use kv_message::UpsertKVReq;
 pub use log_entry::LogEntry;
 pub use match_seq::MatchSeq;
 pub use match_seq::MatchSeqExt;
-pub use message::ForwardRequest;
-pub use message::ForwardRequestBody;
-pub use message::ForwardResponse;
-pub use message::JoinRequest;
-pub use message::LeaveRequest;
 pub use operation::GCDroppedDataReply;
 pub use operation::GCDroppedDataReq;
 pub use operation::MetaId;

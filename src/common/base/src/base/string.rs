@@ -132,6 +132,10 @@ pub fn convert_byte_size(num: f64) -> String {
 }
 
 pub fn convert_number_size(num: f64) -> String {
+    if num == 0.0 {
+        return String::from("0");
+    }
+
     let negative = if num.is_sign_positive() { "" } else { "-" };
     let num = num.abs();
     let units = [
@@ -144,7 +148,7 @@ pub fn convert_number_size(num: f64) -> String {
     ];
 
     if num < 1_f64 {
-        return format!("{}{}", negative, num);
+        return format!("{}{:.2}", negative, num);
     }
     let delimiter = 1000_f64;
     let exponent = std::cmp::min(

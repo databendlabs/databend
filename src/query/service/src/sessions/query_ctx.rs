@@ -23,7 +23,6 @@ use std::sync::Arc;
 use std::sync::Weak;
 use std::time::SystemTime;
 
-use chrono_tz::Tz;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
@@ -33,13 +32,14 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::StageTableInfo;
+use common_catalog::table_args::TableArgs;
 use common_catalog::table_context::StageAttachment;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::date_helper::TzFactory;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
-use common_expression::Scalar;
 use common_io::prelude::FormatSettings;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::RoleInfo;
@@ -94,15 +94,14 @@ impl QueryContext {
         &self,
         catalog_name: &str,
         table_info: &TableInfo,
-        table_args: Option<Vec<Scalar>>,
+        table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
         let catalog = self.get_catalog(catalog_name)?;
-        if table_args.is_none() {
-            catalog.get_table_by_info(table_info)
-        } else {
-            Ok(catalog
+        match table_args {
+            None => catalog.get_table_by_info(table_info),
+            Some(table_args) => Ok(catalog
                 .get_table_function(&table_info.name, table_args)?
-                .as_table())
+                .as_table()),
         }
     }
 
@@ -113,7 +112,7 @@ impl QueryContext {
         &self,
         _catalog: &str,
         table_info: &StageTableInfo,
-        _table_args: Option<Vec<Scalar>>,
+        _table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
         StageTable::try_create(table_info.clone())
     }
@@ -335,9 +334,7 @@ impl TableContext for QueryContext {
 
     fn get_function_context(&self) -> Result<FunctionContext> {
         let tz = self.get_settings().get_timezone()?;
-        let tz = tz.parse::<Tz>().map_err(|_| {
-            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
-        })?;
+        let tz = TzFactory::instance().get_by_name(&tz)?;
         Ok(FunctionContext { tz })
     }
 

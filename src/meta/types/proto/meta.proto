@@ -166,9 +166,6 @@ service MetaService {
   // handshake
   rpc Handshake(stream HandshakeRequest) returns (stream HandshakeResponse);
 
-  rpc WriteMsg(RaftRequest) returns (RaftReply);
-  rpc ReadMsg(RaftRequest) returns (RaftReply);
-
   // General KV API for get, mget, list, and upsert;
   // It is introduced to replace `WriteMsg` and `ReadMsg`.
   //

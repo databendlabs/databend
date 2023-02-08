@@ -195,12 +195,12 @@ SELECT to_timestamp(1640019661000000) = to_timestamp('2021-12-20 17:01:01.000000
 
 
 query B
-SELECT parse_json(true)::boolean
+SELECT to_variant(true)::boolean
 ----
 1
 
 query B
-SELECT parse_json(false)::boolean
+SELECT to_variant(false)::boolean
 ----
 0
 
@@ -217,75 +217,74 @@ SELECT parse_json('"false"')::boolean
 0
 
 
-
 statement error 1001
 SELECT parse_json('"test"')::boolean
 
 
 statement error 1001
-SELECT parse_json(1)::boolean
+SELECT to_variant(1)::boolean
 
 
 statement error 1001
 SELECT parse_json('null')::boolean
 
 query I
-SELECT parse_json(255)::uint8
+SELECT to_variant(255)::uint8
 ----
 255
 
 query I
-SELECT parse_json(65535)::uint16
+SELECT to_variant(65535)::uint16
 ----
 65535
 
 query I
-SELECT parse_json(4294967295)::uint32
+SELECT to_variant(4294967295)::uint32
 ----
 4294967295
 
 query I
-SELECT parse_json(18446744073709551615)::uint64
+SELECT to_variant(18446744073709551615)::uint64
 ----
 18446744073709551615
 
 query I
-SELECT parse_json(-128)::int8
+SELECT to_variant(-128)::int8
 ----
 -128
 
 query I
-SELECT parse_json(127)::int8
+SELECT to_variant(127)::int8
 ----
 127
 
 query I
-SELECT parse_json(-32768)::int16
+SELECT to_variant(-32768)::int16
 ----
 -32768
 
 query I
-SELECT parse_json(32767)::int16
+SELECT to_variant(32767)::int16
 ----
 32767
 
 query I
-SELECT parse_json(-2147483648)::int32
+SELECT to_variant(-2147483648)::int32
 ----
 -2147483648
 
 query I
-SELECT parse_json(2147483647)::int32
+SELECT to_variant(2147483647)::int32
 ----
 2147483647
 
 query I
-SELECT parse_json(-9223372036854775808)::int64
+SELECT to_variant(-9223372036854775808)::int64
 ----
 -9223372036854775808
 
 query I
-SELECT parse_json(9223372036854775807)::int64
+SELECT to_variant(9223372036854775807)::int64
 ----
 9223372036854775807
 
@@ -362,12 +361,12 @@ statement error 1001
 SELECT parse_json('null')::int64
 
 query F
-SELECT parse_json(12.34)::float32
+SELECT to_variant(12.34)::float32
 ----
 12.34
 
 query F
-SELECT parse_json(1234.5678)::float64
+SELECT to_variant(1234.5678)::float64
 ----
 1234.5678
 
@@ -421,7 +420,7 @@ SELECT as_array(parse_json('[1,2,3]'))
 [1,2,3]
 
 query T
-SELECT as_array(parse_json(1))
+SELECT as_array(to_variant(1))
 ----
 NULL
 

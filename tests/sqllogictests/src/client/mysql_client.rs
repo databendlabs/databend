@@ -27,6 +27,7 @@ use crate::error::Result;
 pub struct MySQLClient {
     pub conn: Conn,
     pub debug: bool,
+    pub tpch: bool,
 }
 
 impl MySQLClient {
@@ -34,17 +35,26 @@ impl MySQLClient {
         let url = "mysql://root:@127.0.0.1:3307/default";
         let pool = Pool::new(url);
         let conn = pool.get_conn().await?;
-        Ok(Self { conn, debug: false })
+        Ok(Self {
+            conn,
+            debug: false,
+            tpch: false,
+        })
+    }
+
+    pub fn enable_tpch(&mut self) {
+        self.tpch = true;
     }
 
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
         let start = Instant::now();
         let rows: Vec<Row> = self.conn.query(sql).await?;
+        let elapsed = start.elapsed();
+        if self.tpch && !sql.trim_start().starts_with("set") {
+            println!("{elapsed:?}");
+        }
         if self.debug {
-            println!(
-                "Running sql with mysql client: [{sql}] ({:?})",
-                start.elapsed()
-            );
+            println!("Running sql with mysql client: [{sql}] ({elapsed:?})");
         };
         let types = vec![ColumnType::Any; rows.len()];
         let mut parsed_rows = Vec::with_capacity(rows.len());

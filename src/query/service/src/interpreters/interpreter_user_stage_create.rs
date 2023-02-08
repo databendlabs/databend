@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::MatchSeq;
 use common_meta_types::StageType;
 use common_sql::plans::CreateStagePlan;
 use common_users::UserApiProvider;
@@ -57,7 +58,7 @@ impl Interpreter for CreateUserStageInterpreter {
         }
 
         let quota_api = user_mgr.get_tenant_quota_api_client(&plan.tenant)?;
-        let quota = quota_api.get_quota(None).await?.data;
+        let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
         let stages = user_mgr.get_stages(&plan.tenant).await?;
         if quota.max_stages != 0 && stages.len() >= quota.max_stages as usize {
             return Err(ErrorCode::TenantQuotaExceeded(format!(

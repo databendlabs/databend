@@ -14,11 +14,10 @@
 
 use std::ops::Range;
 
-use chrono_tz::Tz;
-
 use super::date::date_to_string;
 use super::number::NumberScalar;
 use super::timestamp::timestamp_to_string;
+use crate::date_helper::TzLUT;
 use crate::property::Domain;
 use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
@@ -170,7 +169,8 @@ impl ArgType for VariantType {
     }
 }
 
-pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: Tz, buf: &mut Vec<u8>) {
+pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
+    let inner_tz = tz.tz;
     let value = match scalar {
         ScalarRef::Null => common_jsonb::Value::Null,
         ScalarRef::EmptyArray => common_jsonb::Value::Array(vec![]),
@@ -186,10 +186,11 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: Tz, buf: &mut Vec<u8>) {
             NumberScalar::Float32(n) => n.0.into(),
             NumberScalar::Float64(n) => n.0.into(),
         },
+        ScalarRef::Decimal(_) => todo!("decimal"),
         ScalarRef::Boolean(b) => common_jsonb::Value::Bool(b),
         ScalarRef::String(s) => common_jsonb::Value::String(String::from_utf8_lossy(s)),
-        ScalarRef::Timestamp(ts) => timestamp_to_string(ts, tz).to_string().into(),
-        ScalarRef::Date(d) => date_to_string(d, tz).to_string().into(),
+        ScalarRef::Timestamp(ts) => timestamp_to_string(ts, inner_tz).to_string().into(),
+        ScalarRef::Date(d) => date_to_string(d, inner_tz).to_string().into(),
         ScalarRef::Array(col) => {
             let items = cast_scalars_to_variants(col.iter(), tz);
             common_jsonb::build_array(items.iter(), buf).expect("failed to build jsonb array");
@@ -217,7 +218,7 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: Tz, buf: &mut Vec<u8>) {
 
 pub fn cast_scalars_to_variants(
     scalars: impl IntoIterator<Item = ScalarRef>,
-    tz: Tz,
+    tz: TzLUT,
 ) -> StringColumn {
     let iter = scalars.into_iter();
     let mut builder = StringColumnBuilder::with_capacity(iter.size_hint().0, 0);

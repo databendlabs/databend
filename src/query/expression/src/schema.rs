@@ -39,6 +39,8 @@ use serde::Serialize;
 use crate::types::array::ArrayColumn;
 use crate::types::date::DATE_MAX;
 use crate::types::date::DATE_MIN;
+use crate::types::decimal::DecimalDataType;
+use crate::types::decimal::DecimalSize;
 use crate::types::nullable::NullableColumn;
 use crate::types::timestamp::TIMESTAMP_MAX;
 use crate::types::timestamp::TIMESTAMP_MIN;
@@ -104,6 +106,7 @@ pub enum TableDataType {
     Boolean,
     String,
     Number(NumberDataType),
+    Decimal(DecimalDataType),
     Timestamp,
     Date,
     Nullable(Box<TableDataType>),
@@ -818,6 +821,7 @@ impl From<&TableDataType> for DataType {
             TableDataType::Boolean => DataType::Boolean,
             TableDataType::String => DataType::String,
             TableDataType::Number(ty) => DataType::Number(*ty),
+            TableDataType::Decimal(ty) => DataType::Decimal(*ty),
             TableDataType::Timestamp => DataType::Timestamp,
             TableDataType::Date => DataType::Date,
             TableDataType::Nullable(ty) => DataType::Nullable(Box::new((&**ty).into())),
@@ -954,6 +958,7 @@ impl TableDataType {
                     ),
                 })),
             },
+            TableDataType::Decimal(_) => todo!("decimal"),
             TableDataType::Timestamp => BlockEntry {
                 data_type: DataType::Timestamp,
                 value: Value::Column(TimestampType::from_data(
@@ -1151,6 +1156,17 @@ impl From<&ArrowField> for TableDataType {
         let ty = with_number_type!(|TYPE| match f.data_type() {
             ArrowDataType::TYPE => TableDataType::Number(NumberDataType::TYPE),
 
+            ArrowDataType::Decimal(precision, scale) =>
+                TableDataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
+                    precision: *precision as u8,
+                    scale: *scale as u8,
+                })),
+            ArrowDataType::Decimal256(precision, scale) =>
+                TableDataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
+                    precision: *precision as u8,
+                    scale: *scale as u8,
+                })),
+
             ArrowDataType::Null => return TableDataType::Null,
             ArrowDataType::Boolean => TableDataType::Boolean,
 
@@ -1277,6 +1293,12 @@ impl From<&TableDataType> for ArrowDataType {
             TableDataType::Number(ty) => with_number_type!(|TYPE| match ty {
                 NumberDataType::TYPE => ArrowDataType::TYPE,
             }),
+            TableDataType::Decimal(DecimalDataType::Decimal128(size)) => {
+                ArrowDataType::Decimal(size.precision as usize, size.scale as usize)
+            }
+            TableDataType::Decimal(DecimalDataType::Decimal256(size)) => {
+                ArrowDataType::Decimal256(size.precision as usize, size.scale as usize)
+            }
             TableDataType::Timestamp => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
             TableDataType::Date => ArrowDataType::Date32,
             TableDataType::Nullable(ty) => ty.as_ref().into(),

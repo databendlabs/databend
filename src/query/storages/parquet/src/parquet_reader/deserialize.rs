@@ -65,7 +65,7 @@ impl ParquetReader {
             let mut chunks = Vec::with_capacity(indices.len());
             for index in indices {
                 // in `read_parquet` function, there is no `TableSchema`, so index treated as column id
-                let column_meta = &part.column_metas[&(*index as u32)];
+                let column_meta = &part.column_metas[index];
                 let cnt = cnt_map.get_mut(index).unwrap();
                 *cnt -= 1;
                 let column_chunk = if cnt > &mut 0 {

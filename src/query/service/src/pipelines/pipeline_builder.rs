@@ -27,8 +27,9 @@ use common_expression::SortColumnDescription;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
-use common_pipeline_sinks::processors::sinks::EmptySink;
-use common_pipeline_sinks::processors::sinks::UnionReceiveSink;
+use common_pipeline_sinks::EmptySink;
+use common_pipeline_sinks::Sinker;
+use common_pipeline_sinks::UnionReceiveSink;
 use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
@@ -66,7 +67,6 @@ use crate::pipelines::processors::LeftJoinCompactor;
 use crate::pipelines::processors::MarkJoinCompactor;
 use crate::pipelines::processors::RightJoinCompactor;
 use crate::pipelines::processors::SinkBuildHashTable;
-use crate::pipelines::processors::Sinker;
 use crate::pipelines::processors::SortMergeCompactor;
 use crate::pipelines::processors::TransformAggregator;
 use crate::pipelines::processors::TransformCastSchema;
@@ -433,13 +433,14 @@ impl PipelineBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
+        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
         let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
 
-        if self.main_pipeline.output_len() == 1 {
-            let _ = self
-                .main_pipeline
-                .resize(self.ctx.get_settings().get_max_threads()? as usize);
+        // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
+        if self.main_pipeline.output_len() == 1 || max_threads == 1 {
+            self.main_pipeline.resize(max_threads)?;
         }
+
         // Sort
         self.main_pipeline.add_transform(|input, output| {
             TransformSortPartial::try_create(input, output, sort.limit, sort_desc.clone())

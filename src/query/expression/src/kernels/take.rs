@@ -13,8 +13,10 @@
 // limitations under the License.
 
 use common_exception::Result;
+use itertools::Itertools;
 
 use crate::types::array::ArrayColumnBuilder;
+use crate::types::decimal::DecimalColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::AnyType;
@@ -25,6 +27,7 @@ use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::ValueType;
 use crate::types::VariantType;
+use crate::with_decimal_type;
 use crate::with_number_mapped_type;
 use crate::BlockEntry;
 use crate::Column;
@@ -68,6 +71,15 @@ impl Column {
             Column::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
                 NumberColumn::NUM_TYPE(values) =>
                     Self::take_arg_types::<NumberType<NUM_TYPE>, _>(values, indices),
+            }),
+            Column::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
+                DecimalColumn::DECIMAL_TYPE(values, size) => {
+                    let builder = indices
+                        .iter()
+                        .map(|index| unsafe { *values.get_unchecked(index.to_usize()) })
+                        .collect_vec();
+                    Column::Decimal(DecimalColumn::DECIMAL_TYPE(builder.into(), *size))
+                }
             }),
             Column::Boolean(bm) => Self::take_arg_types::<BooleanType, _>(bm, indices),
             Column::String(column) => Self::take_arg_types::<StringType, _>(column, indices),

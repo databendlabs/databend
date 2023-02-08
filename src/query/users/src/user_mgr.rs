@@ -14,8 +14,10 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_management::UserApi;
 use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
+use common_meta_types::MatchSeq;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserInfo;
 use common_meta_types::UserOption;
@@ -57,7 +59,7 @@ impl UserApiProvider {
             Ok(user_info)
         } else {
             let client = self.get_user_api_client(tenant)?;
-            let get_user = client.get_user(user, None);
+            let get_user = client.get_user(user, MatchSeq::GE(0));
             Ok(get_user.await?.data)
         }
     }
@@ -143,7 +145,9 @@ impl UserApiProvider {
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client(tenant)?;
         client
-            .grant_privileges(user, object, privileges, None)
+            .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
+                ui.grants.grant_privileges(&object, privileges)
+            })
             .await
             .map_err(|e| e.add_message_back("(while set user privileges)"))
     }
@@ -157,7 +161,9 @@ impl UserApiProvider {
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client(tenant)?;
         client
-            .revoke_privileges(user, object, privileges, None)
+            .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
+                ui.grants.revoke_privileges(&object, privileges)
+            })
             .await
             .map_err(|e| e.add_message_back("(while revoke user privileges)"))
     }
@@ -170,7 +176,9 @@ impl UserApiProvider {
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client(tenant)?;
         client
-            .grant_role(user, grant_role.clone(), None)
+            .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
+                ui.grants.grant_role(grant_role)
+            })
             .await
             .map_err(|e| e.add_message_back("(while grant role to user)"))
     }
@@ -183,7 +191,9 @@ impl UserApiProvider {
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client(tenant)?;
         client
-            .revoke_role(user, revoke_role.clone(), None)
+            .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
+                ui.grants.revoke_role(&revoke_role)
+            })
             .await
             .map_err(|e| e.add_message_back("(while revoke role from user)"))
     }
@@ -191,7 +201,7 @@ impl UserApiProvider {
     // Drop a user by name and hostname.
     pub async fn drop_user(&self, tenant: &str, user: UserIdentity, if_exists: bool) -> Result<()> {
         let client = self.get_user_api_client(tenant)?;
-        let drop_user = client.drop_user(user, None);
+        let drop_user = client.drop_user(user, MatchSeq::GE(1));
         match drop_user.await {
             Ok(res) => Ok(res),
             Err(e) => {
@@ -213,8 +223,13 @@ impl UserApiProvider {
         user_option: Option<UserOption>,
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client(tenant)?;
-        let update_user = client.update_user(user, auth_info, user_option, None);
-        match update_user.await {
+        let update_user = client
+            .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
+                ui.update_auth_option(auth_info, user_option)
+            })
+            .await;
+
+        match update_user {
             Ok(res) => Ok(res),
             Err(e) => Err(e.add_message_back("(while alter user).")),
         }

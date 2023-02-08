@@ -60,3 +60,5 @@ __pycache__/
 
 # tpch data set
 benchmark/tpch/data
+# benchmark results
+benchmark/results

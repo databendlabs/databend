@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_meta_types::MatchSeq;
 use common_meta_types::SeqV;
 use common_meta_types::UserDefinedFunction;
 
@@ -22,14 +23,14 @@ pub trait UdfApi: Sync + Send {
     async fn add_udf(&self, udf: UserDefinedFunction) -> Result<u64>;
 
     // Update a UDF to /tenant/udf-name.
-    async fn update_udf(&self, udf: UserDefinedFunction, seq: Option<u64>) -> Result<u64>;
+    async fn update_udf(&self, udf: UserDefinedFunction, seq: MatchSeq) -> Result<u64>;
 
     // Get UDF by name.
-    async fn get_udf(&self, udf_name: &str, seq: Option<u64>) -> Result<SeqV<UserDefinedFunction>>;
+    async fn get_udf(&self, udf_name: &str, seq: MatchSeq) -> Result<SeqV<UserDefinedFunction>>;
 
     // Get all the UDFs for a tenant.
     async fn get_udfs(&self) -> Result<Vec<UserDefinedFunction>>;
 
     // Drop the tenant's UDF by name.
-    async fn drop_udf(&self, udf_name: &str, seq: Option<u64>) -> Result<()>;
+    async fn drop_udf(&self, udf_name: &str, seq: MatchSeq) -> Result<()>;
 }

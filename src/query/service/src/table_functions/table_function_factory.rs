@@ -15,9 +15,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_catalog::table_args::TableArgs;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Scalar;
 use common_meta_types::MetaId;
 use parking_lot::RwLock;
 
@@ -33,7 +33,6 @@ use crate::table_functions::numbers::NumbersTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::TableFunction;
 
-pub type TableArgs = Option<Vec<Scalar>>;
 type TableFunctionCreators = RwLock<HashMap<String, (MetaId, Arc<dyn TableFunctionCreator>)>>;
 
 pub trait TableFunctionCreator: Send + Sync {
@@ -161,14 +160,5 @@ impl TableFunctionFactory {
         })?;
         let func = factory.try_create("", &func_name, *id, tbl_args)?;
         Ok(func)
-    }
-
-    pub fn get_id(&self, func_name: &str) -> Result<MetaId> {
-        let lock = self.creators.read();
-        let func_name = func_name.to_lowercase();
-        let (id, _) = lock.get(&func_name).ok_or_else(|| {
-            ErrorCode::UnknownTable(format!("Unknown table function {}", func_name))
-        })?;
-        Ok(*id)
     }
 }

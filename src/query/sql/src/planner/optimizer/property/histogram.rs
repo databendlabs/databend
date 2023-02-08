@@ -15,7 +15,6 @@
 use std::cmp::Ordering;
 use std::fmt::Debug;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::optimizer::property::datum::Datum;
@@ -87,39 +86,36 @@ pub fn histogram_from_ndv(
     num_rows: u64,
     bound: Option<(Datum, Datum)>,
     num_buckets: usize,
-) -> Result<Histogram> {
+) -> Result<Histogram, String> {
     if ndv <= 2 {
         return if num_rows != 0 {
-            Err(ErrorCode::Internal(format!(
+            Err(format!(
                 "NDV must be greater than 0 when the number of rows is greater than 0, got NDV: {}, num_rows: {}",
                 ndv, num_rows
-            )))
+            ))
         } else {
             Ok(Histogram { buckets: vec![] })
         };
     }
 
     if num_buckets < 2 {
-        return Err(ErrorCode::Internal(format!(
-            "Must have at least 2 buckets, got {}",
-            num_buckets
-        )));
+        return Err(format!("Must have at least 2 buckets, got {}", num_buckets));
     }
 
     if ndv > num_rows {
-        return Err(ErrorCode::Internal(format!(
+        return Err(format!(
             "NDV must be less than or equal to the number of rows, got NDV: {}, num_rows: {}",
             ndv, num_rows
-        )));
+        ));
     }
 
     let (min, max) = match bound {
         Some((min, max)) => (min, max),
         None => {
-            return Err(ErrorCode::Internal(format!(
+            return Err(format!(
                 "Must have min and max value when NDV is greater than 0, got NDV: {}",
                 ndv
-            )));
+            ));
         }
     };
 
@@ -189,7 +185,7 @@ impl HistogramBucket {
 }
 
 trait SampleSet {
-    fn get_upper_bound(&self, num_buckets: usize, bucket_index: usize) -> Result<Datum>;
+    fn get_upper_bound(&self, num_buckets: usize, bucket_index: usize) -> Result<Datum, String>;
 }
 
 pub struct UniformSampleSet {
@@ -243,7 +239,7 @@ impl UniformSampleSet {
 }
 
 impl SampleSet for UniformSampleSet {
-    fn get_upper_bound(&self, num_buckets: usize, bucket_index: usize) -> Result<Datum> {
+    fn get_upper_bound(&self, num_buckets: usize, bucket_index: usize) -> Result<Datum, String> {
         match (&self.min, &self.max) {
             (Datum::Int(min), Datum::Int(max)) => {
                 let min = *min;
@@ -281,10 +277,7 @@ impl SampleSet for UniformSampleSet {
                 Ok(Datum::Float(upper_bound))
             }
 
-            _ => Err(ErrorCode::Unimplemented(format!(
-                "Unsupported datum type: {:?}",
-                self.min,
-            ))),
+            _ => Err(format!("Unsupported datum type: {:?}", self.min,)),
         }
     }
 }

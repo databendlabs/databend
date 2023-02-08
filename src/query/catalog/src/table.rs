@@ -40,6 +40,7 @@ use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::PushDownInfo;
 use crate::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
+use crate::table_args::TableArgs;
 use crate::table_context::TableContext;
 use crate::table_mutator::TableMutator;
 
@@ -144,7 +145,7 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    fn table_args(&self) -> Option<Vec<Scalar>> {
+    fn table_args(&self) -> Option<TableArgs> {
         None
     }
 

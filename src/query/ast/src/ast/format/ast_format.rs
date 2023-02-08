@@ -2209,14 +2209,18 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             TableReference::Stage {
                 span: _,
                 location,
-                files,
+                options,
                 alias,
             } => {
                 let mut children = Vec::new();
-                if !files.is_empty() {
+                if let Some(files) = &options.files {
                     let files = files.join(",");
                     let files = format!("files = {}", files);
                     children.push(FormatTreeNode::new(AstFormatContext::new(files)))
+                }
+                if let Some(pattern) = &options.pattern {
+                    let pattern = format!("pattern = {}", pattern);
+                    children.push(FormatTreeNode::new(AstFormatContext::new(pattern)))
                 }
                 let stage_name = format!("Stage {:?}", location);
                 let format_ctx = if let Some(alias) = alias {

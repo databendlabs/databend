@@ -31,6 +31,7 @@ use common_base::base::tokio;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
+use common_catalog::plan::TopK;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Expr;
@@ -64,6 +65,11 @@ pub struct PartitionPruner {
     pub column_nodes: ColumnNodes,
     /// Whether to skip pruning.
     pub skip_pruning: bool,
+    /// top k information from pushed down information. The usize is the offset of top k column in `schema`.
+    pub top_k: Option<(TopK, usize)>,
+    // TODO: use limit information for pruning
+    // /// Limit of this query. If there is order by and filter, it will not be used (assign to `usize::MAX`).
+    // pub limit: usize,
 }
 
 impl PartitionPruner {
@@ -79,6 +85,7 @@ impl PartitionPruner {
             columns_to_read,
             column_nodes,
             skip_pruning,
+            top_k,
         } = self;
 
         // part stats
@@ -128,6 +135,10 @@ impl PartitionPruner {
         };
 
         // 2. Use file meta to prune row groups or pages.
+
+        // If one row group does not have stats, we cannot use the stats for topk optimization.
+        let mut all_have_minmax = true;
+
         for (file_id, file_meta) in file_metas.iter().enumerate() {
             partitions_total += file_meta.row_groups.len();
             let mut row_group_pruned = vec![false; file_meta.row_groups.len()];
@@ -138,7 +149,9 @@ impl PartitionPruner {
                     .any(|c| c.metadata().statistics.is_none())
             });
 
-            if row_group_pruner.is_some() && !skip_pruning && !no_stats {
+            let row_group_stats = if no_stats {
+                None
+            } else if row_group_pruner.is_some() && !skip_pruning {
                 let pruner = row_group_pruner.as_ref().unwrap();
                 // If collecting stats fails or `should_keep` is true, we still read the row group.
                 // Otherwise, the row group will be pruned.
@@ -152,11 +165,21 @@ impl PartitionPruner {
                     {
                         row_group_pruned[idx] = !pruner.should_keep(stats);
                     }
+                    Some(row_group_stats)
+                } else {
+                    None
                 }
-            }
+            } else if top_k.is_some() {
+                collect_row_group_stats(column_nodes, &file_meta.row_groups).ok()
+            } else {
+                None
+            };
 
-            for (idx, rg) in file_meta.row_groups.iter().enumerate() {
-                if row_group_pruned[idx] {
+            // If one row group does not have stats, we cannot use the stats for topk optimization.
+            all_have_minmax &= row_group_stats.is_some();
+
+            for (rg_idx, rg) in file_meta.row_groups.iter().enumerate() {
+                if row_group_pruned[rg_idx] {
                     continue;
                 }
 
@@ -185,21 +208,78 @@ impl PartitionPruner {
                 for index in columns_to_read {
                     let c = &rg.columns()[*index];
                     let (offset, length) = c.byte_range();
-                    column_metas.insert(*index as u32, ColumnMeta {
+
+                    let min_max = top_k
+                        .as_ref()
+                        .filter(|(tk, _)| tk.column_id as usize == *index)
+                        .zip(row_group_stats.as_ref())
+                        .map(|((_, offset), stats)| {
+                            let stat = stats[rg_idx].get(&(*offset as u32)).unwrap();
+                            (stat.min.clone(), stat.max.clone())
+                        });
+
+                    column_metas.insert(*index, ColumnMeta {
                         offset,
                         length,
                         compression: c.compression(),
+                        min_max,
+                        has_dictionary: c.dictionary_page_offset().is_some(),
                     });
                 }
 
-                partitions.push(ParquetRowGroupPart::create(
-                    locations[file_id].clone(),
-                    rg.num_rows(),
+                partitions.push(ParquetRowGroupPart {
+                    location: locations[file_id].clone(),
+                    num_rows: rg.num_rows(),
                     column_metas,
                     row_selection,
-                ))
+                    sort_min_max: None,
+                })
             }
         }
+
+        // 3. Check if can conduct topk push down optimization.
+        // Only all row groups have min/max stats can we use topk optimization.
+        // If we can use topk optimization, we should use `PartitionsShuffleKind::Seq`.
+        let partition_kind = if let (Some((top_k, _)), true) = (top_k, all_have_minmax) {
+            partitions.sort_by(|a, b| {
+                let (a_min, a_max) = a
+                    .column_metas
+                    .get(&(top_k.column_id as usize))
+                    .unwrap()
+                    .min_max
+                    .as_ref()
+                    .unwrap();
+                let (b_min, b_max) = b
+                    .column_metas
+                    .get(&(top_k.column_id as usize))
+                    .unwrap()
+                    .min_max
+                    .as_ref()
+                    .unwrap();
+
+                if top_k.asc {
+                    (a_min.as_ref(), a_max.as_ref()).cmp(&(b_min.as_ref(), b_max.as_ref()))
+                } else {
+                    (b_max.as_ref(), b_min.as_ref()).cmp(&(a_max.as_ref(), a_min.as_ref()))
+                }
+            });
+            for part in partitions.iter_mut() {
+                part.sort_min_max = part
+                    .column_metas
+                    .get(&(top_k.column_id as usize))
+                    .unwrap()
+                    .min_max
+                    .clone();
+            }
+            PartitionsShuffleKind::Seq
+        } else {
+            PartitionsShuffleKind::Mod
+        };
+
+        let partitions = partitions
+            .into_iter()
+            .map(|p| p.convert_to_part_info())
+            .collect();
 
         Ok((
             PartStatistics::new_estimated(
@@ -208,7 +288,7 @@ impl PartitionPruner {
                 partitions_scanned,
                 partitions_total,
             ),
-            Partitions::create(PartitionsShuffleKind::Mod, partitions),
+            Partitions::create(partition_kind, partitions),
         ))
     }
 }

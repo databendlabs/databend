@@ -31,6 +31,7 @@ use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
+use common_catalog::plan::ParquetReadOptions;
 use common_catalog::table::ColumnId;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::NavigationPoint;
@@ -39,21 +40,19 @@ use common_catalog::table_function::TableFunction;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::type_check::check_literal;
 use common_expression::types::DataType;
 use common_expression::ConstantFolder;
-use common_expression::Scalar;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
+use common_storage::StageFilesInfo;
 use common_storages_parquet::ParquetTable;
-use common_storages_stage::list_file;
-use common_storages_stage::StageTable;
 use common_storages_view::view_table::QUERY;
 
 use crate::binder::copy::parse_stage_location_v2;
 use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
+use crate::binder::table_args::bind_table_args;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
 use crate::binder::CteInfo;
@@ -61,8 +60,6 @@ use crate::binder::Visibility;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
-use crate::plans::ConstantExpr;
-use crate::plans::ScalarExpr;
 use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::BindContext;
@@ -228,49 +225,7 @@ impl Binder {
                     self.metadata.clone(),
                     &[],
                 );
-                let mut args = Vec::with_capacity(params.len());
-                for arg in params.iter() {
-                    args.push(scalar_binder.bind(arg).await?.0);
-                }
-
-                let mut named_args = Vec::with_capacity(named_params.len());
-                for (name, arg) in named_params.iter() {
-                    named_args.push((name.clone(), scalar_binder.bind(arg).await?.0));
-                }
-
-                let mut args = args
-                    .into_iter()
-                    .map(|scalar| match scalar {
-                        ScalarExpr::ConstantExpr(ConstantExpr { value, .. }) => {
-                            Ok(check_literal(&value).0)
-                        }
-                        _ => Err(ErrorCode::Unimplemented(format!(
-                            "Unsupported table argument type: {:?}",
-                            scalar
-                        ))),
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-
-                // Convert named params into Tuple(String, Scalar) and append to `args`.
-                args.reserve(named_args.len());
-                for (name, scalar) in named_args.into_iter() {
-                    match scalar {
-                        ScalarExpr::ConstantExpr(ConstantExpr { value, .. }) => {
-                            args.push(Scalar::Tuple(vec![
-                                Scalar::String(name.into_bytes()),
-                                check_literal(&value).0,
-                            ]))
-                        }
-                        _ => {
-                            return Err(ErrorCode::Unimplemented(format!(
-                                "Unsupported table named argument type: {:?}",
-                                scalar
-                            )));
-                        }
-                    }
-                }
-
-                let table_args = Some(args);
+                let table_args = bind_table_args(&mut scalar_binder, params, named_params).await?;
 
                 // Table functions always reside is default catalog
                 let table_meta: Arc<dyn TableFunction> = self
@@ -319,7 +274,7 @@ impl Binder {
             TableReference::Stage {
                 span: _,
                 location,
-                files: _,
+                options,
                 alias,
             } => {
                 let (user_stage_info, path) = match location.clone() {
@@ -340,32 +295,20 @@ impl Binder {
                     }
                 };
 
-                let op = StageTable::get_op(&user_stage_info)?;
-
                 if matches!(
                     user_stage_info.file_format_options.format,
                     StageFileFormatType::Parquet
                 ) {
-                    // Table functions always reside is default catalog
-                    let table_id = self
-                        .catalogs
-                        .get_catalog(CATALOG_DEFAULT)?
-                        .get_table_function_id("read_parquet")?;
+                    let files_info = StageFilesInfo {
+                        path,
+                        pattern: options.pattern.clone(),
+                        files: options.files.clone(),
+                    };
+                    let read_options = ParquetReadOptions::default();
 
-                    let files = list_file(&op, &path)
-                        .await?
-                        .into_iter()
-                        .map(|x| x.path)
-                        .collect();
-
-                    let table = ParquetTable::create(
-                        table_id,
-                        op,
-                        files,
-                        Default::default(),
-                        Some(user_stage_info.clone()),
-                    )
-                    .await?;
+                    let table =
+                        ParquetTable::create(user_stage_info.clone(), files_info, read_options)
+                            .await?;
 
                     let table_alias_name = if let Some(table_alias) = alias {
                         Some(
@@ -448,6 +391,7 @@ impl Binder {
         let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
         let columns = self.metadata.read().columns_by_table_index(table_index);
         let table = self.metadata.read().table(table_index).clone();
+        let statistics_provider = table.table().column_statistics_provider().await?;
 
         let mut col_stats: HashMap<IndexType, Option<ColumnStatistics>> = HashMap::new();
         for column in columns.iter() {
@@ -475,11 +419,8 @@ impl Binder {
                     bind_context.add_column_binding(column_binding);
                     if path_indices.is_none() {
                         if let Some(col_id) = *leaf_index {
-                            let col_stat = table
-                                .table()
-                                .column_statistics_provider()
-                                .await?
-                                .column_statistics(col_id as ColumnId);
+                            let col_stat =
+                                statistics_provider.column_statistics(col_id as ColumnId);
                             col_stats.insert(*column_index, col_stat);
                         }
                     }
