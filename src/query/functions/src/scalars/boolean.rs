@@ -139,9 +139,9 @@ pub fn register(registry: &mut FunctionRegistry) {
         "or",
         FunctionProperty::default(),
         |lhs, rhs| {
-            let all_false =  lhs.value.as_ref().map(|v| v.has_true && !v.has_false).unwrap_or(false)
+            let all_true =  lhs.value.as_ref().map(|v| v.has_true && !v.has_false).unwrap_or(false)
                     || rhs.value.as_ref().map(|v| v.has_true && !v.has_false).unwrap_or(false);
-            if all_false {
+            if all_true {
                  return FunctionDomain::Domain(NullableDomain::<BooleanType> {
                         has_null: false,
                         value: Some(Box::new(BooleanDomain {
