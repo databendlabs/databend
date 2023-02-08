@@ -5925,6 +5925,96 @@ AlterTable(
 
 
 ---------- Input ----------
+ALTER TABLE t ADD COLUMN a float default 101 COMMENT 'hello';
+---------- Output ---------
+ALTER TABLE t ADD COLUMN a Float32 NOT NULL DEFAULT 101 COMMENT 'hello'
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+        },
+        action: AddColumn {
+            column: ColumnDefinition {
+                name: Identifier {
+                    name: "a",
+                    quote: None,
+                    span: Some(
+                        25..26,
+                    ),
+                },
+                data_type: Float32,
+                default_expr: Some(
+                    Literal {
+                        span: Some(
+                            41..44,
+                        ),
+                        lit: Integer(
+                            101,
+                        ),
+                    },
+                ),
+                comment: Some(
+                    "hello",
+                ),
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t DROP COLUMN b;
+---------- Output ---------
+ALTER TABLE t DROP COLUMN b
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+        },
+        action: DropColumn {
+            column: Identifier {
+                name: "b",
+                quote: None,
+                span: Some(
+                    26..27,
+                ),
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
 ALTER DATABASE IF EXISTS ctl.c RENAME TO a;
 ---------- Output ---------
 ALTER DATABASE IF EXISTS ctl.c RENAME TO a
