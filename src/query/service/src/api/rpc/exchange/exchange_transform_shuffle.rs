@@ -14,10 +14,15 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::block_debug::pretty_format_blocks;
+use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
@@ -27,10 +32,62 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
+use common_pipeline_transforms::processors::transforms::Transform;
+use common_pipeline_transforms::processors::transforms::Transformer;
 use itertools::Itertools;
 
 use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
+use crate::api::rpc::exchange::exchange_transform_scatter::ScatterTransform;
 use crate::api::rpc::flight_scatter::FlightScatter;
+
+pub struct ExchangeShuffleMeta {
+    pub blocks: Vec<DataBlock>,
+}
+
+impl ExchangeShuffleMeta {
+    pub fn create(blocks: Vec<DataBlock>) -> BlockMetaInfoPtr {
+        Box::new(ExchangeShuffleMeta { blocks })
+    }
+}
+
+impl Debug for ExchangeShuffleMeta {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExchangeShuffleMeta").finish()
+    }
+}
+
+impl serde::Serialize for ExchangeShuffleMeta {
+    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
+        where S: serde::Serializer {
+        unimplemented!("Unimplemented serialize ExchangeShuffleMeta")
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ExchangeShuffleMeta {
+    fn deserialize<D>(_: D) -> Result<Self, D::Error>
+        where D: serde::Deserializer<'de> {
+        unimplemented!("Unimplemented deserialize ExchangeShuffleMeta")
+    }
+}
+
+#[typetag::serde(name = "exchange_shuffle")]
+impl BlockMetaInfo for ExchangeShuffleMeta {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
+        unimplemented!("Unimplemented equals ExchangeShuffleMeta")
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        unimplemented!("Unimplemented clone ExchangeShuffleMeta")
+    }
+}
 
 struct OutputBuffer {
     blocks: VecDeque<DataBlock>,
@@ -82,19 +139,12 @@ pub struct ExchangeShuffleTransform {
     outputs: Vec<Arc<OutputPort>>,
 
     buffer: OutputsBuffer,
-    input_data: Option<DataBlock>,
-    shuffle_scatter: Arc<Box<dyn FlightScatter>>,
-
     all_inputs_finished: bool,
     all_outputs_finished: bool,
 }
 
 impl ExchangeShuffleTransform {
-    pub fn create(
-        inputs: usize,
-        outputs: usize,
-        scatter: Arc<Box<dyn FlightScatter>>,
-    ) -> ExchangeShuffleTransform {
+    pub fn create(inputs: usize, outputs: usize) -> ExchangeShuffleTransform {
         let mut inputs_port = Vec::with_capacity(inputs);
         let mut outputs_port = Vec::with_capacity(outputs);
 
@@ -110,8 +160,6 @@ impl ExchangeShuffleTransform {
             inputs: inputs_port,
             outputs: outputs_port,
             buffer: OutputsBuffer::create(10, outputs),
-            input_data: None,
-            shuffle_scatter: scatter,
             all_inputs_finished: false,
             all_outputs_finished: false,
         }
@@ -148,9 +196,25 @@ impl Processor for ExchangeShuffleTransform {
             return Ok(Event::Finished);
         }
 
-        if let Some(data_block) = self.try_pull_inputs()? {
-            self.input_data = Some(data_block);
-            return Ok(Event::Sync);
+        if let Some(mut data_block) = self.try_pull_inputs()? {
+            let mut block_meta = data_block.take_meta();
+            let shuffle_meta = block_meta
+                .as_mut()
+                .and_then(|meta| meta.as_mut_any().downcast_mut::<ExchangeShuffleMeta>());
+
+            match shuffle_meta {
+                None => {
+                    return Err(ErrorCode::Internal(""));
+                }
+                Some(shuffle_meta) => {
+                    let blocks = std::mem::take(&mut shuffle_meta.blocks);
+                    for (index, block) in blocks.into_iter().enumerate() {
+                        if !block.is_empty() {
+                            self.buffer.push_back(index, block);
+                        }
+                    }
+                }
+            }
         }
 
         if self.all_inputs_finished && self.buffer.is_empty() {
@@ -162,20 +226,6 @@ impl Processor for ExchangeShuffleTransform {
         }
 
         Ok(Event::NeedData)
-    }
-
-    fn process(&mut self) -> Result<()> {
-        if let Some(data_block) = self.input_data.take() {
-            let blocks = self.shuffle_scatter.execute(&data_block)?;
-
-            for (index, block) in blocks.into_iter().enumerate() {
-                if !block.is_empty() {
-                    self.buffer.push_back(index, block);
-                }
-            }
-        }
-
-        Ok(())
     }
 }
 
@@ -231,20 +281,14 @@ impl ExchangeShuffleTransform {
 
 // Scatter the data block and push it to the corresponding output port
 pub fn exchange_shuffle(params: &ShuffleExchangeParams, pipeline: &mut Pipeline) -> Result<()> {
-    // UpstreamTransform+                                   +---->DownstreamTransform
-    //                  |                                   |
-    //                  |                                   +---->DownStreamTransform
-    //                  |                                   |
-    // UpstreamTransform+----->ExchangeShuffleTransform-----+---->DownStreamTransform
-    //                  |                                   |
-    //                  |                                   +---->DownStreamTransform
-    //                  |                                   |
-    // UpstreamTransform+                                   +---->DownStreamTransform
+    // append scatter transform
+    pipeline.add_transform(|input, output| {
+        Ok(ScatterTransform::create(input, output, params.shuffle_scatter.clone()))
+    })?;
 
     let output_len = pipeline.output_len();
     let new_output_len = params.destination_ids.len();
-    let shuffle_scatter = params.shuffle_scatter.clone();
-    let transform = ExchangeShuffleTransform::create(output_len, new_output_len, shuffle_scatter);
+    let transform = ExchangeShuffleTransform::create(output_len, new_output_len);
 
     let inputs = transform.get_inputs();
     let outputs = transform.get_outputs();

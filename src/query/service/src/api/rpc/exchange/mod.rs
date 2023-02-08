@@ -20,6 +20,7 @@ mod exchange_sink_writer;
 mod exchange_source;
 mod exchange_source_reader;
 mod exchange_transform;
+mod exchange_transform_scatter;
 mod exchange_transform_shuffle;
 mod serde;
 mod statistics_receiver;
