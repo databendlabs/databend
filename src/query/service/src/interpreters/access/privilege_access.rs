@@ -38,9 +38,9 @@ async fn validate_query_privilege(session: &Arc<Session>, table: &&TableEntry) -
     session
         .validate_privilege(
             &GrantObject::Table(
-                table.catalog().clone().to_string(),
-                table.database().clone().to_string(),
-                table.name().clone().to_string(),
+                table.catalog().to_string(),
+                table.database().to_string(),
+                table.name().to_string(),
             ),
             UserPrivilegeType::Select,
         )

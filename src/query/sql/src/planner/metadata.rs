@@ -139,7 +139,7 @@ impl Metadata {
         database: String,
         table_meta: Arc<dyn Table>,
         table_alias_name: Option<String>,
-    ) -> () {
+    ) {
         let table_name = table_meta.name().to_string();
         let table_index = self.view_tables.len();
         // If exists table alias name, use it instead of origin name
@@ -303,7 +303,7 @@ impl TableEntry {
     pub fn table(&self) -> Arc<dyn Table> {
         self.table.clone()
     }
-    
+
     /// Return true if is view table.
     pub fn is_view(&self) -> bool {
         self.is_view
