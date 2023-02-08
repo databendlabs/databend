@@ -12,93 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::hash::BuildHasher;
+use std::hash::Hash;
 use std::sync::Arc;
 
+use common_cache::Count;
+use common_cache::CountableMeter;
+use common_cache::DefaultHashBuilder;
+
 // The cache accessor, crate users usually working on this interface while manipulating caches
-pub trait CacheAccessor<K, V> {
+pub trait CacheAccessor<K, V, S = DefaultHashBuilder, M = Count>
+where
+    K: Eq + Hash,
+    S: BuildHasher,
+    M: CountableMeter<K, Arc<V>>,
+{
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<V>>;
     fn put(&self, key: K, value: Arc<V>);
     fn evict(&self, k: &str) -> bool;
     fn contains_key(&self, _k: &str) -> bool;
-}
-
-// TODO rename this, and move it into another mod
-// or consider remove this trait
-pub trait StorageCache<K, V> {
-    type Meter;
-    type CacheEntry;
-
-    fn get(&mut self, k: &str) -> Option<Self::CacheEntry>;
-
-    fn put(&mut self, key: K, value: Arc<V>);
-
-    fn evict(&mut self, k: &str) -> bool;
-
-    fn contains_key(&self, k: &str) -> bool;
-}
-
-// default impls
-mod impls {
-    use std::sync::Arc;
-
-    use parking_lot::RwLock;
-
-    use crate::cache::CacheAccessor;
-    use crate::cache::StorageCache;
-
-    // Wrap a StorageCache with RwLock, and impl CacheAccessor for it
-    impl<V, C> CacheAccessor<String, V> for Arc<RwLock<C>>
-    where C: StorageCache<String, V, CacheEntry = Arc<V>>
-    {
-        fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<V>> {
-            let mut guard = self.write();
-            guard.get(k.as_ref())
-        }
-
-        fn put(&self, k: String, v: Arc<V>) {
-            let mut guard = self.write();
-            guard.put(k, v);
-        }
-
-        fn evict(&self, k: &str) -> bool {
-            let mut guard = self.write();
-            guard.evict(k)
-        }
-
-        fn contains_key(&self, k: &str) -> bool {
-            let guard = self.read();
-            guard.contains_key(k)
-        }
-    }
-
-    // Wrap an Option<CacheAccessor>, and impl CacheAccessor for it
-    impl<V, C> CacheAccessor<String, V> for Option<C>
-    where C: CacheAccessor<String, V>
-    {
-        fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<V>> {
-            self.as_ref().and_then(|cache| cache.get(k))
-        }
-
-        fn put(&self, k: String, v: Arc<V>) {
-            if let Some(cache) = self {
-                cache.put(k, v);
-            }
-        }
-
-        fn evict(&self, k: &str) -> bool {
-            if let Some(cache) = self {
-                cache.evict(k)
-            } else {
-                false
-            }
-        }
-
-        fn contains_key(&self, k: &str) -> bool {
-            if let Some(cache) = self {
-                cache.contains_key(k)
-            } else {
-                false
-            }
-        }
-    }
 }

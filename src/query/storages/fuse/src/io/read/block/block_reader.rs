@@ -79,9 +79,7 @@ impl OwnerMemory {
     }
 }
 
-pub struct MergeIOReadResult
-where Self: 'static
-{
+pub struct MergeIOReadResult {
     block_path: String,
     columns_chunk_positions: HashMap<ColumnId, (usize, Range<usize>)>,
     owner_memory: OwnerMemory,
@@ -90,9 +88,7 @@ where Self: 'static
 
 pub type CachedColumnData = Vec<(ColumnId, Arc<Vec<u8>>)>;
 
-impl MergeIOReadResult
-where Self: 'static
-{
+impl MergeIOReadResult {
     pub fn create(owner_memory: OwnerMemory, capacity: usize, path: String) -> MergeIOReadResult {
         MergeIOReadResult {
             block_path: path,
@@ -119,11 +115,14 @@ where Self: 'static
         Ok(res)
     }
 
-    pub fn get_chunk(&self, index: usize, path: &str) -> Result<&[u8]> {
+    fn get_chunk(&self, index: usize, path: &str) -> Result<&[u8]> {
         self.owner_memory.get_chunk(index, path)
     }
 
-    pub fn add_column_chunk(&mut self, chunk: usize, column_id: ColumnId, range: Range<usize>) {
+    // sync read path also hit this method!
+    // TODO 1. pass the cache in 2) let the block reader hold a instance of cache
+    fn add_column_chunk(&mut self, chunk: usize, column_id: ColumnId, range: Range<usize>) {
+        // TODO doc why put cache operation could be placed here
         if let Ok(chunk_data) = self.get_chunk(chunk, &self.block_path) {
             let cache = CacheManager::instance().get_block_data_cache();
             let cache_key = TableDataColumnCacheKey::new(&self.block_path, column_id);
@@ -320,16 +319,14 @@ impl BlockReader {
             let column_cache_key = TableDataColumnCacheKey::new(location, *column_id);
             if let Some(cached_column_raw_data) = block_data_cache.get(&column_cache_key) {
                 data_from_cache.push((*column_id as ColumnId, cached_column_raw_data));
-            } else {
-                if let Some(column_meta) = columns_meta.get(column_id) {
-                    let (offset, len) = column_meta.offset_length();
-                    ranges.push((*column_id, offset..(offset + len)));
+            } else if let Some(column_meta) = columns_meta.get(column_id) {
+                let (offset, len) = column_meta.offset_length();
+                ranges.push((*column_id, offset..(offset + len)));
 
-                    // Perf
-                    {
-                        metrics_inc_remote_io_seeks(1);
-                        metrics_inc_remote_io_read_bytes(len);
-                    }
+                // Perf
+                {
+                    metrics_inc_remote_io_seeks(1);
+                    metrics_inc_remote_io_read_bytes(len);
                 }
             }
         }

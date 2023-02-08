@@ -15,6 +15,8 @@
 use std::sync::Arc;
 use std::thread::JoinHandle;
 
+use common_cache::Count;
+use common_cache::DefaultHashBuilder;
 pub use common_cache::LruDiskCache as DiskCache;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -91,7 +93,7 @@ impl TableDataCacheBuilder {
     }
 }
 
-impl CacheAccessor<String, Vec<u8>> for TableDataCache {
+impl CacheAccessor<String, Vec<u8>, DefaultHashBuilder, Count> for TableDataCache {
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Vec<u8>>> {
         metrics_inc_cache_access_count(1, TABLE_DATA_CACHE_NAME);
         let k = k.as_ref();
@@ -146,14 +148,13 @@ impl CacheAccessor<String, Vec<u8>> for TableDataCache {
     }
 }
 
-#[derive(Clone)]
 struct CachePopulationWorker<T> {
     cache: T,
     population_queue: crossbeam_channel::Receiver<CacheItem>,
 }
 
 impl<T> CachePopulationWorker<T>
-where T: CacheAccessor<String, Vec<u8>> + Send + Sync + 'static
+where T: CacheAccessor<String, Vec<u8>, DefaultHashBuilder, Count> + Send + Sync + 'static
 {
     fn populate(&self) {
         loop {
@@ -193,7 +194,7 @@ impl DiskCachePopulator {
         _num_worker_thread: usize,
     ) -> Result<Self>
     where
-        T: CacheAccessor<String, Vec<u8>> + Send + Sync + 'static,
+        T: CacheAccessor<String, Vec<u8>, DefaultHashBuilder, Count> + Send + Sync + 'static,
     {
         let worker = Arc::new(CachePopulationWorker {
             cache,

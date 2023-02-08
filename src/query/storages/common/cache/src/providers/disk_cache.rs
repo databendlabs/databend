@@ -15,6 +15,7 @@
 use std::io::Read;
 use std::sync::Arc;
 
+use common_cache::Count;
 pub use common_cache::LruDiskCache as DiskCache;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -42,7 +43,7 @@ impl DiskCacheBuilder {
     }
 }
 
-impl CacheAccessor<String, Vec<u8>> for DiskBytesCache {
+impl CacheAccessor<String, Vec<u8>, common_cache::DefaultHashBuilder, Count> for DiskBytesCache {
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Vec<u8>>> {
         let k = k.as_ref();
         // check disk cache
