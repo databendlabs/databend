@@ -362,9 +362,10 @@ impl Column {
                 let data = &data[offsets[pos] as usize..offsets[pos + CHUNK_SIZE] as usize];
                 res_data.extend_from_slice(data);
 
+                let mut last_len = *res_offsets.last().unwrap();
                 for i in 0..CHUNK_SIZE {
-                    res_offsets
-                        .push(res_offsets[pos + i] + (offsets[pos + i + 1] - offsets[pos + i]));
+                    last_len += offsets[pos + i + 1] - offsets[pos + i];
+                    res_offsets.push(last_len);
                 }
             } else {
                 while mask != 0 {
