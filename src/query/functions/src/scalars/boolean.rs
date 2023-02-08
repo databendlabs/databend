@@ -97,6 +97,17 @@ pub fn register(registry: &mut FunctionRegistry) {
         "and",
         FunctionProperty::default(),
         |lhs, rhs| {
+            let all_false =  lhs.value.as_ref().map(|v| v.has_false && !v.has_true).unwrap_or(false)
+                    || rhs.value.as_ref().map(|v| v.has_false && !v.has_true).unwrap_or(false);
+            if all_false {
+                 return FunctionDomain::Domain(NullableDomain::<BooleanType> {
+                        has_null: false,
+                        value: Some(Box::new(BooleanDomain {
+                            has_false: true,
+                            has_true: false,
+                        })),
+                    });
+            }
             if !lhs.has_null && !rhs.has_null {
                 let bools = match (&lhs.value, &rhs.value) {
                     (Some(a), Some(b)) => Some(Box::new(BooleanDomain {
@@ -128,6 +139,17 @@ pub fn register(registry: &mut FunctionRegistry) {
         "or",
         FunctionProperty::default(),
         |lhs, rhs| {
+            let all_false =  lhs.value.as_ref().map(|v| v.has_true && !v.has_false).unwrap_or(false)
+                    || rhs.value.as_ref().map(|v| v.has_true && !v.has_false).unwrap_or(false);
+            if all_false {
+                 return FunctionDomain::Domain(NullableDomain::<BooleanType> {
+                        has_null: false,
+                        value: Some(Box::new(BooleanDomain {
+                            has_false: false,
+                            has_true: true,
+                        })),
+                    });
+            }
             if !lhs.has_null && !rhs.has_null {
                 let bools = match (&lhs.value, &rhs.value) {
                     (Some(a), Some(b)) => Some(Box::new(BooleanDomain {
