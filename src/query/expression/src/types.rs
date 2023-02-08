@@ -41,7 +41,7 @@ pub use self::any::AnyType;
 pub use self::array::ArrayType;
 pub use self::boolean::BooleanType;
 pub use self::date::DateType;
-use self::decimal::DecimalDataType;
+pub use self::decimal::DecimalDataType;
 pub use self::empty_array::EmptyArrayType;
 pub use self::generic::GenericType;
 pub use self::map::MapType;
@@ -140,6 +140,13 @@ impl DataType {
     pub fn is_floating(&self) -> bool {
         match self {
             DataType::Number(ty) => ALL_FLOAT_TYPES.contains(ty),
+            _ => false,
+        }
+    }
+
+    pub fn is_decimal(&self) -> bool {
+        match self {
+            DataType::Decimal(ty) => true,
             _ => false,
         }
     }
