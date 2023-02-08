@@ -73,7 +73,8 @@ impl BloomPrunerCreator {
                 .iter()
                 .cloned()
                 .reduce(|lhs, rhs| {
-                    check_function(None, "and", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS).unwrap()
+                    check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
+                        .unwrap()
                 })
                 .unwrap();
 
