@@ -97,6 +97,8 @@ jobs:
         run: |
           mkdir -p /tmp/databend-perf/
           bendsql benchmark \
+            --warm 2 \
+            --count 5 \
             --test-dir ./scripts/benchmark/query/benchmarks/ \
             --output-format json,md \
             --output-dir /tmp/databend-perf/ \
