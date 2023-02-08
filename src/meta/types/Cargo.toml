@@ -11,19 +11,18 @@ doctest = false
 test = false
 
 [features]
-storage-hdfs = ["opendal/services-hdfs"]
+storage-hdfs = []
 
 [dependencies]
 common-exception = { path = "../../common/exception" }
 common-io = { path = "../../common/io" }
 common-meta-stoerr = { path = "../stoerr" }
 
-opendal = { workspace = true }
 openraft = { workspace = true }
 
 anyerror = { workspace = true }
 chrono = { workspace = true }
-derive_more = "0.99.17"
+derive_more = { workspace = true }
 enumflags2 = { version = "0.7.5", features = ["serde"] }
 hex = "0.4.3"
 num-derive = "0.3.3"

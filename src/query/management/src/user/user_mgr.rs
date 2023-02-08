@@ -18,7 +18,6 @@ use common_base::base::escape_for_key;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_kvapi::kvapi;
-use common_meta_types::AuthInfo;
 use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
@@ -27,7 +26,6 @@ use common_meta_types::SeqV;
 use common_meta_types::UpsertKVReq;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserInfo;
-use common_meta_types::UserOption;
 
 use crate::serde::deserialize_struct;
 use crate::serde::serialize_struct;
@@ -140,11 +138,6 @@ impl UserApi for UserMgr {
         Ok(r)
     }
 
-    /// General user's grants update.
-    ///
-    /// It fetch the role that matches the specified seq number, update it in place, then write it back with the seq it sees.
-    ///
-    /// Seq number ensures there is no other write happens between get and set.
     async fn update_user_with<F>(
         &self,
         user: UserIdentity,
@@ -166,25 +159,6 @@ impl UserApi for UserMgr {
             .upsert_user_info(&user_info, MatchSeq::Exact(seq))
             .await?;
         Ok(Some(seq))
-    }
-
-    // TODO: it deserve a better name.
-    async fn update_user(
-        &self,
-        user: UserIdentity,
-        new_auth_info: Option<AuthInfo>,
-        new_user_option: Option<UserOption>,
-        seq: MatchSeq,
-    ) -> Result<Option<u64>> {
-        self.update_user_with(user, seq, |ui: &mut UserInfo| {
-            if let Some(auth_info) = new_auth_info {
-                ui.auth_info = auth_info;
-            };
-            if let Some(user_option) = new_user_option {
-                ui.option = user_option;
-            };
-        })
-        .await
     }
 
     async fn drop_user(&self, user: UserIdentity, seq: MatchSeq) -> Result<()> {

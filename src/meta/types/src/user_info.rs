@@ -74,6 +74,15 @@ impl UserInfo {
     pub fn has_option_flag(&self, flag: UserOptionFlag) -> bool {
         self.option.has_option_flag(flag)
     }
+
+    pub fn update_auth_option(&mut self, auth: Option<AuthInfo>, option: Option<UserOption>) {
+        if let Some(auth_info) = auth {
+            self.auth_info = auth_info;
+        };
+        if let Some(user_option) = option {
+            self.option = user_option;
+        };
+    }
 }
 
 impl TryFrom<Vec<u8>> for UserInfo {
@@ -174,5 +183,35 @@ impl std::fmt::Display for UserOptionFlag {
         match self {
             UserOptionFlag::TenantSetting => write!(f, "TENANTSETTING"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use enumflags2::BitFlags;
+
+    use crate::AuthInfo;
+    use crate::UserInfo;
+    use crate::UserOption;
+
+    #[test]
+    fn test_user_update_auth_option() -> anyhow::Result<()> {
+        let mut u = UserInfo::new("a", "b", AuthInfo::None);
+
+        // None does not take effect
+        {
+            let mut u2 = u.clone();
+            u2.update_auth_option(None, None);
+            assert_eq!(u2, u);
+        }
+
+        // Some updates the corresponding fields
+        {
+            u.update_auth_option(Some(AuthInfo::JWT), Some(UserOption::new(BitFlags::all())));
+            assert_eq!(AuthInfo::JWT, u.auth_info);
+            assert_eq!(BitFlags::all(), u.option.flags);
+        }
+
+        Ok(())
     }
 }

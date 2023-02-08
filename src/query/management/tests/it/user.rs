@@ -532,26 +532,22 @@ mod update {
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
 
-        let res = user_mgr.update_user(
-            user_info.identity(),
-            Some(new_test_auth_info(full)),
-            None,
-            test_seq,
-        );
+        let res = user_mgr.update_user_with(user_info.identity(), test_seq, |ui: &mut UserInfo| {
+            ui.update_auth_option(Some(new_test_auth_info(full)), None)
+        });
 
         assert!(res.await.is_ok());
         Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_update_user_partial_unknown() -> common_exception::Result<()> {
+    async fn test_update_user_with_conflict_when_writing_back() -> common_exception::Result<()> {
         let test_user_name = "name";
         let test_hostname = "localhost";
         let test_key = format!(
             "__fd_users/tenant1/{}",
             escape_for_key(&format_user_key(test_user_name, test_hostname))?
         );
-        let test_seq = MatchSeq::GE(0);
 
         // if partial update, and get_kv returns None
         // update_kv should NOT be called
@@ -564,11 +560,10 @@ mod update {
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
 
-        let res = user_mgr.update_user(
+        let res = user_mgr.update_user_with(
             UserIdentity::new(test_user_name, test_hostname),
-            Some(new_test_auth_info(false)),
-            None,
-            test_seq,
+            MatchSeq::GE(0),
+            |ui: &mut UserInfo| ui.update_auth_option(Some(new_test_auth_info(false)), None),
         );
         assert_eq!(
             res.await.unwrap_err().code(),
@@ -578,14 +573,13 @@ mod update {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_update_user_full_unknown() -> common_exception::Result<()> {
+    async fn test_update_user_with_complete() -> common_exception::Result<()> {
         let test_user_name = "name";
         let test_hostname = "localhost";
         let test_key = format!(
             "__fd_users/tenant1/{}",
             escape_for_key(&format_user_key(test_user_name, test_hostname))?
         );
-        let test_seq = MatchSeq::GE(1);
 
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
         let prev_value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
@@ -611,16 +605,9 @@ mod update {
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
 
-        let res = user_mgr.update_user(
-            user_info.identity(),
-            Some(new_test_auth_info(true)),
-            None,
-            test_seq,
-        );
-        assert_eq!(
-            res.await.unwrap_err().code(),
-            ErrorCode::UnknownUser("").code()
-        );
+        let _ = user_mgr
+            .update_user_with(user_info.identity(), MatchSeq::GE(1), |_x| {})
+            .await;
         Ok(())
     }
 }

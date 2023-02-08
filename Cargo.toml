@@ -90,6 +90,9 @@ sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafus
 opendal = { version = "0.26.2" }
 ordered-float = { version = "3.4.0", default-features = false }
 
+# type helper
+derive_more = "0.99.17"
+
 # error
 anyhow = { version = "1.0.65" }
 anyerror = { version = "=0.1.7" }
