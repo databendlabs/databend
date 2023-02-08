@@ -87,13 +87,13 @@ impl DecimalDataType {
             Ok(DecimalDataType::Decimal256(size))
         }
     }
-    
+
     pub fn scale(&self) -> u8 {
         crate::with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalDataType::DECIMAL_TYPE(size) => size.scale,
         })
     }
-    
+
     pub fn precision(&self) -> u8 {
         crate::with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalDataType::DECIMAL_TYPE(size) => size.precision,
