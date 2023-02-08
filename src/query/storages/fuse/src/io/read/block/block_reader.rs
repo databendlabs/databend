@@ -38,9 +38,6 @@ use common_storage::ColumnNodes;
 use futures::future::try_join_all;
 use opendal::Object;
 use opendal::Operator;
-use storages_common_cache::metrics_inc_cache_access_count;
-use storages_common_cache::metrics_inc_cache_hit_count;
-use storages_common_cache::metrics_inc_cache_miss_count;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::TableDataColumnCacheKey;
 use storages_common_cache_manager::CacheManager;
@@ -85,10 +82,10 @@ impl OwnerMemory {
 pub struct MergeIOReadResult
 where Self: 'static
 {
-    path: String,
+    block_path: String,
+    columns_chunk_positions: HashMap<ColumnId, (usize, Range<usize>)>,
     owner_memory: OwnerMemory,
-    columns_chunks: HashMap<ColumnId, (usize, Range<usize>)>,
-    cached_columns: CachedColumnData,
+    cached_column_data: CachedColumnData,
 }
 
 pub type CachedColumnData = Vec<(ColumnId, Arc<Vec<u8>>)>;
@@ -98,22 +95,24 @@ where Self: 'static
 {
     pub fn create(owner_memory: OwnerMemory, capacity: usize, path: String) -> MergeIOReadResult {
         MergeIOReadResult {
-            path,
+            block_path: path,
+            columns_chunk_positions: HashMap::with_capacity(capacity),
             owner_memory,
-            columns_chunks: HashMap::with_capacity(capacity),
-            cached_columns: vec![],
+            cached_column_data: vec![],
         }
     }
 
     pub fn columns_chunks(&self) -> Result<Vec<(ColumnId, &[u8])>> {
-        let mut res = Vec::with_capacity(self.columns_chunks.len());
+        let mut res = Vec::with_capacity(self.columns_chunk_positions.len());
 
-        for (column_idx, (chunk_idx, range)) in &self.columns_chunks {
-            let chunk = self.owner_memory.get_chunk(*chunk_idx, &self.path)?;
+        // merge column data fetched from object storage
+        for (column_idx, (chunk_idx, range)) in &self.columns_chunk_positions {
+            let chunk = self.owner_memory.get_chunk(*chunk_idx, &self.block_path)?;
             res.push((*column_idx, &chunk[range.clone()]));
         }
 
-        for (column_id, data) in &self.cached_columns {
+        // merge column data from cache
+        for (column_id, data) in &self.cached_column_data {
             res.push((*column_id, data.as_slice()))
         }
 
@@ -125,14 +124,15 @@ where Self: 'static
     }
 
     pub fn add_column_chunk(&mut self, chunk: usize, column_id: ColumnId, range: Range<usize>) {
-        if let Ok(chunk_data) = self.get_chunk(chunk, &self.path) {
+        if let Ok(chunk_data) = self.get_chunk(chunk, &self.block_path) {
             let cache = CacheManager::instance().get_block_data_cache();
-            let cache_key = format!("{}-{}", self.path, column_id);
+            let cache_key = TableDataColumnCacheKey::new(&self.block_path, column_id);
             let data = &chunk_data[range.clone()];
-            // TODO NO, use a &[u8] to pass data to cache
-            cache.put(cache_key, Arc::new(data.to_vec()));
+            // TODO api is NOT type safe
+            cache.put(cache_key.as_ref().to_owned(), Arc::new(data.to_vec()));
         }
-        self.columns_chunks.insert(column_id, (chunk, range));
+        self.columns_chunk_positions
+            .insert(column_id, (chunk, range));
     }
 }
 
@@ -318,13 +318,9 @@ impl BlockReader {
         let mut data_from_cache = vec![];
         for (_index, (column_id, ..)) in self.project_indices.iter() {
             let column_cache_key = TableDataColumnCacheKey::new(location, *column_id);
-            let cache_name = "data_block_cache";
-            metrics_inc_cache_access_count(1, cache_name);
             if let Some(cached_column_raw_data) = block_data_cache.get(&column_cache_key) {
-                metrics_inc_cache_hit_count(1, cache_name);
                 data_from_cache.push((*column_id as ColumnId, cached_column_raw_data));
             } else {
-                metrics_inc_cache_miss_count(1, cache_name);
                 if let Some(column_meta) = columns_meta.get(column_id) {
                     let (offset, len) = column_meta.offset_length();
                     ranges.push((*column_id, offset..(offset + len)));
@@ -341,7 +337,7 @@ impl BlockReader {
         let object = self.operator.object(location);
 
         let mut merge_io_read_res = Self::merge_io_read(settings, object, ranges).await?;
-        merge_io_read_res.cached_columns = data_from_cache;
+        merge_io_read_res.cached_column_data = data_from_cache;
         Ok(merge_io_read_res)
     }
 

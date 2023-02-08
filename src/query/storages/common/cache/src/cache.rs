@@ -22,8 +22,8 @@ pub trait CacheAccessor<K, V> {
     fn contains_key(&self, _k: &str) -> bool;
 }
 
-// The minimum interface that cache providers should implement
-//  note this interface working on mutable self reference
+// TODO rename this, and move it into another mod
+// or consider remove this trait
 pub trait StorageCache<K, V> {
     type Meter;
     type CacheEntry;

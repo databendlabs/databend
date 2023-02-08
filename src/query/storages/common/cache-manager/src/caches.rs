@@ -28,7 +28,7 @@ pub type SegmentInfoCache = InMemoryItemCacheHolder<SegmentInfo>;
 pub type TableSnapshotCache = InMemoryItemCacheHolder<TableSnapshot>;
 /// In memory object cache of TableSnapshotStatistics
 pub type TableSnapshotStatisticCache = InMemoryItemCacheHolder<TableSnapshotStatistics>;
-/// In memory data cache of bloom index data.
+/// In memory object cache of bloom filter.
 /// For each indexed data block, the bloom xor8 filter of column is cached individually
 pub type BloomIndexFilterCache = InMemoryItemCacheHolder<Xor8Filter>;
 pub struct BloomIndexMeta(pub FileMetaData);
