@@ -52,40 +52,41 @@ use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::Ke
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::SerializedKeysColumnIter;
 use crate::pipelines::processors::AggregatorParams;
 
-// Provide functions for all HashMethod to help implement polymorphic group by key
-//
-// When we want to add new HashMethod, we need to add the following components
-//     - HashMethod, more information in [HashMethod] trait
-//     - AggregatorState, more information in [AggregatorState] trait
-//     - KeysColumnBuilder, more information in [KeysColumnBuilder] trait
-//     - PolymorphicKeysHelper, more information in following comments
-//
-// For example:
-//
-// use bumpalo::Bump;
-// use databend_query::common::HashTable;
-// use common_expression::HashMethodSerializer;
-// use databend_query::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
-// use databend_query::pipelines::processors::transforms::group_by::aggregator_state::SerializedKeysAggregatorState;
-// use databend_query::pipelines::processors::transforms::group_by::aggregator_keys_builder::StringKeysColumnBuilder;
-//
-// impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
-//     type State = SerializedKeysAggregatorState;
-//     fn aggregate_state(&self) -> Self::State {
-//         SerializedKeysAggregatorState {
-//             keys_area: Bump::new(),
-//             state_area: Bump::new(),
-//             data_state_map: HashTable::create(),
-//         }
-//     }
-//
-//     type ColumnBuilder = StringKeysColumnBuilder;
-//     fn state_array_builder(&self, capacity: usize) -> Self::ColumnBuilder {
-//         StringKeysColumnBuilder {
-//             inner_builder: MutableStringColumn::with_capacity(capacity),
-//         }
-//     }
-// }
+/// Provide functions for all HashMethod to help implement polymorphic group by key
+///
+/// When we want to add new HashMethod, we need to add the following components
+///     - HashMethod, more information in [`HashMethod`] trait
+///     - AggregatorState, more information in [`AggregatorState`] trait
+///     - KeysColumnBuilder, more information in [`KeysColumnBuilder`] trait
+///     - PolymorphicKeysHelper, more information in following comments
+///
+/// For example:
+/// ```rust
+/// use bumpalo::Bump;
+/// use databend_query::common::HashTable;
+/// use common_expression::HashMethodSerializer;
+/// use databend_query::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
+/// use databend_query::pipelines::processors::transforms::group_by::aggregator_state::SerializedKeysAggregatorState;
+/// use databend_query::pipelines::processors::transforms::group_by::aggregator_keys_builder::StringKeysColumnBuilder;
+///
+/// impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
+///     type State = SerializedKeysAggregatorState;
+///     fn aggregate_state(&self) -> Self::State {
+///         SerializedKeysAggregatorState {
+///             keys_area: Bump::new(),
+///             state_area: Bump::new(),
+///             data_state_map: HashTable::create(),
+///         }
+///     }
+///
+///     type ColumnBuilder = StringKeysColumnBuilder;
+///     fn state_array_builder(&self, capacity: usize) -> Self::ColumnBuilder {
+///         StringKeysColumnBuilder {
+///             inner_builder: MutableStringColumn::with_capacity(capacity),
+///         }
+///     }
+/// }
+/// ```
 //
 pub trait PolymorphicKeysHelper<Method: HashMethod> {
     const SUPPORT_TWO_LEVEL: bool;

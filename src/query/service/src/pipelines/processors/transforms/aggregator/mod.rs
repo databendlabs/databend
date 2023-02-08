@@ -14,7 +14,6 @@
 
 mod aggregate_hashstate_info;
 mod aggregate_info;
-mod aggregator_final;
 mod aggregator_final_parallel;
 mod aggregator_params;
 mod aggregator_partial;
