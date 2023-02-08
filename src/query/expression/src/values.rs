@@ -40,6 +40,7 @@ use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalColumnBuilder;
 use crate::types::decimal::DecimalDataType;
 use crate::types::decimal::DecimalScalar;
+use crate::types::decimal::DecimalSize;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableColumnBuilder;
 use crate::types::nullable::NullableDomain;
@@ -1205,6 +1206,31 @@ impl Column {
                     fields,
                     len: arrow_col.len(),
                 }
+            }
+            ArrowDataType::Decimal(precision, scale) => {
+                let arrow_col = arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::PrimitiveArray<i128>>()
+                    .expect("fail to read from arrow: array should be `DecimalArray`");
+                Column::Decimal(DecimalColumn::Decimal128(
+                    arrow_col.values().clone(),
+                    DecimalSize {
+                        precision: *precision as u8,
+                        scale: *scale as u8,
+                    },
+                ))
+            }
+            ArrowDataType::Decimal256(precision, scale) => {
+                let arrow_col = arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::PrimitiveArray<common_arrow::arrow::types::i256>>()
+                    .expect("fail to read from arrow: array should be `DecimalArray`");
+
+                let values = unsafe { std::mem::transmute(arrow_col.values().clone()) };
+                Column::Decimal(DecimalColumn::Decimal256(values, DecimalSize {
+                    precision: *precision as u8,
+                    scale: *scale as u8,
+                }))
             }
             ty => unimplemented!("unsupported arrow type {ty:?}"),
         };

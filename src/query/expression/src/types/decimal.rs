@@ -63,8 +63,25 @@ pub struct DecimalSize {
     pub scale: u8,
 }
 
+static MAX_DECIMAL128_PRECISION: u8 = 38;
+static MAX_DECIMAL256_PRECISION: u8 = 76;
+
 impl DecimalDataType {
-    pub fn from_size(_size: DecimalSize) -> Result<DecimalDataType> {
+    pub fn from_size(size: DecimalSize) -> Result<DecimalDataType> {
+        if size.precision < 1 || size.precision > MAX_DECIMAL256_PRECISION {
+            return Err(ErrorCode::BadDataValueType(format!(
+                "Decimal precision must be between 1 and {}",
+                MAX_DECIMAL128_PRECISION
+            )));
+        }
+        
+        if size.scale > size.precision {
+            return Err(ErrorCode::BadDataValueType(format!(
+                "Decimal scale must be between 0 and precision {}",
+                size.precision
+            )));
+        }
+        
         // todo!("decimal")
         Err(ErrorCode::Unimplemented("decimal"))
     }
