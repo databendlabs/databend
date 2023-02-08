@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use common_arrow::arrow::io::flight::default_ipc_fields;
 use common_arrow::arrow::io::flight::deserialize_batch;
@@ -22,6 +23,7 @@ use common_arrow::arrow::io::ipc::IpcSchema;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::block_debug::pretty_format_blocks;
 use common_expression::DataBlock;
 use common_io::prelude::BinaryRead;
 use common_io::prelude::BinaryWrite;
@@ -34,6 +36,9 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
+use common_pipeline_transforms::processors::transforms::Transform;
+use common_pipeline_transforms::processors::transforms::Transformer;
+use itertools::Itertools;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::SerializeParams;
@@ -95,29 +100,29 @@ impl ExchangeTransform {
                 let exchanges = flight_exchanges.iter().cloned();
                 for (destination_id, exchange) in params.destination_ids.iter().zip(exchanges) {
                     items.push(match destination_id == &params.executor_id {
+                        true if max_threads == 1 => create_dummy_item(),
                         true => create_resize_item(1, max_threads),
                         false => create_writer_item(exchange),
                     });
                 }
 
+                let mut nodes_source = 0;
                 let exchanges = flight_exchanges.into_iter();
                 for (destination_id, exchange) in params.destination_ids.iter().zip(exchanges) {
                     if destination_id != &params.executor_id {
+                        nodes_source += 1;
                         exchange.close_output();
                         items.push(create_reader_item(exchange));
                     }
                 }
 
-                let new_outputs = max_threads + params.destination_ids.len() - 1;
+                let new_outputs = max_threads + nodes_source;
                 pipeline.add_pipe(Pipe::create(len, new_outputs, items));
 
                 let mut items = create_dummy_items(max_threads, new_outputs);
-
-                for _index in 1..params.destination_ids.len() {
-                    items.push(create_deserializer_item(&params.schema));
-                }
-
+                items.extend(create_deserializer_items(nodes_source, &params.schema));
                 pipeline.add_pipe(Pipe::create(new_outputs, new_outputs, items));
+
                 Ok(())
             }
         }

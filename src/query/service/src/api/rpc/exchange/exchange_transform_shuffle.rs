@@ -17,6 +17,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::block_debug::pretty_format_blocks;
 use common_expression::DataBlock;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
@@ -26,6 +27,7 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
+use itertools::Itertools;
 
 use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
 use crate::api::rpc::flight_scatter::FlightScatter;
@@ -188,13 +190,17 @@ impl ExchangeShuffleTransform {
             }
 
             self.all_outputs_finished = false;
-            if !output.can_push() && self.buffer.is_fill(index) {
-                pushed_all_outputs = false;
+
+            if output.can_push() {
+                if let Some(data_block) = self.buffer.pop(index) {
+                    output.push_data(Ok(data_block));
+                }
+
                 continue;
             }
 
-            if let Some(data_block) = self.buffer.pop(index) {
-                output.push_data(Ok(data_block));
+            if !output.can_push() && self.buffer.is_fill(index) {
+                pushed_all_outputs = false;
             }
         }
 
