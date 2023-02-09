@@ -16,7 +16,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::constants::NAN_BYTES_LOWER;
 use common_io::constants::NAN_BYTES_SNAKE;
-use common_meta_types::StageFileFormatType;
+use common_meta_app::principal::StageFileFormatType;
 
 use crate::FileFormatOptionsExt;
 

@@ -287,6 +287,7 @@ impl FuseTable {
             return (statistics, partitions);
         }
 
+        let columns = projection.project_column_nodes(column_nodes).unwrap();
         let mut remaining = limit;
 
         for (range, block_meta) in block_metas {
@@ -297,17 +298,14 @@ impl FuseTable {
                 top_k.clone(),
                 projection,
             ));
+
             let rows = block_meta.row_count as usize;
 
             statistics.read_rows += rows;
-            let columns = projection.project_column_nodes(column_nodes).unwrap();
             for column in &columns {
-                let indices = &column.leaf_ids;
-                for (i, _index) in indices.iter().enumerate() {
+                for column_id in &column.leaf_column_ids {
                     // ignore all deleted field
-                    let column_id = column.leaf_column_id(i);
-
-                    if let Some(col_metas) = block_meta.col_metas.get(&column_id) {
+                    if let Some(col_metas) = block_meta.col_metas.get(column_id) {
                         let (_, len) = col_metas.offset_length();
                         statistics.read_bytes += len as usize;
                     }
@@ -380,13 +378,10 @@ impl FuseTable {
 
         let columns = projection.project_column_nodes(column_nodes).unwrap();
         for column in &columns {
-            let indices = &column.leaf_ids;
-            for (i, _index) in indices.iter().enumerate() {
-                let column_id = column.leaf_column_id(i);
-
+            for column_id in &column.leaf_column_ids {
                 // ignore column this block dose not exist
-                if let Some(column_meta) = meta.col_metas.get(&column_id) {
-                    columns_meta.insert(column_id, column_meta.clone());
+                if let Some(column_meta) = meta.col_metas.get(column_id) {
+                    columns_meta.insert(*column_id, column_meta.clone());
                 }
             }
         }

@@ -27,8 +27,8 @@ use common_formats::FieldDecoderTSV;
 use common_formats::FileFormatOptionsExt;
 use common_io::cursor_ext::*;
 use common_io::format_diagnostic::verbose_string;
-use common_meta_types::OnErrorMode;
-use common_meta_types::StageFileFormatType;
+use common_meta_app::principal::OnErrorMode;
+use common_meta_app::principal::StageFileFormatType;
 
 use crate::input_formats::AligningStateRowDelimiter;
 use crate::input_formats::BlockBuilder;

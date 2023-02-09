@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,15 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::exception::Result;
-use common_meta_types::UserQuota;
+mod storage_params;
 
-#[test]
-fn test_user_quota() -> Result<()> {
-    let quota = UserQuota::no_limit();
-    assert_eq!(quota.max_cpu, 0);
-    assert_eq!(quota.max_memory_in_bytes, 0);
-    assert_eq!(quota.max_storage_in_bytes, 0);
-
-    Ok(())
-}
+pub use storage_params::*;

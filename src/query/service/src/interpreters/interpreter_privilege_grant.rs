@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::GrantObject;
-use common_meta_types::PrincipalIdentity;
-use common_meta_types::UserPrivilegeSet;
+use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::PrincipalIdentity;
+use common_meta_app::principal::UserPrivilegeSet;
 use common_sql::plans::GrantPrivilegePlan;
 use common_users::UserApiProvider;
 

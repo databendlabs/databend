@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashSet;
 use std::fmt::Debug;
 use std::ops::Range;
 
@@ -29,6 +30,8 @@ use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataSchemaRef;
 use crate::Domain;
+use crate::Scalar;
+use crate::TableSchemaRef;
 use crate::Value;
 
 pub type SendableDataBlockStream =
@@ -341,6 +344,102 @@ impl DataBlock {
             .collect::<Result<_>>()?;
 
         Ok(DataBlock::new(cols, arrow_chunk.len()))
+    }
+
+    // If default_vals[i].is_some(), then DataBlock.column[i] = num_rows * default_vals[i].
+    // Else, DataBlock.column[i] = chuck.column.
+    // For example, Schema.field is [a,b,c] and default_vals is [Some("a"), None, Some("c")],
+    // then the return block column will be ["a"*num_rows, chunk.column[0], "c"*num_rows].
+    pub fn create_with_default_value_and_chunk<A: AsRef<dyn Array>>(
+        schema: &DataSchema,
+        chuck: &ArrowChunk<A>,
+        default_vals: &[Option<Scalar>],
+        num_rows: usize,
+    ) -> Result<DataBlock> {
+        let mut chunk_idx: usize = 0;
+        let schema_fields = schema.fields();
+        let chunk_columns = chuck.arrays();
+
+        let mut columns = Vec::with_capacity(default_vals.len());
+        for (i, default_val) in default_vals.iter().enumerate() {
+            let field = &schema_fields[i];
+            let data_type = field.data_type();
+
+            let column = match default_val {
+                Some(default_val) => BlockEntry {
+                    data_type: data_type.clone(),
+                    value: Value::Scalar(default_val.to_owned()),
+                },
+                None => {
+                    let chunk_column = &chunk_columns[chunk_idx];
+                    chunk_idx += 1;
+                    BlockEntry {
+                        data_type: data_type.clone(),
+                        value: Value::Column(Column::from_arrow(chunk_column.as_ref(), data_type)),
+                    }
+                }
+            };
+
+            columns.push(column);
+        }
+
+        Ok(DataBlock::new(columns, num_rows))
+    }
+
+    pub fn create_with_default_value(
+        schema: &DataSchema,
+        default_vals: &[Scalar],
+        num_rows: usize,
+    ) -> Result<DataBlock> {
+        let default_opt_vals: Vec<Option<Scalar>> = default_vals
+            .iter()
+            .map(|default_val| Some(default_val.to_owned()))
+            .collect();
+
+        Self::create_with_default_value_and_chunk(
+            schema,
+            &ArrowChunk::<ArrayRef>::new(vec![]),
+            &default_opt_vals[0..],
+            num_rows,
+        )
+    }
+
+    // If block_column_ids not contain schema.field[i].column_id,
+    // then DataBlock.column[i] = num_rows * default_vals[i].
+    // Else, DataBlock.column[i] = data_block.column.
+    pub fn create_with_default_value_and_block(
+        schema: &TableSchemaRef,
+        data_block: &DataBlock,
+        block_column_ids: &HashSet<u32>,
+        default_vals: &[Scalar],
+        num_rows: usize,
+    ) -> Result<DataBlock> {
+        let mut new_data_block = DataBlock::empty();
+        new_data_block.num_rows = num_rows;
+        let mut data_block_columns_idx: usize = 0;
+        let data_block_columns = data_block.columns();
+
+        let schema_fields = schema.fields();
+        let mut columns = Vec::with_capacity(default_vals.len());
+        for (i, field) in schema_fields.iter().enumerate() {
+            let column_id = field.column_id();
+            let column = if !block_column_ids.contains(&column_id) {
+                let default_val = &default_vals[i];
+                let table_data_type = field.data_type();
+                let data_type: DataType = table_data_type.into();
+                BlockEntry {
+                    data_type,
+                    value: Value::Scalar(default_val.to_owned()),
+                }
+            } else {
+                let chunk_column = &data_block_columns[data_block_columns_idx];
+                data_block_columns_idx += 1;
+                chunk_column.clone()
+            };
+
+            columns.push(column);
+        }
+        Ok(DataBlock::new(columns, num_rows))
     }
 }
 

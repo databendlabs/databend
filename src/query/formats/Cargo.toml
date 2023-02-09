@@ -26,6 +26,7 @@ common-exception = { path = "../../common/exception" }
 common-expression = { path = "../expression" }
 common-io = { path = "../../common/io" }
 common-jsonb = { path = "../../common/jsonb" }
+common-meta-app = { path = "../../meta/app" }
 common-meta-types = { path = "../../meta/types" }
 common-settings = { path = "../settings" }
 

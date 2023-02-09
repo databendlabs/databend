@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::io::BufReader;
 use std::ops::Range;
 use std::time::Instant;
@@ -20,6 +22,7 @@ use common_arrow::arrow::array::Array;
 use common_arrow::native::read::reader::NativeReader;
 use common_arrow::native::read::NativeReadBuf;
 use common_catalog::plan::PartInfoPtr;
+use common_catalog::table::ColumnId;
 use common_exception::Result;
 use common_expression::BlockEntry;
 use common_expression::Column;
@@ -155,6 +158,52 @@ impl BlockReader {
         let reader: Reader = Box::new(BufReader::new(reader));
         let fuse_reader = NativeReader::new(reader, data_type, column_meta.pages, vec![]);
         Ok((index, fuse_reader))
+    }
+
+    pub fn fill_missing_native_column_values(
+        &self,
+        data_block: DataBlock,
+        parts: &VecDeque<PartInfoPtr>,
+    ) -> Result<DataBlock> {
+        let part = FusePartInfo::from_part(&parts[0])?;
+        let column_nodes = self.projection.project_column_nodes(&self.column_nodes)?;
+        let mut need_to_fill_data = false;
+
+        let columns_meta = &part.columns_meta;
+        // check if need to fill default data
+        for column_node in column_nodes {
+            for column_id in &column_node.leaf_column_ids {
+                if !columns_meta.contains_key(column_id) {
+                    need_to_fill_data = true;
+                    break;
+                }
+            }
+            if need_to_fill_data {
+                break;
+            }
+        }
+
+        if need_to_fill_data {
+            let data_block_column_ids: HashSet<ColumnId> =
+                part.columns_meta.keys().cloned().collect();
+            let mut num_rows = 0;
+            for part in parts {
+                let part = FusePartInfo::from_part(part)?;
+                num_rows += part.nums_rows;
+            }
+
+            let default_vals = self.default_vals.clone();
+
+            Ok(DataBlock::create_with_default_value_and_block(
+                &self.projected_schema,
+                &data_block,
+                &data_block_column_ids,
+                &default_vals,
+                num_rows,
+            )?)
+        } else {
+            Ok(data_block)
+        }
     }
 
     pub fn build_block(&self, chunks: Vec<(usize, Box<dyn Array>)>) -> Result<DataBlock> {
