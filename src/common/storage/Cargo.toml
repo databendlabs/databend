@@ -15,6 +15,7 @@ common-auth = { path = "../auth" }
 common-base = { path = "../base" }
 common-exception = { path = "../exception" }
 common-expression = { path = "../../query/expression" }
+common-meta-app = { path = "../../meta/app" }
 common-meta-types = { path = "../../meta/types" }
 
 anyhow = { workspace = true }

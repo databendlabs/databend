@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use common_exception::exception::Result;
-use common_meta_types::AuthInfo;
-use common_meta_types::PasswordHashMethod;
-use common_meta_types::UserInfo;
+use common_meta_app::principal::AuthInfo;
+use common_meta_app::principal::PasswordHashMethod;
+use common_meta_app::principal::UserInfo;
 
 #[test]
 fn test_user_info() -> Result<()> {

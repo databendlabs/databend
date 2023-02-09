@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_base::base::tokio;
 use common_exception::Result;
-use common_meta_types::UserIdentity;
+use common_meta_app::principal::UserIdentity;
 use common_users::UserApiProvider;
 use databend_query::api::http::v1::instance_status::instance_status_handler;
 use databend_query::api::http::v1::instance_status::InstanceStatus;

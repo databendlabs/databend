@@ -13,20 +13,22 @@
 // limitations under the License.
 
 use common_exception::exception::Result;
-use common_meta_types::UserDefinedFunction;
+use common_meta_app::principal::UserPrivilegeSet;
+use common_meta_app::principal::UserPrivilegeType;
 
 #[test]
-fn test_udf() -> Result<()> {
-    let udf = UserDefinedFunction::new(
-        "is_not_null",
-        vec!["p".to_string()],
-        "not(is_null(p))",
-        "this is a description",
-    );
-    let ser = serde_json::to_string(&udf)?;
+fn test_user_privilege() -> Result<()> {
+    let mut privileges = UserPrivilegeSet::empty();
+    let r = privileges.has_privilege(UserPrivilegeType::Insert);
+    assert!(!r);
 
-    let de = UserDefinedFunction::try_from(ser.into_bytes())?;
-    assert_eq!(udf, de);
+    privileges.set_privilege(UserPrivilegeType::Insert);
+    let r = privileges.has_privilege(UserPrivilegeType::Insert);
+    assert!(r);
+
+    privileges.set_all_privileges();
+    let r = privileges.has_privilege(UserPrivilegeType::Create);
+    assert!(r);
 
     Ok(())
 }

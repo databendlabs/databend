@@ -24,8 +24,8 @@ use common_expression::TypeDeserializerImpl;
 use common_formats::FieldDecoder;
 use common_formats::FieldJsonAstDecoder;
 use common_formats::FileFormatOptionsExt;
-use common_meta_types::OnErrorMode;
-use common_meta_types::StageFileFormatType;
+use common_meta_app::principal::OnErrorMode;
+use common_meta_app::principal::StageFileFormatType;
 
 use crate::input_formats::AligningStateRowDelimiter;
 use crate::input_formats::BlockBuilder;

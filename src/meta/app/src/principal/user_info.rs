@@ -22,10 +22,10 @@ use enumflags2::BitFlags;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::user_grant::UserGrantSet;
-use crate::AuthInfo;
-use crate::UserIdentity;
-use crate::UserQuota;
+use crate::principal::AuthInfo;
+use crate::principal::UserGrantSet;
+use crate::principal::UserIdentity;
+use crate::principal::UserQuota;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 #[serde(default)]
@@ -190,9 +190,9 @@ impl std::fmt::Display for UserOptionFlag {
 mod tests {
     use enumflags2::BitFlags;
 
-    use crate::AuthInfo;
-    use crate::UserInfo;
-    use crate::UserOption;
+    use crate::principal::AuthInfo;
+    use crate::principal::UserInfo;
+    use crate::principal::UserOption;
 
     #[test]
     fn test_user_update_auth_option() -> anyhow::Result<()> {
