@@ -16,9 +16,12 @@ echo "create stage s2 url = '${DATADIR}' FILE_FORMAT = (type = PARQUET);"  | $MY
 cp "$CURDIR"/../../../../data/tuple.parquet ${DATADIR_PATH}/
 cp "$CURDIR"/../../../../data/sample.csv ${DATADIR_PATH}/
 
+echo "select * from infer_schema(location => '@s2/tuple.parquet');" | $MYSQL_CLIENT_CONNECT
+echo "select * from infer_schema(location => '@s2/tuple.parquet');" | $MYSQL_CLIENT_CONNECT
 echo "select * from @s2 (files => ('tuple.parquet'));" | $MYSQL_CLIENT_CONNECT
 
 echo "---"
 
 cp "$CURDIR"/../../../../data/tuple.parquet ${DATADIR_PATH}/tuple2.parquet
+echo "select * from infer_schema(location => '@s2', pattern => '.*parquet');" | $MYSQL_CLIENT_CONNECT
 echo "select * from @s2 (pattern => '.*parquet');" | $MYSQL_CLIENT_CONNECT
