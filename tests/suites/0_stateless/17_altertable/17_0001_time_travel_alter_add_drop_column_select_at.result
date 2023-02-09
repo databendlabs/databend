@@ -4,14 +4,26 @@ latest snapshot should contain 3 rows
 alter table add a column
 counting the data set of first insertion, which should contain 2 rows
 2
+select the data set of first insertion, which should contain 2 rows
+1
+2
 planner_v2: counting the data set of first insertion, which should contain 2 rows
 2
 planner_v2: counting the data set of first insertion by timestamp, which should contains 2 rows
+2
+planner_v2: select the data set of first insertion by timestamp, which should contains 2 rows
+1
 2
 alter table drop a column
 counting the data set of first insertion, which should contain 2 rows
 2
+select the data set of first insertion, which should contain 2 rows
+1
+2
 planner_v2: counting the data set of first insertion, which should contain 2 rows
 2
 planner_v2: counting the data set of first insertion by timestamp, which should contains 2 rows
+2
+planner_v2: select the data set of first insertion by timestamp, which should contains 2 rows
+1
 2

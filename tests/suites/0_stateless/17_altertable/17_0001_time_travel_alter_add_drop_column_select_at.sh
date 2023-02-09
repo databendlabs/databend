@@ -23,6 +23,9 @@ SNAPSHOT_ID=$(echo "select previous_snapshot_id from fuse_snapshot('default','t1
 echo "counting the data set of first insertion, which should contain 2 rows"
 echo "select count(*) from t12_0005 at (snapshot => '$SNAPSHOT_ID')" | $MYSQL_CLIENT_CONNECT
 
+echo "select the data set of first insertion, which should contain 2 rows"
+echo "select * from t12_0005 at (snapshot => '$SNAPSHOT_ID')" | $MYSQL_CLIENT_CONNECT
+
 echo "planner_v2: counting the data set of first insertion, which should contain 2 rows"
 echo "select count(t.c) from t12_0005 at (snapshot => '$SNAPSHOT_ID') as t" | $MYSQL_CLIENT_CONNECT
 
@@ -32,6 +35,9 @@ TIMEPOINT=$(echo "select timestamp from fuse_snapshot('default', 't12_0005') whe
 
 echo "planner_v2: counting the data set of first insertion by timestamp, which should contains 2 rows"
 echo "select count(t.c) from t12_0005 at (TIMESTAMP => '$TIMEPOINT'::TIMESTAMP) as t" | $MYSQL_CLIENT_CONNECT
+
+echo "planner_v2: select the data set of first insertion by timestamp, which should contains 2 rows"
+echo "select * from t12_0005 at (TIMESTAMP => '$TIMEPOINT'::TIMESTAMP) as t" | $MYSQL_CLIENT_CONNECT
 
 # alter table drop a column
 echo "alter table drop a column"
@@ -43,6 +49,9 @@ SNAPSHOT_ID=$(echo "select previous_snapshot_id from fuse_snapshot('default','t1
 echo "counting the data set of first insertion, which should contain 2 rows"
 echo "select count(*) from t12_0005 at (snapshot => '$SNAPSHOT_ID')" | $MYSQL_CLIENT_CONNECT
 
+echo "select the data set of first insertion, which should contain 2 rows"
+echo "select * from t12_0005 at (snapshot => '$SNAPSHOT_ID')" | $MYSQL_CLIENT_CONNECT
+
 echo "planner_v2: counting the data set of first insertion, which should contain 2 rows"
 echo "select count(t.c) from t12_0005 at (snapshot => '$SNAPSHOT_ID') as t" | $MYSQL_CLIENT_CONNECT
 
@@ -52,6 +61,9 @@ TIMEPOINT=$(echo "select timestamp from fuse_snapshot('default', 't12_0005') whe
 
 echo "planner_v2: counting the data set of first insertion by timestamp, which should contains 2 rows"
 echo "select count(t.c) from t12_0005 at (TIMESTAMP => '$TIMEPOINT'::TIMESTAMP) as t" | $MYSQL_CLIENT_CONNECT
+
+echo "planner_v2: select the data set of first insertion by timestamp, which should contains 2 rows"
+echo "select * from t12_0005 at (TIMESTAMP => '$TIMEPOINT'::TIMESTAMP) as t" | $MYSQL_CLIENT_CONNECT
 
 ## Drop table.
 echo "drop table t12_0005" | $MYSQL_CLIENT_CONNECT
