@@ -23,8 +23,8 @@ use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Stoppable;
 use common_meta_types::protobuf::meta_service_server::MetaServiceServer;
 use common_meta_types::protobuf::FILE_DESCRIPTOR_SET;
+use common_meta_types::MetaError;
 use common_meta_types::MetaNetworkError;
-use common_meta_types::MetaResult;
 use futures::future::Either;
 use tonic::transport::Identity;
 use tonic::transport::Server;
@@ -59,7 +59,7 @@ impl GrpcServer {
         self.meta_node.clone()
     }
 
-    async fn do_start(&mut self) -> MetaResult<()> {
+    async fn do_start(&mut self) -> Result<(), MetaError> {
         let conf = self.conf.clone();
         let meta_node = self.meta_node.clone();
         // For sending signal when server started.

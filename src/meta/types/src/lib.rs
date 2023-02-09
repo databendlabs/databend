@@ -82,7 +82,6 @@ pub use errors::meta_api_errors::MetaDataReadError;
 pub use errors::meta_api_errors::MetaOperationError;
 pub use errors::meta_client_errors::MetaClientError;
 pub use errors::meta_errors::MetaError;
-pub use errors::meta_errors::MetaResult;
 pub use errors::meta_handshake_errors::MetaHandshakeError;
 pub use errors::meta_management_error::MetaManagementError;
 pub use errors::meta_network_errors::ConnectionError;
