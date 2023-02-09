@@ -347,7 +347,7 @@ impl DataBlock {
     }
 
     // If default_vals[i].is_some(), then DataBlock.column[i] = num_rows * default_vals[i].
-    // else, DataBlock.column[i] = chuck.column.
+    // Else, DataBlock.column[i] = chuck.column.
     // For example, Schema.field is [a,b,c] and default_vals is [Some("a"), None, Some("c")],
     // then the return block column will be ["a"*num_rows, chunk.column[0], "c"*num_rows].
     pub fn create_with_default_value_and_chunk<A: AsRef<dyn Array>>(
@@ -357,8 +357,8 @@ impl DataBlock {
         num_rows: usize,
     ) -> Result<DataBlock> {
         let mut chunk_idx: usize = 0;
-        let chunk_columns = chuck.arrays();
         let schema_fields = schema.fields();
+        let chunk_columns = chuck.arrays();
 
         let mut columns = Vec::with_capacity(default_vals.len());
         for (i, default_val) in default_vals.iter().enumerate() {
@@ -390,27 +390,23 @@ impl DataBlock {
         schema: &DataSchema,
         default_vals: &[Scalar],
         num_rows: usize,
-    ) -> Self {
-        let mut data_block = DataBlock::empty();
-        data_block.num_rows = num_rows;
-        let schema_fields = schema.fields();
+    ) -> Result<DataBlock> {
+        let default_opt_vals: Vec<Option<Scalar>> = default_vals
+            .iter()
+            .map(|default_val| Some(default_val.to_owned()))
+            .collect();
 
-        let mut columns = Vec::with_capacity(default_vals.len());
-        for (i, default_val) in default_vals.iter().enumerate() {
-            let field = &schema_fields[i];
-            let data_type = field.data_type();
-
-            let column = BlockEntry {
-                data_type: data_type.clone(),
-                value: Value::Scalar(default_val.to_owned()),
-            };
-
-            columns.push(column);
-        }
-
-        DataBlock::new(columns, num_rows)
+        Self::create_with_default_value_and_chunk(
+            schema,
+            &ArrowChunk::<ArrayRef>::new(vec![]),
+            &default_opt_vals[0..],
+            num_rows,
+        )
     }
 
+    // If block_column_ids not contain schema.field[i].column_id,
+    // then DataBlock.column[i] = num_rows * default_vals[i].
+    // Else, DataBlock.column[i] = data_block.column.
     pub fn create_with_default_value_and_block(
         schema: &TableSchemaRef,
         data_block: &DataBlock,

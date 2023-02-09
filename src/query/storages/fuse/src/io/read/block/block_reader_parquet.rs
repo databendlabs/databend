@@ -119,11 +119,7 @@ impl BlockReader {
     pub fn build_default_values_block(&self, num_rows: usize) -> Result<DataBlock> {
         let data_schema = self.data_schema();
         let default_vals = self.default_vals.clone();
-        Ok(DataBlock::create_with_default_value(
-            &data_schema,
-            &default_vals,
-            num_rows,
-        ))
+        DataBlock::create_with_default_value(&data_schema, &default_vals, num_rows)
     }
 
     /// Deserialize column chunks data from parquet format to DataBlock with a uncompressed buffer.
@@ -181,9 +177,9 @@ impl BlockReader {
                         .clone()
                         .unwrap_or_else(|| UncompressedBuffer::new(0)),
                 )?);
-                need_default_vals.push(None);
+                need_default_vals.push(false);
             } else {
-                need_default_vals.push(Some(()));
+                need_default_vals.push(true);
                 need_to_fill_default_val = true;
             }
         }
@@ -203,7 +199,7 @@ impl BlockReader {
             let schema_default_vals = self.default_vals.clone();
             let mut default_vals = Vec::with_capacity(need_default_vals.len());
             for (i, need_default_val) in need_default_vals.iter().enumerate() {
-                if need_default_val.is_none() {
+                if !need_default_val {
                     default_vals.push(None);
                 } else {
                     default_vals.push(Some(schema_default_vals[i].clone()));

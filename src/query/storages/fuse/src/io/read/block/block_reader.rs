@@ -144,6 +144,7 @@ impl BlockReader {
             .collect();
         let project_indices = Self::build_projection_indices(&project_column_nodes);
 
+        // init default_vals of schema.fields
         let mut default_vals = Vec::with_capacity(projected_schema.fields().len());
         for field in projected_schema.fields() {
             default_vals.push(field_default_value(ctx.clone(), field)?);
