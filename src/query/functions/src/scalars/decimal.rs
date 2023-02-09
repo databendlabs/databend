@@ -14,29 +14,29 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_expression::types::nullable::NullableColumn;
-use common_expression::types::number::Int64Type;
-use common_expression::types::number::NumberScalar;
-use common_expression::types::number::UInt8Type;
-use common_expression::types::string::StringColumn;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::string::StringDomain;
-use common_expression::types::NumberColumn;
+
+
+
+
+
+
+
+
+
 use common_expression::types::*;
-use common_expression::wrap_nullable;
-use common_expression::Column;
-use common_expression::Domain;
+
+
+
 use common_expression::EvalContext;
 use common_expression::Function;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
-use common_expression::Scalar;
+
 use common_expression::Value;
 use common_expression::ValueRef;
-use common_exception::Result;
+
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_function_factory("plus", |_, args_type| {
@@ -60,7 +60,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 property: FunctionProperty::default(),
             },
             calc_domain: Box::new(|args_domain| {
-                let domain = args_domain[0].as_string().unwrap();
+                let _domain = args_domain[0].as_string().unwrap();
                 FunctionDomain::Full
             }),
             eval: Box::new(plus),
@@ -68,6 +68,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     });
 }
 
-fn plus(ctx: &mut EvalContext, args: &[ValueRef<AnyType>]) -> Result<Value<AnyType>> {
+fn plus(_cargs: &[ValueRef<AnyType>], _tx: &mut EvalContext) -> Value<AnyType> {
     todo!()     
 }

@@ -25,11 +25,9 @@ use num_traits::AsPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::AnyType;
 use super::Number;
 use super::SimpleDomain;
 use crate::utils::arrow::buffer_into_mut;
-use crate::Value;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
 pub enum DecimalDataType {
@@ -201,53 +199,12 @@ impl DecimalDataType {
                     DecimalDataType::Decimal256(_) => todo!(),
                 }
             }
-            DecimalColumn::Decimal256(buffer, from) => match self {
+            DecimalColumn::Decimal256(_buffer, _from) => match self {
                 DecimalDataType::Decimal128(_) => todo!(),
                 DecimalDataType::Decimal256(_) => todo!(),
             },
         }
     }
-
-    /// Returns a [`PrimitiveArray<i128>`] with the casted values. Values are `None` on overflow
-    // pub fn integer_to_decimal<T: NativeType + AsPrimitive<i128>>(
-    //     from: &PrimitiveArray<T>,
-    //     to_precision: usize,
-    //     to_scale: usize,
-    // ) -> PrimitiveArray<i128> {
-    //     let multiplier = 10_i128.pow(to_scale as u32);
-
-    //     let min_for_precision = 9_i128
-    //         .saturating_pow(1 + to_precision as u32)
-    //         .saturating_neg();
-    //     let max_for_precision = 9_i128.saturating_pow(1 + to_precision as u32);
-
-    //     let values = from.iter().map(|x| {
-    //         x.and_then(|x| {
-    //             x.as_().checked_mul(multiplier).and_then(|x| {
-    //                 if x > max_for_precision || x < min_for_precision {
-    //                     None
-    //                 } else {
-    //                     Some(x)
-    //                 }
-    //             })
-    //         })
-    //     });
-
-    //     PrimitiveArray::<i128>::from_trusted_len_iter(values)
-    //         .to(DataType::Decimal(to_precision, to_scale))
-    // }
-
-    // pub(super) fn integer_to_decimal_dyn<T>(
-    //     from: &dyn Array,
-    //     precision: usize,
-    //     scale: usize,
-    // ) -> Result<Box<dyn Array>>
-    // where
-    //     T: NativeType + AsPrimitive<i128>,
-    // {
-    //     let from = from.as_any().downcast_ref().unwrap();
-    //     Ok(Box::new(integer_to_decimal::<T>(from, precision, scale)))
-    // }
 
     pub fn from_integer<T: Number + AsPrimitive<i128>>(
         &self,
@@ -284,7 +241,7 @@ impl DecimalDataType {
                 }
                 Ok(DecimalColumn::Decimal128(values.into(), *size))
             }
-            DecimalDataType::Decimal256(size) => todo!(),
+            DecimalDataType::Decimal256(_size) => todo!(),
         }
     }
 }

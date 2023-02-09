@@ -146,7 +146,7 @@ impl DataType {
 
     pub fn is_decimal(&self) -> bool {
         match self {
-            DataType::Decimal(ty) => true,
+            DataType::Decimal(_ty) => true,
             _ => false,
         }
     }
