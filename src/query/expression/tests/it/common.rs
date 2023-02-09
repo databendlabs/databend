@@ -34,7 +34,7 @@ pub fn new_block(columns: &[Column]) -> DataBlock {
     DataBlock::new(columns, len)
 }
 
-fn run_filter(file: &mut impl Write, predicate: Vec<bool>, block: &DataBlock) {
+pub fn run_filter(file: &mut impl Write, predicate: Vec<bool>, block: &DataBlock) {
     let result = block.clone().filter_with_bitmap(&predicate.clone().into());
 
     match result {
