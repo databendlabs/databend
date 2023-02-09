@@ -81,6 +81,8 @@ impl OwnerMemory {
     }
 }
 
+type CachedColumnData = Vec<(ColumnId, Arc<Vec<u8>>)>;
+type CachedColumnArray = Vec<(ColumnId, Arc<Box<dyn Array>>)>;
 pub struct MergeIOReadResult {
     block_path: String,
     columns_chunk_offsets: HashMap<ColumnId, (usize, Range<usize>)>,
@@ -89,9 +91,6 @@ pub struct MergeIOReadResult {
     cached_column_array: CachedColumnArray,
     table_data_cache: Option<TableDataCache>,
 }
-
-type CachedColumnData = Vec<(ColumnId, Arc<Vec<u8>>)>;
-type CachedColumnArray = Vec<(ColumnId, Arc<Box<dyn Array>>)>;
 
 pub enum DataItem<'a> {
     RawData(&'a [u8]),
@@ -141,19 +140,18 @@ impl MergeIOReadResult {
         self.owner_memory.get_chunk(index, path)
     }
 
-    // sync read path also hit this method!
-    // TODO 1. pass the cache in 2) let the block reader hold a instance of cache
-    fn add_column_chunk(&mut self, chunk: usize, column_id: ColumnId, range: Range<usize>) {
+    fn add_column_chunk(&mut self, chunk_index: usize, column_id: ColumnId, range: Range<usize>) {
         // TODO doc why put cache operation could be placed here
         if let Some(cache) = &self.table_data_cache {
-            if let Ok(chunk_data) = self.get_chunk(chunk, &self.block_path) {
+            if let Ok(chunk_data) = self.get_chunk(chunk_index, &self.block_path) {
                 let cache_key = TableDataColumnCacheKey::new(&self.block_path, column_id);
                 let data = &chunk_data[range.clone()];
                 // TODO api is NOT type safe
                 cache.put(cache_key.as_ref().to_owned(), Arc::new(data.to_vec()));
             }
         }
-        self.columns_chunk_offsets.insert(column_id, (chunk, range));
+        self.columns_chunk_offsets
+            .insert(column_id, (chunk_index, range));
     }
 }
 
@@ -207,7 +205,16 @@ impl BlockReader {
         object: Object,
         raw_ranges: Vec<(ColumnId, Range<u64>)>,
     ) -> Result<MergeIOReadResult> {
-        let path = object.path().to_string();
+        if raw_ranges.is_empty() {
+            // shortcut
+            let read_res = MergeIOReadResult::create(
+                OwnerMemory::create(vec![]),
+                raw_ranges.len(),
+                object.path().to_string(),
+                CacheManager::instance().get_table_data_cache(),
+            );
+            return Ok(read_res);
+        }
 
         // Build merged read ranges.
         let ranges = raw_ranges
@@ -244,7 +251,7 @@ impl BlockReader {
         let mut read_res = MergeIOReadResult::create(
             owner_memory,
             raw_ranges.len(),
-            path.clone(),
+            object.path().to_string(),
             table_data_cache,
         );
 
@@ -260,7 +267,9 @@ impl BlockReader {
             let (merged_range_idx, merged_range) = match range_merger.get(column_range.clone()) {
                 None => Err(ErrorCode::Internal(format!(
                     "It's a terrible bug, not found raw range:[{:?}], path:{} from merged ranges\n: {:?}",
-                    column_range, path, merged_ranges
+                    column_range,
+                    object.path(),
+                    merged_ranges
                 ))),
                 Some((index, range)) => Ok((index, range)),
             }?;
@@ -358,20 +367,19 @@ impl BlockReader {
         for (_index, (column_id, ..)) in self.project_indices.iter() {
             let column_cache_key = TableDataColumnCacheKey::new(location, *column_id);
 
-            // check column array object cache
-            eprintln!("geting col array cache {}", column_cache_key.as_ref());
+            // first, check column array object cache
             if let Some(cache_array) = column_array_cache.get(&column_cache_key) {
-                eprintln!("got from object cache");
                 cached_column_array.push((*column_id, cache_array));
                 continue;
             }
 
-            // check column data cache
+            // and then, check column data cache
             if let Some(cached_column_raw_data) = column_data_cache.get(&column_cache_key) {
                 cached_column_data.push((*column_id, cached_column_raw_data));
                 continue;
             }
 
+            // if all cache missed, prepare the ranges to be read
             if let Some(column_meta) = columns_meta.get(column_id) {
                 let (offset, len) = column_meta.offset_length();
                 ranges.push((*column_id, offset..(offset + len)));
@@ -398,9 +406,18 @@ impl BlockReader {
         part: PartInfoPtr,
     ) -> Result<MergeIOReadResult> {
         let part = FusePartInfo::from_part(&part)?;
+        let column_array_cache = CacheManager::instance().get_table_data_array_cache();
 
         let mut ranges = vec![];
+        let mut cached_column_array = vec![];
         for (index, (column_id, ..)) in self.project_indices.iter() {
+            // first, check column array object cache
+            let block_path = &part.location;
+            let column_cache_key = TableDataColumnCacheKey::new(block_path, *column_id);
+            if let Some(cache_array) = column_array_cache.get(&column_cache_key) {
+                cached_column_array.push((*column_id, cache_array));
+                continue;
+            }
             if let Some(column_meta) = part.columns_meta.get(column_id) {
                 let (offset, len) = column_meta.offset_length();
                 ranges.push((*index, offset..(offset + len)));
@@ -408,7 +425,9 @@ impl BlockReader {
         }
 
         let object = self.operator.object(&part.location);
-        Self::sync_merge_io_read(settings, object, ranges)
+        let mut merge_io_result = Self::sync_merge_io_read(settings, object, ranges)?;
+        merge_io_result.cached_column_array = cached_column_array;
+        Ok(merge_io_result)
     }
 
     // Build non duplicate leaf_ids to avoid repeated read column from parquet

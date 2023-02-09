@@ -181,7 +181,7 @@ impl BlockReader {
                 }
             }
 
-            if column_metas.len() > 0 {
+            if !column_metas.is_empty() {
                 if column_metas.len() > 1 {
                     // working on nested field
                     holders.push(Holder::Deserialized(deserialized_item_index));
@@ -236,10 +236,7 @@ impl BlockReader {
 
         if let Some(cache) = CacheManager::instance().get_table_data_array_cache() {
             // populate array cache items
-            for (item, need_tobe_cached) in deserialized_column_arrays
-                .into_iter()
-                .zip(cache_flags)
-                .into_iter()
+            for (item, need_tobe_cached) in deserialized_column_arrays.into_iter().zip(cache_flags)
             {
                 if let Some(column_idx) = need_tobe_cached {
                     let key = TableDataColumnCacheKey::new(block_path, column_idx);
