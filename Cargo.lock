@@ -7832,6 +7832,7 @@ version = "0.1.0"
 dependencies = [
  "common-arrow",
  "common-base",
+ "common-cache",
  "common-config",
  "common-exception",
  "storages-common-cache",

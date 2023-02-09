@@ -18,7 +18,6 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_arrow::arrow::array::Array;
 use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::metadata::SchemaDescriptor;
@@ -43,6 +42,7 @@ use storages_common_cache::CacheAccessor;
 use storages_common_cache::TableDataCache;
 use storages_common_cache::TableDataColumnCacheKey;
 use storages_common_cache_manager::CacheManager;
+use storages_common_cache_manager::SizedColumnArray;
 use storages_common_table_meta::meta::ColumnMeta;
 
 use crate::fuse_part::FusePartInfo;
@@ -82,7 +82,7 @@ impl OwnerMemory {
 }
 
 type CachedColumnData = Vec<(ColumnId, Arc<Vec<u8>>)>;
-type CachedColumnArray = Vec<(ColumnId, Arc<Box<dyn Array>>)>;
+type CachedColumnArray = Vec<(ColumnId, Arc<SizedColumnArray>)>;
 pub struct MergeIOReadResult {
     block_path: String,
     columns_chunk_offsets: HashMap<ColumnId, (usize, Range<usize>)>,
@@ -94,7 +94,7 @@ pub struct MergeIOReadResult {
 
 pub enum DataItem<'a> {
     RawData(&'a [u8]),
-    ColumnArray(&'a Arc<Box<dyn Array>>),
+    ColumnArray(&'a Arc<SizedColumnArray>),
 }
 
 impl MergeIOReadResult {

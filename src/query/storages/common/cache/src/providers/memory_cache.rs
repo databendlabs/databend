@@ -23,20 +23,34 @@ use common_cache::DefaultHashBuilder;
 use common_cache::LruCache;
 use parking_lot::RwLock;
 
-pub type ItemCache<V, S, M> = LruCache<String, Arc<V>, S, M>;
+pub type ImMemoryCache<V, S, M> = LruCache<String, Arc<V>, S, M>;
 pub type BytesCache = LruCache<String, Arc<Vec<u8>>, DefaultHashBuilder, BytesMeter>;
 
 pub type InMemoryItemCacheHolder<T, S = DefaultHashBuilder, M = Count> =
-    Arc<RwLock<ItemCache<T, S, M>>>;
+    Arc<RwLock<ImMemoryCache<T, S, M>>>;
 pub type InMemoryBytesCacheHolder = Arc<RwLock<BytesCache>>;
 
 pub struct InMemoryCacheBuilder;
 impl InMemoryCacheBuilder {
+    // new cache that cache `V`, and metered by the given `meter`
+    pub fn new_in_memory_cache<V, M>(
+        capacity: u64,
+        meter: M,
+    ) -> InMemoryItemCacheHolder<V, DefaultHashBuilder, M>
+    where
+        M: CountableMeter<String, Arc<V>>,
+    {
+        let cache = LruCache::with_meter_and_hasher(capacity, meter, DefaultHashBuilder::new());
+        Arc::new(RwLock::new(cache))
+    }
+
+    // new cache that caches `V` and meter by counting
     pub fn new_item_cache<V>(capacity: u64) -> InMemoryItemCacheHolder<V> {
         let cache = LruCache::new(capacity);
         Arc::new(RwLock::new(cache))
     }
 
+    // new cache that cache `Vec<u8>`, and metered by byte size
     pub fn new_bytes_cache(capacity: u64) -> InMemoryBytesCacheHolder {
         let cache =
             LruCache::with_meter_and_hasher(capacity, BytesMeter, DefaultHashBuilder::new());

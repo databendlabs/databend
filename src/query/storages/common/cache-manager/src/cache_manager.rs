@@ -16,6 +16,8 @@
 use std::sync::Arc;
 
 use common_base::base::GlobalInstance;
+use common_cache::CountableMeter;
+use common_cache::DefaultHashBuilder;
 use common_config::QueryConfig;
 use common_exception::Result;
 use storages_common_cache::InMemoryCacheBuilder;
@@ -25,11 +27,12 @@ use storages_common_cache::TableDataCacheBuilder;
 
 use crate::caches::BloomIndexFilterCache;
 use crate::caches::BloomIndexMetaCache;
+use crate::caches::ColumnArrayCache;
 use crate::caches::FileMetaDataCache;
 use crate::caches::SegmentInfoCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
-use crate::ColumnArrayCache;
+use crate::ColumnArrayMeter;
 
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
 
@@ -61,7 +64,8 @@ impl CacheManager {
         };
 
         // setup in-memory table column cache
-        let table_column_array_cache = Self::new_item_cache(config.table_cache_column_mb_size);
+        let table_column_array_cache =
+            Self::new_in_memory_cache(config.table_cache_column_mb_size, ColumnArrayMeter);
 
         // setup in-memory table meta cache
         if !config.table_meta_cache_enabled {
@@ -135,9 +139,25 @@ impl CacheManager {
         self.table_column_array_cache.clone()
     }
 
-    fn new_item_cache<T>(capacity: u64) -> Option<InMemoryItemCacheHolder<T>> {
+    // create cache that meters size by `Count`
+    fn new_item_cache<V>(capacity: u64) -> Option<InMemoryItemCacheHolder<V>> {
         if capacity > 0 {
             Some(InMemoryCacheBuilder::new_item_cache(capacity))
+        } else {
+            None
+        }
+    }
+
+    // create cache that meters size by `meter`
+    fn new_in_memory_cache<V, M>(
+        capacity: u64,
+        meter: M,
+    ) -> Option<InMemoryItemCacheHolder<V, DefaultHashBuilder, M>>
+    where
+        M: CountableMeter<String, Arc<V>>,
+    {
+        if capacity > 0 {
+            Some(InMemoryCacheBuilder::new_in_memory_cache(capacity, meter))
         } else {
             None
         }

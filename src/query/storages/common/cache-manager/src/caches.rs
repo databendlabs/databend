@@ -12,7 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Borrow;
+use std::sync::Arc;
+
 use common_arrow::parquet::metadata::FileMetaData;
+use common_cache::DefaultHashBuilder;
+use common_cache::Meter;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::InMemoryItemCacheHolder;
 use storages_common_index::filters::Xor8Filter;
@@ -38,8 +43,9 @@ pub type BloomIndexMetaCache = InMemoryItemCacheHolder<BloomIndexMeta>;
 pub type FileMetaDataCache = InMemoryItemCacheHolder<FileMetaData>;
 
 /// In memory object cache of parquet FileMetaData of external parquet files
-/// TODO provides a proper meter
-pub type ColumnArrayCache = InMemoryItemCacheHolder<Box<dyn common_arrow::arrow::array::Array>>;
+pub type ColumnArrayCache =
+    InMemoryItemCacheHolder<SizedColumnArray, DefaultHashBuilder, ColumnArrayMeter>;
+pub type SizedColumnArray = (Box<dyn common_arrow::arrow::array::Array>, usize);
 
 // Bind Type of cached objects to Caches
 //
@@ -90,5 +96,15 @@ impl CachedObject<FileMetaData> for FileMetaData {
     type Cache = FileMetaDataCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_file_meta_data_cache()
+    }
+}
+
+pub struct ColumnArrayMeter;
+
+impl<K, V> Meter<K, Arc<(V, usize)>> for ColumnArrayMeter {
+    type Measure = usize;
+    fn measure<Q: ?Sized>(&self, _: &Q, v: &Arc<(V, usize)>) -> usize
+    where K: Borrow<Q> {
+        v.1
     }
 }

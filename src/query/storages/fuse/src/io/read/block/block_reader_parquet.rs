@@ -159,6 +159,7 @@ impl BlockReader {
             let mut column_metas = Vec::with_capacity(indices.len());
             let mut column_chunks = Vec::with_capacity(indices.len());
             let mut column_descriptors = Vec::with_capacity(indices.len());
+            let mut field_uncompressed_size = 0;
             for (i, index) in indices.iter().enumerate() {
                 let column_id = column.leaf_column_id(i);
                 if let Some(column_meta) = columns_meta.get(&column_id) {
@@ -170,10 +171,12 @@ impl BlockReader {
                                 column_metas.push(column_meta);
                                 column_chunks.push(*data);
                                 column_descriptors.push(column_descriptor);
+                                field_uncompressed_size += data.len();
                             }
                             DataItem::ColumnArray(column_array) => {
                                 let idx = column_idx_cached_array.len();
                                 column_idx_cached_array.push(*column_array);
+                                field_uncompressed_size += column_array.1;
                                 holders.push(Holder::Cached(idx));
                             }
                         }
@@ -194,18 +197,21 @@ impl BlockReader {
                 }
                 deserialized_item_index += 1;
 
-                columns_array_iter.push(Self::chunks_to_parquet_array_iter(
-                    column_metas,
-                    column_chunks,
-                    // test_chunks,
-                    num_rows,
-                    column_descriptors,
-                    field,
-                    compression,
-                    uncompressed_buffer
-                        .clone()
-                        .unwrap_or_else(|| UncompressedBuffer::new(0)),
-                )?);
+                // TODO why not just iterator it here?
+                columns_array_iter.push((
+                    field_uncompressed_size,
+                    Self::chunks_to_parquet_array_iter(
+                        column_metas,
+                        column_chunks,
+                        num_rows,
+                        column_descriptors,
+                        field,
+                        compression,
+                        uncompressed_buffer
+                            .clone()
+                            .unwrap_or_else(|| UncompressedBuffer::new(0)),
+                    )?,
+                ));
             }
         }
 
@@ -214,20 +220,19 @@ impl BlockReader {
         // deserialized fields that are not cached
         let deserialized_column_arrays = columns_array_iter
             .into_iter()
-            .map(|mut v|
+            .map(|(size, mut array_iter)|
                 // TODO error handling
-                     v.next().unwrap().unwrap())
+                     (size, array_iter.next().unwrap().unwrap()))
             .collect::<Vec<_>>();
 
         // assembly the arrays
         for holder in holders {
             match holder {
                 Holder::Cached(idx) => {
-                    arrays.push(column_idx_cached_array[idx].as_ref());
+                    arrays.push(&column_idx_cached_array[idx].as_ref().0);
                 }
                 Holder::Deserialized(idx) => {
-                    let item = &deserialized_column_arrays[idx];
-                    arrays.push(item);
+                    arrays.push(&deserialized_column_arrays[idx].1);
                 }
             }
         }
@@ -236,11 +241,12 @@ impl BlockReader {
 
         if let Some(cache) = CacheManager::instance().get_table_data_array_cache() {
             // populate array cache items
-            for (item, need_tobe_cached) in deserialized_column_arrays.into_iter().zip(cache_flags)
+            for ((size, item), need_tobe_cached) in
+                deserialized_column_arrays.into_iter().zip(cache_flags)
             {
                 if let Some(column_idx) = need_tobe_cached {
                     let key = TableDataColumnCacheKey::new(block_path, column_idx);
-                    cache.put(key.into(), item.into())
+                    cache.put(key.into(), Arc::new((item, size)))
                 }
             }
         }
