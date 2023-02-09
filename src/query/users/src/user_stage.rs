@@ -14,6 +14,7 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::MatchSeq;
 use common_meta_types::UserStageInfo;
 
 use crate::UserApiProvider;
@@ -44,7 +45,7 @@ impl UserApiProvider {
     // Get one stage from by tenant.
     pub async fn get_stage(&self, tenant: &str, stage_name: &str) -> Result<UserStageInfo> {
         let stage_api_provider = self.get_stage_api_client(tenant)?;
-        let get_stage = stage_api_provider.get_stage(stage_name, None);
+        let get_stage = stage_api_provider.get_stage(stage_name, MatchSeq::GE(0));
         Ok(get_stage.await?.data)
     }
 

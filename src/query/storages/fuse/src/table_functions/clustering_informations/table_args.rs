@@ -27,18 +27,10 @@ use crate::table_functions::TableArgs;
 use crate::FuseTable;
 
 pub fn parse_func_table_args(table_args: &TableArgs) -> Result<(String, String)> {
-    match table_args {
-        // Todo(zhyass): support 3 arguments.
-        Some(args) if args.len() == 2 => {
-            let db = string_value(&args[0])?;
-            let tbl = string_value(&args[1])?;
-            Ok((db, tbl))
-        }
-        _ => Err(ErrorCode::BadArguments(format!(
-            "expecting database and table name (as two string literals), but got {:?}",
-            table_args
-        ))),
-    }
+    let args = table_args.expect_all_positioned("clustering_information", Some(2))?;
+    let db = string_value(&args[0])?;
+    let tbl = string_value(&args[1])?;
+    Ok((db, tbl))
 }
 
 pub fn get_cluster_keys(

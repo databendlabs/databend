@@ -115,28 +115,6 @@ char_length(String) :: UInt64
 char_length(String NULL) :: UInt64 NULL
 check_json(String) :: String NULL
 check_json(String NULL) :: String NULL
-check_json(Boolean) :: String NULL
-check_json(Boolean NULL) :: String NULL
-check_json(UInt8) :: String NULL
-check_json(UInt8 NULL) :: String NULL
-check_json(UInt16) :: String NULL
-check_json(UInt16 NULL) :: String NULL
-check_json(UInt32) :: String NULL
-check_json(UInt32 NULL) :: String NULL
-check_json(UInt64) :: String NULL
-check_json(UInt64 NULL) :: String NULL
-check_json(Int8) :: String NULL
-check_json(Int8 NULL) :: String NULL
-check_json(Int16) :: String NULL
-check_json(Int16 NULL) :: String NULL
-check_json(Int32) :: String NULL
-check_json(Int32 NULL) :: String NULL
-check_json(Int64) :: String NULL
-check_json(Int64 NULL) :: String NULL
-check_json(Float32) :: String NULL
-check_json(Float32 NULL) :: String NULL
-check_json(Float64) :: String NULL
-check_json(Float64 NULL) :: String NULL
 city64withseed(String, UInt8) :: UInt64
 city64withseed(String NULL, UInt8 NULL) :: UInt64 NULL
 city64withseed(String, UInt16) :: UInt64
@@ -1909,28 +1887,6 @@ ord(String) :: UInt64
 ord(String NULL) :: UInt64 NULL
 parse_json(String) :: Variant
 parse_json(String NULL) :: Variant NULL
-parse_json(Boolean) :: Variant
-parse_json(Boolean NULL) :: Variant NULL
-parse_json(UInt8) :: Variant
-parse_json(UInt8 NULL) :: Variant NULL
-parse_json(UInt16) :: Variant
-parse_json(UInt16 NULL) :: Variant NULL
-parse_json(UInt32) :: Variant
-parse_json(UInt32 NULL) :: Variant NULL
-parse_json(UInt64) :: Variant
-parse_json(UInt64 NULL) :: Variant NULL
-parse_json(Int8) :: Variant
-parse_json(Int8 NULL) :: Variant NULL
-parse_json(Int16) :: Variant
-parse_json(Int16 NULL) :: Variant NULL
-parse_json(Int32) :: Variant
-parse_json(Int32 NULL) :: Variant NULL
-parse_json(Int64) :: Variant
-parse_json(Int64 NULL) :: Variant NULL
-parse_json(Float32) :: Variant
-parse_json(Float32 NULL) :: Variant NULL
-parse_json(Float64) :: Variant
-parse_json(Float64 NULL) :: Variant NULL
 pi() :: Float64
 plus(UInt8, UInt8) :: UInt16
 plus(UInt8 NULL, UInt8 NULL) :: UInt16 NULL
@@ -2464,6 +2420,8 @@ to_int32(Boolean) :: Int32
 to_int32(Boolean NULL) :: Int32 NULL
 to_int32(String) :: Int32
 to_int32(String NULL) :: Int32 NULL
+to_int32(Date) :: Int32
+to_int32(Date NULL) :: Int32 NULL
 to_int32(Variant) :: Int32
 to_int32(Variant NULL) :: Int32 NULL
 to_int64(UInt8) :: Int64
@@ -2788,28 +2746,6 @@ try_inet_ntoa(Int64) :: String NULL
 try_inet_ntoa(Int64 NULL) :: String NULL
 try_parse_json(String) :: Variant NULL
 try_parse_json(String NULL) :: Variant NULL
-try_parse_json(Boolean) :: Variant NULL
-try_parse_json(Boolean NULL) :: Variant NULL
-try_parse_json(UInt8) :: Variant NULL
-try_parse_json(UInt8 NULL) :: Variant NULL
-try_parse_json(UInt16) :: Variant NULL
-try_parse_json(UInt16 NULL) :: Variant NULL
-try_parse_json(UInt32) :: Variant NULL
-try_parse_json(UInt32 NULL) :: Variant NULL
-try_parse_json(UInt64) :: Variant NULL
-try_parse_json(UInt64 NULL) :: Variant NULL
-try_parse_json(Int8) :: Variant NULL
-try_parse_json(Int8 NULL) :: Variant NULL
-try_parse_json(Int16) :: Variant NULL
-try_parse_json(Int16 NULL) :: Variant NULL
-try_parse_json(Int32) :: Variant NULL
-try_parse_json(Int32 NULL) :: Variant NULL
-try_parse_json(Int64) :: Variant NULL
-try_parse_json(Int64 NULL) :: Variant NULL
-try_parse_json(Float32) :: Variant NULL
-try_parse_json(Float32 NULL) :: Variant NULL
-try_parse_json(Float64) :: Variant NULL
-try_parse_json(Float64 NULL) :: Variant NULL
 try_to_boolean(UInt8) :: Boolean NULL
 try_to_boolean(UInt8 NULL) :: Boolean NULL
 try_to_boolean(UInt16) :: Boolean NULL
@@ -2936,6 +2872,8 @@ try_to_int32(Boolean) :: Int32 NULL
 try_to_int32(Boolean NULL) :: Int32 NULL
 try_to_int32(String) :: Int32 NULL
 try_to_int32(String NULL) :: Int32 NULL
+try_to_int32(Date) :: Int32 NULL
+try_to_int32(Date NULL) :: Int32 NULL
 try_to_int32(Variant) :: Int32 NULL
 try_to_int32(Variant NULL) :: Int32 NULL
 try_to_int64(UInt8) :: Int64 NULL
@@ -3207,6 +3145,11 @@ yesterday() :: Date
 
 Factory functions:
 array
+array_avg
+array_count
+array_max
+array_min
+array_sum
 char
 concat
 concat_ws

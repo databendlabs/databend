@@ -97,21 +97,37 @@ pub fn register(registry: &mut FunctionRegistry) {
         "and",
         FunctionProperty::default(),
         |lhs, rhs| {
-            if !lhs.has_null && !rhs.has_null {
-                let bools = match (&lhs.value, &rhs.value) {
-                    (Some(a), Some(b)) => Some(Box::new(BooleanDomain {
-                    has_false: a.has_false || b.has_false,
-                    has_true: a.has_true && b.has_true,
-                    })),
-                    _ => return FunctionDomain::Full,
-                };
-                FunctionDomain::Domain(NullableDomain::<BooleanType> {
-                    has_null: false,
-                    value: bools,
-                })
+            let lhs_has_null = lhs.has_null;
+            let lhs_has_true = lhs.value.as_ref().map(|v| v.has_true).unwrap_or(false);
+            let lhs_has_false = lhs.value.as_ref().map(|v| v.has_false).unwrap_or(false);
+
+            let rhs_has_null = rhs.has_null;
+            let rhs_has_true = rhs.value.as_ref().map(|v| v.has_true).unwrap_or(false);
+            let rhs_has_false = rhs.value.as_ref().map(|v| v.has_false).unwrap_or(false);
+
+            let (has_null, has_true, has_false) = if (!lhs_has_null && !lhs_has_true) || (!rhs_has_null && !rhs_has_true) {
+                (false, false, true)
             } else {
-                FunctionDomain::Full
-            }
+                (
+                    lhs_has_null || rhs_has_null,
+                    lhs_has_true && rhs_has_true,
+                    lhs_has_false || rhs_has_false
+                )
+            };
+
+            let value = if has_true || has_false {
+                Some(Box::new(BooleanDomain{
+                    has_true,
+                    has_false,
+                }))
+            } else {
+                None
+            };
+
+             FunctionDomain::Domain(NullableDomain::<BooleanType> {
+                    has_null,
+                    value,
+            })
         },
         // value = lhs & rhs,  valid = (lhs_v & rhs_v) | (!lhs & lhs_v) | (!rhs & rhs_v))
         vectorize_2_arg::<NullableType<BooleanType>, NullableType<BooleanType>, NullableType<BooleanType>>(|lhs, rhs, _| {
@@ -128,21 +144,37 @@ pub fn register(registry: &mut FunctionRegistry) {
         "or",
         FunctionProperty::default(),
         |lhs, rhs| {
-            if !lhs.has_null && !rhs.has_null {
-                let bools = match (&lhs.value, &rhs.value) {
-                    (Some(a), Some(b)) => Some(Box::new(BooleanDomain {
-                        has_false: a.has_false && b.has_false,
-                        has_true: a.has_true || b.has_true,
-                    })),
-                    _ => return FunctionDomain::Full,
-                };
-                FunctionDomain::Domain(NullableDomain::<BooleanType> {
-                    has_null: false,
-                    value: bools,
-                })
+            let lhs_has_null = lhs.has_null;
+            let lhs_has_true = lhs.value.as_ref().map(|v| v.has_true).unwrap_or(false);
+            let lhs_has_false = lhs.value.as_ref().map(|v| v.has_false).unwrap_or(false);
+
+            let rhs_has_null = rhs.has_null;
+            let rhs_has_true = rhs.value.as_ref().map(|v| v.has_true).unwrap_or(false);
+            let rhs_has_false = rhs.value.as_ref().map(|v| v.has_false).unwrap_or(false);
+
+            let (has_null, has_true, has_false) = if (!lhs_has_null && !lhs_has_false) || (!rhs_has_null && !rhs_has_false) {
+                (false, true, false)
             } else {
-                FunctionDomain::Full
-            }
+                (
+                    lhs_has_null || rhs_has_null,
+                    lhs_has_true || rhs_has_true,
+                    lhs_has_false && rhs_has_false
+                )
+            };
+
+            let value = if has_true || has_false {
+                Some(Box::new(BooleanDomain{
+                    has_true,
+                    has_false,
+                }))
+            } else {
+                None
+            };
+
+             FunctionDomain::Domain(NullableDomain::<BooleanType> {
+                    has_null,
+                    value,
+            })
         },
         // value = lhs | rhs,  valid = (lhs_v & rhs_v) | (lhs_v & lhs) | (rhs_v & rhs)
         vectorize_2_arg::<NullableType<BooleanType>, NullableType<BooleanType>, NullableType<BooleanType>>(|lhs, rhs, _| {

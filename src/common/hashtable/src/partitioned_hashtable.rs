@@ -22,27 +22,24 @@ use crate::HashtableKeyable;
 use crate::HashtableLike;
 use crate::PartitionedHashSet;
 
-const BUCKETS_LG2: u32 = 8;
-const BUCKETS: usize = 1 << BUCKETS_LG2;
-
-pub struct PartitionedHashtable<Impl> {
+pub struct PartitionedHashtable<Impl, const BUCKETS_LG2: u32 = 8> {
     tables: Vec<Impl>,
 }
 
-impl<Impl> PartitionedHashtable<Impl> {
+impl<Impl, const BUCKETS_LG2: u32> PartitionedHashtable<Impl, BUCKETS_LG2> {
     pub fn create(tables: Vec<Impl>) -> Self {
-        assert_eq!(tables.len(), BUCKETS);
-        PartitionedHashtable::<Impl> { tables }
+        assert_eq!(tables.len(), 1 << BUCKETS_LG2);
+        PartitionedHashtable::<Impl, BUCKETS_LG2> { tables }
     }
 }
 
-impl<Impl: HashtableLike> PartitionedHashtable<Impl> {
+impl<Impl: HashtableLike, const BUCKETS_LG2: u32> PartitionedHashtable<Impl, BUCKETS_LG2> {
     pub fn iter_tables_mut(&mut self) -> IterMut<'_, Impl> {
         self.tables.iter_mut()
     }
 }
 
-impl<K: HashtableKeyable + FastHash> PartitionedHashSet<K> {
+impl<K: HashtableKeyable + FastHash, const BUCKETS_LG2: u32> PartitionedHashSet<K, BUCKETS_LG2> {
     pub fn inner_sets_mut(&mut self) -> &mut Vec<HashSet<K>> {
         &mut self.tables
     }
@@ -67,8 +64,8 @@ impl<K: HashtableKeyable + FastHash> PartitionedHashSet<K> {
     }
 }
 
-impl<K: ?Sized + FastHash, V, Impl: HashtableLike<Key = K, Value = V>> HashtableLike
-    for PartitionedHashtable<Impl>
+impl<K: ?Sized + FastHash, V, Impl: HashtableLike<Key = K, Value = V>, const BUCKETS_LG2: u32>
+    HashtableLike for PartitionedHashtable<Impl, BUCKETS_LG2>
 {
     type Key = Impl::Key;
     type Value = Impl::Value;

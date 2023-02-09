@@ -90,7 +90,7 @@ impl StageApi for StageMgr {
         Ok(res.seq)
     }
 
-    async fn get_stage(&self, name: &str, seq: Option<u64>) -> Result<SeqV<UserStageInfo>> {
+    async fn get_stage(&self, name: &str, seq: MatchSeq) -> Result<SeqV<UserStageInfo>> {
         let key = format!("{}/{}", self.stage_prefix, escape_for_key(name)?);
         let kv_api = self.kv_api.clone();
         let get_kv = async move { kv_api.get_kv(&key).await };
@@ -98,7 +98,7 @@ impl StageApi for StageMgr {
         let seq_value =
             res.ok_or_else(|| ErrorCode::UnknownStage(format!("Unknown stage {}", name)))?;
 
-        match MatchSeq::from(seq).match_seq(&seq_value) {
+        match seq.match_seq(&seq_value) {
             Ok(_) => Ok(SeqV::new(
                 seq_value.seq,
                 deserialize_struct(&seq_value.data, ErrorCode::IllegalUserStageFormat, || "")?,

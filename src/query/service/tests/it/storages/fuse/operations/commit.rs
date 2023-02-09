@@ -127,12 +127,12 @@ async fn test_fuse_occ_retry() -> Result<()> {
         .await?;
 
     let expected = vec![
-        "+----------+------------------+",
-        "| Column 0 | Column 1         |",
-        "+----------+------------------+",
-        "| 1_i32    | (2_i32, 3_i32)   |",
-        "| 5_i32    | (10_i32, 15_i32) |",
-        "+----------+------------------+",
+        "+----------+----------+",
+        "| Column 0 | Column 1 |",
+        "+----------+----------+",
+        "| 1        | (2, 3)   |",
+        "| 5        | (10, 15) |",
+        "+----------+----------+",
     ];
     common_expression::block_debug::assert_blocks_sorted_eq(expected, blocks.as_slice());
 

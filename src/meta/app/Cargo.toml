@@ -11,6 +11,7 @@ doctest = false
 test = false
 
 [dependencies]
+common-exception = { path = "../../common/exception" }
 common-expression = { path = "../../query/expression" }
 common-meta-kvapi = { path = "../kvapi" }
 common-meta-types = { path = "../types" }

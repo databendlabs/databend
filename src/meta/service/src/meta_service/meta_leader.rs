@@ -12,17 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_base::base::tokio::sync::RwLockReadGuard;
 use common_meta_kvapi::kvapi::KVApi;
+use common_meta_raft_store::applied_state::AppliedState;
+use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::openraft::error::RemoveLearnerError;
-use common_meta_types::AppliedState;
+use common_meta_stoerr::MetaStorageError;
 use common_meta_types::Cmd;
-use common_meta_types::ForwardRequest;
-use common_meta_types::ForwardResponse;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaDataError;
 use common_meta_types::MetaDataReadError;
 use common_meta_types::MetaOperationError;
 use common_meta_types::Node;
+use common_meta_types::NodeId;
 use common_meta_types::RaftChangeMembershipError;
 use common_meta_types::RaftWriteError;
 use common_meta_types::SeqV;
@@ -31,27 +35,35 @@ use tracing::debug;
 use tracing::error;
 use tracing::info;
 
-use crate::meta_service::ForwardRequestBody;
-use crate::meta_service::JoinRequest;
-use crate::meta_service::LeaveRequest;
+use crate::message::ForwardRequest;
+use crate::message::ForwardRequestBody;
+use crate::message::ForwardResponse;
+use crate::message::JoinRequest;
+use crate::message::LeaveRequest;
+use crate::meta_service::raftmeta::MetaRaft;
 use crate::meta_service::MetaNode;
 use crate::metrics::ProposalPending;
+use crate::store::RaftStore;
 
-/// The container of APIs of a metasrv leader in a metasrv cluster.
+/// The container of APIs of the leader in a meta service cluster.
 ///
-/// A meta leader does not imply it is actually the leader granted by the cluster.
-/// It just means it believes it is the leader an have not yet perceived there is other newer leader.
+/// A leader does not imply it is actually the leader granted by the cluster.
+/// It just means it believes it is the leader and have not yet perceived there is other newer leader.
 pub struct MetaLeader<'a> {
-    meta_node: &'a MetaNode,
+    sto: &'a Arc<RaftStore>,
+    raft: &'a MetaRaft,
 }
 
 impl<'a> MetaLeader<'a> {
     pub fn new(meta_node: &'a MetaNode) -> MetaLeader {
-        MetaLeader { meta_node }
+        MetaLeader {
+            sto: &meta_node.sto,
+            raft: &meta_node.raft,
+        }
     }
 
     #[tracing::instrument(level = "debug", skip(self, req), fields(target=%req.forward_to_leader))]
-    pub async fn handle_forwardable_req(
+    pub async fn handle_request(
         &self,
         req: ForwardRequest,
     ) -> Result<ForwardResponse, MetaOperationError> {
@@ -74,7 +86,7 @@ impl<'a> MetaLeader<'a> {
             }
 
             ForwardRequestBody::GetKV(req) => {
-                let sm = self.meta_node.get_state_machine().await;
+                let sm = self.get_state_machine().await;
                 let res = sm
                     .get_kv(&req.key)
                     .await
@@ -82,7 +94,7 @@ impl<'a> MetaLeader<'a> {
                 Ok(ForwardResponse::GetKV(res))
             }
             ForwardRequestBody::MGetKV(req) => {
-                let sm = self.meta_node.get_state_machine().await;
+                let sm = self.get_state_machine().await;
                 let res = sm
                     .mget_kv(&req.keys)
                     .await
@@ -90,7 +102,7 @@ impl<'a> MetaLeader<'a> {
                 Ok(ForwardResponse::MGetKV(res))
             }
             ForwardRequestBody::ListKV(req) => {
-                let sm = self.meta_node.get_state_machine().await;
+                let sm = self.get_state_machine().await;
                 let res = sm
                     .prefix_list_kv(&req.prefix)
                     .await
@@ -110,7 +122,7 @@ impl<'a> MetaLeader<'a> {
     pub async fn join(&self, req: JoinRequest) -> Result<(), RaftChangeMembershipError> {
         let node_id = req.node_id;
         let endpoint = req.endpoint;
-        let metrics = self.meta_node.raft.metrics().borrow().clone();
+        let metrics = self.raft.metrics().borrow().clone();
         let membership = metrics.membership_config.membership.clone();
 
         if membership.contains(&node_id) {
@@ -132,10 +144,7 @@ impl<'a> MetaLeader<'a> {
         };
         self.write(ent).await?;
 
-        self.meta_node
-            .raft
-            .change_membership(membership, false)
-            .await?;
+        self.raft.change_membership(membership, false).await?;
         Ok(())
     }
 
@@ -150,10 +159,10 @@ impl<'a> MetaLeader<'a> {
     pub async fn leave(&self, req: LeaveRequest) -> Result<(), MetaOperationError> {
         let node_id = req.node_id;
 
-        let can_res =
-            self.meta_node.can_leave(node_id).await.map_err(|e| {
-                MetaDataError::ReadError(MetaDataReadError::new("can_leave()", "", &e))
-            })?;
+        let can_res = self
+            .can_leave(node_id)
+            .await
+            .map_err(|e| MetaDataError::ReadError(MetaDataReadError::new("can_leave()", "", &e)))?;
 
         if let Err(e) = can_res {
             info!("no need to leave: {}", e);
@@ -162,7 +171,7 @@ impl<'a> MetaLeader<'a> {
 
         // safe unwrap: if the first config is None, panic is the expected behavior here.
         let membership = {
-            let sm = self.meta_node.sto.get_state_machine().await;
+            let sm = self.get_state_machine().await;
             let m = sm.get_membership().map_err(|e| {
                 MetaDataError::ReadError(MetaDataReadError::new("get_membership()", "", &e))
             })?;
@@ -176,11 +185,11 @@ impl<'a> MetaLeader<'a> {
             let mut config0 = membership.get_ith_config(0).unwrap().clone();
             config0.remove(&node_id);
 
-            self.meta_node.raft.change_membership(config0, true).await?;
+            self.raft.change_membership(config0, true).await?;
         }
 
         // 2. Stop replication
-        let res = self.meta_node.raft.remove_learner(node_id).await;
+        let res = self.raft.remove_learner(node_id).await;
         if let Err(e) = res {
             match e {
                 RemoveLearnerError::ForwardToLeader(e) => {
@@ -221,7 +230,7 @@ impl<'a> MetaLeader<'a> {
         let _guard = ProposalPending::guard();
 
         info!("write LogEntry: {}", entry);
-        let write_res = self.meta_node.raft.client_write(entry).await;
+        let write_res = self.raft.client_write(entry).await;
         if let Ok(ok) = &write_res {
             info!(
                 "raft.client_write res ok: log_id: {}, data: {}, membership: {:?}",
@@ -236,5 +245,35 @@ impl<'a> MetaLeader<'a> {
             Ok(resp) => Ok(resp.data),
             Err(cli_write_err) => Err(RaftWriteError::from_raft_err(cli_write_err)),
         }
+    }
+
+    /// Check if a node is allowed to leave the cluster.
+    ///
+    /// A cluster must have at least one node in it.
+    async fn can_leave(&self, id: NodeId) -> Result<Result<(), String>, MetaStorageError> {
+        let m = {
+            let sm = self.get_state_machine().await;
+            sm.get_membership()?
+        };
+        info!("check can_leave: id: {}, membership: {:?}", id, m);
+
+        let membership = match m {
+            None => {
+                return Ok(Err("no membership, can not leave".to_string()));
+            }
+            Some(x) => x.membership,
+        };
+
+        let config0 = membership.get_ith_config(0).unwrap();
+
+        if config0.contains(&id) && config0.len() == 1 {
+            return Ok(Err(format!("can not remove the last node: {:?}", config0)));
+        }
+
+        Ok(Ok(()))
+    }
+
+    async fn get_state_machine(&self) -> RwLockReadGuard<'_, StateMachine> {
+        self.sto.state_machine.read().await
     }
 }

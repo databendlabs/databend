@@ -12,6 +12,9 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::any::Any;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
@@ -20,23 +23,22 @@ use common_arrow::arrow::io::flight::deserialize_batch;
 use common_arrow::arrow::io::ipc::IpcSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_io::prelude::BinaryRead;
-use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_pipeline_transforms::processors::transforms::Transformer;
+use serde::Deserializer;
+use serde::Serializer;
 
-use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
-use crate::api::rpc::exchange::exchange_source::ExchangeSourceMeta;
 use crate::api::DataPacket;
 use crate::api::FragmentData;
-use crate::pipelines::processors::TransformDummy;
 
 pub struct TransformExchangeDeserializer {
     schema: DataSchemaRef,
@@ -48,9 +50,9 @@ impl TransformExchangeDeserializer {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        params: &MergeExchangeParams,
+        schema: &DataSchemaRef,
     ) -> ProcessorPtr {
-        let arrow_schema = Arc::new(params.schema.to_arrow());
+        let arrow_schema = Arc::new(schema.to_arrow());
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
         let ipc_schema = IpcSchema {
             fields: ipc_fields,
@@ -60,7 +62,7 @@ impl TransformExchangeDeserializer {
         Transformer::create(input, output, TransformExchangeDeserializer {
             ipc_schema,
             arrow_schema,
-            schema: params.schema.clone(),
+            schema: schema.clone(),
         })
     }
 
@@ -98,8 +100,9 @@ impl Transform for TransformExchangeDeserializer {
 
     fn transform(&mut self, mut data: DataBlock) -> Result<DataBlock> {
         if let Some(mut block_meta) = data.take_meta() {
-            if let Some(exchange_meta) =
-                block_meta.as_mut_any().downcast_mut::<ExchangeSourceMeta>()
+            if let Some(exchange_meta) = block_meta
+                .as_mut_any()
+                .downcast_mut::<ExchangeDeserializeMeta>()
             {
                 return match exchange_meta.packet.take().unwrap() {
                     DataPacket::ErrorCode(v) => Err(v),
@@ -117,35 +120,73 @@ impl Transform for TransformExchangeDeserializer {
     }
 }
 
-pub fn via_deserializer(
-    prefix_size: usize,
-    suffix_size: usize,
-    params: &MergeExchangeParams,
-    pipeline: &mut Pipeline,
-) {
-    let mut items = Vec::with_capacity(prefix_size + suffix_size);
+pub struct ExchangeDeserializeMeta {
+    pub packet: Option<DataPacket>,
+}
 
-    for _index in 0..prefix_size {
-        let input = InputPort::create();
-        let output = OutputPort::create();
+impl ExchangeDeserializeMeta {
+    pub fn create(packet: DataPacket) -> BlockMetaInfoPtr {
+        Box::new(ExchangeDeserializeMeta {
+            packet: Some(packet),
+        })
+    }
+}
 
-        items.push(PipeItem::create(
-            TransformDummy::create(input.clone(), output.clone()),
-            vec![input],
-            vec![output],
-        ));
+impl Debug for ExchangeDeserializeMeta {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExchangeSourceMeta").finish()
+    }
+}
+
+impl serde::Serialize for ExchangeDeserializeMeta {
+    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
+        unimplemented!("Unimplemented serialize ExchangeSourceMeta")
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ExchangeDeserializeMeta {
+    fn deserialize<D>(_: D) -> Result<Self, D::Error>
+    where D: Deserializer<'de> {
+        unimplemented!("Unimplemented deserialize ExchangeSourceMeta")
+    }
+}
+
+#[typetag::serde(name = "exchange_source")]
+impl BlockMetaInfo for ExchangeDeserializeMeta {
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 
-    for _index in 0..suffix_size {
-        let input = InputPort::create();
-        let output = OutputPort::create();
-
-        items.push(PipeItem::create(
-            TransformExchangeDeserializer::create(input.clone(), output.clone(), params),
-            vec![input],
-            vec![output],
-        ));
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
     }
 
-    pipeline.add_pipe(Pipe::create(items.len(), items.len(), items));
+    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
+        unimplemented!("Unimplemented equals ExchangeSourceMeta")
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        unimplemented!("Unimplemented clone ExchangeSourceMeta")
+    }
+}
+
+pub fn create_deserializer_items(size: usize, schema: &DataSchemaRef) -> Vec<PipeItem> {
+    let mut items = Vec::with_capacity(size);
+    for _index in 0..size {
+        items.push(create_deserializer_item(schema));
+    }
+
+    items
+}
+
+pub fn create_deserializer_item(schema: &DataSchemaRef) -> PipeItem {
+    let input = InputPort::create();
+    let output = OutputPort::create();
+
+    PipeItem::create(
+        TransformExchangeDeserializer::create(input.clone(), output.clone(), schema),
+        vec![input],
+        vec![output],
+    )
 }

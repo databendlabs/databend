@@ -131,7 +131,8 @@ mod ext {
     #[cfg(test)]
     mod tests {
 
-        use opendal::services::fs;
+        use opendal::services::Fs;
+        use opendal::Builder;
 
         use super::*;
 
@@ -157,9 +158,9 @@ mod ext {
             let test_root = tmp_dir.path().join("test_cluster_id/test_tenant_id");
             let test_root_str = test_root.to_str().unwrap();
             let operator = {
-                let mut builder = fs::Builder::default();
+                let mut builder = Fs::default();
                 builder.root(test_root_str);
-                Operator::new(builder.build()?)
+                Operator::new(builder.build()?).finish()
             };
 
             let share_spec_ext = ShareSpecExt::from_share_spec(share_spec, &operator);

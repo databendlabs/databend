@@ -26,7 +26,6 @@ use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_meta_types::StorageAzblobConfig;
 use common_meta_types::StorageFsConfig;
-use common_meta_types::StorageFtpConfig;
 use common_meta_types::StorageGcsConfig;
 use common_meta_types::StorageHttpConfig;
 use common_meta_types::StorageIpfsConfig;
@@ -41,16 +40,10 @@ use opendal::layers::LoggingLayer;
 use opendal::layers::MetricsLayer;
 use opendal::layers::RetryLayer;
 use opendal::layers::TracingLayer;
-use opendal::services::azblob;
-use opendal::services::fs;
-use opendal::services::gcs;
-use opendal::services::http;
-use opendal::services::memory;
-use opendal::services::moka;
-use opendal::services::obs;
-use opendal::services::oss;
-use opendal::services::redis;
-use opendal::services::s3;
+use opendal::raw::Accessor;
+use opendal::raw::Layer;
+use opendal::services;
+use opendal::Builder;
 use opendal::Operator;
 
 use crate::runtime_layer::RuntimeLayer;
@@ -59,9 +52,35 @@ use crate::StorageConfig;
 
 /// init_operator will init an opendal operator based on storage config.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
-    let op = init_operator_without_layers(cfg)?;
+    let op = match &cfg {
+        StorageParams::Azblob(cfg) => build_operator(init_azblob_operator(cfg)?),
+        StorageParams::Fs(cfg) => build_operator(init_fs_operator(cfg)?),
+        StorageParams::Gcs(cfg) => build_operator(init_gcs_operator(cfg)?),
+        #[cfg(feature = "storage-hdfs")]
+        StorageParams::Hdfs(cfg) => build_operator(init_hdfs_operator(cfg)?),
+        StorageParams::Http(cfg) => build_operator(init_http_operator(cfg)?),
+        StorageParams::Ipfs(cfg) => build_operator(init_ipfs_operator(cfg)?),
+        StorageParams::Memory => build_operator(init_memory_operator()?),
+        StorageParams::Moka(cfg) => build_operator(init_moka_operator(cfg)?),
+        StorageParams::Obs(cfg) => build_operator(init_obs_operator(cfg)?),
+        StorageParams::S3(cfg) => build_operator(init_s3_operator(cfg)?),
+        StorageParams::Oss(cfg) => build_operator(init_oss_operator(cfg)?),
+        StorageParams::Redis(cfg) => build_operator(init_redis_operator(cfg)?),
+        v => {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                anyhow!("Unsupported storage type: {:?}", v),
+            ));
+        }
+    };
 
-    let op = op
+    Ok(op)
+}
+
+pub fn build_operator<A: Accessor>(acc: A) -> Operator {
+    let ob = Operator::new(acc);
+
+    ob
         // Add retry
         .layer(RetryLayer::new(ExponentialBackoff::default().with_jitter()))
         // Add metrics
@@ -75,43 +94,13 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
         // Magic happens here. We will add a layer upon original
         // storage operator so that all underlying storage operations
         // will send to storage runtime.
-        .layer(RuntimeLayer::new(GlobalIORuntime::instance().inner()));
-
-    Ok(op)
-}
-
-/// init_operator_without_layers will init an opendal operator based
-/// on storage config with any layers.
-pub fn init_operator_without_layers(cfg: &StorageParams) -> Result<Operator> {
-    let op = match &cfg {
-        StorageParams::Azblob(cfg) => init_azblob_operator(cfg)?,
-        StorageParams::Fs(cfg) => init_fs_operator(cfg)?,
-        StorageParams::Ftp(cfg) => init_ftp_operator(cfg)?,
-        StorageParams::Gcs(cfg) => init_gcs_operator(cfg)?,
-        #[cfg(feature = "storage-hdfs")]
-        StorageParams::Hdfs(cfg) => init_hdfs_operator(cfg)?,
-        StorageParams::Http(cfg) => init_http_operator(cfg)?,
-        StorageParams::Ipfs(cfg) => init_ipfs_operator(cfg)?,
-        StorageParams::Memory => init_memory_operator()?,
-        StorageParams::Moka(cfg) => init_moka_operator(cfg)?,
-        StorageParams::Obs(cfg) => init_obs_operator(cfg)?,
-        StorageParams::S3(cfg) => init_s3_operator(cfg)?,
-        StorageParams::Oss(cfg) => init_oss_operator(cfg)?,
-        StorageParams::Redis(cfg) => init_redis_operator(cfg)?,
-        v => {
-            return Err(Error::new(
-                ErrorKind::InvalidInput,
-                anyhow!("Unsupported storage type: {:?}", v),
-            ));
-        }
-    };
-
-    Ok(op)
+        .layer(RuntimeLayer::new(GlobalIORuntime::instance().inner()))
+        .finish()
 }
 
 /// init_azblob_operator will init an opendal azblob operator.
-pub fn init_azblob_operator(cfg: &StorageAzblobConfig) -> Result<Operator> {
-    let mut builder = azblob::Builder::default();
+pub fn init_azblob_operator(cfg: &StorageAzblobConfig) -> Result<impl Accessor> {
+    let mut builder = services::Azblob::default();
 
     // Endpoint
     builder.endpoint(&cfg.endpoint_url);
@@ -126,12 +115,12 @@ pub fn init_azblob_operator(cfg: &StorageAzblobConfig) -> Result<Operator> {
     builder.account_name(&cfg.account_name);
     builder.account_key(&cfg.account_key);
 
-    Ok(Operator::new(builder.build()?))
+    Ok(builder.build()?)
 }
 
 /// init_fs_operator will init a opendal fs operator.
-fn init_fs_operator(cfg: &StorageFsConfig) -> Result<Operator> {
-    let mut builder = fs::Builder::default();
+fn init_fs_operator(cfg: &StorageFsConfig) -> Result<impl Accessor> {
+    let mut builder = services::Fs::default();
 
     let mut path = cfg.root.clone();
     if !path.starts_with('/') {
@@ -139,44 +128,26 @@ fn init_fs_operator(cfg: &StorageFsConfig) -> Result<Operator> {
     }
     builder.root(&path);
 
-    Ok(Operator::new(builder.build()?))
-}
-
-/// init_ftp_operator will init a opendal ftp operator.
-fn init_ftp_operator(_: &StorageFtpConfig) -> Result<Operator> {
-    // Should be addressed after https://github.com/datafuselabs/opendal/pull/1101
-    Err(Error::other("ftp support has been disabled"))
-    // let mut builder = ftp::Builder::default();
-
-    // let bd = builder
-    //     .endpoint(&cfg.endpoint)
-    //     .user(&cfg.username)
-    //     .password(&cfg.password)
-    //     .root(&cfg.root)
-    //     .build()?;
-    // Ok(Operator::new(bd))
+    Ok(builder.build()?)
 }
 
 /// init_gcs_operator will init a opendal gcs operator.
-fn init_gcs_operator(cfg: &StorageGcsConfig) -> Result<Operator> {
-    let mut builder = gcs::Builder::default();
+fn init_gcs_operator(cfg: &StorageGcsConfig) -> Result<impl Accessor> {
+    let mut builder = services::Gcs::default();
 
-    let accessor = builder
+    builder
         .endpoint(&cfg.endpoint_url)
         .bucket(&cfg.bucket)
         .root(&cfg.root)
-        .credential(&cfg.credential)
-        .build()?;
+        .credential(&cfg.credential);
 
-    Ok(Operator::new(accessor))
+    Ok(builder.build()?)
 }
 
 /// init_hdfs_operator will init an opendal hdfs operator.
 #[cfg(feature = "storage-hdfs")]
-fn init_hdfs_operator(cfg: &common_meta_types::StorageHdfsConfig) -> Result<Operator> {
-    use opendal::services::hdfs;
-
-    let mut builder = hdfs::Builder::default();
+fn init_hdfs_operator(cfg: &common_meta_types::StorageHdfsConfig) -> Result<impl Accessor> {
+    let mut builder = services::Hdfs::default();
 
     // Endpoint.
     builder.name_node(&cfg.name_node);
@@ -184,22 +155,20 @@ fn init_hdfs_operator(cfg: &common_meta_types::StorageHdfsConfig) -> Result<Oper
     // Root
     builder.root(&cfg.root);
 
-    Ok(Operator::new(builder.build()?))
+    Ok(builder.build()?)
 }
 
-fn init_ipfs_operator(cfg: &StorageIpfsConfig) -> Result<Operator> {
-    use opendal::services::ipfs;
-
-    let mut builder = ipfs::Builder::default();
+fn init_ipfs_operator(cfg: &StorageIpfsConfig) -> Result<impl Accessor> {
+    let mut builder = services::Ipfs::default();
 
     builder.root(&cfg.root);
     builder.endpoint(&cfg.endpoint_url);
 
-    Ok(Operator::new(builder.build()?))
+    Ok(builder.build()?)
 }
 
-fn init_http_operator(cfg: &StorageHttpConfig) -> Result<Operator> {
-    let mut builder = http::Builder::default();
+fn init_http_operator(cfg: &StorageHttpConfig) -> Result<impl Accessor> {
+    let mut builder = services::Http::default();
 
     // Endpoint.
     builder.endpoint(&cfg.endpoint_url);
@@ -217,19 +186,19 @@ fn init_http_operator(cfg: &StorageHttpConfig) -> Result<Operator> {
         immutable_layer.insert(i);
     }
 
-    Ok(Operator::new(builder.build()?).layer(immutable_layer))
+    Ok(immutable_layer.layer(builder.build()?))
 }
 
 /// init_memory_operator will init a opendal memory operator.
-fn init_memory_operator() -> Result<Operator> {
-    let mut builder = memory::Builder::default();
+fn init_memory_operator() -> Result<impl Accessor> {
+    let mut builder = services::Memory::default();
 
-    Ok(Operator::new(builder.build()?))
+    Ok(builder.build()?)
 }
 
 /// init_s3_operator will init a opendal s3 operator with input s3 config.
-fn init_s3_operator(cfg: &StorageS3Config) -> Result<Operator> {
-    let mut builder = s3::Builder::default();
+fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Accessor> {
+    let mut builder = services::S3::default();
 
     // Endpoint.
     builder.endpoint(&cfg.endpoint_url);
@@ -260,12 +229,12 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<Operator> {
         builder.enable_virtual_host_style();
     }
 
-    Ok(Operator::new(builder.build()?))
+    Ok(builder.build()?)
 }
 
 /// init_obs_operator will init a opendal obs operator with input obs config.
-fn init_obs_operator(cfg: &StorageObsConfig) -> Result<Operator> {
-    let mut builder = obs::Builder::default();
+fn init_obs_operator(cfg: &StorageObsConfig) -> Result<impl Accessor> {
+    let mut builder = services::Obs::default();
     // Endpoint
     builder.endpoint(&cfg.endpoint_url);
     // Bucket
@@ -276,40 +245,38 @@ fn init_obs_operator(cfg: &StorageObsConfig) -> Result<Operator> {
     builder.access_key_id(&cfg.access_key_id);
     builder.secret_access_key(&cfg.secret_access_key);
 
-    Ok(Operator::new(builder.build()?))
+    Ok(builder.build()?)
 }
 
 /// init_oss_operator will init an opendal OSS operator with input oss config.
-fn init_oss_operator(cfg: &StorageOssConfig) -> Result<Operator> {
-    let mut builder = oss::Builder::default();
+fn init_oss_operator(cfg: &StorageOssConfig) -> Result<impl Accessor> {
+    let mut builder = services::Oss::default();
 
-    // endpoint
-    let backend = builder
+    builder
         .endpoint(&cfg.endpoint_url)
         .presign_endpoint(&cfg.presign_endpoint_url)
         .access_key_id(&cfg.access_key_id)
         .access_key_secret(&cfg.access_key_secret)
         .bucket(&cfg.bucket)
-        .root(&cfg.root)
-        .build()?;
+        .root(&cfg.root);
 
-    Ok(Operator::new(backend))
+    Ok(builder.build()?)
 }
 
 /// init_moka_operator will init a moka operator.
-fn init_moka_operator(v: &StorageMokaConfig) -> Result<Operator> {
-    let mut builder = moka::Builder::default();
+fn init_moka_operator(v: &StorageMokaConfig) -> Result<impl Accessor> {
+    let mut builder = services::Moka::default();
 
     builder.max_capacity(v.max_capacity);
     builder.time_to_live(std::time::Duration::from_secs(v.time_to_live as u64));
     builder.time_to_idle(std::time::Duration::from_secs(v.time_to_idle as u64));
 
-    Ok(Operator::new(builder.build()?))
+    Ok(builder.build()?)
 }
 
 /// init_redis_operator will init a reids operator.
-fn init_redis_operator(v: &StorageRedisConfig) -> Result<Operator> {
-    let mut builder = redis::Builder::default();
+fn init_redis_operator(v: &StorageRedisConfig) -> Result<impl Accessor> {
+    let mut builder = services::Redis::default();
 
     builder.endpoint(&v.endpoint_url);
     builder.root(&v.root);
@@ -324,7 +291,7 @@ fn init_redis_operator(v: &StorageRedisConfig) -> Result<Operator> {
         builder.password(v);
     }
 
-    Ok(Operator::new(builder.build()?))
+    Ok(builder.build()?)
 }
 
 /// DataOperator is the operator to access persist data services.
@@ -335,13 +302,17 @@ fn init_redis_operator(v: &StorageRedisConfig) -> Result<Operator> {
 #[derive(Clone, Debug)]
 pub struct DataOperator {
     operator: Operator,
-    _params: StorageParams,
+    params: StorageParams,
 }
 
 impl DataOperator {
     /// Get the operator from PersistOperator
     pub fn operator(&self) -> Operator {
         self.operator.clone()
+    }
+
+    pub fn params(&self) -> StorageParams {
+        self.params.clone()
     }
 
     pub async fn init(conf: &StorageConfig) -> common_exception::Result<()> {
@@ -372,7 +343,7 @@ impl DataOperator {
 
         Ok(DataOperator {
             operator,
-            _params: sp.clone(),
+            params: sp.clone(),
         })
     }
 
@@ -406,25 +377,7 @@ impl CacheOperator {
             return Ok(CacheOperator { op: None });
         }
 
-        let operator = init_operator_without_layers(&conf.params)?
-            // Add retry
-            .layer(RetryLayer::new(ExponentialBackoff::default().with_jitter()))
-            // Add metrics
-            .layer(MetricsLayer)
-            // Add logging
-            .layer(
-                LoggingLayer::default()
-                    // Ingore expected errors for logging.
-                    .with_error_level(None),
-            )
-            // Add tracing
-            .layer(TracingLayer)
-            // NOTE
-            //
-            // Magic happens here. We will add a layer upon original
-            // storage operator so that all underlying storage operations
-            // will send to storage runtime.
-            .layer(RuntimeLayer::new(GlobalIORuntime::instance().inner()));
+        let operator = init_operator(&conf.params)?;
 
         // OpenDAL will send a real request to underlying storage to check whether it works or not.
         // If this check failed, it's highly possible that the users have configured it wrongly.

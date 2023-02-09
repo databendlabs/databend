@@ -16,6 +16,7 @@ pub mod any;
 pub mod array;
 pub mod boolean;
 pub mod date;
+pub mod decimal;
 pub mod empty_array;
 pub mod generic;
 pub mod map;
@@ -40,6 +41,7 @@ pub use self::any::AnyType;
 pub use self::array::ArrayType;
 pub use self::boolean::BooleanType;
 pub use self::date::DateType;
+use self::decimal::DecimalDataType;
 pub use self::empty_array::EmptyArrayType;
 pub use self::generic::GenericType;
 pub use self::map::MapType;
@@ -59,7 +61,6 @@ use crate::deserializations::TimestampDeserializer;
 use crate::deserializations::TupleDeserializer;
 use crate::deserializations::VariantDeserializer;
 use crate::property::Domain;
-use crate::utils::concat_array;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
@@ -75,6 +76,7 @@ pub enum DataType {
     Boolean,
     String,
     Number(NumberDataType),
+    Decimal(DecimalDataType),
     Timestamp,
     Date,
     Nullable(Box<DataType>),
@@ -84,29 +86,6 @@ pub enum DataType {
     Variant,
     Generic(usize),
 }
-
-pub const ALL_UNSIGNED_INTEGER_TYPES: &[NumberDataType; 4] = &[
-    NumberDataType::UInt8,
-    NumberDataType::UInt16,
-    NumberDataType::UInt32,
-    NumberDataType::UInt64,
-];
-
-pub const ALL_INTEGER_TYPES: &[NumberDataType; 8] = &[
-    NumberDataType::UInt8,
-    NumberDataType::UInt16,
-    NumberDataType::UInt32,
-    NumberDataType::UInt64,
-    NumberDataType::Int8,
-    NumberDataType::Int16,
-    NumberDataType::Int32,
-    NumberDataType::Int64,
-];
-
-pub const ALL_FLOAT_TYPES: &[NumberDataType; 2] =
-    &[NumberDataType::Float32, NumberDataType::Float64];
-pub const ALL_NUMERICS_TYPES: &[NumberDataType; 10] =
-    &concat_array(ALL_INTEGER_TYPES, ALL_FLOAT_TYPES);
 
 impl DataType {
     pub fn wrap_nullable(&self) -> Self {

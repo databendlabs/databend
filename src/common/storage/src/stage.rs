@@ -19,7 +19,6 @@ use common_exception::Result;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use futures::TryStreamExt;
-use opendal::layers::SubdirLayer;
 use opendal::ObjectMetadata;
 use opendal::ObjectMode;
 use opendal::Operator;
@@ -46,8 +45,12 @@ pub fn init_stage_operator(stage_info: &UserStageInfo) -> Result<Operator> {
     if stage_info.stage_type == StageType::External {
         Ok(init_operator(&stage_info.stage_params.storage)?)
     } else {
-        let pop = DataOperator::instance().operator();
-        Ok(pop.layer(SubdirLayer::new(&stage_info.stage_prefix())))
+        let stage_prefix = stage_info.stage_prefix();
+        let param = DataOperator::instance()
+            .params()
+            .map_root(|path| format!("{path}/{stage_prefix}"));
+
+        Ok(init_operator(&param)?)
     }
 }
 /// select * from @s1/<path> (FILES => <files> PATTERN => <pattern>)

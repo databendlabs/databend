@@ -16,8 +16,8 @@
 //! It can also be used by apps to generate mono incremental seq numbers.
 
 use common_base::base::tokio;
+use common_meta_raft_store::applied_state::AppliedState;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
-use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaError;

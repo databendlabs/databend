@@ -76,5 +76,30 @@ select array_distinct(col1), array_distinct(col2), array_distinct(col3) from t
 ----
 [1,2,3] ['x','y','z'] ['2022-02-02']
 
+query I
+select array_sum(col1) from t
+----
+9
+
+query T
+select array_avg(col1) from t
+----
+2.25
+
+query III
+select array_count(col1), array_count(col2), array_count(col3) from t
+----
+4 4 1
+
+query ITT
+select array_max(col1), array_max(col2), array_max(col3) from t
+----
+3 z 2022-02-02
+
+query ITT
+select array_min(col1), array_min(col2), array_min(col3) from t
+----
+1 x 2022-02-02
+
 statement ok
 DROP DATABASE array_func_test

@@ -318,6 +318,8 @@ pub enum TokenKind {
     #[token("CHAR", ignore(ascii_case))]
     CHAR,
     #[token("CHARACTER", ignore(ascii_case))]
+    #[token("COLUMN", ignore(ascii_case))]
+    COLUMN,
     CHARACTER,
     #[token("COMPRESSION", ignore(ascii_case))]
     COMPRESSION,
@@ -355,6 +357,8 @@ pub enum TokenKind {
     DAY,
     #[token("DECADE", ignore(ascii_case))]
     DECADE,
+    #[token("DECIMAL", ignore(ascii_case))]
+    DECIMAL,
     #[token("DEFAULT", ignore(ascii_case))]
     DEFAULT,
     #[token("DEFLATE", ignore(ascii_case))]

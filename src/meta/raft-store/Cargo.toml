@@ -24,17 +24,20 @@ common-meta-stoerr = { path = "../stoerr" }
 common-meta-types = { path = "../types" }
 common-tracing = { path = "../../common/tracing" }
 
+openraft = { workspace = true }
+
 # crates.io deps
 anyhow = { workspace = true }
 async-trait = "0.1.57"
 byteorder = "1.4.3"
 chrono = { workspace = true }
-derive_more = "0.99.17"
+derive_more = { workspace = true }
 hostname = "0.3.1"
 maplit = "1.0.2"
 num = "0.4.0"
 once_cell = "1.15.0"
 serde = { workspace = true }
+serde_json = { workspace = true }
 tracing = "0.1.36"
 
 [dev-dependencies]

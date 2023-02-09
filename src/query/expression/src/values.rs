@@ -36,6 +36,10 @@ use crate::property::Domain;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::boolean::BooleanDomain;
+use crate::types::decimal::DecimalColumn;
+use crate::types::decimal::DecimalColumnBuilder;
+use crate::types::decimal::DecimalDataType;
+use crate::types::decimal::DecimalScalar;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableColumnBuilder;
 use crate::types::nullable::NullableDomain;
@@ -56,8 +60,8 @@ use crate::utils::arrow::buffer_into_mut;
 use crate::utils::arrow::constant_bitmap;
 use crate::utils::arrow::deserialize_column;
 use crate::utils::arrow::serialize_column;
+use crate::with_decimal_type;
 use crate::with_integer_mapped_type;
-use crate::with_number_mapped_type;
 use crate::with_number_type;
 
 #[derive(Debug, Clone, PartialEq, EnumAsInner)]
@@ -78,6 +82,7 @@ pub enum Scalar {
     Null,
     EmptyArray,
     Number(NumberScalar),
+    Decimal(DecimalScalar),
     Timestamp(i64),
     Date(i32),
     Boolean(bool),
@@ -93,6 +98,7 @@ pub enum ScalarRef<'a> {
     Null,
     EmptyArray,
     Number(NumberScalar),
+    Decimal(DecimalScalar),
     Boolean(bool),
     String(&'a [u8]),
     Timestamp(i64),
@@ -107,6 +113,7 @@ pub enum Column {
     Null { len: usize },
     EmptyArray { len: usize },
     Number(NumberColumn),
+    Decimal(DecimalColumn),
     Boolean(Bitmap),
     String(StringColumn),
     Timestamp(Buffer<i64>),
@@ -126,6 +133,7 @@ pub enum ColumnBuilder {
         len: usize,
     },
     Number(NumberColumnBuilder),
+    Decimal(DecimalColumnBuilder),
     Boolean(MutableBitmap),
     String(StringColumnBuilder),
     Timestamp(Vec<i64>),
@@ -240,6 +248,7 @@ impl Scalar {
             Scalar::Null => ScalarRef::Null,
             Scalar::EmptyArray => ScalarRef::EmptyArray,
             Scalar::Number(n) => ScalarRef::Number(*n),
+            Scalar::Decimal(d) => ScalarRef::Decimal(*d),
             Scalar::Boolean(b) => ScalarRef::Boolean(*b),
             Scalar::String(s) => ScalarRef::String(s.as_slice()),
             Scalar::Timestamp(t) => ScalarRef::Timestamp(*t),
@@ -257,6 +266,7 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Null => Scalar::Null,
             ScalarRef::EmptyArray => Scalar::EmptyArray,
             ScalarRef::Number(n) => Scalar::Number(*n),
+            ScalarRef::Decimal(d) => Scalar::Decimal(*d),
             ScalarRef::Boolean(b) => Scalar::Boolean(*b),
             ScalarRef::String(s) => Scalar::String(s.to_vec()),
             ScalarRef::Timestamp(t) => Scalar::Timestamp(*t),
@@ -287,6 +297,7 @@ impl<'a> ScalarRef<'a> {
             }),
             ScalarRef::EmptyArray => Domain::Array(None),
             ScalarRef::Number(num) => Domain::Number(num.domain()),
+            ScalarRef::Decimal(dec) => Domain::Decimal(dec.domain()),
             ScalarRef::Boolean(true) => Domain::Boolean(BooleanDomain {
                 has_false: false,
                 has_true: true,
@@ -335,6 +346,8 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Number(NumberScalar::Int16(_)) => 2,
             ScalarRef::Number(NumberScalar::Int32(_)) => 4,
             ScalarRef::Number(NumberScalar::Int64(_)) => 8,
+            ScalarRef::Decimal(DecimalScalar::Decimal128(_, _)) => 16,
+            ScalarRef::Decimal(DecimalScalar::Decimal256(_, _)) => 32,
             ScalarRef::Boolean(_) => 1,
             ScalarRef::String(s) => s.len(),
             ScalarRef::Timestamp(_) => 8,
@@ -431,8 +444,13 @@ impl Hash for ScalarRef<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
             ScalarRef::Null | ScalarRef::EmptyArray => {}
-            ScalarRef::Number(t) => with_number_mapped_type!(|NUM_TYPE| match t {
+            ScalarRef::Number(t) => with_number_type!(|NUM_TYPE| match t {
                 NumberScalar::NUM_TYPE(v) => {
+                    v.hash(state);
+                }
+            }),
+            ScalarRef::Decimal(t) => with_decimal_type!(|DECIMAL_TYPE| match t {
+                DecimalScalar::DECIMAL_TYPE(v, _) => {
                     v.hash(state);
                 }
             }),
@@ -465,13 +483,7 @@ impl PartialOrd for Column {
             (Column::EmptyArray { len: col1 }, Column::EmptyArray { len: col2 }) => {
                 col1.partial_cmp(col2)
             }
-            (Column::Number(col1), Column::Number(col2)) => {
-                with_number_type!(|NUM_TYPE| match (col1, col2) {
-                    (NumberColumn::NUM_TYPE(c1), NumberColumn::NUM_TYPE(c2)) =>
-                        c1.iter().partial_cmp(c2.iter()),
-                    _ => None,
-                })
-            }
+            (Column::Number(col1), Column::Number(col2)) => col1.partial_cmp(col2),
             (Column::Boolean(col1), Column::Boolean(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::String(col1), Column::String(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::Timestamp(col1), Column::Timestamp(col2)) => {
@@ -508,6 +520,7 @@ impl Column {
             Column::Null { len } => *len,
             Column::EmptyArray { len } => *len,
             Column::Number(col) => col.len(),
+            Column::Decimal(col) => col.len(),
             Column::Boolean(col) => col.len(),
             Column::String(col) => col.len(),
             Column::Timestamp(col) => col.len(),
@@ -524,6 +537,7 @@ impl Column {
             Column::Null { .. } => Some(ScalarRef::Null),
             Column::EmptyArray { .. } => Some(ScalarRef::EmptyArray),
             Column::Number(col) => Some(ScalarRef::Number(col.index(index)?)),
+            Column::Decimal(col) => Some(ScalarRef::Decimal(col.index(index)?)),
             Column::Boolean(col) => Some(ScalarRef::Boolean(col.get(index)?)),
             Column::String(col) => Some(ScalarRef::String(col.index(index)?)),
             Column::Timestamp(col) => Some(ScalarRef::Timestamp(col.get(index).cloned()?)),
@@ -547,6 +561,7 @@ impl Column {
             Column::Null { .. } => ScalarRef::Null,
             Column::EmptyArray { .. } => ScalarRef::EmptyArray,
             Column::Number(col) => ScalarRef::Number(col.index_unchecked(index)),
+            Column::Decimal(col) => ScalarRef::Decimal(col.index_unchecked(index)),
             Column::Boolean(col) => ScalarRef::Boolean(col.get_bit_unchecked(index)),
             Column::String(col) => ScalarRef::String(col.index_unchecked(index)),
             Column::Timestamp(col) => ScalarRef::Timestamp(*col.get_unchecked(index)),
@@ -586,6 +601,7 @@ impl Column {
                 len: range.end - range.start,
             },
             Column::Number(col) => Column::Number(col.slice(range)),
+            Column::Decimal(col) => Column::Decimal(col.slice(range)),
             Column::Boolean(col) => {
                 Column::Boolean(col.clone().slice(range.start, range.end - range.start))
             }
@@ -626,6 +642,7 @@ impl Column {
             }),
             Column::EmptyArray { .. } => Domain::Array(None),
             Column::Number(col) => Domain::Number(col.domain()),
+            Column::Decimal(col) => Domain::Decimal(col.domain()),
             Column::Boolean(col) => Domain::Boolean(BooleanDomain {
                 has_false: col.unset_bits() > 0,
                 has_true: col.len() - col.unset_bits() > 0,
@@ -680,6 +697,10 @@ impl Column {
             Column::EmptyArray { .. } => DataType::EmptyArray,
             Column::Number(c) => with_number_type!(|NUM_TYPE| match c {
                 NumberColumn::NUM_TYPE(_) => DataType::Number(NumberDataType::NUM_TYPE),
+            }),
+            Column::Decimal(c) => with_decimal_type!(|DECIMAL_TYPE| match c {
+                DecimalColumn::DECIMAL_TYPE(_, size) =>
+                    DataType::Decimal(DecimalDataType::DECIMAL_TYPE(*size)),
             }),
             Column::Boolean(_) => DataType::Boolean,
             Column::String(_) => DataType::String,
@@ -803,6 +824,22 @@ impl Column {
                     .unwrap(),
                 )
             }
+            Column::Decimal(DecimalColumn::Decimal128(col, _)) => Box::new(
+                common_arrow::arrow::array::PrimitiveArray::<i128>::try_new(
+                    arrow_type,
+                    col.clone(),
+                    None,
+                )
+                .unwrap(),
+            ),
+            Column::Decimal(DecimalColumn::Decimal256(col, _)) => Box::new(
+                common_arrow::arrow::array::PrimitiveArray::<common_arrow::arrow::types::i256>::try_new(
+                    arrow_type,
+                    col.iter().cloned().map(common_arrow::arrow::types::i256).collect::<Vec<_>>().into(),
+                    None,
+                )
+                .unwrap(),
+            ),
             Column::Boolean(col) => Box::new(
                 common_arrow::arrow::array::BooleanArray::try_new(arrow_type, col.clone(), None)
                     .unwrap(),
@@ -1205,6 +1242,8 @@ impl Column {
             Column::Number(NumberColumn::Int16(_)) => self.len() * 2,
             Column::Number(NumberColumn::Int32(_)) => self.len() * 4,
             Column::Number(NumberColumn::Int64(_)) => self.len() * 8,
+            Column::Decimal(DecimalColumn::Decimal128(_, _)) => self.len() * 16,
+            Column::Decimal(DecimalColumn::Decimal256(_, _)) => self.len() * 32,
             Column::Boolean(c) => c.as_slice().0.len(),
             Column::String(col) => col.data.len() + col.offsets.len() * 8,
             Column::Timestamp(col) => col.len() * 8,
@@ -1271,6 +1310,7 @@ impl ColumnBuilder {
             Column::Null { len } => ColumnBuilder::Null { len },
             Column::EmptyArray { len } => ColumnBuilder::EmptyArray { len },
             Column::Number(col) => ColumnBuilder::Number(NumberColumnBuilder::from_column(col)),
+            Column::Decimal(col) => ColumnBuilder::Decimal(DecimalColumnBuilder::from_column(col)),
             Column::Boolean(col) => ColumnBuilder::Boolean(bitmap_into_mut(col)),
             Column::String(col) => ColumnBuilder::String(StringColumnBuilder::from_column(col)),
             Column::Timestamp(col) => ColumnBuilder::Timestamp(buffer_into_mut(col)),
@@ -1323,6 +1363,9 @@ impl ColumnBuilder {
             },
             ScalarRef::EmptyArray => ColumnBuilder::EmptyArray { len: n },
             ScalarRef::Number(num) => ColumnBuilder::Number(NumberColumnBuilder::repeat(*num, n)),
+            ScalarRef::Decimal(dec) => {
+                ColumnBuilder::Decimal(DecimalColumnBuilder::repeat(*dec, n))
+            }
             ScalarRef::Boolean(b) => ColumnBuilder::Boolean(constant_bitmap(*b, n)),
             ScalarRef::String(s) => ColumnBuilder::String(StringColumnBuilder::repeat(s, n)),
             ScalarRef::Timestamp(d) => ColumnBuilder::Timestamp(vec![*d; n]),
@@ -1353,6 +1396,7 @@ impl ColumnBuilder {
             ColumnBuilder::Null { len } => *len,
             ColumnBuilder::EmptyArray { len } => *len,
             ColumnBuilder::Number(col) => col.len(),
+            ColumnBuilder::Decimal(col) => col.len(),
             ColumnBuilder::Boolean(builder) => builder.len(),
             ColumnBuilder::String(builder) => builder.len(),
             ColumnBuilder::Timestamp(builder) => builder.len(),
@@ -1370,6 +1414,9 @@ impl ColumnBuilder {
             DataType::EmptyArray => ColumnBuilder::EmptyArray { len: 0 },
             DataType::Number(num_ty) => {
                 ColumnBuilder::Number(NumberColumnBuilder::with_capacity(num_ty, capacity))
+            }
+            DataType::Decimal(decimal_ty) => {
+                ColumnBuilder::Decimal(DecimalColumnBuilder::with_capacity(decimal_ty, capacity))
             }
             DataType::Boolean => ColumnBuilder::Boolean(MutableBitmap::with_capacity(capacity)),
             DataType::String => {
@@ -1455,6 +1502,7 @@ impl ColumnBuilder {
             ColumnBuilder::Null { len } => *len += 1,
             ColumnBuilder::EmptyArray { len } => *len += 1,
             ColumnBuilder::Number(builder) => builder.push_default(),
+            ColumnBuilder::Decimal(builder) => builder.push_default(),
             ColumnBuilder::Boolean(builder) => builder.push(false),
             ColumnBuilder::String(builder) => builder.commit_row(),
             ColumnBuilder::Timestamp(builder) => builder.push(0),
@@ -1528,6 +1576,7 @@ impl ColumnBuilder {
             ColumnBuilder::Null { len } => Column::Null { len },
             ColumnBuilder::EmptyArray { len } => Column::EmptyArray { len },
             ColumnBuilder::Number(builder) => Column::Number(builder.build()),
+            ColumnBuilder::Decimal(builder) => Column::Decimal(builder.build()),
             ColumnBuilder::Boolean(builder) => Column::Boolean(builder.into()),
             ColumnBuilder::String(builder) => Column::String(builder.build()),
             ColumnBuilder::Timestamp(builder) => Column::Timestamp(builder.into()),
@@ -1548,6 +1597,7 @@ impl ColumnBuilder {
             ColumnBuilder::Null { .. } => Scalar::Null,
             ColumnBuilder::EmptyArray { .. } => Scalar::EmptyArray,
             ColumnBuilder::Number(builder) => Scalar::Number(builder.build_scalar()),
+            ColumnBuilder::Decimal(builder) => Scalar::Decimal(builder.build_scalar()),
             ColumnBuilder::Boolean(builder) => Scalar::Boolean(builder.get(0)),
             ColumnBuilder::String(builder) => Scalar::String(builder.build_scalar()),
             ColumnBuilder::Timestamp(builder) => Scalar::Timestamp(builder[0]),

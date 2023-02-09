@@ -18,8 +18,6 @@ use common_base::base::escape_for_key;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_kvapi::kvapi;
-use common_meta_types::AuthInfo;
-use common_meta_types::GrantObject;
 use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
@@ -28,8 +26,6 @@ use common_meta_types::SeqV;
 use common_meta_types::UpsertKVReq;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserInfo;
-use common_meta_types::UserOption;
-use common_meta_types::UserPrivilegeSet;
 
 use crate::serde::deserialize_struct;
 use crate::serde::serialize_struct;
@@ -59,26 +55,17 @@ impl UserMgr {
     async fn upsert_user_info(
         &self,
         user_info: &UserInfo,
-        seq: Option<u64>,
+        seq: MatchSeq,
     ) -> common_exception::Result<u64> {
         let user_key = format_user_key(&user_info.name, &user_info.hostname);
         let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
         let value = serialize_struct(user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
-        let match_seq = match seq {
-            None => MatchSeq::GE(1),
-            Some(s) => MatchSeq::Exact(s),
-        };
-
         let kv_api = self.kv_api.clone();
         let res = kv_api
-            .upsert_kv(UpsertKVReq::new(
-                &key,
-                match_seq,
-                Operation::Update(value),
-                None,
-            ))
+            .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Update(value), None))
             .await?;
+
         match res.result {
             Some(SeqV { seq: s, .. }) => Ok(s),
             None => Err(ErrorCode::UnknownUser(format!(
@@ -121,14 +108,14 @@ impl UserApi for UserMgr {
         Ok(res.seq)
     }
 
-    async fn get_user(&self, user: UserIdentity, seq: Option<u64>) -> Result<SeqV<UserInfo>> {
+    async fn get_user(&self, user: UserIdentity, seq: MatchSeq) -> Result<SeqV<UserInfo>> {
         let user_key = format_user_key(&user.username, &user.hostname);
         let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
         let res = self.kv_api.get_kv(&key).await?;
         let seq_value =
             res.ok_or_else(|| ErrorCode::UnknownUser(format!("unknown user {}", user_key)))?;
 
-        match MatchSeq::from(seq).match_seq(&seq_value) {
+        match seq.match_seq(&seq_value) {
             Ok(_) => Ok(SeqV::new(
                 seq_value.seq,
                 deserialize_struct(&seq_value.data, ErrorCode::IllegalUserInfoFormat, || "")?,
@@ -151,86 +138,35 @@ impl UserApi for UserMgr {
         Ok(r)
     }
 
-    async fn update_user(
+    async fn update_user_with<F>(
         &self,
         user: UserIdentity,
-        new_auth_info: Option<AuthInfo>,
-        new_user_option: Option<UserOption>,
-        seq: Option<u64>,
-    ) -> Result<Option<u64>> {
-        let user_val_seq = self.get_user(user, seq);
-        let mut user_info = user_val_seq.await?.data;
+        seq: MatchSeq,
+        f: F,
+    ) -> Result<Option<u64>>
+    where
+        F: FnOnce(&mut UserInfo) + Send,
+    {
+        let SeqV {
+            seq,
+            data: mut user_info,
+            ..
+        } = self.get_user(user, seq).await?;
 
-        if let Some(auth_info) = new_auth_info {
-            user_info.auth_info = auth_info;
-        };
-        if let Some(user_option) = new_user_option {
-            user_info.option = user_option;
-        };
-        let seq = self.upsert_user_info(&user_info, seq).await?;
+        f(&mut user_info);
+
+        let seq = self
+            .upsert_user_info(&user_info, MatchSeq::Exact(seq))
+            .await?;
         Ok(Some(seq))
     }
 
-    async fn grant_privileges(
-        &self,
-        user: UserIdentity,
-        object: GrantObject,
-        privileges: UserPrivilegeSet,
-        seq: Option<u64>,
-    ) -> Result<Option<u64>> {
-        let user_val_seq = self.get_user(user, seq);
-        let mut user_info = user_val_seq.await?.data;
-        user_info.grants.grant_privileges(&object, privileges);
-        let seq = self.upsert_user_info(&user_info, seq).await?;
-        Ok(Some(seq))
-    }
-
-    async fn revoke_privileges(
-        &self,
-        user: UserIdentity,
-        object: GrantObject,
-        privileges: UserPrivilegeSet,
-        seq: Option<u64>,
-    ) -> Result<Option<u64>> {
-        let user_val_seq = self.get_user(user, seq);
-        let mut user_info = user_val_seq.await?.data;
-        user_info.grants.revoke_privileges(&object, privileges);
-        let seq = self.upsert_user_info(&user_info, seq).await?;
-        Ok(Some(seq))
-    }
-
-    async fn grant_role(
-        &self,
-        user: UserIdentity,
-        grant_role: String,
-        seq: Option<u64>,
-    ) -> Result<Option<u64>> {
-        let user_val_seq = self.get_user(user, seq);
-        let mut user_info = user_val_seq.await?.data;
-        user_info.grants.grant_role(grant_role);
-        let seq = self.upsert_user_info(&user_info, seq).await?;
-        Ok(Some(seq))
-    }
-
-    async fn revoke_role(
-        &self,
-        user: UserIdentity,
-        revoke_role: String,
-        seq: Option<u64>,
-    ) -> Result<Option<u64>> {
-        let user_val_seq = self.get_user(user, seq);
-        let mut user_info = user_val_seq.await?.data;
-        user_info.grants.revoke_role(&revoke_role);
-        let seq = self.upsert_user_info(&user_info, seq).await?;
-        Ok(Some(seq))
-    }
-
-    async fn drop_user(&self, user: UserIdentity, seq: Option<u64>) -> Result<()> {
+    async fn drop_user(&self, user: UserIdentity, seq: MatchSeq) -> Result<()> {
         let user_key = format_user_key(&user.username, &user.hostname);
         let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
         let res = self
             .kv_api
-            .upsert_kv(UpsertKVReq::new(&key, seq.into(), Operation::Delete, None))
+            .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Delete, None))
             .await?;
         if res.prev.is_some() && res.result.is_none() {
             Ok(())

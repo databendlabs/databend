@@ -13,48 +13,27 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_meta_types::GrantObject;
+use common_meta_types::MatchSeq;
 use common_meta_types::RoleInfo;
 use common_meta_types::SeqV;
-use common_meta_types::UserPrivilegeSet;
 
 #[async_trait::async_trait]
 pub trait RoleApi: Sync + Send {
     async fn add_role(&self, role_info: RoleInfo) -> Result<u64>;
 
-    async fn get_role(&self, role: String, seq: Option<u64>) -> Result<SeqV<RoleInfo>>;
+    #[allow(clippy::ptr_arg)]
+    async fn get_role(&self, role: &String, seq: MatchSeq) -> Result<SeqV<RoleInfo>>;
 
     async fn get_roles(&self) -> Result<Vec<SeqV<RoleInfo>>>;
 
-    async fn grant_privileges(
-        &self,
-        role: String,
-        object: GrantObject,
-        privileges: UserPrivilegeSet,
-        seq: Option<u64>,
-    ) -> Result<Option<u64>>;
+    /// General role update.
+    ///
+    /// It fetches the role that matches the specified seq number, update it in place, then write it back with the seq it sees.
+    ///
+    /// Seq number ensures there is no other write happens between get and set.
+    #[allow(clippy::ptr_arg)]
+    async fn update_role_with<F>(&self, role: &String, seq: MatchSeq, f: F) -> Result<Option<u64>>
+    where F: FnOnce(&mut RoleInfo) + Send;
 
-    async fn revoke_privileges(
-        &self,
-        role: String,
-        object: GrantObject,
-        privileges: UserPrivilegeSet,
-        seq: Option<u64>,
-    ) -> Result<Option<u64>>;
-
-    async fn grant_role(
-        &self,
-        role: String,
-        grant_role: String,
-        seq: Option<u64>,
-    ) -> Result<Option<u64>>;
-
-    async fn revoke_role(
-        &self,
-        role: String,
-        revoke_role: String,
-        seq: Option<u64>,
-    ) -> Result<Option<u64>>;
-
-    async fn drop_role(&self, role: String, seq: Option<u64>) -> Result<()>;
+    async fn drop_role(&self, role: String, seq: MatchSeq) -> Result<()>;
 }

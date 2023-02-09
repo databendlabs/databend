@@ -14,6 +14,7 @@
 
 use std::cmp::Ordering;
 use std::cmp::Ordering::Less;
+use std::intrinsics::assume;
 use std::mem;
 use std::ptr;
 
@@ -24,6 +25,7 @@ use crate::with_number_mapped_type;
 use crate::Column;
 use crate::Scalar;
 
+#[derive(Clone)]
 pub struct TopKSorter {
     data: Vec<Scalar>,
     limit: usize,
@@ -75,12 +77,16 @@ impl TopKSorter {
     fn push_value<T: ValueType>(&mut self, value: T::ScalarRef<'_>) -> bool
     where for<'a> T::ScalarRef<'a>: Ord {
         let order = self.ordering();
-        let data = self.data[0].clone();
-        let data = data.as_ref();
+        unsafe {
+            assume(self.data.len() == self.limit);
+        }
+        let data = self.data[0].as_ref();
         let data = T::try_downcast_scalar(&data).unwrap();
+
         let value = T::upcast_gat(value);
 
         if Ord::cmp(&data, &value) != order {
+            drop(data);
             self.data[0] = T::upcast_scalar(T::to_owned_scalar(value));
             self.adjust();
             true
@@ -147,6 +153,12 @@ impl TopKSorter {
 fn make_heap<T, F>(v: &mut [T], is_less: &mut F)
 where F: FnMut(&T, &T) -> bool {
     let len = v.len();
+
+    if len < 2 {
+        // no need to adjust heap
+        return;
+    }
+
     let mut parent = (len - 2) / 2;
 
     loop {

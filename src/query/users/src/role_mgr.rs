@@ -16,7 +16,9 @@ use std::collections::HashMap;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_management::RoleApi;
 use common_meta_types::GrantObject;
+use common_meta_types::MatchSeq;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserPrivilegeSet;
 
@@ -30,7 +32,7 @@ impl UserApiProvider {
     // Get one role from by tenant.
     pub async fn get_role(&self, tenant: &str, role: String) -> Result<RoleInfo> {
         let client = self.get_role_api_client(tenant)?;
-        let role_data = client.get_role(role, None).await?.data;
+        let role_data = client.get_role(&role, MatchSeq::GE(0)).await?.data;
         Ok(role_data)
     }
 
@@ -92,13 +94,15 @@ impl UserApiProvider {
     pub async fn grant_privileges_to_role(
         &self,
         tenant: &str,
-        role: String,
+        role: &String,
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
         let client = self.get_role_api_client(tenant)?;
         client
-            .grant_privileges(role, object, privileges, None)
+            .update_role_with(role, MatchSeq::GE(1), |ri: &mut RoleInfo| {
+                ri.grants.grant_privileges(&object, privileges)
+            })
             .await
             .map_err(|e| e.add_message_back("(while set role privileges)"))
     }
@@ -106,13 +110,15 @@ impl UserApiProvider {
     pub async fn revoke_privileges_from_role(
         &self,
         tenant: &str,
-        role: String,
+        role: &String,
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
         let client = self.get_role_api_client(tenant)?;
         client
-            .revoke_privileges(role, object, privileges, None)
+            .update_role_with(role, MatchSeq::GE(1), |ri: &mut RoleInfo| {
+                ri.grants.revoke_privileges(&object, privileges)
+            })
             .await
             .map_err(|e| e.add_message_back("(while revoke role privileges)"))
     }
@@ -121,7 +127,7 @@ impl UserApiProvider {
     pub async fn grant_role_to_role(
         &self,
         tenant: &str,
-        target_role: String,
+        target_role: &String,
         grant_role: String,
     ) -> Result<Option<u64>> {
         let related_roles = self
@@ -137,7 +143,9 @@ impl UserApiProvider {
 
         let client = self.get_role_api_client(tenant)?;
         client
-            .grant_role(target_role, grant_role, None)
+            .update_role_with(target_role, MatchSeq::GE(1), |ri: &mut RoleInfo| {
+                ri.grants.grant_role(grant_role)
+            })
             .await
             .map_err(|e| e.add_message_back("(while grant role to role)"))
     }
@@ -145,12 +153,14 @@ impl UserApiProvider {
     pub async fn revoke_role_from_role(
         &self,
         tenant: &str,
-        role: String,
-        revoke_role: String,
+        role: &String,
+        revoke_role: &String,
     ) -> Result<Option<u64>> {
         let client = self.get_role_api_client(tenant)?;
         client
-            .revoke_role(role, revoke_role, None)
+            .update_role_with(role, MatchSeq::GE(1), |ri: &mut RoleInfo| {
+                ri.grants.revoke_role(revoke_role)
+            })
             .await
             .map_err(|e| e.add_message_back("(while revoke role from role)"))
     }
@@ -158,7 +168,7 @@ impl UserApiProvider {
     // Drop a role by name
     pub async fn drop_role(&self, tenant: &str, role: String, if_exists: bool) -> Result<()> {
         let client = self.get_role_api_client(tenant)?;
-        let drop_role = client.drop_role(role, None);
+        let drop_role = client.drop_role(role, MatchSeq::GE(1));
         match drop_role.await {
             Ok(res) => Ok(res),
             Err(e) => {

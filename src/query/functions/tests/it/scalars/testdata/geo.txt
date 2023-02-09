@@ -4,7 +4,7 @@ checked expr   : geo_to_h3<Float64, Float64, UInt8>(37.79506683_f64, 55.71290588
 optimized expr : 644325524701193974_u64
 output type    : UInt64
 output domain  : {644325524701193974..=644325524701193974}
-output         : 644325524701193974_u64
+output         : 644325524701193974
 
 
 ast            : geo_to_h3(lon, lat, 15)
@@ -16,9 +16,9 @@ evaluation:
 +--------+-------------------------+---------------------------+----------------------------+
 | Type   | Float64                 | Float64                   | UInt64                     |
 | Domain | {37.598135..=37.660183} | {55.720762..=55.77922738} | {0..=18446744073709551615} |
-| Row 0  | 37.63098076_f64         | 55.77922738_f64           | 644325529094369568_u64     |
-| Row 1  | 37.660183_f64           | 55.763241_f64             | 644325528627451570_u64     |
-| Row 2  | 37.598135_f64           | 55.720762_f64             | 644325528491955313_u64     |
+| Row 0  | 37.63098076             | 55.77922738               | 644325529094369568         |
+| Row 1  | 37.660183               | 55.763241                 | 644325528627451570         |
+| Row 2  | 37.598135               | 55.720762                 | 644325528491955313         |
 +--------+-------------------------+---------------------------+----------------------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------+
@@ -36,7 +36,7 @@ checked expr   : great_circle_distance<Float64, Float64, Float64, Float64>(55.75
 optimized expr : 14128353_f32
 output type    : Float32
 output domain  : {14128353..=14128353}
-output         : 14128353_f32
+output         : 14128353
 
 
 ast            : great_circle_distance(lon1, lat1, lon2, lat2)
@@ -48,9 +48,9 @@ evaluation:
 +--------+-------------------------+-------------------------+---------------------------+---------------------------+--------------+
 | Type   | Float64                 | Float64                 | Float64                   | Float64                   | Float32      |
 | Domain | {55.755831..=57.755831} | {37.617673..=39.617673} | {-57.755831..=-55.755831} | {-39.617673..=-37.617673} | {-inf..=NaN} |
-| Row 0  | 55.755831_f64           | 37.617673_f64           | -55.755831_f64            | -37.617673_f64            | 14128353_f32 |
-| Row 1  | 56.755831_f64           | 38.617673_f64           | -56.755831_f64            | -38.617673_f64            | 14374804_f32 |
-| Row 2  | 57.755831_f64           | 39.617673_f64           | -57.755831_f64            | -39.617673_f64            | 14618267_f32 |
+| Row 0  | 55.755831               | 37.617673               | -55.755831                | -37.617673                | 14128353     |
+| Row 1  | 56.755831               | 38.617673               | -56.755831                | -38.617673                | 14374804     |
+| Row 2  | 57.755831               | 39.617673               | -57.755831                | -39.617673                | 14618267     |
 +--------+-------------------------+-------------------------+---------------------------+---------------------------+--------------+
 evaluation (internal):
 +--------+-----------------------------------------------+
@@ -70,7 +70,7 @@ checked expr   : geo_distance<Float64, Float64, Float64, Float64>(55.755831_f64,
 optimized expr : 14128353_f32
 output type    : Float32
 output domain  : {14128353..=14128353}
-output         : 14128353_f32
+output         : 14128353
 
 
 ast            : geo_distance(lon1, lat1, lon2, lat2)
@@ -82,9 +82,9 @@ evaluation:
 +--------+-------------------------+-------------------------+---------------------------+---------------------------+--------------+
 | Type   | Float64                 | Float64                 | Float64                   | Float64                   | Float32      |
 | Domain | {55.755831..=57.755831} | {37.617673..=39.617673} | {-57.755831..=-55.755831} | {-39.617673..=-37.617673} | {-inf..=NaN} |
-| Row 0  | 55.755831_f64           | 37.617673_f64           | -55.755831_f64            | -37.617673_f64            | 14128353_f32 |
-| Row 1  | 56.755831_f64           | 38.617673_f64           | -56.755831_f64            | -38.617673_f64            | 14374804_f32 |
-| Row 2  | 57.755831_f64           | 39.617673_f64           | -57.755831_f64            | -39.617673_f64            | 14618267_f32 |
+| Row 0  | 55.755831               | 37.617673               | -55.755831                | -37.617673                | 14128353     |
+| Row 1  | 56.755831               | 38.617673               | -56.755831                | -38.617673                | 14374804     |
+| Row 2  | 57.755831               | 39.617673               | -57.755831                | -39.617673                | 14618267     |
 +--------+-------------------------+-------------------------+---------------------------+---------------------------+--------------+
 evaluation (internal):
 +--------+-----------------------------------------------+
@@ -104,7 +104,7 @@ checked expr   : great_circle_angle<Float64, Float64, Float64, Float64>(to_float
 optimized expr : 44.99998_f32
 output type    : Float32
 output domain  : {44.99998..=44.99998}
-output         : 44.99998_f32
+output         : 44.99998
 
 
 ast            : great_circle_angle(0, 0, a, 0)
@@ -117,9 +117,9 @@ evaluation:
 +--------+-----------+--------------+
 | Type   | Float64   | Float32      |
 | Domain | {45..=47} | {-inf..=NaN} |
-| Row 0  | 45_f64    | 44.99998_f32 |
-| Row 1  | 46_f64    | 45.99966_f32 |
-| Row 2  | 47_f64    | 46.99969_f32 |
+| Row 0  | 45        | 44.99998     |
+| Row 1  | 46        | 45.99966     |
+| Row 2  | 47        | 46.99969     |
 +--------+-----------+--------------+
 evaluation (internal):
 +--------+-----------------------------------------+
@@ -136,7 +136,7 @@ checked expr   : point_in_ellipses<Float64, Float64, Float64, Float64, Float64, 
 optimized expr : 1_u8
 output type    : UInt8
 output domain  : {1..=1}
-output         : 1_u8
+output         : 1
 
 
 ast            : point_in_ellipses(10., 10., 10., 9.1, a, b)
@@ -148,9 +148,9 @@ evaluation:
 +--------+-----------+-------------------+-----------+
 | Type   | Float64   | Float64           | UInt8     |
 | Domain | {1..=1.2} | {0.9997..=0.9999} | {0..=255} |
-| Row 0  | 1_f64     | 0.9999_f64        | 0_u8      |
-| Row 1  | 1.1_f64   | 0.9998_f64        | 0_u8      |
-| Row 2  | 1.2_f64   | 0.9997_f64        | 0_u8      |
+| Row 0  | 1         | 0.9999            | 0         |
+| Row 1  | 1.1       | 0.9998            | 0         |
+| Row 2  | 1.2       | 0.9997            | 0         |
 +--------+-----------+-------------------+-----------+
 evaluation (internal):
 +--------+-----------------------------------+
@@ -168,22 +168,22 @@ checked expr   : point_in_polygon<Tuple(Float64, Float64), Array(Tuple(Float64, 
 optimized expr : 1_u8
 output type    : UInt8
 output domain  : {1..=1}
-output         : 1_u8
+output         : 1
 
 
 ast            : point_in_polygon((a, b), [(6, 0), (8, 4), (5, 8), (0, 2)])
 raw expr       : point_in_polygon(tuple(a::Float64, b::Float64), array(tuple(6_u8, 0_u8), tuple(8_u8, 4_u8), tuple(5_u8, 8_u8), tuple(0_u8, 2_u8)))
 checked expr   : point_in_polygon<Tuple(Float64, Float64), Array(Tuple(Float64, Float64))>(tuple<Float64, Float64>(a, b), CAST(array<T0=Tuple(UInt8, UInt8)><T0, T0, T0, T0>(tuple<UInt8, UInt8>(6_u8, 0_u8), tuple<UInt8, UInt8>(8_u8, 4_u8), tuple<UInt8, UInt8>(5_u8, 8_u8), tuple<UInt8, UInt8>(0_u8, 2_u8)) AS Array(Tuple(Float64, Float64))))
-optimized expr : point_in_polygon<Tuple(Float64, Float64), Array(Tuple(Float64, Float64))>(tuple<Float64, Float64>(a, b), [(6_f64, 0_f64), (8_f64, 4_f64), (5_f64, 8_f64), (0_f64, 2_f64)])
+optimized expr : point_in_polygon<Tuple(Float64, Float64), Array(Tuple(Float64, Float64))>(tuple<Float64, Float64>(a, b), [(6, 0), (8, 4), (5, 8), (0, 2)])
 evaluation:
 +--------+-----------+-----------+-----------+
 |        | a         | b         | Output    |
 +--------+-----------+-----------+-----------+
 | Type   | Float64   | Float64   | UInt8     |
 | Domain | {3..=3.2} | {3..=3.2} | {0..=255} |
-| Row 0  | 3_f64     | 3_f64     | 1_u8      |
-| Row 1  | 3.1_f64   | 3.1_f64   | 1_u8      |
-| Row 2  | 3.2_f64   | 3.2_f64   | 1_u8      |
+| Row 0  | 3         | 3         | 1         |
+| Row 1  | 3.1       | 3.1       | 1         |
+| Row 2  | 3.2       | 3.2       | 1         |
 +--------+-----------+-----------+-----------+
 evaluation (internal):
 +--------+------------------------+
@@ -201,7 +201,7 @@ checked expr   : point_in_polygon<Tuple(Float64, Float64), Array(Array(Tuple(Flo
 optimized expr : 0_u8
 output type    : UInt8
 output domain  : {0..=0}
-output         : 0_u8
+output         : 0
 
 
 ast            : point_in_polygon((2.5, 2.5), [[(4., 0.), (8., 4.), (4., 8.), (0., 4.)], [(3., 3.), (3., 5.), (5., 5.), (5., 3.)]])
@@ -210,21 +210,21 @@ checked expr   : point_in_polygon<Tuple(Float64, Float64), Array(Array(Tuple(Flo
 optimized expr : 1_u8
 output type    : UInt8
 output domain  : {1..=1}
-output         : 1_u8
+output         : 1
 
 
 ast            : point_in_polygon((2.5, 2.5), [[(4., 0.), (8., 4.), (4., 8.), (0., 4.)], [(3., 3.), (a, b), (5., 5.), (5., 3.)]])
 raw expr       : point_in_polygon(tuple(2.5_f64, 2.5_f64), array(array(tuple(4_f64, 0_f64), tuple(8_f64, 4_f64), tuple(4_f64, 8_f64), tuple(0_f64, 4_f64)), array(tuple(3_f64, 3_f64), tuple(a::Float64, b::Float64), tuple(5_f64, 5_f64), tuple(5_f64, 3_f64))))
 checked expr   : point_in_polygon<Tuple(Float64, Float64), Array(Array(Tuple(Float64, Float64)))>(tuple<Float64, Float64>(2.5_f64, 2.5_f64), array<T0=Array(Tuple(Float64, Float64))><T0, T0>(array<T0=Tuple(Float64, Float64)><T0, T0, T0, T0>(tuple<Float64, Float64>(4_f64, 0_f64), tuple<Float64, Float64>(8_f64, 4_f64), tuple<Float64, Float64>(4_f64, 8_f64), tuple<Float64, Float64>(0_f64, 4_f64)), array<T0=Tuple(Float64, Float64)><T0, T0, T0, T0>(tuple<Float64, Float64>(3_f64, 3_f64), tuple<Float64, Float64>(a, b), tuple<Float64, Float64>(5_f64, 5_f64), tuple<Float64, Float64>(5_f64, 3_f64))))
-optimized expr : point_in_polygon<Tuple(Float64, Float64), Array(Array(Tuple(Float64, Float64)))>((2.5_f64, 2.5_f64), array<T0=Array(Tuple(Float64, Float64))><T0, T0>([(4_f64, 0_f64), (8_f64, 4_f64), (4_f64, 8_f64), (0_f64, 4_f64)], array<T0=Tuple(Float64, Float64)><T0, T0, T0, T0>((3_f64, 3_f64), tuple<Float64, Float64>(a, 5_f64), (5_f64, 5_f64), (5_f64, 3_f64))))
+optimized expr : point_in_polygon<Tuple(Float64, Float64), Array(Array(Tuple(Float64, Float64)))>((2.5_f64, 2.5_f64), array<T0=Array(Tuple(Float64, Float64))><T0, T0>([(4, 0), (8, 4), (4, 8), (0, 4)], array<T0=Tuple(Float64, Float64)><T0, T0, T0, T0>((3_f64, 3_f64), tuple<Float64, Float64>(a, 5_f64), (5_f64, 5_f64), (5_f64, 3_f64))))
 evaluation:
 +--------+-----------+---------+-----------+
 |        | a         | b       | Output    |
 +--------+-----------+---------+-----------+
 | Type   | Float64   | Float64 | UInt8     |
 | Domain | {3..=3.1} | {5..=5} | {0..=255} |
-| Row 0  | 3_f64     | 5_f64   | 1_u8      |
-| Row 1  | 3.1_f64   | 5_f64   | 1_u8      |
+| Row 0  | 3         | 5       | 1         |
+| Row 1  | 3.1       | 5       | 1         |
 +--------+-----------+---------+-----------+
 evaluation (internal):
 +--------+-------------------+
@@ -242,7 +242,7 @@ checked expr   : point_in_polygon<Tuple(Float64, Float64), Array(Tuple(Float64, 
 optimized expr : 1_u8
 output type    : UInt8
 output domain  : {1..=1}
-output         : 1_u8
+output         : 1
 
 
 ast            : point_in_polygon((2.5, 2.5), [(4., 0.), (8., 4.), (4., 8.), (0., 4.)], [(3., 3.), (a, b), (5., 5.), (5., 3.)])
@@ -255,8 +255,8 @@ evaluation:
 +--------+---------+---------+---------+
 | Type   | Float64 | Float64 | UInt8   |
 | Domain | {3..=3} | {5..=5} | {1..=1} |
-| Row 0  | 3_f64   | 5_f64   | 1_u8    |
-| Row 1  | 3_f64   | 5_f64   | 1_u8    |
+| Row 0  | 3       | 5       | 1       |
+| Row 1  | 3       | 5       | 1       |
 +--------+---------+---------+---------+
 evaluation (internal):
 +--------+-----------------+
@@ -301,6 +301,6 @@ checked expr   : geohash_decode<String>("ezs42")
 optimized expr : (-5.6030273437_f64, 42.6049804687_f64)
 output type    : Tuple(Float64, Float64)
 output domain  : ({-5.6030273437..=-5.6030273437}, {42.6049804687..=42.6049804687})
-output         : (-5.6030273437_f64, 42.6049804687_f64)
+output         : (-5.6030273437, 42.6049804687)
 
 

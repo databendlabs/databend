@@ -116,6 +116,12 @@ impl BlockReader {
         deserialized_res
     }
 
+    pub fn build_default_values_block(&self, num_rows: usize) -> Result<DataBlock> {
+        let data_schema = self.data_schema();
+        let default_vals = self.default_vals.clone();
+        DataBlock::create_with_default_value(&data_schema, &default_vals, num_rows)
+    }
+
     /// Deserialize column chunks data from parquet format to DataBlock with a uncompressed buffer.
     pub fn deserialize_parquet_chunks_with_buffer(
         &self,
@@ -126,42 +132,56 @@ impl BlockReader {
         uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
     ) -> Result<DataBlock> {
         if columns_chunks.is_empty() {
-            return Ok(DataBlock::new(vec![], num_rows));
+            return self.build_default_values_block(num_rows);
         }
 
         let chunk_map: HashMap<usize, &[u8]> = columns_chunks.into_iter().collect();
         let mut columns_array_iter = Vec::with_capacity(self.projection.len());
 
         let columns = self.projection.project_column_nodes(&self.column_nodes)?;
+        let mut need_default_vals = Vec::with_capacity(columns.len());
+        let mut need_to_fill_default_val = false;
 
-        for column in &columns {
+        for column in columns {
             let field = column.field.clone();
             let indices = &column.leaf_ids;
             let mut column_metas = Vec::with_capacity(indices.len());
             let mut column_chunks = Vec::with_capacity(indices.len());
             let mut column_descriptors = Vec::with_capacity(indices.len());
-            for (i, index) in indices.iter().enumerate() {
-                let column_id = column.leaf_column_id(i);
+            let mut column_in_block = false;
+
+            for (j, index) in indices.iter().enumerate() {
+                let column_id = column.leaf_column_ids[j];
                 if let Some(column_meta) = columns_meta.get(&column_id) {
                     let column_read = <&[u8]>::clone(&chunk_map[index]);
                     let column_descriptor = &self.parquet_schema_descriptor.columns()[*index];
                     column_metas.push(column_meta);
                     column_chunks.push(column_read);
                     column_descriptors.push(column_descriptor);
+                    column_in_block = true;
+                } else {
+                    column_in_block = false;
+                    break;
                 }
             }
 
-            columns_array_iter.push(Self::chunks_to_parquet_array_iter(
-                column_metas,
-                column_chunks,
-                num_rows,
-                column_descriptors,
-                field,
-                compression,
-                uncompressed_buffer
-                    .clone()
-                    .unwrap_or_else(|| UncompressedBuffer::new(0)),
-            )?);
+            if column_in_block {
+                columns_array_iter.push(Self::chunks_to_parquet_array_iter(
+                    column_metas,
+                    column_chunks,
+                    num_rows,
+                    column_descriptors,
+                    field,
+                    compression,
+                    uncompressed_buffer
+                        .clone()
+                        .unwrap_or_else(|| UncompressedBuffer::new(0)),
+                )?);
+                need_default_vals.push(false);
+            } else {
+                need_default_vals.push(true);
+                need_to_fill_default_val = true;
+            }
         }
 
         let mut arrays = Vec::with_capacity(columns_array_iter.len());
@@ -172,7 +192,26 @@ impl BlockReader {
         }
 
         let chunk = Chunk::try_new(arrays)?;
-        DataBlock::from_arrow_chunk(&chunk, &self.data_schema())
+        if !need_to_fill_default_val {
+            DataBlock::from_arrow_chunk(&chunk, &self.data_schema())
+        } else {
+            let data_schema = self.data_schema();
+            let schema_default_vals = self.default_vals.clone();
+            let mut default_vals = Vec::with_capacity(need_default_vals.len());
+            for (i, need_default_val) in need_default_vals.iter().enumerate() {
+                if !need_default_val {
+                    default_vals.push(None);
+                } else {
+                    default_vals.push(Some(schema_default_vals[i].clone()));
+                }
+            }
+            DataBlock::create_with_default_value_and_chunk(
+                &data_schema,
+                &chunk,
+                &default_vals,
+                num_rows,
+            )
+        }
     }
 
     fn chunks_to_parquet_array_iter<'a>(

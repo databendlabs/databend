@@ -18,9 +18,9 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
 
+use common_meta_raft_store::applied_state::AppliedState;
 use common_meta_sled_store::openraft::NodeId;
 use common_meta_sled_store::openraft::State;
-use common_meta_types::AppliedState;
 use common_meta_types::Node;
 use databend_meta::meta_service::MetaNode;
 use databend_meta::Opened;

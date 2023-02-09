@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_management::*;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_kvapi::kvapi::KVApi;
+use common_meta_types::MatchSeq;
 use common_meta_types::SeqV;
 use common_meta_types::UserDefinedFunction;
 
@@ -84,7 +85,7 @@ async fn test_successfully_drop_udf() -> Result<()> {
     let udfs = udf_api.get_udfs().await?;
     assert_eq!(udfs, vec![udf.clone()]);
 
-    udf_api.drop_udf(&udf.name, None).await?;
+    udf_api.drop_udf(&udf.name, MatchSeq::GE(1)).await?;
 
     let udfs = udf_api.get_udfs().await?;
     assert_eq!(udfs, vec![]);
@@ -95,7 +96,7 @@ async fn test_successfully_drop_udf() -> Result<()> {
 async fn test_unknown_udf_drop_udf() -> Result<()> {
     let (_, udf_api) = new_udf_api().await?;
 
-    match udf_api.drop_udf("UNKNOWN_NAME", None).await {
+    match udf_api.drop_udf("UNKNOWN_NAME", MatchSeq::GE(1)).await {
         Ok(_) => panic!("Unknown Function drop must be return Err."),
         Err(cause) => assert_eq!(cause.code(), 2602),
     }

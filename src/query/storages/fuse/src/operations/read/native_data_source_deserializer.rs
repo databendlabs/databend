@@ -97,11 +97,11 @@ impl NativeDeserializeDataTransform {
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => (0..src_schema.num_fields()).collect(),
                 Some(v) => {
-                    let projected_arrow_schema = v
+                    let projected_schema = v
                         .prewhere_columns
                         .project_schema(plan.source_info.schema().as_ref());
 
-                    projected_arrow_schema
+                    projected_schema
                         .fields()
                         .iter()
                         .map(|f| src_schema.index_of(f.name()).unwrap())
@@ -124,16 +124,7 @@ impl NativeDeserializeDataTransform {
             .filter(|i| !prewhere_columns.contains(i))
             .collect();
 
-        let output_schema: DataSchema = match PushDownInfo::prewhere_of_push_downs(&plan.push_downs)
-        {
-            None => src_schema.clone(),
-            Some(v) => {
-                let projected = v
-                    .output_columns
-                    .project_schema(plan.source_info.schema().as_ref());
-                (&projected).into()
-            }
-        };
+        let output_schema: DataSchema = plan.schema().into();
 
         let func_ctx = ctx.get_function_context()?;
         let prewhere_schema = src_schema.project(&prewhere_columns);
@@ -299,9 +290,9 @@ impl Processor for NativeDeserializeDataTransform {
             if chunks.is_empty() {
                 let _ = self.chunks.pop_front();
                 let part = self.parts.pop_front().unwrap();
-
                 let part = FusePartInfo::from_part(&part)?;
-                let data_block = DataBlock::new(vec![], part.nums_rows);
+                let num_rows = part.nums_rows;
+                let data_block = self.block_reader.build_default_values_block(num_rows)?;
                 self.add_block(data_block)?;
                 return Ok(());
             }
@@ -340,17 +331,18 @@ impl Processor for NativeDeserializeDataTransform {
                 if self.read_columns.contains(index) {
                     continue;
                 }
-                let chunk = chunks.get_mut(*index).unwrap();
-                if !chunk.1.has_next() {
-                    // No data anymore
-                    let _ = self.chunks.pop_front();
-                    let _ = self.parts.pop_front().unwrap();
+                if let Some(chunk) = chunks.get_mut(*index) {
+                    if !chunk.1.has_next() {
+                        // No data anymore
+                        let _ = self.chunks.pop_front();
+                        let _ = self.parts.pop_front().unwrap();
 
-                    self.check_topn();
-                    return Ok(());
+                        self.check_topn();
+                        return Ok(());
+                    }
+                    self.read_columns.push(*index);
+                    arrays.push((chunk.0, chunk.1.next_array()?));
                 }
-                self.read_columns.push(*index);
-                arrays.push((chunk.0, chunk.1.next_array()?));
             }
 
             let data_block = match self.prewhere_filter.as_ref() {
@@ -413,7 +405,12 @@ impl Processor for NativeDeserializeDataTransform {
                 }
             }?;
 
-            // Step 5: Add the block to output data
+            // Step 5: fill missing field default value if need
+            let data_block = self
+                .block_reader
+                .fill_missing_native_column_values(data_block, &self.parts)?;
+
+            // Step 6: Add the block to output data
             self.add_block(data_block)?;
         }
 

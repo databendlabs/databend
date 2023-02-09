@@ -490,6 +490,7 @@ pub fn serialize_column_binary(column: &Column, row: usize, vec: &mut Vec<u8>) {
         Column::String(v) => {
             BinaryWrite::write_binary(vec, unsafe { v.index_unchecked(row) }).unwrap()
         }
+        Column::Decimal(_) => todo!("decimal"),
         Column::Timestamp(v) => vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
         Column::Date(v) => vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
         Column::Array(array) => {

@@ -25,6 +25,7 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::table_args::TableArgs;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -42,7 +43,6 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
 use crate::storages::Table;
-use crate::table_functions::table_function_factory::TableArgs;
 use crate::table_functions::TableFunction;
 
 pub struct SyncCrashMeTable {
@@ -53,28 +53,27 @@ pub struct SyncCrashMeTable {
 impl SyncCrashMeTable {
     pub fn create(
         database_name: &str,
-        _table_func_name: &str,
+        table_func_name: &str,
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let mut panic_message = None;
-        if let Some(args) = table_args {
-            if args.len() == 1 {
-                let arg = args[0].clone();
-                panic_message =
-                    Some(String::from_utf8(arg.into_string().map_err(|_| {
-                        ErrorCode::BadArguments("Expected string argument.")
-                    })?)?);
-            }
+        let args = table_args.expect_all_positioned(table_func_name, None)?;
+        if args.len() == 1 {
+            let arg = args[0].clone();
+            panic_message =
+                Some(String::from_utf8(arg.into_string().map_err(|_| {
+                    ErrorCode::BadArguments("Expected string argument.")
+                })?)?);
         }
 
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
-            desc: format!("'{}'.'{}'", database_name, "async_crash_me"),
-            name: String::from("async_crash_me"),
+            desc: format!("'{}'.'{}'", database_name, table_func_name),
+            name: String::from(table_func_name),
             meta: TableMeta {
                 schema: Arc::new(TableSchema::empty()),
-                engine: String::from("async_crash_me"),
+                engine: String::from(table_func_name),
                 // Assuming that created_on is unnecessary for function table,
                 // we could make created_on fixed to pass test_shuffle_action_try_into.
                 created_on: Utc.from_utc_datetime(&NaiveDateTime::from_timestamp(0, 0)),
@@ -114,10 +113,12 @@ impl Table for SyncCrashMeTable {
         Ok((PartStatistics::new_exact(1, 1, 1, 1), Partitions::default()))
     }
 
-    fn table_args(&self) -> Option<Vec<Scalar>> {
-        self.panic_message
-            .clone()
-            .map(|s| vec![Scalar::String(s.as_bytes().to_vec())])
+    fn table_args(&self) -> Option<TableArgs> {
+        let args = match &self.panic_message {
+            Some(s) => vec![Scalar::String(s.as_bytes().to_vec())],
+            None => vec![],
+        };
+        Some(TableArgs::new_positioned(args))
     }
 
     fn read_data(

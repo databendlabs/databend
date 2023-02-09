@@ -164,14 +164,6 @@ impl MetaService for MetaServiceImpl {
         }
     }
 
-    async fn write_msg(&self, r: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
-        self.kv_api(r).await
-    }
-
-    async fn read_msg(&self, r: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
-        self.kv_api(r).await
-    }
-
     async fn kv_api(&self, r: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
         let _guard = RequestInFlight::guard();
 
@@ -206,6 +198,26 @@ impl MetaService for MetaServiceImpl {
         network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
 
         Ok(Response::new(reply))
+    }
+
+    async fn transaction(
+        &self,
+        request: Request<TxnRequest>,
+    ) -> Result<Response<TxnReply>, Status> {
+        self.check_token(request.metadata())?;
+        network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+        let _guard = RequestInFlight::guard();
+
+        common_tracing::extract_remote_span_as_parent(&request);
+
+        let request = request.into_inner();
+
+        info!("Receive txn_request: {}", request);
+
+        let body = self.execute_txn(request).await;
+        network_metrics::incr_sent_bytes(body.encoded_len() as u64);
+
+        Ok(Response::new(body))
     }
 
     type ExportStream =
@@ -254,26 +266,6 @@ impl MetaService for MetaServiceImpl {
                 Err(Status::invalid_argument(e))
             }
         }
-    }
-
-    async fn transaction(
-        &self,
-        request: Request<TxnRequest>,
-    ) -> Result<Response<TxnReply>, Status> {
-        self.check_token(request.metadata())?;
-        network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
-        let _guard = RequestInFlight::guard();
-
-        common_tracing::extract_remote_span_as_parent(&request);
-
-        let request = request.into_inner();
-
-        info!("Receive txn_request: {}", request);
-
-        let body = self.execute_txn(request).await;
-        network_metrics::incr_sent_bytes(body.encoded_len() as u64);
-
-        Ok(Response::new(body))
     }
 
     async fn member_list(

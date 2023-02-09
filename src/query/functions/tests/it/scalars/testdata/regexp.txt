@@ -4,7 +4,7 @@ checked expr   : regexp_instr<String, String, Int64>("dog cat dog", "dog", to_in
 optimized expr : 1_u64
 output type    : UInt64
 output domain  : {1..=1}
-output         : 1_u64
+output         : 1
 
 
 ast            : regexp_instr('aa aaa aaaa aa aaa aaaa', 'a{2}', 1)
@@ -13,7 +13,7 @@ checked expr   : regexp_instr<String, String, Int64>("aa aaa aaaa aa aaa aaaa", 
 optimized expr : 1_u64
 output type    : UInt64
 output domain  : {1..=1}
-output         : 1_u64
+output         : 1
 
 
 ast            : regexp_instr('aa aaa aaaa aa aaa aaaa', NULL, 2)
@@ -31,14 +31,14 @@ checked expr   : regexp_instr<String, String, Int64>("", "", to_int64<UInt8>(1_u
 optimized expr : 0_u64
 output type    : UInt64
 output domain  : {0..=0}
-output         : 0_u64
+output         : 0
 
 
 error: 
   --> SQL:1:1
   |
 1 | regexp_instr('', '', 0)
-  | ^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr: position must be positive, but got 0 while evaluating function `regexp_instr("", "", 0_i64)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr: position must be positive, but got 0 while evaluating function `regexp_instr("", "", 0)`
 
 
 
@@ -51,9 +51,9 @@ evaluation:
 +--------+---------------------------+--------------+---------+
 | Type   | String                    | String       | UInt64  |
 | Domain | {""..="dog cat dog"}      | {""..="dog"} | Unknown |
-| Row 0  | "dog cat dog"             | "dog"        | 1_u64   |
-| Row 1  | "aa aaa aaaa aa aaa aaaa" | "a{2}"       | 1_u64   |
-| Row 2  | ""                        | ""           | 0_u64   |
+| Row 0  | "dog cat dog"             | "dog"        | 1       |
+| Row 1  | "aa aaa aaaa aa aaa aaaa" | "a{2}"       | 1       |
+| Row 2  | ""                        | ""           | 0       |
 +--------+---------------------------+--------------+---------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------+
@@ -74,9 +74,9 @@ evaluation:
 +--------+---------------------------+--------------+---------+---------+
 | Type   | String                    | String       | Int64   | UInt64  |
 | Domain | {""..="dog cat dog"}      | {""..="dog"} | {1..=2} | Unknown |
-| Row 0  | "dog cat dog"             | "dog"        | 1_i64   | 1_u64   |
-| Row 1  | "aa aaa aaaa aa aaa aaaa" | "a{2}"       | 2_i64   | 4_u64   |
-| Row 2  | ""                        | ""           | 1_i64   | 0_u64   |
+| Row 0  | "dog cat dog"             | "dog"        | 1       | 1       |
+| Row 1  | "aa aaa aaaa aa aaa aaaa" | "a{2}"       | 2       | 4       |
+| Row 2  | ""                        | ""           | 1       | 0       |
 +--------+---------------------------+--------------+---------+---------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------+
@@ -98,9 +98,9 @@ evaluation:
 +--------+---------------------------------------------+------------------+---------+---------+---------+
 | Type   | String                                      | String           | Int64   | Int64   | UInt64  |
 | Domain | {"aa aa aa aaaa aaaa aaaa"..="dog cat dog"} | {"a{2}"..="dog"} | {1..=9} | {2..=3} | Unknown |
-| Row 0  | "dog cat dog"                               | "dog"            | 1_i64   | 2_i64   | 9_u64   |
-| Row 1  | "aa aaa aaaa aa aaa aaaa"                   | "a{2}"           | 1_i64   | 3_i64   | 8_u64   |
-| Row 2  | "aa aa aa aaaa aaaa aaaa"                   | "a{4}"           | 9_i64   | 2_i64   | 15_u64  |
+| Row 0  | "dog cat dog"                               | "dog"            | 1       | 2       | 9       |
+| Row 1  | "aa aaa aaaa aa aaa aaaa"                   | "a{2}"           | 1       | 3       | 8       |
+| Row 2  | "aa aa aa aaaa aaaa aaaa"                   | "a{4}"           | 9       | 2       | 15      |
 +--------+---------------------------------------------+------------------+---------+---------+---------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -124,9 +124,9 @@ evaluation:
 +--------+---------------------------------------------+------------------+---------+---------+---------+---------+
 | Type   | String                                      | String           | Int64   | Int64   | Int64   | UInt64  |
 | Domain | {"aa aa aa aaaa aaaa aaaa"..="dog cat dog"} | {"a{2}"..="dog"} | {1..=2} | {2..=2} | {0..=1} | Unknown |
-| Row 0  | "dog cat dog"                               | "dog"            | 1_i64   | 2_i64   | 0_i64   | 9_u64   |
-| Row 1  | "aa aaa aaaa aa aaa aaaa"                   | "a{2}"           | 2_i64   | 2_i64   | 1_i64   | 10_u64  |
-| Row 2  | "aa aa aa aaaa aaaa aaaa"                   | "a{4}"           | 1_i64   | 2_i64   | 1_i64   | 19_u64  |
+| Row 0  | "dog cat dog"                               | "dog"            | 1       | 2       | 0       | 9       |
+| Row 1  | "aa aaa aaaa aa aaa aaaa"                   | "a{2}"           | 2       | 2       | 1       | 10      |
+| Row 2  | "aa aa aa aaaa aaaa aaaa"                   | "a{4}"           | 1       | 2       | 1       | 19      |
 +--------+---------------------------------------------+------------------+---------+---------+---------+---------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -151,9 +151,9 @@ evaluation:
 +--------+---------------------------------------------+------------------+---------+---------+---------+-------------+---------+
 | Type   | String                                      | String           | Int64   | Int64   | Int64   | String      | UInt64  |
 | Domain | {"aa aa aa aaaa aaaa aaaa"..="dog cat dog"} | {"A{2}"..="dog"} | {1..=2} | {2..=2} | {0..=1} | {"c"..="i"} | Unknown |
-| Row 0  | "dog cat dog"                               | "dog"            | 1_i64   | 2_i64   | 0_i64   | "i"         | 9_u64   |
-| Row 1  | "aa aaa aaaa aa aaa aaaa"                   | "A{2}"           | 2_i64   | 2_i64   | 1_i64   | "c"         | 0_u64   |
-| Row 2  | "aa aa aa aaaa aaaa aaaa"                   | "A{4}"           | 1_i64   | 2_i64   | 1_i64   | "i"         | 19_u64  |
+| Row 0  | "dog cat dog"                               | "dog"            | 1       | 2       | 0       | "i"         | 9       |
+| Row 1  | "aa aaa aaaa aa aaa aaaa"                   | "A{2}"           | 2       | 2       | 1       | "c"         | 0       |
+| Row 2  | "aa aa aa aaaa aaaa aaaa"                   | "A{4}"           | 1       | 2       | 1       | "i"         | 19      |
 +--------+---------------------------------------------+------------------+---------+---------+---------+-------------+---------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -178,10 +178,10 @@ evaluation:
 +--------+-------------------------------+-----------------------+---------+---------+---------+-------------+
 | Type   | String NULL                   | String NULL           | Int64   | Int64   | Int64   | UInt64 NULL |
 | Domain | {""..="dog cat dog"} ∪ {NULL} | {""..="dog"} ∪ {NULL} | {1..=2} | {1..=2} | {0..=1} | Unknown     |
-| Row 0  | "dog cat dog"                 | "dog"                 | 1_i64   | 2_i64   | 0_i64   | 9_u64       |
-| Row 1  | "aa aaa aaaa aa aaa aaaa"     | NULL                  | 2_i64   | 2_i64   | 1_i64   | NULL        |
-| Row 2  | NULL                          | NULL                  | 1_i64   | 2_i64   | 1_i64   | NULL        |
-| Row 3  | "aa aa aa aaaa aaaa aaaa"     | "A{4}"                | 1_i64   | 1_i64   | 1_i64   | 14_u64      |
+| Row 0  | "dog cat dog"                 | "dog"                 | 1       | 2       | 0       | 9           |
+| Row 1  | "aa aaa aaaa aa aaa aaaa"     | NULL                  | 2       | 2       | 1       | NULL        |
+| Row 2  | NULL                          | NULL                  | 1       | 2       | 1       | NULL        |
+| Row 3  | "aa aa aa aaaa aaaa aaaa"     | "A{4}"                | 1       | 1       | 1       | 14          |
 +--------+-------------------------------+-----------------------+---------+---------+---------+-------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -205,10 +205,10 @@ evaluation:
 +--------+-------------------------------+-----------------------+---------+---------+---------+-------------+-------------+
 | Type   | String NULL                   | String NULL           | Int64   | Int64   | Int64   | String      | UInt64 NULL |
 | Domain | {""..="dog cat dog"} ∪ {NULL} | {""..="dog"} ∪ {NULL} | {1..=2} | {1..=2} | {0..=1} | {"c"..="i"} | Unknown     |
-| Row 0  | "dog cat dog"                 | "dog"                 | 1_i64   | 2_i64   | 0_i64   | "i"         | 9_u64       |
-| Row 1  | "aa aaa aaaa aa aaa aaaa"     | NULL                  | 2_i64   | 2_i64   | 1_i64   | "c"         | NULL        |
-| Row 2  | NULL                          | NULL                  | 1_i64   | 2_i64   | 1_i64   | "i"         | NULL        |
-| Row 3  | "aa aa aa aaaa aaaa aaaa"     | "A{4}"                | 1_i64   | 1_i64   | 1_i64   | "i"         | 14_u64      |
+| Row 0  | "dog cat dog"                 | "dog"                 | 1       | 2       | 0       | "i"         | 9           |
+| Row 1  | "aa aaa aaaa aa aaa aaaa"     | NULL                  | 2       | 2       | 1       | "c"         | NULL        |
+| Row 2  | NULL                          | NULL                  | 1       | 2       | 1       | "i"         | NULL        |
+| Row 3  | "aa aa aa aaaa aaaa aaaa"     | "A{4}"                | 1       | 1       | 1       | "i"         | 14          |
 +--------+-------------------------------+-----------------------+---------+---------+---------+-------------+-------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -234,10 +234,10 @@ evaluation:
 +--------+---------------------------------------------------------+-----------------+---------+---------+---------+---------+
 | Type   | String                                                  | String          | Int64   | Int64   | Int64   | UInt64  |
 | Domain | {"周 周周 周周周 周周周周"..="周 周周 周周周 周周周周"} | {"周+"..="周+"} | {1..=5} | {1..=3} | {0..=1} | Unknown |
-| Row 0  | "周 周周 周周周 周周周周"                               | "周+"           | 1_i64   | 2_i64   | 0_i64   | 3_u64   |
-| Row 1  | "周 周周 周周周 周周周周"                               | "周+"           | 2_i64   | 2_i64   | 1_i64   | 9_u64   |
-| Row 2  | "周 周周 周周周 周周周周"                               | "周+"           | 3_i64   | 3_i64   | 1_i64   | 14_u64  |
-| Row 3  | "周 周周 周周周 周周周周"                               | "周+"           | 5_i64   | 1_i64   | 1_i64   | 9_u64   |
+| Row 0  | "周 周周 周周周 周周周周"                               | "周+"           | 1       | 2       | 0       | 3       |
+| Row 1  | "周 周周 周周周 周周周周"                               | "周+"           | 2       | 2       | 1       | 9       |
+| Row 2  | "周 周周 周周周 周周周周"                               | "周+"           | 3       | 3       | 1       | 14      |
+| Row 3  | "周 周周 周周周 周周周周"                               | "周+"           | 5       | 1       | 1       | 9       |
 +--------+---------------------------------------------------------+-----------------+---------+---------+---------+---------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -256,7 +256,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_instr(source, pat, pos, occur, ro)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr: position must be positive, but got 0 while evaluating function `regexp_instr("dog cat dog", "dog", 0_i64, 1_i64, 0_i64)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr: position must be positive, but got 0 while evaluating function `regexp_instr("dog cat dog", "dog", 0, 1, 0)`
 
 
 
@@ -264,7 +264,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_instr(source, pat, pos, occur, ro)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr: return_option must be 1 or 0, but got 2 while evaluating function `regexp_instr("aa aaa aaaa aa aaa aaaa", "A{2}", 2_i64, 2_i64, 2_i64)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr: return_option must be 1 or 0, but got 2 while evaluating function `regexp_instr("aa aaa aaaa aa aaa aaaa", "A{2}", 2, 2, 2)`
 
 
 
@@ -272,7 +272,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_instr(source, pat, pos, occur, ro, mt)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr match type: - while evaluating function `regexp_instr("aa aaa aaaa aa aaa aaaa", "A{4}", 1_i64, 1_i64, 1_i64, "-i")`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr match type: - while evaluating function `regexp_instr("aa aaa aaaa aa aaa aaaa", "A{4}", 1, 1, 1, "-i")`
 
 
 
@@ -533,10 +533,10 @@ evaluation:
 +--------+---------------------------------+-----------------------+-------------+----------+---------------+
 | Type   | String                          | String                | String      | Int64    | String        |
 | Domain | {"abc def ghi"..="abc def ghi"} | {"[a-z]+"..="[a-z]+"} | {"X"..="X"} | {1..=12} | Unknown       |
-| Row 0  | "abc def ghi"                   | "[a-z]+"              | "X"         | 1_i64    | "X X X"       |
-| Row 1  | "abc def ghi"                   | "[a-z]+"              | "X"         | 4_i64    | "abc X X"     |
-| Row 2  | "abc def ghi"                   | "[a-z]+"              | "X"         | 8_i64    | "abc def X"   |
-| Row 3  | "abc def ghi"                   | "[a-z]+"              | "X"         | 12_i64   | "abc def ghi" |
+| Row 0  | "abc def ghi"                   | "[a-z]+"              | "X"         | 1        | "X X X"       |
+| Row 1  | "abc def ghi"                   | "[a-z]+"              | "X"         | 4        | "abc X X"     |
+| Row 2  | "abc def ghi"                   | "[a-z]+"              | "X"         | 8        | "abc def X"   |
+| Row 3  | "abc def ghi"                   | "[a-z]+"              | "X"         | 12       | "abc def ghi" |
 +--------+---------------------------------+-----------------------+-------------+----------+---------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -560,10 +560,10 @@ evaluation:
 +--------+---------------------------------+-----------------------+-------------+---------+---------+---------------+
 | Type   | String                          | String                | String      | Int64   | Int64   | String        |
 | Domain | {"abc def ghi"..="abc def ghi"} | {"[a-z]+"..="[a-z]+"} | {"X"..="X"} | {1..=4} | {0..=3} | Unknown       |
-| Row 0  | "abc def ghi"                   | "[a-z]+"              | "X"         | 1_i64   | 0_i64   | "X X X"       |
-| Row 1  | "abc def ghi"                   | "[a-z]+"              | "X"         | 1_i64   | 1_i64   | "X def ghi"   |
-| Row 2  | "abc def ghi"                   | "[a-z]+"              | "X"         | 4_i64   | 2_i64   | "abc def X"   |
-| Row 3  | "abc def ghi"                   | "[a-z]+"              | "X"         | 4_i64   | 3_i64   | "abc def ghi" |
+| Row 0  | "abc def ghi"                   | "[a-z]+"              | "X"         | 1       | 0       | "X X X"       |
+| Row 1  | "abc def ghi"                   | "[a-z]+"              | "X"         | 1       | 1       | "X def ghi"   |
+| Row 2  | "abc def ghi"                   | "[a-z]+"              | "X"         | 4       | 2       | "abc def X"   |
+| Row 3  | "abc def ghi"                   | "[a-z]+"              | "X"         | 4       | 3       | "abc def ghi" |
 +--------+---------------------------------+-----------------------+-------------+---------+---------+---------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -588,9 +588,9 @@ evaluation:
 +--------+---------------------------------+-----------------------+-------------+---------+---------+------------+-------------+
 | Type   | String                          | String                | String      | Int64   | Int64   | String     | String      |
 | Domain | {"abc DEF ghi"..="abc def ghi"} | {"[a-z]+"..="[a-z]+"} | {"X"..="X"} | {1..=4} | {0..=2} | {""..="i"} | Unknown     |
-| Row 0  | "abc def ghi"                   | "[a-z]+"              | "X"         | 1_i64   | 0_i64   | ""         | "X X X"     |
-| Row 1  | "abc DEF ghi"                   | "[a-z]+"              | "X"         | 1_i64   | 2_i64   | "c"        | "abc DEF X" |
-| Row 2  | "abc DEF ghi"                   | "[a-z]+"              | "X"         | 4_i64   | 1_i64   | "i"        | "abc X ghi" |
+| Row 0  | "abc def ghi"                   | "[a-z]+"              | "X"         | 1       | 0       | ""         | "X X X"     |
+| Row 1  | "abc DEF ghi"                   | "[a-z]+"              | "X"         | 1       | 2       | "c"        | "abc DEF X" |
+| Row 2  | "abc DEF ghi"                   | "[a-z]+"              | "X"         | 4       | 1       | "i"        | "abc X ghi" |
 +--------+---------------------------------+-----------------------+-------------+---------+---------+------------+-------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------+
@@ -616,10 +616,10 @@ evaluation:
 +--------+-------------------------------+--------------------------+-------------+---------+---------+-------------+
 | Type   | String NULL                   | String NULL              | String      | Int64   | Int64   | String NULL |
 | Domain | {""..="abc def ghi"} ∪ {NULL} | {""..="[a-z]+"} ∪ {NULL} | {"X"..="X"} | {1..=4} | {0..=2} | Unknown     |
-| Row 0  | "abc def ghi"                 | "[a-z]+"                 | "X"         | 1_i64   | 0_i64   | "X X X"     |
-| Row 1  | "abc DEF ghi"                 | NULL                     | "X"         | 1_i64   | 2_i64   | NULL        |
-| Row 2  | NULL                          | NULL                     | "X"         | 4_i64   | 1_i64   | NULL        |
-| Row 3  | "abc DEF ghi"                 | "[a-z]+"                 | "X"         | 4_i64   | 1_i64   | "abc X ghi" |
+| Row 0  | "abc def ghi"                 | "[a-z]+"                 | "X"         | 1       | 0       | "X X X"     |
+| Row 1  | "abc DEF ghi"                 | NULL                     | "X"         | 1       | 2       | NULL        |
+| Row 2  | NULL                          | NULL                     | "X"         | 4       | 1       | NULL        |
+| Row 3  | "abc DEF ghi"                 | "[a-z]+"                 | "X"         | 4       | 1       | "abc X ghi" |
 +--------+-------------------------------+--------------------------+-------------+---------+---------+-------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -644,10 +644,10 @@ evaluation:
 +--------+-------------------------------+--------------------------+-------------+---------+---------+------------+-------------+
 | Type   | String NULL                   | String NULL              | String      | Int64   | Int64   | String     | String NULL |
 | Domain | {""..="abc def ghi"} ∪ {NULL} | {""..="[a-z]+"} ∪ {NULL} | {"X"..="X"} | {1..=4} | {0..=2} | {""..="i"} | Unknown     |
-| Row 0  | "abc def ghi"                 | "[a-z]+"                 | "X"         | 1_i64   | 0_i64   | ""         | "X X X"     |
-| Row 1  | "abc DEF ghi"                 | NULL                     | "X"         | 1_i64   | 2_i64   | "c"        | NULL        |
-| Row 2  | NULL                          | NULL                     | "X"         | 4_i64   | 1_i64   | "i"        | NULL        |
-| Row 3  | "abc DEF ghi"                 | "[a-z]+"                 | "X"         | 4_i64   | 1_i64   | "i"        | "abc X ghi" |
+| Row 0  | "abc def ghi"                 | "[a-z]+"                 | "X"         | 1       | 0       | ""         | "X X X"     |
+| Row 1  | "abc DEF ghi"                 | NULL                     | "X"         | 1       | 2       | "c"        | NULL        |
+| Row 2  | NULL                          | NULL                     | "X"         | 4       | 1       | "i"        | NULL        |
+| Row 3  | "abc DEF ghi"                 | "[a-z]+"                 | "X"         | 4       | 1       | "i"        | "abc X ghi" |
 +--------+-------------------------------+--------------------------+-------------+---------+---------+------------+-------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -673,10 +673,10 @@ evaluation:
 +--------+---------------------------------------------------------+-----------------+---------------+---------+---------+-------------------------+
 | Type   | String                                                  | String          | String        | Int64   | Int64   | String                  |
 | Domain | {"周 周周 周周周 周周周周"..="周 周周 周周周 周周周周"} | {"周+"..="周+"} | {"唐"..="唐"} | {1..=5} | {0..=3} | Unknown                 |
-| Row 0  | "周 周周 周周周 周周周周"                               | "周+"           | "唐"          | 1_i64   | 0_i64   | "唐 唐 唐 唐"           |
-| Row 1  | "周 周周 周周周 周周周周"                               | "周+"           | "唐"          | 2_i64   | 1_i64   | "周 唐 周周周 周周周周" |
-| Row 2  | "周 周周 周周周 周周周周"                               | "周+"           | "唐"          | 3_i64   | 3_i64   | "周 周周 周周周 唐"     |
-| Row 3  | "周 周周 周周周 周周周周"                               | "周+"           | "唐"          | 5_i64   | 1_i64   | "周 周周 唐 周周周周"   |
+| Row 0  | "周 周周 周周周 周周周周"                               | "周+"           | "唐"          | 1       | 0       | "唐 唐 唐 唐"           |
+| Row 1  | "周 周周 周周周 周周周周"                               | "周+"           | "唐"          | 2       | 1       | "周 唐 周周周 周周周周" |
+| Row 2  | "周 周周 周周周 周周周周"                               | "周+"           | "唐"          | 3       | 3       | "周 周周 周周周 唐"     |
+| Row 3  | "周 周周 周周周 周周周周"                               | "周+"           | "唐"          | 5       | 1       | "周 周周 唐 周周周周"   |
 +--------+---------------------------------------------------------+-----------------+---------------+---------+---------+-------------------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -695,7 +695,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_replace(source, pat, repl, pos)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_replace: position must be positive, but got 0 while evaluating function `regexp_replace("abc", "b", "X", 0_i64)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_replace: position must be positive, but got 0 while evaluating function `regexp_replace("abc", "b", "X", 0)`
 
 
 
@@ -703,7 +703,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_replace(source, pat, repl, pos, occur)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_replace: occurrence must not be negative, but got -1 while evaluating function `regexp_replace("a b c", "b", "X", 1_i64, -1_i64)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_replace: occurrence must not be negative, but got -1 while evaluating function `regexp_replace("a b c", "b", "X", 1, -1)`
 
 
 
@@ -711,7 +711,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_replace(source, pat, repl, pos, occur, mt)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_replace match type: - while evaluating function `regexp_replace("a b c", "b", "X", 1_i64, 0_i64, "-c")`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_replace match type: - while evaluating function `regexp_replace("a b c", "b", "X", 1, 0, "-c")`
 
 
 
@@ -802,9 +802,9 @@ evaluation:
 +--------+---------------------------------+-----------------------+----------+-------------+
 | Type   | String                          | String                | Int64    | String NULL |
 | Domain | {"abc def ghi"..="abc def ghi"} | {"[a-z]+"..="[a-z]+"} | {1..=12} | Unknown     |
-| Row 0  | "abc def ghi"                   | "[a-z]+"              | 1_i64    | "abc"       |
-| Row 1  | "abc def ghi"                   | "[a-z]+"              | 4_i64    | "def"       |
-| Row 2  | "abc def ghi"                   | "[a-z]+"              | 12_i64   | NULL        |
+| Row 0  | "abc def ghi"                   | "[a-z]+"              | 1        | "abc"       |
+| Row 1  | "abc def ghi"                   | "[a-z]+"              | 4        | "def"       |
+| Row 2  | "abc def ghi"                   | "[a-z]+"              | 12       | NULL        |
 +--------+---------------------------------+-----------------------+----------+-------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------+
@@ -827,9 +827,9 @@ evaluation:
 +--------+---------------------------------+-----------------------+----------+---------+-------------+
 | Type   | String                          | String                | Int64    | Int64   | String NULL |
 | Domain | {"abc def ghi"..="abc def ghi"} | {"[a-z]+"..="[a-z]+"} | {1..=12} | {2..=3} | Unknown     |
-| Row 0  | "abc def ghi"                   | "[a-z]+"              | 1_i64    | 3_i64   | "ghi"       |
-| Row 1  | "abc def ghi"                   | "[a-z]+"              | 4_i64    | 2_i64   | "ghi"       |
-| Row 2  | "abc def ghi"                   | "[a-z]+"              | 12_i64   | 3_i64   | NULL        |
+| Row 0  | "abc def ghi"                   | "[a-z]+"              | 1        | 3       | "ghi"       |
+| Row 1  | "abc def ghi"                   | "[a-z]+"              | 4        | 2       | "ghi"       |
+| Row 2  | "abc def ghi"                   | "[a-z]+"              | 12       | 3       | NULL        |
 +--------+---------------------------------+-----------------------+----------+---------+-------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------+
@@ -853,9 +853,9 @@ evaluation:
 +--------+---------------------------------+-----------------------+----------+---------+-------------+-------------+
 | Type   | String                          | String                | Int64    | Int64   | String      | String NULL |
 | Domain | {"ABC def ghi"..="abc def GHI"} | {"[a-z]+"..="[a-z]+"} | {1..=12} | {2..=3} | {"c"..="i"} | Unknown     |
-| Row 0  | "ABC def ghi"                   | "[a-z]+"              | 1_i64    | 3_i64   | "c"         | NULL        |
-| Row 1  | "abc def GHI"                   | "[a-z]+"              | 4_i64    | 2_i64   | "i"         | "GHI"       |
-| Row 2  | "abc DEF ghi"                   | "[a-z]+"              | 12_i64   | 3_i64   | "i"         | NULL        |
+| Row 0  | "ABC def ghi"                   | "[a-z]+"              | 1        | 3       | "c"         | NULL        |
+| Row 1  | "abc def GHI"                   | "[a-z]+"              | 4        | 2       | "i"         | "GHI"       |
+| Row 2  | "abc DEF ghi"                   | "[a-z]+"              | 12       | 3       | "i"         | NULL        |
 +--------+---------------------------------+-----------------------+----------+---------+-------------+-------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------+
@@ -879,10 +879,10 @@ evaluation:
 +--------+-------------------------------+--------------------------+---------+---------+------------+-------------+
 | Type   | String NULL                   | String NULL              | Int64   | Int64   | String     | String NULL |
 | Domain | {""..="abc def ghi"} ∪ {NULL} | {""..="[a-z]+"} ∪ {NULL} | {1..=4} | {1..=2} | {""..="i"} | Unknown     |
-| Row 0  | "abc def ghi"                 | "[a-z]+"                 | 1_i64   | 1_i64   | ""         | "abc"       |
-| Row 1  | "abc DEF ghi"                 | NULL                     | 1_i64   | 2_i64   | "c"        | NULL        |
-| Row 2  | NULL                          | NULL                     | 4_i64   | 1_i64   | "i"        | NULL        |
-| Row 3  | "abc DEF ghi"                 | "[a-z]+"                 | 4_i64   | 1_i64   | "i"        | "DEF"       |
+| Row 0  | "abc def ghi"                 | "[a-z]+"                 | 1       | 1       | ""         | "abc"       |
+| Row 1  | "abc DEF ghi"                 | NULL                     | 1       | 2       | "c"        | NULL        |
+| Row 2  | NULL                          | NULL                     | 4       | 1       | "i"        | NULL        |
+| Row 3  | "abc DEF ghi"                 | "[a-z]+"                 | 4       | 1       | "i"        | "DEF"       |
 +--------+-------------------------------+--------------------------+---------+---------+------------+-------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -907,9 +907,9 @@ evaluation:
 +--------+---------------------------------------------------------+-----------------+----------+---------+-------------+
 | Type   | String                                                  | String          | Int64    | Int64   | String NULL |
 | Domain | {"周 周周 周周周 周周周周"..="周 周周 周周周 周周周周"} | {"周+"..="周+"} | {1..=14} | {1..=2} | Unknown     |
-| Row 0  | "周 周周 周周周 周周周周"                               | "周+"           | 1_i64    | 1_i64   | "周"        |
-| Row 1  | "周 周周 周周周 周周周周"                               | "周+"           | 2_i64    | 2_i64   | "周周周"    |
-| Row 2  | "周 周周 周周周 周周周周"                               | "周+"           | 14_i64   | 1_i64   | NULL        |
+| Row 0  | "周 周周 周周周 周周周周"                               | "周+"           | 1        | 1       | "周"        |
+| Row 1  | "周 周周 周周周 周周周周"                               | "周+"           | 2        | 2       | "周周周"    |
+| Row 2  | "周 周周 周周周 周周周周"                               | "周+"           | 14       | 1       | NULL        |
 +--------+---------------------------------------------------------+-----------------+----------+---------+-------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -927,7 +927,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_substr(source, pat, pos, occur, mt)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_substr: occurrence must be positive, but got 0 while evaluating function `regexp_substr("a b c", "b", 1_i64, 0_i64, "-c")`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_substr: occurrence must be positive, but got 0 while evaluating function `regexp_substr("a b c", "b", 1, 0, "-c")`
 
 
 
