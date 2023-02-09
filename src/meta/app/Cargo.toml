@@ -30,7 +30,6 @@ sha1 = "0.10.5"
 sha2 = "0.10.6"
 thiserror = { workspace = true }
 
-
 [dev-dependencies]
 anyhow = { workspace = true }
 
@@ -38,4 +37,3 @@ anyhow = { workspace = true }
 common-building = { path = "../../common/building" }
 
 tonic-build = "0.8.0"
-
