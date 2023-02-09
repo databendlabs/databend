@@ -38,12 +38,13 @@ pub type BloomIndexMetaCache = InMemoryItemCacheHolder<BloomIndexMeta>;
 pub type FileMetaDataCache = InMemoryItemCacheHolder<FileMetaData>;
 
 /// In memory object cache of parquet FileMetaData of external parquet files
-pub type ColumnArrayCache = InMemoryItemCacheHolder<dyn common_arrow::arrow::array::Array>;
+/// TODO provides a proper meter
+pub type ColumnArrayCache = InMemoryItemCacheHolder<Box<dyn common_arrow::arrow::array::Array>>;
 
 // Bind Type of cached objects to Caches
 //
-// The `Cache` returned should
-// - cache item s of Type `T`
+// The `Cache` should return
+// - cache item of Type `T`
 // - and implement `CacheAccessor` properly
 pub trait CachedObject<T> {
     type Cache: CacheAccessor<String, T>;

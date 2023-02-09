@@ -40,6 +40,7 @@ struct CacheItem {
     value: Arc<Vec<u8>>,
 }
 
+#[derive(Clone)]
 pub struct TableDataColumnCacheKey {
     cache_key: String,
 }
@@ -49,6 +50,12 @@ impl TableDataColumnCacheKey {
         Self {
             cache_key: format!("{block_path}-{column_id}"),
         }
+    }
+}
+
+impl From<TableDataColumnCacheKey> for String {
+    fn from(value: TableDataColumnCacheKey) -> Self {
+        value.cache_key
     }
 }
 

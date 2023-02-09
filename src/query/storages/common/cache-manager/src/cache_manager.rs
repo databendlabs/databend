@@ -29,8 +29,10 @@ use crate::caches::FileMetaDataCache;
 use crate::caches::SegmentInfoCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
+use crate::ColumnArrayCache;
 
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
+static DEFAULT_COLUMN_ARRAY_CACHE_ITEMS: u64 = 100_000;
 
 /// Where all the caches reside
 pub struct CacheManager {
@@ -41,12 +43,13 @@ pub struct CacheManager {
     bloom_index_meta_cache: Option<BloomIndexMetaCache>,
     file_meta_data_cache: Option<FileMetaDataCache>,
     table_data_cache: Option<TableDataCache>,
+    table_column_array_cache: Option<ColumnArrayCache>,
 }
 
 impl CacheManager {
     /// Initialize the caches according to the relevant configurations.
     pub fn init(config: &QueryConfig) -> Result<()> {
-        let block_data_cache = if config.table_data_cache_enabled {
+        let table_data_cache = if config.table_data_cache_enabled {
             None
         } else {
             Self::new_block_data_cache(
@@ -56,6 +59,10 @@ impl CacheManager {
                 config.table_disk_cache_mb_size,
             )?
         };
+
+        // TODO settings
+        let table_column_array_cache = Self::new_item_cache(DEFAULT_COLUMN_ARRAY_CACHE_ITEMS);
+
         if !config.table_meta_cache_enabled {
             GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache: None,
@@ -64,7 +71,8 @@ impl CacheManager {
                 bloom_index_meta_cache: None,
                 file_meta_data_cache: None,
                 table_statistic_cache: None,
-                table_data_cache: None,
+                table_data_cache,
+                table_column_array_cache,
             }));
         } else {
             let table_snapshot_cache = Self::new_item_cache(config.table_cache_snapshot_count);
@@ -82,7 +90,8 @@ impl CacheManager {
                 bloom_index_meta_cache,
                 file_meta_data_cache,
                 table_statistic_cache,
-                table_data_cache: block_data_cache,
+                table_data_cache,
+                table_column_array_cache,
             }));
         }
 
@@ -119,6 +128,10 @@ impl CacheManager {
 
     pub fn get_table_data_cache(&self) -> Option<TableDataCache> {
         self.table_data_cache.clone()
+    }
+
+    pub fn get_table_data_array_cache(&self) -> Option<ColumnArrayCache> {
+        self.table_column_array_cache.clone()
     }
 
     fn new_item_cache<T>(capacity: u64) -> Option<InMemoryItemCacheHolder<T>> {

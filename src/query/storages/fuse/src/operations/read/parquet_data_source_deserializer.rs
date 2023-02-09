@@ -140,6 +140,7 @@ impl Processor for DeserializeDataTransform {
             let part = FusePartInfo::from_part(&part)?;
 
             let data_block = self.block_reader.deserialize_parquet_chunks_with_buffer(
+                &part.location,
                 part.nums_rows,
                 &part.compression,
                 &part.columns_meta,

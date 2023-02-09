@@ -18,6 +18,7 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_arrow::arrow::array::Array;
 use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::metadata::SchemaDescriptor;
@@ -82,13 +83,20 @@ impl OwnerMemory {
 
 pub struct MergeIOReadResult {
     block_path: String,
-    columns_chunk_positions: HashMap<ColumnId, (usize, Range<usize>)>,
+    columns_chunk_offsets: HashMap<ColumnId, (usize, Range<usize>)>,
     owner_memory: OwnerMemory,
     cached_column_data: CachedColumnData,
+    cached_column_array: CachedColumnArray,
     table_data_cache: Option<TableDataCache>,
 }
 
-pub type CachedColumnData = Vec<(ColumnId, Arc<Vec<u8>>)>;
+type CachedColumnData = Vec<(ColumnId, Arc<Vec<u8>>)>;
+type CachedColumnArray = Vec<(ColumnId, Arc<Box<dyn Array>>)>;
+
+pub enum DataItem<'a> {
+    RawData(&'a [u8]),
+    ColumnArray(&'a Arc<Box<dyn Array>>),
+}
 
 impl MergeIOReadResult {
     pub fn create(
@@ -99,25 +107,31 @@ impl MergeIOReadResult {
     ) -> MergeIOReadResult {
         MergeIOReadResult {
             block_path: path,
-            columns_chunk_positions: HashMap::with_capacity(capacity),
+            columns_chunk_offsets: HashMap::with_capacity(capacity),
             owner_memory,
             cached_column_data: vec![],
+            cached_column_array: vec![],
             table_data_cache,
         }
     }
 
-    pub fn columns_chunks(&self) -> Result<Vec<(ColumnId, &[u8])>> {
-        let mut res = Vec::with_capacity(self.columns_chunk_positions.len());
+    pub fn columns_chunks(&self) -> Result<Vec<(ColumnId, DataItem)>> {
+        let mut res = Vec::with_capacity(self.columns_chunk_offsets.len());
 
         // merge column data fetched from object storage
-        for (column_idx, (chunk_idx, range)) in &self.columns_chunk_positions {
+        for (column_idx, (chunk_idx, range)) in &self.columns_chunk_offsets {
             let chunk = self.owner_memory.get_chunk(*chunk_idx, &self.block_path)?;
-            res.push((*column_idx, &chunk[range.clone()]));
+            res.push((*column_idx, DataItem::RawData(&chunk[range.clone()])));
         }
 
         // merge column data from cache
         for (column_id, data) in &self.cached_column_data {
-            res.push((*column_id, data.as_slice()))
+            res.push((*column_id, DataItem::RawData(data.as_slice())))
+        }
+
+        // merge column array from cache
+        for (column_id, data) in &self.cached_column_array {
+            res.push((*column_id, DataItem::ColumnArray(data)))
         }
 
         Ok(res)
@@ -139,8 +153,7 @@ impl MergeIOReadResult {
                 cache.put(cache_key.as_ref().to_owned(), Arc::new(data.to_vec()));
             }
         }
-        self.columns_chunk_positions
-            .insert(column_id, (chunk, range));
+        self.columns_chunk_offsets.insert(column_id, (chunk, range));
     }
 }
 
@@ -179,7 +192,8 @@ impl BlockReader {
     }
 
     pub fn support_blocking_api(&self) -> bool {
-        self.operator.metadata().can_blocking()
+        // self.operator.metadata().can_blocking()
+        false
     }
 
     /// This is an optimized for data read, works like the Linux kernel io-scheduler IO merging.
@@ -336,13 +350,29 @@ impl BlockReader {
         }
 
         let mut ranges = vec![];
-        let block_data_cache = CacheManager::instance().get_table_data_cache();
+        // for async read, always try using table data cache (if enabled in settings)
+        let column_data_cache = CacheManager::instance().get_table_data_cache();
+        let column_array_cache = CacheManager::instance().get_table_data_array_cache();
         let mut cached_column_data = vec![];
+        let mut cached_column_array = vec![];
         for (_index, (column_id, ..)) in self.project_indices.iter() {
             let column_cache_key = TableDataColumnCacheKey::new(location, *column_id);
-            if let Some(cached_column_raw_data) = block_data_cache.get(&column_cache_key) {
-                cached_column_data.push((*column_id as ColumnId, cached_column_raw_data));
-            } else if let Some(column_meta) = columns_meta.get(column_id) {
+
+            // check column array object cache
+            eprintln!("geting col array cache {}", column_cache_key.as_ref());
+            if let Some(cache_array) = column_array_cache.get(&column_cache_key) {
+                eprintln!("got from object cache");
+                cached_column_array.push((*column_id, cache_array));
+                continue;
+            }
+
+            // check column data cache
+            if let Some(cached_column_raw_data) = column_data_cache.get(&column_cache_key) {
+                cached_column_data.push((*column_id, cached_column_raw_data));
+                continue;
+            }
+
+            if let Some(column_meta) = columns_meta.get(column_id) {
                 let (offset, len) = column_meta.offset_length();
                 ranges.push((*column_id, offset..(offset + len)));
 
@@ -358,6 +388,7 @@ impl BlockReader {
 
         let mut merge_io_read_res = Self::merge_io_read(settings, object, ranges).await?;
         merge_io_read_res.cached_column_data = cached_column_data;
+        merge_io_read_res.cached_column_array = cached_column_array;
         Ok(merge_io_read_res)
     }
 
