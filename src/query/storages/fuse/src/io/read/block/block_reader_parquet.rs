@@ -30,10 +30,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use storages_common_cache::CacheAccessor;
-use storages_common_cache::TableDataCache;
 use storages_common_cache::TableDataColumnCacheKey;
 use storages_common_cache_manager::CacheManager;
-use storages_common_cache_manager::ColumnArrayCache;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::Compression;
@@ -134,10 +132,7 @@ impl BlockReader {
         columns_chunks: Vec<(ColumnId, DataItem)>,
         uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
     ) -> Result<DataBlock> {
-        eprintln!(">>> I AM H");
-
         if columns_chunks.is_empty() {
-            eprintln!(">>> I AM H, EMPTY");
             return Ok(DataBlock::new(vec![], num_rows));
         }
 
@@ -147,11 +142,11 @@ impl BlockReader {
         let columns = self.projection.project_column_nodes(&self.column_nodes)?;
 
         // TODO need refactor
-
         type ItemIndex = usize;
         enum Holder {
             Cached(ItemIndex),
             Deserialized(ItemIndex),
+            DeserializedNoCache(ItemIndex),
         }
 
         let mut column_idx_cached_array = vec![];
@@ -159,80 +154,91 @@ impl BlockReader {
         let mut deserialized_item_index: usize = 0;
 
         for column in &columns {
-            eprintln!("processing col");
             let field = column.field.clone();
             let indices = &column.leaf_ids;
-            eprintln!(">>> column leaf node len {}", indices.len());
             let mut column_metas = Vec::with_capacity(indices.len());
             let mut column_chunks = Vec::with_capacity(indices.len());
             let mut column_descriptors = Vec::with_capacity(indices.len());
-            for (i, index) in indices.iter().enumerate() {
-                eprintln!("lead idx {}-{}", i, index);
-                let column_id = column.leaf_column_id(i);
+            if indices.len() == 1 {
+                eprintln!("non nestted filed");
+                // we only cache non-nested column for the time being
+                let column_id = column.leaf_column_id(0);
+                let index = indices[0];
                 if let Some(column_meta) = columns_meta.get(&column_id) {
-                    // TODO use get and handle exception
-                    match chunk_map[&column_id] {
-                        DataItem::RawData(data) => {
-                            let column_read = data;
-                            // TODO why index is used here? need @LiChuang review
-                            let column_descriptor =
-                                &self.parquet_schema_descriptor.columns()[*index];
-                            column_metas.push(column_meta);
-                            column_chunks.push(column_read);
-                            column_descriptors.push(column_descriptor);
-                            eprintln!("pushing deser {}", deserialized_item_index);
-                            holders.push(Holder::Deserialized(deserialized_item_index));
-                            deserialized_item_index += 1;
-                        }
-                        DataItem::ColumnArray(column_array) => {
-                            eprintln!("***>>>using cached column");
-                            let idx = column_idx_cached_array.len();
-                            eprintln!("pushing cached {}", idx);
-                            column_idx_cached_array.push(column_array);
-                            holders.push(Holder::Cached(idx));
+                    if let Some(chunk) = chunk_map.get(&column_id) {
+                        match chunk {
+                            DataItem::RawData(data) => {
+                                // TODO why index of type usize is used here? need @LiChuang review
+                                let column_descriptor =
+                                    &self.parquet_schema_descriptor.columns()[index];
+                                column_metas.push(column_meta);
+                                column_chunks.push(*data);
+                                column_descriptors.push(column_descriptor);
+                                holders.push(Holder::Deserialized(deserialized_item_index));
+                                deserialized_item_index += 1;
+                            }
+                            DataItem::ColumnArray(column_array) => {
+                                let idx = column_idx_cached_array.len();
+                                column_idx_cached_array.push(*column_array);
+                                holders.push(Holder::Cached(idx));
+                            }
                         }
                     }
                 }
+            } else {
+                eprintln!("nestted filed");
+                for (i, index) in indices.iter().enumerate() {
+                    let column_id = column.leaf_column_id(i);
+                    if let Some(column_meta) = columns_meta.get(&column_id) {
+                        if let Some(chunk) = chunk_map.get(&column_id) {
+                            match chunk {
+                                DataItem::RawData(data) => {
+                                    // TODO why index is used here? need @LiChuang review
+                                    let column_descriptor =
+                                        &self.parquet_schema_descriptor.columns()[*index];
+                                    column_metas.push(column_meta);
+                                    column_chunks.push(*data);
+                                    column_descriptors.push(column_descriptor);
+                                }
+                                DataItem::ColumnArray(column_array) => {
+                                    eprintln!("using cache in nested");
+                                    let idx = column_idx_cached_array.len();
+                                    column_idx_cached_array.push(*column_array);
+                                    holders.push(Holder::Cached(idx));
+                                }
+                            }
+                        }
+                    }
+                }
+                // a field nested structure is expected
+                holders.push(Holder::DeserializedNoCache(deserialized_item_index));
+                deserialized_item_index += 1;
             }
-            eprintln!("col meta len {}", column_metas.len());
 
-            // let test_chunks = column_chunks
-            //    .into_iter()
-            //    .map(|bytes| DataItem::RawData(bytes))
-            //    .collect();
             if column_metas.len() > 0 {
-                columns_array_iter.push((
-                    indices[0],
-                    Self::chunks_to_parquet_array_iter(
-                        column_metas,
-                        column_chunks,
-                        // test_chunks,
-                        num_rows,
-                        column_descriptors,
-                        field,
-                        compression,
-                        uncompressed_buffer
-                            .clone()
-                            .unwrap_or_else(|| UncompressedBuffer::new(0)),
-                    )?,
-                ));
+                columns_array_iter.push(Self::chunks_to_parquet_array_iter(
+                    column_metas,
+                    column_chunks,
+                    // test_chunks,
+                    num_rows,
+                    column_descriptors,
+                    field,
+                    compression,
+                    uncompressed_buffer
+                        .clone()
+                        .unwrap_or_else(|| UncompressedBuffer::new(0)),
+                )?);
             }
-            eprintln!("col arr iter len {}", columns_array_iter.len());
         }
 
         let mut arrays = Vec::with_capacity(columns_array_iter.len());
 
         let deserialized_column_arrays = columns_array_iter
             .into_iter()
-            .map(|(col_idx, mut v)|
+            .map(|mut v|
                 // TODO error handling
-                     (col_idx, v.next().unwrap().unwrap()))
+                     v.next().unwrap().unwrap())
             .collect::<Vec<_>>();
-
-        eprintln!(
-            "deserialized_column_arrays len {}",
-            deserialized_column_arrays.len()
-        );
 
         for holder in holders {
             match holder {
@@ -240,28 +246,27 @@ impl BlockReader {
                     arrays.push(column_idx_cached_array[idx].as_ref());
                 }
                 Holder::Deserialized(idx) => {
-                    let item = &deserialized_column_arrays[idx].1;
+                    let item = &deserialized_column_arrays[idx];
+                    arrays.push(item);
+                }
+                Holder::DeserializedNoCache(idx) => {
+                    let item = &deserialized_column_arrays[idx];
                     arrays.push(item);
                 }
             }
         }
         let chunk = Chunk::try_new(arrays)?;
-        // let chunk = Chunk::try_new(deserialized_column_arrays)?;
         let block = DataBlock::from_arrow_chunk(&chunk, &self.data_schema());
 
-        if block.is_ok() {
-            let cache = CacheManager::instance().get_table_data_array_cache();
-            match cache {
-                Some(cache) => {
-                    for (idx, array) in deserialized_column_arrays.into_iter() {
-                        let key = TableDataColumnCacheKey::new(block_path, idx as ColumnId);
-                        eprintln!("putting cache {}", key.as_ref());
-                        cache.put(key.into(), array.into());
-                    }
-                }
-                None => {}
-            }
-        }
+        // if block.is_ok() {
+        //    let maybe_column_array_cache = CacheManager::instance().get_table_data_array_cache();
+        //    if let Some(cache) = maybe_column_array_cache {
+        //        for (idx, array) in deserialized_column_arrays.into_iter() {
+        //            let key = TableDataColumnCacheKey::new(block_path, idx as ColumnId);
+        //            cache.put(key.into(), array.into());
+        //        }
+        //    }
+        //}
 
         block
     }
@@ -343,60 +348,5 @@ impl BlockReader {
             Compression::Gzip => Ok(ParquetCompression::Gzip),
             Compression::None => Ok(ParquetCompression::Uncompressed),
         }
-    }
-
-    fn chunks_to_parquet_array_iter_new<'a>(
-        metas: Vec<&ColumnMeta>,
-        chunks: Vec<DataItem<'a>>,
-        rows: usize,
-        column_descriptors: Vec<&ColumnDescriptor>,
-        field: Field,
-        compression: &Compression,
-        uncompressed_buffer: Arc<UncompressedBuffer>,
-    ) -> Result<ArrayIter<'a>> {
-        let columns = metas
-            .iter()
-            .zip(chunks.into_iter().zip(column_descriptors.iter()))
-            .map(|(meta, (chunk, column_descriptor))| match chunk {
-                DataItem::RawData(data) => {
-                    let meta = meta.as_parquet().unwrap();
-
-                    let page_meta_data = PageMetaData {
-                        column_start: meta.offset,
-                        num_values: meta.num_values as i64,
-                        compression: Self::to_parquet_compression(compression)?,
-                        descriptor: column_descriptor.descriptor.clone(),
-                    };
-                    let pages = PageReader::new_with_page_meta(
-                        data,
-                        page_meta_data,
-                        Arc::new(|_, _| true),
-                        vec![],
-                        usize::MAX,
-                    );
-
-                    Ok(BuffedBasicDecompressor::new(
-                        pages,
-                        uncompressed_buffer.clone(),
-                    ))
-                }
-                DataItem::ColumnArray(_) => {
-                    todo!()
-                }
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        let types = column_descriptors
-            .iter()
-            .map(|column_descriptor| &column_descriptor.descriptor.primitive_type)
-            .collect::<Vec<_>>();
-
-        Ok(column_iter_to_arrays(
-            columns,
-            types,
-            field,
-            Some(rows),
-            rows,
-        )?)
     }
 }
