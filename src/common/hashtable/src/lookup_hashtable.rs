@@ -121,6 +121,10 @@ macro_rules! lookup_impl {
                 }
             }
 
+            unsafe fn insert_with_hash(&mut self, key: &$ty, _hash: u64) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> {
+                self.insert(key)
+            }
+
             unsafe fn insert_and_entry(&mut self, key: &$ty) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
                 match self.flags[*key as usize] {
                     true => Err(&mut self.data[*key as usize]),

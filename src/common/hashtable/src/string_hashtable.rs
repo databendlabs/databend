@@ -500,6 +500,17 @@ where A: Allocator + Clone + Default
         }
     }
 
+    unsafe fn insert_with_hash(
+        &mut self,
+        key_ref: &Self::Key,
+        hash: u64,
+    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> {
+        match self.insert_and_entry_with_hash(key_ref, hash) {
+            Ok(e) => Ok(&mut *(e.get_mut_ptr() as *mut MaybeUninit<V>)),
+            Err(e) => Err(&mut *e.get_mut_ptr()),
+        }
+    }
+
     #[inline(always)]
     unsafe fn insert_and_entry(
         &mut self,

@@ -475,6 +475,15 @@ pub trait HashtableLike {
     /// # Safety
     ///
     /// The uninitialized value of returned entry should be written immediately.
+    unsafe fn insert_with_hash(
+        &mut self,
+        key_ref: &Self::Key,
+        hash: u64,
+    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value>;
+
+    /// # Safety
+    ///
+    /// The uninitialized value of returned entry should be written immediately.
     unsafe fn insert_and_entry(
         &mut self,
         key_ref: &Self::Key,
@@ -492,4 +501,16 @@ pub trait HashtableLike {
     fn iter(&self) -> Self::Iterator<'_>;
 
     fn clear(&mut self);
+
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    #[inline(always)]
+    unsafe fn prefetch_read_by_hash(&self, _hash: u64) {}
+
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    #[inline(always)]
+    unsafe fn prefetch_write_by_hash(&self, _hash: u64) {}
 }

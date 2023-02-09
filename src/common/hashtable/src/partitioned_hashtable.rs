@@ -128,6 +128,15 @@ impl<K: ?Sized + FastHash, V, Impl: HashtableLike<Key = K, Value = V>, const BUC
         self.tables[index].insert(key)
     }
 
+    unsafe fn insert_with_hash(
+        &mut self,
+        key_ref: &Self::Key,
+        hash: u64,
+    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> {
+        let index = hash as usize >> (64u32 - BUCKETS_LG2);
+        self.tables[index].insert_with_hash(key_ref, hash)
+    }
+
     #[inline(always)]
     unsafe fn insert_and_entry(
         &mut self,

@@ -163,6 +163,7 @@ where
             Err(e) => Err(e.val.assume_init_mut()),
         }
     }
+
     pub fn iter(&self) -> StackHashtableIter<'_, K, V> {
         StackHashtableIter {
             inner: self.zero.iter().chain(self.table.iter()),

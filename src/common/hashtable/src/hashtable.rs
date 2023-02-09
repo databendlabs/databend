@@ -263,25 +263,23 @@ where
         self.insert(*key)
     }
 
+    unsafe fn insert_with_hash(
+        &mut self,
+        key_ref: &Self::Key,
+        hash: u64,
+    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> {
+        match self.insert_and_entry_with_hash(key_ref, hash) {
+            Ok(e) => Ok(&mut e.val),
+            Err(e) => Err(e.val.assume_init_mut()),
+        }
+    }
+
     #[inline(always)]
     unsafe fn insert_and_entry(
         &mut self,
         key: &Self::Key,
     ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
-        if unlikely(K::equals_zero(key)) {
-            let res = self.zero.is_some();
-            if !res {
-                *self.zero = Some(MaybeUninit::zeroed().assume_init());
-            }
-            let zero = self.zero.as_mut().unwrap();
-            if res {
-                return Err(zero);
-            } else {
-                return Ok(zero);
-            }
-        }
-        self.table.check_grow();
-        self.table.insert(*key)
+        self.insert_and_entry(*key)
     }
 
     #[inline(always)]
