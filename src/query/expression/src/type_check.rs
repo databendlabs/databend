@@ -330,6 +330,7 @@ pub fn try_check_function<Index: ColumnIndex>(
         .zip(&sig.args_type)
         .map(|(src_ty, dest_ty)| unify(src_ty, dest_ty, additional_rules))
         .collect::<Result<Vec<_>>>()?;
+
     let subst = substs
         .into_iter()
         .try_reduce(|subst1, subst2| subst1.merge(subst2))?

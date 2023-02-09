@@ -36,6 +36,7 @@ use common_expression::FunctionSignature;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_expression::ValueRef;
+use common_exception::Result;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_function_factory("plus", |_, args_type| {
@@ -67,6 +68,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     });
 }
 
-fn plus(ctx: &mut EvalContext, args: &[ValueRef]) -> Result<Value> {
+fn plus(ctx: &mut EvalContext, args: &[ValueRef<AnyType>]) -> Result<Value<AnyType>> {
     todo!()     
 }
