@@ -15,6 +15,7 @@
 use std::borrow::BorrowMut;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::intrinsics::likely;
 use std::sync::Arc;
 use std::vec;
 
@@ -42,6 +43,8 @@ use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
+
+const HASH_MAP_PREFETCH_DIST: usize = 16;
 
 pub struct ParallelFinalAggregator<const HAS_AGG: bool, Method>
 where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
@@ -186,11 +189,27 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
         //     return Ok(());
         // }
 
+        let entries_with_hash = hashtable
+            .iter()
+            .map(|e| (e, self.method.get_hash(e.key())))
+            .collect::<Vec<_>>();
+
+        let len = entries_with_hash.len();
+
         if !HAS_AGG {
             unsafe {
-                for key in hashtable.iter() {
-                    let _ = self.hash_table.insert_and_entry(key.key());
+                for i in 0..len {
+                    if likely(i + HASH_MAP_PREFETCH_DIST < len) {
+                        self.hash_table.prefetch_write_by_hash(
+                            entries_with_hash
+                                .get_unchecked(i + HASH_MAP_PREFETCH_DIST)
+                                .1,
+                        );
+                    }
+                    let (e, hash) = entries_with_hash.get_unchecked(i);
+                    let _ = self.hash_table.insert_and_entry_with_hash(e.key(), *hash);
                 }
+
                 if let Some(limit) = self.params.limit {
                     if self.hash_table.len() >= limit {
                         return Ok(());
@@ -201,10 +220,17 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             let aggregate_functions = &self.params.aggregate_functions;
             let offsets_aggregate_states = &self.params.offsets_aggregate_states;
 
-            for entry in hashtable.iter() {
-                let key = entry.key();
-                unsafe {
-                    match self.hash_table.insert(key) {
+            unsafe {
+                for i in 0..len {
+                    if likely(i + HASH_MAP_PREFETCH_DIST < len) {
+                        self.hash_table.prefetch_write_by_hash(
+                            entries_with_hash
+                                .get_unchecked(i + HASH_MAP_PREFETCH_DIST)
+                                .1,
+                        );
+                    }
+                    let (entry, hash) = entries_with_hash.get_unchecked(i);
+                    match self.hash_table.insert_with_hash(entry.key(), *hash) {
                         Ok(e) => {
                             // just set new places and the arena will be keeped in partial state
                             e.write(*entry.get());
@@ -227,6 +253,8 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                 }
             }
         }
+
+        drop(entries_with_hash);
         hashtable.clear();
         Ok(())
     }

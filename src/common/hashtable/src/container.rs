@@ -38,6 +38,20 @@ where Self: Deref<Target = [Self::T]> + DerefMut
     unsafe fn new_zeroed(len: usize, allocator: Self::A) -> Self;
 
     unsafe fn grow_zeroed(&mut self, new_len: usize);
+
+    /// Prefetch memory of container buffer on the given index for read.
+    ///
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    unsafe fn prefetch_read_data(&self, index: usize);
+
+    /// Prefetch memory of container buffer on the given index for write.
+    ///
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    unsafe fn prefetch_write_data(&self, index: usize);
 }
 
 #[derive(Debug)]
@@ -94,6 +108,18 @@ unsafe impl<T, A: Allocator> Container for HeapContainer<T, A> {
                 std::ptr::write(self, Self(new_box));
             }
         }
+    }
+
+    #[inline(always)]
+    unsafe fn prefetch_read_data(&self, index: usize) {
+        let ptr = self.0.as_ptr().add(index);
+        std::intrinsics::prefetch_read_data(ptr, 1);
+    }
+
+    #[inline(always)]
+    unsafe fn prefetch_write_data(&self, index: usize) {
+        let ptr = self.0.as_ptr().add(index);
+        std::intrinsics::prefetch_write_data(ptr, 1);
     }
 }
 
@@ -215,6 +241,24 @@ unsafe impl<T, const N: usize, A: Allocator + Clone> Container for StackContaine
                 }
             };
         }
+    }
+
+    #[inline(always)]
+    unsafe fn prefetch_read_data(&self, index: usize) {
+        if self.ptr.is_null() {
+            return;
+        }
+        let ptr = self.ptr.add(index);
+        std::intrinsics::prefetch_read_data(ptr, 1);
+    }
+
+    #[inline(always)]
+    unsafe fn prefetch_write_data(&self, index: usize) {
+        if self.ptr.is_null() {
+            return;
+        }
+        let ptr = self.ptr.add(index);
+        std::intrinsics::prefetch_write_data(ptr, 1);
     }
 }
 

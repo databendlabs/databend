@@ -117,6 +117,13 @@ where
     pub unsafe fn get(&self, key: &K) -> Option<&Entry<K, V>> {
         self.get_with_hash(key, key.hash())
     }
+
+    // Find the initital place of the key.
+    #[inline(always)]
+    pub fn place(&self, hash: u64) -> usize {
+        (hash as usize) & (self.entries.len() - 1)
+    }
+
     /// # Safety
     ///
     /// `key` doesn't equal to zero.
@@ -124,7 +131,7 @@ where
     #[inline(always)]
     pub unsafe fn get_with_hash(&self, key: &K, hash: u64) -> Option<&Entry<K, V>> {
         assume(!K::equals_zero(key));
-        let index = (hash as usize) & (self.entries.len() - 1);
+        let index = self.place(hash);
         for i in (index..self.entries.len()).chain(0..index) {
             assume(i < self.entries.len());
             if self.entries[i].is_zero() {
@@ -150,7 +157,7 @@ where
     #[inline(always)]
     pub unsafe fn get_with_hash_mut(&mut self, key: &K, hash: u64) -> Option<&mut Entry<K, V>> {
         assume(!K::equals_zero(key));
-        let index = (hash as usize) & (self.entries.len() - 1);
+        let index = self.place(hash);
         for i in (index..self.entries.len()).chain(0..index) {
             assume(i < self.entries.len());
             if self.entries[i].is_zero() {
@@ -189,7 +196,7 @@ where
         hash: u64,
     ) -> Result<&mut Entry<K, V>, &mut Entry<K, V>> {
         assume(!K::equals_zero(&key));
-        let index = (hash as usize) & (self.entries.len() - 1);
+        let index = self.place(hash);
         for i in (index..self.entries.len()).chain(0..index) {
             assume(i < self.entries.len());
             if self.entries[i].is_zero() {
@@ -295,6 +302,18 @@ where
                 }
             }
         }
+    }
+
+    #[inline(always)]
+    pub unsafe fn prefetch_read_by_hash(&self, hash: u64) {
+        let index = self.place(hash);
+        self.entries.prefetch_read_data(index);
+    }
+
+    #[inline(always)]
+    pub unsafe fn prefetch_write_by_hash(&self, hash: u64) {
+        let index = self.place(hash);
+        self.entries.prefetch_write_data(index);
     }
 }
 
