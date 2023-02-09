@@ -23,6 +23,7 @@ use common_expression::types::NumberDataType;
 use common_expression::Literal;
 use common_functions::aggregates::AggregateCountFunction;
 
+use crate::binder::wrap_cast;
 use crate::binder::ColumnBinding;
 use crate::binder::Visibility;
 use crate::optimizer::RelExpr;
@@ -281,12 +282,15 @@ impl SubqueryRewriter {
                     (marker_index, marker_index.to_string())
                 } else if let UnnestResult::SingleJoin = result {
                     let mut output_column = subquery.output_column;
-                    if let Some(index) = self.derived_columns.get(&output_column) {
-                        output_column = *index;
+                    if let Some(index) = self.derived_columns.get(&output_column.index) {
+                        output_column.index = *index;
                     }
-                    (output_column, format!("scalar_subquery_{output_column}"))
+                    (
+                        output_column.index,
+                        format!("scalar_subquery_{:?}", output_column.index),
+                    )
                 } else {
-                    let index = subquery.output_column;
+                    let index = subquery.output_column.index;
                     (index, format!("subquery_{}", index))
                 };
 
@@ -463,18 +467,21 @@ impl SubqueryRewriter {
                 ))
             }
             SubqueryType::Any => {
-                let index = subquery.output_column;
-                let column_name = format!("subquery_{}", index);
-                let left_condition = ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    column: ColumnBinding {
-                        database_name: None,
-                        table_name: None,
-                        column_name,
-                        index,
-                        data_type: subquery.data_type.clone(),
-                        visibility: Visibility::Visible,
-                    },
-                });
+                let output_column = subquery.output_column.clone();
+                let column_name = format!("subquery_{}", output_column.index);
+                let left_condition = wrap_cast(
+                    &ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        column: ColumnBinding {
+                            database_name: None,
+                            table_name: None,
+                            column_name,
+                            index: output_column.index,
+                            data_type: output_column.data_type,
+                            visibility: Visibility::Visible,
+                        },
+                    }),
+                    &subquery.data_type,
+                );
                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
                 let op = subquery.compare_op.as_ref().unwrap().clone();
                 let (right_condition, is_non_equi_condition) =
