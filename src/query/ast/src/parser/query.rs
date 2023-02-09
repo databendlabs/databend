@@ -241,9 +241,9 @@ pub enum TableFunctionParam {
 }
 
 pub fn table_function_param(i: Input) -> IResult<TableFunctionParam> {
-    let named = map(rule! { Ident ~ "=>" ~ #expr  }, |(name, _, value)| {
+    let named = map(rule! { #ident ~ "=>" ~ #expr  }, |(name, _, value)| {
         TableFunctionParam::Named {
-            name: name.text().to_string(),
+            name: name.to_string(),
             value,
         }
     });

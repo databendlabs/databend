@@ -51,6 +51,10 @@ mod column_node;
 pub use column_node::ColumnNode;
 pub use column_node::ColumnNodes;
 
+mod parquet;
+pub use parquet::read_parquet_schema_async;
+
 mod stage;
+
 pub use stage::init_stage_operator;
 pub use stage::StageFilesInfo;

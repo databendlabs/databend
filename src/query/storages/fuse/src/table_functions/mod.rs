@@ -17,6 +17,7 @@ mod fuse_blocks;
 mod fuse_segments;
 mod fuse_snapshots;
 mod fuse_statistics;
+mod infer_schema;
 mod table_args;
 
 pub use clustering_informations::get_cluster_keys;
@@ -31,5 +32,6 @@ pub use fuse_segments::FuseSegmentTable;
 pub use fuse_snapshots::FuseSnapshot;
 pub use fuse_snapshots::FuseSnapshotTable;
 pub use fuse_statistics::FuseStatisticTable;
+pub use infer_schema::InferSchemaTable;
 pub use table_args::string_literal;
 pub use table_args::string_value;
