@@ -23,6 +23,7 @@ use common_meta_api::txn_op_put;
 use common_meta_app::principal::StageFile;
 use common_meta_app::principal::UserStageInfo;
 use common_meta_kvapi::kvapi;
+use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::errors::app_error::TxnRetryMaxTimes;
 use common_meta_types::ConditionResult::Eq;
 use common_meta_types::KVAppError;
@@ -33,7 +34,6 @@ use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::TxnOp;
 use common_meta_types::TxnRequest;
-use common_meta_types::UpsertKVReq;
 
 use crate::serde::deserialize_struct;
 use crate::serde::serialize_struct;
