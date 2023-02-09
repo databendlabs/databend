@@ -55,11 +55,8 @@ impl AccessChecker for PrivilegeAccess {
         match plan {
             Plan::Query { metadata, .. } => {
                 let metadata = metadata.read().clone();
-                for table in metadata.view_tables() {
-                    validate_query_privilege(&session, &table).await?;
-                }
                 for table in metadata.tables() {
-                    if table.is_view() {
+                    if table.is_source_of_view() {
                         continue;
                     }
                     validate_query_privilege(&session, &table).await?;

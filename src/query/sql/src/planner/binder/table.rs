@@ -172,6 +172,13 @@ impl Binder {
                             BindContext::with_parent(Box::new(bind_context.clone()));
                         new_bind_context.is_view = true;
                         if let Statement::Query(query) = &stmt {
+                            self.metadata.write().add_table(
+                                catalog,
+                                database.clone(),
+                                table_meta,
+                                table_alias_name,
+                                false,
+                            );
                             let (s_expr, mut new_bind_context) =
                                 self.bind_query(&new_bind_context, query).await?;
                             if let Some(alias) = alias {
@@ -187,12 +194,6 @@ impl Binder {
                                     );
                                 }
                             }
-                            self.metadata.write().add_view_table(
-                                catalog,
-                                database.clone(),
-                                table_meta,
-                                table_alias_name,
-                            );
                             Ok((s_expr, new_bind_context))
                         } else {
                             Err(ErrorCode::Internal(format!(
