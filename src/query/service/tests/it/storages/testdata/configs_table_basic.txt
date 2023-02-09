@@ -63,6 +63,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | "query"   | "table_cache_block_meta_count"           | "102400"                         | ""       |
 | "query"   | "table_cache_bloom_index_filter_count"   | "1048576"                        | ""       |
 | "query"   | "table_cache_bloom_index_meta_count"     | "3000"                           | ""       |
+| "query"   | "table_cache_column_mb_size"             | "10240"                          | ""       |
 | "query"   | "table_cache_segment_count"              | "10240"                          | ""       |
 | "query"   | "table_cache_snapshot_count"             | "256"                            | ""       |
 | "query"   | "table_cache_statistic_count"            | "256"                            | ""       |

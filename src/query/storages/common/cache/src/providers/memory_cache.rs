@@ -23,10 +23,11 @@ use common_cache::DefaultHashBuilder;
 use common_cache::LruCache;
 use parking_lot::RwLock;
 
-pub type ItemCache<V> = LruCache<String, Arc<V>, DefaultHashBuilder, Count>;
+pub type ItemCache<V, S, M> = LruCache<String, Arc<V>, S, M>;
 pub type BytesCache = LruCache<String, Arc<Vec<u8>>, DefaultHashBuilder, BytesMeter>;
 
-pub type InMemoryItemCacheHolder<T> = Arc<RwLock<ItemCache<T>>>;
+pub type InMemoryItemCacheHolder<T, S = DefaultHashBuilder, M = Count> =
+    Arc<RwLock<ItemCache<T, S, M>>>;
 pub type InMemoryBytesCacheHolder = Arc<RwLock<BytesCache>>;
 
 pub struct InMemoryCacheBuilder;

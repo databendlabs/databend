@@ -32,7 +32,6 @@ use crate::caches::TableSnapshotStatisticCache;
 use crate::ColumnArrayCache;
 
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
-static DEFAULT_COLUMN_ARRAY_CACHE_ITEMS: u64 = 100_000;
 
 /// Where all the caches reside
 pub struct CacheManager {
@@ -49,6 +48,7 @@ pub struct CacheManager {
 impl CacheManager {
     /// Initialize the caches according to the relevant configurations.
     pub fn init(config: &QueryConfig) -> Result<()> {
+        // setup table data cache
         let table_data_cache = if config.table_data_cache_enabled {
             None
         } else {
@@ -60,9 +60,10 @@ impl CacheManager {
             )?
         };
 
-        // TODO settings
-        let table_column_array_cache = Self::new_item_cache(DEFAULT_COLUMN_ARRAY_CACHE_ITEMS);
+        // setup in-memory table column cache
+        let table_column_array_cache = Self::new_item_cache(config.table_cache_column_mb_size);
 
+        // setup in-memory table meta cache
         if !config.table_meta_cache_enabled {
             GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache: None,

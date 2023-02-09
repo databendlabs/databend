@@ -229,8 +229,8 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
         }
         let mut f = File::create(&path)?;
         let mut bufs = Vec::with_capacity(bytes.len());
-        for x in bytes {
-            bufs.push(IoSlice::new(x));
+        for slick in bytes {
+            bufs.push(IoSlice::new(slick));
         }
         f.write_all_vectored(&mut bufs)?;
         self.cache.put(cache_key.0, bytes_len);

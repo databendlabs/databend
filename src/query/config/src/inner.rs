@@ -163,6 +163,8 @@ pub struct QueryConfig {
     pub table_cache_bloom_index_meta_count: u64,
     /// Max number of cached bloom index filters
     pub table_cache_bloom_index_filter_count: u64,
+    /// Max size of in memory table column object cache
+    pub table_cache_column_mb_size: u64,
     /// Indicates if table data cache is enabled
     pub table_data_cache_enabled: bool,
     /// Max bytes of table data cached in memory (MB)
@@ -228,6 +230,7 @@ impl Default for QueryConfig {
             table_cache_segment_count: 10240,
             table_cache_bloom_index_meta_count: 3000,
             table_cache_bloom_index_filter_count: 1024 * 1024,
+            table_cache_column_mb_size: 10 * 1024,
             table_data_cache_enabled: false,
             table_data_cache_population_queue_size: 65536,
             table_disk_cache_root: "_cache".to_string(),
