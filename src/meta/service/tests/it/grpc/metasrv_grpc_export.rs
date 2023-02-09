@@ -50,7 +50,7 @@ async fn test_export() -> anyhow::Result<()> {
             client
                 .upsert_kv(UpsertKVReq::new(
                     k,
-                    MatchSeq::Any,
+                    MatchSeq::GE(0),
                     Operation::Update(k.as_bytes().to_vec()),
                     None,
                 ))

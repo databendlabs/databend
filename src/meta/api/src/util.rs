@@ -178,7 +178,7 @@ pub async fn fetch_id<T: kvapi::Key>(
     let res = kv_api
         .upsert_kv(UpsertKVReq {
             key: generator.to_string_key(),
-            seq: MatchSeq::Any,
+            seq: MatchSeq::GE(0),
             value: Operation::Update(b"".to_vec()),
             value_meta: None,
         })

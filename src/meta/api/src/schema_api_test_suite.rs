@@ -182,7 +182,7 @@ async fn upsert_test_data(
     let res = kv_api
         .upsert_kv(UpsertKVReq {
             key: key.to_string_key(),
-            seq: MatchSeq::Any,
+            seq: MatchSeq::GE(0),
             value: Operation::Update(value),
             value_meta: None,
         })
@@ -199,7 +199,7 @@ async fn delete_test_data(
     let _res = kv_api
         .upsert_kv(UpsertKVReq {
             key: key.to_string_key(),
-            seq: MatchSeq::Any,
+            seq: MatchSeq::GE(0),
             value: Operation::Delete,
             value_meta: None,
         })
