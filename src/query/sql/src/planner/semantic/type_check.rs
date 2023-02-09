@@ -1398,7 +1398,7 @@ impl<'a> TypeChecker<'a> {
             subquery: Box::new(s_expr),
             child_expr: child_scalar,
             compare_op,
-            output_column: output_context.columns[0].index,
+            output_column: output_context.columns[0].clone(),
             projection_index: None,
             data_type: data_type.clone(),
             typ,
