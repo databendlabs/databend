@@ -27,6 +27,7 @@ use common_exception::ErrorCode;
 use common_meta_app::storage::StorageAzblobConfig;
 use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageGcsConfig;
+use common_meta_app::storage::StorageHdfsConfig;
 use common_meta_app::storage::StorageHttpConfig;
 use common_meta_app::storage::StorageIpfsConfig;
 use common_meta_app::storage::StorageMokaConfig;
@@ -146,7 +147,7 @@ fn init_gcs_operator(cfg: &StorageGcsConfig) -> Result<impl Accessor> {
 
 /// init_hdfs_operator will init an opendal hdfs operator.
 #[cfg(feature = "storage-hdfs")]
-fn init_hdfs_operator(cfg: &common_meta_types::StorageHdfsConfig) -> Result<impl Accessor> {
+fn init_hdfs_operator(cfg: &StorageHdfsConfig) -> Result<impl Accessor> {
     let mut builder = services::Hdfs::default();
 
     // Endpoint.
