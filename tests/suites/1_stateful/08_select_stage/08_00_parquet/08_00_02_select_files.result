@@ -1,13 +1,7 @@
-id	INT	0	0
-t	(A INT32, B STRING)	0	1
-id	INT	0	0
-t	(A INT32, B STRING)	0	1
 1	(1,'a')
 2	(3,'b')
 3	(3,'c')
 ---
-id	INT	0	0
-t	(A INT32, B STRING)	0	1
 1	(1,'a')
 2	(3,'b')
 3	(3,'c')
