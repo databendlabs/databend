@@ -15,10 +15,10 @@
 use std::sync::Arc;
 
 use common_meta_kvapi::kvapi;
+use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::KVAppError;
 use common_meta_types::KVMeta;
 use common_meta_types::SeqV;
-use common_meta_types::UpsertKVReq;
 use common_meta_types::With;
 use databend_meta::configs::Config;
 

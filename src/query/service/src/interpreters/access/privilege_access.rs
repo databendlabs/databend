@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::GrantObject;
-use common_meta_types::UserPrivilegeType;
+use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::UserPrivilegeType;
 
 use crate::interpreters::access::AccessChecker;
 use crate::sessions::QueryContext;

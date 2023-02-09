@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_meta_types::GrantObject;
+use common_meta_app::principal::GrantObject;
 
 use crate::sessions::QueryContext;
 

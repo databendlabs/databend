@@ -16,7 +16,7 @@ use base64::encode_config;
 use base64::URL_SAFE_NO_PAD;
 use common_base::base::tokio;
 use common_exception::Result;
-use common_meta_types::UserIdentity;
+use common_meta_app::principal::UserIdentity;
 use common_users::CustomClaims;
 use common_users::EnsureUser;
 use common_users::UserApiProvider;

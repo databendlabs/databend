@@ -16,10 +16,10 @@ use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::RpcClientConf;
-use common_meta_types::GrantObject;
-use common_meta_types::RoleInfo;
-use common_meta_types::UserPrivilegeSet;
-use common_meta_types::UserPrivilegeType;
+use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::RoleInfo;
+use common_meta_app::principal::UserPrivilegeSet;
+use common_meta_app::principal::UserPrivilegeType;
 use common_users::UserApiProvider;
 use pretty_assertions::assert_eq;
 

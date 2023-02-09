@@ -17,10 +17,10 @@ use std::collections::HashMap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_management::RoleApi;
-use common_meta_types::GrantObject;
+use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::RoleInfo;
+use common_meta_app::principal::UserPrivilegeSet;
 use common_meta_types::MatchSeq;
-use common_meta_types::RoleInfo;
-use common_meta_types::UserPrivilegeSet;
 
 use crate::role_util::find_all_related_roles;
 use crate::UserApiProvider;

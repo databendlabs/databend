@@ -20,8 +20,8 @@ use std::sync::Weak;
 
 use common_config::GlobalConfig;
 use common_exception::Result;
-use common_meta_types::RoleInfo;
-use common_meta_types::UserInfo;
+use common_meta_app::principal::RoleInfo;
+use common_meta_app::principal::UserInfo;
 use common_settings::Settings;
 use futures::channel::oneshot::Sender;
 use parking_lot::RwLock;

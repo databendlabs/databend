@@ -14,8 +14,8 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::principal::UserStageInfo;
 use common_meta_types::MatchSeq;
-use common_meta_types::UserStageInfo;
 
 use crate::UserApiProvider;
 

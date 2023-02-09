@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_meta_app::principal::RoleInfo;
 use common_meta_types::MatchSeq;
-use common_meta_types::RoleInfo;
 use common_meta_types::SeqV;
 
 #[async_trait::async_trait]

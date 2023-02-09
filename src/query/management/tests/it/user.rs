@@ -19,21 +19,21 @@ use common_base::base::escape_for_key;
 use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_management::*;
+use common_meta_app::principal::AuthInfo;
+use common_meta_app::principal::PasswordHashMethod;
+use common_meta_app::principal::UserIdentity;
 use common_meta_kvapi::kvapi;
-use common_meta_types::AuthInfo;
-use common_meta_types::GetKVReply;
+use common_meta_kvapi::kvapi::GetKVReply;
+use common_meta_kvapi::kvapi::ListKVReply;
+use common_meta_kvapi::kvapi::MGetKVReply;
+use common_meta_kvapi::kvapi::UpsertKVReply;
+use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::KVAppError;
-use common_meta_types::ListKVReply;
-use common_meta_types::MGetKVReply;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
-use common_meta_types::PasswordHashMethod;
 use common_meta_types::SeqV;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
-use common_meta_types::UpsertKVReply;
-use common_meta_types::UpsertKVReq;
-use common_meta_types::UserIdentity;
 use mockall::predicate::*;
 use mockall::*;
 
@@ -75,8 +75,8 @@ fn default_test_auth_info() -> AuthInfo {
 }
 
 mod add {
+    use common_meta_app::principal::UserInfo;
     use common_meta_types::Operation;
-    use common_meta_types::UserInfo;
 
     use super::*;
 
@@ -175,7 +175,7 @@ mod add {
 }
 
 mod get {
-    use common_meta_types::UserInfo;
+    use common_meta_app::principal::UserInfo;
 
     use super::*;
 
@@ -317,7 +317,7 @@ mod get {
 }
 
 mod get_users {
-    use common_meta_types::UserInfo;
+    use common_meta_app::principal::UserInfo;
 
     use super::*;
 
@@ -465,8 +465,8 @@ mod drop {
 }
 
 mod update {
-    use common_meta_types::AuthInfo;
-    use common_meta_types::UserInfo;
+    use common_meta_app::principal::AuthInfo;
+    use common_meta_app::principal::UserInfo;
 
     use super::*;
 
@@ -613,10 +613,10 @@ mod update {
 }
 
 mod set_user_privileges {
-    use common_meta_types::GrantObject;
-    use common_meta_types::UserInfo;
-    use common_meta_types::UserPrivilegeSet;
-    use common_meta_types::UserPrivilegeType;
+    use common_meta_app::principal::GrantObject;
+    use common_meta_app::principal::UserInfo;
+    use common_meta_app::principal::UserPrivilegeSet;
+    use common_meta_app::principal::UserPrivilegeType;
 
     use super::*;
 

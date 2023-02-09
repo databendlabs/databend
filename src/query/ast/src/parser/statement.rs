@@ -15,14 +15,14 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use common_meta_app::principal::AuthType;
+use common_meta_app::principal::PrincipalIdentity;
+use common_meta_app::principal::UserIdentity;
+use common_meta_app::principal::UserPrivilegeType;
 use common_meta_app::schema::CatalogType;
 use common_meta_app::share::ShareGrantObjectName;
 use common_meta_app::share::ShareGrantObjectPrivilege;
 use common_meta_app::share::ShareNameIdent;
-use common_meta_types::AuthType;
-use common_meta_types::PrincipalIdentity;
-use common_meta_types::UserIdentity;
-use common_meta_types::UserPrivilegeType;
 use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
