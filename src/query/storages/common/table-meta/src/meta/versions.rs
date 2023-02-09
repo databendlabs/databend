@@ -78,8 +78,6 @@ impl Versioned<0> for v1::TableSnapshotStatistics {}
 
 impl Versioned<2> for DataBlock {}
 
-impl Versioned<0> for v2::DeleteMask {}
-
 pub enum TableSnapshotStatisticsVersion {
     V0(PhantomData<v1::TableSnapshotStatistics>),
 }
@@ -94,6 +92,12 @@ impl TableSnapshotStatisticsVersion {
     fn ver<const V: u64, T: Versioned<V>>(_v: &PhantomData<T>) -> u64 {
         V
     }
+}
+
+impl Versioned<0> for v2::DeleteMask {}
+
+pub enum DeleteMaskVersion {
+    V0(PhantomData<v2::DeleteMask>),
 }
 
 /// Statically check that if T implements Versioned<U> where U equals V
@@ -148,6 +152,18 @@ mod converters {
                 ))),
                 _ => Err(ErrorCode::Internal(format!(
                     "unknown table snapshot statistics version {value}, versions supported: 0"
+                ))),
+            }
+        }
+    }
+
+    impl TryFrom<u64> for DeleteMaskVersion {
+        type Error = ErrorCode;
+        fn try_from(value: u64) -> Result<Self, Self::Error> {
+            match value {
+                0 => Ok(DeleteMaskVersion::V0(testify_version::<_, 0>(PhantomData))),
+                _ => Err(ErrorCode::Internal(format!(
+                    "unknown delete mask version {value}, versions supported: 0"
                 ))),
             }
         }

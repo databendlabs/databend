@@ -33,6 +33,7 @@ pub use statistics::SnapshotId;
 pub use statistics::Statistics;
 pub use statistics::StatisticsOfColumns;
 pub use versions::testify_version;
+pub use versions::DeleteMaskVersion;
 pub use versions::SegmentInfoVersion;
 pub use versions::SnapshotVersion;
 pub use versions::TableSnapshotStatisticsVersion;
