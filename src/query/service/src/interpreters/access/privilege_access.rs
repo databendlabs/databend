@@ -99,6 +99,30 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::RenameTable(_) => {}
+            Plan::AddTableColumn(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        UserPrivilegeType::Alter,
+                    )
+                    .await?;
+            }
+            Plan::DropTableColumn(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        UserPrivilegeType::Alter,
+                    )
+                    .await?;
+            }
             Plan::AlterTableClusterKey(plan) => {
                 session
                     .validate_privilege(
