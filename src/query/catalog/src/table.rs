@@ -109,6 +109,10 @@ pub trait Table: Sync + Send {
         false
     }
 
+    fn support_delete_mark(&self) -> bool {
+        false
+    }
+
     async fn alter_table_cluster_keys(
         &self,
         ctx: Arc<dyn TableContext>,
