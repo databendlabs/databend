@@ -15,6 +15,8 @@
 pub use common_pipeline_core::processors::*;
 pub(crate) mod transforms;
 
+pub use transforms::create_dummy_item;
+pub use transforms::create_dummy_items;
 pub use transforms::AggregatorParams;
 pub use transforms::AggregatorTransformParams;
 pub use transforms::BlockCompactor;

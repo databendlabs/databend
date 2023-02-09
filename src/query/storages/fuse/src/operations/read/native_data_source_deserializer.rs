@@ -97,11 +97,11 @@ impl NativeDeserializeDataTransform {
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => (0..src_schema.num_fields()).collect(),
                 Some(v) => {
-                    let projected_arrow_schema = v
+                    let projected_schema = v
                         .prewhere_columns
                         .project_schema(plan.source_info.schema().as_ref());
 
-                    projected_arrow_schema
+                    projected_schema
                         .fields()
                         .iter()
                         .map(|f| src_schema.index_of(f.name()).unwrap())
@@ -124,16 +124,7 @@ impl NativeDeserializeDataTransform {
             .filter(|i| !prewhere_columns.contains(i))
             .collect();
 
-        let output_schema: DataSchema = match PushDownInfo::prewhere_of_push_downs(&plan.push_downs)
-        {
-            None => src_schema.clone(),
-            Some(v) => {
-                let projected = v
-                    .output_columns
-                    .project_schema(plan.source_info.schema().as_ref());
-                (&projected).into()
-            }
-        };
+        let output_schema: DataSchema = plan.schema().into();
 
         let func_ctx = ctx.get_function_context()?;
         let prewhere_schema = src_schema.project(&prewhere_columns);

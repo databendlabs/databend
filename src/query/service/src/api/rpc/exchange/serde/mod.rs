@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,22 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod data_exchange;
-mod exchange_manager;
-mod exchange_params;
-mod exchange_sink;
-mod exchange_sink_writer;
-mod exchange_source;
-mod exchange_source_reader;
-mod exchange_transform;
-mod exchange_transform_scatter;
-mod exchange_transform_shuffle;
-mod serde;
-mod statistics_receiver;
-mod statistics_sender;
-
-pub use data_exchange::BroadcastExchange;
-pub use data_exchange::DataExchange;
-pub use data_exchange::MergeExchange;
-pub use data_exchange::ShuffleDataExchange;
-pub use exchange_manager::DataExchangeManager;
+pub mod exchange_deserializer;
+pub mod exchange_serializer;
