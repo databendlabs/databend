@@ -160,7 +160,7 @@ impl DecimalDataType {
 
         Self::from_size(DecimalSize { precision, scale })
     }
-
+    
     pub fn convert_from(&self, col: &DecimalColumn) -> Result<DecimalColumn> {
         match col {
             DecimalColumn::Decimal128(buffer, from) => {

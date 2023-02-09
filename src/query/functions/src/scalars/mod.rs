@@ -30,11 +30,11 @@ mod tuple;
 mod variant;
 
 mod comparison;
+mod decimal;
 mod hash;
 mod other;
 mod string;
 mod string_multi_args;
-mod decimal;
 
 pub use comparison::check_pattern_type;
 pub use comparison::is_like_pattern_escape;
