@@ -27,6 +27,7 @@ use common_exception::ErrorCode;
 use common_meta_app::storage::StorageAzblobConfig;
 use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageGcsConfig;
+#[cfg(feature = "storage-hdfs")]
 use common_meta_app::storage::StorageHdfsConfig;
 use common_meta_app::storage::StorageHttpConfig;
 use common_meta_app::storage::StorageIpfsConfig;

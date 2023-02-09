@@ -7,7 +7,7 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [features]
-storage-hdfs = ["common-meta-types/storage-hdfs"]
+storage-hdfs = ["common-meta-app/storage-hdfs"]
 
 [dependencies]
 common-arrow = { path = "../arrow" }

@@ -11,7 +11,7 @@ test = true
 [features]
 default = []
 storage-hdfs = ["common-storage/storage-hdfs"]
-hive = ["common-hive-meta-store", "thrift", "storage-hdfs"]
+hive = ["common-hive-meta-store", "thrift", "storage-hdfs", "common-meta-app/storage-hdfs"]
 
 [package.metadata.cargo-machete]
 ignored = ["thrift", "common-hive-meta-store", "strum"]

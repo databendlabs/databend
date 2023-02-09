@@ -17,7 +17,7 @@ simd = ["common-arrow/simd"]
 tokio-console = ["common-tracing/console", "common-base/tracing"]
 memory-profiling = ["common-base/memory-profiling", "common-http/memory-profiling", "tempfile"]
 storage-hdfs = ["opendal/services-hdfs", "common-storage/storage-hdfs"]
-hive = ["common-hive-meta-store", "thrift", "storage-hdfs", "common-config/hive", "common-storages-hive"]
+hive = ["common-hive-meta-store", "thrift", "storage-hdfs", "common-config/hive", "common-storages-hive", "common-meta-app/storage-hdfs"]
 io-uring = [
     # "common-meta-embedded/io-uring",
     "common-meta-store/io-uring",
