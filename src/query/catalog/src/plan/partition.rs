@@ -113,22 +113,26 @@ impl Partitions {
             }
         };
 
+        let num_parts = partitions.len();
         let mut executor_part = HashMap::default();
-        let parts_per_node = partitions.len() / executor_nums;
+        let parts_per_node = (partitions.len() + executor_nums - 1) / executor_nums;
         for (idx, executor) in executors_sort.iter().enumerate() {
             let begin = parts_per_node * idx;
-            let end = parts_per_node * (idx + 1);
-            let mut parts = partitions[begin..end].to_vec();
-
-            if idx == executor_nums - 1 {
-                // For some irregular partitions, we assign them to the last node
-                let begin = parts_per_node * executor_nums;
-                parts.extend_from_slice(&partitions[begin..]);
-            }
+            let end = num_parts.min(parts_per_node * (idx + 1));
+            let parts = partitions[begin..end].to_vec();
             executor_part.insert(
                 executor.clone(),
                 Partitions::create(PartitionsShuffleKind::Seq, parts.to_vec()),
             );
+            if end == num_parts {
+                executors_sort[(idx + 1)..].iter().for_each(|executor| {
+                    executor_part.insert(
+                        executor.clone(),
+                        Partitions::create(PartitionsShuffleKind::Seq, vec![]),
+                    );
+                });
+                break;
+            }
         }
         Ok(executor_part)
     }
