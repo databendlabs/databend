@@ -116,7 +116,9 @@ impl Partitions {
 
         let num_parts = partitions.len();
         let mut executor_part = HashMap::default();
-        let parts_per_node = (partitions.len() + num_executors - 1) / num_executors;
+        // the first num_parts % num_executors get parts_per_node parts
+        // the remaining get parts_per_node - 1 parts
+        let parts_per_node = (num_parts + num_executors - 1) / num_executors;
         for (idx, executor) in executors_sorted.iter().enumerate() {
             let begin = parts_per_node * idx;
             let end = num_parts.min(parts_per_node * (idx + 1));
@@ -126,6 +128,7 @@ impl Partitions {
                 Partitions::create(PartitionsShuffleKind::Seq, parts.to_vec()),
             );
             if end == num_parts {
+                // reach here only when num_executors > num_parts
                 executors_sorted[(idx + 1)..].iter().for_each(|executor| {
                     executor_part.insert(
                         executor.clone(),
