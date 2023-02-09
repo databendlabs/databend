@@ -97,13 +97,14 @@ impl Partitions {
             PartitionsShuffleKind::Seq => self.partitions.clone(),
             PartitionsShuffleKind::Mod => {
                 // Sort by hash%executor_nums.
-                let mut parts = self.partitions.clone();
-                parts.sort_by(|a, b| {
-                    let hl = a.hash() % executor_nums as u64;
-                    let hr = b.hash() % executor_nums as u64;
-                    hl.cmp(&hr)
-                });
-                parts
+                let mut parts = self
+                    .partitions
+                    .iter()
+                    .map(|p| p.hash() % executor_nums as u64)
+                    .zip(self.partitions.clone().into_iter())
+                    .collect::<Vec<_>>();
+                parts.sort_by(|a, b| a.0.cmp(&b.0));
+                parts.into_iter().map(|x| x.1).collect()
             }
             PartitionsShuffleKind::Rand => {
                 let mut rng = thread_rng();
