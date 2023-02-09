@@ -161,7 +161,7 @@ impl<'a> Evaluator<'a> {
             } => {
                 let value = self.run(expr)?;
                 if *is_try {
-                    Ok(self.run_try_cast(*span, expr.data_type(), dest_type, value))
+                    self.run_try_cast(*span, expr.data_type(), dest_type, value)
                 } else {
                     self.run_cast(*span, expr.data_type(), dest_type, value)
                 }
@@ -361,9 +361,9 @@ impl<'a> Evaluator<'a> {
         src_type: &DataType,
         dest_type: &DataType,
         value: Value<AnyType>,
-    ) -> Value<AnyType> {
+    ) -> Result<Value<AnyType>> {
         if src_type == dest_type {
-            return value;
+            return Ok(value);
         }
 
         // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
@@ -373,84 +373,84 @@ impl<'a> Evaluator<'a> {
             if let Ok(Some(new_value)) =
                 self.run_simple_cast(span, src_type, dest_type, value.clone(), &cast_fn)
             {
-                return new_value;
+                return Ok(new_value);
             }
         }
 
         match (src_type, inner_dest_type) {
             (DataType::Null, _) => match value {
-                Value::Scalar(Scalar::Null) => Value::Scalar(Scalar::Null),
+                Value::Scalar(Scalar::Null) => Ok(Value::Scalar(Scalar::Null)),
                 Value::Column(Column::Null { len }) => {
                     let mut builder = ColumnBuilder::with_capacity(dest_type, len);
                     for _ in 0..len {
                         builder.push_default();
                     }
-                    Value::Column(builder.build())
+                    Ok(Value::Column(builder.build()))
                 }
                 other => unreachable!("source: {}", other),
             },
             (DataType::Nullable(inner_src_ty), _) => match value {
-                Value::Scalar(Scalar::Null) => Value::Scalar(Scalar::Null),
+                Value::Scalar(Scalar::Null) => Ok(Value::Scalar(Scalar::Null)),
                 Value::Scalar(_) => self.run_try_cast(span, inner_src_ty, inner_dest_type, value),
                 Value::Column(Column::Nullable(col)) => {
                     let new_col = *self
-                        .run_try_cast(span, inner_src_ty, dest_type, Value::Column(col.column))
+                        .run_try_cast(span, inner_src_ty, dest_type, Value::Column(col.column))?
                         .into_column()
                         .unwrap()
                         .into_nullable()
                         .unwrap();
-                    Value::Column(Column::Nullable(Box::new(NullableColumn {
+                    Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
                         column: new_col.column,
                         validity: bitmap::or(&col.validity, &new_col.validity),
-                    })))
+                    }))))
                 }
                 other => unreachable!("source: {}", other),
             },
             (src_ty, inner_dest_ty) if src_ty == inner_dest_ty => match value {
-                Value::Scalar(_) => value,
+                Value::Scalar(_) => Ok(value),
                 Value::Column(column) => {
-                    Value::Column(Column::Nullable(Box::new(NullableColumn {
+                    Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
                         validity: constant_bitmap(true, column.len()).into(),
                         column,
-                    })))
+                    }))))
                 }
             },
 
             (DataType::EmptyArray, DataType::Array(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::EmptyArray) => {
                     let new_column = ColumnBuilder::with_capacity(inner_dest_ty, 0).build();
-                    Value::Scalar(Scalar::Array(new_column))
+                    Ok(Value::Scalar(Scalar::Array(new_column)))
                 }
                 Value::Column(Column::EmptyArray { len }) => {
                     let mut builder = ColumnBuilder::with_capacity(dest_type, len);
                     for _ in 0..len {
                         builder.push_default();
                     }
-                    Value::Column(builder.build())
+                    Ok(Value::Column(builder.build()))
                 }
                 other => unreachable!("source: {}", other),
             },
             (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Array(array)) => {
                     let new_array = self
-                        .run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(array))
+                        .run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(array))?
                         .into_column()
                         .unwrap();
-                    Value::Scalar(Scalar::Array(new_array))
+                    Ok(Value::Scalar(Scalar::Array(new_array)))
                 }
                 Value::Column(Column::Array(col)) => {
                     let new_values = self
-                        .run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(col.values))
+                        .run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(col.values))?
                         .into_column()
                         .unwrap();
                     let new_col = Column::Array(Box::new(ArrayColumn {
                         values: new_values,
                         offsets: col.offsets,
                     }));
-                    Value::Column(Column::Nullable(Box::new(NullableColumn {
+                    Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
                         validity: constant_bitmap(true, new_col.len()).into(),
                         column: new_col,
-                    })))
+                    }))))
                 }
                 _ => unreachable!(),
             },
@@ -465,12 +465,13 @@ impl<'a> Evaluator<'a> {
                             .zip(fields_src_ty.iter())
                             .zip(fields_dest_ty.iter())
                             .map(|((field, src_ty), dest_ty)| {
-                                self.run_try_cast(span, src_ty, dest_ty, Value::Scalar(field))
+                                Ok(self
+                                    .run_try_cast(span, src_ty, dest_ty, Value::Scalar(field))?
                                     .into_scalar()
-                                    .unwrap()
+                                    .unwrap())
                             })
-                            .collect::<Vec<_>>();
-                        Value::Scalar(Scalar::Tuple(new_fields))
+                            .collect::<Result<_>>()?;
+                        Ok(Value::Scalar(Scalar::Tuple(new_fields)))
                     }
                     Value::Column(Column::Tuple { fields, len }) => {
                         let new_fields = fields
@@ -478,22 +479,26 @@ impl<'a> Evaluator<'a> {
                             .zip(fields_src_ty.iter())
                             .zip(fields_dest_ty.iter())
                             .map(|((field, src_ty), dest_ty)| {
-                                self.run_try_cast(span, src_ty, dest_ty, Value::Column(field))
+                                Ok(self
+                                    .run_try_cast(span, src_ty, dest_ty, Value::Column(field))?
                                     .into_column()
-                                    .unwrap()
+                                    .unwrap())
                             })
-                            .collect();
+                            .collect::<Result<_>>()?;
                         let new_col = Column::Tuple {
                             fields: new_fields,
                             len,
                         };
-                        Value::Column(new_col)
+                        Ok(Value::Column(new_col))
                     }
                     other => unreachable!("source: {}", other),
                 }
             }
 
-            _ => Value::Scalar(Scalar::Null),
+            _ => Err(ErrorCode::Internal(format!(
+                "unable to cast type `{src_type}` to type `{dest_type}`"
+            ))
+            .set_span(span)),
         }
     }
 
@@ -921,10 +926,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 Some(Domain::Tuple(new_fields_domain))
             }
 
-            _ => Some(Domain::Nullable(NullableDomain {
-                has_null: true,
-                value: None,
-            })),
+            _ => None,
         }
     }
 
