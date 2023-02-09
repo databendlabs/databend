@@ -17,9 +17,9 @@ use std::time::UNIX_EPOCH;
 
 use common_base::base::tokio;
 use common_meta_kvapi::kvapi::KVApi;
+use common_meta_raft_store::applied_state::AppliedState;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::openraft;
-use common_meta_types::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
 use common_meta_types::Endpoint;
@@ -297,7 +297,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
                     &Cmd::UpsertKV(UpsertKV {
                         key: c.key.clone(),
                         seq: c.seq,
-                        value: Some(c.value.clone()).into(),
+                        value: Operation::Update(c.value.clone()),
                         value_meta: c.value_meta.clone(),
                     }),
                     &mut t,

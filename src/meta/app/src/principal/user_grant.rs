@@ -18,8 +18,8 @@ use std::ops;
 
 use enumflags2::BitFlags;
 
-use crate::UserPrivilegeSet;
-use crate::UserPrivilegeType;
+use crate::principal::UserPrivilegeSet;
+use crate::principal::UserPrivilegeType;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum GrantObject {

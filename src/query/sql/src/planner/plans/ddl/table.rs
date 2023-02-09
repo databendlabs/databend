@@ -27,7 +27,7 @@ use common_expression::TableSchemaRef;
 use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::UndropTableReq;
-use common_meta_types::StorageParams;
+use common_meta_app::storage::StorageParams;
 
 use crate::plans::Plan;
 
@@ -160,6 +160,38 @@ pub struct RenameTableEntity {
 }
 
 impl RenameTablePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+// Table add column
+#[derive(Clone, Debug, PartialEq)]
+pub struct AddTableColumnPlan {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub schema: TableSchemaRef,
+    pub field_default_exprs: Vec<Option<String>>,
+    pub field_comments: Vec<String>,
+}
+
+impl AddTableColumnPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+// Table drop column
+#[derive(Clone, Debug, PartialEq)]
+pub struct DropTableColumnPlan {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub column: String,
+}
+
+impl DropTableColumnPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

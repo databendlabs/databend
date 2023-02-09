@@ -13,22 +13,14 @@
 // limitations under the License.
 
 use common_exception::exception::Result;
-use common_meta_types::UserPrivilegeSet;
-use common_meta_types::UserPrivilegeType;
+use common_meta_app::principal::UserQuota;
 
 #[test]
-fn test_user_privilege() -> Result<()> {
-    let mut privileges = UserPrivilegeSet::empty();
-    let r = privileges.has_privilege(UserPrivilegeType::Insert);
-    assert!(!r);
-
-    privileges.set_privilege(UserPrivilegeType::Insert);
-    let r = privileges.has_privilege(UserPrivilegeType::Insert);
-    assert!(r);
-
-    privileges.set_all_privileges();
-    let r = privileges.has_privilege(UserPrivilegeType::Create);
-    assert!(r);
+fn test_user_quota() -> Result<()> {
+    let quota = UserQuota::no_limit();
+    assert_eq!(quota.max_cpu, 0);
+    assert_eq!(quota.max_memory_in_bytes, 0);
+    assert_eq!(quota.max_storage_in_bytes, 0);
 
     Ok(())
 }

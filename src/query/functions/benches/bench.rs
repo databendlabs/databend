@@ -18,6 +18,7 @@ extern crate criterion;
 #[path = "../tests/it/scalars/parser.rs"]
 mod parser;
 
+use common_expression::date_helper::TzLUT;
 use common_expression::type_check;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
@@ -41,7 +42,9 @@ fn bench(c: &mut Criterion) {
             b.iter(|| type_check::check(&raw_expr, &BUILTIN_FUNCTIONS))
         });
 
-        let func_ctx = FunctionContext { tz: chrono_tz::UTC };
+        let func_ctx = FunctionContext {
+            tz: TzLUT::default(),
+        };
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
         let block = DataBlock::new(vec![], 1);
         let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);

@@ -40,6 +40,8 @@ use common_expression::infer_schema_type;
 use common_expression::type_check;
 use common_expression::type_check::check_literal;
 use common_expression::type_check::common_super_type;
+use common_expression::types::decimal::DecimalDataType;
+use common_expression::types::decimal::DecimalSize;
 use common_expression::types::number::F64;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
@@ -458,7 +460,6 @@ impl<'a> TypeChecker<'a> {
                                 self.resolve_subquery(
                                     SubqueryType::Any,
                                     subquery,
-                                    true,
                                     Some(*left.clone()),
                                     Some(comparison_op),
                                     None,
@@ -768,7 +769,6 @@ impl<'a> TypeChecker<'a> {
                         SubqueryType::NotExists
                     },
                     subquery,
-                    true,
                     None,
                     None,
                     None,
@@ -777,7 +777,7 @@ impl<'a> TypeChecker<'a> {
             }
 
             Expr::Subquery { subquery, .. } => {
-                self.resolve_subquery(SubqueryType::Scalar, subquery, false, None, None, None)
+                self.resolve_subquery(SubqueryType::Scalar, subquery, None, None, None)
                     .await?
             }
 
@@ -807,7 +807,6 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_subquery(
                     SubqueryType::Any,
                     subquery,
-                    true,
                     Some(*expr.clone()),
                     Some(ComparisonOp::Equal),
                     None,
@@ -1348,7 +1347,6 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         typ: SubqueryType,
         subquery: &Query,
-        allow_multi_rows: bool,
         child_expr: Option<Expr>,
         compare_op: Option<ComparisonOp>,
         _required_type: Option<DataType>,
@@ -1400,10 +1398,9 @@ impl<'a> TypeChecker<'a> {
             subquery: Box::new(s_expr),
             child_expr: child_scalar,
             compare_op,
-            output_column: output_context.columns[0].index,
+            output_column: output_context.columns[0].clone(),
             projection_index: None,
             data_type: data_type.clone(),
-            allow_multi_rows,
             typ,
             outer_columns: rel_prop.outer_columns,
         };
@@ -2290,6 +2287,12 @@ impl<'a> TypeChecker<'a> {
             TypeName::Int64 => TableDataType::Number(NumberDataType::Int64),
             TypeName::Float32 => TableDataType::Number(NumberDataType::Float32),
             TypeName::Float64 => TableDataType::Number(NumberDataType::Float64),
+            TypeName::Decimal { precision, scale } => {
+                TableDataType::Decimal(DecimalDataType::from_size(DecimalSize {
+                    precision: *precision,
+                    scale: *scale,
+                })?)
+            }
             TypeName::String => TableDataType::String,
             TypeName::Timestamp => TableDataType::Timestamp,
             TypeName::Date => TableDataType::Date,

@@ -21,6 +21,8 @@ use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
+use common_meta_types::MatchSeq;
+use common_sql::field_default_value;
 use common_sql::plans::CreateTablePlanV2;
 use common_users::UserApiProvider;
 
@@ -54,7 +56,7 @@ impl Interpreter for CreateTableInterpreterV2 {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.plan.tenant.clone();
         let quota_api = UserApiProvider::instance().get_tenant_quota_api_client(&tenant)?;
-        let quota = quota_api.get_quota(None).await?.data;
+        let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
         let engine = self.plan.engine;
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
         let tables = catalog
@@ -157,10 +159,13 @@ impl CreateTableInterpreterV2 {
         for (idx, field) in self.plan.schema.fields().clone().into_iter().enumerate() {
             check_create_data_type(field.data_type())?;
             let field = if let Some(Some(default_expr)) = &self.plan.field_default_exprs.get(idx) {
-                field.with_default_expr(Some(default_expr.clone()))
+                let field = field.with_default_expr(Some(default_expr.clone()));
+                let _ = field_default_value(self.ctx.clone(), &field)?;
+                field
             } else {
                 field
             };
+
             fields.push(field)
         }
         let schema = TableSchemaRefExt::create(fields);

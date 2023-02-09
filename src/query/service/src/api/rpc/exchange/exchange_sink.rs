@@ -16,10 +16,14 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_pipeline_core::pipe::Pipe;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
-use crate::api::rpc::exchange::exchange_sink_merge::ExchangeMergeSink;
-use crate::api::rpc::exchange::exchange_sink_shuffle::ExchangePublisherSink;
+use crate::api::rpc::exchange::exchange_sink_writer::create_writer_items;
+use crate::api::rpc::exchange::exchange_sink_writer::ExchangeWriterSink;
+use crate::api::rpc::exchange::exchange_transform_shuffle::exchange_shuffle;
+use crate::api::rpc::exchange::serde::exchange_serializer::create_serializer_items;
+use crate::api::rpc::exchange::serde::exchange_serializer::TransformExchangeSerializer;
 use crate::clusters::ClusterHelper;
 use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
@@ -33,6 +37,9 @@ impl ExchangeSink {
         params: &ExchangeParams,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
+        let exchange_manager = ctx.get_exchange_manager();
+        let flight_exchange = exchange_manager.get_flight_exchanges(params)?;
+
         match params {
             ExchangeParams::MergeExchange(params) => {
                 if params.destination_id == ctx.get_cluster().local_id() {
@@ -44,10 +51,35 @@ impl ExchangeSink {
                     )));
                 }
 
-                pipeline.add_sink(|input| ExchangeMergeSink::try_create(ctx.clone(), input, params))
+                pipeline.add_transform(|input, output| {
+                    Ok(TransformExchangeSerializer::create(
+                        input,
+                        output,
+                        &params.schema,
+                    ))
+                })?;
+
+                assert_eq!(flight_exchange.len(), 1);
+                pipeline.add_sink(|input| {
+                    Ok(ExchangeWriterSink::create(
+                        input,
+                        flight_exchange[0].clone(),
+                    ))
+                })
             }
-            ExchangeParams::ShuffleExchange(params) => pipeline
-                .add_sink(|input| ExchangePublisherSink::try_create(ctx.clone(), input, params)),
+            ExchangeParams::ShuffleExchange(params) => {
+                exchange_shuffle(params, pipeline)?;
+
+                // exchange serialize transform
+                let len = flight_exchange.len();
+                let items = create_serializer_items(len, &params.schema);
+                pipeline.add_pipe(Pipe::create(len, len, items));
+
+                // exchange writer sink
+                let items = create_writer_items(flight_exchange);
+                pipeline.add_pipe(Pipe::create(len, 0, items));
+                Ok(())
+            }
         }
     }
 }

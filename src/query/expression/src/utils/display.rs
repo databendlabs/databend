@@ -17,6 +17,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Write;
 
+use chrono_tz::Tz;
 use comfy_table::Cell;
 use comfy_table::Table;
 use ethnum::i256;
@@ -181,8 +182,8 @@ impl<'a> Display for ScalarRef<'a> {
                     Ok(())
                 }
             },
-            ScalarRef::Timestamp(t) => write!(f, "{}", timestamp_to_string(*t, chrono_tz::Tz::UTC)),
-            ScalarRef::Date(d) => write!(f, "{}", date_to_string(*d as i64, chrono_tz::Tz::UTC)),
+            ScalarRef::Timestamp(t) => write!(f, "{}", timestamp_to_string(*t, Tz::UTC)),
+            ScalarRef::Date(d) => write!(f, "{}", date_to_string(*d as i64, Tz::UTC)),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Tuple(fields) => {
                 write!(f, "(")?;

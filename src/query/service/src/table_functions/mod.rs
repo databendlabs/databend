@@ -22,5 +22,4 @@ pub use numbers::generate_numbers_parts;
 pub use numbers::NumbersPartInfo;
 pub use numbers::NumbersTable;
 pub use table_function::TableFunction;
-pub use table_function_factory::TableArgs;
 pub use table_function_factory::TableFunctionFactory;

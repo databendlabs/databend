@@ -72,11 +72,11 @@ use common_meta_app::share::ShareMeta;
 use common_meta_app::share::ShareNameIdent;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::Key;
+use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::GCDroppedDataReq;
 use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
-use common_meta_types::UpsertKVReq;
 use tracing::debug;
 use tracing::info;
 

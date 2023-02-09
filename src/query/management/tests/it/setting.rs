@@ -17,11 +17,12 @@ use std::sync::Arc;
 use common_base::base::tokio;
 use common_exception::Result;
 use common_management::*;
+use common_meta_app::principal::UserSetting;
+use common_meta_app::principal::UserSettingValue;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_kvapi::kvapi::KVApi;
+use common_meta_types::MatchSeq;
 use common_meta_types::SeqV;
-use common_meta_types::UserSetting;
-use common_meta_types::UserSettingValue;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_set_setting() -> Result<()> {
@@ -79,13 +80,13 @@ async fn test_set_setting() -> Result<()> {
     // Get setting.
     {
         let expect = UserSetting::create("max_threads", UserSettingValue::UInt64(1));
-        let actual = mgr.get_setting("max_threads", None).await?;
+        let actual = mgr.get_setting("max_threads", MatchSeq::GE(0)).await?;
         assert_eq!(actual.data, expect);
     }
 
     // Drop setting.
     {
-        mgr.drop_setting("max_threads", None).await?;
+        mgr.drop_setting("max_threads", MatchSeq::GE(1)).await?;
     }
 
     // Get settings.
@@ -96,13 +97,13 @@ async fn test_set_setting() -> Result<()> {
 
     // Get setting.
     {
-        let res = mgr.get_setting("max_threads", None).await;
+        let res = mgr.get_setting("max_threads", MatchSeq::GE(0)).await;
         assert!(res.is_err());
     }
 
     // Drop setting not exists.
     {
-        let res = mgr.drop_setting("max_threads_not", None).await;
+        let res = mgr.drop_setting("max_threads_not", MatchSeq::GE(1)).await;
         assert!(res.is_err());
     }
 

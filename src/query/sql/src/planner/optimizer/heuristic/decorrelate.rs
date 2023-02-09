@@ -309,18 +309,21 @@ impl SubqueryRewriter {
                     &mut left_conditions,
                     &mut right_conditions,
                 )?;
-                let index = subquery.output_column;
-                let column_name = format!("subquery_{}", index);
-                let right_condition = ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    column: ColumnBinding {
-                        database_name: None,
-                        table_name: None,
-                        column_name,
-                        index,
-                        data_type: subquery.data_type.clone(),
-                        visibility: Visibility::Visible,
-                    },
-                });
+                let output_column = subquery.output_column.clone();
+                let column_name = format!("subquery_{}", output_column.index);
+                let right_condition = wrap_cast(
+                    &ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        column: ColumnBinding {
+                            database_name: None,
+                            table_name: None,
+                            column_name,
+                            index: output_column.index,
+                            data_type: output_column.data_type,
+                            visibility: Visibility::Visible,
+                        },
+                    }),
+                    &subquery.data_type,
+                );
                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
                 let op = subquery.compare_op.as_ref().unwrap().clone();
                 // Make <child_expr op right_condition> as non_equi_conditions even if op is equal operator.

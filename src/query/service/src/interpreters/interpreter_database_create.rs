@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::MatchSeq;
 use common_sql::plans::CreateDatabasePlan;
 use common_users::UserApiProvider;
 
@@ -46,7 +47,7 @@ impl Interpreter for CreateDatabaseInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.plan.tenant.clone();
         let quota_api = UserApiProvider::instance().get_tenant_quota_api_client(&tenant)?;
-        let quota = quota_api.get_quota(None).await?.data;
+        let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
         let databases = catalog.list_databases(&tenant).await?;
         if quota.max_databases != 0 && databases.len() >= quota.max_databases as usize {

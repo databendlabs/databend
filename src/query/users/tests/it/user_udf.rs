@@ -15,7 +15,7 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use common_grpc::RpcClientConf;
-use common_meta_types::UserDefinedFunction;
+use common_meta_app::principal::UserDefinedFunction;
 use common_users::UserApiProvider;
 use pretty_assertions::assert_eq;
 

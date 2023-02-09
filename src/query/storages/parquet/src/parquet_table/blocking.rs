@@ -20,7 +20,7 @@ use common_catalog::plan::ParquetReadOptions;
 use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::UserStageInfo;
+use common_meta_app::principal::UserStageInfo;
 use common_storage::StageFilesInfo;
 use opendal::Operator;
 

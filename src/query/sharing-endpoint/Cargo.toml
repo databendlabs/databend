@@ -13,6 +13,7 @@ doctest = false
 common-base = { path = "../../common/base" }
 common-config = { path = "../../query/config" }
 common-exception = { path = "../../common/exception" }
+common-meta-app = { path = "../../meta/app" }
 common-meta-types = { path = "../../meta/types" }
 common-storage = { path = "../../common/storage" }
 once_cell = "1.15.0"

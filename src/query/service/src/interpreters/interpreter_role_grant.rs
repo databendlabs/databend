@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::PrincipalIdentity;
+use common_meta_app::principal::PrincipalIdentity;
 use common_sql::plans::GrantRolePlan;
 use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
@@ -61,7 +61,7 @@ impl Interpreter for GrantRoleInterpreter {
             }
             PrincipalIdentity::Role(role) => {
                 user_mgr
-                    .grant_role_to_role(&tenant, role, plan.role)
+                    .grant_role_to_role(&tenant, &role, plan.role)
                     .await?;
             }
         }

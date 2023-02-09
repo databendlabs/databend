@@ -74,6 +74,34 @@ impl Projection {
         };
         Ok(column_nodes)
     }
+
+    pub fn add_col(&mut self, col: usize) {
+        match self {
+            Projection::Columns(indices) => {
+                if indices.contains(&col) {
+                    return;
+                }
+                indices.push(col);
+                indices.sort();
+            }
+            Projection::InnerColumns(path_indices) => {
+                path_indices.entry(col).or_insert(vec![col]);
+            }
+        }
+    }
+
+    pub fn remove_col(&mut self, col: usize) {
+        match self {
+            Projection::Columns(indices) => {
+                if let Some(pos) = indices.iter().position(|x| *x == col) {
+                    indices.remove(pos);
+                }
+            }
+            Projection::InnerColumns(path_indices) => {
+                path_indices.remove(&col);
+            }
+        }
+    }
 }
 
 impl core::fmt::Debug for Projection {

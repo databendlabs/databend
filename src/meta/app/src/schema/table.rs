@@ -22,13 +22,15 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use common_exception::Result;
+use common_expression::TableField;
 use common_expression::TableSchema;
 use common_meta_types::MatchSeq;
-use common_meta_types::StorageParams;
 use maplit::hashmap;
 
 use crate::schema::database::DatabaseNameIdent;
 use crate::share::ShareNameIdent;
+use crate::storage::StorageParams;
 
 /// Globally unique identifier of a version of TableMeta.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq, Default)]
@@ -222,6 +224,25 @@ pub struct TableMeta {
     // if used in CreateTableReq, this field MUST set to None.
     pub drop_on: Option<DateTime<Utc>>,
     pub statistics: TableStatistics,
+}
+
+impl TableMeta {
+    pub fn add_columns(&mut self, fields: &[TableField], field_comments: &[String]) -> Result<()> {
+        let mut new_schema = self.schema.as_ref().to_owned();
+        new_schema.add_columns(fields)?;
+        self.schema = Arc::new(new_schema);
+        field_comments.iter().for_each(|c| {
+            self.field_comments.push(c.to_owned());
+        });
+        Ok(())
+    }
+
+    pub fn drop_column(&mut self, column: &str) -> Result<()> {
+        let mut new_schema = self.schema.as_ref().to_owned();
+        new_schema.drop_column(column)?;
+        self.schema = Arc::new(new_schema);
+        Ok(())
+    }
 }
 
 impl TableInfo {

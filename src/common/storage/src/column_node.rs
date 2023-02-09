@@ -32,12 +32,11 @@ impl ColumnNodes {
         let mut leaf_id = 0;
         let mut column_nodes = Vec::with_capacity(schema.fields.len());
 
-        let field_column_ids =
-            table_schema.map(|table_schema| table_schema.field_leaf_column_ids());
-        for (i, field) in schema.fields.iter().enumerate() {
+        let leaf_column_ids = table_schema.map(|table_schema| table_schema.to_leaf_column_ids());
+        for field in &schema.fields {
             let mut column_node = Self::traverse_fields_dfs(field, &mut leaf_id);
-            if let Some(ref field_column_ids) = field_column_ids {
-                column_node.leaf_column_ids = field_column_ids[i].to_owned();
+            if let Some(ref leaf_column_ids) = leaf_column_ids {
+                column_node.build_leaf_column_ids(leaf_column_ids);
             }
             column_nodes.push(column_node);
         }
@@ -124,12 +123,22 @@ impl ColumnNode {
         }
     }
 
-    // Handle the case that leaf_column_ids is empty
-    pub fn leaf_column_id(&self, i: usize) -> u32 {
-        if self.leaf_ids.len() == self.leaf_column_ids.len() {
-            self.leaf_column_ids[i]
-        } else {
-            self.leaf_ids[i] as u32
+    pub fn build_leaf_column_ids(&mut self, leaf_column_ids: &Vec<u32>) {
+        let mut node_leaf_column_ids = Vec::with_capacity(self.leaf_ids.len());
+        for index in &self.leaf_ids {
+            node_leaf_column_ids.push(leaf_column_ids[*index]);
+        }
+        self.leaf_column_ids = node_leaf_column_ids;
+
+        if let Some(ref children) = self.children {
+            let mut new_children = Vec::with_capacity(children.len());
+            for child in children {
+                let mut new_child = child.clone();
+                new_child.build_leaf_column_ids(leaf_column_ids);
+                new_children.push(new_child);
+            }
+
+            self.children = Some(new_children);
         }
     }
 }

@@ -19,3 +19,5 @@ pub mod key_spaces;
 pub mod log;
 pub mod state;
 pub mod state_machine;
+
+pub mod applied_state;

@@ -63,8 +63,10 @@ pub type StackHashSet<K, const N: usize = 16> = stack_hashtable::StackHashtable<
 pub type StackHashSetIter<'a, K> = stack_hashtable::StackHashtableIter<'a, K, ()>;
 pub type StackHashSetIterMut<'a, K> = stack_hashtable::StackHashtableIter<'a, K, ()>;
 
-pub type PartitionedHashMap<Inner> = partitioned_hashtable::PartitionedHashtable<Inner>;
-pub type PartitionedHashSet<K> = partitioned_hashtable::PartitionedHashtable<HashSet<K>>;
+pub type PartitionedHashMap<Inner, const BUCKETS_LG2: u32> =
+    partitioned_hashtable::PartitionedHashtable<Inner, BUCKETS_LG2>;
+pub type PartitionedHashSet<K, const BUCKETS_LG2: u32> =
+    partitioned_hashtable::PartitionedHashtable<HashSet<K>, BUCKETS_LG2>;
 pub type PartitionedHashMapIter<Inner> = partitioned_hashtable::PartitionedHashtableIter<Inner>;
 
 pub type ShortStringHashMap<K, V> = short_string_hashtable::ShortStringHashtable<K, V>;

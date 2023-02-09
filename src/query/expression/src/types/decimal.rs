@@ -16,6 +16,8 @@ use std::fmt::Debug;
 use std::ops::Range;
 
 use common_arrow::arrow::buffer::Buffer;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 use itertools::Itertools;
@@ -61,39 +63,10 @@ pub struct DecimalSize {
     pub scale: u8,
 }
 
-impl PartialOrd for DecimalScalar {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match (self, other) {
-            (
-                DecimalScalar::DECIMAL_TYPE(lhs, lhs_size),
-                DecimalScalar::DECIMAL_TYPE(rhs, rhs_size),
-            ) => {
-                if lhs_size == rhs_size {
-                    lhs.partial_cmp(rhs)
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        })
-    }
-}
-
-impl PartialOrd for DecimalColumn {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match (self, other) {
-            (
-                DecimalColumn::DECIMAL_TYPE(lhs, lhs_size),
-                DecimalColumn::DECIMAL_TYPE(rhs, rhs_size),
-            ) => {
-                if lhs_size == rhs_size {
-                    lhs.iter().partial_cmp(rhs.iter())
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        })
+impl DecimalDataType {
+    pub fn from_size(_size: DecimalSize) -> Result<DecimalDataType> {
+        // todo!("decimal")
+        Err(ErrorCode::Unimplemented("decimal"))
     }
 }
 
@@ -252,6 +225,42 @@ impl DecimalColumnBuilder {
                     .pop()
                     .map(|num| DecimalScalar::DECIMAL_TYPE(num, *size))
             }
+        })
+    }
+}
+
+impl PartialOrd for DecimalScalar {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        crate::with_decimal_type!(|DECIMAL_TYPE| match (self, other) {
+            (
+                DecimalScalar::DECIMAL_TYPE(lhs, lhs_size),
+                DecimalScalar::DECIMAL_TYPE(rhs, rhs_size),
+            ) => {
+                if lhs_size == rhs_size {
+                    lhs.partial_cmp(rhs)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        })
+    }
+}
+
+impl PartialOrd for DecimalColumn {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        crate::with_decimal_type!(|DECIMAL_TYPE| match (self, other) {
+            (
+                DecimalColumn::DECIMAL_TYPE(lhs, lhs_size),
+                DecimalColumn::DECIMAL_TYPE(rhs, rhs_size),
+            ) => {
+                if lhs_size == rhs_size {
+                    lhs.iter().partial_cmp(rhs.iter())
+                } else {
+                    None
+                }
+            }
+            _ => None,
         })
     }
 }

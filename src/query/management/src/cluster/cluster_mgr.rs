@@ -21,14 +21,14 @@ use common_base::base::unescape_for_key;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_kvapi::kvapi::KVApi;
+use common_meta_kvapi::kvapi::UpsertKVReply;
+use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_store::MetaStore;
 use common_meta_types::KVMeta;
 use common_meta_types::MatchSeq;
 use common_meta_types::NodeInfo;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
-use common_meta_types::UpsertKVReply;
-use common_meta_types::UpsertKVReq;
 
 use crate::cluster::ClusterApi;
 
@@ -114,14 +114,11 @@ impl ClusterApi for ClusterMgr {
         Ok(nodes_info)
     }
 
-    async fn drop_node(&self, node_id: String, seq: Option<u64>) -> Result<()> {
+    async fn drop_node(&self, node_id: String, seq: MatchSeq) -> Result<()> {
         let node_key = format!("{}/{}", self.cluster_prefix, escape_for_key(&node_id)?);
-        let upsert_node = self.metastore.upsert_kv(UpsertKVReq::new(
-            &node_key,
-            seq.into(),
-            Operation::Delete,
-            None,
-        ));
+        let upsert_node =
+            self.metastore
+                .upsert_kv(UpsertKVReq::new(&node_key, seq, Operation::Delete, None));
 
         match upsert_node.await? {
             UpsertKVReply {
@@ -136,13 +133,9 @@ impl ClusterApi for ClusterMgr {
         }
     }
 
-    async fn heartbeat(&self, node: &NodeInfo, seq: Option<u64>) -> Result<u64> {
+    async fn heartbeat(&self, node: &NodeInfo, seq: MatchSeq) -> Result<u64> {
         let meta = Some(self.new_lift_time());
         let node_key = format!("{}/{}", self.cluster_prefix, escape_for_key(&node.id)?);
-        let seq = match seq {
-            None => MatchSeq::GE(1),
-            Some(exact) => MatchSeq::Exact(exact),
-        };
 
         let upsert_meta =
             self.metastore

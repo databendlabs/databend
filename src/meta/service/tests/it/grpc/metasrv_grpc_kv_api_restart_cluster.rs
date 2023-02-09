@@ -22,9 +22,9 @@ use common_base::base::Stoppable;
 use common_meta_client::ClientHandle;
 use common_meta_client::MetaGrpcClient;
 use common_meta_kvapi::kvapi::KVApi;
+use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
-use common_meta_types::UpsertKVReq;
 use databend_meta::init_meta_ut;
 use tracing::info;
 
