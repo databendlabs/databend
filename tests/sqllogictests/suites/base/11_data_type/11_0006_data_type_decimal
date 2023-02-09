@@ -1,0 +1,13 @@
+query I
+select 1::Decimal(17, 3), 2::Decimal(19, 4), 3::Decimal(20, 5), cast(10 as Decimal(7, 2));
+----
+1.000 2.0000 3.00000 10.00
+
+-- parser overflow
+statement error 1005
+select 2::Decimal(2000, 3);
+
+
+-- runtime overflow 
+statement error 1001
+select 20000::Decimal(4, 3);

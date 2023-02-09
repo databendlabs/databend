@@ -146,7 +146,14 @@ pub fn check_cast<Index: ColumnIndex>(
     } else {
         // fast path to eval function for cast
         if let Some(cast_fn) = get_simple_cast_function(is_try, dest_type) {
-            if let Ok(cast_expr) = check_function(span, &cast_fn, &[], &[expr.clone()], fn_registry)
+            let params = if let DataType::Decimal(ty) = dest_type {
+                vec![ty.precision() as usize, ty.scale() as usize]
+            } else {
+                vec![]
+            };
+
+            if let Ok(cast_expr) =
+                check_function(span, &cast_fn, &params, &[expr.clone()], fn_registry)
             {
                 if cast_expr.data_type() == &wrapped_dest_type {
                     return Ok(cast_expr);
@@ -431,6 +438,8 @@ pub fn can_auto_cast_to(src_ty: &DataType, dest_ty: &DataType) -> bool {
             || src_num_ty.can_lossless_cast_to(*dest_num_ty)
         }
 
+        (DataType::Number(_) | DataType::Decimal(_), DataType::Decimal(_)) => true,
+
         // Note: comment these because : select 'str' -1 will auto transform into: `minus(CAST('str' AS Date), CAST(1 AS Int64))`
         // (DataType::String, DataType::Date) => true,
         // (DataType::String, DataType::Timestamp) => true,
@@ -478,7 +487,10 @@ pub fn common_super_type(ty1: DataType, ty2: DataType) -> Option<DataType> {
 }
 
 pub fn get_simple_cast_function(is_try: bool, dest_type: &DataType) -> Option<String> {
-    let function_name = format!("to_{}", dest_type.to_string().to_lowercase());
+    let mut function_name = format!("to_{}", dest_type.to_string().to_lowercase());
+    if dest_type.is_decimal() {
+        function_name = "to_decimal".to_owned();
+    }
 
     if is_simple_cast_function(&function_name) {
         let prefix = if is_try { "try_" } else { "" };
@@ -489,7 +501,7 @@ pub fn get_simple_cast_function(is_try: bool, dest_type: &DataType) -> Option<St
 }
 
 pub fn is_simple_cast_function(name: &str) -> bool {
-    const SIMPLE_CAST_FUNCTIONS: &[&str; 15] = &[
+    const SIMPLE_CAST_FUNCTIONS: &[&str; 16] = &[
         "to_string",
         "to_uint8",
         "to_uint16",
@@ -505,6 +517,7 @@ pub fn is_simple_cast_function(name: &str) -> bool {
         "to_date",
         "to_variant",
         "to_boolean",
+        "to_decimal",
     ];
     SIMPLE_CAST_FUNCTIONS.contains(&name)
 }

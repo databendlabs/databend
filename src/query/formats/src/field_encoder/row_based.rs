@@ -50,7 +50,10 @@ pub trait FieldEncoderRowBased {
                 NumberColumn::Float32(c) => self.write_float(c, row_index, out_buf, raw),
                 NumberColumn::Float64(c) => self.write_float(c, row_index, out_buf, raw),
             },
-            Column::Decimal(_) => todo!("decimal"),
+            Column::Decimal(x) => {
+                let data = x.index(row_index).unwrap().to_string();
+                out_buf.extend_from_slice(data.as_bytes());
+            }
             Column::Date(c) => self.write_date(c, row_index, out_buf, raw),
             Column::Timestamp(c) => self.write_timestamp(c, row_index, out_buf, raw),
             Column::String(c) => self.write_string(c, row_index, out_buf, raw),

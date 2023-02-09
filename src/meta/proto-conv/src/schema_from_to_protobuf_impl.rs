@@ -206,7 +206,9 @@ impl FromToProto for ex::TableDataType {
                         }
                     }
                     Dt24::VariantT(_) => ex::TableDataType::Variant,
-                    Dt24::DecimalT(x) => ex::TableDataType::Decimal(ex::types::decimal::DecimalDataType::from_pb(x)?),
+                    Dt24::DecimalT(x) => {
+                        ex::TableDataType::Decimal(ex::types::decimal::DecimalDataType::from_pb(x)?)
+                    }
                 };
                 Ok(x)
             }

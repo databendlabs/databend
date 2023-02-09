@@ -27,6 +27,7 @@ use common_exception::Result;
 use common_jsonb::Number as JsonbNumber;
 use common_jsonb::Object as JsonbObject;
 use common_jsonb::Value as JsonbValue;
+use ethnum::i256;
 use itertools::Itertools;
 use rand::distributions::Alphanumeric;
 use rand::distributions::DistString;
@@ -39,6 +40,7 @@ use serde::Serialize;
 use crate::types::array::ArrayColumn;
 use crate::types::date::DATE_MAX;
 use crate::types::date::DATE_MIN;
+use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalDataType;
 use crate::types::decimal::DecimalSize;
 use crate::types::nullable::NullableColumn;
@@ -958,7 +960,23 @@ impl TableDataType {
                     ),
                 })),
             },
-            TableDataType::Decimal(_) => todo!("decimal"),
+            // useless for now.
+            TableDataType::Decimal(t) => match t {
+                DecimalDataType::Decimal128(x) => BlockEntry {
+                    data_type: DataType::Decimal(t.clone()),
+                    value: Value::Column(Column::Decimal(DecimalColumn::Decimal128(
+                        vec![0i128; len].into(),
+                        *x,
+                    ))),
+                },
+                DecimalDataType::Decimal256(x) => BlockEntry {
+                    data_type: DataType::Decimal(t.clone()),
+                    value: Value::Column(Column::Decimal(DecimalColumn::Decimal256(
+                        vec![i256::ZERO; len].into(),
+                        *x,
+                    ))),
+                },
+            },
             TableDataType::Timestamp => BlockEntry {
                 data_type: DataType::Timestamp,
                 value: Value::Column(TimestampType::from_data(
