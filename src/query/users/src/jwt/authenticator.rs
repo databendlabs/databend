@@ -32,7 +32,7 @@ pub enum PubKey {
 
 pub struct JwtAuthenticator {
     // Todo(youngsofun): verify settings, like issuer
-    key_store: jwk::JwkKeyStore,
+    key_stores: Vec<jwk::JwkKeyStore>,
 }
 
 #[derive(Default, Deserialize, Serialize)]
@@ -73,16 +73,27 @@ impl CustomClaims {
 }
 
 impl JwtAuthenticator {
-    pub fn try_create(jwt_key_file: String) -> Result<Option<Self>> {
+    pub fn try_create(
+        jwt_key_file: String,
+        additional_jwt_key_files: Vec<String>,
+    ) -> Result<Option<Self>> {
         if jwt_key_file.is_empty() {
             return Ok(None);
         }
-        let key_store = jwk::JwkKeyStore::new(jwt_key_file);
-        Ok(Some(JwtAuthenticator { key_store }))
+        // init a vec of key store
+        let mut key_stores = vec![jwk::JwkKeyStore::new(jwt_key_file)];
+        for u in additional_jwt_key_files {
+            key_stores.push(jwk::JwkKeyStore::new(u))
+        }
+        Ok(Some(JwtAuthenticator { key_stores }))
     }
 
-    pub async fn parse_jwt_claims(&self, token: &str) -> Result<JWTClaims<CustomClaims>> {
-        let pub_key = self.key_store.get_key(None).await?;
+    pub async fn parse_jwt_claims_from_store(
+        &self,
+        token: &str,
+        key_store: &jwk::JwkKeyStore,
+    ) -> Result<JWTClaims<CustomClaims>> {
+        let pub_key = key_store.get_key(None).await?;
         let r = match &pub_key {
             PubKey::RSA256(pk) => pk.verify_token::<CustomClaims>(token, None),
             PubKey::ES256(pk) => pk.verify_token::<CustomClaims>(token, None),
@@ -94,5 +105,25 @@ impl JwtAuthenticator {
             )),
             Some(_) => Ok(c),
         }
+    }
+    pub async fn parse_jwt_claims(&self, token: &str) -> Result<JWTClaims<CustomClaims>> {
+        let mut combined_code = ErrorCode::AuthenticateFailure(
+            "could not decode token from all available jwt key stores. ",
+        );
+        for store in &self.key_stores {
+            let claim = self.parse_jwt_claims_from_store(token, store).await;
+            match claim {
+                Ok(e) => return Ok(e),
+                Err(e) => {
+                    combined_code = combined_code.add_message(format!(
+                        "message: {} , source file: {}, ",
+                        e,
+                        store.url()
+                    ));
+                    continue;
+                }
+            }
+        }
+        Err(combined_code)
     }
 }

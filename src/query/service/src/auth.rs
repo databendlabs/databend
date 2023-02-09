@@ -43,7 +43,10 @@ pub enum Credential {
 impl AuthMgr {
     pub fn create(cfg: &Config) -> Result<Arc<AuthMgr>> {
         Ok(Arc::new(AuthMgr {
-            jwt_auth: JwtAuthenticator::try_create(cfg.query.jwt_key_file.clone())?,
+            jwt_auth: JwtAuthenticator::try_create(
+                cfg.query.jwt_key_file.clone(),
+                cfg.query.additional_jwt_key_files.clone(),
+            )?,
         }))
     }
 
