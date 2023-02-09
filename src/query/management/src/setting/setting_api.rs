@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_meta_app::principal::UserSetting;
 use common_meta_types::MatchSeq;
 use common_meta_types::SeqV;
-use common_meta_types::UserSetting;
 
 #[async_trait::async_trait]
 pub trait SettingApi: Sync + Send {

@@ -10,29 +10,20 @@ edition = { workspace = true }
 doctest = false
 test = false
 
-[features]
-storage-hdfs = []
-
 [dependencies]
 common-exception = { path = "../../common/exception" }
-common-io = { path = "../../common/io" }
 common-meta-stoerr = { path = "../stoerr" }
 
 openraft = { workspace = true }
 
 anyerror = { workspace = true }
-chrono = { workspace = true }
 derive_more = { workspace = true }
-enumflags2 = { version = "0.7.5", features = ["serde"] }
-hex = "0.4.3"
 num-derive = "0.3.3"
 num-traits = "0.2.15"
 once_cell = "1.15.0"
 prost = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sha1 = "0.10.5"
-sha2 = "0.10.6"
 thiserror = { workspace = true }
 tonic = { version = "0.8.1", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
 

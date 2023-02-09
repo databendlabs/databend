@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_meta_app::principal::UserIdentity;
+use common_meta_app::principal::UserInfo;
 use common_meta_types::MatchSeq;
 use common_meta_types::SeqV;
-use common_meta_types::UserIdentity;
-use common_meta_types::UserInfo;
 
 #[async_trait::async_trait]
 pub trait UserApi: Sync + Send {

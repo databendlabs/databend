@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_types as mt;
-use common_meta_types::StorageFsConfig;
-use common_meta_types::StorageParams;
-use common_meta_types::UserIdentity;
+use common_meta_app as mt;
+use common_meta_app::principal::UserIdentity;
+use common_meta_app::storage::StorageFsConfig;
+use common_meta_app::storage::StorageParams;
 
 use crate::common;
 
@@ -41,27 +41,27 @@ fn test_decode_v25_user_stage() -> anyhow::Result<()> {
         160, 6, 25, 168, 6, 24, 160, 6, 25, 168, 6, 24,
     ];
 
-    let want = || mt::UserStageInfo {
+    let want = || mt::principal::UserStageInfo {
         stage_name: "fs://dir/to/files".to_string(),
-        stage_type: mt::StageType::LegacyInternal,
-        stage_params: mt::StageParams {
+        stage_type: mt::principal::StageType::LegacyInternal,
+        stage_params: mt::principal::StageParams {
             storage: StorageParams::Fs(StorageFsConfig {
                 root: "/dir/to/files".to_string(),
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "NaN".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             escape: "\\".to_string(),
             row_tag: "row".to_string(),
             quote: "\'\'".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::AbortNum(2),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::AbortNum(2),
             size_limit: 1038,
             split_size: 0,
             purge: true,

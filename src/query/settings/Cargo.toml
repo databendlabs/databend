@@ -16,6 +16,7 @@ common-ast = { path = "../../query/ast" }
 common-base = { path = "../../common/base" }
 common-config = { path = "../config" }
 common-exception = { path = "../../common/exception" }
+common-meta-app = { path = "../../meta/app" }
 common-meta-types = { path = "../../meta/types" }
 common-users = { path = "../users" }
 

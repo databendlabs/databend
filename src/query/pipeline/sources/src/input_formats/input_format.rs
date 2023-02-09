@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::TableSchemaRef;
-use common_meta_types::UserStageInfo;
+use common_meta_app::principal::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
 use opendal::Operator;
