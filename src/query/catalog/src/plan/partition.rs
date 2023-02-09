@@ -127,7 +127,7 @@ impl Partitions {
                 executor.clone(),
                 Partitions::create(PartitionsShuffleKind::Seq, parts.to_vec()),
             );
-            if end == num_parts {
+            if end == num_parts && idx < num_executors - 1 {
                 // reach here only when num_executors > num_parts
                 executors_sorted[(idx + 1)..].iter().for_each(|executor| {
                     executor_part.insert(
