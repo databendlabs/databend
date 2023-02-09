@@ -60,6 +60,8 @@ impl TableScan {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Filter {
     pub input: Box<PhysicalPlan>,
+
+    // Assumption: expression's data type must be `DataType::Boolean`.
     pub predicates: Vec<RemoteExpr>,
 
     /// Only used for explain

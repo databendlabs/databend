@@ -61,7 +61,6 @@ impl PageIndex {
             })
             .unwrap();
 
-        let (new_expr, _) = ConstantFolder::fold(&conjunction, func_ctx, &BUILTIN_FUNCTIONS);
         let data_schema: DataSchemaRef = Arc::new((&schema).into());
         let cluster_key_fields = cluster_keys
             .iter()
@@ -69,8 +68,8 @@ impl PageIndex {
             .collect::<Vec<_>>();
 
         Ok(Self {
-            column_refs: new_expr.column_refs(),
-            expr: new_expr,
+            column_refs: conjunction.column_refs(),
+            expr: conjunction,
             cluster_key_fields,
             cluster_key_id,
             func_ctx,

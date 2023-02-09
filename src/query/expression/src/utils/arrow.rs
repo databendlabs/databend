@@ -104,15 +104,6 @@ pub fn column_to_arrow_array(column: &BlockEntry, num_rows: usize) -> Box<dyn Ar
     }
 }
 
-pub fn combine_validities(lhs: Option<&Bitmap>, rhs: Option<&Bitmap>) -> Option<Bitmap> {
-    match (lhs, rhs) {
-        (Some(lhs), None) => Some(lhs.clone()),
-        (None, Some(rhs)) => Some(rhs.clone()),
-        (None, None) => None,
-        (Some(lhs), Some(rhs)) => Some(lhs & rhs),
-    }
-}
-
 pub fn and_validities(lhs: Option<Bitmap>, rhs: Option<Bitmap>) -> Option<Bitmap> {
     match (lhs, rhs) {
         (Some(lhs), None) => Some(lhs),

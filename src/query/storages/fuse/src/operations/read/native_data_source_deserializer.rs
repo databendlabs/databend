@@ -25,8 +25,9 @@ use common_catalog::plan::TopK;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::filter_helper::FilterHelpers;
+use common_expression::types::BooleanType;
+use common_expression::types::DataType;
 use common_expression::Column;
-use common_expression::ConstantFolder;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::Evaluator;
@@ -128,7 +129,7 @@ impl NativeDeserializeDataTransform {
 
         let func_ctx = ctx.get_function_context()?;
         let prewhere_schema = src_schema.project(&prewhere_columns);
-        let prewhere_filter = Self::build_prewhere_filter_expr(plan, func_ctx, &prewhere_schema)?;
+        let prewhere_filter = Self::build_prewhere_filter_expr(plan, &prewhere_schema)?;
 
         Ok(ProcessorPtr::create(Box::new(
             NativeDeserializeDataTransform {
@@ -156,17 +157,16 @@ impl NativeDeserializeDataTransform {
 
     fn build_prewhere_filter_expr(
         plan: &DataSourcePlan,
-        ctx: FunctionContext,
         schema: &DataSchema,
     ) -> Result<Arc<Option<Expr>>> {
         Ok(
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => Arc::new(None),
                 Some(v) => {
-                    let expr = v.filter.as_expr(&BUILTIN_FUNCTIONS);
-                    let expr =
-                        expr.project_column_ref(|name| schema.column_with_name(name).unwrap().0);
-                    let (expr, _) = ConstantFolder::fold(&expr, ctx, &BUILTIN_FUNCTIONS);
+                    let expr = v
+                        .filter
+                        .as_expr(&BUILTIN_FUNCTIONS)
+                        .project_column_ref(|name| schema.column_with_name(name).unwrap().0);
                     Arc::new(Some(expr))
                 }
             },
@@ -347,13 +347,16 @@ impl Processor for NativeDeserializeDataTransform {
 
             let data_block = match self.prewhere_filter.as_ref() {
                 Some(filter) => {
+                    assert_eq!(filter.data_type(), &DataType::Boolean);
+
                     let prewhere_block = self.block_reader.build_block(arrays.clone())?;
                     let evaluator =
                         Evaluator::new(&prewhere_block, self.func_ctx, &BUILTIN_FUNCTIONS);
-                    let result = evaluator
+                    let filter = evaluator
                         .run(filter)
-                        .map_err(|e| e.add_message("eval prewhere filter failed:"))?;
-                    let filter = FilterHelpers::cast_to_nonull_boolean(&result).unwrap();
+                        .map_err(|e| e.add_message("eval prewhere filter failed:"))?
+                        .try_downcast::<BooleanType>()
+                        .unwrap();
 
                     // Step 3: Apply the filter, if it's all filtered, we can skip the remain columns.
                     if FilterHelpers::is_all_unset(&filter) {
@@ -394,7 +397,7 @@ impl Processor for NativeDeserializeDataTransform {
 
                     let block = self.block_reader.build_block(arrays)?;
                     let block = block.resort(&self.src_schema, &self.output_schema)?;
-                    block.filter_boolean_value(filter)
+                    block.filter_boolean_value(&filter)
                 }
                 None => {
                     for index in self.remain_columns.iter() {

@@ -14,6 +14,7 @@
 
 use common_expression::error_to_null;
 use common_expression::types::boolean::BooleanDomain;
+use common_expression::types::nullable::NullableColumn;
 use common_expression::types::nullable::NullableDomain;
 use common_expression::types::BooleanType;
 use common_expression::types::NullableType;
@@ -234,6 +235,32 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         error_to_null(eval_string_to_boolean),
+    );
+
+    registry.register_1_arg_core::<BooleanType, BooleanType, _, _>(
+        "is_true",
+        FunctionProperty::default(),
+        |domain| FunctionDomain::Domain(*domain),
+        |val, _| val.to_owned(),
+    );
+
+    registry.register_1_arg_core::<NullableType<BooleanType>, BooleanType, _, _>(
+        "is_true",
+        FunctionProperty::default(),
+        |domain| {
+            FunctionDomain::Domain(BooleanDomain {
+                has_false: domain.has_null
+                    || domain.value.as_ref().map(|v| v.has_false).unwrap_or(false),
+                has_true: domain.value.as_ref().map(|v| v.has_true).unwrap_or(false),
+            })
+        },
+        |val, _| match val {
+            ValueRef::Scalar(None) => Value::Scalar(false),
+            ValueRef::Scalar(Some(scalar)) => Value::Scalar(scalar),
+            ValueRef::Column(NullableColumn { column, validity }) => {
+                Value::Column((&column) & (&validity))
+            }
+        },
     );
 }
 

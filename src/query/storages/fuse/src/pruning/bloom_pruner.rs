@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_function;
-use common_expression::ConstantFolder;
 use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
@@ -77,15 +76,7 @@ impl BloomPrunerCreator {
                 })
                 .unwrap();
 
-            let (optimized_expr, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
-            let point_query_cols = BloomIndex::find_eq_columns(&optimized_expr)?;
-
-            tracing::debug!(
-                "Bloom filter expr {:?}, optimized {:?}, point_query_cols: {:?}",
-                expr.sql_display(),
-                optimized_expr.sql_display(),
-                point_query_cols
-            );
+            let point_query_cols = BloomIndex::find_eq_columns(&expr)?;
 
             if !point_query_cols.is_empty() {
                 // convert to filter column names
@@ -102,7 +93,7 @@ impl BloomPrunerCreator {
                 let creator = BloomPrunerCreator {
                     func_ctx,
                     index_columns: filter_block_cols,
-                    filter_expression: optimized_expr,
+                    filter_expression: expr,
                     scalar_map,
                     dal,
                     data_schema: schema.clone(),

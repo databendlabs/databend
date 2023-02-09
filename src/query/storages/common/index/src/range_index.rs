@@ -60,8 +60,6 @@ impl RangeIndex {
             })
             .unwrap();
 
-        let (new_expr, _) = ConstantFolder::fold(&conjunction, func_ctx, &BUILTIN_FUNCTIONS);
-
         let (leaf_column_ids, leaf_fields) = schema.leaf_fields();
         let mut column_ids: HashMap<String, u32> = HashMap::new();
         for (leaf_index, field) in leaf_fields.iter().enumerate() {
@@ -69,7 +67,7 @@ impl RangeIndex {
         }
 
         Ok(Self {
-            expr: new_expr,
+            expr: conjunction,
             func_ctx,
             column_ids,
         })

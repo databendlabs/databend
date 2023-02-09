@@ -224,6 +224,10 @@ impl Value<AnyType> {
             Value::Column(c) => c.clone(),
         }
     }
+
+    pub fn try_downcast<T: ValueType>(&self) -> Option<Value<T>> {
+        Some(self.as_ref().try_downcast::<T>()?.to_owned())
+    }
 }
 
 impl<'a> ValueRef<'a, AnyType> {

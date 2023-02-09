@@ -17,10 +17,8 @@ use common_arrow::arrow::bitmap::utils::BitChunksExact;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
-use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::filter_helper::FilterHelpers;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::decimal::DecimalColumn;
 use crate::types::nullable::NullableColumn;
@@ -42,30 +40,19 @@ use crate::TypeDeserializer;
 use crate::Value;
 
 impl DataBlock {
-    pub fn filter(self, predicate: &Value<AnyType>) -> Result<DataBlock> {
+    pub fn filter_with_bitmap(self, bitmap: &Bitmap) -> Result<DataBlock> {
         if self.num_rows() == 0 {
             return Ok(self);
         }
 
-        let predicate = FilterHelpers::cast_to_nonull_boolean(predicate).ok_or_else(|| {
-            ErrorCode::BadDataValueType(format!(
-                "Filter predict column does not support type '{:?}'",
-                predicate
-            ))
-        })?;
-
-        self.filter_boolean_value(predicate)
-    }
-
-    pub fn filter_with_bitmap(block: DataBlock, bitmap: &Bitmap) -> Result<DataBlock> {
         let count_zeros = bitmap.unset_bits();
         match count_zeros {
-            0 => Ok(block),
+            0 => Ok(self),
             _ => {
-                if count_zeros == block.num_rows() {
-                    return Ok(block.slice(0..0));
+                if count_zeros == self.num_rows() {
+                    return Ok(self.slice(0..0));
                 }
-                let after_columns = block
+                let after_columns = self
                     .columns()
                     .iter()
                     .map(|entry| match &entry.value {
@@ -79,24 +66,25 @@ impl DataBlock {
                         _ => entry.clone(),
                     })
                     .collect();
-                Ok(DataBlock::new(
-                    after_columns,
-                    block.num_rows() - count_zeros,
-                ))
+                Ok(DataBlock::new(after_columns, self.num_rows() - count_zeros))
             }
         }
     }
 
-    pub fn filter_boolean_value(self, filter: Value<BooleanType>) -> Result<DataBlock> {
+    pub fn filter_boolean_value(self, filter: &Value<BooleanType>) -> Result<DataBlock> {
+        if self.num_rows() == 0 {
+            return Ok(self);
+        }
+
         match filter {
             Value::Scalar(s) => {
-                if s {
+                if *s {
                     Ok(self)
                 } else {
                     Ok(self.slice(0..0))
                 }
             }
-            Value::Column(bitmap) => Self::filter_with_bitmap(self, &bitmap),
+            Value::Column(bitmap) => Self::filter_with_bitmap(self, bitmap),
         }
     }
 }

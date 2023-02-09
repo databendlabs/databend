@@ -716,3 +716,74 @@ output domain  : {NULL}
 output         : NULL
 
 
+ast            : is_true(null)
+raw expr       : is_true(NULL)
+checked expr   : is_true<Boolean NULL>(CAST(NULL AS Boolean NULL))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : is_true(false)
+raw expr       : is_true(false)
+checked expr   : is_true<Boolean>(false)
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : is_true(true)
+raw expr       : is_true(true)
+checked expr   : is_true<Boolean>(true)
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : is_true(col)
+raw expr       : is_true(col::Boolean)
+checked expr   : is_true<Boolean>(col)
+evaluation:
++--------+---------------+---------------+
+|        | col           | Output        |
++--------+---------------+---------------+
+| Type   | Boolean       | Boolean       |
+| Domain | {FALSE, TRUE} | {FALSE, TRUE} |
+| Row 0  | true          | true          |
+| Row 1  | false         | false         |
++--------+---------------+---------------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| col    | Boolean([0b______01]) |
+| Output | Boolean([0b______01]) |
++--------+-----------------------+
+
+
+ast            : is_true(col)
+raw expr       : is_true(col::Boolean NULL)
+checked expr   : is_true<Boolean NULL>(col)
+evaluation:
++--------+------------------------+---------------+
+|        | col                    | Output        |
++--------+------------------------+---------------+
+| Type   | Boolean NULL           | Boolean       |
+| Domain | {FALSE, TRUE} ∪ {NULL} | {FALSE, TRUE} |
+| Row 0  | true                   | true          |
+| Row 1  | false                  | false         |
+| Row 2  | NULL                   | false         |
+| Row 3  | NULL                   | false         |
++--------+------------------------+---------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| col    | NullableColumn { column: Boolean([0b____0101]), validity: [0b____0011] } |
+| Output | Boolean([0b____0001])                                                    |
++--------+--------------------------------------------------------------------------+
+
+

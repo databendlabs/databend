@@ -24,7 +24,7 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::filter_helper::FilterHelpers;
+use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::Column;
@@ -164,17 +164,19 @@ impl FuseTable {
             1,
         );
 
-        let filter_expr = filter
+        let filter = filter
             .as_expr(&BUILTIN_FUNCTIONS)
             .project_column_ref(|name| schema.index_of(name).unwrap());
+
+        assert_eq!(filter.data_type(), &DataType::Boolean);
+
         let func_ctx = ctx.get_function_context()?;
         let evaluator = Evaluator::new(&dummy_block, func_ctx, &BUILTIN_FUNCTIONS);
-        let res = evaluator
-            .run(&filter_expr)
-            .map_err(|e| e.add_message("eval try eval const failed:"))?;
-        let predicates = FilterHelpers::cast_to_nonull_boolean(&res).ok_or_else(|| {
-            ErrorCode::BadArguments("Result of filter expression cannot be converted to boolean.")
-        })?;
+        let predicates = evaluator
+            .run(&filter)
+            .map_err(|e| e.add_message("eval try eval const failed:"))?
+            .try_downcast::<BooleanType>()
+            .unwrap();
 
         Ok(match &predicates {
             Value::Scalar(v) => *v,

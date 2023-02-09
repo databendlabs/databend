@@ -34,13 +34,12 @@ pub fn new_block(columns: &[Column]) -> DataBlock {
     DataBlock::new(columns, len)
 }
 
-pub fn run_filter(file: &mut impl Write, predicate: Column, block: &DataBlock) {
-    let predicate = Value::Column(predicate);
-    let result = block.clone().filter(&predicate);
+fn run_filter(file: &mut impl Write, predicate: Vec<bool>, block: &DataBlock) {
+    let result = block.clone().filter_with_bitmap(&predicate.clone().into());
 
     match result {
         Ok(result_block) => {
-            writeln!(file, "Filter:         {predicate}").unwrap();
+            writeln!(file, "Filter:         {predicate:?}").unwrap();
             writeln!(file, "Source:\n{block}").unwrap();
             writeln!(file, "Result:\n{result_block}").unwrap();
             write!(file, "\n\n").unwrap();
