@@ -22,7 +22,6 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_meta_types::errors::app_error::AppError;
 use common_meta_types::errors::app_error::WrongShareObject;
-use common_meta_types::KVAppError;
 use enumflags2::bitflags;
 use enumflags2::BitFlags;
 
