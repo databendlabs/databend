@@ -8,7 +8,7 @@ on:
 
 # TODO: compare with baseline
 jobs:
-  check_result:
+  comment_on_pr:
     runs-on: [self-hosted, X64, Linux, dev]
     if: >
       github.event.workflow_run.event == 'pull_request' &&
@@ -19,7 +19,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run download ${{github.event.workflow_run.id }} --dir benchmark/results --name benchmark-results
+          gh run download ${{ github.event.workflow_run.id }} --dir benchmark/results --name benchmark-results
           while read line; do
             echo "$line" >> $GITHUB_ENV
           done <benchmark/results/metadata.info
@@ -33,3 +33,24 @@ jobs:
             ![platform](https://img.shields.io/static/v1?label=AWS%20EC2&message=${{ env.INSTANCE_TYPE }}&color=orange&logo=amazonec2)
           files: benchmark/results/hits.md
           file-titles: "Hits"
+
+  save_baseline:
+    runs-on: [self-hosted, X64, Linux, dev]
+    if: >
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Download benchmark results
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download ${{ github.event.workflow_run.id }} --dir benchmark/results --name benchmark-results
+          while read line; do
+            echo "$line" >> $GITHUB_ENV
+          done <benchmark/results/metadata.info
+      - name: Upload results to s3
+        shell: bash
+        run: |
+          today="$(date +%Y-%m-%d)"
+          aws s3 cp benchmark/results/ s3://databend-ci/perf/results/$today/ --recursive
