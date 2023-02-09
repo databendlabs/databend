@@ -290,10 +290,9 @@ impl Rule for RulePushDownFilterJoin {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         // First, try to convert outer join to inner join
-        // Todo(xudong): find a way to avoid type conflict and then open the rule
-        // let mut s_expr = self.convert_outer_to_inner_join(s_expr)?;
+        let mut s_expr = self.convert_outer_to_inner_join(s_expr)?;
         // Second, check if can convert mark join to semi join
-        let s_expr = self.convert_mark_to_semi_join(s_expr)?;
+        s_expr = self.convert_mark_to_semi_join(&s_expr)?;
         let filter: Filter = s_expr.plan().clone().try_into()?;
         if filter.predicates.is_empty() {
             state.add_result(s_expr);
