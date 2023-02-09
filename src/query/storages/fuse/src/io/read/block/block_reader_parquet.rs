@@ -146,12 +146,12 @@ impl BlockReader {
         enum Holder {
             Cached(ItemIndex),
             Deserialized(ItemIndex),
-            DeserializedNoCache(ItemIndex),
         }
 
         let mut column_idx_cached_array = vec![];
         let mut holders = vec![];
         let mut deserialized_item_index: usize = 0;
+        let mut cache_flags = vec![];
 
         for column in &columns {
             let field = column.field.clone();
@@ -159,23 +159,17 @@ impl BlockReader {
             let mut column_metas = Vec::with_capacity(indices.len());
             let mut column_chunks = Vec::with_capacity(indices.len());
             let mut column_descriptors = Vec::with_capacity(indices.len());
-            if indices.len() == 1 {
-                eprintln!("non nestted filed");
-                // we only cache non-nested column for the time being
-                let column_id = column.leaf_column_id(0);
-                let index = indices[0];
+            for (i, index) in indices.iter().enumerate() {
+                let column_id = column.leaf_column_id(i);
                 if let Some(column_meta) = columns_meta.get(&column_id) {
                     if let Some(chunk) = chunk_map.get(&column_id) {
                         match chunk {
                             DataItem::RawData(data) => {
-                                // TODO why index of type usize is used here? need @LiChuang review
                                 let column_descriptor =
-                                    &self.parquet_schema_descriptor.columns()[index];
+                                    &self.parquet_schema_descriptor.columns()[*index];
                                 column_metas.push(column_meta);
                                 column_chunks.push(*data);
                                 column_descriptors.push(column_descriptor);
-                                holders.push(Holder::Deserialized(deserialized_item_index));
-                                deserialized_item_index += 1;
                             }
                             DataItem::ColumnArray(column_array) => {
                                 let idx = column_idx_cached_array.len();
@@ -185,37 +179,21 @@ impl BlockReader {
                         }
                     }
                 }
-            } else {
-                eprintln!("nestted filed");
-                for (i, index) in indices.iter().enumerate() {
-                    let column_id = column.leaf_column_id(i);
-                    if let Some(column_meta) = columns_meta.get(&column_id) {
-                        if let Some(chunk) = chunk_map.get(&column_id) {
-                            match chunk {
-                                DataItem::RawData(data) => {
-                                    // TODO why index is used here? need @LiChuang review
-                                    let column_descriptor =
-                                        &self.parquet_schema_descriptor.columns()[*index];
-                                    column_metas.push(column_meta);
-                                    column_chunks.push(*data);
-                                    column_descriptors.push(column_descriptor);
-                                }
-                                DataItem::ColumnArray(column_array) => {
-                                    eprintln!("using cache in nested");
-                                    let idx = column_idx_cached_array.len();
-                                    column_idx_cached_array.push(*column_array);
-                                    holders.push(Holder::Cached(idx));
-                                }
-                            }
-                        }
-                    }
-                }
-                // a field nested structure is expected
-                holders.push(Holder::DeserializedNoCache(deserialized_item_index));
-                deserialized_item_index += 1;
             }
 
             if column_metas.len() > 0 {
+                if column_metas.len() > 1 {
+                    // working on nested field
+                    holders.push(Holder::Deserialized(deserialized_item_index));
+                    cache_flags.push(None);
+                } else {
+                    // working on simple field
+                    let column_idx = indices[0] as ColumnId;
+                    holders.push(Holder::Deserialized(deserialized_item_index));
+                    cache_flags.push(Some(column_idx));
+                }
+                deserialized_item_index += 1;
+
                 columns_array_iter.push(Self::chunks_to_parquet_array_iter(
                     column_metas,
                     column_chunks,
@@ -233,6 +211,7 @@ impl BlockReader {
 
         let mut arrays = Vec::with_capacity(columns_array_iter.len());
 
+        // deserialized fields that are not cached
         let deserialized_column_arrays = columns_array_iter
             .into_iter()
             .map(|mut v|
@@ -240,6 +219,7 @@ impl BlockReader {
                      v.next().unwrap().unwrap())
             .collect::<Vec<_>>();
 
+        // assembly the arrays
         for holder in holders {
             match holder {
                 Holder::Cached(idx) => {
@@ -249,26 +229,25 @@ impl BlockReader {
                     let item = &deserialized_column_arrays[idx];
                     arrays.push(item);
                 }
-                Holder::DeserializedNoCache(idx) => {
-                    let item = &deserialized_column_arrays[idx];
-                    arrays.push(item);
-                }
             }
         }
         let chunk = Chunk::try_new(arrays)?;
-        let block = DataBlock::from_arrow_chunk(&chunk, &self.data_schema());
+        let data_block = DataBlock::from_arrow_chunk(&chunk, &self.data_schema());
 
-        // if block.is_ok() {
-        //    let maybe_column_array_cache = CacheManager::instance().get_table_data_array_cache();
-        //    if let Some(cache) = maybe_column_array_cache {
-        //        for (idx, array) in deserialized_column_arrays.into_iter() {
-        //            let key = TableDataColumnCacheKey::new(block_path, idx as ColumnId);
-        //            cache.put(key.into(), array.into());
-        //        }
-        //    }
-        //}
-
-        block
+        if let Some(cache) = CacheManager::instance().get_table_data_array_cache() {
+            // populate array cache items
+            for (item, need_tobe_cached) in deserialized_column_arrays
+                .into_iter()
+                .zip(cache_flags)
+                .into_iter()
+            {
+                if let Some(column_idx) = need_tobe_cached {
+                    let key = TableDataColumnCacheKey::new(block_path, column_idx);
+                    cache.put(key.into(), item.into())
+                }
+            }
+        }
+        data_block
     }
 
     fn chunks_to_parquet_array_iter<'a>(
