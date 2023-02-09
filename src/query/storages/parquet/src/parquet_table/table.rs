@@ -73,6 +73,10 @@ impl Table for ParquetTable {
         self
     }
 
+    fn is_local(&self) -> bool {
+        false
+    }
+
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
     }
