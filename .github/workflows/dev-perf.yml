@@ -19,6 +19,9 @@ on:
   # schedule:
   #   # Run base perf at 08:00 UTC+8
   #   - cron: "0 0 * * *"
+  push:
+    tags:
+      - "v*"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
@@ -111,3 +114,7 @@ jobs:
         with:
           name: benchmark-results
           path: /tmp/databend-perf/
+      - name: Upload results to S3
+        shell: bash
+        run: |
+          aws s3 cp /tmp/databend-perf/ "s3://databend-ci/perf/results/${{ github.run_id }}/" --recursive --no-progress
