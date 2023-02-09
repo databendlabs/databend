@@ -1695,6 +1695,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "common-meta-types",
+ "serde",
  "thiserror",
  "tokio",
  "tracing",
