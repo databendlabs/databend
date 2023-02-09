@@ -417,7 +417,6 @@ pub struct SubqueryExpr {
     pub output_column: IndexType,
     pub projection_index: Option<IndexType>,
     pub(crate) data_type: Box<DataType>,
-    pub allow_multi_rows: bool,
     pub outer_columns: ColumnSet,
 }
 

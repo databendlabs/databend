@@ -460,7 +460,6 @@ impl<'a> TypeChecker<'a> {
                                 self.resolve_subquery(
                                     SubqueryType::Any,
                                     subquery,
-                                    true,
                                     Some(*left.clone()),
                                     Some(comparison_op),
                                     None,
@@ -770,7 +769,6 @@ impl<'a> TypeChecker<'a> {
                         SubqueryType::NotExists
                     },
                     subquery,
-                    true,
                     None,
                     None,
                     None,
@@ -779,7 +777,7 @@ impl<'a> TypeChecker<'a> {
             }
 
             Expr::Subquery { subquery, .. } => {
-                self.resolve_subquery(SubqueryType::Scalar, subquery, false, None, None, None)
+                self.resolve_subquery(SubqueryType::Scalar, subquery, None, None, None)
                     .await?
             }
 
@@ -809,7 +807,6 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_subquery(
                     SubqueryType::Any,
                     subquery,
-                    true,
                     Some(*expr.clone()),
                     Some(ComparisonOp::Equal),
                     None,
@@ -1350,7 +1347,6 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         typ: SubqueryType,
         subquery: &Query,
-        allow_multi_rows: bool,
         child_expr: Option<Expr>,
         compare_op: Option<ComparisonOp>,
         _required_type: Option<DataType>,
@@ -1405,7 +1401,6 @@ impl<'a> TypeChecker<'a> {
             output_column: output_context.columns[0].index,
             projection_index: None,
             data_type: data_type.clone(),
-            allow_multi_rows,
             typ,
             outer_columns: rel_prop.outer_columns,
         };

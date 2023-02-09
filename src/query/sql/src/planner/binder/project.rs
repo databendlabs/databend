@@ -63,7 +63,6 @@ impl Binder {
                 child_expr,
                 compare_op,
                 data_type,
-                allow_multi_rows,
                 outer_columns,
                 output_column,
                 ..
@@ -78,7 +77,6 @@ impl Binder {
                         output_column,
                         projection_index: Some(column_binding.index),
                         data_type,
-                        allow_multi_rows,
                         outer_columns,
                     })
                 } else {
