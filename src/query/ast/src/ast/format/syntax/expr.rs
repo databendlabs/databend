@@ -318,6 +318,38 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc<'static> {
         Expr::Array { exprs, .. } => RcDoc::text("[")
             .append(inline_comma(exprs.into_iter().map(pretty_expr)))
             .append(RcDoc::text("]")),
+        Expr::ArraySort {
+            expr,
+            asc,
+            null_first,
+            ..
+        } => {
+            let res = pretty_expr(*expr);
+            if asc {
+                res.clone()
+                    .append(RcDoc::text(","))
+                    .append(RcDoc::space())
+                    .append(RcDoc::text("ASC"));
+            } else {
+                res.clone()
+                    .append(RcDoc::text(","))
+                    .append(RcDoc::space())
+                    .append(RcDoc::text("DESC"));
+            }
+            if null_first {
+                res.clone()
+                    .append(RcDoc::text(","))
+                    .append(RcDoc::space())
+                    .append(RcDoc::text("NULL FIRST"))
+                    .append(RcDoc::space());
+            } else {
+                res.clone()
+                    .append(RcDoc::text(","))
+                    .append(RcDoc::space())
+                    .append(RcDoc::text("NULL LAST"));
+            }
+            res.clone().append(RcDoc::text(")"))
+        }
         Expr::Interval { expr, unit, .. } => RcDoc::text("INTERVAL")
             .append(RcDoc::space())
             .append(pretty_expr(*expr))

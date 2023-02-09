@@ -1586,8 +1586,8 @@ optimized expr : NULL
 output type    : NULL
 =======
 ast            : array_sort([])
-raw expr       : array_sort(array())
-checked expr   : array_sort<Array(Nothing)>(array<>())
+raw expr       : array_sort_asc_null_first(array())
+checked expr   : array_sort_asc_null_first<Array(Nothing)>(array<>())
 optimized expr : [] :: Array(Nothing)
 output type    : Array(Nothing)
 output domain  : []
@@ -1595,8 +1595,8 @@ output         : []
 
 
 ast            : array_sort(NULL)
-raw expr       : array_sort(NULL)
-checked expr   : array_sort<Array(Nothing) NULL>(CAST(NULL AS Array(Nothing) NULL))
+raw expr       : array_sort_asc_null_first(NULL)
+checked expr   : array_sort_asc_null_first<Array(Nothing) NULL>(CAST(NULL AS Array(Nothing) NULL))
 optimized expr : NULL
 output type    : Array(Nothing) NULL
 >>>>>>> support array_sort array_reverse_sort
@@ -1604,6 +1604,7 @@ output domain  : {NULL}
 output         : NULL
 
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 ast            : array_any([1, 2, 3])
 raw expr       : array_any(array(1_u8, 2_u8, 3_u8))
@@ -1695,15 +1696,47 @@ evaluation (internal):
 ast            : array_sort([8, 20, 1, 2, 3, 4, 5, 6, 7])
 raw expr       : array_sort(array(8_u8, 20_u8, 1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
 checked expr   : array_sort<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0, T0, T0, T0, T0, T0, T0>(8_u8, 20_u8, 1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
+=======
+ast            : array_sort([8, 20, 1, 2, 3, 4, 5, 6, 7], ASC)
+raw expr       : array_sort_asc_null_first(array(8_u8, 20_u8, 1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
+checked expr   : array_sort_asc_null_first<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0, T0, T0, T0, T0, T0, T0>(8_u8, 20_u8, 1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
+>>>>>>> support array_sort([...] (, ASC|DESC) (, NULLS FIRST|LAST))
 optimized expr : [1, 2, 3, 4, 5, 6, 7, 8, 20]
 output type    : Array(UInt8)
 output domain  : [{1..=20}]
 output         : [1, 2, 3, 4, 5, 6, 7, 8, 20]
 
 
+ast            : array_sort([], ASC)
+raw expr       : array_sort_asc_null_first(array())
+checked expr   : array_sort_asc_null_first<Array(Nothing)>(array<>())
+optimized expr : [] :: Array(Nothing)
+output type    : Array(Nothing)
+output domain  : []
+output         : []
+
+
+ast            : array_sort([], DESC)
+raw expr       : array_sort_desc_null_first(array())
+checked expr   : array_sort_desc_null_first<Array(Nothing)>(array<>())
+optimized expr : [] :: Array(Nothing)
+output type    : Array(Nothing)
+output domain  : []
+output         : []
+
+
+ast            : array_sort([8, 20, 1, 2, 3, 4, 5, 6, 7], DESC)
+raw expr       : array_sort_desc_null_first(array(8_u8, 20_u8, 1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
+checked expr   : array_sort_desc_null_first<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0, T0, T0, T0, T0, T0, T0>(8_u8, 20_u8, 1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
+optimized expr : [20, 8, 7, 6, 5, 4, 3, 2, 1]
+output type    : Array(UInt8)
+output domain  : [{1..=20}]
+output         : [20, 8, 7, 6, 5, 4, 3, 2, 1]
+
+
 ast            : array_sort([9.32, 0, 1.2, 3.4, 5.6, 7.8])
-raw expr       : array_sort(array(9.32_f64, 0_u8, 1.2_f64, 3.4_f64, 5.6_f64, 7.8_f64))
-checked expr   : array_sort<T0=Float64><Array(T0)>(array<T0=Float64><T0, T0, T0, T0, T0, T0>(9.32_f64, to_float64<UInt8>(0_u8), 1.2_f64, 3.4_f64, 5.6_f64, 7.8_f64))
+raw expr       : array_sort_asc_null_first(array(9.32_f64, 0_u8, 1.2_f64, 3.4_f64, 5.6_f64, 7.8_f64))
+checked expr   : array_sort_asc_null_first<T0=Float64><Array(T0)>(array<T0=Float64><T0, T0, T0, T0, T0, T0>(9.32_f64, to_float64<UInt8>(0_u8), 1.2_f64, 3.4_f64, 5.6_f64, 7.8_f64))
 optimized expr : [0, 1.2, 3.4, 5.6, 7.8, 9.32]
 output type    : Array(Float64)
 output domain  : [{0..=9.32}]
@@ -1711,93 +1744,88 @@ output         : [0, 1.2, 3.4, 5.6, 7.8, 9.32]
 
 
 ast            : array_sort(['x', 0, 1.2, 3.4, 5.6, 7.8])
-raw expr       : array_sort(array("x", 0_u8, 1.2_f64, 3.4_f64, 5.6_f64, 7.8_f64))
-checked expr   : array_sort<T0=Variant><Array(T0)>(array<T0=Variant><T0, T0, T0, T0, T0, T0>(to_variant<T0=String><T0>("x"), to_variant<T0=UInt8><T0>(0_u8), to_variant<T0=Float64><T0>(1.2_f64), to_variant<T0=Float64><T0>(3.4_f64), to_variant<T0=Float64><T0>(5.6_f64), to_variant<T0=Float64><T0>(7.8_f64)))
+raw expr       : array_sort_asc_null_first(array("x", 0_u8, 1.2_f64, 3.4_f64, 5.6_f64, 7.8_f64))
+checked expr   : array_sort_asc_null_first<T0=Variant><Array(T0)>(array<T0=Variant><T0, T0, T0, T0, T0, T0>(to_variant<T0=String><T0>("x"), to_variant<T0=UInt8><T0>(0_u8), to_variant<T0=Float64><T0>(1.2_f64), to_variant<T0=Float64><T0>(3.4_f64), to_variant<T0=Float64><T0>(5.6_f64), to_variant<T0=Float64><T0>(7.8_f64)))
 optimized expr : [0, 1.2, 3.4, 5.6, 7.8, "x"]
 output type    : Array(Variant)
 output domain  : [Undefined]
 output         : [0, 1.2, 3.4, 5.6, 7.8, "x"]
 
 
-ast            : array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL])
-raw expr       : array_sort(array(1.2_f64, NULL, 3.4_f64, 5.6_f64, "2.2", NULL))
-checked expr   : array_sort<T0=Variant NULL><Array(T0)>(array<T0=Variant NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_f64 AS Variant NULL), CAST(NULL AS Variant NULL), CAST(3.4_f64 AS Variant NULL), CAST(5.6_f64 AS Variant NULL), CAST("2.2" AS Variant NULL), CAST(NULL AS Variant NULL)))
-optimized expr : [1.2, 3.4, 5.6, "2.2", NULL, NULL]
+ast            : array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], DESC, NULLS FIRST)
+raw expr       : array_sort_desc_null_first(array(1.2_f64, NULL, 3.4_f64, 5.6_f64, "2.2", NULL))
+checked expr   : array_sort_desc_null_first<T0=Variant NULL><Array(T0)>(array<T0=Variant NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_f64 AS Variant NULL), CAST(NULL AS Variant NULL), CAST(3.4_f64 AS Variant NULL), CAST(5.6_f64 AS Variant NULL), CAST("2.2" AS Variant NULL), CAST(NULL AS Variant NULL)))
+optimized expr : [NULL, NULL, "2.2", 5.6, 3.4, 1.2]
 output type    : Array(Variant NULL)
 output domain  : [Undefined ∪ {NULL}]
-output         : [1.2, 3.4, 5.6, "2.2", NULL, NULL]
+output         : [NULL, NULL, "2.2", 5.6, 3.4, 1.2]
 
 
-ast            : array_sort(['z', 'a', NULL, 'v', 'd', NULL])
-raw expr       : array_sort(array("z", "a", NULL, "v", "d", NULL))
-checked expr   : array_sort<T0=String NULL><Array(T0)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0>(CAST("z" AS String NULL), CAST("a" AS String NULL), CAST(NULL AS String NULL), CAST("v" AS String NULL), CAST("d" AS String NULL), CAST(NULL AS String NULL)))
-optimized expr : ["a", "d", "v", "z", NULL, NULL]
-output type    : Array(String NULL)
-output domain  : [{""..="z"} ∪ {NULL}]
-output         : ["a", "d", "v", "z", NULL, NULL]
-
-
-ast            : array_reverse_sort([])
-raw expr       : array_reverse_sort(array())
-checked expr   : array_reverse_sort<Array(Nothing)>(array<>())
+ast            : array_sort([], DESC, NULLS FIRST)
+raw expr       : array_sort_desc_null_first(array())
+checked expr   : array_sort_desc_null_first<Array(Nothing)>(array<>())
 optimized expr : [] :: Array(Nothing)
 output type    : Array(Nothing)
 output domain  : []
 output         : []
 
 
-ast            : array_reverse_sort(NULL)
-raw expr       : array_reverse_sort(NULL)
-checked expr   : array_reverse_sort<Array(Nothing) NULL>(CAST(NULL AS Array(Nothing) NULL))
-optimized expr : NULL
-output type    : Array(Nothing) NULL
-output domain  : {NULL}
-output         : NULL
-
-
-ast            : array_reverse_sort([8, 20, 1, 2, 3, 4, 5, 6, 7])
-raw expr       : array_reverse_sort(array(8_u8, 20_u8, 1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
-checked expr   : array_reverse_sort<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0, T0, T0, T0, T0, T0, T0>(8_u8, 20_u8, 1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
-optimized expr : [20, 8, 7, 6, 5, 4, 3, 2, 1]
-output type    : Array(UInt8)
-output domain  : [{1..=20}]
-output         : [20, 8, 7, 6, 5, 4, 3, 2, 1]
-
-
-ast            : array_reverse_sort([9.32, 0, 1.2, 3.4, 5.6, 7.8])
-raw expr       : array_reverse_sort(array(9.32_f64, 0_u8, 1.2_f64, 3.4_f64, 5.6_f64, 7.8_f64))
-checked expr   : array_reverse_sort<T0=Float64><Array(T0)>(array<T0=Float64><T0, T0, T0, T0, T0, T0>(9.32_f64, to_float64<UInt8>(0_u8), 1.2_f64, 3.4_f64, 5.6_f64, 7.8_f64))
-optimized expr : [9.32, 7.8, 5.6, 3.4, 1.2, 0]
-output type    : Array(Float64)
-output domain  : [{0..=9.32}]
-output         : [9.32, 7.8, 5.6, 3.4, 1.2, 0]
-
-
-ast            : array_reverse_sort(['x', 0, 1.2, 3.4, 5.6, 7.8])
-raw expr       : array_reverse_sort(array("x", 0_u8, 1.2_f64, 3.4_f64, 5.6_f64, 7.8_f64))
-checked expr   : array_reverse_sort<T0=Variant><Array(T0)>(array<T0=Variant><T0, T0, T0, T0, T0, T0>(to_variant<T0=String><T0>("x"), to_variant<T0=UInt8><T0>(0_u8), to_variant<T0=Float64><T0>(1.2_f64), to_variant<T0=Float64><T0>(3.4_f64), to_variant<T0=Float64><T0>(5.6_f64), to_variant<T0=Float64><T0>(7.8_f64)))
-optimized expr : ["x", 7.8, 5.6, 3.4, 1.2, 0]
-output type    : Array(Variant)
-output domain  : [Undefined]
-output         : ["x", 7.8, 5.6, 3.4, 1.2, 0]
-
-
-ast            : array_reverse_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL])
-raw expr       : array_reverse_sort(array(1.2_f64, NULL, 3.4_f64, 5.6_f64, "2.2", NULL))
-checked expr   : array_reverse_sort<T0=Variant NULL><Array(T0)>(array<T0=Variant NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_f64 AS Variant NULL), CAST(NULL AS Variant NULL), CAST(3.4_f64 AS Variant NULL), CAST(5.6_f64 AS Variant NULL), CAST("2.2" AS Variant NULL), CAST(NULL AS Variant NULL)))
+ast            : array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], DESC, NULLS LAST)
+raw expr       : array_sort_desc_null_last(array(1.2_f64, NULL, 3.4_f64, 5.6_f64, "2.2", NULL))
+checked expr   : array_sort_desc_null_last<T0=Variant NULL><Array(T0)>(array<T0=Variant NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_f64 AS Variant NULL), CAST(NULL AS Variant NULL), CAST(3.4_f64 AS Variant NULL), CAST(5.6_f64 AS Variant NULL), CAST("2.2" AS Variant NULL), CAST(NULL AS Variant NULL)))
 optimized expr : ["2.2", 5.6, 3.4, 1.2, NULL, NULL]
 output type    : Array(Variant NULL)
 output domain  : [Undefined ∪ {NULL}]
 output         : ["2.2", 5.6, 3.4, 1.2, NULL, NULL]
 
 
-ast            : array_reverse_sort(['z', 'a', NULL, 'v', 'd', NULL])
-raw expr       : array_reverse_sort(array("z", "a", NULL, "v", "d", NULL))
-checked expr   : array_reverse_sort<T0=String NULL><Array(T0)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0>(CAST("z" AS String NULL), CAST("a" AS String NULL), CAST(NULL AS String NULL), CAST("v" AS String NULL), CAST("d" AS String NULL), CAST(NULL AS String NULL)))
-optimized expr : ["z", "v", "d", "a", NULL, NULL]
+ast            : array_sort([], DESC, NULLS LAST)
+raw expr       : array_sort_desc_null_last(array())
+checked expr   : array_sort_desc_null_last<Array(Nothing)>(array<>())
+optimized expr : [] :: Array(Nothing)
+output type    : Array(Nothing)
+output domain  : []
+output         : []
+
+
+ast            : array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], ASC, NULLS FIRST)
+raw expr       : array_sort_asc_null_first(array(1.2_f64, NULL, 3.4_f64, 5.6_f64, "2.2", NULL))
+checked expr   : array_sort_asc_null_first<T0=Variant NULL><Array(T0)>(array<T0=Variant NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_f64 AS Variant NULL), CAST(NULL AS Variant NULL), CAST(3.4_f64 AS Variant NULL), CAST(5.6_f64 AS Variant NULL), CAST("2.2" AS Variant NULL), CAST(NULL AS Variant NULL)))
+optimized expr : [NULL, NULL, 1.2, 3.4, 5.6, "2.2"]
+output type    : Array(Variant NULL)
+output domain  : [Undefined ∪ {NULL}]
+output         : [NULL, NULL, 1.2, 3.4, 5.6, "2.2"]
+
+
+ast            : array_sort([], ASC, NULLS FIRST)
+raw expr       : array_sort_asc_null_first(array())
+checked expr   : array_sort_asc_null_first<Array(Nothing)>(array<>())
+optimized expr : [] :: Array(Nothing)
+output type    : Array(Nothing)
+output domain  : []
+output         : []
+
+
+ast            : array_sort(['z', 'a', NULL, 'v', 'd', NULL], ASC, NULLS LAST)
+raw expr       : array_sort_asc_null_last(array("z", "a", NULL, "v", "d", NULL))
+checked expr   : array_sort_asc_null_last<T0=String NULL><Array(T0)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0>(CAST("z" AS String NULL), CAST("a" AS String NULL), CAST(NULL AS String NULL), CAST("v" AS String NULL), CAST("d" AS String NULL), CAST(NULL AS String NULL)))
+optimized expr : ["a", "d", "v", "z", NULL, NULL]
 output type    : Array(String NULL)
 output domain  : [{""..="z"} ∪ {NULL}]
+<<<<<<< HEAD
 output         : ["z", "v", "d", "a", NULL, NULL]
 >>>>>>> support array_sort array_reverse_sort
+=======
+output         : ["a", "d", "v", "z", NULL, NULL]
+
+
+ast            : array_sort([], ASC, NULLS LAST)
+raw expr       : array_sort_asc_null_last(array())
+checked expr   : array_sort_asc_null_last<Array(Nothing)>(array<>())
+optimized expr : [] :: Array(Nothing)
+output type    : Array(Nothing)
+output domain  : []
+output         : []
+>>>>>>> support array_sort([...] (, ASC|DESC) (, NULLS FIRST|LAST))
 
 

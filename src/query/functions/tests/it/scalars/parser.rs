@@ -279,6 +279,28 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 .map(|expr| transform_expr(expr, columns))
                 .collect(),
         },
+        AExpr::ArraySort {
+            span,
+            expr,
+            asc,
+            null_first,
+        } => {
+            let name = if asc && null_first {
+                "array_sort_asc_null_first".to_string()
+            } else if asc && !null_first {
+                "array_sort_asc_null_last".to_string()
+            } else if !asc && null_first {
+                "array_sort_desc_null_first".to_string()
+            } else {
+                "array_sort_desc_null_last".to_string()
+            };
+            RawExpr::FunctionCall {
+                span,
+                name,
+                params: vec![],
+                args: vec![transform_expr(*expr, columns)],
+            }
+        }
         AExpr::Tuple { span, exprs } => RawExpr::FunctionCall {
             span,
             name: "tuple".to_string(),
