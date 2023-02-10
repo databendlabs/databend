@@ -75,7 +75,7 @@ Check out what we've done this week to make Databend even better for you.
 
 ### Build/Testing/CI Infra Changes :electric_plug:
 
-- support for running benchmark tests on PRs ([#9913](https://github.com/datafuselabs/databend/pull/9913))
+- support for running benchmark on PRs ([#9788](https://github.com/datafuselabs/databend/pull/9788))
 
 ### Bug Fixes :wrench:
 
@@ -106,6 +106,14 @@ Stay connected with the latest news about Databend.
 **Learn More**
 
 - [Blog | Why You Should Try Sccache](https://databend.rs/blog/sccache)
+
+### Running Benchmark on PRs
+
+Databend now has support for running benchmarks with CI, which will improve the development workflow. Adding lable `ci-perf` would enable perf for the PR.
+
+**Learn More**
+
+- [PRs | ci: build release in dev ci](https://github.com/datafuselabs/databend/pull/9788)
 
 ## What's Up Next
 
