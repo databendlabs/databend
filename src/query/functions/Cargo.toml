@@ -30,6 +30,7 @@ chrono-tz = { workspace = true }
 crc32fast = "1.3.2"
 criterion = "0.4"
 ctor = "0.1.26"
+ethnum = { version = "1.3" }
 geo = "0.23.1"
 geohash = "0.13.0"
 h3o = "0.1.0"
