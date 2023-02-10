@@ -95,12 +95,12 @@ jobs:
       - name: Load Data
         run: |
           ./scripts/benchmark/query/load/hits.sh
-      - name: Run Benchmark
+      - name: Prepare Metadata
         run: |
           mkdir -p /tmp/databend-perf/
           echo "INSTANCE_TYPE=c5.4xlarge" > /tmp/databend-perf/metadata.info
           echo "COMMIT=${{ github.sha }}" > /tmp/databend-perf/metadata.info
-          case ${{ github.event }} in
+          case ${{ github.event_name }} in
             pull_request)
               echo "PR_NUMBER=${{ github.event.number }}" >> /tmp/databend-perf/metadata.info
               ;;
@@ -108,6 +108,8 @@ jobs:
               echo "RELEASE_TAG=${{ github.ref_name }}" >> /tmp/databend-perf/metadata.info
               ;;
           esac
+      - name: Run Benchmark
+        run: |
           bendsql benchmark \
             --warm 3 \
             --count 10 \
