@@ -29,7 +29,7 @@ runs:
           bash ./tests/fuse-compat/test-fuse-compat.sh 0.7.150
           bash ./tests/fuse-compat/test-fuse-compat.sh 0.7.151
     - name: Upload failure
-      if: failure()
+      if: failure() || cancelled()
       uses: ./.github/actions/artifact_failure
       with:
         name: test-compat
