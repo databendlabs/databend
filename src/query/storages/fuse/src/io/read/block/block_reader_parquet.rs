@@ -50,6 +50,7 @@ use crate::metrics::*;
 enum DeserializedArray<'a> {
     Cached(&'a Arc<SizedColumnArray>),
     Deserialized((ColumnId, Box<dyn Array>, usize)),
+    NoNeedToCache(Box<dyn Array>),
 }
 
 impl BlockReader {
@@ -137,11 +138,13 @@ impl BlockReader {
             return self.build_default_values_block(num_rows);
         }
 
-        let fields = self.projection.project_column_nodes(&self.column_nodes)?;
+        let fields = self
+            .projection
+            .project_column_nodes_nested_aware(&self.column_nodes)?;
         let mut need_default_vals = Vec::with_capacity(fields.len());
         let mut need_to_fill_default_val = false;
         let mut deserialized_column_arrays = Vec::with_capacity(self.projection.len());
-        for column in &fields {
+        for (column, is_nested_field) in &fields {
             match self.deserialize_field(
                 column,
                 column_metas,
@@ -149,6 +152,7 @@ impl BlockReader {
                 num_rows,
                 compression,
                 &uncompressed_buffer,
+                *is_nested_field,
             )? {
                 None => {
                     need_to_fill_default_val = true;
@@ -166,6 +170,9 @@ impl BlockReader {
         for array in &deserialized_column_arrays {
             match array {
                 DeserializedArray::Deserialized((_, array, ..)) => {
+                    chunk_arrays.push(array);
+                }
+                DeserializedArray::NoNeedToCache(array) => {
                     chunk_arrays.push(array);
                 }
                 DeserializedArray::Cached(sized_column) => {
@@ -203,7 +210,6 @@ impl BlockReader {
             for item in deserialized_column_arrays.into_iter() {
                 if let DeserializedArray::Deserialized((column_id, array, size)) = item {
                     let key = TableDataColumnCacheKey::new(block_path, column_id);
-                    eprintln!("array cache put {}", key.as_ref());
                     cache.put(key.into(), Arc::new((array, size)))
                 }
             }
@@ -261,6 +267,8 @@ impl BlockReader {
         )?)
     }
 
+    // TODO: refactor this method
+    #[allow(clippy::too_many_arguments)]
     fn deserialize_field<'a>(
         &self,
         column: &ColumnNode,
@@ -269,14 +277,15 @@ impl BlockReader {
         num_rows: usize,
         compression: &Compression,
         uncompressed_buffer: &'a Option<Arc<UncompressedBuffer>>,
+        is_nested: bool,
     ) -> Result<Option<DeserializedArray<'a>>> {
         let indices = &column.leaf_ids;
+        let is_nested = is_nested || indices.len() > 1;
         let estimated_cap = indices.len();
         let mut field_column_metas = Vec::with_capacity(estimated_cap);
         let mut field_column_data = Vec::with_capacity(estimated_cap);
         let mut field_column_descriptors = Vec::with_capacity(estimated_cap);
         let mut field_uncompressed_size = 0;
-        let is_nested_field = indices.len() > 1;
 
         for (i, leaf_column_id) in indices.iter().enumerate() {
             let column_id = column.leaf_column_ids[i];
@@ -292,7 +301,7 @@ impl BlockReader {
                             field_uncompressed_size += data.len();
                         }
                         DataItem::ColumnArray(column_array) => {
-                            if is_nested_field {
+                            if is_nested {
                                 return Err(ErrorCode::StorageOther(
                                     "unexpected nested field: nested leaf field hits cached",
                                 ));
@@ -328,11 +337,19 @@ impl BlockReader {
                     "unexpected deserialization error, no array found for field {field_name} "
                 ))
             })?;
-            Ok(Some(DeserializedArray::Deserialized((
-                indices[0] as ColumnId,
-                array,
-                field_uncompressed_size,
-            ))))
+
+            // mark the array
+            if is_nested {
+                // the array is not intended to be cached
+                Ok(Some(DeserializedArray::NoNeedToCache(array)))
+            } else {
+                // the array is deserialized from raw bytes, should be cached
+                Ok(Some(DeserializedArray::Deserialized((
+                    indices[0] as ColumnId,
+                    array,
+                    field_uncompressed_size,
+                ))))
+            }
         } else {
             Ok(None)
         }

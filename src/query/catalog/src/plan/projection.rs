@@ -75,6 +75,35 @@ impl Projection {
         Ok(column_nodes)
     }
 
+    /// ColumnNode projection.
+    ///
+    /// `ColumnNode`s returned are paired with a boolean which indicates if it
+    /// is part of a nested field
+    pub fn project_column_nodes_nested_aware<'a>(
+        &'a self,
+        column_nodes: &'a ColumnNodes,
+    ) -> Result<Vec<(&ColumnNode, bool)>> {
+        let column_nodes = match self {
+            Projection::Columns(indices) => indices
+                .iter()
+                .map(|idx| (&column_nodes.column_nodes[*idx], false))
+                .collect(),
+            Projection::InnerColumns(path_indices) => {
+                let paths: Vec<&Vec<usize>> = path_indices.values().collect();
+                paths
+                    .iter()
+                    .map(|path| {
+                        (
+                            ColumnNodes::traverse_path(&column_nodes.column_nodes, path).unwrap(),
+                            true,
+                        )
+                    })
+                    .collect()
+            }
+        };
+        Ok(column_nodes)
+    }
+
     pub fn add_col(&mut self, col: usize) {
         match self {
             Projection::Columns(indices) => {
