@@ -192,6 +192,12 @@ impl DecimalDataType {
         })
     }
 
+    pub fn leading_digits(&self) -> u8 {
+        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+            DecimalDataType::DECIMAL_TYPE(size) => size.precision - size.scale,
+        })
+    }
+
     pub fn max_precision(&self) -> u8 {
         match self {
             DecimalDataType::Decimal128(_) => MAX_DECIMAL128_PRECISION,
@@ -220,8 +226,7 @@ impl DecimalDataType {
         let divide_precision = a.precision() + b.scale();
 
         // for addition/subtraction, we add 1 to the width to ensure we don't overflow
-        let plus_min_precision =
-            (a.precision() - a.scale()).max(b.precision() - b.scale()) + scale + 1;
+        let plus_min_precision = a.leading_digits().max(b.leading_digits()) - scale + 1;
 
         if is_multiply {
             scale = a.scale() + b.scale();
