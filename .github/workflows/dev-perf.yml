@@ -13,7 +13,6 @@ on:
       - "docs/**"
       - "website/**"
       - "**.md"
-      - "scripts/setup/**"
       - "docker/**"
       - ".devcontainer/**"
   # schedule:
