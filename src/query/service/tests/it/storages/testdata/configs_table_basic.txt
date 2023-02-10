@@ -68,7 +68,6 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | "query"   | "table_cache_snapshot_count"             | "256"                            | ""       |
 | "query"   | "table_cache_statistic_count"            | "256"                            | ""       |
 | "query"   | "table_data_cache_enabled"               | "false"                          | ""       |
-| "query"   | "table_data_cache_in_memory_mb_size"     | "2048"                           | ""       |
 | "query"   | "table_data_cache_population_queue_size" | "65536"                          | ""       |
 | "query"   | "table_disk_cache_mb_size"               | "20480"                          | ""       |
 | "query"   | "table_disk_cache_root"                  | "_cache"                         | ""       |
