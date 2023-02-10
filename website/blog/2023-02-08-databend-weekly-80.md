@@ -107,14 +107,6 @@ Stay connected with the latest news about Databend.
 
 - [Blog | Why You Should Try Sccache](https://databend.rs/blog/sccache)
 
-### Running Benchmark on PRs
-
-Databend now has support for running benchmarks with CI, which will improve the development workflow. Adding lable `ci-perf` would enable perf for the PR.
-
-**Learn More**
-
-- [PRs | ci: build release in dev ci](https://github.com/datafuselabs/databend/pull/9788)
-
 ## What's Up Next
 
 We're always open to cutting-edge technologies and innovative ideas. You're more than welcome to join the community and bring them to Databend.
