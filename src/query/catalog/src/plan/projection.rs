@@ -86,17 +86,22 @@ impl Projection {
         let column_nodes = match self {
             Projection::Columns(indices) => indices
                 .iter()
-                .map(|idx| (&column_nodes.column_nodes[*idx], false))
+                .map(|idx| {
+                    let column_node = &column_nodes.column_nodes[*idx];
+                    (column_node, column_node.children.is_some())
+                })
                 .collect(),
             Projection::InnerColumns(path_indices) => {
                 let paths: Vec<&Vec<usize>> = path_indices.values().collect();
                 paths
                     .iter()
                     .map(|path| {
-                        (
-                            ColumnNodes::traverse_path(&column_nodes.column_nodes, path).unwrap(),
-                            true,
+                        ColumnNodes::traverse_path_nested_aware(
+                            &column_nodes.column_nodes,
+                            path,
+                            false,
                         )
+                        .unwrap()
                     })
                     .collect()
             }

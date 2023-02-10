@@ -44,7 +44,7 @@ SELECT d,b.1,c,b.2 FROM `05_0028_at_t0_2`
 4.0 1 [101,2] 100
 
 statement ok
-DROP TABLE IF EXISTS `06_0028_at_t0_2`
+DROP TABLE IF EXISTS `05_0028_at_t0_2`
 
 query FIIIF
 SELECT d,b.1,c,b.2,b.3 FROM `05_0028_at_t0`

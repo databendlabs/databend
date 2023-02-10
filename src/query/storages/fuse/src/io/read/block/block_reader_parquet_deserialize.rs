@@ -109,10 +109,6 @@ impl BlockReader {
         let mut need_to_fill_default_val = false;
         let mut deserialized_column_arrays = Vec::with_capacity(self.projection.len());
         for (column, is_nested_field) in &fields {
-            eprintln!(
-                "deser col {}, idx {:?}",
-                column.field.name, &column.leaf_column_ids
-            );
             match self.deserialize_field(
                 column,
                 column_metas,
@@ -177,7 +173,6 @@ impl BlockReader {
             for item in deserialized_column_arrays.into_iter() {
                 if let DeserializedArray::Deserialized((column_id, array, size)) = item {
                     let key = TableDataColumnCacheKey::new(block_path, column_id);
-                    eprintln!("caching key {}", key.as_ref());
                     cache.put(key.into(), Arc::new((array, size)))
                 }
             }
@@ -249,13 +244,6 @@ impl BlockReader {
     ) -> Result<Option<DeserializedArray<'a>>> {
         let indices = &column.leaf_ids;
         let is_nested = is_nested_column || indices.len() > 1;
-        eprintln!(
-            "column name {}, nested {}, index {:?}, leaves {:?}",
-            column.field.name.as_str(),
-            is_nested,
-            indices,
-            &column.leaf_column_ids,
-        );
         // column passed in may be a compound field (with sub leaves),
         // or a leaf column of compound field
         let estimated_cap = indices.len();
@@ -267,11 +255,6 @@ impl BlockReader {
         let mut column_id = 0;
         for (i, leaf_column_id) in indices.iter().enumerate() {
             column_id = column.leaf_column_ids[i];
-            eprintln!(
-                "column name {}, column id{:?}",
-                column.field.name.as_str(),
-                column_id,
-            );
             if let Some(column_meta) = column_metas.get(&column_id) {
                 if let Some(chunk) = column_chunks.get(&column_id) {
                     match chunk {
@@ -295,6 +278,7 @@ impl BlockReader {
                         }
                     }
                 } else {
+                    // TODO more context info for error message
                     // no raw data of given column id, it is unexpected
                     return Err(ErrorCode::StorageOther("unexpected: column data not found"));
                 }
