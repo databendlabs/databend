@@ -24,7 +24,7 @@ Filter
     ├── partitions scanned: 0
     ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [gt(t1.a (#0), 0)], limit: NONE]
-    ├── output columns: [0]
+    ├── output columns: [a]
     └── estimated rows: 1.00
 
 query T
@@ -530,7 +530,7 @@ UnionAll
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │   ├── push downs: [filters: [], limit: NONE]
-│   ├── output columns: [0]
+│   ├── output columns: [a]
 │   └── estimated rows: 1.00
 └── TableScan
     ├── table: default.default.t2
@@ -540,7 +540,7 @@ UnionAll
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [], limit: NONE]
-    ├── output columns: [0]
+    ├── output columns: [a]
     └── estimated rows: 5.00
 
 query T
@@ -826,7 +826,7 @@ EvalScalar
                     ├── partitions scanned: 1
                     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
                     ├── push downs: [filters: [], limit: NONE]
-                    ├── output columns: [0]
+                    ├── output columns: [a]
                     └── estimated rows: 1.00
 
 query T
@@ -859,7 +859,7 @@ EvalScalar
                     ├── partitions scanned: 1
                     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
                     ├── push downs: [filters: [], limit: NONE]
-                    ├── output columns: [0]
+                    ├── output columns: [a]
                     └── estimated rows: 1.00
 
 statement ok

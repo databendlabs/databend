@@ -19,15 +19,14 @@ use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use chrono::NaiveTime;
 use chrono::Utc;
-use common_meta_types as mt;
-use common_meta_types::StorageFsConfig;
-use common_meta_types::StorageGcsConfig;
-use common_meta_types::StorageOssConfig;
-use common_meta_types::StorageParams;
-use common_meta_types::StorageS3Config;
-use common_meta_types::UserIdentity;
-use common_meta_types::UserInfo;
-use common_meta_types::UserPrivilegeType;
+use common_meta_app as mt;
+use common_meta_app::principal::UserIdentity;
+use common_meta_app::principal::UserPrivilegeType;
+use common_meta_app::storage::StorageFsConfig;
+use common_meta_app::storage::StorageGcsConfig;
+use common_meta_app::storage::StorageOssConfig;
+use common_meta_app::storage::StorageParams;
+use common_meta_app::storage::StorageS3Config;
 use common_proto_conv::FromToProto;
 use common_proto_conv::Incompatible;
 use common_proto_conv::VER;
@@ -37,29 +36,29 @@ use pretty_assertions::assert_eq;
 
 use crate::common::print_err;
 
-fn test_user_info() -> UserInfo {
-    let option = mt::UserOption::default()
-        .with_set_flag(mt::UserOptionFlag::TenantSetting)
+fn test_user_info() -> mt::principal::UserInfo {
+    let option = mt::principal::UserOption::default()
+        .with_set_flag(mt::principal::UserOptionFlag::TenantSetting)
         .with_default_role(Some("role1".into()));
 
-    mt::UserInfo {
+    mt::principal::UserInfo {
         name: "test_user".to_string(),
         hostname: "localhost".to_string(),
-        auth_info: mt::AuthInfo::Password {
+        auth_info: mt::principal::AuthInfo::Password {
             hash_value: [
                 116, 101, 115, 116, 95, 112, 97, 115, 115, 119, 111, 114, 100,
             ]
             .to_vec(),
-            hash_method: mt::PasswordHashMethod::DoubleSha1,
+            hash_method: mt::principal::PasswordHashMethod::DoubleSha1,
         },
-        grants: mt::UserGrantSet::new(
-            vec![mt::GrantEntry::new(
-                mt::GrantObject::Global,
+        grants: mt::principal::UserGrantSet::new(
+            vec![mt::principal::GrantEntry::new(
+                mt::principal::GrantObject::Global,
                 make_bitflags!(UserPrivilegeType::{Create}),
             )],
             HashSet::new(),
         ),
-        quota: mt::UserQuota {
+        quota: mt::principal::UserQuota {
             max_cpu: 10,
             max_memory_in_bytes: 10240,
             max_storage_in_bytes: 20480,
@@ -68,28 +67,28 @@ fn test_user_info() -> UserInfo {
     }
 }
 
-pub(crate) fn test_fs_stage_info() -> mt::UserStageInfo {
-    mt::UserStageInfo {
+pub(crate) fn test_fs_stage_info() -> mt::principal::UserStageInfo {
+    mt::principal::UserStageInfo {
         stage_name: "fs://dir/to/files".to_string(),
-        stage_type: mt::StageType::LegacyInternal,
-        stage_params: mt::StageParams {
-            storage: StorageParams::Fs(StorageFsConfig {
+        stage_type: mt::principal::StageType::LegacyInternal,
+        stage_params: mt::principal::StageParams {
+            storage: mt::storage::StorageParams::Fs(mt::storage::StorageFsConfig {
                 root: "/dir/to/files".to_string(),
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "NaN".to_string(),
             escape: "\\".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "row".to_string(),
             quote: "\'\'".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::AbortNum(2),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::AbortNum(2),
             size_limit: 1038,
             split_size: 0,
             purge: true,
@@ -106,11 +105,11 @@ pub(crate) fn test_fs_stage_info() -> mt::UserStageInfo {
     }
 }
 
-pub(crate) fn test_s3_stage_info() -> mt::UserStageInfo {
-    mt::UserStageInfo {
+pub(crate) fn test_s3_stage_info() -> mt::principal::UserStageInfo {
+    mt::principal::UserStageInfo {
         stage_name: "s3://mybucket/data/files".to_string(),
-        stage_type: mt::StageType::External,
-        stage_params: mt::StageParams {
+        stage_type: mt::principal::StageType::External,
+        stage_params: mt::principal::StageParams {
             storage: StorageParams::S3(StorageS3Config {
                 bucket: "mybucket".to_string(),
                 root: "/data/files".to_string(),
@@ -121,19 +120,19 @@ pub(crate) fn test_s3_stage_info() -> mt::UserStageInfo {
                 ..Default::default()
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "NaN".to_string(),
             escape: "".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "row".to_string(),
             quote: "'".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: true,
@@ -145,11 +144,11 @@ pub(crate) fn test_s3_stage_info() -> mt::UserStageInfo {
     }
 }
 
-pub(crate) fn test_s3_stage_info_v16() -> mt::UserStageInfo {
-    mt::UserStageInfo {
+pub(crate) fn test_s3_stage_info_v16() -> mt::principal::UserStageInfo {
+    mt::principal::UserStageInfo {
         stage_name: "s3://mybucket/data/files".to_string(),
-        stage_type: mt::StageType::External,
-        stage_params: mt::StageParams {
+        stage_type: mt::principal::StageType::External,
+        stage_params: mt::principal::StageParams {
             storage: StorageParams::S3(StorageS3Config {
                 bucket: "mybucket".to_string(),
                 root: "/data/files".to_string(),
@@ -162,19 +161,19 @@ pub(crate) fn test_s3_stage_info_v16() -> mt::UserStageInfo {
                 ..Default::default()
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "NaN".to_string(),
             escape: "".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 1024,
             purge: true,
@@ -186,11 +185,11 @@ pub(crate) fn test_s3_stage_info_v16() -> mt::UserStageInfo {
     }
 }
 
-pub(crate) fn test_s3_stage_info_v14() -> mt::UserStageInfo {
-    mt::UserStageInfo {
+pub(crate) fn test_s3_stage_info_v14() -> mt::principal::UserStageInfo {
+    mt::principal::UserStageInfo {
         stage_name: "s3://mybucket/data/files".to_string(),
-        stage_type: mt::StageType::External,
-        stage_params: mt::StageParams {
+        stage_type: mt::principal::StageType::External,
+        stage_params: mt::principal::StageParams {
             storage: StorageParams::S3(StorageS3Config {
                 bucket: "mybucket".to_string(),
                 root: "/data/files".to_string(),
@@ -203,19 +202,19 @@ pub(crate) fn test_s3_stage_info_v14() -> mt::UserStageInfo {
                 ..Default::default()
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "NaN".to_string(),
             escape: "".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: true,
@@ -228,11 +227,11 @@ pub(crate) fn test_s3_stage_info_v14() -> mt::UserStageInfo {
 }
 
 // Version 4 added Google Cloud Storage as a stage backend, should be tested
-pub(crate) fn test_gcs_stage_info() -> mt::UserStageInfo {
-    mt::UserStageInfo {
+pub(crate) fn test_gcs_stage_info() -> mt::principal::UserStageInfo {
+    mt::principal::UserStageInfo {
         stage_name: "gcs://my_bucket/data/files".to_string(),
-        stage_type: mt::StageType::External,
-        stage_params: mt::StageParams {
+        stage_type: mt::principal::StageType::External,
+        stage_params: mt::principal::StageParams {
             storage: StorageParams::Gcs(StorageGcsConfig {
                 endpoint_url: "https://storage.googleapis.com".to_string(),
                 bucket: "my_bucket".to_string(),
@@ -240,19 +239,19 @@ pub(crate) fn test_gcs_stage_info() -> mt::UserStageInfo {
                 credential: "my_credential".to_string(),
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "NaN".to_string(),
             escape: "".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "row".to_string(),
             quote: "".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: true,
@@ -265,11 +264,11 @@ pub(crate) fn test_gcs_stage_info() -> mt::UserStageInfo {
 }
 
 // Version 13 added OSS as a stage backend, should be tested
-pub(crate) fn test_oss_stage_info() -> mt::UserStageInfo {
-    mt::UserStageInfo {
+pub(crate) fn test_oss_stage_info() -> mt::principal::UserStageInfo {
+    mt::principal::UserStageInfo {
         stage_name: "oss://my_bucket/data/files".to_string(),
-        stage_type: mt::StageType::External,
-        stage_params: mt::StageParams {
+        stage_type: mt::principal::StageType::External,
+        stage_params: mt::principal::StageParams {
             storage: StorageParams::Oss(StorageOssConfig {
                 endpoint_url: "https://oss-cn-litang.example.com".to_string(),
                 bucket: "my_bucket".to_string(),
@@ -279,19 +278,19 @@ pub(crate) fn test_oss_stage_info() -> mt::UserStageInfo {
                 presign_endpoint_url: "".to_string(),
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "NaN".to_string(),
             escape: "".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "row".to_string(),
             quote: "".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: true,
@@ -303,13 +302,13 @@ pub(crate) fn test_oss_stage_info() -> mt::UserStageInfo {
     }
 }
 
-pub(crate) fn test_stage_file() -> mt::StageFile {
+pub(crate) fn test_stage_file() -> mt::principal::StageFile {
     let dt = NaiveDateTime::new(
         NaiveDate::from_ymd(2022, 9, 16),
         NaiveTime::from_hms(0, 1, 2),
     );
-    let user_id = mt::UserIdentity::new("datafuselabs", "datafuselabs.rs");
-    mt::StageFile {
+    let user_id = mt::principal::UserIdentity::new("datafuselabs", "datafuselabs.rs");
+    mt::principal::StageFile {
         path: "/path/to/stage".to_string(),
         size: 233,
         md5: None,
@@ -323,7 +322,7 @@ pub(crate) fn test_stage_file() -> mt::StageFile {
 fn test_user_pb_from_to() -> anyhow::Result<()> {
     let test_user_info = test_user_info();
     let test_user_info_pb = test_user_info.to_pb()?;
-    let got = mt::UserInfo::from_pb(test_user_info_pb)?;
+    let got = mt::principal::UserInfo::from_pb(test_user_info_pb)?;
     assert_eq!(got, test_user_info);
 
     Ok(())
@@ -333,7 +332,7 @@ fn test_user_pb_from_to() -> anyhow::Result<()> {
 fn test_stage_file_pb_from_to() -> anyhow::Result<()> {
     let test_stage_file = test_stage_file();
     let test_stage_file_pb = test_stage_file.to_pb()?;
-    let got = mt::StageFile::from_pb(test_stage_file_pb)?;
+    let got = mt::principal::StageFile::from_pb(test_stage_file_pb)?;
     assert_eq!(got, test_stage_file);
 
     Ok(())
@@ -347,7 +346,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         p.ver = VER + 1;
         p.min_reader_ver = VER + 1;
 
-        let res = mt::UserInfo::from_pb(p);
+        let res = mt::principal::UserInfo::from_pb(p);
         assert_eq!(
             Incompatible {
                 reason: format!(
@@ -366,7 +365,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         p.ver = VER + 1;
         p.min_reader_ver = VER + 1;
 
-        let res = mt::StageFile::from_pb(p);
+        let res = mt::principal::StageFile::from_pb(p);
         assert_eq!(
             Incompatible {
                 reason: format!(
@@ -385,7 +384,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         p.ver = VER + 1;
         p.min_reader_ver = VER + 1;
 
-        let res = mt::UserStageInfo::from_pb(p);
+        let res = mt::principal::UserStageInfo::from_pb(p);
         assert_eq!(
             Incompatible {
                 reason: format!(
@@ -404,7 +403,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         p.ver = VER + 1;
         p.min_reader_ver = VER + 1;
 
-        let res = mt::UserStageInfo::from_pb(p);
+        let res = mt::principal::UserStageInfo::from_pb(p);
         assert_eq!(
             Incompatible {
                 reason: format!(
@@ -423,7 +422,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         p.ver = VER + 1;
         p.min_reader_ver = VER + 1;
 
-        let res = mt::UserStageInfo::from_pb(p);
+        let res = mt::principal::UserStageInfo::from_pb(p);
         assert_eq!(
             Incompatible {
                 reason: format!(
@@ -442,7 +441,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         p.ver = VER + 1;
         p.min_reader_ver = VER + 1;
 
-        let res = mt::UserStageInfo::from_pb(p);
+        let res = mt::principal::UserStageInfo::from_pb(p);
         assert_eq!(
             Incompatible {
                 reason: format!(
@@ -461,7 +460,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         p.ver = VER + 1;
         p.min_reader_ver = VER + 1;
 
-        let res = mt::UserStageInfo::from_pb(p);
+        let res = mt::principal::UserStageInfo::from_pb(p);
         assert_eq!(
             Incompatible {
                 reason: format!(
@@ -581,7 +580,7 @@ fn test_load_old_user() -> anyhow::Result<()> {
         ];
         let p: pb::UserInfo =
             common_protos::prost::Message::decode(user_info_v4.as_slice()).map_err(print_err)?;
-        let got = mt::UserInfo::from_pb(p).map_err(print_err)?;
+        let got = mt::principal::UserInfo::from_pb(p).map_err(print_err)?;
         let want = test_user_info();
 
         assert_eq!(want, got);
@@ -598,7 +597,7 @@ fn test_load_old_user() -> anyhow::Result<()> {
         ];
         let p: pb::UserInfo =
             common_protos::prost::Message::decode(user_info_v1.as_slice()).map_err(print_err)?;
-        let got = mt::UserInfo::from_pb(p).map_err(print_err)?;
+        let got = mt::principal::UserInfo::from_pb(p).map_err(print_err)?;
         println!("got: {:?}", got);
         assert_eq!(got.name, "test_user".to_string());
         assert_eq!(got.option.default_role().clone(), None);
@@ -615,7 +614,7 @@ fn test_load_old_user() -> anyhow::Result<()> {
         ];
         let p: pb::UserInfo =
             common_protos::prost::Message::decode(user_info_v3.as_slice()).map_err(print_err)?;
-        let got = mt::UserInfo::from_pb(p).map_err(print_err)?;
+        let got = mt::principal::UserInfo::from_pb(p).map_err(print_err)?;
         let want = test_user_info();
         assert_eq!(want, got);
     }
@@ -632,7 +631,7 @@ fn test_load_old_user() -> anyhow::Result<()> {
         ];
         let p: pb::UserInfo =
             common_protos::prost::Message::decode(user_info_v3.as_slice()).map_err(print_err)?;
-        let got = mt::UserInfo::from_pb(p).map_err(print_err)?;
+        let got = mt::principal::UserInfo::from_pb(p).map_err(print_err)?;
         assert!(got.option.flags().is_empty());
     }
 
@@ -653,14 +652,14 @@ fn test_old_stage_file() -> anyhow::Result<()> {
         ];
         let p: pb::StageFile =
             common_protos::prost::Message::decode(stage_file_v7.as_slice()).map_err(print_err)?;
-        let got = mt::StageFile::from_pb(p).map_err(print_err)?;
+        let got = mt::principal::StageFile::from_pb(p).map_err(print_err)?;
 
         let dt = NaiveDateTime::new(
             NaiveDate::from_ymd(2022, 9, 16),
             NaiveTime::from_hms(0, 1, 2),
         );
-        let user_id = mt::UserIdentity::new("datafuselabs", "datafuselabs.rs");
-        let want = mt::StageFile {
+        let user_id = mt::principal::UserIdentity::new("datafuselabs", "datafuselabs.rs");
+        let want = mt::principal::StageFile {
             path: "/path/to/stage".to_string(),
             size: 233,
             md5: None,
@@ -675,28 +674,28 @@ fn test_old_stage_file() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub(crate) fn test_internal_stage_info_v17() -> mt::UserStageInfo {
-    mt::UserStageInfo {
+pub(crate) fn test_internal_stage_info_v17() -> mt::principal::UserStageInfo {
+    mt::principal::UserStageInfo {
         stage_name: "fs://dir/to/files".to_string(),
-        stage_type: mt::StageType::Internal,
-        stage_params: mt::StageParams {
+        stage_type: mt::principal::StageType::Internal,
+        stage_params: mt::principal::StageParams {
             storage: StorageParams::Fs(StorageFsConfig {
                 root: "/dir/to/files".to_string(),
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "NaN".to_string(),
             escape: "".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: true,
@@ -708,28 +707,28 @@ pub(crate) fn test_internal_stage_info_v17() -> mt::UserStageInfo {
     }
 }
 
-pub(crate) fn test_user_stage_info_v18() -> mt::UserStageInfo {
-    mt::UserStageInfo {
+pub(crate) fn test_user_stage_info_v18() -> mt::principal::UserStageInfo {
+    mt::principal::UserStageInfo {
         stage_name: "root".to_string(),
-        stage_type: mt::StageType::User,
-        stage_params: mt::StageParams {
+        stage_type: mt::principal::StageType::User,
+        stage_params: mt::principal::StageParams {
             storage: StorageParams::Fs(StorageFsConfig {
                 root: "/dir/to/files".to_string(),
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "NaN".to_string(),
             escape: "".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: true,

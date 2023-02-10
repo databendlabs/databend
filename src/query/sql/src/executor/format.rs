@@ -115,17 +115,14 @@ fn table_scan_to_format_tree(
         "push downs: [filters: [{filters}], limit: {limit}]"
     )));
 
-    let mut output_columns: Vec<usize> = Vec::new();
-    if let Some(scan_fields) = &plan.source.scan_fields {
-        output_columns = scan_fields.keys().cloned().collect();
-    };
+    let output_columns = plan.source.output_schema.fields();
 
-    // If output_columns is empty, it indicates that scan all fields.
+    // If output_columns contains all columns of the source,
     // Then output_columns won't show in explain
-    if !output_columns.is_empty() {
+    if output_columns.len() < plan.source.source_info.schema().fields().len() {
         children.push(FormatTreeNode::new(format!(
             "output columns: [{}]",
-            output_columns.iter().join(", ")
+            output_columns.iter().map(|f| f.name()).join(", ")
         )));
     }
 

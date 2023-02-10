@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use common_meta_types::ForwardRequest;
-pub use common_meta_types::ForwardRequestBody;
-pub use common_meta_types::JoinRequest;
-pub use common_meta_types::LeaveRequest;
 pub use meta_service_impl::RaftServiceImpl;
 pub use raftmeta::MetaNode;
+
+pub use crate::message::ForwardRequest;
+pub use crate::message::ForwardRequestBody;
+pub use crate::message::JoinRequest;
+pub use crate::message::LeaveRequest;
 
 pub mod meta_leader;
 mod meta_node_kv_api_impl;

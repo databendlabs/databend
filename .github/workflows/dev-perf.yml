@@ -84,7 +84,7 @@ jobs:
           python3 scripts/ci/wait_tcp.py --timeout 5 --port 3307
       - name: Setup BendSQL
         run: |
-          curl -fsSLo ./bendsql.tar.gz https://github.com/databendcloud/bendsql/releases/download/v0.2.3/bendsql-linux-amd64.tar.gz
+          curl -fsSLo ./bendsql.tar.gz https://github.com/databendcloud/bendsql/releases/download/v0.3.0/bendsql-linux-amd64.tar.gz
           tar -xvzf ./bendsql.tar.gz
           chmod +x ./linux-amd64/bendsql
           sudo cp ./linux-amd64/bendsql /usr/local/bin/bendsql
@@ -97,6 +97,8 @@ jobs:
         run: |
           mkdir -p /tmp/databend-perf/
           bendsql benchmark \
+            --warm 2 \
+            --count 5 \
             --test-dir ./scripts/benchmark/query/benchmarks/ \
             --output-format json,md \
             --output-dir /tmp/databend-perf/ \

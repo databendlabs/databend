@@ -29,8 +29,9 @@ use common_config::Config;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::UserSetting;
-use common_meta_types::UserSettingValue;
+use common_meta_app::principal::UserSetting;
+use common_meta_app::principal::UserSettingValue;
+use common_meta_types::MatchSeq;
 use common_users::UserApiProvider;
 use dashmap::DashMap;
 use itertools::Itertools;
@@ -889,7 +890,7 @@ impl Settings {
 
         UserApiProvider::instance()
             .get_setting_api_client(&tenant)?
-            .drop_setting(key.as_str(), None)
+            .drop_setting(key.as_str(), MatchSeq::GE(1))
             .await?;
 
         setting.level = ScopeLevel::Session;

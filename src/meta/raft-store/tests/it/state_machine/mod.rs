@@ -17,9 +17,9 @@ use std::time::UNIX_EPOCH;
 
 use common_base::base::tokio;
 use common_meta_kvapi::kvapi::KVApi;
+use common_meta_raft_store::applied_state::AppliedState;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::openraft;
-use common_meta_types::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
 use common_meta_types::Endpoint;
@@ -240,10 +240,10 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
 
     let cases: Vec<T> = vec![
         case("foo", MatchSeq::Exact(5), "b", None, None, None),
-        case("foo", MatchSeq::Any, "a", None, None, Some((1, "a"))),
+        case("foo", MatchSeq::GE(0), "a", None, None, Some((1, "a"))),
         case(
             "foo",
-            MatchSeq::Any,
+            MatchSeq::GE(0),
             "b",
             None,
             Some((1, "a")),
@@ -275,11 +275,11 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
             Some((4, "y")),
         ),
         // expired at once
-        case("wow", MatchSeq::Any, "y", Some(0), None, Some((5, "y"))),
+        case("wow", MatchSeq::GE(0), "y", Some(0), None, Some((5, "y"))),
         // expired value does not exist
         case(
             "wow",
-            MatchSeq::Any,
+            MatchSeq::GE(0),
             "y",
             Some(now + 1000),
             None,
@@ -297,7 +297,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
                     &Cmd::UpsertKV(UpsertKV {
                         key: c.key.clone(),
                         seq: c.seq,
-                        value: Some(c.value.clone()).into(),
+                        value: Operation::Update(c.value.clone()),
                         value_meta: c.value_meta.clone(),
                     }),
                     &mut t,
@@ -361,7 +361,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
             .apply_cmd(
                 &Cmd::UpsertKV(UpsertKV {
                     key: key.clone(),
-                    seq: MatchSeq::Any,
+                    seq: MatchSeq::GE(0),
                     value: Operation::AsIs,
                     value_meta: Some(KVMeta {
                         expire_at: Some(now + 10),
@@ -388,7 +388,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
             .apply_cmd(
                 &Cmd::UpsertKV(UpsertKV {
                     key: key.clone(),
-                    seq: MatchSeq::Any,
+                    seq: MatchSeq::GE(0),
                     value: Operation::Update(b"value_meta_bar".to_vec()),
                     value_meta: Some(KVMeta {
                         expire_at: Some(now + 10),
@@ -407,7 +407,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
             .apply_cmd(
                 &Cmd::UpsertKV(UpsertKV {
                     key: key.clone(),
-                    seq: MatchSeq::Any,
+                    seq: MatchSeq::GE(0),
                     value: Operation::AsIs,
                     value_meta: Some(KVMeta {
                         expire_at: Some(now + 20),
@@ -472,7 +472,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
     let prev = Some((1u64, "x"));
 
     let cases: Vec<T> = vec![
-        case("foo", MatchSeq::Any, prev, None),
+        case("foo", MatchSeq::GE(0), prev, None),
         case("foo", MatchSeq::Exact(1), prev, None),
         case("foo", MatchSeq::Exact(0), prev, prev),
         case("foo", MatchSeq::GE(1), prev, None),

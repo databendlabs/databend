@@ -200,6 +200,26 @@ impl MetaService for MetaServiceImpl {
         Ok(Response::new(reply))
     }
 
+    async fn transaction(
+        &self,
+        request: Request<TxnRequest>,
+    ) -> Result<Response<TxnReply>, Status> {
+        self.check_token(request.metadata())?;
+        network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+        let _guard = RequestInFlight::guard();
+
+        common_tracing::extract_remote_span_as_parent(&request);
+
+        let request = request.into_inner();
+
+        info!("Receive txn_request: {}", request);
+
+        let body = self.execute_txn(request).await;
+        network_metrics::incr_sent_bytes(body.encoded_len() as u64);
+
+        Ok(Response::new(body))
+    }
+
     type ExportStream =
         Pin<Box<dyn Stream<Item = Result<ExportedChunk, tonic::Status>> + Send + Sync + 'static>>;
 
@@ -246,26 +266,6 @@ impl MetaService for MetaServiceImpl {
                 Err(Status::invalid_argument(e))
             }
         }
-    }
-
-    async fn transaction(
-        &self,
-        request: Request<TxnRequest>,
-    ) -> Result<Response<TxnReply>, Status> {
-        self.check_token(request.metadata())?;
-        network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
-        let _guard = RequestInFlight::guard();
-
-        common_tracing::extract_remote_span_as_parent(&request);
-
-        let request = request.into_inner();
-
-        info!("Receive txn_request: {}", request);
-
-        let body = self.execute_txn(request).await;
-        network_metrics::incr_sent_bytes(body.encoded_len() as u64);
-
-        Ok(Response::new(body))
     }
 
     async fn member_list(

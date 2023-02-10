@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
-use common_meta_types::UserStageInfo;
+use common_meta_app::principal::UserStageInfo;
 
 use crate::plan::StageFileInfo;
 

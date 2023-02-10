@@ -55,6 +55,8 @@ pub use transform_convert_grouping::efficiently_memory_final_aggregator;
 pub use transform_convert_grouping::TransformConvertGrouping;
 pub use transform_create_sets::SubqueryReceiver;
 pub use transform_create_sets::TransformCreateSets;
+pub use transform_dummy::create_dummy_item;
+pub use transform_dummy::create_dummy_items;
 pub use transform_dummy::TransformDummy;
 pub use transform_hash_join::SinkBuildHashTable;
 pub use transform_hash_join::TransformHashJoinProbe;

@@ -12,17 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::TableField;
-use common_expression::TableSchemaRef;
 
 #[async_trait::async_trait]
 pub trait ToReadDataSourcePlan {
@@ -59,17 +55,15 @@ impl ToReadDataSourcePlan for dyn Table {
         let schema = &source_info.schema();
         let description = statistics.get_description(&source_info.desc());
 
-        let scan_fields = match (self.benefit_column_prune(), &push_downs) {
+        let output_schema = match (self.benefit_column_prune(), &push_downs) {
             (true, Some(push_downs)) => match &push_downs.prewhere {
-                Some(prewhere) => {
-                    extract_scan_fields_from_projection(schema, &prewhere.output_columns)
-                }
+                Some(prewhere) => Arc::new(prewhere.output_columns.project_schema(schema)),
                 _ => match &push_downs.projection {
-                    Some(projection) => extract_scan_fields_from_projection(schema, projection),
-                    _ => None,
+                    Some(projection) => Arc::new(projection.project_schema(schema)),
+                    _ => schema.clone(),
                 },
             },
-            _ => None,
+            _ => schema.clone(),
         };
 
         // TODO pass in catalog name
@@ -77,37 +71,12 @@ impl ToReadDataSourcePlan for dyn Table {
         Ok(DataSourcePlan {
             catalog,
             source_info,
-            scan_fields,
+            output_schema,
             parts,
             statistics,
             description,
             tbl_args: self.table_args(),
             push_downs,
         })
-    }
-}
-
-fn extract_scan_fields_from_projection(
-    schema: &TableSchemaRef,
-    projection: &Projection,
-) -> Option<BTreeMap<usize, TableField>> {
-    match projection {
-        Projection::Columns(ref indices) => {
-            if indices.len() < schema.fields().len() {
-                let fields = indices.iter().map(|i| schema.field(*i).clone());
-
-                Some((indices.iter().cloned().zip(fields)).collect::<BTreeMap<_, _>>())
-            } else {
-                None
-            }
-        }
-        Projection::InnerColumns(ref path_indices) => {
-            let column_ids: Vec<usize> = path_indices.keys().cloned().collect();
-            let new_schema = schema.inner_project(path_indices);
-            Some(
-                (column_ids.iter().cloned().zip(new_schema.fields().clone()))
-                    .collect::<BTreeMap<_, _>>(),
-            )
-        }
     }
 }

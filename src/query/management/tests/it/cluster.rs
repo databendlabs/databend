@@ -22,6 +22,7 @@ use common_management::*;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_kvapi::kvapi::KVApi;
 use common_meta_store::MetaStore;
+use common_meta_types::MatchSeq;
 use common_meta_types::NodeInfo;
 use common_meta_types::SeqV;
 
@@ -91,7 +92,7 @@ async fn test_successfully_drop_node() -> Result<()> {
     let nodes = cluster_api.get_nodes().await?;
     assert_eq!(nodes, vec![node_info.clone()]);
 
-    cluster_api.drop_node(node_info.id, None).await?;
+    cluster_api.drop_node(node_info.id, MatchSeq::GE(1)).await?;
 
     let nodes = cluster_api.get_nodes().await?;
     assert_eq!(nodes, vec![]);
@@ -103,7 +104,7 @@ async fn test_unknown_node_drop_node() -> Result<()> {
     let (_, cluster_api) = new_cluster_api().await?;
 
     match cluster_api
-        .drop_node(String::from("UNKNOWN_ID"), None)
+        .drop_node(String::from("UNKNOWN_ID"), MatchSeq::GE(1))
         .await
     {
         Ok(_) => panic!("Unknown node drop node must be return Err."),
@@ -128,7 +129,7 @@ async fn test_successfully_heartbeat_node() -> Result<()> {
     assert!(value.unwrap().meta.unwrap().expire_at.unwrap() - current_time >= 60);
 
     let current_time = current_seconds_time();
-    cluster_api.heartbeat(&node_info, None).await?;
+    cluster_api.heartbeat(&node_info, MatchSeq::GE(1)).await?;
 
     let value = kv_api
         .get_kv("__fd_clusters/test%2dtenant%2did/test%2dcluster%2did/databend_query/test_node")

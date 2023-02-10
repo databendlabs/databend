@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use common_exception::Span;
-use common_meta_types::PrincipalIdentity;
-use common_meta_types::UserIdentity;
+use common_meta_app::principal::PrincipalIdentity;
+use common_meta_app::principal::UserIdentity;
 
 use super::walk::walk_cte;
 use super::walk::walk_expr;

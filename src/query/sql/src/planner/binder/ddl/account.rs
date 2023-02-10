@@ -19,10 +19,10 @@ use common_ast::ast::CreateUserStmt;
 use common_ast::ast::GrantStmt;
 use common_ast::ast::RevokeStmt;
 use common_exception::Result;
-use common_meta_types::AuthInfo;
-use common_meta_types::GrantObject;
-use common_meta_types::UserOption;
-use common_meta_types::UserPrivilegeSet;
+use common_meta_app::principal::AuthInfo;
+use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::UserOption;
+use common_meta_app::principal::UserPrivilegeSet;
 use common_users::UserApiProvider;
 
 use crate::plans::AlterUserPlan;
