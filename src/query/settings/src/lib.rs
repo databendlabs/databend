@@ -408,13 +408,13 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
-                default_value: UserSettingValue::UInt64(0),
+                default_value: UserSettingValue::UInt64(1),
                 user_setting: UserSetting::create(
                     "prefer_broadcast_join",
-                    UserSettingValue::UInt64(0),
+                    UserSettingValue::UInt64(1),
                 ),
                 level: ScopeLevel::Session,
-                desc: "If enable broadcast join, default value: 0",
+                desc: "If enable broadcast join, default value: 1",
                 possible_values: None,
             },
             SettingValue {
