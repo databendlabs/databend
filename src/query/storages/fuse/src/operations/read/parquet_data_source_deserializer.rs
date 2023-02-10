@@ -30,10 +30,10 @@ use common_pipeline_core::processors::Processor;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
+use crate::io::MergeIOReadResult;
 use crate::io::UncompressedBuffer;
 use crate::metrics::metrics_inc_remote_io_deserialize_milliseconds;
 use crate::operations::read::parquet_data_source::DataSourceMeta;
-use crate::MergeIOReadResult;
 
 pub struct DeserializeDataTransform {
     scan_progress: Arc<Progress>,

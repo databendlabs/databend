@@ -359,11 +359,13 @@ impl DataBlock {
         let mut chunk_idx: usize = 0;
         let schema_fields = schema.fields();
         let chunk_columns = chuck.arrays();
+        eprintln!("chunk_column len {}", chunk_columns.len());
 
         let mut columns = Vec::with_capacity(default_vals.len());
         for (i, default_val) in default_vals.iter().enumerate() {
             let field = &schema_fields[i];
             let data_type = field.data_type();
+            eprintln!("data type {}", data_type);
 
             let column = match default_val {
                 Some(default_val) => BlockEntry {
@@ -371,12 +373,16 @@ impl DataBlock {
                     value: Value::Scalar(default_val.to_owned()),
                 },
                 None => {
-                    let chunk_column = &chunk_columns[chunk_idx];
+                    eprintln!("chunk idx {}", chunk_idx);
+                    let chunk_column = chunk_columns.get(chunk_idx).unwrap();
+                    eprintln!("get column");
                     chunk_idx += 1;
-                    BlockEntry {
+                    let entry = BlockEntry {
                         data_type: data_type.clone(),
                         value: Value::Column(Column::from_arrow(chunk_column.as_ref(), data_type)),
-                    }
+                    };
+                    eprintln!("build entry");
+                    entry
                 }
             };
 
