@@ -100,8 +100,7 @@ impl Partitions {
                 let mut parts = self
                     .partitions
                     .iter()
-                    .map(|p| p.hash() % num_executors as u64)
-                    .zip(self.partitions.clone().into_iter())
+                    .map(|p| (p.hash() % num_executors as u64, p.clone()))
                     .collect::<Vec<_>>();
                 parts.sort_by(|a, b| a.0.cmp(&b.0));
                 parts.into_iter().map(|x| x.1).collect()
