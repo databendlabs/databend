@@ -33,7 +33,7 @@ done
 
 if [[ $ENABLE_SCCACHE == "true" ]]; then
 	env | grep -E "^SCCACHE_" >"${CARGO_HOME}/sccache.env"
-	EXTRA_ARGS="${EXTRA_ARGS} --env RUSTC_WRAPPER=/opt/rust/cargo/bin/sccache --env-file ${CARGO_HOME}/sccache.env"
+	EXTRA_ARGS="${EXTRA_ARGS} --env RUSTC_WRAPPER=/opt/rust/cargo/bin/sccach --env CARGO_INCREMENTAL=0 --env-file ${CARGO_HOME}/sccache.env"
 	COMMAND="${COMMAND} && sccache --show-stats"
 fi
 
