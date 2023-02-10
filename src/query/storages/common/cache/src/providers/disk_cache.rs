@@ -118,15 +118,15 @@ fn validate_checksum(bytes: &[u8]) -> Result<()> {
             "crc checksum validation failure: invalid file length {total_len}"
         )))
     } else {
-        // checksum validation
+        // total_len > 4 is ensured
         let crc_bytes: [u8; 4] = bytes[total_len - 4..].try_into().unwrap();
-        let crc = u32::from_le_bytes(crc_bytes);
+        let crc_provided = u32::from_le_bytes(crc_bytes);
         let crc_calculated = crc32fast::hash(&bytes[0..total_len - 4]);
-        if crc == crc_calculated {
+        if crc_provided == crc_calculated {
             Ok(())
         } else {
             Err(ErrorCode::StorageOther(format!(
-                "crc checksum validation failure, key : crc checksum not match, crc kept in file {crc}, crc calculated {crc_calculated}"
+                "crc checksum validation failure, key : crc checksum not match, crc provided {crc_provided}, crc calculated {crc_calculated}"
             )))
         }
     }

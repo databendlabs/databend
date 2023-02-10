@@ -20,6 +20,7 @@ use common_cache::DefaultHashBuilder;
 use common_cache::Meter;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::InMemoryItemCacheHolder;
+use storages_common_cache::NamedCache;
 use storages_common_index::filters::Xor8Filter;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -44,8 +45,12 @@ pub type FileMetaDataCache = InMemoryItemCacheHolder<FileMetaData>;
 
 /// In memory object cache of parquet FileMetaData of external parquet files
 pub type ColumnArrayCache =
-    InMemoryItemCacheHolder<SizedColumnArray, DefaultHashBuilder, ColumnArrayMeter>;
-pub type SizedColumnArray = (Box<dyn common_arrow::arrow::array::Array>, usize);
+    NamedCache<InMemoryItemCacheHolder<SizedColumnArray, DefaultHashBuilder, ColumnArrayMeter>>;
+pub type ArrayRawDataUncompressedSize = usize;
+pub type SizedColumnArray = (
+    Box<dyn common_arrow::arrow::array::Array>,
+    ArrayRawDataUncompressedSize,
+);
 
 // Bind Type of cached objects to Caches
 //

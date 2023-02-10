@@ -20,6 +20,10 @@ use common_cache::Count;
 use common_cache::CountableMeter;
 use common_cache::DefaultHashBuilder;
 
+use crate::metrics_inc_cache_access_count;
+use crate::metrics_inc_cache_hit_count;
+use crate::metrics_inc_cache_miss_count;
+
 // The cache accessor, crate users usually working on this interface while manipulating caches
 pub trait CacheAccessor<K, V, S = DefaultHashBuilder, M = Count>
 where
@@ -30,5 +34,57 @@ where
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<V>>;
     fn put(&self, key: K, value: Arc<V>);
     fn evict(&self, k: &str) -> bool;
-    fn contains_key(&self, _k: &str) -> bool;
+    fn contains_key(&self, k: &str) -> bool;
+}
+
+/// Helper trait to convert a Cache into NamedCache
+pub trait Named
+where Self: Sized
+{
+    fn name_with(self: Self, name: String) -> NamedCache<Self> {
+        NamedCache { name, cache: self }
+    }
+}
+
+impl<T> Named for T where T: Sized + Clone {}
+
+/// A named cache that with embedded metrics logging
+#[derive(Clone)]
+pub struct NamedCache<C> {
+    name: String,
+    cache: C,
+}
+
+impl<K, V, S, M, C> CacheAccessor<K, V, S, M> for NamedCache<C>
+where
+    C: CacheAccessor<K, V, S, M>,
+    K: Eq + Hash,
+    S: BuildHasher,
+    M: CountableMeter<K, Arc<V>>,
+{
+    fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<V>> {
+        metrics_inc_cache_access_count(1, &self.name);
+        match self.cache.get(k) {
+            None => {
+                metrics_inc_cache_miss_count(1, &self.name);
+                None
+            }
+            v @ Some(_) => {
+                metrics_inc_cache_hit_count(1, &self.name);
+                v
+            }
+        }
+    }
+
+    fn put(&self, key: K, value: Arc<V>) {
+        self.cache.put(key, value)
+    }
+
+    fn evict(&self, k: &str) -> bool {
+        self.cache.evict(k)
+    }
+
+    fn contains_key(&self, k: &str) -> bool {
+        self.cache.contains_key(k)
+    }
 }

@@ -146,12 +146,12 @@ impl MergeIOReadResult {
 
     fn add_column_chunk(&mut self, chunk_index: usize, column_id: ColumnId, range: Range<usize>) {
         // TODO doc why put cache operation could be placed here
-        if let Some(cache) = &self.table_data_cache {
+        if let Some(table_data_cache) = &self.table_data_cache {
             if let Ok(chunk_data) = self.get_chunk(chunk_index, &self.block_path) {
                 let cache_key = TableDataColumnCacheKey::new(&self.block_path, column_id);
                 let data = &chunk_data[range.clone()];
                 // TODO api is NOT type safe
-                cache.put(cache_key.as_ref().to_owned(), Arc::new(data.to_vec()));
+                table_data_cache.put(cache_key.as_ref().to_owned(), Arc::new(data.to_vec()));
             }
         }
         self.columns_chunk_offsets

@@ -18,6 +18,8 @@ mod providers;
 mod read;
 
 pub use cache::CacheAccessor;
+pub use cache::Named;
+pub use cache::NamedCache;
 pub use providers::DiskBytesCache;
 pub use providers::DiskCache;
 pub use providers::DiskCacheBuilder;

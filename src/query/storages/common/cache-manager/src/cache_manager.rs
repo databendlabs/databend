@@ -22,6 +22,8 @@ use common_config::QueryConfig;
 use common_exception::Result;
 use storages_common_cache::InMemoryCacheBuilder;
 use storages_common_cache::InMemoryItemCacheHolder;
+use storages_common_cache::Named;
+use storages_common_cache::NamedCache;
 use storages_common_cache::TableDataCache;
 use storages_common_cache::TableDataCacheBuilder;
 
@@ -63,8 +65,11 @@ impl CacheManager {
         };
 
         // setup in-memory table column cache
-        let table_column_array_cache =
-            Self::new_in_memory_cache(config.table_cache_column_mb_size, ColumnArrayMeter);
+        let table_column_array_cache = Self::new_in_memory_cache(
+            config.table_cache_column_mb_size,
+            ColumnArrayMeter,
+            "table_data_cache_column_array",
+        );
 
         // setup in-memory table meta cache
         if !config.table_meta_cache_enabled {
@@ -151,12 +156,16 @@ impl CacheManager {
     fn new_in_memory_cache<V, M>(
         capacity: u64,
         meter: M,
-    ) -> Option<InMemoryItemCacheHolder<V, DefaultHashBuilder, M>>
+        name: &str,
+    ) -> Option<NamedCache<InMemoryItemCacheHolder<V, DefaultHashBuilder, M>>>
     where
         M: CountableMeter<String, Arc<V>>,
     {
         if capacity > 0 {
-            Some(InMemoryCacheBuilder::new_in_memory_cache(capacity, meter))
+            Some(
+                InMemoryCacheBuilder::new_in_memory_cache(capacity, meter)
+                    .name_with(name.to_owned()),
+            )
         } else {
             None
         }

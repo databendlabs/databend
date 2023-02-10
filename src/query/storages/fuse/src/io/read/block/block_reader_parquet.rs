@@ -131,8 +131,8 @@ impl BlockReader {
 
         let mut deserialized_column_arrays = Vec::with_capacity(self.projection.len());
 
-        let columns = self.projection.project_column_nodes(&self.column_nodes)?;
-        let mut need_default_vals = Vec::with_capacity(columns.len());
+        let fields = self.projection.project_column_nodes(&self.column_nodes)?;
+        let mut need_default_vals = Vec::with_capacity(fields.len());
         let mut need_to_fill_default_val = false;
 
         // TODO need refactor
@@ -147,7 +147,7 @@ impl BlockReader {
         let mut deserialized_item_index: usize = 0;
         let mut cache_flags = vec![];
 
-        for column in &columns {
+        for column in &fields {
             let field = column.field.clone();
             let indices = &column.leaf_ids;
             let mut field_column_metas = Vec::with_capacity(indices.len());
@@ -186,17 +186,24 @@ impl BlockReader {
                 }
             }
 
+            if field_column_metas.len() == 0 {
+                continue;
+            }
+
             if column_in_block {
-                if column_metas.len() > 1 {
+                if field_column_metas.len() > 1 {
+                    eprintln!("nested");
                     // working on nested field
                     holders.push(Holder::Deserialized(deserialized_item_index));
                     cache_flags.push(None);
                 } else {
+                    eprintln!("simple");
                     // working on simple field
                     let column_idx = indices[0] as ColumnId;
                     holders.push(Holder::Deserialized(deserialized_item_index));
                     cache_flags.push(Some(column_idx));
                 }
+
                 deserialized_item_index += 1;
 
                 let field_name = field.name.clone();
@@ -262,12 +269,14 @@ impl BlockReader {
         };
 
         if let Some(cache) = CacheManager::instance().get_table_data_array_cache() {
+            eprintln!("array cache enabeld");
             // populate array cache items
             for ((size, item), need_tobe_cached) in
                 deserialized_column_arrays.into_iter().zip(cache_flags)
             {
                 if let Some(column_idx) = need_tobe_cached {
                     let key = TableDataColumnCacheKey::new(block_path, column_idx);
+                    eprintln!("array cache put {}", key.as_ref());
                     cache.put(key.into(), Arc::new((item, size)))
                 }
             }
