@@ -102,6 +102,10 @@ macro_rules! register_decimal_binary_op {
             if args_type.len() != 2 {
                 return None;
             }
+
+            let has_nullable = args_type.iter().any(|x| x.is_nullable_or_null());
+            let args_type: Vec<DataType> = args_type.iter().map(|x| x.remove_nullable()).collect();
+
             // number X decimal -> decimal
             // decimal X number -> decimal
             // decimal X decimal -> decimal
@@ -142,7 +146,7 @@ macro_rules! register_decimal_binary_op {
                 scale_a = return_type.scale() as u32;
             }
 
-            Some(Arc::new(Function {
+            let function = Function {
                 signature: FunctionSignature {
                     name: $name.to_string(),
                     args_type: vec![
@@ -163,7 +167,12 @@ macro_rules! register_decimal_binary_op {
                         scale_b
                     )
                 }),
-            }))
+            };
+            if has_nullable {
+                Some(Arc::new(function.wrap_nullable()))
+            } else {
+                Some(Arc::new(function))
+            }
         });
     };
 }

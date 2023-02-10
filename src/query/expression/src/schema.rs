@@ -1371,6 +1371,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         DataType::String => Ok(TableDataType::String),
         DataType::Number(number_type) => Ok(TableDataType::Number(*number_type)),
         DataType::Timestamp => Ok(TableDataType::Timestamp),
+        DataType::Decimal(x) => Ok(TableDataType::Decimal(*x)),
         DataType::Date => Ok(TableDataType::Date),
         DataType::Nullable(inner_type) => Ok(TableDataType::Nullable(Box::new(infer_schema_type(
             inner_type,
@@ -1397,7 +1398,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
                 fields_type,
             })
         }
-        _ => Err(ErrorCode::SemanticError(format!(
+        DataType::Generic(_) => Err(ErrorCode::SemanticError(format!(
             "Cannot create table with type: {}",
             data_type
         ))),

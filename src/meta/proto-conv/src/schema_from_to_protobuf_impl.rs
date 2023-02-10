@@ -341,7 +341,7 @@ impl FromToProto for ex::types::DecimalDataType {
         let num = match p.decimal {
             None => {
                 return Err(Incompatible {
-                    reason: "Invalid Number: .num can not be None".to_string(),
+                    reason: "Invalid Decimal: .decimal can not be None".to_string(),
                 });
             }
             Some(x) => x,
