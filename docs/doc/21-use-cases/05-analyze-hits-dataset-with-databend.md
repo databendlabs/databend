@@ -39,15 +39,13 @@ See also [How To Create User](../14-sql-commands/00-ddl/30-user/01-user-create-u
 
 ### 2.3 Load Data Into hits Table
 
-```shell title='hits_1m.tsv.gz'
-wget --no-check-certificate https://repo.databend.rs/hits/hits_1m.tsv.gz
-## If you want to load full version of hits dataset, please download from clickhouse's dataset:
-##  wget --continue 'https://datasets.clickhouse.com/hits_compatible/hits.tsv.gz'
-gzip -d hits_1m.csv.gz
+```shell
+mysql -h127.0.0.1 -P3307 -uroot
 ```
 
+`COPY` data into `hits` table:
 ```shell title='Load CSV files into Databend'
-curl -H "insert_sql:insert into hits file_format = (type = 'TSV')"  -F  "upload=@./hits_1m.tsv"  -XPUT http://user1:abc123@127.0.0.1:8000/v1/streaming_load
+COPY INTO hits FROM 'https://repo.databend.rs/hits/hits_1m.tsv.gz' FILE_FORMAT=(type=TSV compression=AUTO);
 ```
 
 ## Step 3. Queries
@@ -57,6 +55,7 @@ Execute Queries:
 ```shell
 mysql -h127.0.0.1 -P3307 -uroot
 ```
+
 ```sql
 SELECT SUM(AdvEngineID), COUNT(*), AVG(ResolutionWidth) FROM hits;
 ```
