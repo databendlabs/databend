@@ -26,13 +26,16 @@ use common_base::runtime::UnlimitedFuture;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
 use common_catalog::table::ColumnId;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::DataField;
 use common_expression::DataSchema;
+use common_expression::Scalar;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
+use common_sql::field_default_value;
 use common_storage::ColumnNode;
 use common_storage::ColumnNodes;
 use futures::future::try_join_all;
@@ -53,6 +56,7 @@ pub struct BlockReader {
     pub(crate) project_indices: BTreeMap<usize, (ColumnId, Field, DataType)>,
     pub(crate) column_nodes: ColumnNodes,
     pub(crate) parquet_schema_descriptor: SchemaDescriptor,
+    pub(crate) default_vals: Vec<Scalar>,
 }
 
 pub struct OwnerMemory {
@@ -120,6 +124,7 @@ impl BlockReader {
         operator: Operator,
         schema: TableSchemaRef,
         projection: Projection,
+        ctx: Arc<dyn TableContext>,
     ) -> Result<Arc<BlockReader>> {
         let projected_schema = match projection {
             Projection::Columns(ref indices) => TableSchemaRef::new(schema.project(indices)),
@@ -139,6 +144,12 @@ impl BlockReader {
             .collect();
         let project_indices = Self::build_projection_indices(&project_column_nodes);
 
+        // init default_vals of schema.fields
+        let mut default_vals = Vec::with_capacity(projected_schema.fields().len());
+        for field in projected_schema.fields() {
+            default_vals.push(field_default_value(ctx.clone(), field)?);
+        }
+
         Ok(Arc::new(BlockReader {
             operator,
             projection,
@@ -146,6 +157,7 @@ impl BlockReader {
             parquet_schema_descriptor,
             column_nodes,
             project_indices,
+            default_vals,
         }))
     }
 
@@ -339,7 +351,7 @@ impl BlockReader {
                 let data_type: DataType = f.data_type().into();
                 indices.insert(
                     *index,
-                    (column.leaf_column_id(i), column.field.clone(), data_type),
+                    (column.leaf_column_ids[i], column.field.clone(), data_type),
                 );
             }
         }

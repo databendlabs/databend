@@ -32,10 +32,10 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::TableSchema;
+use common_meta_app::principal::UserStageInfo;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use common_storage::init_stage_operator;
 use common_storage::StageFilesInfo;
@@ -71,6 +71,10 @@ impl ParquetTable {
 impl Table for ParquetTable {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn is_local(&self) -> bool {
+        false
     }
 
     fn get_table_info(&self) -> &TableInfo {

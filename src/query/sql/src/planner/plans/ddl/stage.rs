@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
-use common_meta_types::UserStageInfo;
+use common_meta_app::principal::UserStageInfo;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateStagePlan {

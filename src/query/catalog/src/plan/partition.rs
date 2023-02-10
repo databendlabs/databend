@@ -89,21 +89,21 @@ impl Partitions {
     }
 
     pub fn reshuffle(&self, executors: Vec<String>) -> Result<HashMap<String, Partitions>> {
-        let mut executors_sort = executors;
-        executors_sort.sort();
+        let mut executors_sorted = executors;
+        executors_sorted.sort();
 
-        let executor_nums = executors_sort.len();
+        let num_executors = executors_sorted.len();
         let partitions = match self.kind {
             PartitionsShuffleKind::Seq => self.partitions.clone(),
             PartitionsShuffleKind::Mod => {
                 // Sort by hash%executor_nums.
-                let mut parts = self.partitions.clone();
-                parts.sort_by(|a, b| {
-                    let hl = a.hash() % executor_nums as u64;
-                    let hr = b.hash() % executor_nums as u64;
-                    hl.cmp(&hr)
-                });
-                parts
+                let mut parts = self
+                    .partitions
+                    .iter()
+                    .map(|p| (p.hash() % num_executors as u64, p.clone()))
+                    .collect::<Vec<_>>();
+                parts.sort_by(|a, b| a.0.cmp(&b.0));
+                parts.into_iter().map(|x| x.1).collect()
             }
             PartitionsShuffleKind::Rand => {
                 let mut rng = thread_rng();
@@ -113,22 +113,29 @@ impl Partitions {
             }
         };
 
+        let num_parts = partitions.len();
         let mut executor_part = HashMap::default();
-        let parts_per_node = partitions.len() / executor_nums;
-        for (idx, executor) in executors_sort.iter().enumerate() {
+        // the first num_parts % num_executors get parts_per_node parts
+        // the remaining get parts_per_node - 1 parts
+        let parts_per_node = (num_parts + num_executors - 1) / num_executors;
+        for (idx, executor) in executors_sorted.iter().enumerate() {
             let begin = parts_per_node * idx;
-            let end = parts_per_node * (idx + 1);
-            let mut parts = partitions[begin..end].to_vec();
-
-            if idx == executor_nums - 1 {
-                // For some irregular partitions, we assign them to the last node
-                let begin = parts_per_node * executor_nums;
-                parts.extend_from_slice(&partitions[begin..]);
-            }
+            let end = num_parts.min(parts_per_node * (idx + 1));
+            let parts = partitions[begin..end].to_vec();
             executor_part.insert(
                 executor.clone(),
                 Partitions::create(PartitionsShuffleKind::Seq, parts.to_vec()),
             );
+            if end == num_parts && idx < num_executors - 1 {
+                // reach here only when num_executors > num_parts
+                executors_sorted[(idx + 1)..].iter().for_each(|executor| {
+                    executor_part.insert(
+                        executor.clone(),
+                        Partitions::create(PartitionsShuffleKind::Seq, vec![]),
+                    );
+                });
+                break;
+            }
         }
         Ok(executor_part)
     }

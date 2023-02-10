@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use common_exception::exception::Result;
-use common_meta_types::GrantEntry;
-use common_meta_types::GrantObject;
-use common_meta_types::UserGrantSet;
-use common_meta_types::UserPrivilegeType;
+use common_meta_app::principal::GrantEntry;
+use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::UserGrantSet;
+use common_meta_app::principal::UserPrivilegeType;
 use enumflags2::make_bitflags;
 
 #[test]

@@ -24,8 +24,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::constants::NAN_BYTES_SNAKE;
 
-use crate::StorageParams;
-use crate::UserIdentity;
+use crate::principal::UserIdentity;
+use crate::storage::StorageParams;
 
 // -- Internal stage
 // CREATE [ OR REPLACE ] [ TEMPORARY ] STAGE [ IF NOT EXISTS ] <internal_stage_name>
@@ -165,7 +165,7 @@ pub enum StageFileFormatType {
 
 impl Default for StageFileFormatType {
     fn default() -> Self {
-        Self::Csv
+        Self::Parquet
     }
 }
 

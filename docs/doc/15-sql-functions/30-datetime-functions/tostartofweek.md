@@ -8,7 +8,7 @@ The first day of a week can be Sunday or Monday, which is specified by the argum
 ## Syntax
 
 ```sql
-to_start_of_week(expr)
+to_start_of_week(expr[, mode])
 ```
 
 ## Arguments
@@ -38,4 +38,11 @@ SELECT to_start_of_week(to_timestamp(1630812366));
 +--------------------------------------------+
 | 2021-09-05                                 |
 +--------------------------------------------+
+
+SELECT to_start_of_week(to_timestamp(1630812366), 1);
++-----------------------------------------------+
+| to_start_of_week(to_timestamp(1630812366), 1) |
++-----------------------------------------------+
+| 2021-08-30                                    |
++-----------------------------------------------+
 ```

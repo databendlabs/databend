@@ -26,7 +26,7 @@ DESC STAGE my_int_stage;
 +--------------+------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------+--------------------------------------------------------------------------------------------------------------------+---------+
 | name         | stage_type | stage_params                                                                                                                                                | copy_options                                  | file_format_options                                                                                                | comment |
 +--------------+------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------+--------------------------------------------------------------------------------------------------------------------+---------+
-| my_int_stage | Internal   | StageParams { storage: S3(StageS3Storage { bucket: "", path: "", credentials_aws_key_id: "", credentials_aws_secret_key: "", encryption_master_key: "" }) } | CopyOptions { on_error: None, size_limit: 0 } | FileFormatOptions { format: Csv, skip_header: 0, field_delimiter: ",", record_delimiter: "\n", compression: None } |         |
+| my_int_stage | Internal   | StageParams { storage: S3(StageS3Storage { bucket: "", path: "", credentials_aws_key_id: "", credentials_aws_secret_key: "", encryption_master_key: "" }) } | CopyOptions { on_error: None, size_limit: 0 } | FileFormatOptions { format: Parquet, skip_header: 0, field_delimiter: ",", record_delimiter: "\n", compression: None } |         |
 +--------------+------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------+--------------------------------------------------------------------------------------------------------------------+---------+
 ```
 
@@ -180,7 +180,7 @@ COPY INTO books FROM @my_int_stage files=('books.csv') file_format = (type = CSV
 <TabItem value="parquet" label="Parquet">
 
 ```sql
-COPY INTO books FROM @my_int_stage files=('books.parquet') file_format = (type = 'Parquet');
+COPY INTO books FROM @my_int_stage files=('books.parquet') FILE_FORMAT = (TYPE = PARQUET);
 ```
 
 </TabItem>

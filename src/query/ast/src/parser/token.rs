@@ -318,6 +318,8 @@ pub enum TokenKind {
     #[token("CHAR", ignore(ascii_case))]
     CHAR,
     #[token("CHARACTER", ignore(ascii_case))]
+    #[token("COLUMN", ignore(ascii_case))]
+    COLUMN,
     CHARACTER,
     #[token("COMPRESSION", ignore(ascii_case))]
     COMPRESSION,
