@@ -294,6 +294,16 @@ impl Processor for NativeDeserializeDataTransform {
                 return Ok(());
             }
 
+            // FIX: select * from t where now()
+            if !chunks.get(0).unwrap().1.has_next() {
+                // No data anymore
+                let _ = self.chunks.pop_front();
+                let _ = self.parts.pop_front().unwrap();
+                self.check_topn();
+                // check finished
+                return Ok(());
+            }
+
             let mut arrays = Vec::with_capacity(chunks.len());
             self.read_columns.clear();
 
@@ -301,14 +311,6 @@ impl Processor for NativeDeserializeDataTransform {
             if self.prewhere_columns.len() > 1 {
                 if let Some((top_k, sorter, index)) = self.top_k.as_mut() {
                     let chunk = chunks.get_mut(*index).unwrap();
-                    if !chunk.1.has_next() {
-                        // No data anymore
-                        let _ = self.chunks.pop_front();
-                        let _ = self.parts.pop_front().unwrap();
-                        self.check_topn();
-                        // check finished
-                        return Ok(());
-                    }
                     let array = chunk.1.next_array()?;
                     self.read_columns.push(*index);
 
@@ -329,14 +331,6 @@ impl Processor for NativeDeserializeDataTransform {
                     continue;
                 }
                 if let Some(chunk) = chunks.get_mut(*index) {
-                    if !chunk.1.has_next() {
-                        // No data anymore
-                        let _ = self.chunks.pop_front();
-                        let _ = self.parts.pop_front().unwrap();
-
-                        self.check_topn();
-                        return Ok(());
-                    }
                     self.read_columns.push(*index);
                     arrays.push((chunk.0, chunk.1.next_array()?));
                 }

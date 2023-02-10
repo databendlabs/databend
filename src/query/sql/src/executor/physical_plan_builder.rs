@@ -601,7 +601,7 @@ impl PhysicalPlanBuilder {
             .transpose()?;
 
         let prewhere_info = scan.prewhere.as_ref().map_or_else(
-            || {
+            || -> Result<Option<PrewhereInfo>> {
                 if support_delete_mark {
                     let filter = ScalarExpr::BoundColumnRef(BoundColumnRef {
                         column: ColumnBinding {
@@ -631,7 +631,7 @@ impl PhysicalPlanBuilder {
                     Ok(None)
                 }
             },
-            |prewhere| -> Result<Option<PrewhereInfo>> {
+            |prewhere| {
                 let predicate = if prewhere.predicates.is_empty() {
                     None
                 } else {
