@@ -65,24 +65,16 @@ impl BlockReader {
             .await?;
 
         // Get the columns chunk.
-        let chunks = fetched
-            .columns_chunks()?
-            .into_iter()
-            .map(|(column_idx, column_chunk)| (column_idx, column_chunk))
-            .collect::<Vec<_>>();
+        let column_chunks = fetched.columns_chunks()?;
 
         let num_rows = meta.row_count as usize;
-        let columns_chunk = chunks
-            .into_iter()
-            .map(|(index, chunk)| (index, chunk))
-            .collect::<Vec<_>>();
 
         self.deserialize_parquet_chunks_with_buffer(
             &meta.location.0,
             num_rows,
             &meta.compression,
             &columns_meta,
-            columns_chunk,
+            column_chunks,
             None,
         )
     }
@@ -91,7 +83,7 @@ impl BlockReader {
     pub fn deserialize_parquet_chunks(
         &self,
         part: PartInfoPtr,
-        chunks: Vec<(ColumnId, DataItem)>,
+        chunks: HashMap<ColumnId, DataItem>,
     ) -> Result<DataBlock> {
         let part = FusePartInfo::from_part(&part)?;
         let start = Instant::now();
@@ -100,17 +92,12 @@ impl BlockReader {
             return Ok(DataBlock::new(vec![], part.nums_rows));
         }
 
-        let reads = chunks
-            .into_iter()
-            .map(|(index, chunk)| (index, chunk))
-            .collect::<Vec<_>>();
-
         let deserialized_res = self.deserialize_parquet_chunks_with_buffer(
             &part.location,
             part.nums_rows,
             &part.compression,
             &part.columns_meta,
-            reads,
+            chunks,
             None,
         );
 
@@ -134,16 +121,15 @@ impl BlockReader {
         block_path: &str,
         num_rows: usize,
         compression: &Compression,
-        columns_meta: &HashMap<ColumnId, ColumnMeta>,
-        columns_chunks: Vec<(ColumnId, DataItem)>,
+        column_metas: &HashMap<ColumnId, ColumnMeta>,
+        column_chunks: HashMap<ColumnId, DataItem>,
         uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
     ) -> Result<DataBlock> {
-        if columns_chunks.is_empty() {
+        if column_chunks.is_empty() {
             return self.build_default_values_block(num_rows);
         }
 
-        let chunk_map: HashMap<ColumnId, DataItem> = columns_chunks.into_iter().collect();
-        let mut columns_array_iter = Vec::with_capacity(self.projection.len());
+        let mut deserialized_column_arrays = Vec::with_capacity(self.projection.len());
 
         let columns = self.projection.project_column_nodes(&self.column_nodes)?;
         let mut need_default_vals = Vec::with_capacity(columns.len());
@@ -164,23 +150,24 @@ impl BlockReader {
         for column in &columns {
             let field = column.field.clone();
             let indices = &column.leaf_ids;
-            let mut column_metas = Vec::with_capacity(indices.len());
-            let mut column_chunks = Vec::with_capacity(indices.len());
-            let mut column_descriptors = Vec::with_capacity(indices.len());
+            let mut field_column_metas = Vec::with_capacity(indices.len());
+            let mut field_column_data = Vec::with_capacity(indices.len());
+            let mut field_column_descriptors = Vec::with_capacity(indices.len());
             let mut column_in_block = false;
             let mut field_uncompressed_size = 0;
             for (i, index) in indices.iter().enumerate() {
-                let column_id = column.leaf_column_id(i);
-                if let Some(column_meta) = columns_meta.get(&column_id) {
-                    if let Some(chunk) = chunk_map.get(index) {
+                let column_id = column.leaf_column_ids[i];
+                if let Some(column_meta) = column_metas.get(&column_id) {
+                    // TODO need @LiChuang review
+                    if let Some(chunk) = column_chunks.get(&(*index as ColumnId)) {
                         column_in_block = true;
                         match chunk {
                             DataItem::RawData(data) => {
                                 let column_descriptor =
                                     &self.parquet_schema_descriptor.columns()[*index];
-                                column_metas.push(column_meta);
-                                column_chunks.push(*data);
-                                column_descriptors.push(column_descriptor);
+                                field_column_metas.push(column_meta);
+                                field_column_data.push(*data);
+                                field_column_descriptors.push(column_descriptor);
                                 field_uncompressed_size += data.len();
                             }
                             DataItem::ColumnArray(column_array) => {
@@ -212,21 +199,25 @@ impl BlockReader {
                 }
                 deserialized_item_index += 1;
 
-                // TODO why not just iterator it here?
-                columns_array_iter.push((
-                    field_uncompressed_size,
-                    Self::chunks_to_parquet_array_iter(
-                        column_metas,
-                        column_chunks,
-                        num_rows,
-                        column_descriptors,
-                        field,
-                        compression,
-                        uncompressed_buffer
-                            .clone()
-                            .unwrap_or_else(|| UncompressedBuffer::new(0)),
-                    )?,
-                ));
+                let field_name = field.name.clone();
+                let mut array_iter = Self::chunks_to_parquet_array_iter(
+                    field_column_metas,
+                    field_column_data,
+                    num_rows,
+                    field_column_descriptors,
+                    field,
+                    compression,
+                    uncompressed_buffer
+                        .clone()
+                        .unwrap_or_else(|| UncompressedBuffer::new(0)),
+                )?;
+                let array = array_iter.next().transpose()?.ok_or_else(|| {
+                    ErrorCode::StorageOther(format!(
+                        "unexpected deserialization error, no array found for field {field_name} "
+                    ))
+                })?;
+                deserialized_column_arrays.push((field_uncompressed_size, array));
+
                 need_default_vals.push(false);
             } else {
                 need_default_vals.push(true);
@@ -234,15 +225,7 @@ impl BlockReader {
             }
         }
 
-        let mut arrays = Vec::with_capacity(columns_array_iter.len());
-
-        // deserialized fields that are not cached
-        let deserialized_column_arrays = columns_array_iter
-            .into_iter()
-            .map(|(size, mut array_iter)|
-                // TODO error handling
-                     (size, array_iter.next().unwrap().unwrap()))
-            .collect::<Vec<_>>();
+        let mut arrays = Vec::with_capacity(self.projection.len());
 
         // assembly the arrays
         for holder in holders {

@@ -118,23 +118,23 @@ impl MergeIOReadResult {
         }
     }
 
-    pub fn columns_chunks(&self) -> Result<Vec<(ColumnId, DataItem)>> {
-        let mut res = Vec::with_capacity(self.columns_chunk_offsets.len());
+    pub fn columns_chunks(&self) -> Result<HashMap<ColumnId, DataItem>> {
+        let mut res = HashMap::with_capacity(self.columns_chunk_offsets.len());
 
         // merge column data fetched from object storage
         for (column_idx, (chunk_idx, range)) in &self.columns_chunk_offsets {
             let chunk = self.owner_memory.get_chunk(*chunk_idx, &self.block_path)?;
-            res.push((*column_idx, DataItem::RawData(&chunk[range.clone()])));
+            res.insert(*column_idx, DataItem::RawData(&chunk[range.clone()]));
         }
 
         // merge column data from cache
         for (column_id, data) in &self.cached_column_data {
-            res.push((*column_id, DataItem::RawData(data.as_slice())))
+            res.insert(*column_id, DataItem::RawData(data.as_slice()));
         }
 
         // merge column array from cache
         for (column_id, data) in &self.cached_column_array {
-            res.push((*column_id, DataItem::ColumnArray(data)))
+            res.insert(*column_id, DataItem::ColumnArray(data));
         }
 
         Ok(res)
