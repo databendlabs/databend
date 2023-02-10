@@ -19,7 +19,7 @@ use common_expression::types::StringType;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::FromData;
-use common_meta_types::PrincipalIdentity;
+use common_meta_app::principal::PrincipalIdentity;
 use common_sql::plans::ShowGrantsPlan;
 use common_users::RoleCacheManager;
 use common_users::UserApiProvider;

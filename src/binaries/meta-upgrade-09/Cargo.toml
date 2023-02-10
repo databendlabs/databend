@@ -9,7 +9,6 @@ edition = { workspace = true }
 
 [dependencies]
 # Workspace dependencies
-common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-kvapi = { path = "../../meta/kvapi" }
 common-meta-raft-store = { path = "../../meta/raft-store" }

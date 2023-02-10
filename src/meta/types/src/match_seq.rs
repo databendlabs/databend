@@ -88,3 +88,102 @@ impl MatchSeqExt<u64> for MatchSeq {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use crate::ConflictSeq;
+    use crate::MatchSeq;
+    use crate::MatchSeqExt;
+    use crate::SeqV;
+
+    #[derive(serde::Serialize)]
+    struct Foo {
+        f: MatchSeq,
+    }
+
+    #[test]
+    fn test_match_seq_serde() -> anyhow::Result<()> {
+        //
+
+        let t = Foo { f: MatchSeq::Any };
+        let s = serde_json::to_string(&t)?;
+        println!("{s}");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_match_seq_match_seq_value() -> anyhow::Result<()> {
+        assert_eq!(MatchSeq::GE(0).match_seq(&Some(SeqV::new(0, 1))), Ok(()));
+        assert_eq!(MatchSeq::GE(0).match_seq(&Some(SeqV::new(1, 1))), Ok(()));
+
+        //
+
+        assert_eq!(
+            MatchSeq::Exact(3).match_seq(&None::<SeqV>),
+            Err(ConflictSeq::NotMatch {
+                want: MatchSeq::Exact(3),
+                got: 0
+            })
+        );
+        assert_eq!(
+            MatchSeq::Exact(3).match_seq(&Some(SeqV::new(0, 1))),
+            Err(ConflictSeq::NotMatch {
+                want: MatchSeq::Exact(3),
+                got: 0
+            })
+        );
+        assert_eq!(
+            MatchSeq::Exact(3).match_seq(&Some(SeqV::new(2, 1))),
+            Err(ConflictSeq::NotMatch {
+                want: MatchSeq::Exact(3),
+                got: 2
+            })
+        );
+        assert_eq!(MatchSeq::Exact(3).match_seq(&Some(SeqV::new(3, 1))), Ok(()));
+        assert_eq!(
+            MatchSeq::Exact(3).match_seq(&Some(SeqV::new(4, 1))),
+            Err(ConflictSeq::NotMatch {
+                want: MatchSeq::Exact(3),
+                got: 4
+            })
+        );
+
+        //
+
+        assert_eq!(
+            MatchSeq::GE(3).match_seq(&None::<SeqV>),
+            Err(ConflictSeq::NotMatch {
+                want: MatchSeq::GE(3),
+                got: 0
+            })
+        );
+        assert_eq!(
+            MatchSeq::GE(3).match_seq(&Some(SeqV::new(0, 1))),
+            Err(ConflictSeq::NotMatch {
+                want: MatchSeq::GE(3),
+                got: 0
+            })
+        );
+        assert_eq!(
+            MatchSeq::GE(3).match_seq(&Some(SeqV::new(2, 1))),
+            Err(ConflictSeq::NotMatch {
+                want: MatchSeq::GE(3),
+                got: 2
+            })
+        );
+        assert_eq!(MatchSeq::GE(3).match_seq(&Some(SeqV::new(3, 1))), Ok(()));
+        assert_eq!(MatchSeq::GE(3).match_seq(&Some(SeqV::new(4, 1))), Ok(()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_match_seq_display() -> anyhow::Result<()> {
+        assert_eq!("== 3", MatchSeq::Exact(3).to_string());
+        assert_eq!(">= 3", MatchSeq::GE(3).to_string());
+
+        Ok(())
+    }
+}

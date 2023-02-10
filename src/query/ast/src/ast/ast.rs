@@ -85,7 +85,7 @@ pub(crate) fn write_quoted_comma_separated_list(
 }
 
 /// Write input map items into `field_a=x field_b=y`
-pub(crate) fn write_space_seperated_map(
+pub(crate) fn write_space_separated_map(
     f: &mut Formatter<'_>,
     items: impl IntoIterator<Item = (impl Display, impl Display)>,
 ) -> std::fmt::Result {

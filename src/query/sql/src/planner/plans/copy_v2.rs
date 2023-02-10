@@ -18,8 +18,8 @@ use std::str::FromStr;
 
 use common_catalog::plan::DataSourcePlan;
 use common_expression::TableSchemaRef;
+use common_meta_app::principal::UserStageInfo;
 use common_meta_types::MetaId;
-use common_meta_types::UserStageInfo;
 
 use crate::plans::Plan;
 

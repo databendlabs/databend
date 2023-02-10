@@ -33,6 +33,14 @@ pub trait Transform: Send {
     fn name(&self) -> String {
         Self::NAME.to_string()
     }
+
+    fn on_start(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    fn on_finish(&mut self) -> Result<()> {
+        Ok(())
+    }
 }
 
 pub struct Transformer<T: Transform + 'static> {
@@ -40,6 +48,8 @@ pub struct Transformer<T: Transform + 'static> {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
+    called_on_start: bool,
+    called_on_finish: bool,
     input_data: Option<DataBlock>,
     output_data: Option<DataBlock>,
 }
@@ -52,6 +62,8 @@ impl<T: Transform + 'static> Transformer<T> {
             transform: inner,
             input_data: None,
             output_data: None,
+            called_on_start: false,
+            called_on_finish: false,
         }))
     }
 }
@@ -67,6 +79,10 @@ impl<T: Transform + 'static> Processor for Transformer<T> {
     }
 
     fn event(&mut self) -> Result<Event> {
+        if !self.called_on_start {
+            return Ok(Event::Sync);
+        }
+
         match self.output.is_finished() {
             true => self.finish_input(),
             false if !self.output.can_push() => self.not_need_data(),
@@ -82,9 +98,21 @@ impl<T: Transform + 'static> Processor for Transformer<T> {
     }
 
     fn process(&mut self) -> Result<()> {
+        if !self.called_on_start {
+            self.called_on_start = true;
+            self.transform.on_start()?;
+            return Ok(());
+        }
+
         if let Some(data_block) = self.input_data.take() {
             let data_block = self.transform.transform(data_block)?;
             self.output_data = Some(data_block);
+            return Ok(());
+        }
+
+        if !self.called_on_finish {
+            self.called_on_finish = true;
+            self.transform.on_finish()?;
         }
 
         Ok(())
@@ -99,8 +127,13 @@ impl<T: Transform> Transformer<T> {
         }
 
         if self.input.is_finished() {
-            self.output.finish();
-            return Ok(Event::Finished);
+            return match !self.called_on_finish {
+                true => Ok(Event::Sync),
+                false => {
+                    self.output.finish();
+                    Ok(Event::Finished)
+                }
+            };
         }
 
         self.input.set_need_data();
@@ -113,7 +146,12 @@ impl<T: Transform> Transformer<T> {
     }
 
     fn finish_input(&mut self) -> Result<Event> {
-        self.input.finish();
-        Ok(Event::Finished)
+        match !self.called_on_finish {
+            true => Ok(Event::Sync),
+            false => {
+                self.input.finish();
+                Ok(Event::Finished)
+            }
+        }
     }
 }

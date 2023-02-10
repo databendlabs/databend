@@ -3,7 +3,7 @@ title: IS [NOT] DISTINCT_FROM
 description: '<expr1> IS [NOT] DISTINCT FROM <expr2> function'
 ---
 
-Compares whether two expressions are equal (or not equal) with awareness of nullability, meaning it treats NULLs as known values for comparing equality. Note that this is different from the [comparision operators](../comparisons-operators/), which will return NULL if the arguments are NULL.
+Compares whether two expressions are equal (or not equal) with awareness of nullability, meaning it treats NULLs as known values for comparing equality. Note that this is different from the [comparison operators](../comparisons-operators/), which will return NULL if the arguments are NULL.
 
 ## Syntax
 

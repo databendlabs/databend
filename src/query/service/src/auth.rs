@@ -17,8 +17,8 @@ use std::sync::Arc;
 pub use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::AuthInfo;
-use common_meta_types::UserInfo;
+use common_meta_app::principal::AuthInfo;
+use common_meta_app::principal::UserInfo;
 use common_users::JwtAuthenticator;
 use common_users::UserApiProvider;
 

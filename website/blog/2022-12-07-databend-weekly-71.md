@@ -19,7 +19,7 @@ Check out what we've done this week to make Databend even better for you.
 
 **Planner**
 
-- optimize topk in cluser mode ([#9092](https://github.com/datafuselabs/databend/pull/9092))
+- optimize topk in cluster mode ([#9092](https://github.com/datafuselabs/databend/pull/9092))
 
 **Query**
 

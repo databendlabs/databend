@@ -16,6 +16,26 @@ create table t(col1 Array(Int Null), col2 Array(String), col3 Array(Date), col4 
 statement ok
 insert into t values([1,2,3,3],['x','x','y','z'], ['2022-02-02'], ['2023-01-01 02:00:01'], [[1,2],[],[null]])
 
+query IIII
+select length(col1), length(col2), length(col3), length(col4) from t
+----
+4 4 1 1
+
+query ITT
+select get(col1, 3), get(col2, 2), get(col3, 1) from t
+----
+3 x 2022-02-02
+
+query TTTT
+select slice(col1, 1), slice(col1, 2, 3), slice(col2, 2), slice(col2, 3, 3) from t
+----
+[1,2,3,3] [2,3] ['x','y','z'] ['y']
+
+query BBB
+select contains(col1, 3), contains(col2, 'x'), contains(col3, '2021-01-01') from t
+----
+1 1 0
+
 query T
 select array_concat(col1, col5) from t
 ----
@@ -98,6 +118,11 @@ select array_max(col1), array_max(col2), array_max(col3) from t
 
 query ITT
 select array_min(col1), array_min(col2), array_min(col3) from t
+----
+1 x 2022-02-02
+
+query ITT
+select array_any(col1), array_any(col2), array_any(col3) from t
 ----
 1 x 2022-02-02
 

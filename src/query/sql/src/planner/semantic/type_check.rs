@@ -460,7 +460,6 @@ impl<'a> TypeChecker<'a> {
                                 self.resolve_subquery(
                                     SubqueryType::Any,
                                     subquery,
-                                    true,
                                     Some(*left.clone()),
                                     Some(comparison_op),
                                     None,
@@ -770,7 +769,6 @@ impl<'a> TypeChecker<'a> {
                         SubqueryType::NotExists
                     },
                     subquery,
-                    true,
                     None,
                     None,
                     None,
@@ -779,7 +777,7 @@ impl<'a> TypeChecker<'a> {
             }
 
             Expr::Subquery { subquery, .. } => {
-                self.resolve_subquery(SubqueryType::Scalar, subquery, false, None, None, None)
+                self.resolve_subquery(SubqueryType::Scalar, subquery, None, None, None)
                     .await?
             }
 
@@ -809,7 +807,6 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_subquery(
                     SubqueryType::Any,
                     subquery,
-                    true,
                     Some(*expr.clone()),
                     Some(ComparisonOp::Equal),
                     None,
@@ -857,7 +854,7 @@ impl<'a> TypeChecker<'a> {
 
             Expr::Interval { span, .. } => {
                 return Err(ErrorCode::SemanticError(
-                    "Unsupport interval expression yet".to_string(),
+                    "Unsupported interval expression yet".to_string(),
                 )
                 .set_span(*span));
             }
@@ -952,11 +949,11 @@ impl<'a> TypeChecker<'a> {
         required_type: Option<DataType>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Check if current function is a virtual function, e.g. `database`, `version`
-        if let Some(rewriten_func_result) = self
+        if let Some(rewritten_func_result) = self
             .try_rewrite_scalar_function(span, func_name, arguments)
             .await
         {
-            return rewriten_func_result;
+            return rewritten_func_result;
         }
 
         let mut args = vec![];
@@ -1350,7 +1347,6 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         typ: SubqueryType,
         subquery: &Query,
-        allow_multi_rows: bool,
         child_expr: Option<Expr>,
         compare_op: Option<ComparisonOp>,
         _required_type: Option<DataType>,
@@ -1402,10 +1398,9 @@ impl<'a> TypeChecker<'a> {
             subquery: Box::new(s_expr),
             child_expr: child_scalar,
             compare_op,
-            output_column: output_context.columns[0].index,
+            output_column: output_context.columns[0].clone(),
             projection_index: None,
             data_type: data_type.clone(),
-            allow_multi_rows,
             typ,
             outer_columns: rel_prop.outer_columns,
         };

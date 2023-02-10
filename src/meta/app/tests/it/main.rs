@@ -12,10 +12,15 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod clustering_information;
-mod clustering_information_table;
-mod table_args;
+mod user_defined_function;
+mod user_grant;
+mod user_info;
+mod user_privilege;
+mod user_quota;
 
-pub use clustering_information::ClusteringInformation;
-pub use clustering_information_table::ClusteringInformationTable;
-pub use table_args::*;
+#[test]
+fn test_bin_commit_version() -> anyhow::Result<()> {
+    let v = &common_meta_types::config::DATABEND_COMMIT_VERSION;
+    assert!(v.len() > 0);
+    Ok(())
+}

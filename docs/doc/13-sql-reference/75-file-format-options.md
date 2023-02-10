@@ -14,6 +14,8 @@ FILE_FORMAT = ( TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOption
 Databend currently supports XML as a source ONLY. Unloading data into an XML file is not supported yet.
 :::
 
+If `FILE_FORMAT` is not specified, use `FILE_FORMAT = (TYPE = PARQUET)` by default.
+
 `formatTypeOptions`: Includes one or more options to describe other format details about the file. The options vary depending on the file format. See the sections below to find out the available options for each supported file format.
 
 ```sql

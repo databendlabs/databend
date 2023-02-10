@@ -36,7 +36,7 @@ use common_meta_app::schema::TableMeta;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 
-pub struct TablesTable<const WITH_HISTROY: bool> {
+pub struct TablesTable<const WITH_HISTORY: bool> {
     table_info: TableInfo,
 }
 
@@ -136,7 +136,7 @@ where TablesTable<T>: HistoryAware
             .iter()
             .map(|v| v.engine().as_bytes().to_vec())
             .collect();
-        let created_ons: Vec<String> = database_tables
+        let created_owns: Vec<String> = database_tables
             .iter()
             .map(|v| {
                 v.get_table_info()
@@ -146,8 +146,9 @@ where TablesTable<T>: HistoryAware
                     .to_string()
             })
             .collect();
-        let created_ons: Vec<Vec<u8>> = created_ons.iter().map(|s| s.as_bytes().to_vec()).collect();
-        let dropped_ons: Vec<String> = database_tables
+        let created_owns: Vec<Vec<u8>> =
+            created_owns.iter().map(|s| s.as_bytes().to_vec()).collect();
+        let dropped_owns: Vec<String> = database_tables
             .iter()
             .map(|v| {
                 v.get_table_info()
@@ -157,7 +158,8 @@ where TablesTable<T>: HistoryAware
                     .unwrap_or_else(|| "NULL".to_owned())
             })
             .collect();
-        let dropped_ons: Vec<Vec<u8>> = dropped_ons.iter().map(|s| s.as_bytes().to_vec()).collect();
+        let dropped_owns: Vec<Vec<u8>> =
+            dropped_owns.iter().map(|s| s.as_bytes().to_vec()).collect();
         let cluster_bys: Vec<String> = database_tables
             .iter()
             .map(|v| {
@@ -176,8 +178,8 @@ where TablesTable<T>: HistoryAware
             StringType::from_data(names),
             StringType::from_data(engines),
             StringType::from_data(cluster_bys),
-            StringType::from_data(created_ons),
-            StringType::from_data(dropped_ons),
+            StringType::from_data(created_owns),
+            StringType::from_data(dropped_owns),
             UInt64Type::from_opt_data(num_rows),
             UInt64Type::from_opt_data(data_size),
             UInt64Type::from_opt_data(data_compressed_size),

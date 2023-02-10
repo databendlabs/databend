@@ -17,12 +17,12 @@ use std::sync::Arc;
 use common_base::base::tokio;
 use common_exception::Result;
 use common_management::*;
+use common_meta_app::principal::UserSetting;
+use common_meta_app::principal::UserSettingValue;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_kvapi::kvapi::KVApi;
 use common_meta_types::MatchSeq;
 use common_meta_types::SeqV;
-use common_meta_types::UserSetting;
-use common_meta_types::UserSettingValue;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_set_setting() -> Result<()> {

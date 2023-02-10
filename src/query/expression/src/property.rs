@@ -57,7 +57,7 @@ pub enum FunctionDomain<T: ValueType> {
     /// The function must not return error, and the return value can be
     /// any valid value the type can represent.
     Full,
-    /// The function must not return error, and have futher information
+    /// The function must not return error, and have further information
     /// about the range of the output value.
     Domain(T::Domain),
 }

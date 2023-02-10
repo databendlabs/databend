@@ -7,13 +7,13 @@ Truncates a date, time, or timestamp value to a specified precision. For example
 ## Syntax
 
 ```sql
-DATE_TRUNC(<precison>, <date_or_time_expr>)
+DATE_TRUNC(<precision>, <date_or_time_expr>)
 ```
 ## Arguments
 
 | Arguments             | Description                                                                                        |
 |-----------------------|----------------------------------------------------------------------------------------------------|
-| `<precison>`          | Must be of the following values: `YEAR`, `QUARTER`, `MONTH`, `DAY`, `HOUR`, `MINUTE` and `SECOND`  |
+| `<precision>`          | Must be of the following values: `YEAR`, `QUARTER`, `MONTH`, `DAY`, `HOUR`, `MINUTE` and `SECOND`  |
 | `<date_or_time_expr>` | A value of `DATE` or `TIMESTAMP` type                                                              |
 
 ## Return Type

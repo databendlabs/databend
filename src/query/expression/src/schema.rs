@@ -205,7 +205,7 @@ impl DataSchema {
             .find(|&(_, c)| c.name() == name)
     }
 
-    /// Check to see if `self` is a superset of `other` schema. Here are the comparision rules:
+    /// Check to see if `self` is a superset of `other` schema. Here are the comparison rules:
     pub fn contains(&self, other: &DataSchema) -> bool {
         if self.fields.len() != other.fields.len() {
             return false;
@@ -486,7 +486,7 @@ impl TableSchema {
             .find(|&(_, c)| c.name == name)
     }
 
-    /// Check to see if `self` is a superset of `other` schema. Here are the comparision rules:
+    /// Check to see if `self` is a superset of `other` schema. Here are the comparison rules:
     pub fn contains(&self, other: &TableSchema) -> bool {
         if self.fields.len() != other.fields.len() {
             return false;

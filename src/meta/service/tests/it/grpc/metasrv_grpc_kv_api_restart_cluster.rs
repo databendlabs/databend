@@ -22,9 +22,9 @@ use common_base::base::Stoppable;
 use common_meta_client::ClientHandle;
 use common_meta_client::MetaGrpcClient;
 use common_meta_kvapi::kvapi::KVApi;
+use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
-use common_meta_types::UpsertKVReq;
 use databend_meta::init_meta_ut;
 use tracing::info;
 
@@ -56,7 +56,7 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
             let res = client
                 .upsert_kv(UpsertKVReq {
                     key: k.clone(),
-                    seq: MatchSeq::Any,
+                    seq: MatchSeq::GE(0),
                     value: Operation::Update(k.clone().into_bytes()),
                     value_meta: None,
                 })
@@ -148,7 +148,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
                 let res = client
                     .upsert_kv(UpsertKVReq {
                         key: k.clone(),
-                        seq: MatchSeq::Any,
+                        seq: MatchSeq::GE(0),
                         value: Operation::Update(k.clone().into_bytes()),
                         value_meta: None,
                     })
@@ -159,7 +159,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
                 let res = client
                     .upsert_kv(UpsertKVReq {
                         key: k.clone(),
-                        seq: MatchSeq::Any,
+                        seq: MatchSeq::GE(0),
                         value: Operation::Update(k.clone().into_bytes()),
                         value_meta: None,
                     })

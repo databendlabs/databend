@@ -14,7 +14,7 @@
 
 use common_base::base::GlobalInstance;
 use common_exception::Result;
-use common_meta_types::StorageParams;
+use common_meta_app::storage::StorageParams;
 use common_storage::init_operator;
 use opendal::Operator;
 use time::Duration;
@@ -35,7 +35,7 @@ pub struct SharingAccessor {
 // 2. without root e.g. db1/tb1/file1
 // after it would be converted to file1
 // and then it would use the location in table spec to form the final path
-// {localtion}/file1
+// {location}/file1
 pub fn truncate_root(root: String, loc: String) -> String {
     let root = root.trim_matches('/');
     let loc = loc.trim_matches('/');

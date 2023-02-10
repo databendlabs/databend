@@ -15,8 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_meta_types::PrincipalIdentity;
-use common_meta_types::UserIdentity;
+use common_meta_app::principal::PrincipalIdentity;
+use common_meta_app::principal::UserIdentity;
 
 use super::*;
 use crate::ast::write_comma_separated_list;

@@ -24,18 +24,18 @@ use clap::Parser;
 use common_base::base::mask_string;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::AuthInfo;
-use common_meta_types::AuthType;
-use common_meta_types::StorageAzblobConfig as InnerStorageAzblobConfig;
-use common_meta_types::StorageFsConfig as InnerStorageFsConfig;
-use common_meta_types::StorageGcsConfig as InnerStorageGcsConfig;
-use common_meta_types::StorageHdfsConfig as InnerStorageHdfsConfig;
-use common_meta_types::StorageMokaConfig as InnerStorageMokaConfig;
-use common_meta_types::StorageObsConfig as InnerStorageObsConfig;
-use common_meta_types::StorageOssConfig as InnerStorageOssConfig;
-use common_meta_types::StorageParams;
-use common_meta_types::StorageRedisConfig as InnerStorageRedisConfig;
-use common_meta_types::StorageS3Config as InnerStorageS3Config;
+use common_meta_app::principal::AuthInfo;
+use common_meta_app::principal::AuthType;
+use common_meta_app::storage::StorageAzblobConfig as InnerStorageAzblobConfig;
+use common_meta_app::storage::StorageFsConfig as InnerStorageFsConfig;
+use common_meta_app::storage::StorageGcsConfig as InnerStorageGcsConfig;
+use common_meta_app::storage::StorageHdfsConfig as InnerStorageHdfsConfig;
+use common_meta_app::storage::StorageMokaConfig as InnerStorageMokaConfig;
+use common_meta_app::storage::StorageObsConfig as InnerStorageObsConfig;
+use common_meta_app::storage::StorageOssConfig as InnerStorageOssConfig;
+use common_meta_app::storage::StorageParams;
+use common_meta_app::storage::StorageRedisConfig as InnerStorageRedisConfig;
+use common_meta_app::storage::StorageS3Config as InnerStorageS3Config;
 use common_meta_types::TenantQuota;
 use common_storage::CacheConfig as InnerCacheConfig;
 use common_storage::StorageConfig as InnerStorageConfig;
@@ -118,7 +118,7 @@ pub struct Config {
     ///
     /// Note:
     ///
-    /// when coverted from inner config, all catalog configurations will store in `catalogs`
+    /// when converted from inner config, all catalog configurations will store in `catalogs`
     #[clap(skip)]
     pub catalogs: HashMap<String, CatalogConfig>,
 }
@@ -245,7 +245,7 @@ impl TryInto<InnerConfig> for Config {
 /// [storage.cache]
 /// type = "redis"
 ///
-/// [storage.temperary]
+/// [storage.temporary]
 /// type = "s3"
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]

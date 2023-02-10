@@ -63,7 +63,7 @@ impl Interpreter for ShowSharesInterpreter {
 
         let mut names: Vec<Vec<u8>> = vec![];
         let mut kinds: Vec<Vec<u8>> = vec![];
-        let mut created_ons: Vec<Vec<u8>> = vec![];
+        let mut created_owns: Vec<Vec<u8>> = vec![];
         let mut database_names: Vec<Vec<u8>> = vec![];
         let mut from: Vec<Vec<u8>> = vec![];
         let mut to: Vec<Vec<u8>> = vec![];
@@ -71,7 +71,7 @@ impl Interpreter for ShowSharesInterpreter {
         for entry in resp.inbound_accounts {
             names.push(entry.share_name.share_name.clone().as_bytes().to_vec());
             kinds.push("INBOUND".to_string().as_bytes().to_vec());
-            created_ons.push(entry.create_on.to_string().as_bytes().to_vec());
+            created_owns.push(entry.create_on.to_string().as_bytes().to_vec());
             database_names.push(entry.database_name.unwrap_or_default().as_bytes().to_vec());
             from.push(entry.share_name.tenant.clone().as_bytes().to_vec());
             to.push(tenant.clone().as_bytes().to_vec());
@@ -81,7 +81,7 @@ impl Interpreter for ShowSharesInterpreter {
         for entry in resp.outbound_accounts {
             names.push(entry.share_name.share_name.clone().as_bytes().to_vec());
             kinds.push("OUTBOUND".to_string().as_bytes().to_vec());
-            created_ons.push(entry.create_on.to_string().as_bytes().to_vec());
+            created_owns.push(entry.create_on.to_string().as_bytes().to_vec());
             database_names.push(entry.database_name.unwrap_or_default().as_bytes().to_vec());
             from.push(entry.share_name.tenant.clone().as_bytes().to_vec());
             to.push(
@@ -95,7 +95,7 @@ impl Interpreter for ShowSharesInterpreter {
         }
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-            StringType::from_data(created_ons),
+            StringType::from_data(created_owns),
             StringType::from_data(kinds),
             StringType::from_data(names),
             StringType::from_data(database_names),

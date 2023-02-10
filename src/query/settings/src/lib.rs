@@ -29,9 +29,9 @@ use common_config::Config;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::principal::UserSetting;
+use common_meta_app::principal::UserSettingValue;
 use common_meta_types::MatchSeq;
-use common_meta_types::UserSetting;
-use common_meta_types::UserSettingValue;
 use common_users::UserApiProvider;
 use dashmap::DashMap;
 use itertools::Itertools;
@@ -408,13 +408,13 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
-                default_value: UserSettingValue::UInt64(0),
+                default_value: UserSettingValue::UInt64(1),
                 user_setting: UserSetting::create(
                     "prefer_broadcast_join",
-                    UserSettingValue::UInt64(0),
+                    UserSettingValue::UInt64(1),
                 ),
                 level: ScopeLevel::Session,
-                desc: "If enable broadcast join, default value: 0",
+                desc: "If enable broadcast join, default value: 1",
                 possible_values: None,
             },
             SettingValue {

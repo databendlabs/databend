@@ -28,7 +28,7 @@ runs:
         build-tool bash ./scripts/ci/ci-run-fuzz-tests.sh
 
     - name: Upload failure
-      if: failure()
+      if: failure() || cancelled()
       uses: ./.github/actions/artifact_failure
       with:
         name: test-fuzz-standalone-linux
