@@ -1310,11 +1310,6 @@ pub struct QueryConfig {
     #[clap(long)]
     pub table_data_cache_enabled: bool,
 
-    /// Max bytes of table data cached in memory (MB)
-    /// default value 2048 MB, or 2G
-    #[clap(long, default_value = "2048")]
-    pub table_data_cache_in_memory_mb_size: u64,
-
     /// Max item that could be pending in the external cache population queue
     /// default value 65536 items. Increase this value if it takes too much times
     /// to fully populate the disk cache.
@@ -1407,7 +1402,6 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             table_cache_column_mb_size: self.table_cache_column_mb_size,
             table_data_cache_enabled: self.table_data_cache_enabled,
             table_data_cache_population_queue_size: self.table_data_cache_population_queue_size,
-            table_data_cache_in_memory_mb_size: self.table_data_cache_in_memory_mb_size,
             table_disk_cache_root: self.table_disk_cache_root,
             table_disk_cache_mb_size: self.table_disk_cache_mb_size,
             management_mode: self.management_mode,
@@ -1477,7 +1471,6 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_cache_bloom_index_filter_count: inner.table_cache_bloom_index_filter_count,
             table_cache_column_mb_size: inner.table_cache_column_mb_size,
             table_data_cache_enabled: inner.table_data_cache_enabled,
-            table_data_cache_in_memory_mb_size: inner.table_data_cache_in_memory_mb_size,
             table_data_cache_population_queue_size: inner.table_data_cache_population_queue_size,
             management_mode: inner.management_mode,
             jwt_key_file: inner.jwt_key_file,

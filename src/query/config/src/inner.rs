@@ -167,8 +167,6 @@ pub struct QueryConfig {
     pub table_cache_column_mb_size: u64,
     /// Indicates if table data cache is enabled
     pub table_data_cache_enabled: bool,
-    /// Max bytes of table data cached in memory (MB)
-    pub table_data_cache_in_memory_mb_size: u64,
     /// Table disk cache folder root
     pub table_disk_cache_root: String,
     /// Max size of external cache population queue length
@@ -235,7 +233,6 @@ impl Default for QueryConfig {
             table_data_cache_population_queue_size: 65536,
             table_disk_cache_root: "_cache".to_string(),
             table_disk_cache_mb_size: 20 * 1024,
-            table_data_cache_in_memory_mb_size: 2 * 1024,
             management_mode: false,
             jwt_key_file: "".to_string(),
             async_insert_max_data_size: 10000,

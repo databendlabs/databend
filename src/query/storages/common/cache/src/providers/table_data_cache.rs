@@ -32,8 +32,6 @@ use crate::metrics_inc_cache_population_pending_count;
 use crate::CacheAccessor;
 use crate::DiskBytesCache;
 use crate::DiskCacheBuilder;
-use crate::InMemoryBytesCacheHolder;
-use crate::InMemoryCacheBuilder;
 
 struct CacheItem {
     key: String,
@@ -66,12 +64,10 @@ impl AsRef<str> for TableDataColumnCacheKey {
 }
 
 /// Tiered cache which consist of
-/// - a in-memory cache
-/// - a disk or redis based external cache
 /// - a bounded channel that keep the references of items being cached
+/// - a disk or redis based external cache
 #[derive(Clone)]
 pub struct TableDataCache<T = DiskBytesCache> {
-    in_memory_cache: InMemoryBytesCacheHolder,
     external_cache: T,
     population_queue: crossbeam_channel::Sender<CacheItem>,
     _cache_populator: DiskCachePopulator,
@@ -83,16 +79,13 @@ pub struct TableDataCacheBuilder;
 impl TableDataCacheBuilder {
     pub fn new_table_data_disk_cache(
         path: &str,
-        in_memory_cache_mb_size: u64,
         population_queue_size: u32,
         disk_cache_mb_size: u64,
     ) -> Result<TableDataCache<DiskBytesCache>> {
         let disk_cache = DiskCacheBuilder::new_disk_cache(path, disk_cache_mb_size)?;
         let (rx, tx) = crossbeam_channel::bounded(population_queue_size as usize);
-        let in_memory_cache_bytes_size = in_memory_cache_mb_size * 1024 * 1024;
         let num_population_thread = 1;
         Ok(TableDataCache {
-            in_memory_cache: InMemoryCacheBuilder::new_bytes_cache(in_memory_cache_bytes_size),
             external_cache: disk_cache.clone(),
             population_queue: rx,
             _cache_populator: DiskCachePopulator::new(tx, disk_cache, num_population_thread)?,
@@ -104,17 +97,7 @@ impl CacheAccessor<String, Vec<u8>, DefaultHashBuilder, Count> for TableDataCach
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Vec<u8>>> {
         metrics_inc_cache_access_count(1, TABLE_DATA_CACHE_NAME);
         let k = k.as_ref();
-        // check in memory cache first
-        {
-            if let Some(item) = self.in_memory_cache.get(k) {
-                metrics_inc_cache_hit_count(1, TABLE_DATA_CACHE_NAME);
-                return Some(item);
-            }
-        }
-
         if let Some(item) = self.external_cache.get(k) {
-            // put item into in-memory cache
-            self.in_memory_cache.put(k.to_owned(), item.clone());
             metrics_inc_cache_hit_count(1, TABLE_DATA_CACHE_NAME);
             Some(item)
         } else {
@@ -124,9 +107,6 @@ impl CacheAccessor<String, Vec<u8>, DefaultHashBuilder, Count> for TableDataCach
     }
 
     fn put(&self, k: String, v: Arc<Vec<u8>>) {
-        // put it into the in-memory cache first
-        self.in_memory_cache.put(k.clone(), v.clone());
-
         // check if external(disk/redis) already have it.
         if !self.external_cache.contains_key(&k) {
             // populate the cache to external cache(disk/redis) asyncly
@@ -145,13 +125,11 @@ impl CacheAccessor<String, Vec<u8>, DefaultHashBuilder, Count> for TableDataCach
     }
 
     fn evict(&self, k: &str) -> bool {
-        let r = self.in_memory_cache.evict(k);
-        let l = self.external_cache.evict(k);
-        r || l
+        self.external_cache.evict(k)
     }
 
     fn contains_key(&self, k: &str) -> bool {
-        self.in_memory_cache.contains_key(k) || self.external_cache.contains_key(k)
+        self.external_cache.contains_key(k)
     }
 }
 

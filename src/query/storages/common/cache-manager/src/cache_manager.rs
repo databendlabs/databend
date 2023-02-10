@@ -57,7 +57,6 @@ impl CacheManager {
         } else {
             Self::new_block_data_cache(
                 &config.table_disk_cache_root,
-                config.table_data_cache_in_memory_mb_size,
                 config.table_data_cache_population_queue_size,
                 config.table_disk_cache_mb_size,
             )?
@@ -165,14 +164,12 @@ impl CacheManager {
 
     fn new_block_data_cache(
         path: &str,
-        in_memory_cache_mb_size: u64,
         population_queue_size: u32,
         disk_cache_mb_size: u64,
     ) -> Result<Option<TableDataCache>> {
-        if in_memory_cache_mb_size > 0 {
+        if disk_cache_mb_size > 0 {
             let cache_holder = TableDataCacheBuilder::new_table_data_disk_cache(
                 path,
-                in_memory_cache_mb_size,
                 population_queue_size,
                 disk_cache_mb_size,
             )?;
