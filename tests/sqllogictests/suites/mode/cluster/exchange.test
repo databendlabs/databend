@@ -1,3 +1,6 @@
+statement ok
+set prefer_broadcast_join = 0
+
 query T
 explain select * from numbers(1) t, numbers(2) t1 where t.number = t1.number
 ----
@@ -248,3 +251,6 @@ Fragment 4:
     ExchangeSource
     └── source fragment: [3]
 (empty)
+
+statement ok
+set prefer_broadcast_join = 1
