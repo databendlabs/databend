@@ -292,7 +292,7 @@ pub enum TableReferenceElement {
 pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceElement>> {
     let aliased_table = map(
         rule! {
-            #peroid_separated_idents_1_to_3 ~ (AT ~ #travel_point)? ~ #table_alias?
+            #period_separated_idents_1_to_3 ~ (AT ~ #travel_point)? ~ #table_alias?
         },
         |((catalog, database, table), travel_point_opt, alias)| TableReferenceElement::Table {
             catalog,

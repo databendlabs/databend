@@ -50,7 +50,7 @@ impl HivePartitionPruner {
     }
 
     pub fn get_column_stats(&self, partitions: &Vec<String>) -> Result<Vec<StatisticsOfColumns>> {
-        let mut datas = Vec::with_capacity(partitions.len());
+        let mut data = Vec::with_capacity(partitions.len());
         for partition in partitions {
             let mut stats = HashMap::new();
             for (index, singe_value) in partition.split('/').enumerate() {
@@ -67,10 +67,10 @@ impl HivePartitionPruner {
                 };
                 stats.insert(index as u32, column_stats);
             }
-            datas.push(stats);
+            data.push(stats);
         }
 
-        Ok(datas)
+        Ok(data)
     }
 
     pub fn prune(&self, partitions: Vec<String>) -> Result<Vec<String>> {

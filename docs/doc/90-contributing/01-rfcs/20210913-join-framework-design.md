@@ -42,7 +42,7 @@ for s <- outerTable:
 
 Before introducing hash join, we introduce the definition of **equi join** here. A **equi join** is join whose join condition is an equation(e.g. `r.a == s.a`). For the joins whose join condition is not an equation, we call them **non-equi join**
 
-Hash join can only work with equi join. It can be described as two phase: **build phase** and **probe phase**. 
+Hash join can only work with equi join. It can be described as two phase: **build phase** and **probe phase**.
 
 As inner table and outer table of nested-loop join, hash join will choose a table as **build side** and another table as **probe side**.
 
@@ -140,7 +140,7 @@ In left deep tree, every join node's right child is a table, for example:
 ```sql
 SELECT *
 FROM a, b, c, d;
-/*    
+/*
       join
      /    \
     join   d
@@ -156,7 +156,7 @@ In right deep tree, every join node's left child is a table, for example:
 SELECT *
 FROM a, b, c, d;
 /*
-  join    
+  join
  /    \
 a   join
    /    \
@@ -173,7 +173,7 @@ FROM a, b, c, d;
 /*
     join
    /    \
-  join  join    
+  join  join
   /  \  /  \
   a  b  c  d
 */
@@ -186,46 +186,46 @@ Here's an example of `sqlparser` AST, the comment part is simplified AST debug s
 SELECT *
 FROM a, b NATURAL JOIN c, d;
 /*
-Query { 
-    with: None, 
+Query {
+    with: None,
     body: Select(
-        SELECT { 
-            projection: [Wildcard], 
+        SELECT {
+            projection: [Wildcard],
             from: [
-                TableWithJoins { 
-                    relation: Table { 
+                TableWithJoins {
+                    relation: Table {
                         name: "a",
-                    }, 
-                    joins: [] 
-                }, 
-                TableWithJoins { 
-                    relation: Table { 
+                    },
+                    joins: []
+                },
+                TableWithJoins {
+                    relation: Table {
                         name: "b",
-                    }, 
+                    },
                     joins: [
-                        Join { 
-                            relation: Table { 
-                                name: "c", 
-                            }, 
+                        Join {
+                            relation: Table {
+                                name: "c",
+                            },
                             join_operator: Inner(Natural)
                         }
-                    ] 
-                }, 
-                TableWithJoins { 
-                    relation: Table { 
-                        name: "d", 
-                    }, 
-                    joins: [] 
+                    ]
+                },
+                TableWithJoins {
+                    relation: Table {
+                        name: "d",
+                    },
+                    joins: []
                 }
-            ], 
+            ],
         }
-    ), 
+    ),
 }
 */
 ```
 
 The AST above can be directly represented as a bushy tree:
-``` 
+```
     join
    /    \
   join   d
@@ -380,7 +380,7 @@ Since we don't have infrastructure(planner, optimizer) for choosing join algorit
 
 We'are going to introduce a vectorized block nested-loop join algorithm.
 
-Pseudo code of naive nested-loop join has been introduced in [Background](#Background) section. As we know, nested-loop join will fetch only one row from outer table in each loop, which doen't have good locality. Block nested-loop join is a nested-loop join that will fetch a block of data in each loop. Here we introduce the naive block nested-loop join.
+Pseudo code of naive nested-loop join has been introduced in [Background](#Background) section. As we know, nested-loop join will fetch only one row from outer table in each loop, which doesn't have good locality. Block nested-loop join is a nested-loop join that will fetch a block of data in each loop. Here we introduce the naive block nested-loop join.
 
 ```
 // R⋈S

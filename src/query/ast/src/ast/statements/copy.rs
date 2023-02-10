@@ -21,7 +21,7 @@ use std::io::ErrorKind;
 use std::io::Result;
 
 use crate::ast::write_quoted_comma_separated_list;
-use crate::ast::write_space_seperated_map;
+use crate::ast::write_space_separated_map;
 use crate::ast::Identifier;
 use crate::ast::Query;
 
@@ -229,7 +229,7 @@ impl Display for Connection {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if !self.conns.is_empty() {
             write!(f, " CONNECTION = ( ")?;
-            write_space_seperated_map(f, &self.conns)?;
+            write_space_separated_map(f, &self.conns)?;
             write!(f, " )")?;
         }
         Ok(())

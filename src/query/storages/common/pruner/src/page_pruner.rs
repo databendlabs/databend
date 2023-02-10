@@ -25,7 +25,7 @@ use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::ClusterStatistics;
 
 pub trait PagePruner {
-    // returns ture, if target should NOT be pruned (false positive allowed)
+    // returns true, if target should NOT be pruned (false positive allowed)
     fn should_keep(&self, _stats: &Option<ClusterStatistics>) -> (bool, Option<Range<usize>>);
 }
 
@@ -51,7 +51,7 @@ impl PagePruner for PageIndex {
             Ok(r) => r,
             Err(e) => {
                 // swallow exceptions intentionally, corrupted index should not prevent execution
-                tracing::warn!("failed to page filter, returning ture. {}", e);
+                tracing::warn!("failed to page filter, returning true. {}", e);
                 (true, None)
             }
         }

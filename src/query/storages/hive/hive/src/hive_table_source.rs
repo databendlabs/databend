@@ -62,7 +62,7 @@ enum State {
     /// IO bound
     ReadRemainData(HiveBlocks, PreWhereData),
 
-    /// do prewhere filter on prewhere data, if datas are filtered, trans to Generated state with emtpy datablocks,
+    /// do prewhere filter on prewhere data, if data are filtered, trans to Generated state with empty datablocks,
     /// else trans to ReadRemainData
     /// CPU bound
     PrewhereFilter(HiveBlocks, DataBlockDeserializer),
@@ -88,7 +88,7 @@ pub struct HiveTableSource {
     delay: usize,
     hive_block_filter: Arc<HiveBlockFilter>,
 
-    /// The schema before output. Some fields might be removed when outputing.
+    /// The schema before output. Some fields might be removed when outputting.
     source_schema: DataSchemaRef,
     /// The final output schema
     output_schema: DataSchemaRef,

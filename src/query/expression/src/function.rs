@@ -61,7 +61,7 @@ pub struct EvalContext<'a> {
     pub tz: TzLUT,
 
     /// Validity bitmap of outer nullable column. This is an optimization
-    /// to avoid recording errors on the NULL value which has a coresponding
+    /// to avoid recording errors on the NULL value which has a corresponding
     /// default value in nullable's inner column.
     pub validity: Option<Bitmap>,
     pub errors: Option<(MutableBitmap, String)>,
@@ -148,7 +148,7 @@ pub struct Function {
 #[derive(Default)]
 pub struct FunctionRegistry {
     pub funcs: HashMap<String, Vec<Arc<Function>>>,
-    /// A function to build function depending on the const parameters and the type of arguments (before coersion).
+    /// A function to build function depending on the const parameters and the type of arguments (before coercion).
     ///
     /// The first argument is the const parameters and the second argument is the number of arguments.
     #[allow(clippy::type_complexity)]

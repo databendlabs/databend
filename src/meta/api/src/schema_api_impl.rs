@@ -254,7 +254,7 @@ impl<KV: kvapi::KVApi<Error = KVAppError>> SchemaApi for KV {
                                 &[req.name_ident.tenant.clone()],
                                 share_id,
                                 format!(
-                                    "share {} has not granted priviledge to {}",
+                                    "share {} has not granted privilege to {}",
                                     from_share, req.name_ident.tenant
                                 ),
                             ),
@@ -981,7 +981,7 @@ impl<KV: kvapi::KVApi<Error = KVAppError>> SchemaApi for KV {
                         txn_cond_seq(&dbid_tbname, Eq, 0),
                         // no other table id with the same name is append.
                         txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq),
-                        // update table count atomicly
+                        // update table count atomically
                         txn_cond_seq(&tb_count_key, Eq, tb_count_seq),
                         txn_cond_seq(&table_id_to_name_key, Eq, 0),
                     ],
@@ -1143,7 +1143,7 @@ impl<KV: kvapi::KVApi<Error = KVAppError>> SchemaApi for KV {
                         txn_cond_seq(&dbid_tbname, Eq, tb_id_seq),
                         // table is not changed
                         txn_cond_seq(&tbid, Eq, tb_meta_seq),
-                        // update table count atomicly
+                        // update table count atomically
                         txn_cond_seq(&tb_count_key, Eq, tb_count_seq),
                     ],
                     if_then: vec![
@@ -1300,7 +1300,7 @@ impl<KV: kvapi::KVApi<Error = KVAppError>> SchemaApi for KV {
                         txn_cond_seq(&dbid_tbname, Eq, tb_id_seq),
                         // table is not changed
                         txn_cond_seq(&tbid, Eq, tb_meta_seq),
-                        // update table count atomicly
+                        // update table count atomically
                         txn_cond_seq(&tb_count_key, Eq, tb_count_seq),
                     ],
                     if_then: vec![

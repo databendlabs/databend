@@ -266,11 +266,11 @@ pub fn check_function<Index: ColumnIndex>(
 }
 
 #[derive(Debug)]
-pub struct Subsitution(pub HashMap<usize, DataType>);
+pub struct Substitution(pub HashMap<usize, DataType>);
 
-impl Subsitution {
+impl Substitution {
     pub fn empty() -> Self {
-        Subsitution(HashMap::new())
+        Substitution(HashMap::new())
     }
 
     pub fn equation(idx: usize, ty: DataType) -> Self {
@@ -333,7 +333,7 @@ pub fn try_check_function<Index: ColumnIndex>(
     let subst = substs
         .into_iter()
         .try_reduce(|subst1, subst2| subst1.merge(subst2))?
-        .unwrap_or_else(Subsitution::empty);
+        .unwrap_or_else(Substitution::empty);
 
     let checked_args = args
         .iter()
@@ -370,12 +370,12 @@ pub fn unify(
     src_ty: &DataType,
     dest_ty: &DataType,
     additional_rules: &AutoCastSignature,
-) -> Result<Subsitution> {
+) -> Result<Substitution> {
     match (src_ty, dest_ty) {
         (DataType::Generic(_), _) => unreachable!("source type must not contain generic type"),
-        (ty, DataType::Generic(idx)) => Ok(Subsitution::equation(*idx, ty.clone())),
-        (DataType::Null, DataType::Nullable(_)) => Ok(Subsitution::empty()),
-        (DataType::EmptyArray, DataType::Array(_)) => Ok(Subsitution::empty()),
+        (ty, DataType::Generic(idx)) => Ok(Substitution::equation(*idx, ty.clone())),
+        (DataType::Null, DataType::Nullable(_)) => Ok(Substitution::empty()),
+        (DataType::EmptyArray, DataType::Array(_)) => Ok(Substitution::empty()),
         (DataType::Nullable(src_ty), DataType::Nullable(dest_ty)) => {
             unify(src_ty, dest_ty, additional_rules)
         }
@@ -394,16 +394,16 @@ pub fn unify(
             let subst = substs
                 .into_iter()
                 .try_reduce(|subst1, subst2| subst1.merge(subst2))?
-                .unwrap_or_else(Subsitution::empty);
+                .unwrap_or_else(Substitution::empty);
             Ok(subst)
         }
-        (src_ty, dest_ty) if can_auto_cast_to(src_ty, dest_ty) => Ok(Subsitution::empty()),
+        (src_ty, dest_ty) if can_auto_cast_to(src_ty, dest_ty) => Ok(Substitution::empty()),
         (src_ty, dest_ty)
             if additional_rules
                 .iter()
                 .any(|(src, dest)| src == src_ty && dest == dest_ty) =>
         {
-            Ok(Subsitution::empty())
+            Ok(Substitution::empty())
         }
         _ => Err(ErrorCode::from_string_no_backtrace(format!(
             "unable to unify `{}` with `{}`",

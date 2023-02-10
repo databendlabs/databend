@@ -180,7 +180,7 @@ service MetaService {
   rpc Export(Empty) returns (stream ExportedChunk);
 
   // Add watch key stream.
-  // Whenever the watch key data updated, client will be notified accross the
+  // Whenever the watch key data updated, client will be notified across the
   // stream.
   rpc Watch(WatchRequest) returns (stream WatchResponse);
 
