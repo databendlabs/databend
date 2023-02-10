@@ -750,7 +750,7 @@ fn display_decimal_128(num: i128, scale: u8) -> String {
             buf,
             "{}.{:0>width$}",
             num / pow_scale,
-            num % pow_scale,
+            (num % pow_scale).abs(),
             width = scale as usize
         )
         .unwrap();

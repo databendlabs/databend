@@ -3158,6 +3158,7 @@ array_sum
 char
 concat
 concat_ws
+divide
 eq
 get
 gt
@@ -3166,14 +3167,18 @@ if
 ignore
 lt
 lte
+minus
 multi_if
+multiply
 noteq
+plus
 point_in_ellipses
 point_in_polygon
 regexp_instr
 regexp_like
 regexp_replace
 regexp_substr
+to_decimal
 tuple
 
 Function aliases (alias to origin):

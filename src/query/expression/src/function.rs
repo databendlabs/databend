@@ -145,6 +145,26 @@ pub struct Function {
     pub eval: Box<dyn Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Send + Sync>,
 }
 
+impl Function {
+    pub fn wrap_nullable(self) -> Self {
+        Self {
+            signature: FunctionSignature {
+                name: self.signature.name.clone(),
+                args_type: self
+                    .signature
+                    .args_type
+                    .iter()
+                    .map(|ty| ty.wrap_nullable())
+                    .collect(),
+                return_type: self.signature.return_type.wrap_nullable(),
+                property: self.signature.property.clone(),
+            },
+            calc_domain: Box::new(|_| FunctionDomain::Full),
+            eval: Box::new(wrap_nullable(self.eval)),
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct FunctionRegistry {
     pub funcs: HashMap<String, Vec<Arc<Function>>>,
@@ -278,10 +298,8 @@ impl FunctionRegistry {
     }
 }
 
-pub fn wrap_nullable<F>(
-    f: F,
-) -> impl Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Copy
-where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Copy {
+pub fn wrap_nullable<F>(f: F) -> impl Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType>
+where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
     move |args, ctx| {
         type T = NullableType<AnyType>;
         type Result = AnyType;
