@@ -163,7 +163,7 @@ impl DecimalDataType {
         if size.precision < 1 || size.precision > MAX_DECIMAL256_PRECISION {
             return Err(ErrorCode::Overflow(format!(
                 "Decimal precision must be between 1 and {}",
-                MAX_DECIMAL128_PRECISION
+                MAX_DECIMAL256_PRECISION
             )));
         }
 
