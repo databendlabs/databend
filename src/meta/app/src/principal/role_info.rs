@@ -20,7 +20,7 @@ use common_exception::ErrorCode;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::UserGrantSet;
+use crate::principal::UserGrantSet;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 #[serde(default)]

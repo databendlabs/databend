@@ -23,6 +23,7 @@ use common_meta_client::ClientHandle;
 use common_meta_client::MetaGrpcClient;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::KVApi;
+use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::Event;
 use common_meta_types::protobuf::SeqV;
@@ -38,7 +39,6 @@ use common_meta_types::TxnDeleteByPrefixRequest;
 use common_meta_types::TxnDeleteRequest;
 use common_meta_types::TxnOp;
 use common_meta_types::TxnPutRequest;
-use common_meta_types::UpsertKVReq;
 use databend_meta::init_meta_ut;
 use databend_meta::meta_service::MetaNode;
 use tracing::info;
@@ -184,12 +184,12 @@ async fn test_watch() -> anyhow::Result<()> {
         seq = 4;
         // update kv
         let updates = vec![
-            UpsertKVReq::new("a", MatchSeq::Any, Operation::Update(val_a), None),
+            UpsertKVReq::new("a", MatchSeq::GE(0), Operation::Update(val_a), None),
             // upsert key z, because z in key_end and the range is [key_start, key_end), so key z MUST not be notified in watche events.
-            UpsertKVReq::new("z", MatchSeq::Any, Operation::Update(val_z), None),
-            UpsertKVReq::new("b", MatchSeq::Any, Operation::Update(val_b), None),
-            UpsertKVReq::new("b", MatchSeq::Any, Operation::Update(val_new), None),
-            UpsertKVReq::new("b", MatchSeq::Any, Operation::Delete, None),
+            UpsertKVReq::new("z", MatchSeq::GE(0), Operation::Update(val_z), None),
+            UpsertKVReq::new("b", MatchSeq::GE(0), Operation::Update(val_b), None),
+            UpsertKVReq::new("b", MatchSeq::GE(0), Operation::Update(val_new), None),
+            UpsertKVReq::new("b", MatchSeq::GE(0), Operation::Delete, None),
         ];
         test_watch_main(addr.clone(), watch, watch_events, updates).await?;
     }
@@ -232,10 +232,10 @@ async fn test_watch() -> anyhow::Result<()> {
 
         // update and delete twice
         let updates = vec![
-            UpsertKVReq::new(key_str, MatchSeq::Any, Operation::Update(val), None),
-            UpsertKVReq::new(key_str, MatchSeq::Any, Operation::Delete, None),
-            UpsertKVReq::new(key_str, MatchSeq::Any, Operation::Update(val_new), None),
-            UpsertKVReq::new(key_str, MatchSeq::Any, Operation::Delete, None),
+            UpsertKVReq::new(key_str, MatchSeq::GE(0), Operation::Update(val), None),
+            UpsertKVReq::new(key_str, MatchSeq::GE(0), Operation::Delete, None),
+            UpsertKVReq::new(key_str, MatchSeq::GE(0), Operation::Update(val_new), None),
+            UpsertKVReq::new(key_str, MatchSeq::GE(0), Operation::Delete, None),
         ];
         test_watch_main(addr.clone(), watch, watch_events, updates).await?;
     }
@@ -251,13 +251,13 @@ async fn test_watch() -> anyhow::Result<()> {
             let updates = vec![
                 UpsertKVReq::new(
                     delete_key,
-                    MatchSeq::Any,
+                    MatchSeq::GE(0),
                     Operation::Update(delete_key.as_bytes().to_vec()),
                     None,
                 ),
                 UpsertKVReq::new(
                     watch_delete_by_prefix_key,
-                    MatchSeq::Any,
+                    MatchSeq::GE(0),
                     Operation::Update(watch_delete_by_prefix_key.as_bytes().to_vec()),
                     None,
                 ),

@@ -13,17 +13,17 @@
 // limitations under the License.
 
 use common_meta_kvapi::kvapi;
-use common_meta_types::GetKVReply;
-use common_meta_types::GetKVReq;
+use common_meta_kvapi::kvapi::GetKVReply;
+use common_meta_kvapi::kvapi::GetKVReq;
+use common_meta_kvapi::kvapi::ListKVReply;
+use common_meta_kvapi::kvapi::ListKVReq;
+use common_meta_kvapi::kvapi::MGetKVReply;
+use common_meta_kvapi::kvapi::MGetKVReq;
+use common_meta_kvapi::kvapi::UpsertKVReply;
+use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::KVAppError;
-use common_meta_types::ListKVReply;
-use common_meta_types::ListKVReq;
-use common_meta_types::MGetKVReply;
-use common_meta_types::MGetKVReq;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
-use common_meta_types::UpsertKVReply;
-use common_meta_types::UpsertKVReq;
 
 use crate::ClientHandle;
 use crate::MetaGrpcClient;

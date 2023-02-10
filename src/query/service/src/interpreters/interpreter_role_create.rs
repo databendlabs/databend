@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::RoleInfo;
+use common_meta_app::principal::RoleInfo;
 use common_sql::plans::CreateRolePlan;
 use common_users::RoleCacheManager;
 use common_users::UserApiProvider;

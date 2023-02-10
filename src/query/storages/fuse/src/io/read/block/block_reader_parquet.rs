@@ -122,6 +122,12 @@ impl BlockReader {
         deserialized_res
     }
 
+    pub fn build_default_values_block(&self, num_rows: usize) -> Result<DataBlock> {
+        let data_schema = self.data_schema();
+        let default_vals = self.default_vals.clone();
+        DataBlock::create_with_default_value(&data_schema, &default_vals, num_rows)
+    }
+
     /// Deserialize column chunks data from parquet format to DataBlock with a uncompressed buffer.
     pub fn deserialize_parquet_chunks_with_buffer(
         &self,
@@ -133,13 +139,15 @@ impl BlockReader {
         uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
     ) -> Result<DataBlock> {
         if columns_chunks.is_empty() {
-            return Ok(DataBlock::new(vec![], num_rows));
+            return self.build_default_values_block(num_rows);
         }
 
         let chunk_map: HashMap<ColumnId, DataItem> = columns_chunks.into_iter().collect();
         let mut columns_array_iter = Vec::with_capacity(self.projection.len());
 
         let columns = self.projection.project_column_nodes(&self.column_nodes)?;
+        let mut need_default_vals = Vec::with_capacity(columns.len());
+        let mut need_to_fill_default_val = false;
 
         // TODO need refactor
         type ItemIndex = usize;
@@ -159,11 +167,13 @@ impl BlockReader {
             let mut column_metas = Vec::with_capacity(indices.len());
             let mut column_chunks = Vec::with_capacity(indices.len());
             let mut column_descriptors = Vec::with_capacity(indices.len());
+            let mut column_in_block = false;
             let mut field_uncompressed_size = 0;
             for (i, index) in indices.iter().enumerate() {
                 let column_id = column.leaf_column_id(i);
                 if let Some(column_meta) = columns_meta.get(&column_id) {
-                    if let Some(chunk) = chunk_map.get(&column_id) {
+                    if let Some(chunk) = chunk_map.get(index) {
+                        column_in_block = true;
                         match chunk {
                             DataItem::RawData(data) => {
                                 let column_descriptor =
@@ -180,11 +190,16 @@ impl BlockReader {
                                 holders.push(Holder::Cached(idx));
                             }
                         }
+                    } else {
+                        break;
                     }
+                } else {
+                    column_in_block = false;
+                    break;
                 }
             }
 
-            if !column_metas.is_empty() {
+            if column_in_block {
                 if column_metas.len() > 1 {
                     // working on nested field
                     holders.push(Holder::Deserialized(deserialized_item_index));
@@ -212,6 +227,10 @@ impl BlockReader {
                             .unwrap_or_else(|| UncompressedBuffer::new(0)),
                     )?,
                 ));
+                need_default_vals.push(false);
+            } else {
+                need_default_vals.push(true);
+                need_to_fill_default_val = true;
             }
         }
 
@@ -237,7 +256,27 @@ impl BlockReader {
             }
         }
         let chunk = Chunk::try_new(arrays)?;
-        let data_block = DataBlock::from_arrow_chunk(&chunk, &self.data_schema());
+
+        let data_block = if !need_to_fill_default_val {
+            DataBlock::from_arrow_chunk(&chunk, &self.data_schema())
+        } else {
+            let data_schema = self.data_schema();
+            let schema_default_vals = self.default_vals.clone();
+            let mut default_vals = Vec::with_capacity(need_default_vals.len());
+            for (i, need_default_val) in need_default_vals.iter().enumerate() {
+                if !need_default_val {
+                    default_vals.push(None);
+                } else {
+                    default_vals.push(Some(schema_default_vals[i].clone()));
+                }
+            }
+            DataBlock::create_with_default_value_and_chunk(
+                &data_schema,
+                &chunk,
+                &default_vals,
+                num_rows,
+            )
+        };
 
         if let Some(cache) = CacheManager::instance().get_table_data_array_cache() {
             // populate array cache items

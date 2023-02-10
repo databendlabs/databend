@@ -36,8 +36,8 @@ where
 
 impl<T, ID> Change<T, ID>
 where
-    ID: Clone + PartialEq + std::fmt::Debug,
-    T: Clone + PartialEq + std::fmt::Debug,
+    ID: Clone + PartialEq + Debug,
+    T: Clone + PartialEq + Debug,
 {
     pub fn new(prev: Option<SeqV<T>>, result: Option<SeqV<T>>) -> Self {
         Change {
@@ -47,20 +47,9 @@ where
         }
     }
 
-    pub fn new_with_id(id: ID, prev: Option<SeqV<T>>, result: Option<SeqV<T>>) -> Self {
-        Change {
-            ident: Some(id),
-            prev,
-            result,
-        }
-    }
-
-    pub fn nochange_with_id(id: ID, prev: Option<SeqV<T>>) -> Self {
-        Change {
-            ident: Some(id),
-            prev: prev.clone(),
-            result: prev,
-        }
+    pub fn with_id(mut self, id: ID) -> Self {
+        self.ident = Some(id);
+        self
     }
 
     /// Maps `Option<SeqV<T>>` to `Option<U>` for `prev` and `result`.
@@ -88,12 +77,12 @@ where
         self.map(|x| x.data)
     }
 
-    pub fn changed(&self) -> bool {
+    pub fn is_changed(&self) -> bool {
         self.prev != self.result
     }
 
-    /// Assumes it is the state change of an add operation and return Ok if the add operation succeed.
-    /// Otherwise it returns the error the user provided function built with existing value.
+    /// Assumes it is a state change of an add operation and return Ok if the add operation succeed.
+    /// Otherwise it returns an error that is built by provided function.
     pub fn added_or_else<F, E>(self, f: F) -> Result<SeqV<T>, E>
     where F: FnOnce(SeqV<T>) -> E {
         let (prev, result) = self.unpack();

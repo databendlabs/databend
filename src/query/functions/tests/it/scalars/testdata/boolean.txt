@@ -90,13 +90,13 @@ raw expr       : and(lt(a::UInt8 NULL, 1_u8), lt(a::UInt8 NULL, 1_u8))
 checked expr   : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
 optimized expr : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, 1_u8), lt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
-+--------+------------------+------------------------+
-|        | a                | Output                 |
-+--------+------------------+------------------------+
-| Type   | UInt8 NULL       | Boolean NULL           |
-| Domain | {0..=0} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | NULL             | NULL                   |
-+--------+------------------+------------------------+
++--------+------------------+-----------------+
+|        | a                | Output          |
++--------+------------------+-----------------+
+| Type   | UInt8 NULL       | Boolean NULL    |
+| Domain | {0..=0} ∪ {NULL} | {TRUE} ∪ {NULL} |
+| Row 0  | NULL             | NULL            |
++--------+------------------+-----------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
@@ -111,13 +111,13 @@ raw expr       : and(gt(a::UInt8 NULL, 1_u8), lt(a::UInt8 NULL, 1_u8))
 checked expr   : and<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
 optimized expr : and<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(a, 1_u8), lt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
-+--------+------------------+------------------------+
-|        | a                | Output                 |
-+--------+------------------+------------------------+
-| Type   | UInt8 NULL       | Boolean NULL           |
-| Domain | {0..=0} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | NULL             | NULL                   |
-+--------+------------------+------------------------+
++--------+------------------+------------------+
+|        | a                | Output           |
++--------+------------------+------------------+
+| Type   | UInt8 NULL       | Boolean NULL     |
+| Domain | {0..=0} ∪ {NULL} | {FALSE} ∪ {NULL} |
+| Row 0  | NULL             | NULL             |
++--------+------------------+------------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
@@ -132,13 +132,13 @@ raw expr       : and(lt(a::UInt8 NULL, 1_u8), gt(a::UInt8 NULL, 1_u8))
 checked expr   : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), gt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
 optimized expr : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, 1_u8), gt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
-+--------+------------------+------------------------+
-|        | a                | Output                 |
-+--------+------------------+------------------------+
-| Type   | UInt8 NULL       | Boolean NULL           |
-| Domain | {0..=0} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | NULL             | NULL                   |
-+--------+------------------+------------------------+
++--------+------------------+------------------+
+|        | a                | Output           |
++--------+------------------+------------------+
+| Type   | UInt8 NULL       | Boolean NULL     |
+| Domain | {0..=0} ∪ {NULL} | {FALSE} ∪ {NULL} |
+| Row 0  | NULL             | NULL             |
++--------+------------------+------------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
@@ -153,13 +153,13 @@ raw expr       : and(lt(a::UInt8 NULL, 1_u8), lt(a::UInt8 NULL, 1_u8))
 checked expr   : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
 optimized expr : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, 1_u8), lt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
-+--------+------------------+------------------------+
-|        | a                | Output                 |
-+--------+------------------+------------------------+
-| Type   | UInt8 NULL       | Boolean NULL           |
-| Domain | {0..=0} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | NULL             | NULL                   |
-+--------+------------------+------------------------+
++--------+------------------+-----------------+
+|        | a                | Output          |
++--------+------------------+-----------------+
+| Type   | UInt8 NULL       | Boolean NULL    |
+| Domain | {0..=0} ∪ {NULL} | {TRUE} ∪ {NULL} |
+| Row 0  | NULL             | NULL            |
++--------+------------------+-----------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
@@ -172,15 +172,15 @@ evaluation (internal):
 ast            : (a > 1) AND (0 > 1)
 raw expr       : and(gt(a::UInt8 NULL, 1_u8), gt(0_u8, 1_u8))
 checked expr   : and<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
-optimized expr : and<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(a, 1_u8), false)
+optimized expr : false
 evaluation:
-+--------+------------------+------------------------+
-|        | a                | Output                 |
-+--------+------------------+------------------------+
-| Type   | UInt8 NULL       | Boolean NULL           |
-| Domain | {0..=0} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | NULL             | false                  |
-+--------+------------------+------------------------+
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | {FALSE}      |
+| Row 0  | NULL             | false        |
++--------+------------------+--------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
@@ -195,13 +195,13 @@ raw expr       : and(gt(a::UInt8 NULL, 1_u8), lt(0_u8, 1_u8))
 checked expr   : and<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
 optimized expr : and<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(a, 1_u8), true)
 evaluation:
-+--------+------------------+------------------------+
-|        | a                | Output                 |
-+--------+------------------+------------------------+
-| Type   | UInt8 NULL       | Boolean NULL           |
-| Domain | {0..=0} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | NULL             | NULL                   |
-+--------+------------------+------------------------+
++--------+------------------+------------------+
+|        | a                | Output           |
++--------+------------------+------------------+
+| Type   | UInt8 NULL       | Boolean NULL     |
+| Domain | {0..=0} ∪ {NULL} | {FALSE} ∪ {NULL} |
+| Row 0  | NULL             | NULL             |
++--------+------------------+------------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
@@ -214,15 +214,15 @@ evaluation (internal):
 ast            : (a < 1) AND (0 > 1)
 raw expr       : and(lt(a::UInt8 NULL, 1_u8), gt(0_u8, 1_u8))
 checked expr   : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
-optimized expr : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, 1_u8), false)
+optimized expr : false
 evaluation:
-+--------+------------------+------------------------+
-|        | a                | Output                 |
-+--------+------------------+------------------------+
-| Type   | UInt8 NULL       | Boolean NULL           |
-| Domain | {0..=0} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | NULL             | false                  |
-+--------+------------------+------------------------+
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | {FALSE}      |
+| Row 0  | NULL             | false        |
++--------+------------------+--------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
@@ -237,13 +237,13 @@ raw expr       : and(lt(a::UInt8 NULL, 1_u8), lt(0_u8, 1_u8))
 checked expr   : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
 optimized expr : and<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, 1_u8), true)
 evaluation:
-+--------+------------------+------------------------+
-|        | a                | Output                 |
-+--------+------------------+------------------------+
-| Type   | UInt8 NULL       | Boolean NULL           |
-| Domain | {0..=0} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | NULL             | NULL                   |
-+--------+------------------+------------------------+
++--------+------------------+-----------------+
+|        | a                | Output          |
++--------+------------------+-----------------+
+| Type   | UInt8 NULL       | Boolean NULL    |
+| Domain | {0..=0} ∪ {NULL} | {TRUE} ∪ {NULL} |
+| Row 0  | NULL             | NULL            |
++--------+------------------+-----------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
@@ -256,15 +256,15 @@ evaluation (internal):
 ast            : (0 > 1) AND (a > 1)
 raw expr       : and(gt(0_u8, 1_u8), gt(a::UInt8 NULL, 1_u8))
 checked expr   : and<Boolean NULL, Boolean NULL>(CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), gt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
-optimized expr : and<Boolean NULL, Boolean NULL>(false, gt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
+optimized expr : false
 evaluation:
-+--------+------------------+------------------------+
-|        | a                | Output                 |
-+--------+------------------+------------------------+
-| Type   | UInt8 NULL       | Boolean NULL           |
-| Domain | {0..=0} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | NULL             | false                  |
-+--------+------------------+------------------------+
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | {FALSE}      |
+| Row 0  | NULL             | false        |
++--------+------------------+--------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
@@ -277,15 +277,15 @@ evaluation (internal):
 ast            : (0 > 1) AND (a < 1)
 raw expr       : and(gt(0_u8, 1_u8), lt(a::UInt8 NULL, 1_u8))
 checked expr   : and<Boolean NULL, Boolean NULL>(CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
-optimized expr : and<Boolean NULL, Boolean NULL>(false, lt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
+optimized expr : false
 evaluation:
-+--------+------------------+------------------------+
-|        | a                | Output                 |
-+--------+------------------+------------------------+
-| Type   | UInt8 NULL       | Boolean NULL           |
-| Domain | {0..=0} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | NULL             | false                  |
-+--------+------------------+------------------------+
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | {FALSE}      |
+| Row 0  | NULL             | false        |
++--------+------------------+--------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
@@ -300,13 +300,13 @@ raw expr       : and(lt(0_u8, 1_u8), gt(a::UInt8 NULL, 1_u8))
 checked expr   : and<Boolean NULL, Boolean NULL>(CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), gt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
 optimized expr : and<Boolean NULL, Boolean NULL>(true, gt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
-+--------+------------------+------------------------+
-|        | a                | Output                 |
-+--------+------------------+------------------------+
-| Type   | UInt8 NULL       | Boolean NULL           |
-| Domain | {0..=0} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | NULL             | NULL                   |
-+--------+------------------+------------------------+
++--------+------------------+------------------+
+|        | a                | Output           |
++--------+------------------+------------------+
+| Type   | UInt8 NULL       | Boolean NULL     |
+| Domain | {0..=0} ∪ {NULL} | {FALSE} ∪ {NULL} |
+| Row 0  | NULL             | NULL             |
++--------+------------------+------------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
@@ -321,13 +321,13 @@ raw expr       : and(lt(0_u8, 1_u8), lt(a::UInt8 NULL, 1_u8))
 checked expr   : and<Boolean NULL, Boolean NULL>(CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
 optimized expr : and<Boolean NULL, Boolean NULL>(true, lt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
-+--------+------------------+------------------------+
-|        | a                | Output                 |
-+--------+------------------+------------------------+
-| Type   | UInt8 NULL       | Boolean NULL           |
-| Domain | {0..=0} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | NULL             | NULL                   |
-+--------+------------------+------------------------+
++--------+------------------+-----------------+
+|        | a                | Output          |
++--------+------------------+-----------------+
+| Type   | UInt8 NULL       | Boolean NULL    |
+| Domain | {0..=0} ∪ {NULL} | {TRUE} ∪ {NULL} |
+| Row 0  | NULL             | NULL            |
++--------+------------------+-----------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
@@ -451,13 +451,13 @@ raw expr       : or(lt(a::UInt8 NULL, 1_u8), lt(a::UInt8 NULL, 1_u8))
 checked expr   : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
 optimized expr : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, 1_u8), lt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
-+--------+------------------+------------------------+
-|        | a                | Output                 |
-+--------+------------------+------------------------+
-| Type   | UInt8 NULL       | Boolean NULL           |
-| Domain | {0..=0} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | NULL             | NULL                   |
-+--------+------------------+------------------------+
++--------+------------------+-----------------+
+|        | a                | Output          |
++--------+------------------+-----------------+
+| Type   | UInt8 NULL       | Boolean NULL    |
+| Domain | {0..=0} ∪ {NULL} | {TRUE} ∪ {NULL} |
+| Row 0  | NULL             | NULL            |
++--------+------------------+-----------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
@@ -472,13 +472,13 @@ raw expr       : or(gt(a::UInt8 NULL, 1_u8), lt(a::UInt8 NULL, 1_u8))
 checked expr   : or<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
 optimized expr : or<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(a, 1_u8), lt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
-+--------+------------------+------------------------+
-|        | a                | Output                 |
-+--------+------------------+------------------------+
-| Type   | UInt8 NULL       | Boolean NULL           |
-| Domain | {0..=0} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | NULL             | NULL                   |
-+--------+------------------+------------------------+
++--------+------------------+-----------------+
+|        | a                | Output          |
++--------+------------------+-----------------+
+| Type   | UInt8 NULL       | Boolean NULL    |
+| Domain | {0..=0} ∪ {NULL} | {TRUE} ∪ {NULL} |
+| Row 0  | NULL             | NULL            |
++--------+------------------+-----------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
@@ -493,13 +493,13 @@ raw expr       : or(lt(a::UInt8 NULL, 1_u8), gt(a::UInt8 NULL, 1_u8))
 checked expr   : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), gt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
 optimized expr : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, 1_u8), gt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
-+--------+------------------+------------------------+
-|        | a                | Output                 |
-+--------+------------------+------------------------+
-| Type   | UInt8 NULL       | Boolean NULL           |
-| Domain | {0..=0} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | NULL             | NULL                   |
-+--------+------------------+------------------------+
++--------+------------------+-----------------+
+|        | a                | Output          |
++--------+------------------+-----------------+
+| Type   | UInt8 NULL       | Boolean NULL    |
+| Domain | {0..=0} ∪ {NULL} | {TRUE} ∪ {NULL} |
+| Row 0  | NULL             | NULL            |
++--------+------------------+-----------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
@@ -514,13 +514,13 @@ raw expr       : or(lt(a::UInt8 NULL, 1_u8), lt(a::UInt8 NULL, 1_u8))
 checked expr   : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
 optimized expr : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, 1_u8), lt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
-+--------+------------------+------------------------+
-|        | a                | Output                 |
-+--------+------------------+------------------------+
-| Type   | UInt8 NULL       | Boolean NULL           |
-| Domain | {0..=0} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | NULL             | NULL                   |
-+--------+------------------+------------------------+
++--------+------------------+-----------------+
+|        | a                | Output          |
++--------+------------------+-----------------+
+| Type   | UInt8 NULL       | Boolean NULL    |
+| Domain | {0..=0} ∪ {NULL} | {TRUE} ∪ {NULL} |
+| Row 0  | NULL             | NULL            |
++--------+------------------+-----------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
@@ -535,13 +535,13 @@ raw expr       : or(gt(a::UInt8 NULL, 1_u8), gt(0_u8, 1_u8))
 checked expr   : or<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
 optimized expr : or<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(a, 1_u8), false)
 evaluation:
-+--------+------------------+------------------------+
-|        | a                | Output                 |
-+--------+------------------+------------------------+
-| Type   | UInt8 NULL       | Boolean NULL           |
-| Domain | {0..=0} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | NULL             | NULL                   |
-+--------+------------------+------------------------+
++--------+------------------+------------------+
+|        | a                | Output           |
++--------+------------------+------------------+
+| Type   | UInt8 NULL       | Boolean NULL     |
+| Domain | {0..=0} ∪ {NULL} | {FALSE} ∪ {NULL} |
+| Row 0  | NULL             | NULL             |
++--------+------------------+------------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
@@ -554,15 +554,15 @@ evaluation (internal):
 ast            : (a > 1) OR (0 < 1)
 raw expr       : or(gt(a::UInt8 NULL, 1_u8), lt(0_u8, 1_u8))
 checked expr   : or<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
-optimized expr : or<Boolean NULL, Boolean NULL>(gt<UInt8 NULL, UInt8 NULL>(a, 1_u8), true)
+optimized expr : true
 evaluation:
-+--------+------------------+------------------------+
-|        | a                | Output                 |
-+--------+------------------+------------------------+
-| Type   | UInt8 NULL       | Boolean NULL           |
-| Domain | {0..=0} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | NULL             | true                   |
-+--------+------------------+------------------------+
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | {TRUE}       |
+| Row 0  | NULL             | true         |
++--------+------------------+--------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
@@ -577,13 +577,13 @@ raw expr       : or(lt(a::UInt8 NULL, 1_u8), gt(0_u8, 1_u8))
 checked expr   : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
 optimized expr : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, 1_u8), false)
 evaluation:
-+--------+------------------+------------------------+
-|        | a                | Output                 |
-+--------+------------------+------------------------+
-| Type   | UInt8 NULL       | Boolean NULL           |
-| Domain | {0..=0} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | NULL             | NULL                   |
-+--------+------------------+------------------------+
++--------+------------------+-----------------+
+|        | a                | Output          |
++--------+------------------+-----------------+
+| Type   | UInt8 NULL       | Boolean NULL    |
+| Domain | {0..=0} ∪ {NULL} | {TRUE} ∪ {NULL} |
+| Row 0  | NULL             | NULL            |
++--------+------------------+-----------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
@@ -596,15 +596,15 @@ evaluation (internal):
 ast            : (a < 1) OR (0 < 1)
 raw expr       : or(lt(a::UInt8 NULL, 1_u8), lt(0_u8, 1_u8))
 checked expr   : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)), CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL))
-optimized expr : or<Boolean NULL, Boolean NULL>(lt<UInt8 NULL, UInt8 NULL>(a, 1_u8), true)
+optimized expr : true
 evaluation:
-+--------+------------------+------------------------+
-|        | a                | Output                 |
-+--------+------------------+------------------------+
-| Type   | UInt8 NULL       | Boolean NULL           |
-| Domain | {0..=0} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | NULL             | true                   |
-+--------+------------------+------------------------+
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | {TRUE}       |
+| Row 0  | NULL             | true         |
++--------+------------------+--------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
@@ -619,13 +619,13 @@ raw expr       : or(gt(0_u8, 1_u8), gt(a::UInt8 NULL, 1_u8))
 checked expr   : or<Boolean NULL, Boolean NULL>(CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), gt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
 optimized expr : or<Boolean NULL, Boolean NULL>(false, gt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
-+--------+------------------+------------------------+
-|        | a                | Output                 |
-+--------+------------------+------------------------+
-| Type   | UInt8 NULL       | Boolean NULL           |
-| Domain | {0..=0} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | NULL             | NULL                   |
-+--------+------------------+------------------------+
++--------+------------------+------------------+
+|        | a                | Output           |
++--------+------------------+------------------+
+| Type   | UInt8 NULL       | Boolean NULL     |
+| Domain | {0..=0} ∪ {NULL} | {FALSE} ∪ {NULL} |
+| Row 0  | NULL             | NULL             |
++--------+------------------+------------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
@@ -640,13 +640,13 @@ raw expr       : or(gt(0_u8, 1_u8), lt(a::UInt8 NULL, 1_u8))
 checked expr   : or<Boolean NULL, Boolean NULL>(CAST(gt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
 optimized expr : or<Boolean NULL, Boolean NULL>(false, lt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
 evaluation:
-+--------+------------------+------------------------+
-|        | a                | Output                 |
-+--------+------------------+------------------------+
-| Type   | UInt8 NULL       | Boolean NULL           |
-| Domain | {0..=0} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | NULL             | NULL                   |
-+--------+------------------+------------------------+
++--------+------------------+-----------------+
+|        | a                | Output          |
++--------+------------------+-----------------+
+| Type   | UInt8 NULL       | Boolean NULL    |
+| Domain | {0..=0} ∪ {NULL} | {TRUE} ∪ {NULL} |
+| Row 0  | NULL             | NULL            |
++--------+------------------+-----------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
@@ -659,15 +659,15 @@ evaluation (internal):
 ast            : (0 < 1) OR (a > 1)
 raw expr       : or(lt(0_u8, 1_u8), gt(a::UInt8 NULL, 1_u8))
 checked expr   : or<Boolean NULL, Boolean NULL>(CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), gt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
-optimized expr : or<Boolean NULL, Boolean NULL>(true, gt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
+optimized expr : true
 evaluation:
-+--------+------------------+------------------------+
-|        | a                | Output                 |
-+--------+------------------+------------------------+
-| Type   | UInt8 NULL       | Boolean NULL           |
-| Domain | {0..=0} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | NULL             | true                   |
-+--------+------------------+------------------------+
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | {TRUE}       |
+| Row 0  | NULL             | true         |
++--------+------------------+--------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
@@ -680,15 +680,15 @@ evaluation (internal):
 ast            : (0 < 1) OR (a < 1)
 raw expr       : or(lt(0_u8, 1_u8), lt(a::UInt8 NULL, 1_u8))
 checked expr   : or<Boolean NULL, Boolean NULL>(CAST(lt<UInt8, UInt8>(0_u8, 1_u8) AS Boolean NULL), lt<UInt8 NULL, UInt8 NULL>(a, CAST(1_u8 AS UInt8 NULL)))
-optimized expr : or<Boolean NULL, Boolean NULL>(true, lt<UInt8 NULL, UInt8 NULL>(a, 1_u8))
+optimized expr : true
 evaluation:
-+--------+------------------+------------------------+
-|        | a                | Output                 |
-+--------+------------------+------------------------+
-| Type   | UInt8 NULL       | Boolean NULL           |
-| Domain | {0..=0} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
-| Row 0  | NULL             | true                   |
-+--------+------------------+------------------------+
++--------+------------------+--------------+
+|        | a                | Output       |
++--------+------------------+--------------+
+| Type   | UInt8 NULL       | Boolean NULL |
+| Domain | {0..=0} ∪ {NULL} | {TRUE}       |
+| Row 0  | NULL             | true         |
++--------+------------------+--------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |

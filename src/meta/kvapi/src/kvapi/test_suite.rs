@@ -37,12 +37,12 @@ use common_meta_types::TxnPutRequest;
 use common_meta_types::TxnPutResponse;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
-use common_meta_types::UpsertKVReq;
 use common_meta_types::With;
 use tracing::debug;
 use tracing::info;
 
 use crate::kvapi;
+use crate::kvapi::UpsertKVReq;
 
 pub struct TestSuite {}
 
@@ -137,11 +137,11 @@ impl kvapi::TestSuite {
         let current = kv.get_kv(test_key).await?;
         if let Some(SeqV { seq, .. }) = current {
             // seq mismatch
-            let wrong_seq = Some(seq + 1);
+            let wrong_seq = MatchSeq::Exact(seq + 1);
             let res = kv
                 .upsert_kv(UpsertKVReq::new(
                     test_key,
-                    wrong_seq.into(),
+                    wrong_seq,
                     Operation::Delete,
                     None,
                 ))

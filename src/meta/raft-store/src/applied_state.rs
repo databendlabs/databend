@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,21 +13,25 @@
 // limitations under the License.
 
 use std::fmt;
-use std::fmt::Debug;
 use std::fmt::Formatter;
 
+use common_meta_types::protobuf::RaftReply;
+use common_meta_types::Change;
+use common_meta_types::Node;
+use common_meta_types::TxnReply;
 use openraft::AppDataResponse;
-use serde::Deserialize;
-use serde::Serialize;
-
-use crate::Change;
-use crate::Node;
-use crate::TxnReply;
 
 /// The state of an applied raft log.
 /// Normally it includes two fields: the state before applying and the state after applying the log.
 #[derive(
-    Serialize, Deserialize, Debug, Clone, PartialEq, Eq, derive_more::From, derive_more::TryInto,
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    derive_more::From,
+    derive_more::TryInto,
 )]
 pub enum AppliedState {
     Seq {
@@ -81,7 +85,7 @@ impl AppliedState {
                 ref prev,
                 ref result,
             } => prev != result,
-            AppliedState::KV(ref ch) => ch.changed(),
+            AppliedState::KV(ref ch) => ch.is_changed(),
             AppliedState::None => false,
             AppliedState::TxnReply(txn) => txn.success,
         }
@@ -120,6 +124,16 @@ impl AppliedState {
             AppliedState::KV(Change { ref result, .. }) => result.is_none(),
             AppliedState::None => true,
             AppliedState::TxnReply(txn) => !txn.success,
+        }
+    }
+}
+
+impl From<AppliedState> for RaftReply {
+    fn from(msg: AppliedState) -> Self {
+        let data = serde_json::to_string(&msg).expect("fail to serialize");
+        RaftReply {
+            data,
+            error: "".to_string(),
         }
     }
 }

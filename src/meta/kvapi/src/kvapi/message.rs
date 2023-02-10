@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::Change;
-use crate::SeqV;
-use crate::UpsertKV;
+use common_meta_types::Change;
+use common_meta_types::SeqV;
+use common_meta_types::UpsertKV;
 
 pub type UpsertKVReq = UpsertKV;
 

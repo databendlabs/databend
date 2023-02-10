@@ -15,14 +15,14 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use common_meta_app::principal::AuthType;
+use common_meta_app::principal::PrincipalIdentity;
+use common_meta_app::principal::UserIdentity;
+use common_meta_app::principal::UserPrivilegeType;
 use common_meta_app::schema::CatalogType;
 use common_meta_app::share::ShareGrantObjectName;
 use common_meta_app::share::ShareGrantObjectPrivilege;
 use common_meta_app::share::ShareNameIdent;
-use common_meta_types::AuthType;
-use common_meta_types::PrincipalIdentity;
-use common_meta_types::UserIdentity;
-use common_meta_types::UserPrivilegeType;
 use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
@@ -1451,7 +1451,18 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
         |(_, _, new_table)| AlterTableAction::RenameTable { new_table },
     );
-
+    let add_column = map(
+        rule! {
+            ADD ~ COLUMN ~ #column_def
+        },
+        |(_, _, column)| AlterTableAction::AddColumn { column },
+    );
+    let drop_column = map(
+        rule! {
+            DROP ~ COLUMN ~ #ident
+        },
+        |(_, _, column)| AlterTableAction::DropColumn { column },
+    );
     let alter_table_cluster_key = map(
         rule! {
             CLUSTER ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
@@ -1485,6 +1496,8 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 
     rule!(
         #rename_table
+        | #add_column
+        | #drop_column
         | #alter_table_cluster_key
         | #drop_table_cluster_key
         | #recluster_table

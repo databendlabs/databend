@@ -18,6 +18,7 @@ pub mod api;
 pub mod configs;
 pub mod export;
 pub mod logging;
+pub mod message;
 pub mod meta_service;
 pub mod metrics;
 pub mod network;

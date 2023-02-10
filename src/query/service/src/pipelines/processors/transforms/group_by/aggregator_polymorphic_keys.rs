@@ -40,6 +40,7 @@ use primitive_types::U512;
 
 use super::aggregator_keys_builder::LargeFixedKeysColumnBuilder;
 use super::aggregator_keys_iter::LargeFixedKeysColumnIter;
+use super::BUCKETS_LG2;
 use crate::pipelines::processors::transforms::group_by::aggregator_groups_builder::FixedKeysGroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::aggregator_groups_builder::GroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::aggregator_groups_builder::SerializedKeysGroupColumnsBuilder;
@@ -514,16 +515,17 @@ where
     // Partitioned cannot be recursive
     const SUPPORT_TWO_LEVEL: bool = false;
 
-    type HashTable = PartitionedHashMap<Method::HashTable>;
+    type HashTable = PartitionedHashMap<Method::HashTable, BUCKETS_LG2>;
 
     fn create_hash_table(&self) -> Result<Self::HashTable> {
-        let mut tables = Vec::with_capacity(256);
+        let buckets = (1 << BUCKETS_LG2) as usize;
+        let mut tables = Vec::with_capacity(buckets);
 
-        for _index in 0..256 {
+        for _index in 0..buckets {
             tables.push(self.method.create_hash_table()?);
         }
 
-        Ok(PartitionedHashMap::create(tables))
+        Ok(PartitionedHashMap::<_, BUCKETS_LG2>::create(tables))
     }
 
     type ColumnBuilder<'a> = Method::ColumnBuilder<'a> where Self: 'a, PartitionedHashMethod<Method>: 'a;

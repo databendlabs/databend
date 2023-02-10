@@ -144,7 +144,8 @@ impl FuseTable {
                     pos += 1;
                 });
 
-                let reader = self.create_block_reader(Projection::Columns(remain_col_ids))?;
+                let reader =
+                    self.create_block_reader(Projection::Columns(remain_col_ids), ctx.clone())?;
                 fields.extend_from_slice(reader.schema().fields());
                 remain_reader = Some((*reader).clone());
             }
@@ -171,7 +172,7 @@ impl FuseTable {
             projection: offset_map.values().cloned().collect(),
         });
 
-        let block_reader = self.create_block_reader(projection.clone())?;
+        let block_reader = self.create_block_reader(projection.clone(), ctx.clone())?;
         let remain_reader = Arc::new(remain_reader);
         let (filter_expr, filters) = if let Some(remote_expr) = filter {
             let schema = block_reader.schema();

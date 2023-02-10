@@ -16,7 +16,7 @@ use std::net::SocketAddr;
 
 use common_base::base::tokio;
 use common_exception::Result;
-use common_meta_types::UserInfo;
+use common_meta_app::principal::UserInfo;
 use common_settings::Settings;
 use databend_query::sessions::SessionContext;
 

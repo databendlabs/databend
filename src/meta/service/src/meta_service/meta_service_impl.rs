@@ -21,18 +21,18 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use anyerror::AnyError;
+use common_meta_raft_store::applied_state::AppliedState;
 use common_meta_types::protobuf::raft_service_server::RaftService;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
-use common_meta_types::AppliedState;
-use common_meta_types::ForwardRequest;
 use common_meta_types::InvalidReply;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaError;
 use common_meta_types::MetaNetworkError;
 use tonic::codegen::futures_core::Stream;
 
-use crate::meta_service::ForwardRequestBody;
+use crate::message::ForwardRequest;
+use crate::message::ForwardRequestBody;
 use crate::meta_service::MetaNode;
 use crate::metrics::raft_metrics;
 use crate::metrics::server_metrics;

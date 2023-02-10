@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::GrantObject;
-use common_meta_types::UserPrivilegeType;
+use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::UserPrivilegeType;
 
 use crate::interpreters::access::AccessChecker;
 use crate::sessions::QueryContext;
@@ -99,6 +99,30 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::RenameTable(_) => {}
+            Plan::AddTableColumn(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        UserPrivilegeType::Alter,
+                    )
+                    .await?;
+            }
+            Plan::DropTableColumn(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        UserPrivilegeType::Alter,
+                    )
+                    .await?;
+            }
             Plan::AlterTableClusterKey(plan) => {
                 session
                     .validate_privilege(
