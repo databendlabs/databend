@@ -557,7 +557,9 @@ impl FromToProto for mt::storage::StorageParams {
             mt::storage::StorageParams::Oss(v) => Ok(pb::user_stage_info::StageStorage {
                 storage: Some(pb::user_stage_info::stage_storage::Storage::Oss(v.to_pb()?)),
             }),
-            _ => todo!("other stage storage are not supported"),
+            others => Err(Incompatible {
+                reason: format!("stage type: {} not supported", others),
+            }),
         }
     }
 }
