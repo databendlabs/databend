@@ -39,7 +39,7 @@ use serde::Serialize;
 /// [storage.cache]
 /// type = "redis"
 ///
-/// [storage.temperary]
+/// [storage.temporary]
 /// type = "s3"
 /// ```
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

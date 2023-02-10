@@ -55,17 +55,17 @@ impl BloomColumnFilterReader {
     pub fn new(
         index_path: String,
         column_id: ColumnId,
-        colum_chunk_meta: &ColumnChunkMetaData,
+        column_chunk_meta: &ColumnChunkMetaData,
         operator: Operator,
     ) -> Self {
-        let meta = colum_chunk_meta.metadata();
+        let meta = column_chunk_meta.metadata();
         let cache_key = format!("{index_path}-{column_id}");
         let loader = Xor8FilterLoader {
             offset: meta.data_page_offset as u64,
             len: meta.total_compressed_size as u64,
             cache_key,
             operator,
-            column_descriptor: colum_chunk_meta.descriptor().clone(),
+            column_descriptor: column_chunk_meta.descriptor().clone(),
         };
 
         let cached_reader = CachedReader::new(

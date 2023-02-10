@@ -1,0 +1,17 @@
+[default.extend-words]
+# Preserved for NdJson
+"Nd" = "Nd"
+# Microsoft K8s Servier
+"AKS" = "AKS"
+# Wrong cases
+"ba" = "ba"
+"ue" = "ue"
+"INOUT" = "INOUT"
+"ser" = "ser"
+"Ser" = "Ser"
+
+[files]
+extend-exclude = [
+    "scripts/benchmark/",
+    "tests/",
+]

@@ -181,7 +181,7 @@ where
                 return Ok(());
             }
 
-            // V::ScalarRef dosen't dervie Default, so take the first value as default.
+            // V::ScalarRef doesn't derive Default, so take the first value as default.
             let mut v = unsafe { T::index_column_unchecked(column, 0) };
             let mut has_v = validity.get_bit(0);
 

@@ -565,7 +565,7 @@ impl MetaGrpcClient {
             Ok(c) => Ok(c),
             Err(e) => {
                 warn!(
-                    "grpc_client create channel with {} faild, err: {:?}",
+                    "grpc_client create channel with {} failed, err: {:?}",
                     addr, e
                 );
                 label_counter_with_val_and_labels(

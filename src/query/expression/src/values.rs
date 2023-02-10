@@ -155,7 +155,7 @@ impl<'a, T: ValueType> ValueRef<'a, T> {
         }
     }
 
-    pub fn sematically_eq(&'a self, other: &'a Self) -> bool {
+    pub fn semantically_eq(&'a self, other: &'a Self) -> bool {
         match (self, other) {
             (ValueRef::Scalar(s1), ValueRef::Scalar(s2)) => s1 == s2,
             (ValueRef::Column(c1), ValueRef::Column(c2)) => c1 == c2,

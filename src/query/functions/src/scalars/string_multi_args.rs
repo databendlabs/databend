@@ -1127,7 +1127,7 @@ pub mod regexp {
     pub fn regexp_instr(s: &[u8], re: &Regex, pos: i64, occur: i64, ro: i64) -> u64 {
         let pos = (pos - 1) as usize; // set the index start from 0
 
-        // the 'pos' postion is the character index,
+        // the 'pos' position is the character index,
         // so we should iterate the character to find the byte index.
         let mut pos = match s.char_indices().nth(pos) {
             Some((start, _, _)) => start,
@@ -1168,7 +1168,7 @@ pub mod regexp {
     ) {
         let pos = (pos - 1) as usize; // set the index start from 0
 
-        // the 'pos' postion is the character index,
+        // the 'pos' position is the character index,
         // so we should iterate the character to find the byte index.
         let mut pos = match s.char_indices().nth(pos) {
             Some((start, _, _)) => start,
@@ -1200,7 +1200,7 @@ pub mod regexp {
         let occur = if occur < 1 { 1 } else { occur };
         let pos = if pos < 1 { 0 } else { (pos - 1) as usize };
 
-        // the 'pos' postion is the character index,
+        // the 'pos' position is the character index,
         // so we should iterate the character to find the byte index.
         let mut pos = match s.char_indices().nth(pos) {
             Some((start, _, _)) => start,
@@ -1228,7 +1228,7 @@ pub mod regexp {
 
             i += 1;
             if let Some(m) = m {
-                // set the start postion of 'find_at' function to the position following the matched substring
+                // set the start position of 'find_at' function to the position following the matched substring
                 *pos = m.end();
             }
         };

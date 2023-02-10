@@ -72,7 +72,7 @@ pub fn walk_expr_mut<V: VisitorMut>(visitor: &mut V, expr: &mut Expr) {
             span,
             substr_expr,
             str_expr,
-        } => visitor.visit_positon(*span, substr_expr, str_expr),
+        } => visitor.visit_position(*span, substr_expr, str_expr),
         Expr::Substring {
             span,
             expr,

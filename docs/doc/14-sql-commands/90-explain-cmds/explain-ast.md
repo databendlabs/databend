@@ -32,7 +32,7 @@ EXPLAIN AST insert into t1 (a, b) values (1, 2),(3, 4);
  │   ├── Identifier a
  │   └── Identifier b
  └── Source (children 1)
-     └── ValueSouce
+     └── ValueSource
 ```
 
 ```sql

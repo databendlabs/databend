@@ -100,7 +100,7 @@ impl SharedSigner {
         self.cache.insert(PresignRequest::new(path, op), signed)
     }
 
-    /// Sign a reqeust.
+    /// Sign a request.
     pub async fn sign(&self, req: PresignRequest) -> Result<()> {
         self.sign_inner(vec![req]).await
     }
@@ -122,7 +122,7 @@ impl SharedSigner {
     ///     {
     ///        "path": "file_a",
     ///        "method": "GET",
-    ///        "url": "https://exmaple.com",
+    ///        "url": "https://example.com",
     ///        "headers": {
     ///           "host": "example.com"
     ///        },
@@ -131,7 +131,7 @@ impl SharedSigner {
     ///     {
     ///        "path": "file_b",
     ///        "method": "PUT",
-    ///        "url": "https://exmaple.com",
+    ///        "url": "https://example.com",
     ///        "headers": {
     ///           "host": "example.com"
     ///        },

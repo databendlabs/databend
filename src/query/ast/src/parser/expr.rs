@@ -581,7 +581,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
 
 pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let column_ref = map(
-        peroid_separated_idents_1_to_3,
+        period_separated_idents_1_to_3,
         |(database, table, column)| ExprElement::ColumnRef {
             database,
             table,
@@ -729,7 +729,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     });
     let tuple = map(
         rule! {
-            "(" ~ #comma_separated_list0_ignore_trailling(subexpr(0)) ~ ","? ~ ^")"
+            "(" ~ #comma_separated_list0_ignore_trailing(subexpr(0)) ~ ","? ~ ^")"
         },
         |(_, mut exprs, opt_trail, _)| {
             if exprs.len() == 1 && opt_trail.is_none() {
@@ -814,7 +814,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let binary_op = map(binary_op, |op| ExprElement::BinaryOp { op });
     let unary_op = map(unary_op, |op| ExprElement::UnaryOp { op });
     let map_access = map(map_access, |accessor| ExprElement::MapAccess { accessor });
-    // Floating point literal with leading dot will be parsed as a peroid map access,
+    // Floating point literal with leading dot will be parsed as a period map access,
     // and then will be converted back to a floating point literal if the map access
     // is not following a primary element nor a postfix element.
     let literal = map(literal, |lit| ExprElement::Literal { lit });
@@ -823,7 +823,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         // and then will be converted back to an array if the map access is not following
         // a primary element nor a postfix element.
         rule! {
-            "[" ~ #comma_separated_list0_ignore_trailling(subexpr(0))? ~ ","? ~ ^"]"
+            "[" ~ #comma_separated_list0_ignore_trailing(subexpr(0))? ~ ","? ~ ^"]"
         },
         |(_, opt_args, _, _)| {
             let exprs = opt_args.unwrap_or_default();
