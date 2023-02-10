@@ -16,7 +16,7 @@ CREATE STAGE [ IF NOT EXISTS ] <internal_stage_name>
 -- External stage
 CREATE STAGE [ IF NOT EXISTS ] <external_stage_name>
     externalStageParams
-  [ FILE_FORMAT = ( { TYPE = { PARQUET | CSV | TSV | NDJSON| } [ formatTypeOptions ] ) } ]
+  [ FILE_FORMAT = ( { TYPE = { PARQUET | CSV | TSV | NDJSON } [ formatTypeOptions ] ) } ]
   [ COPY_OPTIONS = ( copyOptions ) ]
   [ COMMENT = '<string_literal>' ]
 ```
@@ -69,7 +69,7 @@ externalStageParams ::=
 
 ### formatTypeOptions
 
-For details about `FILE_FORMAT`, see [Input & Output File Formats](../../13-sql-reference/75-file-format-options.md).
+For details about `FILE_FORMAT`, see [Input & Output File Formats](../../../13-sql-reference/75-file-format-options.md).
 
 ### copyOptions
 ```
