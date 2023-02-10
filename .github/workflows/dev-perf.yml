@@ -19,6 +19,9 @@ on:
   # schedule:
   #   # Run base perf at 08:00 UTC+8
   #   - cron: "0 0 * * *"
+  push:
+    tags:
+      - "v*"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
@@ -30,7 +33,7 @@ env:
 
 jobs:
   build_release:
-    if: github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'ci-perf')
+    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'ci-perf')
     timeout-minutes: 30
     runs-on: [self-hosted, X64, Linux, perf]
     steps:
@@ -56,7 +59,6 @@ jobs:
           target: x86_64-unknown-linux-gnu
       - name: Prepare Databend
         run: |
-          # ./target/${BUILD_PROFILE}/databend-metactl
           killall databend-query || true
           killall databend-meta || true
           sleep 1
@@ -96,16 +98,24 @@ jobs:
       - name: Run Benchmark
         run: |
           mkdir -p /tmp/databend-perf/
+          echo "INSTANCE_TYPE=c5.4xlarge" > /tmp/databend-perf/metadata.info
+          echo "COMMIT=${{ github.sha }}" > /tmp/databend-perf/metadata.info
+          case ${{ github.event }} in
+            pull_request)
+              echo "PR_NUMBER=${{ github.event.number }}" >> /tmp/databend-perf/metadata.info
+              ;;
+            push)
+              echo "RELEASE_TAG=${{ github.ref_name }}" >> /tmp/databend-perf/metadata.info
+              ;;
+          esac
           bendsql benchmark \
-            --warm 2 \
-            --count 5 \
+            --warm 3 \
+            --count 10 \
             --test-dir ./scripts/benchmark/query/benchmarks/ \
             --output-format json,md \
             --output-dir /tmp/databend-perf/ \
             --size 'c5.4xlarge'
           cat /tmp/databend-perf/hits.md
-          echo 'PR_NUMBER=${{ github.event.number }}' > /tmp/databend-perf/metadata.info
-          echo 'INSTANCE_TYPE=c5.4xlarge' > /tmp/databend-perf/metadata.info
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
