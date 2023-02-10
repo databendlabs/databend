@@ -121,6 +121,15 @@ impl DataType {
         }
     }
 
+    pub fn is_signed_numeric(&self) -> bool {
+        match self {
+            DataType::Number(ty) => {
+                ALL_INTEGER_TYPES.contains(ty) && !ALL_UNSIGNED_INTEGER_TYPES.contains(ty)
+            }
+            _ => false,
+        }
+    }
+
     pub fn is_numeric(&self) -> bool {
         match self {
             DataType::Number(ty) => ALL_NUMERICS_TYPES.contains(ty),

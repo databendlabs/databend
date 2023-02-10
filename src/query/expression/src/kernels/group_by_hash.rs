@@ -388,9 +388,14 @@ macro_rules! impl_hash_method_fixed_keys {
                 group_columns: &[(Column, DataType)],
                 rows: usize,
             ) -> Result<KeysState> {
-                // faster path for single fixed keys
+                // faster path for single unsigned fixed keys
                 if group_columns.len() == 1 && group_columns[0].1.is_unsigned_numeric() {
                     return Ok(KeysState::Column(group_columns[0].0.clone()));
+                }
+
+                // faster path for signed fixed keys
+                if group_columns.len() == 1 {
+                    let col = group_columns[0].0.clone();
                 }
                 let keys = self.build_keys_vec(group_columns, rows)?;
                 let col = Buffer::<$ty>::from(keys);
@@ -411,10 +416,10 @@ macro_rules! impl_hash_method_fixed_keys {
     };
 }
 
-impl_hash_method_fixed_keys! {UInt8, u8}
-impl_hash_method_fixed_keys! {UInt16, u16}
-impl_hash_method_fixed_keys! {UInt32, u32}
-impl_hash_method_fixed_keys! {UInt64, u64}
+impl_hash_method_fixed_keys! {UInt8, u8, i8}
+impl_hash_method_fixed_keys! {UInt16, u16, i16}
+impl_hash_method_fixed_keys! {UInt32, u32, i32}
+impl_hash_method_fixed_keys! {UInt64, u64, i64}
 
 macro_rules! impl_hash_method_fixed_large_keys {
     ($ty:ty, $name: ident) => {
