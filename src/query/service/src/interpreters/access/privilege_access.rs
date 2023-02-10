@@ -17,11 +17,9 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::UserPrivilegeType;
-use common_sql::TableEntry;
 
 use crate::interpreters::access::AccessChecker;
 use crate::sessions::QueryContext;
-use crate::sessions::Session;
 use crate::sql::plans::Plan;
 
 pub struct PrivilegeAccess {
@@ -32,19 +30,6 @@ impl PrivilegeAccess {
     pub fn create(ctx: Arc<QueryContext>) -> Box<dyn AccessChecker> {
         Box::new(PrivilegeAccess { ctx })
     }
-}
-
-async fn validate_query_privilege(session: &Arc<Session>, table: &&TableEntry) -> Result<()> {
-    session
-        .validate_privilege(
-            &GrantObject::Table(
-                table.catalog().to_string(),
-                table.database().to_string(),
-                table.name().to_string(),
-            ),
-            UserPrivilegeType::Select,
-        )
-        .await
 }
 
 #[async_trait::async_trait]
@@ -59,7 +44,16 @@ impl AccessChecker for PrivilegeAccess {
                     if table.is_source_of_view() {
                         continue;
                     }
-                    validate_query_privilege(&session, &table).await?;
+                    session
+                        .validate_privilege(
+                            &GrantObject::Table(
+                                table.catalog().to_string(),
+                                table.database().to_string(),
+                                table.name().to_string(),
+                            ),
+                            UserPrivilegeType::Select,
+                        )
+                        .await?
                 }
             }
             Plan::Explain { .. } => {}
