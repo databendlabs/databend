@@ -22,7 +22,6 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_meta_types::errors::app_error::AppError;
 use common_meta_types::errors::app_error::WrongShareObject;
-use common_meta_types::KVAppError;
 use enumflags2::bitflags;
 use enumflags2::BitFlags;
 
@@ -536,7 +535,7 @@ impl ShareMeta {
         object: ShareGrantObject,
         privileges: ShareGrantObjectPrivilege,
         update_on: DateTime<Utc>,
-    ) -> Result<(), KVAppError> {
+    ) -> Result<(), AppError> {
         let key = object.to_string();
 
         match object {
@@ -550,13 +549,11 @@ impl ShareMeta {
                             self.update_on = Some(update_on);
                         }
                     } else {
-                        return Err(KVAppError::AppError(AppError::WrongShareObject(
-                            WrongShareObject::new(&key),
-                        )));
+                        return Err(AppError::WrongShareObject(WrongShareObject::new(&key)));
                     }
                 } else {
-                    return Err(KVAppError::AppError(AppError::WrongShareObject(
-                        WrongShareObject::new(object.to_string()),
+                    return Err(AppError::WrongShareObject(WrongShareObject::new(
+                        object.to_string(),
                     )));
                 }
             }
@@ -568,8 +565,8 @@ impl ShareMeta {
                                 self.entries.remove(&key);
                             }
                         } else {
-                            return Err(KVAppError::AppError(AppError::WrongShareObject(
-                                WrongShareObject::new(object.to_string()),
+                            return Err(AppError::WrongShareObject(WrongShareObject::new(
+                                object.to_string(),
                             )));
                         }
                     } else {
@@ -587,14 +584,14 @@ impl ShareMeta {
         obj_name: &ShareGrantObjectName,
         object: &ShareGrantObjectSeqAndId,
         privileges: ShareGrantObjectPrivilege,
-    ) -> Result<bool, KVAppError> {
+    ) -> Result<bool, AppError> {
         match object {
             ShareGrantObjectSeqAndId::Database(_seq, db_id, _meta) => match &self.database {
                 Some(db) => match db.object {
                     ShareGrantObject::Database(self_db_id) => {
                         if self_db_id != *db_id {
-                            Err(KVAppError::AppError(AppError::WrongShareObject(
-                                WrongShareObject::new(obj_name.to_string()),
+                            Err(AppError::WrongShareObject(WrongShareObject::new(
+                                obj_name.to_string(),
                             )))
                         } else {
                             Ok(db.has_granted_privileges(privileges))

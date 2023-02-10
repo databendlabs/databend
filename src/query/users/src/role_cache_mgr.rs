@@ -21,7 +21,7 @@ use common_base::base::tokio;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::GlobalInstance;
 use common_exception::Result;
-use common_meta_types::RoleInfo;
+use common_meta_app::principal::RoleInfo;
 use parking_lot::RwLock;
 use tracing::warn;
 

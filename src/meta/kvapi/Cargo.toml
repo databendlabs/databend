@@ -17,6 +17,7 @@ common-meta-types = { path = "../types" }
 
 anyhow = { workspace = true }
 async-trait = "0.1.57"
+serde = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = "0.1.36"

@@ -2811,40 +2811,36 @@ output domain  : {1..=1}
 output         : 1
 
 
-ast            : TRY_CAST(0.0 AS BOOLEAN)
-raw expr       : TRY_CAST(0_f64 AS Boolean)
-checked expr   : TRY_CAST(0_f64 AS Boolean NULL)
-optimized expr : NULL
-output type    : Boolean NULL
-output domain  : {NULL}
-output         : NULL
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST(0.0 AS BOOLEAN)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Float64` to type `Boolean NULL`
 
 
-ast            : TRY_CAST(1.0 AS BOOLEAN)
-raw expr       : TRY_CAST(1_f64 AS Boolean)
-checked expr   : TRY_CAST(1_f64 AS Boolean NULL)
-optimized expr : NULL
-output type    : Boolean NULL
-output domain  : {NULL}
-output         : NULL
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST(1.0 AS BOOLEAN)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Float64` to type `Boolean NULL`
 
 
-ast            : TRY_CAST(false AS FLOAT32)
-raw expr       : TRY_CAST(false AS Float32)
-checked expr   : TRY_CAST(false AS Float32 NULL)
-optimized expr : NULL
-output type    : Float32 NULL
-output domain  : {NULL}
-output         : NULL
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST(false AS FLOAT32)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Boolean` to type `Float32 NULL`
 
 
-ast            : TRY_CAST(true AS FLOAT64)
-raw expr       : TRY_CAST(true AS Float64)
-checked expr   : TRY_CAST(true AS Float64 NULL)
-optimized expr : NULL
-output type    : Float64 NULL
-output domain  : {NULL}
-output         : NULL
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST(true AS FLOAT64)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Boolean` to type `Float64 NULL`
+
 
 
 ast            : TRY_CAST(num AS BOOLEAN)
@@ -3454,13 +3450,12 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
-ast            : TRY_CAST((1, TRUE) AS Tuple(STRING))
-raw expr       : TRY_CAST(tuple(1_u8, true) AS Tuple(String,))
-checked expr   : TRY_CAST(tuple<UInt8, Boolean>(1_u8, true) AS Tuple(String NULL,) NULL)
-optimized expr : NULL
-output type    : Tuple(String NULL,) NULL
-output domain  : {NULL}
-output         : NULL
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST((1, TRUE) AS Tuple(STRING))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Tuple(UInt8, Boolean)` to type `Tuple(String NULL,) NULL`
+
 
 
 ast            : TRY_CAST(('a',) AS Tuple(INT))

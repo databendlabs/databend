@@ -17,10 +17,10 @@ use std::time::Duration;
 use common_base::base::tokio;
 use common_meta_client::MetaGrpcClient;
 use common_meta_kvapi::kvapi::KVApi;
+use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::protobuf::Empty;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
-use common_meta_types::UpsertKVReq;
 use databend_meta::init_meta_ut;
 use pretty_assertions::assert_eq;
 use regex::Regex;
@@ -50,7 +50,7 @@ async fn test_export() -> anyhow::Result<()> {
             client
                 .upsert_kv(UpsertKVReq::new(
                     k,
-                    MatchSeq::Any,
+                    MatchSeq::GE(0),
                     Operation::Update(k.as_bytes().to_vec()),
                     None,
                 ))
@@ -77,9 +77,9 @@ async fn test_export() -> anyhow::Result<()> {
         r#"["test-29000-raft_log",{"Logs":{"key":0,"value":{"log_id":{"term":0,"index":0},"payload":{"Membership":{"configs":[[0]],"all_nodes":[0]}}}}}]"#,
         r#"["test-29000-raft_log",{"Logs":{"key":1,"value":{"log_id":{"term":1,"index":1},"payload":"Blank"}}}]"#,
         r#"["test-29000-raft_log",{"Logs":{"key":2,"value":{"log_id":{"term":1,"index":2},"payload":{"Normal":{"txid":null,"time_ms":1111111111111,"cmd":{"AddNode":{"node_id":0,"node":{"name":"0","endpoint":{"addr":"localhost","port":29000},"grpc_api_advertise_address":"127.0.0.1:29000"},"overriding":false}}}}}}}]"#,
-        r#"["test-29000-raft_log",{"Logs":{"key":3,"value":{"log_id":{"term":1,"index":3},"payload":{"Normal":{"txid":null,"time_ms":1111111111111,"cmd":{"UpsertKV":{"key":"foo","seq":"Any","value":{"Update":[102,111,111]},"value_meta":null}}}}}}}]"#,
-        r#"["test-29000-raft_log",{"Logs":{"key":4,"value":{"log_id":{"term":1,"index":4},"payload":{"Normal":{"txid":null,"time_ms":1111111111111,"cmd":{"UpsertKV":{"key":"bar","seq":"Any","value":{"Update":[98,97,114]},"value_meta":null}}}}}}}]"#,
-        r#"["test-29000-raft_log",{"Logs":{"key":5,"value":{"log_id":{"term":1,"index":5},"payload":{"Normal":{"txid":null,"time_ms":1111111111111,"cmd":{"UpsertKV":{"key":"wow","seq":"Any","value":{"Update":[119,111,119]},"value_meta":null}}}}}}}]"#,
+        r#"["test-29000-raft_log",{"Logs":{"key":3,"value":{"log_id":{"term":1,"index":3},"payload":{"Normal":{"txid":null,"time_ms":1111111111111,"cmd":{"UpsertKV":{"key":"foo","seq":{"GE":0},"value":{"Update":[102,111,111]},"value_meta":null}}}}}}}]"#,
+        r#"["test-29000-raft_log",{"Logs":{"key":4,"value":{"log_id":{"term":1,"index":4},"payload":{"Normal":{"txid":null,"time_ms":1111111111111,"cmd":{"UpsertKV":{"key":"bar","seq":{"GE":0},"value":{"Update":[98,97,114]},"value_meta":null}}}}}}}]"#,
+        r#"["test-29000-raft_log",{"Logs":{"key":5,"value":{"log_id":{"term":1,"index":5},"payload":{"Normal":{"txid":null,"time_ms":1111111111111,"cmd":{"UpsertKV":{"key":"wow","seq":{"GE":0},"value":{"Update":[119,111,119]},"value_meta":null}}}}}}}]"#,
         r#"["test-29000-state_machine/0",{"Nodes":{"key":0,"value":{"name":"0","endpoint":{"addr":"localhost","port":29000},"grpc_api_advertise_address":"127.0.0.1:29000"}}}]"#,
         r#"["test-29000-state_machine/0",{"StateMachineMeta":{"key":"LastApplied","value":{"LogId":{"term":1,"index":5}}}}]"#,
         r#"["test-29000-state_machine/0",{"StateMachineMeta":{"key":"Initialized","value":{"Bool":true}}}]"#,

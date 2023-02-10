@@ -15,13 +15,13 @@
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_management::UserApi;
-use common_meta_types::AuthInfo;
-use common_meta_types::GrantObject;
+use common_meta_app::principal::AuthInfo;
+use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::UserIdentity;
+use common_meta_app::principal::UserInfo;
+use common_meta_app::principal::UserOption;
+use common_meta_app::principal::UserPrivilegeSet;
 use common_meta_types::MatchSeq;
-use common_meta_types::UserIdentity;
-use common_meta_types::UserInfo;
-use common_meta_types::UserOption;
-use common_meta_types::UserPrivilegeSet;
 
 use crate::role_mgr::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use crate::UserApiProvider;

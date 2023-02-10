@@ -20,7 +20,7 @@ EOF
 aws --endpoint-url ${STORAGE_S3_ENDPOINT_URL} s3 cp s3://testbucket/admin/data/sample.csv s3://testbucket/admin/stage/internal/s1/sample.csv >/dev/null
 
 ## Copy from internal stage
-echo "CREATE STAGE s1" | $MYSQL_CLIENT_CONNECT
+echo "CREATE STAGE s1 FILE_FORMAT = (TYPE = CSV)" | $MYSQL_CLIENT_CONNECT
 echo "list @s1" | $MYSQL_CLIENT_CONNECT | awk '{print $1}'
 
 ## Insert with stage use http API

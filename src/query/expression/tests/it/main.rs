@@ -17,6 +17,7 @@
 #![feature(try_blocks)]
 
 mod common;
+mod fill_field_default_value;
 mod group_by;
 mod kernel;
 mod schema;

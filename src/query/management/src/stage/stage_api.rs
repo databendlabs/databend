@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_meta_app::principal::StageFile;
+use common_meta_app::principal::UserStageInfo;
 use common_meta_types::MatchSeq;
 use common_meta_types::SeqV;
-use common_meta_types::StageFile;
-use common_meta_types::UserStageInfo;
 
 #[async_trait::async_trait]
 pub trait StageApi: Sync + Send {

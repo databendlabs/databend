@@ -26,9 +26,9 @@ use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
 use common_expression::Value;
+use common_meta_app::principal::UserOptionFlag;
 use common_meta_types::MatchSeq;
 use common_meta_types::TenantQuota;
-use common_meta_types::UserOptionFlag;
 use common_users::UserApiProvider;
 
 use crate::procedures::OneBlockProcedure;

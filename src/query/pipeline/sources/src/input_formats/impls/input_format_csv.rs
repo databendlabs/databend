@@ -30,8 +30,8 @@ use common_formats::FileFormatOptionsExt;
 use common_formats::RecordDelimiter;
 use common_io::cursor_ext::*;
 use common_io::format_diagnostic::verbose_char;
-use common_meta_types::OnErrorMode;
-use common_meta_types::StageFileFormatType;
+use common_meta_app::principal::OnErrorMode;
+use common_meta_app::principal::StageFileFormatType;
 use csv_core::ReadRecordResult;
 
 use crate::input_formats::impls::input_format_tsv::format_column_error;
