@@ -53,8 +53,10 @@ use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::BaseTableColumn;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
+use crate::DerivedColumn;
 use crate::IndexType;
 use crate::MetadataRef;
 
@@ -381,14 +383,14 @@ impl SubqueryRewriter {
             for correlated_column in correlated_columns.iter() {
                 let column_entry = metadata.column(*correlated_column).clone();
                 let (name, data_type) = match &column_entry {
-                    ColumnEntry::BaseTableColumn {
+                    ColumnEntry::BaseTableColumn(BaseTableColumn {
                         column_name,
                         data_type,
                         ..
-                    } => (column_name, DataType::from(data_type)),
-                    ColumnEntry::DerivedColumn {
+                    }) => (column_name, DataType::from(data_type)),
+                    ColumnEntry::DerivedColumn(DerivedColumn {
                         alias, data_type, ..
-                    } => (alias, data_type.clone()),
+                    }) => (alias, data_type.clone()),
                 };
                 self.derived_columns.insert(
                     *correlated_column,
@@ -451,8 +453,12 @@ impl SubqueryRewriter {
                 for derived_column in self.derived_columns.values() {
                     let column_entry = metadata.column(*derived_column);
                     let data_type = match column_entry {
-                        ColumnEntry::BaseTableColumn { data_type, .. } => DataType::from(data_type),
-                        ColumnEntry::DerivedColumn { data_type, .. } => data_type.clone(),
+                        ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) => {
+                            DataType::from(data_type)
+                        }
+                        ColumnEntry::DerivedColumn(DerivedColumn { data_type, .. }) => {
+                            data_type.clone()
+                        }
                     };
                     let column_binding = ColumnBinding {
                         database_name: None,
@@ -561,10 +567,12 @@ impl SubqueryRewriter {
                         let metadata = self.metadata.read();
                         let column_entry = metadata.column(*derived_column);
                         let data_type = match column_entry {
-                            ColumnEntry::BaseTableColumn { data_type, .. } => {
+                            ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) => {
                                 DataType::from(data_type)
                             }
-                            ColumnEntry::DerivedColumn { data_type, .. } => data_type.clone(),
+                            ColumnEntry::DerivedColumn(DerivedColumn { data_type, .. }) => {
+                                data_type.clone()
+                            }
                         };
                         ColumnBinding {
                             database_name: None,
@@ -775,8 +783,10 @@ impl SubqueryRewriter {
             let metadata = self.metadata.read();
             let column_entry = metadata.column(*correlated_column);
             let data_type = match column_entry {
-                ColumnEntry::BaseTableColumn { data_type, .. } => DataType::from(data_type),
-                ColumnEntry::DerivedColumn { data_type, .. } => data_type.clone(),
+                ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) => {
+                    DataType::from(data_type)
+                }
+                ColumnEntry::DerivedColumn(DerivedColumn { data_type, .. }) => data_type.clone(),
             };
             let right_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
                 column: ColumnBinding {

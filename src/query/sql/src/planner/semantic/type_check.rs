@@ -75,6 +75,7 @@ use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
@@ -1821,7 +1822,9 @@ impl<'a> TypeChecker<'a> {
         if let Expr::ColumnRef { column: ident, .. } = expr {
             if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column }) = scalar {
                 let column_entry = self.metadata.read().column(column.index).clone();
-                if let ColumnEntry::BaseTableColumn { data_type, .. } = column_entry {
+                if let ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) =
+                    column_entry
+                {
                     table_data_type = data_type;
                     if let TableDataType::Tuple { .. } = table_data_type {
                         let box (inner_scalar, _inner_data_type) = self
