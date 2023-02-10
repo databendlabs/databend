@@ -36,6 +36,7 @@ use common_expression::Scalar;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_sql::field_default_value;
+use common_sql::leaf_field_default_values;
 use common_storage::ColumnNode;
 use common_storage::ColumnNodes;
 use futures::future::try_join_all;
@@ -126,10 +127,31 @@ impl BlockReader {
         projection: Projection,
         ctx: Arc<dyn TableContext>,
     ) -> Result<Arc<BlockReader>> {
-        let projected_schema = match projection {
-            Projection::Columns(ref indices) => TableSchemaRef::new(schema.project(indices)),
+        // init projected_schema and default_vals of schema.fields
+        let (projected_schema, default_vals) = match projection {
+            Projection::Columns(ref indices) => {
+                let projected_schema = TableSchemaRef::new(schema.project(indices));
+                // If projection by Columns, just calc default values by projected fields.
+                let mut default_vals = Vec::with_capacity(projected_schema.fields().len());
+                for field in projected_schema.fields() {
+                    let default_val = field_default_value(ctx.clone(), field)?;
+                    default_vals.push(default_val);
+                }
+
+                (projected_schema, default_vals)
+            }
             Projection::InnerColumns(ref path_indices) => {
-                Arc::new(schema.inner_project(path_indices))
+                let projected_schema = TableSchemaRef::new(schema.inner_project(path_indices));
+                let mut default_vals = Vec::with_capacity(schema.fields().len());
+
+                // If projection by InnerColumns, first calc default value of all schema fields.
+                for field in schema.fields() {
+                    default_vals.extend(leaf_field_default_values(ctx.clone(), field)?);
+                }
+
+                // Then calc project scalars by path_indices
+                let default_vals = schema.inner_project_scalars(path_indices, default_vals);
+                (projected_schema, default_vals)
             }
         };
 
@@ -143,36 +165,6 @@ impl BlockReader {
             .map(|c| (*c).clone())
             .collect();
         let project_indices = Self::build_projection_indices(&project_column_nodes);
-
-        // init default_vals of schema.fields
-        let default_vals = match &projection {
-            Projection::Columns(_indices) => {
-                // If projection by Columns, just calc default values by projected fields.
-                let mut default_vals = Vec::with_capacity(projected_schema.fields().len());
-                for field in projected_schema.fields() {
-                    let default_val = field_default_value(ctx.clone(), field)?;
-                    default_vals.push(default_val);
-                }
-                default_vals
-            }
-            Projection::InnerColumns(ref path_indices) => {
-                let mut default_vals = Vec::with_capacity(schema.fields().len());
-
-                // If projection by InnerColumns, first calc default value of all schema fields.
-                for field in schema.fields() {
-                    let default_val = field_default_value(ctx.clone(), field)?;
-                    default_vals.push(default_val.clone());
-                    if let Scalar::Tuple(scalars) = default_val {
-                        for scalar in scalars {
-                            default_vals.push(scalar);
-                        }
-                    }
-                }
-
-                // Then calc project scalars by path_indices
-                schema.inner_project_scalars(path_indices, default_vals)
-            }
-        };
 
         Ok(Arc::new(BlockReader {
             operator,
