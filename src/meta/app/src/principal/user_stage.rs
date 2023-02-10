@@ -165,7 +165,7 @@ pub enum StageFileFormatType {
 
 impl Default for StageFileFormatType {
     fn default() -> Self {
-        Self::Csv
+        Self::Parquet
     }
 }
 
