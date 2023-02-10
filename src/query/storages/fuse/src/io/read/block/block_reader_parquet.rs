@@ -277,6 +277,7 @@ impl BlockReader {
         let mut field_column_descriptors = Vec::with_capacity(estimated_cap);
         let mut field_uncompressed_size = 0;
         let is_nested_field = indices.len() > 1;
+
         for (i, leaf_column_id) in indices.iter().enumerate() {
             let column_id = column.leaf_column_ids[i];
             if let Some(column_meta) = column_metas.get(&column_id) {
@@ -293,16 +294,18 @@ impl BlockReader {
                         DataItem::ColumnArray(column_array) => {
                             if is_nested_field {
                                 return Err(ErrorCode::StorageOther(
-                                    "unexpected nested field.. blah blah",
+                                    "unexpected nested field: nested leaf field hits cached",
                                 ));
                             }
                             return Ok(Some(DeserializedArray::Cached(column_array)));
                         }
                     }
                 } else {
+                    // no raw data or cache item of given column id
                     break;
                 }
             } else {
+                // no column meta of given colmun id
                 break;
             }
         }
