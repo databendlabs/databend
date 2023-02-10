@@ -13,7 +13,6 @@
 //  limitations under the License.
 
 mod cluster;
-mod match_seq;
 
 #[test]
 fn test_bin_commit_version() -> anyhow::Result<()> {

@@ -56,7 +56,7 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
             let res = client
                 .upsert_kv(UpsertKVReq {
                     key: k.clone(),
-                    seq: MatchSeq::Any,
+                    seq: MatchSeq::GE(0),
                     value: Operation::Update(k.clone().into_bytes()),
                     value_meta: None,
                 })
@@ -148,7 +148,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
                 let res = client
                     .upsert_kv(UpsertKVReq {
                         key: k.clone(),
-                        seq: MatchSeq::Any,
+                        seq: MatchSeq::GE(0),
                         value: Operation::Update(k.clone().into_bytes()),
                         value_meta: None,
                     })
@@ -159,7 +159,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
                 let res = client
                     .upsert_kv(UpsertKVReq {
                         key: k.clone(),
-                        seq: MatchSeq::Any,
+                        seq: MatchSeq::GE(0),
                         value: Operation::Update(k.clone().into_bytes()),
                         value_meta: None,
                     })
