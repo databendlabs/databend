@@ -98,6 +98,7 @@ impl Binder {
             database.to_string(),
             table_meta,
             None,
+            false,
         );
 
         self.bind_base_table(bind_context, database, table_index)
@@ -167,8 +168,9 @@ impl Binder {
                         let backtrace = Backtrace::new();
                         let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
                         // For view, we need use a new context to bind it.
-                        let new_bind_context =
+                        let mut new_bind_context =
                             BindContext::with_parent(Box::new(bind_context.clone()));
+                        new_bind_context.is_view = true;
                         if let Statement::Query(query) = &stmt {
                             let (s_expr, mut new_bind_context) =
                                 self.bind_query(&new_bind_context, query).await?;
@@ -185,6 +187,12 @@ impl Binder {
                                     );
                                 }
                             }
+                            self.metadata.write().add_view_table(
+                                catalog,
+                                database.clone(),
+                                table_meta,
+                                table_alias_name,
+                            );
                             Ok((s_expr, new_bind_context))
                         } else {
                             Err(ErrorCode::Internal(format!(
@@ -199,6 +207,7 @@ impl Binder {
                             database.clone(),
                             table_meta,
                             table_alias_name,
+                            bind_context.is_view,
                         );
 
                         let (s_expr, mut bind_context) = self
@@ -246,6 +255,7 @@ impl Binder {
                     "system".to_string(),
                     table.clone(),
                     table_alias_name,
+                    false,
                 );
 
                 let (s_expr, mut bind_context) = self
@@ -323,6 +333,7 @@ impl Binder {
                         "system".to_string(),
                         table.clone(),
                         table_alias_name,
+                        false,
                     );
 
                     let (s_expr, mut bind_context) = self

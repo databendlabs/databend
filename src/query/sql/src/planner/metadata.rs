@@ -55,6 +55,7 @@ pub type MetadataRef = Arc<RwLock<Metadata>>;
 #[derive(Clone, Debug, Default)]
 pub struct Metadata {
     tables: Vec<TableEntry>,
+    view_tables: Vec<TableEntry>,
     columns: Vec<ColumnEntry>,
 }
 
@@ -65,6 +66,10 @@ impl Metadata {
 
     pub fn tables(&self) -> &[TableEntry] {
         self.tables.as_slice()
+    }
+
+    pub fn view_tables(&self) -> &[TableEntry] {
+        self.view_tables.as_slice()
     }
 
     pub fn table_index_by_column_indexes(&self, column_indexes: &ColumnSet) -> Option<IndexType> {
@@ -128,12 +133,35 @@ impl Metadata {
         column_index
     }
 
+    pub fn add_view_table(
+        &mut self,
+        catalog: String,
+        database: String,
+        table_meta: Arc<dyn Table>,
+        table_alias_name: Option<String>,
+    ) -> () {
+        let table_name = table_meta.name().to_string();
+        let table_index = self.view_tables.len();
+        // If exists table alias name, use it instead of origin name
+        let table_entry = TableEntry {
+            index: table_index,
+            name: table_name,
+            database,
+            catalog,
+            table: table_meta.clone(),
+            alias_name: table_alias_name,
+            is_view: true,
+        };
+        self.view_tables.push(table_entry);
+    }
+
     pub fn add_table(
         &mut self,
         catalog: String,
         database: String,
         table_meta: Arc<dyn Table>,
         table_alias_name: Option<String>,
+        is_view: bool,
     ) -> IndexType {
         let table_name = table_meta.name().to_string();
         let table_index = self.tables.len();
@@ -145,6 +173,7 @@ impl Metadata {
             catalog,
             table: table_meta.clone(),
             alias_name: table_alias_name,
+            is_view,
         };
         self.tables.push(table_entry);
         let mut fields = VecDeque::new();
@@ -209,6 +238,7 @@ pub struct TableEntry {
     name: String,
     alias_name: Option<String>,
     index: IndexType,
+    is_view: bool,
 
     table: Arc<dyn Table>,
 }
@@ -240,6 +270,7 @@ impl TableEntry {
             database,
             table,
             alias_name,
+            is_view: false,
         }
     }
 
@@ -271,6 +302,11 @@ impl TableEntry {
     /// Get the table of this table entry.
     pub fn table(&self) -> Arc<dyn Table> {
         self.table.clone()
+    }
+    
+    /// Return true if is view table.
+    pub fn is_view(&self) -> bool {
+        self.is_view
     }
 }
 

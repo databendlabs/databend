@@ -17,9 +17,11 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::UserPrivilegeType;
+use common_sql::TableEntry;
 
 use crate::interpreters::access::AccessChecker;
 use crate::sessions::QueryContext;
+use crate::sessions::Session;
 use crate::sql::plans::Plan;
 
 pub struct PrivilegeAccess {
@@ -32,13 +34,37 @@ impl PrivilegeAccess {
     }
 }
 
+async fn validate_query_privilege(session: &Arc<Session>, table: &&TableEntry) -> Result<()> {
+    session
+        .validate_privilege(
+            &GrantObject::Table(
+                table.catalog().clone().to_string(),
+                table.database().clone().to_string(),
+                table.name().clone().to_string(),
+            ),
+            UserPrivilegeType::Select,
+        )
+        .await
+}
+
 #[async_trait::async_trait]
 impl AccessChecker for PrivilegeAccess {
     async fn check(&self, plan: &Plan) -> Result<()> {
         let session = self.ctx.get_current_session();
 
         match plan {
-            Plan::Query { .. } => {}
+            Plan::Query { metadata, .. } => {
+                let metadata = metadata.read().clone();
+                for table in metadata.view_tables() {
+                    validate_query_privilege(&session, &table).await?;
+                }
+                for table in metadata.tables() {
+                    if table.is_view() {
+                        continue;
+                    }
+                    validate_query_privilege(&session, &table).await?;
+                }
+            }
             Plan::Explain { .. } => {}
             Plan::Copy(_) => {}
             Plan::Call(_) => {}
