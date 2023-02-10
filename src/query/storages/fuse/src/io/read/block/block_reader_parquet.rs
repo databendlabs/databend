@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_arrow::arrow::array::Array;
 use common_arrow::arrow::chunk::Chunk;
 use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
@@ -29,9 +30,11 @@ use common_catalog::table::ColumnId;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_storage::ColumnNode;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::TableDataColumnCacheKey;
 use storages_common_cache_manager::CacheManager;
+use storages_common_cache_manager::SizedColumnArray;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::Compression;
@@ -43,6 +46,11 @@ use crate::io::read::ReadSettings;
 use crate::io::BlockReader;
 use crate::io::UncompressedBuffer;
 use crate::metrics::*;
+
+enum DeserializedArray<'a> {
+    Cached(&'a Arc<SizedColumnArray>),
+    Deserialized((ColumnId, Box<dyn Array>, usize)),
+}
 
 impl BlockReader {
     /// Read a parquet file and convert to DataBlock.
@@ -129,124 +137,45 @@ impl BlockReader {
             return self.build_default_values_block(num_rows);
         }
 
-        let mut deserialized_column_arrays = Vec::with_capacity(self.projection.len());
-
         let fields = self.projection.project_column_nodes(&self.column_nodes)?;
         let mut need_default_vals = Vec::with_capacity(fields.len());
         let mut need_to_fill_default_val = false;
-
-        // TODO need refactor
-        type ItemIndex = usize;
-        enum Holder {
-            Cached(ItemIndex),
-            Deserialized(ItemIndex),
-        }
-
-        let mut column_idx_cached_array = vec![];
-        let mut holders = vec![];
-        let mut deserialized_item_index: usize = 0;
-        let mut cache_flags = vec![];
-
+        let mut deserialized_column_arrays = Vec::with_capacity(self.projection.len());
         for column in &fields {
-            let field = column.field.clone();
-            let indices = &column.leaf_ids;
-            let mut field_column_metas = Vec::with_capacity(indices.len());
-            let mut field_column_data = Vec::with_capacity(indices.len());
-            let mut field_column_descriptors = Vec::with_capacity(indices.len());
-            let mut column_in_block = false;
-            let mut field_uncompressed_size = 0;
-            for (i, index) in indices.iter().enumerate() {
-                let column_id = column.leaf_column_ids[i];
-                if let Some(column_meta) = column_metas.get(&column_id) {
-                    // TODO need @LiChuang review
-                    if let Some(chunk) = column_chunks.get(&(*index as ColumnId)) {
-                        column_in_block = true;
-                        match chunk {
-                            DataItem::RawData(data) => {
-                                let column_descriptor =
-                                    &self.parquet_schema_descriptor.columns()[*index];
-                                field_column_metas.push(column_meta);
-                                field_column_data.push(*data);
-                                field_column_descriptors.push(column_descriptor);
-                                field_uncompressed_size += data.len();
-                            }
-                            DataItem::ColumnArray(column_array) => {
-                                let idx = column_idx_cached_array.len();
-                                column_idx_cached_array.push(*column_array);
-                                field_uncompressed_size += column_array.1;
-                                holders.push(Holder::Cached(idx));
-                            }
-                        }
-                    } else {
-                        break;
-                    }
-                } else {
-                    column_in_block = false;
-                    break;
+            match self.deserialize_field(
+                column,
+                column_metas,
+                &column_chunks,
+                num_rows,
+                compression,
+                &uncompressed_buffer,
+            )? {
+                None => {
+                    need_to_fill_default_val = true;
+                    need_default_vals.push(true);
                 }
-            }
-
-            if field_column_metas.len() == 0 {
-                continue;
-            }
-
-            if column_in_block {
-                if field_column_metas.len() > 1 {
-                    eprintln!("nested");
-                    // working on nested field
-                    holders.push(Holder::Deserialized(deserialized_item_index));
-                    cache_flags.push(None);
-                } else {
-                    eprintln!("simple");
-                    // working on simple field
-                    let column_idx = indices[0] as ColumnId;
-                    holders.push(Holder::Deserialized(deserialized_item_index));
-                    cache_flags.push(Some(column_idx));
+                Some(v) => {
+                    deserialized_column_arrays.push(v);
+                    need_default_vals.push(false);
                 }
-
-                deserialized_item_index += 1;
-
-                let field_name = field.name.clone();
-                let mut array_iter = Self::chunks_to_parquet_array_iter(
-                    field_column_metas,
-                    field_column_data,
-                    num_rows,
-                    field_column_descriptors,
-                    field,
-                    compression,
-                    uncompressed_buffer
-                        .clone()
-                        .unwrap_or_else(|| UncompressedBuffer::new(0)),
-                )?;
-                let array = array_iter.next().transpose()?.ok_or_else(|| {
-                    ErrorCode::StorageOther(format!(
-                        "unexpected deserialization error, no array found for field {field_name} "
-                    ))
-                })?;
-                deserialized_column_arrays.push((field_uncompressed_size, array));
-
-                need_default_vals.push(false);
-            } else {
-                need_default_vals.push(true);
-                need_to_fill_default_val = true;
             }
         }
-
-        let mut arrays = Vec::with_capacity(self.projection.len());
 
         // assembly the arrays
-        for holder in holders {
-            match holder {
-                Holder::Cached(idx) => {
-                    arrays.push(&column_idx_cached_array[idx].as_ref().0);
+        let mut chunk_arrays = vec![];
+        for array in &deserialized_column_arrays {
+            match array {
+                DeserializedArray::Deserialized((_, array, ..)) => {
+                    chunk_arrays.push(array);
                 }
-                Holder::Deserialized(idx) => {
-                    arrays.push(&deserialized_column_arrays[idx].1);
+                DeserializedArray::Cached(sized_column) => {
+                    chunk_arrays.push(&sized_column.0);
                 }
             }
         }
-        let chunk = Chunk::try_new(arrays)?;
 
+        // build data block
+        let chunk = Chunk::try_new(chunk_arrays)?;
         let data_block = if !need_to_fill_default_val {
             DataBlock::from_arrow_chunk(&chunk, &self.data_schema())
         } else {
@@ -268,16 +197,14 @@ impl BlockReader {
             )
         };
 
+        // populate cache is necessary
         if let Some(cache) = CacheManager::instance().get_table_data_array_cache() {
-            eprintln!("array cache enabeld");
             // populate array cache items
-            for ((size, item), need_tobe_cached) in
-                deserialized_column_arrays.into_iter().zip(cache_flags)
-            {
-                if let Some(column_idx) = need_tobe_cached {
-                    let key = TableDataColumnCacheKey::new(block_path, column_idx);
+            for item in deserialized_column_arrays.into_iter() {
+                if let DeserializedArray::Deserialized((column_id, array, size)) = item {
+                    let key = TableDataColumnCacheKey::new(block_path, column_id);
                     eprintln!("array cache put {}", key.as_ref());
-                    cache.put(key.into(), Arc::new((item, size)))
+                    cache.put(key.into(), Arc::new((array, size)))
                 }
             }
         }
@@ -332,6 +259,80 @@ impl BlockReader {
             Some(rows),
             rows,
         )?)
+    }
+
+    fn deserialize_field<'a>(
+        &self,
+        column: &ColumnNode,
+        column_metas: &HashMap<ColumnId, ColumnMeta>,
+        column_chunks: &'a HashMap<ColumnId, DataItem<'a>>,
+        num_rows: usize,
+        compression: &Compression,
+        uncompressed_buffer: &'a Option<Arc<UncompressedBuffer>>,
+    ) -> Result<Option<DeserializedArray<'a>>> {
+        let indices = &column.leaf_ids;
+        let estimated_cap = indices.len();
+        let mut field_column_metas = Vec::with_capacity(estimated_cap);
+        let mut field_column_data = Vec::with_capacity(estimated_cap);
+        let mut field_column_descriptors = Vec::with_capacity(estimated_cap);
+        let mut field_uncompressed_size = 0;
+        let is_nested_field = indices.len() > 1;
+        for (i, leaf_column_id) in indices.iter().enumerate() {
+            let column_id = column.leaf_column_ids[i];
+            if let Some(column_meta) = column_metas.get(&column_id) {
+                if let Some(chunk) = column_chunks.get(&(*leaf_column_id as ColumnId)) {
+                    match chunk {
+                        DataItem::RawData(data) => {
+                            let column_descriptor =
+                                &self.parquet_schema_descriptor.columns()[*leaf_column_id];
+                            field_column_metas.push(column_meta);
+                            field_column_data.push(*data);
+                            field_column_descriptors.push(column_descriptor);
+                            field_uncompressed_size += data.len();
+                        }
+                        DataItem::ColumnArray(column_array) => {
+                            if is_nested_field {
+                                return Err(ErrorCode::StorageOther(
+                                    "unexpected nested field.. blah blah",
+                                ));
+                            }
+                            return Ok(Some(DeserializedArray::Cached(column_array)));
+                        }
+                    }
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        if !field_column_metas.is_empty() {
+            let field_name = column.field.name.to_owned();
+            let mut array_iter = Self::chunks_to_parquet_array_iter(
+                field_column_metas,
+                field_column_data,
+                num_rows,
+                field_column_descriptors,
+                column.field.clone(),
+                compression,
+                uncompressed_buffer
+                    .clone()
+                    .unwrap_or_else(|| UncompressedBuffer::new(0)),
+            )?;
+            let array = array_iter.next().transpose()?.ok_or_else(|| {
+                ErrorCode::StorageOther(format!(
+                    "unexpected deserialization error, no array found for field {field_name} "
+                ))
+            })?;
+            Ok(Some(DeserializedArray::Deserialized((
+                indices[0] as ColumnId,
+                array,
+                field_uncompressed_size,
+            ))))
+        } else {
+            Ok(None)
+        }
     }
 
     fn to_parquet_compression(meta_compression: &Compression) -> Result<ParquetCompression> {

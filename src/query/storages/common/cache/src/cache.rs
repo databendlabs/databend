@@ -41,7 +41,7 @@ where
 pub trait Named
 where Self: Sized
 {
-    fn name_with(self: Self, name: String) -> NamedCache<Self> {
+    fn name_with(self, name: String) -> NamedCache<Self> {
         NamedCache { name, cache: self }
     }
 }

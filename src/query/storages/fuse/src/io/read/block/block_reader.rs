@@ -202,8 +202,7 @@ impl BlockReader {
     }
 
     pub fn support_blocking_api(&self) -> bool {
-        // self.operator.metadata().can_blocking()
-        false
+        self.operator.metadata().can_blocking()
     }
 
     /// This is an optimized for data read, works like the Linux kernel io-scheduler IO merging.
