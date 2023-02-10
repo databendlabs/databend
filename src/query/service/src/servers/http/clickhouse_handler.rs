@@ -29,8 +29,8 @@ use common_expression::TableSchemaRef;
 use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
 use common_formats::FileFormatTypeExt;
-use common_pipeline_sources::processors::sources::input_formats::InputContext;
-use common_pipeline_sources::processors::sources::input_formats::StreamingReadBatch;
+use common_pipeline_sources::input_formats::InputContext;
+use common_pipeline_sources::input_formats::StreamingReadBatch;
 use common_sql::plans::InsertInputSource;
 use common_sql::plans::Plan;
 use common_sql::Planner;
@@ -254,15 +254,21 @@ pub async fn clickhouse_handler_get(
     }
 
     let mut planner = Planner::new(context.clone());
-    let (plan, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
+    let (plan, _, fmt) = planner
+        .plan_sql(&sql)
+        .await
+        .map_err(|err| err.display_with_sql(&sql))
+        .map_err(BadRequest)?;
     let format = get_format_with_default(fmt, default_format)?;
 
     context.attach_query_str(plan.to_string(), &sql);
     let interpreter = InterpreterFactory::get(context.clone(), &plan)
         .await
+        .map_err(|err| err.display_with_sql(&sql))
         .map_err(BadRequest)?;
     execute(context, interpreter, format, params, None)
         .await
+        .map_err(|err| err.display_with_sql(&sql))
         .map_err(InternalServerError)
 }
 
@@ -310,8 +316,13 @@ pub async fn clickhouse_handler_post(
         return serialize_one_block(ctx.clone(), schema, block, &sql, &params, default_format)
             .map_err(InternalServerError);
     }
+
     let mut planner = Planner::new(ctx.clone());
-    let (mut plan, _, fmt) = planner.plan_sql(&sql).await.map_err(BadRequest)?;
+    let (mut plan, _, fmt) = planner
+        .plan_sql(&sql)
+        .await
+        .map_err(|err| err.display_with_sql(&sql))
+        .map_err(BadRequest)?;
     let schema = plan.schema();
     ctx.attach_query_str(plan.to_string(), &sql);
     let mut handle = None;
@@ -325,7 +336,9 @@ pub async fn clickhouse_handler_post(
                 .await
                 .map_err(InternalServerError)?;
 
-            let table_schema = infer_table_schema(&schema).map_err(InternalServerError)?;
+            let table_schema = infer_table_schema(&schema)
+                .map_err(|err| err.display_with_sql(&sql))
+                .map_err(InternalServerError)?;
             let input_context = Arc::new(
                 InputContext::try_create_from_insert_clickhouse(
                     format.as_str(),
@@ -343,11 +356,15 @@ pub async fn clickhouse_handler_post(
                 "clickhouse insert with format {:?}, value {}",
                 input_context, *start
             );
-            let compression_alg = input_context.get_compression_alg("").map_err(BadRequest)?;
+            let compression_alg = input_context
+                .get_compression_alg("")
+                .map_err(|err| err.display_with_sql(&sql))
+                .map_err(BadRequest)?;
             let start = *start;
+            let sql_cloned = sql.clone();
             handle = Some(ctx.spawn(async move {
                 gen_batches(
-                    sql,
+                    sql_cloned,
                     start,
                     input_context.read_batch_size,
                     tx,
@@ -367,7 +384,9 @@ pub async fn clickhouse_handler_post(
                 .await
                 .map_err(InternalServerError)?;
 
-            let table_schema = infer_table_schema(&schema).map_err(InternalServerError)?;
+            let table_schema = infer_table_schema(&schema)
+                .map_err(|err| err.display_with_sql(&sql))
+                .map_err(InternalServerError)?;
             let input_context = Arc::new(
                 InputContext::try_create_from_insert_file_format(
                     rx,
@@ -379,17 +398,22 @@ pub async fn clickhouse_handler_post(
                     to_table.get_block_compact_thresholds(),
                 )
                 .await
+                .map_err(|err| err.display_with_sql(&sql))
                 .map_err(InternalServerError)?,
             );
 
             *input_context_ref = Some(input_context.clone());
             info!("clickhouse insert with file_format {:?}", input_context);
 
-            let compression_alg = input_context.get_compression_alg("").map_err(BadRequest)?;
+            let compression_alg = input_context
+                .get_compression_alg("")
+                .map_err(|err| err.display_with_sql(&sql))
+                .map_err(BadRequest)?;
             let start = *start;
+            let sql_cloned = sql.clone();
             handle = Some(ctx.spawn(async move {
                 gen_batches(
-                    sql,
+                    sql_cloned,
                     start,
                     input_context.read_batch_size,
                     tx,
@@ -403,10 +427,12 @@ pub async fn clickhouse_handler_post(
     let format = get_format_with_default(fmt, default_format)?;
     let interpreter = InterpreterFactory::get(ctx.clone(), &plan)
         .await
+        .map_err(|err| err.display_with_sql(&sql))
         .map_err(BadRequest)?;
 
     execute(ctx, interpreter, format, params, handle)
         .await
+        .map_err(|err| err.display_with_sql(&sql))
         .map_err(InternalServerError)
 }
 

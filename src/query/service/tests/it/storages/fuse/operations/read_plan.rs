@@ -23,8 +23,8 @@ use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
 use common_expression::Scalar;
-use common_storage::ColumnLeaf;
-use common_storage::ColumnLeaves;
+use common_storage::ColumnNode;
+use common_storage::ColumnNodes;
 use databend_query::storages::fuse::FuseTable;
 use futures::TryStreamExt;
 use storages_common_table_meta::meta;
@@ -56,9 +56,10 @@ fn test_to_partitions() -> Result<()> {
         })
     };
 
-    let col_leaves_gen = |col_id| ColumnLeaf {
+    let col_nodes_gen = |col_id| ColumnNode {
         field: ArrowField::new("".to_string(), ArrowType::Int64, false),
         leaf_ids: vec![col_id],
+        leaf_column_ids: vec![col_id as u32],
         children: None,
     };
 
@@ -98,18 +99,18 @@ fn test_to_partitions() -> Result<()> {
 
     let blocks_metas = (0..num_of_block)
         .into_iter()
-        .map(|_| block_meta.clone())
+        .map(|_| (None, block_meta.clone()))
         .collect::<Vec<_>>();
 
-    let column_leaves = (0..num_of_col)
+    let column_nodes = (0..num_of_col)
         .into_iter()
-        .map(col_leaves_gen)
+        .map(col_nodes_gen)
         .collect::<Vec<_>>();
 
-    let column_leafs = ColumnLeaves { column_leaves };
+    let column_nodes = ColumnNodes { column_nodes };
 
     // CASE I:  no projection
-    let (s, parts) = FuseTable::to_partitions(&blocks_metas, &column_leafs, None);
+    let (s, parts) = FuseTable::to_partitions(None, &blocks_metas, &column_nodes, None, None);
     assert_eq!(parts.len(), num_of_block as usize);
     let expected_block_size: u64 = cols_metas
         .values()
@@ -141,7 +142,8 @@ fn test_to_partitions() -> Result<()> {
         prewhere: None,
     });
 
-    let (stats, parts) = FuseTable::to_partitions(&blocks_metas, &column_leafs, push_down);
+    let (stats, parts) =
+        FuseTable::to_partitions(None, &blocks_metas, &column_nodes, None, push_down);
     assert_eq!(parts.len(), num_of_block as usize);
     assert_eq!(expected_block_size * num_of_block, stats.read_bytes as u64);
 
@@ -182,8 +184,7 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
         };
         let (stats, parts) = table.read_partitions(ctx.clone(), Some(push_downs)).await?;
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);
-        assert!(parts.is_empty());
+        assert!(!parts.is_empty());
     }
-
     Ok(())
 }

@@ -33,8 +33,8 @@ use common_expression::Scalar;
 use common_hashtable::HashSet as CommonHashSet;
 use common_hashtable::HashtableKeyable;
 use common_hashtable::HashtableLike;
+use common_hashtable::ShortStringHashSet;
 use common_hashtable::StackHashSet;
-use common_hashtable::UnsizedHashSet;
 use common_io::prelude::*;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -68,7 +68,7 @@ pub struct AggregateDistinctNumberState<T: Number + HashtableKeyable> {
 }
 
 pub struct AggregateDistinctStringState {
-    set: UnsizedHashSet<[u8]>,
+    set: ShortStringHashSet<[u8]>,
 }
 
 impl DistinctStateFunc for AggregateDistinctState {
@@ -152,7 +152,7 @@ impl DistinctStateFunc for AggregateDistinctState {
 impl DistinctStateFunc for AggregateDistinctStringState {
     fn new() -> Self {
         AggregateDistinctStringState {
-            set: UnsizedHashSet::<[u8]>::with_capacity(4),
+            set: ShortStringHashSet::<[u8]>::with_capacity(4),
         }
     }
 
@@ -166,7 +166,7 @@ impl DistinctStateFunc for AggregateDistinctStringState {
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
         let size = reader.read_uvarint()?;
-        self.set = UnsizedHashSet::<[u8]>::with_capacity(size as usize);
+        self.set = ShortStringHashSet::<[u8]>::with_capacity(size as usize);
         for _ in 0..size {
             let s = reader.read_uvarint()? as usize;
             let _ = self.set.set_insert(&reader[..s]);

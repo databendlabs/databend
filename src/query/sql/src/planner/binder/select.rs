@@ -19,7 +19,6 @@ use common_ast::ast::Expr;
 use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
 use common_ast::ast::JoinOperator;
-use common_ast::ast::Literal;
 use common_ast::ast::OrderByExpr;
 use common_ast::ast::Query;
 use common_ast::ast::SelectStmt;
@@ -45,7 +44,7 @@ use crate::plans::CastExpr;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::JoinType;
-use crate::plans::Scalar;
+use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::UnionAll;
 use crate::ColumnBinding;
@@ -59,17 +58,17 @@ pub struct SelectList<'a> {
 
 #[derive(Debug)]
 pub struct SelectItem<'a> {
-    pub select_target: &'a SelectTarget<'a>,
-    pub scalar: Scalar,
+    pub select_target: &'a SelectTarget,
+    pub scalar: ScalarExpr,
     pub alias: String,
 }
 
-impl<'a> Binder {
+impl Binder {
     pub(super) async fn bind_select_stmt(
         &mut self,
         bind_context: &BindContext,
-        stmt: &SelectStmt<'a>,
-        order_by: &[OrderByExpr<'a>],
+        stmt: &SelectStmt,
+        order_by: &[OrderByExpr],
     ) -> Result<(SExpr, BindContext)> {
         let (mut s_expr, mut from_context) = if stmt.from.is_empty() {
             self.bind_one_table(bind_context, stmt).await?
@@ -79,7 +78,7 @@ impl<'a> Binder {
                 .iter()
                 .cloned()
                 .reduce(|left, right| TableReference::Join {
-                    span: &[],
+                    span: None,
                     join: Join {
                         op: JoinOperator::CrossJoin,
                         condition: JoinCondition::None,
@@ -128,7 +127,8 @@ impl<'a> Binder {
             )
             .await?;
 
-        if !from_context.aggregate_info.aggregate_functions.is_empty() || !stmt.group_by.is_empty()
+        if !from_context.aggregate_info.aggregate_functions.is_empty()
+            || !from_context.aggregate_info.group_items.is_empty()
         {
             s_expr = self.bind_aggregate(&mut from_context, s_expr).await?;
         }
@@ -192,7 +192,7 @@ impl<'a> Binder {
     pub(crate) async fn bind_query(
         &mut self,
         bind_context: &BindContext,
-        query: &Query<'_>,
+        query: &Query,
     ) -> Result<(SExpr, BindContext)> {
         if let Some(with) = &query.with {
             for cte in with.ctes.iter() {
@@ -228,15 +228,6 @@ impl<'a> Binder {
             }
         };
 
-        let default_limit = if self.ctx.get_settings().get_max_result_rows()? > 0 {
-            Some(Expr::Literal {
-                span: &[],
-                lit: Literal::Integer(self.ctx.get_settings().get_max_result_rows()?),
-            })
-        } else {
-            None
-        };
-
         if !query.limit.is_empty() {
             if query.limit.len() == 1 {
                 s_expr = self
@@ -254,11 +245,7 @@ impl<'a> Binder {
             }
         } else if query.offset.is_some() {
             s_expr = self
-                .bind_limit(&bind_context, s_expr, default_limit.as_ref(), &query.offset)
-                .await?;
-        } else if let Some(l) = default_limit {
-            s_expr = self
-                .bind_limit(&bind_context, s_expr, Some(&l), &None)
+                .bind_limit(&bind_context, s_expr, None, &query.offset)
                 .await?;
         }
 
@@ -268,7 +255,7 @@ impl<'a> Binder {
     pub(super) async fn bind_where(
         &mut self,
         bind_context: &BindContext,
-        expr: &Expr<'a>,
+        expr: &Expr,
         child: SExpr,
     ) -> Result<SExpr> {
         let mut scalar_binder = ScalarBinder::new(
@@ -290,8 +277,8 @@ impl<'a> Binder {
     pub(super) async fn bind_set_operator(
         &mut self,
         bind_context: &BindContext,
-        left: &SetExpr<'_>,
-        right: &SetExpr<'_>,
+        left: &SetExpr,
+        right: &SetExpr,
         op: &SetOperator,
         all: &bool,
     ) -> Result<(SExpr, BindContext)> {

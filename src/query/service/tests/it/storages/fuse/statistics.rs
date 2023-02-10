@@ -21,7 +21,7 @@ use common_expression::types::number::NumberScalar;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::DataField;
@@ -64,7 +64,7 @@ fn test_ft_stats_block_stats() -> common_exception::Result<()> {
         StringType::from_data(vec!["aa", "aa", "bb"]),
     ]);
 
-    let r = gen_columns_statistics(&block, None)?;
+    let r = gen_columns_statistics(&block, None, None)?;
     assert_eq!(2, r.len());
     let col_stats = r.get(&0).unwrap();
     assert_eq!(col_stats.min, Scalar::Number(NumberScalar::Int32(1)));
@@ -86,7 +86,7 @@ fn test_ft_stats_block_stats_with_column_distinct_count() -> common_exception::R
     let mut column_distinct_count = HashMap::new();
     column_distinct_count.insert(0, 3);
     column_distinct_count.insert(1, 2);
-    let r = gen_columns_statistics(&block, Some(column_distinct_count))?;
+    let r = gen_columns_statistics(&block, Some(column_distinct_count), None)?;
     assert_eq!(2, r.len());
     let col_stats = r.get(&0).unwrap();
     assert_eq!(col_stats.min, Scalar::Number(NumberScalar::Int32(1)));
@@ -112,7 +112,7 @@ fn test_ft_tuple_stats_block_stats() -> common_exception::Result<()> {
 
     let block = DataBlock::new_from_columns(vec![column]);
 
-    let r = gen_columns_statistics(&block, None)?;
+    let r = gen_columns_statistics(&block, None, None)?;
     assert_eq!(2, r.len());
     let col0_stats = r.get(&0).unwrap();
     assert_eq!(col0_stats.min, Scalar::Number(NumberScalar::Int32(1)));
@@ -134,7 +134,7 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
         TestFixture::gen_sample_blocks_ex(num_of_blocks, rows_per_block, val_start_with);
     let col_stats = blocks
         .iter()
-        .map(|b| gen_columns_statistics(&b.clone().unwrap(), None))
+        .map(|b| gen_columns_statistics(&b.clone().unwrap(), None, None))
         .collect::<common_exception::Result<Vec<_>>>()?;
     let r = reducers::reduce_block_statistics(&col_stats, None);
     assert!(r.is_ok());
@@ -211,13 +211,13 @@ async fn test_accumulator() -> common_exception::Result<()> {
     let (schema, blocks) = TestFixture::gen_sample_blocks(10, 1);
     let mut stats_acc = StatisticsAccumulator::default();
 
-    let operator = Operator::new(opendal::services::memory::Builder::default().build()?);
+    let operator = Operator::create(opendal::services::Memory::default())?.finish();
     let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
     for item in blocks {
         let block = item?;
-        let col_stats = gen_columns_statistics(&block, None)?;
+        let col_stats = gen_columns_statistics(&block, None, Some(&schema))?;
         let block_statistics =
-            BlockStatistics::from(&block, "does_not_matter".to_owned(), None, None)?;
+            BlockStatistics::from(&block, "does_not_matter".to_owned(), None, None, &schema)?;
         let block_writer = BlockWriter::new(&operator, &loc_generator);
         let block_meta = block_writer
             .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
@@ -245,13 +245,15 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
         min: vec![Scalar::Number(NumberScalar::Int32(1))],
         max: vec![Scalar::Number(NumberScalar::Int32(5))],
         level: 0,
+        pages: None,
     });
 
-    let block_compactor = BlockCompactThresholds::new(1_000_000, 800_000, 100 * 1024 * 1024);
+    let block_compactor = BlockThresholds::new(1_000_000, 800_000, 100 * 1024 * 1024);
     let stats_gen = ClusterStatsGenerator::new(
         0,
         vec![0],
         0,
+        None,
         0,
         block_compactor,
         vec![],
@@ -290,6 +292,7 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
         0,
         vec![1],
         0,
+        None,
         0,
         block_compactor,
         operators,
@@ -307,6 +310,7 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
         1,
         vec![0],
         0,
+        None,
         0,
         block_compactor,
         vec![],
@@ -406,20 +410,14 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> common_exce
         );
         let block = DataBlock::new_from_columns(vec![data_col.clone()]);
 
-        let min_col = eval_aggr(
-            "min",
-            vec![],
-            &[data_col.clone()],
-            &[DataType::String],
-            rows,
-        )?;
-        let max_col = eval_aggr("max", vec![], &[data_col], &[DataType::String], rows)?;
+        let min_col = eval_aggr("min", vec![], &[data_col.clone()], rows)?;
+        let max_col = eval_aggr("max", vec![], &[data_col], rows)?;
 
         let min_expr = min_col.0.index(0).unwrap();
         let max_expr = max_col.0.index(0).unwrap();
 
         // generate the statistics of column
-        let stats_of_columns = gen_columns_statistics(&block, None).unwrap();
+        let stats_of_columns = gen_columns_statistics(&block, None, None).unwrap();
 
         // check if the max value (untrimmed) is in degenerated condition:
         // - the length of string value is larger or equal than STRING_PREFIX_LEN
@@ -487,7 +485,7 @@ fn char_len(value: &[u8]) -> usize {
 fn test_reduce_block_meta() -> common_exception::Result<()> {
     // case 1: empty input should return the default statistics
     let block_metas: Vec<BlockMeta> = vec![];
-    let reduced = reduce_block_metas(&block_metas, BlockCompactThresholds::default())?;
+    let reduced = reduce_block_metas(&block_metas, BlockThresholds::default())?;
     assert_eq!(Statistics::default(), reduced);
 
     // case 2: accumulated variants of size index should be as expected
@@ -524,7 +522,7 @@ fn test_reduce_block_meta() -> common_exception::Result<()> {
         blocks.push(block_meta);
     }
 
-    let stats = reduce_block_metas(&blocks, BlockCompactThresholds::default())?;
+    let stats = reduce_block_metas(&blocks, BlockThresholds::default())?;
 
     assert_eq!(acc_row_count, stats.row_count);
     assert_eq!(acc_block_size, stats.uncompressed_byte_size);

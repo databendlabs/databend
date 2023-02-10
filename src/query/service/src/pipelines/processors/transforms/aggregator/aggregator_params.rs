@@ -41,6 +41,9 @@ pub struct AggregatorParams {
     // If there is no aggregate function, layout is None
     pub layout: Option<Layout>,
     pub offsets_aggregate_states: Vec<usize>,
+
+    // Limit is push down to AggregatorTransform
+    pub limit: Option<usize>,
 }
 
 impl AggregatorParams {
@@ -50,6 +53,7 @@ impl AggregatorParams {
         group_columns: &[usize],
         agg_funcs: &[AggregateFunctionRef],
         agg_args: &[Vec<usize>],
+        limit: Option<usize>,
     ) -> Result<Arc<AggregatorParams>> {
         let mut states_offsets: Vec<usize> = Vec::with_capacity(agg_funcs.len());
         let mut states_layout = None;
@@ -66,10 +70,11 @@ impl AggregatorParams {
             aggregate_functions_arguments: agg_args.to_vec(),
             layout: states_layout,
             offsets_aggregate_states: states_offsets,
+            limit,
         }))
     }
 
-    pub fn alloc_layout(&self, area: &mut Area) -> Option<StateAddr> {
+    pub fn alloc_layout(&self, area: &mut Area) -> StateAddr {
         let layout = self.layout.unwrap();
         let place = Into::<StateAddr>::into(area.alloc_layout(layout));
 
@@ -78,7 +83,7 @@ impl AggregatorParams {
             let aggr_state_place = place.next(aggr_state);
             self.aggregate_functions[idx].init_state(aggr_state_place);
         }
-        Some(place)
+        place
     }
 
     pub fn has_distinct_combinator(&self) -> bool {

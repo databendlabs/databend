@@ -99,7 +99,10 @@ pub async fn main() -> Result<()> {
 }
 
 async fn run_mysql_client() -> Result<()> {
-    println!("MySQL client starts to run...");
+    println!(
+        "MySQL client starts to run with: {:?}",
+        SqlLogicTestArgs::parse()
+    );
     let suits = SqlLogicTestArgs::parse().suites;
     let suits = std::fs::read_dir(suits).unwrap();
     run_suits(suits, ClientType::MySQL).await?;
@@ -107,7 +110,10 @@ async fn run_mysql_client() -> Result<()> {
 }
 
 async fn run_http_client() -> Result<()> {
-    println!("Http client starts to run...");
+    println!(
+        "Http client starts to run with: {:?}",
+        SqlLogicTestArgs::parse()
+    );
     let suits = SqlLogicTestArgs::parse().suites;
     let suits = std::fs::read_dir(suits).unwrap();
     run_suits(suits, ClientType::Http).await?;
@@ -115,7 +121,10 @@ async fn run_http_client() -> Result<()> {
 }
 
 async fn run_ck_http_client() -> Result<()> {
-    println!("Clickhouse http client starts to run...");
+    println!(
+        "Clickhouse http client starts to run with: {:?}",
+        SqlLogicTestArgs::parse()
+    );
     let suits = SqlLogicTestArgs::parse().suites;
     let suits = std::fs::read_dir(suits).unwrap();
     run_suits(suits, ClientType::Clickhouse).await?;
@@ -125,9 +134,14 @@ async fn run_ck_http_client() -> Result<()> {
 // Create new databend with client type
 async fn create_databend(client_type: &ClientType) -> Result<Databend> {
     let mut client: Client;
+    let args = SqlLogicTestArgs::parse();
     match client_type {
         ClientType::MySQL => {
-            client = Client::MySQL(MySQLClient::create().await?);
+            let mut mysql_client = MySQLClient::create().await?;
+            if args.tpch {
+                mysql_client.enable_tpch();
+            }
+            client = Client::MySQL(mysql_client);
         }
         ClientType::Http => {
             client = Client::Http(HttpClient::create()?);
@@ -136,7 +150,6 @@ async fn create_databend(client_type: &ClientType) -> Result<Databend> {
             client = Client::Clickhouse(ClickhouseHttpClient::create()?);
         }
     }
-    let args = SqlLogicTestArgs::parse();
     if args.enable_sandbox {
         client.create_sandbox().await?;
     }
@@ -150,6 +163,7 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
     // Todo: set validator to process regex
     let args = SqlLogicTestArgs::parse();
     let mut tasks = vec![];
+    let mut num_of_tests = 0;
     let start = Instant::now();
     // Walk each suit dir and read all files in it
     // After get a slt file, set the file name to databend
@@ -173,6 +187,7 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
                     continue;
                 }
             }
+            num_of_tests += parse_file(file.as_ref().unwrap().path()).unwrap().len();
             if args.complete {
                 let col_separator = " ";
                 let validator = default_validator;
@@ -189,15 +204,20 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
         return Ok(());
     }
     // Run all tasks parallel
-    run_parallel_async(tasks).await?;
+    run_parallel_async(tasks, num_of_tests).await?;
     let duration = start.elapsed();
-    println!("Run all tests using {} ms", duration.as_millis());
+    println!(
+        "Run all tests[{}] using {} ms",
+        num_of_tests,
+        duration.as_millis()
+    );
 
     Ok(())
 }
 
 async fn run_parallel_async(
     tasks: Vec<impl Future<Output = std::result::Result<Vec<TestError>, TestError>>>,
+    num_of_tests: usize,
 ) -> Result<()> {
     let args = SqlLogicTestArgs::parse();
     let jobs = tasks.len().clamp(1, args.parallel);
@@ -208,13 +228,17 @@ async fn run_parallel_async(
             .filter_map(|result| async { result.err() })
             .collect()
             .await;
-        handle_error_records(errors)?;
+        handle_error_records(errors, no_fail_fast, num_of_tests)?;
     } else {
         let errors: Vec<Vec<TestError>> = tasks
             .filter_map(|result| async { result.ok() })
             .collect()
             .await;
-        handle_error_records(errors.into_iter().flatten().collect())?;
+        handle_error_records(
+            errors.into_iter().flatten().collect(),
+            no_fail_fast,
+            num_of_tests,
+        )?;
     }
     Ok(())
 }
@@ -223,6 +247,8 @@ async fn run_file_async(
     client_type: &ClientType,
     filename: impl AsRef<Path>,
 ) -> std::result::Result<Vec<TestError>, TestError> {
+    let start = Instant::now();
+
     println!(
         "Running {} test for file: {} ...",
         client_type,
@@ -249,23 +275,32 @@ async fn run_file_async(
         true => "✅",
         false => "❌",
     };
-    println!(
-        "Completed {} test for file: {} {}",
-        client_type,
-        filename.as_ref().display(),
-        run_file_status,
-    );
+    if !SqlLogicTestArgs::parse().tpch {
+        println!(
+            "Completed {} test for file: {} {} ({:?})",
+            client_type,
+            filename.as_ref().display(),
+            run_file_status,
+            start.elapsed(),
+        );
+    }
     Ok(error_records)
 }
 
-fn handle_error_records(error_records: Vec<TestError>) -> Result<()> {
+fn handle_error_records(
+    error_records: Vec<TestError>,
+    no_fail_fast: bool,
+    num_of_tests: usize,
+) -> Result<()> {
     if error_records.is_empty() {
         return Ok(());
     }
 
     println!(
-        "Test finished, Total {} records failed to run",
-        error_records.len()
+        "Test finished, fail fast {}, {} out of {} records failed to run",
+        if no_fail_fast { "disabled" } else { "enabled" },
+        error_records.len(),
+        num_of_tests
     );
     for (idx, error_record) in error_records.iter().enumerate() {
         println!("{idx}: {}", error_record.display(true));

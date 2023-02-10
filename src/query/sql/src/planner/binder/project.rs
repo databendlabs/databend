@@ -35,22 +35,21 @@ use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::GroupingChecker;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
-use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::IndexType;
 
-impl<'a> Binder {
+impl Binder {
     pub(super) fn analyze_projection(
         &mut self,
-        select_list: &SelectList<'a>,
+        select_list: &SelectList,
     ) -> Result<(HashMap<IndexType, ScalarItem>, Vec<ColumnBinding>)> {
         let mut columns = Vec::with_capacity(select_list.items.len());
         let mut scalars = HashMap::new();
         for item in select_list.items.iter() {
-            let column_binding = if let Scalar::BoundColumnRef(ref column_ref) = item.scalar {
+            let column_binding = if let ScalarExpr::BoundColumnRef(ref column_ref) = item.scalar {
                 let mut column_binding = column_ref.column.clone();
                 // We should apply alias for the ColumnBinding, since it comes from table
                 column_binding.column_name = item.alias.clone();
@@ -58,20 +57,19 @@ impl<'a> Binder {
             } else {
                 self.create_column_binding(None, None, item.alias.clone(), item.scalar.data_type())
             };
-            let scalar = if let Scalar::SubqueryExpr(SubqueryExpr {
+            let scalar = if let ScalarExpr::SubqueryExpr(SubqueryExpr {
                 typ,
                 subquery,
                 child_expr,
                 compare_op,
                 data_type,
-                allow_multi_rows,
                 outer_columns,
                 output_column,
                 ..
             }) = item.scalar.clone()
             {
                 if typ == SubqueryType::Any || typ == SubqueryType::Exists {
-                    Scalar::SubqueryExpr(SubqueryExpr {
+                    ScalarExpr::SubqueryExpr(SubqueryExpr {
                         typ,
                         subquery,
                         child_expr,
@@ -79,7 +77,6 @@ impl<'a> Binder {
                         output_column,
                         projection_index: Some(column_binding.index),
                         data_type,
-                        allow_multi_rows,
                         outer_columns,
                     })
                 } else {
@@ -149,12 +146,12 @@ impl<'a> Binder {
     /// For scalar expressions and aggregate expressions, we will register new columns for
     /// them in `Metadata`. And notice that, the semantic of aggregate expressions won't be checked
     /// in this function.
-    pub(super) async fn normalize_select_list(
+    pub(super) async fn normalize_select_list<'a>(
         &mut self,
         input_context: &BindContext,
-        select_list: &'a [SelectTarget<'a>],
+        select_list: &'a [SelectTarget],
     ) -> Result<SelectList<'a>> {
-        let mut output = SelectList::<'a>::default();
+        let mut output = SelectList::default();
         for select_target in select_list {
             match select_target {
                 SelectTarget::QualifiedName {
@@ -217,7 +214,7 @@ impl<'a> Binder {
         Ok(output)
     }
 
-    fn resolve_qualified_name_without_database_name(
+    fn resolve_qualified_name_without_database_name<'a>(
         &self,
         input_context: &BindContext,
         names: &QualifiedName,
@@ -283,7 +280,7 @@ impl<'a> Binder {
         Ok(())
     }
 
-    fn resolve_qualified_name_with_database_name(
+    fn resolve_qualified_name_with_database_name<'a>(
         &self,
         input_context: &BindContext,
         names: &QualifiedName,

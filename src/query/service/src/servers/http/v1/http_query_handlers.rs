@@ -280,14 +280,18 @@ pub(crate) async fn query_handler(
     info!("receive http query: {:?}", req);
     let http_query_manager = HttpQueryManager::instance();
     let sql = req.sql.clone();
-    let query = http_query_manager.try_create_query(ctx, req).await;
 
+    let query = http_query_manager
+        .try_create_query(ctx, req)
+        .await
+        .map_err(|err| err.display_with_sql(&sql));
     match query {
         Ok(query) => {
             query.update_expire_time(true).await;
             let resp = query
                 .get_response_page(0)
                 .await
+                .map_err(|err| err.display_with_sql(&sql))
                 .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
             let (rows, next_page) = match &resp.data {
                 None => (0, None),

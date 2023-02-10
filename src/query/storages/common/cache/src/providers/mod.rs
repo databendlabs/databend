@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod by_pass_cache;
-mod file_cache;
-mod memory_bytes_cache;
-mod memory_items_cache;
-pub(crate) mod metrics;
-
-pub use by_pass_cache::ByPassCache;
-pub use file_cache::FileCache;
-pub use memory_bytes_cache::MemoryBytesCache;
-pub use memory_items_cache::MemoryItemsCache;
+mod disk_cache;
+mod memory_cache;
+pub use disk_cache::DiskCache;
+pub use memory_cache::BytesCache;
+pub use memory_cache::InMemoryBytesCacheHolder;
+pub use memory_cache::InMemoryCacheBuilder;
+pub use memory_cache::InMemoryItemCacheHolder;
+pub use memory_cache::ItemCache;

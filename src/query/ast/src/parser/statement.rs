@@ -15,14 +15,14 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use common_meta_app::principal::AuthType;
+use common_meta_app::principal::PrincipalIdentity;
+use common_meta_app::principal::UserIdentity;
+use common_meta_app::principal::UserPrivilegeType;
 use common_meta_app::schema::CatalogType;
 use common_meta_app::share::ShareGrantObjectName;
 use common_meta_app::share::ShareGrantObjectPrivilege;
 use common_meta_app::share::ShareNameIdent;
-use common_meta_types::AuthType;
-use common_meta_types::PrincipalIdentity;
-use common_meta_types::UserIdentity;
-use common_meta_types::UserPrivilegeType;
 use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
@@ -557,14 +557,18 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! {
             CREATE ~ VIEW ~ ( IF ~ NOT ~ EXISTS )?
             ~ #peroid_separated_idents_1_to_3
+            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ AS ~ #query
         },
-        |(_, _, opt_if_not_exists, (catalog, database, view), _, query)| {
+        |(_, _, opt_if_not_exists, (catalog, database, view), opt_columns, _, query)| {
             Statement::CreateView(CreateViewStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 catalog,
                 database,
                 view,
+                columns: opt_columns
+                    .map(|(_, columns, _)| columns)
+                    .unwrap_or_default(),
                 query: Box::new(query),
             })
         },
@@ -586,13 +590,17 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! {
             ALTER ~ VIEW
             ~ #peroid_separated_idents_1_to_3
+            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ AS ~ #query
         },
-        |(_, _, (catalog, database, view), _, query)| {
+        |(_, _, (catalog, database, view), opt_columns, _, query)| {
             Statement::AlterView(AlterViewStmt {
                 catalog,
                 database,
                 view,
+                columns: opt_columns
+                    .map(|(_, columns, _)| columns)
+                    .unwrap_or_default(),
                 query: Box::new(query),
             })
         },
@@ -863,7 +871,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 single: Default::default(),
                 purge: Default::default(),
                 force: Default::default(),
-                on_error: Default::default(),
+                on_error: "abort".to_string(),
             };
             for opt in opts {
                 copy_stmt.apply_option(opt);
@@ -888,16 +896,19 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! {
             PRESIGN ~ ( #presign_action )?
                 ~ #presign_location
-                ~ (EXPIRE ~ "=" ~ #literal_u64)?
+                ~ ( #presign_option )*
         },
-        |(_, action, location, expire)| {
-            Statement::Presign(PresignStmt {
+        |(_, action, location, opts)| {
+            let mut presign_stmt = PresignStmt {
                 action: action.unwrap_or_default(),
                 location,
-                expire: expire
-                    .map(|(_, _, v)| Duration::from_secs(v))
-                    .unwrap_or_else(|| Duration::from_secs(3600)),
-            })
+                expire: Duration::from_secs(3600),
+                content_type: None,
+            };
+            for opt in opts {
+                presign_stmt.apply_option(opt);
+            }
+            Statement::Presign(presign_stmt)
         },
     );
 
@@ -1022,9 +1033,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
         ),
         rule!(
-            #create_view : "`CREATE VIEW [IF NOT EXISTS] [<database>.]<view> AS SELECT ...`"
+            #create_view : "`CREATE VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
-            | #alter_view : "`ALTER VIEW [<database>.]<view> AS SELECT ...`"
+            | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
         ),
         rule!(
             #show_users : "`SHOW USERS`"
@@ -1162,15 +1173,14 @@ pub fn unset_source(i: Input) -> IResult<UnSetSource> {
     )(i)
 }
 
-#[allow(clippy::needless_lifetimes)]
-pub fn rest_str<'a>(i: Input<'a>) -> IResult<(&'a str, usize)> {
+pub fn rest_str(i: Input) -> IResult<(String, usize)> {
     // It's safe to unwrap because input must contain EOI.
     let first_token = i.0.first().unwrap();
     let last_token = i.0.last().unwrap();
     Ok((
         i.slice((i.len() - 1)..),
         (
-            &first_token.source[first_token.span.start..last_token.span.end],
+            first_token.source[first_token.span.start..last_token.span.end].to_string(),
             first_token.span.start,
         ),
     ))
@@ -1178,9 +1188,9 @@ pub fn rest_str<'a>(i: Input<'a>) -> IResult<(&'a str, usize)> {
 
 pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     #[derive(Clone)]
-    enum ColumnConstraint<'a> {
+    enum ColumnConstraint {
         Nullable(bool),
-        DefaultExpr(Box<Expr<'a>>),
+        DefaultExpr(Box<Expr>),
     }
 
     let nullable = alt((
@@ -1442,7 +1452,18 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
         |(_, _, new_table)| AlterTableAction::RenameTable { new_table },
     );
-
+    let add_column = map(
+        rule! {
+            ADD ~ COLUMN ~ #column_def
+        },
+        |(_, _, column)| AlterTableAction::AddColumn { column },
+    );
+    let drop_column = map(
+        rule! {
+            DROP ~ COLUMN ~ #ident
+        },
+        |(_, _, column)| AlterTableAction::DropColumn { column },
+    );
     let alter_table_cluster_key = map(
         rule! {
             CLUSTER ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
@@ -1476,6 +1497,8 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 
     rule!(
         #rename_table
+        | #add_column
+        | #drop_column
         | #alter_table_cluster_key
         | #drop_table_cluster_key
         | #recluster_table
@@ -1760,13 +1783,25 @@ pub fn presign_location(i: Input) -> IResult<PresignLocation> {
     )(i)
 }
 
+pub fn presign_option(i: Input) -> IResult<PresignOption> {
+    alt((
+        map(rule! { EXPIRE ~ "=" ~ #literal_u64 }, |(_, _, v)| {
+            PresignOption::Expire(v)
+        }),
+        map(
+            rule! { CONTENT_TYPE ~ "=" ~ #literal_string },
+            |(_, _, v)| PresignOption::ContentType(v),
+        ),
+    ))(i)
+}
+
 pub fn table_reference_only(i: Input) -> IResult<TableReference> {
     map(
         consumed(rule! {
             #peroid_separated_idents_1_to_3
         }),
-        |(input, (catalog, database, table))| TableReference::Table {
-            span: input.0,
+        |(span, (catalog, database, table))| TableReference::Table {
+            span: transform_span(span.0),
             catalog,
             database,
             table,

@@ -18,11 +18,12 @@ concurrency:
 
 env:
   BUILD_PROFILE: debug
+  RUNNER_PROVIDER: aws
 
 jobs:
   check:
     timeout-minutes: 30
-    runs-on: [self-hosted, X64, Linux]
+    runs-on: [self-hosted, X64, Linux, dev]
     steps:
       - uses: actions/checkout@v3
         with:
@@ -35,7 +36,7 @@ jobs:
   build_gnu:
     timeout-minutes: 30
     name: build_${{ matrix.arch }}_gnu
-    runs-on: [self-hosted, X64, Linux, development]
+    runs-on: [self-hosted, X64, Linux, dev]
     strategy:
       matrix:
         arch:
@@ -54,7 +55,7 @@ jobs:
   build_musl:
     timeout-minutes: 30
     name: build_${{ matrix.arch }}_musl
-    runs-on: [self-hosted, X64, Linux, development]
+    runs-on: [self-hosted, X64, Linux, dev]
     strategy:
       matrix:
         arch:
@@ -81,7 +82,7 @@ jobs:
 
   test_unit:
     timeout-minutes: 30
-    runs-on: [self-hosted, X64, Linux]
+    runs-on: [self-hosted, X64, Linux, dev]
     steps:
       - uses: actions/checkout@v3
         with:
@@ -93,7 +94,7 @@ jobs:
 
   test_metactl:
     timeout-minutes: 10
-    runs-on: [self-hosted, X64, Linux, development]
+    runs-on: [self-hosted, X64, Linux, dev]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
@@ -101,7 +102,7 @@ jobs:
 
   test_meta-upgrade-09:
     timeout-minutes: 10
-    runs-on: [self-hosted, X64, Linux, development]
+    runs-on: [self-hosted, X64, Linux, dev]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
@@ -109,7 +110,7 @@ jobs:
 
   test_compat:
     timeout-minutes: 10
-    runs-on: [self-hosted, X64, Linux, development]
+    runs-on: [self-hosted, X64, Linux, dev]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
@@ -117,7 +118,7 @@ jobs:
 
   fuse_compat:
     timeout-minutes: 10
-    runs-on: [self-hosted, X64, Linux, development]
+    runs-on: [self-hosted, X64, Linux, dev]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
@@ -125,7 +126,7 @@ jobs:
 
   test_meta_cluster:
     timeout-minutes: 10
-    runs-on: [self-hosted, X64, Linux, development]
+    runs-on: [self-hosted, X64, Linux, dev]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
@@ -134,7 +135,7 @@ jobs:
   test_sqllogic_standalone_linux:
     timeout-minutes: 30
     name: test_sqllogic_${{ matrix.dirs }}_standalone_linux
-    runs-on: [self-hosted, X64, Linux, development]
+    runs-on: [self-hosted, X64, Linux, dev]
     needs: build_gnu
     strategy:
       matrix:
@@ -154,10 +155,28 @@ jobs:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
 
+  test_sqllogic_management_mode_linux:
+    timeout-minutes: 30
+    name: test_sqllogic_${{ matrix.dirs }}_linux
+    runs-on: [ self-hosted, X64, Linux, dev ]
+    needs: build_gnu
+    strategy:
+      matrix:
+        dirs:
+          - "management"
+        handlers:
+          - "mysql,http,clickhouse"
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/test_sqllogic_management_mode_linux
+        with:
+          dirs: ${{ matrix.dirs }}
+          handlers: ${{ matrix.handlers }}
+
   test_sqllogic_cluster_linux:
     timeout-minutes: 30
     name: test_sqllogic_${{ matrix.dirs }}_cluster_linux
-    runs-on: [self-hosted, X64, Linux, development]
+    runs-on: [self-hosted, X64, Linux, dev]
     needs: build_gnu
     strategy:
       matrix:
@@ -179,7 +198,7 @@ jobs:
 
   test_stateless_standalone_linux:
     timeout-minutes: 20
-    runs-on: [self-hosted, X64, Linux, development]
+    runs-on: [self-hosted, X64, Linux, dev]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
@@ -187,7 +206,7 @@ jobs:
 
   test_stateless_cluster_linux:
     timeout-minutes: 30
-    runs-on: [self-hosted, X64, Linux, development]
+    runs-on: [self-hosted, X64, Linux, dev]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
@@ -195,7 +214,7 @@ jobs:
 
   test_stateful_standalone_linux:
     timeout-minutes: 20
-    runs-on: [self-hosted, X64, Linux, development]
+    runs-on: [self-hosted, X64, Linux, dev]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
@@ -203,7 +222,7 @@ jobs:
 
   test_stateful_cluster_linux:
     timeout-minutes: 20
-    runs-on: [self-hosted, X64, Linux, development]
+    runs-on: [self-hosted, X64, Linux, dev]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
@@ -211,7 +230,7 @@ jobs:
 
   test_fuzz_standalone_linux:
     timeout-minutes: 10
-    runs-on: [self-hosted, X64, Linux, development]
+    runs-on: [self-hosted, X64, Linux, dev]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
@@ -220,9 +239,12 @@ jobs:
 
   build_hive:
     timeout-minutes: 30
-    runs-on: [self-hosted, X64, Linux, development]
+    runs-on: [self-hosted, X64, Linux, dev]
     steps:
       - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - uses: ./.github/actions/build_linux_hive
         with:
           target: x86_64-unknown-linux-gnu
@@ -230,7 +252,7 @@ jobs:
 
   test_stateful_hive_standalone:
     timeout-minutes: 10
-    runs-on: [self-hosted, X64, Linux, development]
+    runs-on: [self-hosted, X64, Linux, dev]
     needs: build_hive
     steps:
       - uses: actions/checkout@v3

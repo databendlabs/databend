@@ -4,11 +4,15 @@ title: DELETE
 
 Removes one or more rows from a table.
 
+:::note
+**Databend guarantees data integrity**. In Databend, Insert, Update, and Delete operations are guaranteed to be atomic, which means that all data in the operation must succeed or all must fail.
+:::
+
 ## Syntax
 
 ```sql
-DELETE FROM table_name
-[WHERE search_ condition]
+DELETE FROM <table_name>
+[WHERE <condition>]
 ```
 
 :::tip
@@ -20,8 +24,8 @@ The DELETE statement does not support the USING clause yet.
 ```sql
 -- create a table
 CREATE TABLE bookstore (
-  bookId INTEGER PRIMARY KEY,
-  bookName TEXT NOT NULL
+  book_id INT,
+  book_name VARCHAR
 );
 
 -- insert values
@@ -41,7 +45,7 @@ SELECT * FROM bookstore;
 105|Deconstructed
 
 -- delete a book (Id: 103)
-DELETE from bookstore where bookId = 103;
+DELETE FROM bookstore WHERE book_id = 103;
 
 -- show the table again after deletion
 SELECT * FROM bookstore;

@@ -43,6 +43,7 @@ use common_meta_types::Node;
 use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
 use openraft::Membership;
+use openraft::NodeId;
 use tokio::net::TcpSocket;
 use url::Url;
 
@@ -67,6 +68,8 @@ pub async fn import_data(config: &Config) -> anyhow::Result<()> {
     let raft_config = &config.raft_config;
     eprintln!("import meta dir into: {}", raft_config.raft_dir);
 
+    let nodes = build_nodes(config.initial_cluster.clone(), raft_config.id)?;
+
     init_sled_db(raft_config.raft_dir.clone());
 
     clear()?;
@@ -75,12 +78,8 @@ pub async fn import_data(config: &Config) -> anyhow::Result<()> {
     if config.initial_cluster.is_empty() {
         return Ok(());
     }
-    init_new_cluster(
-        config.initial_cluster.clone(),
-        max_log_id,
-        config.raft_config.id,
-    )
-    .await?;
+
+    init_new_cluster(nodes, max_log_id, config.raft_config.id).await?;
     Ok(())
 }
 
@@ -145,45 +144,71 @@ fn import_from(restore: String) -> anyhow::Result<Option<LogId>> {
     }
 }
 
-// initial_cluster format: node_id=endpoint,grpc_api_addr;
-async fn init_new_cluster(
-    initial_cluster: Vec<String>,
-    max_log_id: Option<LogId>,
-    id: u64,
-) -> anyhow::Result<()> {
-    eprintln!("init-cluster: {:?}", initial_cluster);
+/// Build `Node` for cluster with new addresses configured.
+///
+/// Raw config is: `<NodeId>=<raft-api-host>:<raft-api-port>[,...]`, e.g. `1=localhost:29103` or `1=localhost:29103,0.0.0.0:19191`
+/// The second part is obsolete grpc api address and will be just ignored. Databend-meta loads Grpc address from config file when starting up.
+fn build_nodes(initial_cluster: Vec<String>, id: u64) -> anyhow::Result<BTreeMap<NodeId, Node>> {
+    eprintln!("init-cluster: id={}, {:?}", id, initial_cluster);
 
-    let mut node_ids = BTreeSet::new();
     let mut nodes = BTreeMap::new();
     for peer in initial_cluster {
         eprintln!("peer:{}", peer);
-        let node_info: Vec<&str> = peer.split('=').collect();
-        if node_info.len() != 2 {
+
+        let id_addrs: Vec<&str> = peer.split('=').collect();
+        if id_addrs.len() != 2 {
             return Err(anyhow::anyhow!("invalid peer str: {}", peer));
         }
-        let id = u64::from_str(node_info[0])?;
-        node_ids.insert(id);
+        let id = u64::from_str(id_addrs[0])?;
 
-        let addrs: Vec<&str> = node_info[1].split(',').collect();
-        if addrs.len() != 2 {
-            return Err(anyhow::anyhow!("invalid peer str: {}", peer));
+        let addrs: Vec<&str> = id_addrs[1].split(',').collect();
+        if addrs.len() > 2 || addrs.is_empty() {
+            return Err(anyhow::anyhow!(
+                "require 1 or 2 addresses in peer str: {}",
+                peer
+            ));
         }
         let url = Url::parse(&format!("http://{}", addrs[0]))?;
-        if url.host_str().is_none() || url.port().is_none() {
-            return Err(anyhow::anyhow!("invalid peer raft addr: {}", addrs[0]));
-        }
-        let endpoint = Endpoint {
-            addr: url.host_str().unwrap().to_string(),
-            port: url.port().unwrap() as u32,
+        let endpoint = match (url.host_str(), url.port()) {
+            (Some(addr), Some(port)) => Endpoint {
+                addr: addr.to_string(),
+                port: port as u32,
+            },
+            _ => {
+                return Err(anyhow::anyhow!("invalid peer raft addr: {}", addrs[0]));
+            }
         };
-        let node = Node {
-            name: id.to_string(),
-            endpoint: endpoint.clone(),
-            grpc_api_addr: Some(addrs[1].to_string()),
-        };
+
+        let node = Node::new(id, endpoint.clone());
         eprintln!("new cluster node:{}", node);
+
         nodes.insert(id, node);
     }
+
+    if nodes.is_empty() {
+        return Ok(nodes);
+    }
+
+    if !nodes.contains_key(&id) {
+        return Err(anyhow::anyhow!(
+            "node id ({}) has to be one of cluster member({:?})",
+            id,
+            nodes.keys().collect::<Vec<_>>()
+        ));
+    }
+
+    Ok(nodes)
+}
+
+// initial_cluster format: node_id=endpoint,grpc_api_addr;
+async fn init_new_cluster(
+    nodes: BTreeMap<NodeId, Node>,
+    max_log_id: Option<LogId>,
+    id: u64,
+) -> anyhow::Result<()> {
+    eprintln!("init-cluster: {:?}", nodes);
+
+    let node_ids = nodes.keys().copied().collect::<BTreeSet<_>>();
 
     let db = get_sled_db();
     let config = RaftConfig {
@@ -231,6 +256,7 @@ async fn init_new_cluster(
             let cmd: Cmd = Cmd::AddNode {
                 node_id: node.0,
                 node: node.1,
+                overriding: true,
             };
 
             let entry: Entry<LogEntry> = Entry::<LogEntry> {

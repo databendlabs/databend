@@ -33,7 +33,6 @@
 #![allow(clippy::needless_lifetimes)]
 #![allow(incomplete_features)]
 
-pub type Result<T> = std::result::Result<T, (crate::Span, String)>;
 #[allow(dead_code)]
 mod block;
 
@@ -62,6 +61,6 @@ pub use crate::kernels::*;
 pub use crate::property::*;
 pub use crate::register::*;
 pub use crate::schema::*;
-pub use crate::utils::block_compact_thresholds::BlockCompactThresholds;
+pub use crate::utils::block_thresholds::BlockThresholds;
 pub use crate::utils::*;
 pub use crate::values::*;

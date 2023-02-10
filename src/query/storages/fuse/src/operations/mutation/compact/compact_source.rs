@@ -20,7 +20,7 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use storages_common_table_meta::meta::BlockMeta;
 
@@ -49,14 +49,14 @@ pub struct CompactSource {
     state: State,
     ctx: Arc<dyn TableContext>,
     output: Arc<OutputPort>,
-    thresholds: BlockCompactThresholds,
+    thresholds: BlockThresholds,
 }
 
 impl CompactSource {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        thresholds: BlockCompactThresholds,
+        thresholds: BlockThresholds,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(CompactSource {
             state: State::ReadData(None),
@@ -79,7 +79,7 @@ impl Processor for CompactSource {
 
     fn event(&mut self) -> Result<Event> {
         if matches!(self.state, State::ReadData(None)) {
-            self.state = match self.ctx.try_get_part() {
+            self.state = match self.ctx.get_partition() {
                 None => State::Finish,
                 Some(part) => State::ReadData(Some(part)),
             }
@@ -138,7 +138,7 @@ impl Processor for CompactSource {
             }
             State::Generate { order, tasks } => {
                 let meta = CompactSourceMeta::create(order, tasks);
-                let new_part = self.ctx.try_get_part();
+                let new_part = self.ctx.get_partition();
                 self.state = State::Output(new_part, DataBlock::empty_with_meta(meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
@@ -159,11 +159,7 @@ impl CompactTaskBuilder {
         self.blocks.is_empty()
     }
 
-    fn add(
-        &mut self,
-        block: &Arc<BlockMeta>,
-        thresholds: BlockCompactThresholds,
-    ) -> Vec<CompactTask> {
+    fn add(&mut self, block: &Arc<BlockMeta>, thresholds: BlockThresholds) -> Vec<CompactTask> {
         self.total_rows += block.row_count as usize;
         self.total_size += block.block_size as usize;
 

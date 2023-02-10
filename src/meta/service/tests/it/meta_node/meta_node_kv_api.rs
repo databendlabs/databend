@@ -17,8 +17,7 @@ use std::sync::Mutex;
 
 use async_trait::async_trait;
 use common_base::base::tokio;
-use common_meta_api::ApiBuilder;
-use common_meta_api::KVApiTestSuite;
+use common_meta_kvapi::kvapi;
 use databend_meta::init_meta_ut;
 use databend_meta::meta_service::MetaNode;
 use maplit::btreeset;
@@ -33,7 +32,7 @@ struct MetaNodeUnitTestBuilder {
 }
 
 #[async_trait]
-impl ApiBuilder<Arc<MetaNode>> for MetaNodeUnitTestBuilder {
+impl kvapi::ApiBuilder<Arc<MetaNode>> for MetaNodeUnitTestBuilder {
     async fn build(&self) -> Arc<MetaNode> {
         let (_id, tc) = start_meta_node_leader().await.unwrap();
 
@@ -75,5 +74,5 @@ async fn test_meta_node_kv_api() -> anyhow::Result<()> {
         test_contexts: Arc::new(Mutex::new(vec![])),
     };
 
-    KVApiTestSuite {}.test_all(builder).await
+    kvapi::TestSuite {}.test_all(builder).await
 }

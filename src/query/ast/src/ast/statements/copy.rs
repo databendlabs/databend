@@ -33,9 +33,9 @@ use crate::ast::Query;
 /// COPY INTO table from s3://bucket/path/to/x.csv
 /// ```
 #[derive(Debug, Clone, PartialEq)]
-pub struct CopyStmt<'a> {
-    pub src: CopyUnit<'a>,
-    pub dst: CopyUnit<'a>,
+pub struct CopyStmt {
+    pub src: CopyUnit,
+    pub dst: CopyUnit,
     pub files: Vec<String>,
     pub pattern: String,
     pub file_format: BTreeMap<String, String>,
@@ -50,7 +50,7 @@ pub struct CopyStmt<'a> {
     pub on_error: String,
 }
 
-impl<'a> CopyStmt<'a> {
+impl CopyStmt {
     pub fn apply_option(&mut self, opt: CopyOption) {
         match opt {
             CopyOption::Files(v) => self.files = v,
@@ -68,7 +68,7 @@ impl<'a> CopyStmt<'a> {
     }
 }
 
-impl Display for CopyStmt<'_> {
+impl Display for CopyStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "COPY")?;
         write!(f, " INTO {}", self.dst)?;
@@ -111,21 +111,22 @@ impl Display for CopyStmt<'_> {
         write!(f, " SINGLE = {}", self.single)?;
         write!(f, " PURGE = {}", self.purge)?;
         write!(f, " FORCE = {}", self.force)?;
-        write!(f, " ON_ERROR = {}", self.on_error)?;
+        write!(f, " ON_ERROR = '{}'", self.on_error)?;
+
         Ok(())
     }
 }
 
 /// CopyUnit is the unit that can be used in `COPY`.
 #[derive(Debug, Clone, PartialEq)]
-pub enum CopyUnit<'a> {
+pub enum CopyUnit {
     /// Table can be used in `INTO` or `FROM`.
     ///
     /// While table used as `FROM`, it will be rewrite as `(SELECT * FROM table)`
     Table {
-        catalog: Option<Identifier<'a>>,
-        database: Option<Identifier<'a>>,
-        table: Identifier<'a>,
+        catalog: Option<Identifier>,
+        database: Option<Identifier>,
+        table: Identifier,
     },
     /// StageLocation (a.k.a internal and external stage) can be used
     /// in `INTO` or `FROM`.
@@ -142,10 +143,10 @@ pub enum CopyUnit<'a> {
     /// Query can only be used as `FROM`.
     ///
     /// For example:`(SELECT field_a,field_b FROM table)`
-    Query(Box<Query<'a>>),
+    Query(Box<Query>),
 }
 
-impl CopyUnit<'_> {
+impl CopyUnit {
     pub fn target(&self) -> &'static str {
         match self {
             CopyUnit::Table { .. } => "Table",
@@ -156,7 +157,7 @@ impl CopyUnit<'_> {
     }
 }
 
-impl Display for CopyUnit<'_> {
+impl Display for CopyUnit {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             CopyUnit::Table {

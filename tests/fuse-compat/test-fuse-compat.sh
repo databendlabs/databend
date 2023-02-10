@@ -58,35 +58,6 @@ download_binary() {
     chmod +x ./bins/$ver/*
 }
 
-# Clone only specified dir or file in the specified commit
-git_partial_clone() {
-    local repo_url="$1"
-    local branch="$2"
-    local worktree_path="$3"
-    local local_path="$4"
-
-    echo " === Clone $repo_url@$branch:$worktree_path"
-    echo " ===    To $local_path/$worktree_path"
-
-    rm -rf "$local_path" || echo "no $local_path"
-
-    git clone \
-        -b "$branch" \
-        --depth 1 \
-        --filter=blob:none \
-        --sparse \
-        "$repo_url" \
-        "$local_path"
-
-    cd "$local_path"
-    git sparse-checkout set "$worktree_path"
-
-    echo " === Done clone from $repo_url@$branch:$worktree_path"
-
-    ls "$worktree_path"
-
-}
-
 kill_proc() {
     local name="$1"
 
@@ -119,12 +90,13 @@ run_test() {
 
     local query_old="./bins/$query_old_ver/bin/databend-query"
     local query_new="./bins/current/databend-query"
-    local metasrv="./bins/current/databend-meta"
+    local metasrv_old="./bins/$query_old_ver/bin/databend-meta"
+    local metasrv_new="./bins/current/databend-meta"
     local sqllogictests="./bins/current/databend-sqllogictests"
 
     echo " === metasrv version:"
     # TODO remove --single
-    "$metasrv" --single --cmd ver || echo " === no version yet"
+    "$metasrv_new" --single --cmd ver || echo " === no version yet"
 
     echo " === old query version:"
     "$query_old" --cmd ver || echo " === no version yet"
@@ -139,22 +111,19 @@ run_test() {
 
     echo " === Clean meta dir"
     rm -rf .databend || echo " === no dir to rm: .databend"
-
     rm nohup.out || echo "no nohup.out"
 
     echo ' === Start databend-meta...'
 
     export RUST_BACKTRACE=1
 
-    nohup "$metasrv" --single --log-level=DEBUG &
+    echo ' === Start old databend-meta...'
+
+    nohup "$metasrv_old" --single --log-level=DEBUG &
     python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
 
     echo ' === Start old databend-query...'
 
-    # (
-    #     download_query_config "$query_old_ver" old_config/$query_old_ver
-    # )
-    # config_path="old_config/$query_old_ver/$query_config_path"
     config_path="./bins/$query_old_ver/configs/databend-query.toml"
 
     # TODO clean up data?
@@ -170,8 +139,14 @@ run_test() {
     $sqllogictests --handlers mysql --suites "$logictest_path" --run_file fuse_compat_write
 
     kill_proc databend-query
+    kill_proc databend-meta
 
-    echo " === bring up new query "
+    echo ' === Start new databend-meta...'
+
+    nohup "$metasrv_new" --single --log-level=DEBUG &
+    python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
+
+    echo " === Start new databend-query..."
 
     config_path="$query_config_path"
 

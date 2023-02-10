@@ -33,7 +33,13 @@ pub enum Cmd {
     IncrSeq { key: String },
 
     /// Add node if absent
-    AddNode { node_id: NodeId, node: Node },
+    AddNode {
+        node_id: NodeId,
+        node: Node,
+        /// Whether to override existing record.
+        #[serde(default)]
+        overriding: bool,
+    },
 
     /// Remove node
     RemoveNode { node_id: NodeId },
@@ -69,8 +75,16 @@ impl fmt::Display for Cmd {
             Cmd::IncrSeq { key } => {
                 write!(f, "incr_seq:{}", key)
             }
-            Cmd::AddNode { node_id, node } => {
-                write!(f, "add_node:{}={}", node_id, node)
+            Cmd::AddNode {
+                node_id,
+                node,
+                overriding,
+            } => {
+                if *overriding {
+                    write!(f, "add_node(override):{}={}", node_id, node)
+                } else {
+                    write!(f, "add_node(no-override):{}={}", node_id, node)
+                }
             }
             Cmd::RemoveNode { node_id } => {
                 write!(f, "remove_node:{}", node_id)
@@ -122,7 +136,7 @@ impl UpsertKV {
     pub fn update(key: impl ToString, value: &[u8]) -> Self {
         Self {
             key: key.to_string(),
-            seq: MatchSeq::Any,
+            seq: MatchSeq::GE(0),
             value: Operation::Update(value.to_vec()),
             value_meta: None,
         }
@@ -131,7 +145,7 @@ impl UpsertKV {
     pub fn delete(key: impl ToString) -> Self {
         Self {
             key: key.to_string(),
-            seq: MatchSeq::Any,
+            seq: MatchSeq::GE(0),
             value: Operation::Delete,
             value_meta: None,
         }

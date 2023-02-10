@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::arrow::constant_bitmap;
 use common_expression::arrow::or_validities;
+use common_expression::filter_helper::FilterHelpers;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::AnyType;
 use common_expression::types::DataType;
@@ -189,13 +190,11 @@ impl JoinHashTable {
         merged_block: &DataBlock,
         filter: &Expr,
     ) -> Result<(Option<Bitmap>, bool, bool)> {
-        let func_ctx = self.ctx.try_get_function_context()?;
+        let func_ctx = self.ctx.get_function_context()?;
         // `predicate_column` contains a column, which is a boolean column.
         let evaluator = Evaluator::new(merged_block, func_ctx, &BUILTIN_FUNCTIONS);
-        let filter_vector: Value<AnyType> = evaluator
-            .run(filter)
-            .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?;
-        let predict_boolean_nonull = DataBlock::cast_to_nonull_boolean(&filter_vector)
+        let filter_vector: Value<AnyType> = evaluator.run(filter)?;
+        let predict_boolean_nonull = FilterHelpers::cast_to_nonull_boolean(&filter_vector)
             .ok_or_else(|| ErrorCode::Internal("Cannot get the boolean column"))?;
 
         match predict_boolean_nonull {
@@ -213,12 +212,10 @@ impl JoinHashTable {
         merged_block: &DataBlock,
         filter: &Expr,
     ) -> Result<Column> {
-        let func_ctx = self.ctx.try_get_function_context()?;
+        let func_ctx = self.ctx.get_function_context()?;
         let evaluator = Evaluator::new(merged_block, func_ctx, &BUILTIN_FUNCTIONS);
 
-        let filter_vector: Value<AnyType> = evaluator
-            .run(filter)
-            .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?;
+        let filter_vector: Value<AnyType> = evaluator.run(filter)?;
         let filter_vector =
             filter_vector.convert_to_full_column(filter.data_type(), merged_block.num_rows());
 
@@ -349,7 +346,7 @@ impl JoinHashTable {
 
     // Add `data_block` for build table to `row_space`
     pub(crate) fn add_build_block(&self, data_block: DataBlock) -> Result<()> {
-        let func_ctx = self.ctx.try_get_function_context()?;
+        let func_ctx = self.ctx.get_function_context()?;
         let mut data_block = data_block;
         if matches!(
             self.hash_join_desc.join_type,
@@ -376,10 +373,7 @@ impl JoinHashTable {
                 let return_type = expr.data_type();
                 Ok((
                     evaluator
-                        .run(expr)
-                        .map_err(|(_, e)| {
-                            ErrorCode::Internal(format!("Invalid expression: {}", e))
-                        })?
+                        .run(expr)?
                         .convert_to_full_column(return_type, data_block.num_rows()),
                     return_type.clone(),
                 ))

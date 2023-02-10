@@ -25,7 +25,7 @@ use crate::plans::PresignAction;
 use crate::plans::PresignPlan;
 use crate::BindContext;
 
-impl<'a> Binder {
+impl Binder {
     pub(in crate::planner::binder) async fn bind_presign(
         &mut self,
         _: &BindContext,
@@ -45,6 +45,7 @@ impl<'a> Binder {
                         AstPresignAction::Upload => PresignAction::Upload,
                     },
                     expire: Duration::seconds(stmt.expire.as_secs() as i64),
+                    content_type: stmt.content_type.clone(),
                 })))
             }
         }

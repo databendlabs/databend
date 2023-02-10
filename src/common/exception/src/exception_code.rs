@@ -133,6 +133,8 @@ build_exceptions! {
     PanicError(1104),
     TableInfoError(1106),
     ReadTableDataError(1107),
+    AddColumnExistError(1108),
+    DropColumnEmptyError(1109),
 
     // Data Related Errors
 

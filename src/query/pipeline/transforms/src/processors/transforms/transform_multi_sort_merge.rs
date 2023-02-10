@@ -16,8 +16,6 @@ use std::any::Any;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::collections::VecDeque;
-use std::sync;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use common_arrow::arrow::compute::sort::row::RowConverter as ArrowRowConverter;
@@ -34,12 +32,13 @@ use common_expression::with_number_mapped_type;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::SortColumnDescription;
+use common_pipeline_core::pipe::Pipe;
+use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_core::Pipe;
 use common_pipeline_core::Pipeline;
 
 use super::sort::Cursor;
@@ -55,16 +54,16 @@ pub fn try_add_multi_sort_merge(
     limit: Option<usize>,
     sort_columns_descriptions: Vec<SortColumnDescription>,
 ) -> Result<()> {
-    match pipeline.pipes.last() {
-        None => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
-        Some(pipe) if pipe.output_size() == 0 => {
-            Err(ErrorCode::Internal("Cannot resize empty pipe."))
-        }
-        Some(pipe) if pipe.output_size() == 1 => Ok(()),
-        Some(pipe) => {
-            let input_size = pipe.output_size();
-            let mut inputs_port = Vec::with_capacity(input_size);
-            for _ in 0..input_size {
+    if pipeline.is_empty() {
+        return Err(ErrorCode::Internal("Cannot resize empty pipe."));
+    }
+
+    match pipeline.output_len() {
+        0 => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
+        1 => Ok(()),
+        last_pipe_size => {
+            let mut inputs_port = Vec::with_capacity(last_pipe_size);
+            for _ in 0..last_pipe_size {
                 inputs_port.push(InputPort::create());
             }
             let output_port = OutputPort::create();
@@ -76,11 +75,13 @@ pub fn try_add_multi_sort_merge(
                 limit,
                 sort_columns_descriptions,
             )?;
-            pipeline.pipes.push(Pipe::ResizePipe {
-                inputs_port,
-                outputs_port: vec![output_port],
+
+            pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
                 processor,
-            });
+                inputs_port,
+                vec![output_port],
+            )]));
+
             Ok(())
         }
     }
@@ -207,8 +208,6 @@ where
     row_converter: Converter,
 
     state: ProcessorState,
-
-    aborting: Arc<AtomicBool>,
 }
 
 impl<R, Converter> MultiSortMergeProcessor<R, Converter>
@@ -244,7 +243,6 @@ where
             input_finished: vec![false; input_size],
             row_converter,
             state: ProcessorState::Consume,
-            aborting: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -255,6 +253,7 @@ where
                 self.input_finished[i] = true;
                 continue;
             }
+
             input.set_need_data();
             if self.cursor_finished[i] && input.has_data() {
                 data.push((i, input.pull_data().unwrap()?));
@@ -440,18 +439,7 @@ where
         self
     }
 
-    fn interrupt(&self) {
-        self.aborting.store(true, sync::atomic::Ordering::Release);
-    }
-
     fn event(&mut self) -> Result<Event> {
-        let aborting = self.aborting.load(sync::atomic::Ordering::Relaxed);
-        if aborting {
-            return Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the server is shutting down or the query was killed.",
-            ));
-        }
-
         if self.output.is_finished() {
             for input in self.inputs.iter() {
                 input.finish();
@@ -496,8 +484,10 @@ where
                     self.state = ProcessorState::Preserve(data_blocks);
                     return Ok(Event::Sync);
                 }
-                let all_finished = self.nums_active_inputs() == 0;
-                if all_finished {
+
+                let active_inputs = self.nums_active_inputs();
+
+                if active_inputs == 0 {
                     if !self.heap.is_empty() {
                         // The heap is not drained yet. Need to drain data into in_progress_rows.
                         self.state = ProcessorState::Preserve(vec![]);
@@ -557,8 +547,11 @@ where
 }
 
 enum ProcessorState {
-    Consume,                           // Need to consume data from input.
-    Preserve(Vec<(usize, DataBlock)>), // Need to preserve blocks in memory.
-    Output,                            // Need to generate output block.
-    Generated(DataBlock),              // Need to push output block to output port.
+    Consume,
+    // Need to consume data from input.
+    Preserve(Vec<(usize, DataBlock)>),
+    // Need to preserve blocks in memory.
+    Output,
+    // Need to generate output block.
+    Generated(DataBlock), // Need to push output block to output port.
 }

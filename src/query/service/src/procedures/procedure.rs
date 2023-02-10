@@ -21,9 +21,7 @@ use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::SendableDataBlockStream;
 use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::Pipe;
 use common_pipeline_core::Pipeline;
-use common_pipeline_sources::processors::sources::StreamSource;
 use common_sql::validate_function_arg;
 use futures::StreamExt;
 
@@ -132,6 +130,10 @@ where Self: Sized
 }
 
 mod impls {
+    use common_pipeline_core::pipe::Pipe;
+    use common_pipeline_core::pipe::PipeItem;
+    use common_pipeline_sources::StreamSource;
+
     use super::*;
     use crate::stream::DataBlockStream;
 
@@ -158,18 +160,17 @@ mod impls {
         ) -> Result<()> {
             self.validate(ctx.clone(), &args)?;
             let block = self.0.all_data(ctx.clone(), args).await?;
-            let output = OutputPort::create();
-            let source = StreamSource::create(
-                ctx,
-                Some(DataBlockStream::create(None, vec![block]).boxed()),
-                output.clone(),
-            )?;
 
-            pipeline.add_pipe(Pipe::SimplePipe {
-                inputs_port: vec![],
-                outputs_port: vec![output],
-                processors: vec![source],
-            });
+            pipeline.add_source(
+                |output| {
+                    StreamSource::create(
+                        ctx.clone(),
+                        Some(DataBlockStream::create(None, vec![block.clone()]).boxed()),
+                        output,
+                    )
+                },
+                1,
+            )?;
 
             Ok(())
         }
@@ -205,11 +206,11 @@ mod impls {
             let output = OutputPort::create();
             let source = StreamSource::create(ctx, Some(block_stream), output.clone())?;
 
-            pipeline.add_pipe(Pipe::SimplePipe {
-                inputs_port: vec![],
-                outputs_port: vec![output],
-                processors: vec![source],
-            });
+            pipeline.add_pipe(Pipe::create(0, 1, vec![PipeItem::create(
+                source,
+                vec![],
+                vec![output],
+            )]));
 
             Ok(())
         }

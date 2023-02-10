@@ -11,3 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+use common_hashtable::HashtableLike;
+
+#[inline]
+pub fn estimated_key_size<Table: HashtableLike>(table: &Table) -> usize {
+    table.unsize_key_size().unwrap_or_default()
+}

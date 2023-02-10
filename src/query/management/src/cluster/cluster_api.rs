@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_meta_types::MatchSeq;
 use common_meta_types::NodeInfo;
 
 #[async_trait::async_trait]
@@ -24,10 +25,10 @@ pub trait ClusterApi: Sync + Send {
     async fn get_nodes(&self) -> Result<Vec<NodeInfo>>;
 
     // Drop the tenant's cluster one node by node.id.
-    async fn drop_node(&self, node_id: String, seq: Option<u64>) -> Result<()>;
+    async fn drop_node(&self, node_id: String, seq: MatchSeq) -> Result<()>;
 
     // Keep the tenant's cluster node alive.
-    async fn heartbeat(&self, node: &NodeInfo, seq: Option<u64>) -> Result<u64>;
+    async fn heartbeat(&self, node: &NodeInfo, seq: MatchSeq) -> Result<u64>;
 
     async fn get_local_addr(&self) -> Result<Option<String>>;
 }

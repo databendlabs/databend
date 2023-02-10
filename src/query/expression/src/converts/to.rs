@@ -35,6 +35,7 @@ pub fn scalar_to_datavalue(scalar: &Scalar) -> DataValue {
             }
             crate::types::number::NumberScalar::Float64(x) => DataValue::Float64((*x).into()),
         },
+        Scalar::Decimal(_) => unimplemented!("decimal type is not supported"),
         Scalar::Timestamp(x) => DataValue::Int64(*x),
         Scalar::Date(x) => DataValue::Int64(*x as i64),
         Scalar::Boolean(x) => DataValue::Boolean(*x),

@@ -57,12 +57,12 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         let (stats, parts) = table.read_partitions(ctx.clone(), None).await?;
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);
 
-        ctx.try_set_partitions(parts.clone())?;
+        ctx.set_partitions(parts.clone())?;
         let stream = table
             .read_data_block_stream(ctx.clone(), &DataSourcePlan {
                 catalog: "default".to_owned(),
                 source_info: DataSourceInfo::TableSource(Default::default()),
-                scan_fields: None,
+                output_schema: Default::default(),
                 parts,
                 statistics: Default::default(),
                 description: "".to_string(),
@@ -80,14 +80,14 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         //   - value_start_from = 1
         // thus
         let expected = vec![
-            "+----------+----------------+",
-            "| Column 0 | Column 1       |",
-            "+----------+----------------+",
-            "| 1_i32    | (2_i32, 3_i32) |",
-            "| 1_i32    | (2_i32, 3_i32) |",
-            "| 2_i32    | (4_i32, 6_i32) |",
-            "| 2_i32    | (4_i32, 6_i32) |",
-            "+----------+----------------+",
+            "+----------+----------+",
+            "| Column 0 | Column 1 |",
+            "+----------+----------+",
+            "| 1        | (2, 3)   |",
+            "| 1        | (2, 3)   |",
+            "| 2        | (4, 6)   |",
+            "| 2        | (4, 6)   |",
+            "+----------+----------+",
         ];
         common_expression::block_debug::assert_blocks_sorted_eq(expected, blocks.as_slice());
     }
@@ -116,13 +116,13 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);
 
         // inject partitions to current ctx
-        ctx.try_set_partitions(parts.clone())?;
+        ctx.set_partitions(parts.clone())?;
 
         let stream = table
             .read_data_block_stream(ctx.clone(), &DataSourcePlan {
                 catalog: "default".to_owned(),
                 source_info: DataSourceInfo::TableSource(Default::default()),
-                scan_fields: None,
+                output_schema: Default::default(),
                 parts,
                 statistics: Default::default(),
                 description: "".to_string(),
@@ -136,14 +136,14 @@ async fn test_fuse_table_normal_case() -> Result<()> {
 
         // two block, two rows for each block, value starts with 2
         let expected = vec![
-            "+----------+----------------+",
-            "| Column 0 | Column 1       |",
-            "+----------+----------------+",
-            "| 2_i32    | (4_i32, 6_i32) |",
-            "| 2_i32    | (4_i32, 6_i32) |",
-            "| 3_i32    | (6_i32, 9_i32) |",
-            "| 3_i32    | (6_i32, 9_i32) |",
-            "+----------+----------------+",
+            "+----------+----------+",
+            "| Column 0 | Column 1 |",
+            "+----------+----------+",
+            "| 2        | (4, 6)   |",
+            "| 2        | (4, 6)   |",
+            "| 3        | (6, 9)   |",
+            "| 3        | (6, 9)   |",
+            "+----------+----------+",
         ];
         common_expression::block_debug::assert_blocks_sorted_eq(expected, blocks.as_slice());
     }

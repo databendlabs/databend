@@ -18,6 +18,8 @@ use std::io::Write;
 
 use bumpalo::Bump;
 use comfy_table::Table;
+use common_exception::Result;
+use common_expression::date_helper::TzLUT;
 use common_expression::type_check;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::AnyType;
@@ -37,14 +39,8 @@ use itertools::Itertools;
 
 use super::scalars::parser;
 
-pub trait AggregationSimulator = Fn(
-        &str,
-        Vec<Scalar>,
-        &[Column],
-        &[DataType],
-        usize,
-    ) -> common_exception::Result<(Column, DataType)>
-    + Copy;
+pub trait AggregationSimulator =
+    Fn(&str, Vec<Scalar>, &[Column], usize) -> common_exception::Result<(Column, DataType)> + Copy;
 
 /// run ast which is agg expr
 pub fn run_agg_ast(
@@ -89,7 +85,7 @@ pub fn run_agg_ast(
                 let args: Vec<(Value<AnyType>, DataType)> = args
                     .iter()
                     .map(|raw_expr| run_scalar_expr(raw_expr, &block))
-                    .collect::<common_expression::Result<_>>()
+                    .collect::<Result<_>>()
                     .unwrap();
 
                 let params = params
@@ -97,7 +93,6 @@ pub fn run_agg_ast(
                     .map(|p| Scalar::Number(NumberScalar::UInt64(*p as u64)))
                     .collect();
 
-                let arg_types: Vec<DataType> = args.iter().map(|(_, ty)| ty.clone()).collect();
                 let arg_columns: Vec<Column> = args
                     .iter()
                     .map(|(arg, ty)| match arg {
@@ -109,13 +104,7 @@ pub fn run_agg_ast(
                     })
                     .collect();
 
-                simulator(
-                    name.as_str(),
-                    params,
-                    &arg_columns,
-                    &arg_types,
-                    block.num_rows(),
-                )?
+                simulator(name.as_str(), params, &arg_columns, block.num_rows())?
             }
             _ => unimplemented!(),
         }
@@ -158,9 +147,11 @@ pub fn run_agg_ast(
 pub fn run_scalar_expr(
     raw_expr: &RawExpr,
     block: &DataBlock,
-) -> common_expression::Result<(Value<AnyType>, DataType)> {
+) -> Result<(Value<AnyType>, DataType)> {
     let expr = type_check::check(raw_expr, &BUILTIN_FUNCTIONS)?;
-    let func_ctx = FunctionContext { tz: chrono_tz::UTC };
+    let func_ctx = FunctionContext {
+        tz: TzLUT::default(),
+    };
     let evaluator = Evaluator::new(block, func_ctx, &BUILTIN_FUNCTIONS);
     let result = evaluator.run(&expr)?;
     Ok((result, expr.data_type().clone()))
@@ -187,11 +178,10 @@ pub fn simulate_two_groups_group_by(
     name: &str,
     params: Vec<Scalar>,
     columns: &[Column],
-    types: &[DataType],
     rows: usize,
 ) -> common_exception::Result<(Column, DataType)> {
     let factory = AggregateFunctionFactory::instance();
-    let arguments = types.to_owned();
+    let arguments: Vec<DataType> = columns.iter().map(|c| c.data_type()).collect();
     let cols: Vec<Column> = columns.to_owned();
 
     let func = factory.get(name, params, arguments)?;

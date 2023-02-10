@@ -11,7 +11,7 @@ EvalScalar
 ├── expressions: [COUNT(*) (#2)]
 ├── estimated rows: 1.00
 └── EvalScalar
-    ├── expressions: [1000_u64]
+    ├── expressions: [1000]
     ├── estimated rows: 1.00
     └── DummyTableScan
 
@@ -25,7 +25,7 @@ EvalScalar
 ├── expressions: [COUNT(*) (#2)]
 ├── estimated rows: 1.00
 └── EvalScalar
-    ├── expressions: [1001_u64]
+    ├── expressions: [1001]
     ├── estimated rows: 1.00
     └── DummyTableScan
 
@@ -44,15 +44,16 @@ EvalScalar
         ├── aggregate functions: [count()]
         ├── estimated rows: 1.00
         └── Filter
-            ├── filters: [gt(t.number (#0), CAST(10_u8 AS UInt64))]
+            ├── filters: [gt(t.number (#0), to_uint64(10))]
             ├── estimated rows: 989.89
             └── TableScan
                 ├── table: default.default.t
                 ├── read rows: 1000
-                ├── read bytes: 4028
+                ├── read bytes: 1598
                 ├── partitions total: 2
                 ├── partitions scanned: 1
-                ├── push downs: [filters: [gt(t.number (#0), 10_u64)], limit: NONE]
+                ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+                ├── push downs: [filters: [gt(t.number (#0), 10)], limit: NONE]
                 └── estimated rows: 1001.00
 
 statement ok

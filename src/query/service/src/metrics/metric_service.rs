@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -50,7 +51,7 @@ impl MetricService {
             .data(prometheus_handle);
         let addr = self
             .shutdown_handler
-            .start_service(listening, None, app)
+            .start_service(listening, None, app, Some(Duration::from_millis(100)))
             .await?;
         Ok(addr)
     }

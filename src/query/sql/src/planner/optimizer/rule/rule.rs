@@ -43,6 +43,7 @@ pub enum RuleID {
     PushDownLimitOuterJoin,
     RulePushDownLimitExpression,
     PushDownLimitSort,
+    PushDownLimitAggregate,
     PushDownLimitScan,
     PushDownSortScan,
     EliminateEvalScalar,
@@ -54,6 +55,7 @@ pub enum RuleID {
 
     // Exploration rules
     CommuteJoin,
+    CommuteJoinBaseTable,
     LeftAssociateJoin,
     RightAssociateJoin,
     LeftExchangeJoin,
@@ -72,6 +74,7 @@ impl Display for RuleID {
             RuleID::PushDownLimitOuterJoin => write!(f, "PushDownLimitOuterJoin"),
             RuleID::RulePushDownLimitExpression => write!(f, "PushDownLimitExpression"),
             RuleID::PushDownLimitSort => write!(f, "PushDownLimitSort"),
+            RuleID::PushDownLimitAggregate => write!(f, "PushDownLimitAggregate"),
             RuleID::PushDownLimitScan => write!(f, "PushDownLimitScan"),
             RuleID::PushDownSortScan => write!(f, "PushDownSortScan"),
             RuleID::EliminateEvalScalar => write!(f, "EliminateEvalScalar"),
@@ -84,6 +87,7 @@ impl Display for RuleID {
             RuleID::FoldCountAggregate => write!(f, "FoldCountAggregate"),
 
             RuleID::CommuteJoin => write!(f, "CommuteJoin"),
+            RuleID::CommuteJoinBaseTable => write!(f, "CommuteJoinBaseTable"),
             RuleID::LeftAssociateJoin => write!(f, "LeftAssociateJoin"),
             RuleID::RightAssociateJoin => write!(f, "RightAssociateJoin"),
             RuleID::LeftExchangeJoin => write!(f, "LeftExchangeJoin"),

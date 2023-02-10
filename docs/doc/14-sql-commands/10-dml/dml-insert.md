@@ -4,6 +4,10 @@ title: INSERT
 
 Writing data.
 
+:::note
+**Databend guarantees data integrity**. In Databend, Insert, Update, and Delete operations are guaranteed to be atomic, which means that all data in the operation must succeed or all must fail.
+:::
+
 ## Insert Into Statement
 ### Syntax
 
@@ -20,14 +24,13 @@ Remote engine is `remote`, will be stored in the remote DatabendStore cluster.
 
 ### Examples
 
-#### Memory engine
 
 Example:
 ```sql
-CREATE TABLE test(a INT UNSIGNED, b Varchar) Engine = Fuse;
+CREATE TABLE test(a INT UNSIGNED, b Varchar);
 
-INSERT INTO test(a,b) values(888, 'stars');
-INSERT INTO test values(1024, 'stars');
+INSERT INTO test(a,b) VALUES(888, 'stars');
+INSERT INTO test VALUES(1024, 'stars');
 
 SELECT * FROM test;
 +------+-------+
@@ -37,7 +40,7 @@ SELECT * FROM test;
 | 1024 | stars |
 +------+-------+
 
-INSERT OVERWRITE test values(2048, 'stars');
+INSERT OVERWRITE test VALUES(2048, 'stars');
 SELECT * FROM test;
 +------+-------+
 | a    | b     |
@@ -64,7 +67,7 @@ The data type of columns in the SELECT and INSERT table could be different, if n
 Example:
 ```sql
 CREATE TABLE select_table(a VARCHAR, b VARCHAR, c VARCHAR);
-INSERT INTO select_table values('1','11','abc');
+INSERT INTO select_table VALUES('1','11','abc');
 
 SELECT * FROM select_table;
 +------+------+------+
@@ -117,11 +120,11 @@ INSERT INTO [db.]table [(c1, c2, c3)] VALUES (v1|DEFAULT, v2|DEFAULT, v3|DEFAULT
 ### Examples
 
 ```sql
-create table t_insert_default(a int null, b int default 2, c float, d varchar default 'd');
+CREATE TABLE t_insert_default(a int null, b int default 2, c float, d varchar default 'd');
 
-insert into t_insert_default values (default, default, default, default), (1, default, 1.0, default), (3, 3, 3.0, default), (4, 4, 4.0, 'a');
+INSERT INTO t_insert_default VALUES (default, default, default, default), (1, default, 1.0, default), (3, 3, 3.0, default), (4, 4, 4.0, 'a');
 
-select * from t_insert_default;
+SELECT * FROM t_insert_default;
 +------+------+------+------+
 | a    | b    | c    | d    |
 +------+------+------+------+
@@ -149,7 +152,7 @@ INSERT INTO [db.]table [(c1, c2, c3)] VALUES
 ### Examples
 
 ```sql
-create table t_insert_stage(a int null, b int default 2, c float, d varchar default 'd');
+CREATE TABLE t_insert_stage(a int null, b int default 2, c float, d varchar default 'd');
 ```
 
 ```plain title='values.csv'
@@ -178,7 +181,7 @@ curl -d '{"sql": "insert into t_insert_stage (a, c) values", "stage_attachment":
 Check if the insert succeeded:
 
 ```sql
-select * from t_insert_stage;
+SELECT * FROM t_insert_stage;
 +------+------+------+------+
 | a    | b    | c    | d    |
 +------+------+------+------+

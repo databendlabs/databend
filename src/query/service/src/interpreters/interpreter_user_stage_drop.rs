@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::StageType;
+use common_meta_app::principal::StageType;
 use common_sql::plans::DropStagePlan;
 use common_storages_stage::StageTable;
 use common_users::UserApiProvider;

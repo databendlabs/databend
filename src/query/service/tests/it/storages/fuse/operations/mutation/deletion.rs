@@ -18,7 +18,6 @@ use common_base::base::tokio;
 use common_exception::Result;
 use common_sql::plans::DeletePlan;
 use common_sql::plans::Plan;
-use common_sql::plans::ScalarExpr;
 use common_sql::Planner;
 use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
@@ -64,7 +63,7 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
         "+----------+----------+",
         "| Column 0 | Column 1 |",
         "+----------+----------+",
-        "| 9_u64    | 9_u64    |",
+        "| 9        | 9        |",
         "+----------+----------+",
     ];
     let qry = format!(
@@ -100,7 +99,8 @@ pub async fn do_deletion(
     fuse_table
         .delete(ctx.clone(), filter, col_indices, &mut pipeline)
         .await?;
-    if !pipeline.pipes.is_empty() {
+
+    if !pipeline.is_empty() {
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
         let query_id = ctx.get_id();
         let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;

@@ -35,6 +35,8 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
+use common_meta_app::principal::RoleInfo;
+use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -65,8 +67,6 @@ use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
-use common_meta_types::RoleInfo;
-use common_meta_types::UserInfo;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storages_fuse::operations::AppendOperationLogEntry;
@@ -127,12 +127,12 @@ async fn test_fuse_occ_retry() -> Result<()> {
         .await?;
 
     let expected = vec![
-        "+----------+------------------+",
-        "| Column 0 | Column 1         |",
-        "+----------+------------------+",
-        "| 1_i32    | (2_i32, 3_i32)   |",
-        "| 5_i32    | (10_i32, 15_i32) |",
-        "+----------+------------------+",
+        "+----------+----------+",
+        "| Column 0 | Column 1 |",
+        "+----------+----------+",
+        "| 1        | (2, 3)   |",
+        "| 5        | (10, 15) |",
+        "+----------+----------+",
     ];
     common_expression::block_debug::assert_blocks_sorted_eq(expected, blocks.as_slice());
 
@@ -343,19 +343,23 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn try_get_part(&self) -> Option<PartInfoPtr> {
+    fn get_partition(&self) -> Option<PartInfoPtr> {
         todo!()
     }
 
-    fn try_get_parts(&self, _: usize) -> Vec<PartInfoPtr> {
+    fn get_partitions(&self, _: usize) -> Vec<PartInfoPtr> {
         todo!()
     }
 
-    fn try_set_partitions(&self, _partitions: Partitions) -> Result<()> {
+    fn set_partitions(&self, _partitions: Partitions) -> Result<()> {
         todo!()
     }
 
     fn attach_query_str(&self, _kind: String, _query: &str) {
+        todo!()
+    }
+
+    fn get_query_str(&self) -> String {
         todo!()
     }
 
@@ -395,14 +399,6 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_changed_settings(&self) -> Arc<Settings> {
-        todo!()
-    }
-
-    fn apply_changed_settings(&self, _changed_settings: Arc<Settings>) -> Result<()> {
-        todo!()
-    }
-
     fn get_format_settings(&self) -> Result<FormatSettings> {
         todo!()
     }
@@ -411,27 +407,11 @@ impl TableContext for CtxDelegation {
         self.ctx.get_tenant()
     }
 
-    fn get_query_str(&self) -> String {
-        todo!()
-    }
-
     fn get_query_kind(&self) -> String {
         todo!()
     }
 
-    fn get_data_operator(&self) -> Result<DataOperator> {
-        self.ctx.get_data_operator()
-    }
-
-    fn push_precommit_block(&self, _block: DataBlock) {
-        todo!()
-    }
-
-    fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
-        todo!()
-    }
-
-    fn try_get_function_context(&self) -> Result<FunctionContext> {
+    fn get_function_context(&self) -> Result<FunctionContext> {
         todo!()
     }
 
@@ -447,15 +427,6 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    async fn get_table(
-        &self,
-        _catalog: &str,
-        _database: &str,
-        _table: &str,
-    ) -> Result<Arc<dyn Table>> {
-        todo!()
-    }
-
     fn get_processes_info(&self) -> Vec<ProcessInfo> {
         todo!()
     }
@@ -465,6 +436,35 @@ impl TableContext for CtxDelegation {
     }
 
     fn set_on_error_map(&self, _map: Option<HashMap<String, ErrorCode>>) {
+        todo!()
+    }
+
+    fn apply_changed_settings(&self, _changed_settings: Arc<Settings>) -> Result<()> {
+        todo!()
+    }
+
+    fn get_changed_settings(&self) -> Arc<Settings> {
+        todo!()
+    }
+
+    fn get_data_operator(&self) -> Result<DataOperator> {
+        self.ctx.get_data_operator()
+    }
+
+    fn push_precommit_block(&self, _block: DataBlock) {
+        todo!()
+    }
+
+    fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
+        todo!()
+    }
+
+    async fn get_table(
+        &self,
+        _catalog: &str,
+        _database: &str,
+        _table: &str,
+    ) -> Result<Arc<dyn Table>> {
         todo!()
     }
 }

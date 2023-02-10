@@ -34,23 +34,22 @@ use common_catalog::table_context::TableContext;
 use common_catalog::table_mutator::TableMutator;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::RemoteExpr;
+use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
+use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableInfo;
 use common_sharing::create_share_table_operator;
 use common_sql::parse_exprs;
 use common_storage::init_operator;
-use common_storage::CacheOperator;
 use common_storage::DataOperator;
-use common_storage::FuseCachePolicy;
 use common_storage::ShareTableConfig;
 use common_storage::StorageMetrics;
 use common_storage::StorageMetricsLayer;
-use opendal::layers::CacheLayer;
 use opendal::Operator;
-use storages_common_table_meta::caches::LoadParams;
+use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::ColumnStatistics as FuseColumnStatistics;
 use storages_common_table_meta::meta::Statistics as FuseStatistics;
@@ -75,8 +74,6 @@ use crate::NavigationPoint;
 use crate::Table;
 use crate::TableStatistics;
 use crate::DEFAULT_BLOCK_PER_SEGMENT;
-use crate::DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD;
-use crate::DEFAULT_ROW_PER_BLOCK;
 use crate::DEFAULT_ROW_PER_PAGE;
 use crate::DEFAULT_ROW_PER_PAGE_FOR_BLOCKING;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
@@ -118,19 +115,14 @@ impl FuseTable {
             DatabaseType::NormalDB => {
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
-                    Some(sp) => init_operator(&sp)?,
-                    None => DataOperator::instance().operator(),
+                    Some(sp) => Ok(init_operator(&sp)?),
+                    None => Ok(DataOperator::instance().operator()),
                 }
             }
-        };
+        }?;
 
         let data_metrics = Arc::new(StorageMetrics::default());
         operator = operator.layer(StorageMetricsLayer::new(data_metrics.clone()));
-        // If cache op is valid, layered with ContentCacheLayer.
-        if let Some(cache_op) = CacheOperator::instance() {
-            operator =
-                operator.layer(CacheLayer::new(cache_op).with_policy(FuseCachePolicy::new()));
-        }
 
         let storage_format = table_info
             .options()
@@ -166,6 +158,10 @@ impl FuseTable {
             comment: "FUSE Storage Engine".to_string(),
             support_cluster_key: true,
         }
+    }
+
+    pub fn is_native(&self) -> bool {
+        matches!(self.storage_format, FuseStorageFormat::Native)
     }
 
     pub fn meta_location_generator(&self) -> &TableMetaLocationGenerator {
@@ -223,7 +219,6 @@ impl FuseTable {
                         location: loc.clone(),
                         len_hint: None,
                         ver,
-                        schema: None,
                     };
 
                     Ok(Some(reader.read(&load_params).await?))
@@ -244,7 +239,6 @@ impl FuseTable {
                 location: loc,
                 len_hint: None,
                 ver,
-                schema: None,
             };
             Ok(Some(reader.read(&params).await?))
         } else {
@@ -572,14 +566,15 @@ impl Table for FuseTable {
             .await
     }
 
-    fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
-        let max_rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
+    fn get_block_compact_thresholds(&self) -> BlockThresholds {
+        let max_rows_per_block =
+            self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_MAX_ROWS);
         let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
         let max_bytes_per_block = self.get_option(
             FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
-            DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
+            DEFAULT_BLOCK_BUFFER_SIZE,
         );
-        BlockCompactThresholds::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
+        BlockThresholds::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
     }
 
     async fn compact(
@@ -607,6 +602,10 @@ impl Table for FuseTable {
         point: NavigationDescriptor,
     ) -> Result<()> {
         self.do_revert_to(ctx.as_ref(), point).await
+    }
+
+    fn support_prewhere(&self) -> bool {
+        matches!(self.storage_format, FuseStorageFormat::Native)
     }
 }
 

@@ -1,0 +1,39 @@
+# only limit pruning
+
+statement ok
+DROP DATABASE IF EXISTS db_09_0009_02
+
+statement ok
+CREATE DATABASE db_09_0009_02
+
+statement ok
+USE db_09_0009_02
+
+statement ok
+create table t(a Int64)
+
+statement ok
+insert into t select * from numbers(100);
+
+statement ok
+insert into t select * from numbers(100);
+
+statement ok
+insert into t select * from numbers(100);
+
+query I
+select count(*) from (select * from t limit 2);
+----
+2
+
+query I
+select * from t where a=55 limit 2;
+----
+55
+55
+
+statement ok
+DROP TABLE t
+
+statement ok
+DROP DATABASE db_09_0009_02

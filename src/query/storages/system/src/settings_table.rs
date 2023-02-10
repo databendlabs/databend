@@ -23,6 +23,7 @@ use common_expression::DataBlock;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
+use common_meta_app::principal::UserSettingValue;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -64,8 +65,8 @@ impl SyncSystemTable for SettingsTable {
             descs.push(vals.4);
 
             let typename = match vals.2 {
-                common_meta_types::UserSettingValue::UInt64(_) => "UInt64",
-                common_meta_types::UserSettingValue::String(_) => "String",
+                UserSettingValue::UInt64(_) => "UInt64",
+                UserSettingValue::String(_) => "String",
             };
             // Types.
             types.push(typename.to_string());

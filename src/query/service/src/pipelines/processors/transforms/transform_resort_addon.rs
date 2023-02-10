@@ -59,7 +59,16 @@ where Self: Transform
             let expr = if !input_schema.has_field(f.name()) {
                 if let Some(default_expr) = f.default_expr() {
                     let mut expr = parse_exprs(ctx.clone(), table.clone(), false, default_expr)?;
-                    expr.remove(0)
+                    let mut expr = expr.remove(0);
+                    if expr.data_type() != f.data_type() {
+                        expr = Expr::Cast {
+                            span: None,
+                            is_try: f.data_type().is_nullable(),
+                            expr: Box::new(expr),
+                            dest_type: f.data_type().clone(),
+                        };
+                    }
+                    expr
                 } else {
                     let default_value = f.data_type().default_value();
                     Expr::Constant {
@@ -81,7 +90,7 @@ where Self: Transform
             ops.push(BlockOperator::Map { expr });
         }
 
-        let func_ctx = ctx.try_get_function_context()?;
+        let func_ctx = ctx.get_function_context()?;
         let expression_transform = CompoundBlockOperator {
             ctx: func_ctx,
             operators: ops,

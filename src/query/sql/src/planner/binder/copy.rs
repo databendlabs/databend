@@ -32,9 +32,9 @@ use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::FileFormatOptions;
-use common_meta_types::OnErrorMode;
-use common_meta_types::UserStageInfo;
+use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::OnErrorMode;
+use common_meta_app::principal::UserStageInfo;
 use common_users::UserApiProvider;
 use tracing::debug;
 
@@ -50,7 +50,7 @@ impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_copy(
         &mut self,
         bind_context: &BindContext,
-        stmt: &CopyStmt<'a>,
+        stmt: &CopyStmt,
     ) -> Result<Plan> {
         match (&stmt.src, &stmt.dst) {
             (
@@ -218,7 +218,7 @@ impl<'a> Binder {
     async fn bind_copy_from_stage_into_table(
         &mut self,
         _: &BindContext,
-        stmt: &CopyStmt<'a>,
+        stmt: &CopyStmt,
         src_stage: &str,
         src_path: &str,
         dst_catalog_name: &str,
@@ -247,7 +247,7 @@ impl<'a> Binder {
                 pattern: stmt.pattern.clone(),
                 files_to_copy: None,
             }),
-            scan_fields: None,
+            output_schema: table.schema(),
             parts: Partitions::default(),
             statistics: Default::default(),
             description: "".to_string(),
@@ -272,7 +272,7 @@ impl<'a> Binder {
     async fn bind_copy_from_uri_into_table(
         &mut self,
         _: &BindContext,
-        stmt: &CopyStmt<'a>,
+        stmt: &CopyStmt,
         src_uri_location: &mut UriLocation,
         dst_catalog_name: &str,
         dst_database_name: &str,
@@ -305,7 +305,7 @@ impl<'a> Binder {
                 pattern: stmt.pattern.clone(),
                 files_to_copy: None,
             }),
-            scan_fields: None,
+            output_schema: table.schema(),
             parts: Partitions::default(),
             statistics: Default::default(),
             description: "".to_string(),
@@ -330,7 +330,7 @@ impl<'a> Binder {
     async fn bind_copy_from_table_into_stage(
         &mut self,
         bind_context: &BindContext,
-        stmt: &CopyStmt<'a>,
+        stmt: &CopyStmt,
         src_catalog_name: &str,
         src_database_name: &str,
         src_table_name: &str,
@@ -376,7 +376,7 @@ impl<'a> Binder {
     async fn bind_copy_from_table_into_uri(
         &mut self,
         bind_context: &BindContext,
-        stmt: &CopyStmt<'a>,
+        stmt: &CopyStmt,
         src_catalog_name: &str,
         src_database_name: &str,
         src_table_name: &str,
@@ -426,8 +426,8 @@ impl<'a> Binder {
     async fn bind_copy_from_query_into_stage(
         &mut self,
         bind_context: &BindContext,
-        stmt: &CopyStmt<'a>,
-        src_query: &Query<'_>,
+        stmt: &CopyStmt,
+        src_query: &Query,
         dst_stage: &str,
         dst_path: &str,
     ) -> Result<Plan> {
@@ -456,8 +456,8 @@ impl<'a> Binder {
     async fn bind_copy_from_query_into_uri(
         &mut self,
         bind_context: &BindContext,
-        stmt: &CopyStmt<'a>,
-        src_query: &Query<'_>,
+        stmt: &CopyStmt,
+        src_query: &Query,
         dst_uri_location: &mut UriLocation,
     ) -> Result<Plan> {
         let query = self
@@ -486,11 +486,7 @@ impl<'a> Binder {
         })))
     }
 
-    fn apply_stage_options(
-        &mut self,
-        stmt: &CopyStmt<'a>,
-        stage: &mut UserStageInfo,
-    ) -> Result<()> {
+    fn apply_stage_options(&mut self, stmt: &CopyStmt, stage: &mut UserStageInfo) -> Result<()> {
         if !stmt.file_format.is_empty() {
             stage.file_format_options = FileFormatOptions::from_map(&stmt.file_format)?;
         }
@@ -498,10 +494,8 @@ impl<'a> Binder {
         // Copy options.
         {
             // on_error.
-            if !stmt.on_error.is_empty() {
-                stage.copy_options.on_error =
-                    OnErrorMode::from_str(&stmt.on_error).map_err(ErrorCode::SyntaxException)?;
-            }
+            stage.copy_options.on_error =
+                OnErrorMode::from_str(&stmt.on_error).map_err(ErrorCode::SyntaxException)?;
 
             // size_limit.
             if stmt.size_limit != 0 {

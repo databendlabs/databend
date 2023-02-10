@@ -29,8 +29,9 @@ use common_config::Config;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::UserSetting;
-use common_meta_types::UserSettingValue;
+use common_meta_app::principal::UserSetting;
+use common_meta_app::principal::UserSettingValue;
+use common_meta_types::MatchSeq;
 use common_users::UserApiProvider;
 use dashmap::DashMap;
 use itertools::Itertools;
@@ -456,6 +457,13 @@ impl Settings {
                 desc: "Parquet decompresses buffer size. default: 2MB",
                 possible_values: None,
             },
+            SettingValue {
+                default_value: UserSettingValue::UInt64(0),
+                user_setting: UserSetting::create("enable_bushy_join", UserSettingValue::UInt64(0)),
+                level: ScopeLevel::Session,
+                desc: "Enable generating bushy join plan in optimizer",
+                possible_values: None,
+            },
         ];
 
         let settings: Arc<DashMap<String, SettingValue>> = Arc::new(DashMap::default());
@@ -607,6 +615,11 @@ impl Settings {
 
     pub fn get_enable_planner_v2(&self) -> Result<u64> {
         static KEY: &str = "enable_planner_v2";
+        self.try_get_u64(KEY)
+    }
+
+    pub fn get_enable_bushy_join(&self) -> Result<u64> {
+        static KEY: &str = "enable_bushy_join";
         self.try_get_u64(KEY)
     }
 
@@ -877,7 +890,7 @@ impl Settings {
 
         UserApiProvider::instance()
             .get_setting_api_client(&tenant)?
-            .drop_setting(key.as_str(), None)
+            .drop_setting(key.as_str(), MatchSeq::GE(1))
             .await?;
 
         setting.level = ScopeLevel::Session;

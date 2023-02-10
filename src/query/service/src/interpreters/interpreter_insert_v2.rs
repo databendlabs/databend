@@ -52,11 +52,11 @@ use common_formats::parse_timezone;
 use common_formats::FastFieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
-use common_meta_types::FileFormatOptions;
-use common_meta_types::UserStageInfo;
+use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::UserStageInfo;
 use common_pipeline_core::Pipeline;
-use common_pipeline_sources::processors::sources::AsyncSource;
-use common_pipeline_sources::processors::sources::AsyncSourcer;
+use common_pipeline_sources::AsyncSource;
+use common_pipeline_sources::AsyncSourcer;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
@@ -68,7 +68,7 @@ use common_sql::plans::CastExpr;
 use common_sql::plans::Insert;
 use common_sql::plans::InsertInputSource;
 use common_sql::plans::Plan;
-use common_sql::plans::Scalar;
+use common_sql::plans::ScalarExpr;
 use common_sql::BindContext;
 use common_sql::Metadata;
 use common_sql::MetadataRef;
@@ -786,8 +786,9 @@ async fn fill_default_value(
         let backtrace = Backtrace::new();
         let ast = parse_expr(&tokens, Dialect::PostgreSQL, &backtrace)?;
         let (mut scalar, ty) = binder.bind(&ast).await?;
+
         if !field.data_type().eq(&ty) {
-            scalar = Scalar::CastExpr(CastExpr {
+            scalar = ScalarExpr::CastExpr(CastExpr {
                 is_try: false,
                 argument: Box::new(scalar),
                 from_type: Box::new(ty),
@@ -823,8 +824,8 @@ async fn fill_default_value(
     Ok(())
 }
 
-async fn exprs_to_scalar<'a>(
-    exprs: Vec<AExpr<'a>>,
+async fn exprs_to_scalar(
+    exprs: Vec<AExpr>,
     schema: &DataSchemaRef,
     ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &NameResolutionContext,
@@ -861,7 +862,7 @@ async fn exprs_to_scalar<'a>(
         let (mut scalar, data_type) = scalar_binder.bind(expr).await?;
         let field_data_type = schema.field(i).data_type();
         if &data_type != field_data_type {
-            scalar = Scalar::CastExpr(CastExpr {
+            scalar = ScalarExpr::CastExpr(CastExpr {
                 is_try: false,
                 argument: Box::new(scalar),
                 from_type: Box::new(data_type),
@@ -881,7 +882,7 @@ async fn exprs_to_scalar<'a>(
         }],
         1,
     );
-    let func_ctx = ctx.try_get_function_context()?;
+    let func_ctx = ctx.get_function_context()?;
     let mut expression_transform = CompoundBlockOperator {
         operators,
         ctx: func_ctx,

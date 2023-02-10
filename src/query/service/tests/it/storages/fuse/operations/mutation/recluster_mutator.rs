@@ -20,17 +20,16 @@ use common_base::base::tokio;
 use common_catalog::table_mutator::TableMutator;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
+use common_storages_fuse::pruning::FusePruner;
 use databend_query::sessions::TableContext;
 use databend_query::storages::fuse::io::SegmentWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::operations::ReclusterMutator;
-use databend_query::storages::fuse::pruning::BlockPruner;
-use storages_common_table_meta::caches::CacheManager;
 use storages_common_table_meta::meta;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ClusterStatistics;
@@ -48,9 +47,8 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let ctx = fixture.ctx();
     let location_generator = TableMetaLocationGenerator::with_prefix("_prefix".to_owned());
 
-    let segment_info_cache = CacheManager::instance().get_table_segment_cache();
     let data_accessor = ctx.get_data_operator()?.operator();
-    let seg_writer = SegmentWriter::new(&data_accessor, &location_generator, &segment_info_cache);
+    let seg_writer = SegmentWriter::new(&data_accessor, &location_generator);
 
     let gen_test_seg = |cluster_stats: Option<ClusterStatistics>| async {
         let block_id = Uuid::new_v4().simple().to_string();
@@ -78,6 +76,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         min: vec![Scalar::from(1i64)],
         max: vec![Scalar::from(3i64)],
         level: 0,
+        pages: None,
     }))
     .await?;
     test_segment_locations.push(segment_location);
@@ -88,6 +87,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         min: vec![Scalar::from(2i64)],
         max: vec![Scalar::from(4i64)],
         level: 0,
+        pages: None,
     }))
     .await?;
     test_segment_locations.push(segment_location);
@@ -98,6 +98,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         min: vec![Scalar::from(4i64)],
         max: vec![Scalar::from(5i64)],
         level: 0,
+        pages: None,
     }))
     .await?;
     test_segment_locations.push(segment_location);
@@ -117,15 +118,10 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
 
     let schema = TableSchemaRef::new(TableSchema::empty());
     let ctx: Arc<dyn TableContext> = ctx.clone();
-    let segments_location = base_snapshot.segments.clone();
-    let block_metas = BlockPruner::prune(
-        &ctx,
-        data_accessor.clone(),
-        schema,
-        &None,
-        segments_location,
-    )
-    .await?;
+    let segment_locations = base_snapshot.segments.clone();
+    let block_metas = FusePruner::create(&ctx, data_accessor.clone(), schema, &None)?
+        .pruning(segment_locations)
+        .await?;
     let mut blocks_map: BTreeMap<i32, Vec<(usize, Arc<BlockMeta>)>> = BTreeMap::new();
     block_metas.iter().for_each(|(idx, b)| {
         if let Some(stats) = &b.cluster_stats {
@@ -141,7 +137,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         location_generator,
         base_snapshot,
         1.0,
-        BlockCompactThresholds::default(),
+        BlockThresholds::default(),
         blocks_map,
         data_accessor,
     )?;

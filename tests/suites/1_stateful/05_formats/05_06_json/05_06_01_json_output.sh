@@ -21,3 +21,6 @@ curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}"
 echo "---2 rows"
 echo "insert into test_json values (2, 'b');" | $MYSQL_CLIENT_CONNECT
 curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" -d 'select * from test_json order by c1 format Json'
+
+echo "---tests"
+curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" -d 'select (1, try_cast(2 as int), '3') as A, [try_cast(1 as int), 2, cast(3 as Nullable(Int))] as B from test_json order by c1 format Json'

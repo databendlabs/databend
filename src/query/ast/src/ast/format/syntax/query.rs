@@ -33,7 +33,7 @@ use crate::ast::TimeTravelPoint;
 use crate::ast::With;
 use crate::ast::CTE;
 
-pub(crate) fn pretty_query(query: Query) -> RcDoc {
+pub(crate) fn pretty_query(query: Query) -> RcDoc<'static> {
     pretty_with(query.with)
         .append(pretty_body(query.body))
         .append(pretty_order_by(query.order_by))
@@ -42,7 +42,7 @@ pub(crate) fn pretty_query(query: Query) -> RcDoc {
         .group()
 }
 
-fn pretty_with(with: Option<With>) -> RcDoc {
+fn pretty_with(with: Option<With>) -> RcDoc<'static> {
     if let Some(with) = with {
         RcDoc::text("WITH")
             .append(if with.recursive {
@@ -62,13 +62,13 @@ fn pretty_with(with: Option<With>) -> RcDoc {
     }
 }
 
-fn pretty_cte(cte: CTE) -> RcDoc {
+fn pretty_cte(cte: CTE) -> RcDoc<'static> {
     RcDoc::text(format!("{} AS", cte.alias))
         .append(RcDoc::softline())
         .append(parenthenized(pretty_query(cte.query)))
 }
 
-fn pretty_body(body: SetExpr) -> RcDoc {
+fn pretty_body(body: SetExpr) -> RcDoc<'static> {
     match body {
         SetExpr::Select(select_stmt) => if select_stmt.distinct {
             RcDoc::text("SELECT DISTINCT")
@@ -100,7 +100,7 @@ fn pretty_body(body: SetExpr) -> RcDoc {
     }
 }
 
-fn pretty_select_list(select_list: Vec<SelectTarget>) -> RcDoc {
+fn pretty_select_list(select_list: Vec<SelectTarget>) -> RcDoc<'static> {
     if select_list.len() > 1 {
         RcDoc::line()
     } else {
@@ -168,7 +168,7 @@ fn pretty_select_list(select_list: Vec<SelectTarget>) -> RcDoc {
     )
 }
 
-fn pretty_from(from: Vec<TableReference>) -> RcDoc {
+fn pretty_from(from: Vec<TableReference>) -> RcDoc<'static> {
     if !from.is_empty() {
         RcDoc::line()
             .append(RcDoc::text("FROM").append(RcDoc::line().nest(NEST_FACTOR)))
@@ -182,7 +182,7 @@ fn pretty_from(from: Vec<TableReference>) -> RcDoc {
     }
 }
 
-fn pretty_selection(selection: Option<Expr>) -> RcDoc {
+fn pretty_selection(selection: Option<Expr>) -> RcDoc<'static> {
     if let Some(selection) = selection {
         RcDoc::line().append(RcDoc::text("WHERE")).append(
             RcDoc::line()
@@ -194,7 +194,7 @@ fn pretty_selection(selection: Option<Expr>) -> RcDoc {
     }
 }
 
-fn pretty_group_by(group_by: Vec<Expr>) -> RcDoc {
+fn pretty_group_by(group_by: Vec<Expr>) -> RcDoc<'static> {
     if !group_by.is_empty() {
         RcDoc::line()
             .append(
@@ -217,7 +217,7 @@ fn pretty_group_by(group_by: Vec<Expr>) -> RcDoc {
     }
 }
 
-fn pretty_having(having: Option<Expr>) -> RcDoc {
+fn pretty_having(having: Option<Expr>) -> RcDoc<'static> {
     if let Some(having) = having {
         RcDoc::line()
             .append(RcDoc::text("HAVING").append(RcDoc::line().nest(NEST_FACTOR)))
@@ -227,7 +227,7 @@ fn pretty_having(having: Option<Expr>) -> RcDoc {
     }
 }
 
-pub(crate) fn pretty_table(table: TableReference) -> RcDoc {
+pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
     match table {
         TableReference::Table {
             span: _,
@@ -272,16 +272,30 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc {
             span: _,
             name,
             params,
+            named_params,
             alias,
-        } => RcDoc::text(name.to_string())
-            .append(RcDoc::text("("))
-            .append(inline_comma(params.into_iter().map(pretty_expr)))
-            .append(RcDoc::text(")"))
-            .append(if let Some(alias) = alias {
-                RcDoc::text(format!(" AS {alias}"))
+        } => {
+            let seperator = if !named_params.is_empty() && !params.is_empty() {
+                RcDoc::text(", ")
             } else {
                 RcDoc::nil()
-            }),
+            };
+            RcDoc::text(name.to_string())
+                .append(RcDoc::text("("))
+                .append(inline_comma(params.into_iter().map(pretty_expr)))
+                .append(seperator)
+                .append(inline_comma(named_params.into_iter().map(|(k, v)| {
+                    RcDoc::text(k)
+                        .append(RcDoc::text("=>"))
+                        .append(pretty_expr(v))
+                })))
+                .append(RcDoc::text(")"))
+                .append(if let Some(alias) = alias {
+                    RcDoc::text(format!(" AS {alias}"))
+                } else {
+                    RcDoc::nil()
+                })
+        }
         TableReference::Join { span: _, join } => pretty_table(*join.left)
             .append(RcDoc::line())
             .append(if join.condition == JoinCondition::Natural {
@@ -317,15 +331,21 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc {
         TableReference::Stage {
             span: _,
             location,
-            files,
+            options,
             alias,
         } => RcDoc::text(location.to_string())
-            .append(if files.is_empty() {
-                RcDoc::nil()
-            } else {
+            .append(if let Some(files) = options.files {
                 let files = files.join(",");
                 let files = format!("FILES {}", files);
                 RcDoc::text(files)
+            } else {
+                RcDoc::nil()
+            })
+            .append(if let Some(pattern) = options.pattern {
+                let pattern = format!("Pattern {pattern}");
+                RcDoc::text(pattern)
+            } else {
+                RcDoc::nil()
             })
             .append(if let Some(a) = alias {
                 RcDoc::text(format!(" AS {a}"))
@@ -335,7 +355,7 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc {
     }
 }
 
-fn pretty_order_by(order_by: Vec<OrderByExpr>) -> RcDoc {
+fn pretty_order_by(order_by: Vec<OrderByExpr>) -> RcDoc<'static> {
     if !order_by.is_empty() {
         RcDoc::line()
             .append(
@@ -358,7 +378,7 @@ fn pretty_order_by(order_by: Vec<OrderByExpr>) -> RcDoc {
     }
 }
 
-fn pretty_limit(limit: Vec<Expr>) -> RcDoc {
+fn pretty_limit(limit: Vec<Expr>) -> RcDoc<'static> {
     if !limit.is_empty() {
         RcDoc::line()
             .append(
@@ -381,7 +401,7 @@ fn pretty_limit(limit: Vec<Expr>) -> RcDoc {
     }
 }
 
-fn pretty_offset(offset: Option<Expr>) -> RcDoc {
+fn pretty_offset(offset: Option<Expr>) -> RcDoc<'static> {
     if let Some(offset) = offset {
         RcDoc::line()
             .append(RcDoc::text("OFFSET").append(RcDoc::space().nest(NEST_FACTOR)))
@@ -391,7 +411,7 @@ fn pretty_offset(offset: Option<Expr>) -> RcDoc {
     }
 }
 
-fn pretty_order_by_expr(order_by_expr: OrderByExpr) -> RcDoc {
+fn pretty_order_by_expr(order_by_expr: OrderByExpr) -> RcDoc<'static> {
     RcDoc::text(order_by_expr.expr.to_string())
         .append(if let Some(asc) = order_by_expr.asc {
             if asc {

@@ -13,21 +13,20 @@
 // limitations under the License.
 
 use common_exception::ErrorCode;
+use common_exception::Range;
 use common_exception::Result;
 use logos::Lexer;
 use logos::Logos;
-use logos::Span;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
 pub use self::TokenKind::*;
-use crate::DisplayError;
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Token<'a> {
     pub source: &'a str,
     pub kind: TokenKind,
-    pub span: Span,
+    pub span: Range,
 }
 
 impl<'a> Token<'a> {
@@ -35,12 +34,12 @@ impl<'a> Token<'a> {
         Token {
             source,
             kind: TokenKind::EOI,
-            span: source.len()..source.len(),
+            span: (source.len()..source.len()).into(),
         }
     }
 
     pub fn text(&self) -> &'a str {
-        &self.source[self.span.clone()]
+        &self.source[std::ops::Range::from(self.span)]
     }
 }
 
@@ -71,20 +70,14 @@ impl<'a> Iterator for Tokenizer<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.lexer.next() {
-            Some(kind) if kind == TokenKind::Error => {
-                let rest_span = Token {
-                    source: self.source,
-                    kind: TokenKind::Error,
-                    span: self.lexer.span().start..self.source.len(),
-                };
-                Some(Err(ErrorCode::SyntaxException(rest_span.display_error(
-                    "unable to recognize the rest tokens".to_string(),
-                ))))
-            }
+            Some(kind) if kind == TokenKind::Error => Some(Err(ErrorCode::SyntaxException(
+                "unable to recognize the rest tokens".to_string(),
+            )
+            .set_span(Some((self.lexer.span().start..self.source.len()).into())))),
             Some(kind) => Some(Ok(Token {
                 source: self.source,
                 kind,
-                span: self.lexer.span(),
+                span: self.lexer.span().into(),
             })),
             None if !self.eoi => {
                 self.eoi = true;
@@ -242,12 +235,14 @@ pub enum TokenKind {
     // Steps to add keyword:
     // 1. Add the keyword to token kind variants by alphabetical order.
     // 2. Search in this file to see if the new keyword is a commented
-    //    out reserverd keyword. If so, uncomment the keyword in the
+    //    out reserved keyword. If so, uncomment the keyword in the
     //    reserved list.
     #[token("ALL", ignore(ascii_case))]
     ALL,
     #[token("ACCESS_KEY_ID", ignore(ascii_case))]
     ACCESS_KEY_ID,
+    #[token("ACCESS_KEY_SECRET", ignore(ascii_case))]
+    ACCESS_KEY_SECRET,
     #[token("ADD", ignore(ascii_case))]
     ADD,
     #[token("ANY", ignore(ascii_case))]
@@ -318,9 +313,13 @@ pub enum TokenKind {
     COMPACT,
     #[token("CONNECTION", ignore(ascii_case))]
     CONNECTION,
+    #[token("CONTENT_TYPE", ignore(ascii_case))]
+    CONTENT_TYPE,
     #[token("CHAR", ignore(ascii_case))]
     CHAR,
     #[token("CHARACTER", ignore(ascii_case))]
+    #[token("COLUMN", ignore(ascii_case))]
+    COLUMN,
     CHARACTER,
     #[token("COMPRESSION", ignore(ascii_case))]
     COMPRESSION,
@@ -358,6 +357,8 @@ pub enum TokenKind {
     DAY,
     #[token("DECADE", ignore(ascii_case))]
     DECADE,
+    #[token("DECIMAL", ignore(ascii_case))]
+    DECIMAL,
     #[token("DEFAULT", ignore(ascii_case))]
     DEFAULT,
     #[token("DEFLATE", ignore(ascii_case))]
@@ -570,6 +571,8 @@ pub enum TokenKind {
     NOTENANTSETTING,
     #[token("NULL", ignore(ascii_case))]
     NULL,
+    #[token("NULLABLE", ignore(ascii_case))]
+    NULLABLE,
     #[token("OBJECT", ignore(ascii_case))]
     OBJECT,
     #[token("OF", ignore(ascii_case))]

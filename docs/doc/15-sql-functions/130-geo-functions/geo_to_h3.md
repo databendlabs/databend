@@ -1,34 +1,35 @@
 ---
-title: GeoToH3
+title: GEO_TO_H3
 ---
 
-Returns [H3](https://eng.uber.com/h3/) point index **(lon, lat)** with specified resolution.
+Returns the [H3](https://eng.uber.com/h3/) index of the hexagon cell where the given location resides.
 
 ## Syntax
 
 ```sql
-geo_to_h3(lon, lat, resolution)
+GEO_TO_H3(lon, lat, res)
 ```
 
 ## Arguments
 
-| Arguments    | Description |
-|--------------| ----------- |
-| `lon`        | Longitude. Type: Float64
-| `lon`        | Latitude. Type: Float64
-| `resolution` | Index resolution. Range: `[0, 15]`. Type: UInt8
+| Argument   | Type    | Description                                                                                               |
+|------------|---------|-----------------------------------------------------------------------------------------------------------|
+| lon        | Float64 | Specifies the location's longitude, for example, `37.79506683`.                                           |
+| lat        | Float64 | Specifies the location's latitude, for example, `55.71290588`.                                            |
+| res | UInt8   | Sets an [H3 resolution](https://h3geo.org/docs/core-library/restable) ranging from 0 to 15.|
 
 ## Return Type
 
-* Hexagon index number
-* 0 in case of error.
+UInt64.
 
-Type: UInt64
+:::note
+Returning 0 means an error occurred.
+:::
 
 ## Examples
 
 ```sql
-SELECT geo_to_h3(37.79506683, 55.71290588, 15) AS h3Index;
+SELECT GEO_TO_H3(37.79506683, 55.71290588, 15) AS h3Index;
 +-------------------------------+
 |        h3Index                |
 +-------------------------------+

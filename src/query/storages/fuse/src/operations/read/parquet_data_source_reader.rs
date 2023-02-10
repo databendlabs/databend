@@ -24,8 +24,8 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_sources::processors::sources::SyncSource;
-use common_pipeline_sources::processors::sources::SyncSourcer;
+use common_pipeline_sources::SyncSource;
+use common_pipeline_sources::SyncSourcer;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
@@ -85,7 +85,7 @@ impl SyncSource for ReadParquetDataSource<true> {
     const NAME: &'static str = "SyncReadParquetDataSource";
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
-        match self.ctx.try_get_part() {
+        match self.ctx.get_partition() {
             None => Ok(None),
             Some(part) => Ok(Some(DataBlock::empty_with_meta(DataSourceMeta::create(
                 vec![part.clone()],
@@ -133,7 +133,7 @@ impl Processor for ReadParquetDataSource<false> {
     }
 
     async fn async_process(&mut self) -> Result<()> {
-        let parts = self.ctx.try_get_parts(self.batch_size);
+        let parts = self.ctx.get_partitions(self.batch_size);
 
         if !parts.is_empty() {
             let mut chunks = Vec::with_capacity(parts.len());

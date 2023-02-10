@@ -44,9 +44,10 @@ members = [
     "src/query/sql",
     "src/query/storages/common/blocks",
     "src/query/storages/common/cache",
+    "src/query/storages/common/cache-manager",
     "src/query/storages/common/index",
-    "src/query/storages/common/table-meta",
     "src/query/storages/common/pruner",
+    "src/query/storages/common/table-meta",
     "src/query/storages/factory",
     "src/query/storages/fuse",
     "src/query/storages/hive/hive",
@@ -68,6 +69,7 @@ members = [
     "src/meta/api",
     "src/meta/app",
     "src/meta/embedded",
+    "src/meta/kvapi",
     "src/meta/raft-store",
     "src/meta/sled-store",
     "src/meta/stoerr",
@@ -86,8 +88,11 @@ members = [
 # databend maintains:
 openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.7.4-alpha.3" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
-opendal = "0.24"
+opendal = { version = "0.26.2" }
 ordered-float = { version = "3.4.0", default-features = false }
+
+# type helper
+derive_more = "0.99.17"
 
 # error
 anyhow = { version = "1.0.65" }
@@ -106,7 +111,8 @@ serde_json = { version = "1.0.85", default-features = false, features = ["preser
 chrono = { version = "0.4.22", features = ["serde"] }
 chrono-tz = "0.6.3"
 
-# jemalloc
+# memory
+bumpalo = "3.12.0"
 tikv-jemalloc-ctl = { version = "0.5.0", features = ["use_std"] }
 
 # http
@@ -116,6 +122,9 @@ reqwest = { version = "0.11", default-features = false, features = [
     "rustls-tls-native-roots",
     "trust-dns",
 ] }
+
+# runtime
+tokio = { version = "1.24.2", features = ["full"] }
 
 [profile.release]
 debug = 1

@@ -14,13 +14,12 @@
 
 pub mod arithmetics_type;
 pub mod arrow;
-pub mod block_compact_thresholds;
 pub mod block_debug;
+pub mod block_thresholds;
 mod column_from;
 pub mod date_helper;
 pub mod display;
-
-use std::collections::HashMap;
+pub mod filter_helper;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::chunk::Chunk as ArrowChunk;
@@ -34,22 +33,19 @@ use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_arrow::parquet::write::Version;
 use common_arrow::write_parquet_file;
 use common_exception::ErrorCode;
-use common_exception::Result as ExceptionResult;
+use common_exception::Result;
+use common_exception::Span;
 
 pub use self::column_from::*;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::BlockEntry;
 use crate::Column;
-use crate::ConstantFolder;
 use crate::DataBlock;
-use crate::Domain;
 use crate::Evaluator;
 use crate::FunctionContext;
 use crate::FunctionRegistry;
 use crate::RawExpr;
-use crate::Result;
-use crate::Span;
 use crate::TableSchema;
 use crate::Value;
 
@@ -68,7 +64,7 @@ pub fn eval_function(
         .map(|(id, (val, ty))| {
             (
                 RawExpr::ColumnRef {
-                    span: span.clone(),
+                    span,
                     id,
                     data_type: ty.clone(),
                     display_name: String::new(),
@@ -90,41 +86,6 @@ pub fn eval_function(
     let block = DataBlock::new(cols, num_rows);
     let evaluator = Evaluator::new(&block, func_ctx, fn_registry);
     Ok((evaluator.run(&expr)?, expr.data_type().clone()))
-}
-
-/// A convenient shortcut to calculate the domain of a scalar function.
-pub fn calculate_function_domain(
-    span: Span,
-    fn_name: &str,
-    args: impl IntoIterator<Item = (Domain, DataType)>,
-    func_ctx: FunctionContext,
-    fn_registry: &FunctionRegistry,
-) -> Result<(Option<Domain>, DataType)> {
-    let (args, args_domain): (Vec<_>, HashMap<_, _>) = args
-        .into_iter()
-        .enumerate()
-        .map(|(id, (domain, ty))| {
-            (
-                RawExpr::ColumnRef {
-                    span: span.clone(),
-                    id,
-                    data_type: ty,
-                    display_name: String::new(),
-                },
-                (id, domain),
-            )
-        })
-        .unzip();
-    let raw_expr = RawExpr::FunctionCall {
-        span,
-        name: fn_name.to_string(),
-        params: vec![],
-        args,
-    };
-    let expr = crate::type_check::check(&raw_expr, fn_registry)?;
-    let (_, output_domain) =
-        ConstantFolder::fold_with_domain(&expr, args_domain, func_ctx, fn_registry);
-    Ok((output_domain, expr.data_type().clone()))
 }
 
 pub fn column_merge_validity(column: &Column, bitmap: Option<Bitmap>) -> Option<Bitmap> {
@@ -152,7 +113,7 @@ pub fn serialize_to_parquet_with_compression(
     schema: impl AsRef<TableSchema>,
     buf: &mut Vec<u8>,
     compression: CompressionOptions,
-) -> ExceptionResult<(u64, ThriftFileMetaData)> {
+) -> Result<(u64, ThriftFileMetaData)> {
     let arrow_schema = schema.as_ref().to_arrow();
 
     let row_group_write_options = WriteOptions {
@@ -164,7 +125,7 @@ pub fn serialize_to_parquet_with_compression(
     let batches = blocks
         .into_iter()
         .map(ArrowChunk::try_from)
-        .collect::<ExceptionResult<Vec<_>>>()?;
+        .collect::<Result<Vec<_>>>()?;
 
     let encoding_map = |data_type: &ArrowDataType| match data_type {
         ArrowDataType::Dictionary(..) => Encoding::RleDictionary,
@@ -200,7 +161,7 @@ pub fn serialize_to_parquet(
     blocks: Vec<DataBlock>,
     schema: impl AsRef<TableSchema>,
     buf: &mut Vec<u8>,
-) -> ExceptionResult<(u64, ThriftFileMetaData)> {
+) -> Result<(u64, ThriftFileMetaData)> {
     serialize_to_parquet_with_compression(blocks, schema, buf, CompressionOptions::Lz4Raw)
 }
 

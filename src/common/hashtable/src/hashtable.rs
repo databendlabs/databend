@@ -145,13 +145,7 @@ where
                 return Ok(zero);
             }
         }
-        if unlikely((self.table.len() + 1) * 2 > self.table.capacity()) {
-            if (self.table.entries.len() >> 22) == 0 {
-                self.table.grow(2);
-            } else {
-                self.table.grow(1);
-            }
-        }
+        self.table.check_grow();
         self.table.insert(key)
     }
     /// # Safety
@@ -189,13 +183,7 @@ where
                 _alignment: [0; 0],
             }));
         }
-        while (self.table.len() + other.table.len()) * 2 > self.table.capacity() {
-            if (self.table.entries.len() >> 22) == 0 {
-                self.table.grow(2);
-            } else {
-                self.table.grow(1);
-            }
-        }
+
         unsafe {
             self.table.set_merge(&other.table);
         }
@@ -292,13 +280,7 @@ where
                 return Ok(zero);
             }
         }
-        if unlikely((self.table.len() + 1) * 2 > self.table.capacity()) {
-            if (self.table.entries.len() >> 22) == 0 {
-                self.table.grow(2);
-            } else {
-                self.table.grow(1);
-            }
-        }
+        self.table.check_grow();
         self.table.insert(*key)
     }
 
@@ -321,13 +303,7 @@ where
             }
         }
 
-        if unlikely((self.table.len() + 1) * 2 > self.table.capacity()) {
-            if (self.table.entries.len() >> 22) == 0 {
-                self.table.grow(2);
-            } else {
-                self.table.grow(1);
-            }
-        }
+        self.table.check_grow();
 
         self.table.insert_with_hash(*key, hash)
     }

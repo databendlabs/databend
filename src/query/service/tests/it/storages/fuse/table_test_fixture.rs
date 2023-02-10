@@ -38,10 +38,11 @@ use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::DatabaseMeta;
+use common_meta_app::storage::StorageFsConfig;
+use common_meta_app::storage::StorageParams;
+use common_pipeline_sources::BlocksSource;
 use common_sql::plans::CreateDatabasePlan;
 use common_sql::plans::CreateTablePlanV2;
-use common_storage::StorageFsConfig;
-use common_storage::StorageParams;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 use databend_query::interpreters::append2table;
@@ -50,7 +51,6 @@ use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
-use databend_query::pipelines::processors::BlocksSource;
 use databend_query::pipelines::PipelineBuildResult;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
@@ -546,7 +546,7 @@ pub async fn history_should_have_item(
     // check history
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
-    let count_str = format!("| {}_u64    |", item_cnt);
+    let count_str = format!("| {}        |", item_cnt);
     let expected = vec![
         "+----------+",
         "| Column 0 |",

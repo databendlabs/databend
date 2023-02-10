@@ -21,11 +21,11 @@ use common_cache::Cache;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use opendal::Operator;
-use storages_common_table_meta::caches::CacheManager;
+use storages_common_cache_manager::CacheManager;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
@@ -78,7 +78,7 @@ pub struct MutationTransform {
     location_gen: TableMetaLocationGenerator,
 
     base_segments: Vec<Location>,
-    thresholds: BlockCompactThresholds,
+    thresholds: BlockThresholds,
     abort_operation: AbortOperation,
 
     inputs: Vec<Arc<InputPort>>,
@@ -98,7 +98,7 @@ impl MutationTransform {
         dal: Operator,
         location_gen: TableMetaLocationGenerator,
         base_segments: Vec<Location>,
-        thresholds: BlockCompactThresholds,
+        thresholds: BlockThresholds,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(MutationTransform {
             state: State::None,

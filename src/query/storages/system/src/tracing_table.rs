@@ -40,10 +40,9 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::Pipe;
 use common_pipeline_core::Pipeline;
-use common_pipeline_sources::processors::sources::SyncSource;
-use common_pipeline_sources::processors::sources::SyncSourcer;
+use common_pipeline_sources::SyncSource;
+use common_pipeline_sources::SyncSourcer;
 use tracing::debug;
 use walkdir::WalkDir;
 
@@ -120,21 +119,14 @@ impl Table for TracingTable {
     ) -> Result<()> {
         let settings = ctx.get_settings();
 
-        let output = OutputPort::create();
         let log_files = Self::log_files()?;
         debug!("listed log files: {:?}", log_files);
         let max_block_size = settings.get_max_block_size()? as usize;
 
-        pipeline.add_pipe(Pipe::SimplePipe {
-            inputs_port: vec![],
-            outputs_port: vec![output.clone()],
-            processors: vec![TracingSource::create(
-                ctx,
-                output,
-                max_block_size,
-                log_files,
-            )?],
-        });
+        pipeline.add_source(
+            |output| TracingSource::create(ctx.clone(), output, max_block_size, log_files.clone()),
+            1,
+        )?;
 
         Ok(())
     }

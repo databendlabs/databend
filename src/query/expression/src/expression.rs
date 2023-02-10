@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::Span;
 use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -32,8 +33,6 @@ use crate::types::number::F32;
 use crate::types::number::F64;
 use crate::types::DataType;
 use crate::values::Scalar;
-
-pub type Span = Option<std::ops::Range<usize>>;
 
 pub trait ColumnIndex: Debug + Clone + Serialize + Hash + Eq {}
 
@@ -109,7 +108,7 @@ pub enum Expr<Index: ColumnIndex = usize> {
 /// Serializable expression used to share executable expression between nodes.
 ///
 /// The remote node will recover the `Arc` pointer within `FunctionCall` by looking
-/// up the funciton registry with the `FunctionID`.
+/// up the function registry with the `FunctionID`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RemoteExpr<Index: ColumnIndex = usize> {
     Constant {
@@ -319,7 +318,7 @@ impl<Index: ColumnIndex> Expr<Index> {
                 scalar,
                 data_type,
             } => Expr::Constant {
-                span: span.clone(),
+                span: *span,
                 scalar: scalar.clone(),
                 data_type: data_type.clone(),
             },
@@ -329,7 +328,7 @@ impl<Index: ColumnIndex> Expr<Index> {
                 data_type,
                 display_name,
             } => Expr::ColumnRef {
-                span: span.clone(),
+                span: *span,
                 id: f(id),
                 data_type: data_type.clone(),
                 display_name: display_name.clone(),
@@ -340,7 +339,7 @@ impl<Index: ColumnIndex> Expr<Index> {
                 expr,
                 dest_type,
             } => Expr::Cast {
-                span: span.clone(),
+                span: *span,
                 is_try: *is_try,
                 expr: Box::new(expr.project_column_ref(f)),
                 dest_type: dest_type.clone(),
@@ -353,7 +352,7 @@ impl<Index: ColumnIndex> Expr<Index> {
                 args,
                 return_type,
             } => Expr::FunctionCall {
-                span: span.clone(),
+                span: *span,
                 id: id.clone(),
                 function: function.clone(),
                 generics: generics.clone(),
@@ -370,7 +369,7 @@ impl<Index: ColumnIndex> Expr<Index> {
                 scalar,
                 data_type,
             } => RemoteExpr::Constant {
-                span: span.clone(),
+                span: *span,
                 scalar: scalar.clone(),
                 data_type: data_type.clone(),
             },
@@ -380,7 +379,7 @@ impl<Index: ColumnIndex> Expr<Index> {
                 data_type,
                 display_name,
             } => RemoteExpr::ColumnRef {
-                span: span.clone(),
+                span: *span,
                 id: id.clone(),
                 data_type: data_type.clone(),
                 display_name: display_name.clone(),
@@ -391,7 +390,7 @@ impl<Index: ColumnIndex> Expr<Index> {
                 expr,
                 dest_type,
             } => RemoteExpr::Cast {
-                span: span.clone(),
+                span: *span,
                 is_try: *is_try,
                 expr: Box::new(expr.as_remote_expr()),
                 dest_type: dest_type.clone(),
@@ -404,7 +403,7 @@ impl<Index: ColumnIndex> Expr<Index> {
                 args,
                 return_type,
             } => RemoteExpr::FunctionCall {
-                span: span.clone(),
+                span: *span,
                 id: id.clone(),
                 generics: generics.clone(),
                 args: args.iter().map(Expr::as_remote_expr).collect(),
@@ -422,7 +421,7 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                 scalar,
                 data_type,
             } => Expr::Constant {
-                span: span.clone(),
+                span: *span,
                 scalar: scalar.clone(),
                 data_type: data_type.clone(),
             },
@@ -432,7 +431,7 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                 data_type,
                 display_name,
             } => Expr::ColumnRef {
-                span: span.clone(),
+                span: *span,
                 id: id.clone(),
                 data_type: data_type.clone(),
                 display_name: display_name.clone(),
@@ -443,7 +442,7 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                 expr,
                 dest_type,
             } => Expr::Cast {
-                span: span.clone(),
+                span: *span,
                 is_try: *is_try,
                 expr: Box::new(expr.as_expr(fn_registry)),
                 dest_type: dest_type.clone(),
@@ -457,7 +456,7 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
             } => {
                 let function = fn_registry.get(id).expect("function id not found");
                 Expr::FunctionCall {
-                    span: span.clone(),
+                    span: *span,
                     id: id.clone(),
                     function,
                     generics: generics.clone(),

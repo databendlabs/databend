@@ -15,21 +15,23 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct CreateViewStmt<'a> {
+pub struct CreateViewStmt {
     pub if_not_exists: bool,
-    pub catalog: Option<Identifier<'a>>,
-    pub database: Option<Identifier<'a>>,
-    pub view: Identifier<'a>,
-    pub query: Box<Query<'a>>,
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub view: Identifier,
+    pub columns: Vec<Identifier>,
+    pub query: Box<Query>,
 }
 
-impl Display for CreateViewStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for CreateViewStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE VIEW ")?;
         if self.if_not_exists {
             write!(f, "IF NOT EXISTS ")?;
@@ -41,20 +43,26 @@ impl Display for CreateViewStmt<'_> {
                 .chain(&self.database)
                 .chain(Some(&self.view)),
         )?;
+        if !self.columns.is_empty() {
+            write!(f, " (")?;
+            write_comma_separated_list(f, &self.columns)?;
+            write!(f, ")")?;
+        }
         write!(f, " AS {}", self.query)
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct AlterViewStmt<'a> {
-    pub catalog: Option<Identifier<'a>>,
-    pub database: Option<Identifier<'a>>,
-    pub view: Identifier<'a>,
-    pub query: Box<Query<'a>>,
+pub struct AlterViewStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub view: Identifier,
+    pub columns: Vec<Identifier>,
+    pub query: Box<Query>,
 }
 
-impl Display for AlterViewStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for AlterViewStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "ALTER VIEW ")?;
         write_period_separated_list(
             f,
@@ -63,20 +71,25 @@ impl Display for AlterViewStmt<'_> {
                 .chain(&self.database)
                 .chain(Some(&self.view)),
         )?;
+        if !self.columns.is_empty() {
+            write!(f, " (")?;
+            write_comma_separated_list(f, &self.columns)?;
+            write!(f, ")")?;
+        }
         write!(f, " AS {}", self.query)
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DropViewStmt<'a> {
+pub struct DropViewStmt {
     pub if_exists: bool,
-    pub catalog: Option<Identifier<'a>>,
-    pub database: Option<Identifier<'a>>,
-    pub view: Identifier<'a>,
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub view: Identifier,
 }
 
-impl Display for DropViewStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for DropViewStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DROP VIEW ")?;
         if self.if_exists {
             write!(f, "IF EXISTS ")?;

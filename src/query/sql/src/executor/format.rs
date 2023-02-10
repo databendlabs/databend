@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_ast::ast::FormatTreeNode;
-use common_exception::ErrorCode;
+use common_catalog::plan::PartStatistics;
 use common_exception::Result;
 use common_expression::ConstantFolder;
 use common_expression::FunctionContext;
@@ -34,14 +34,17 @@ use super::Sort;
 use super::TableScan;
 use super::UnionAll;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::DistributedInsertSelect;
+use crate::executor::ExchangeSink;
+use crate::executor::ExchangeSource;
 use crate::executor::FragmentKind;
 use crate::planner::MetadataRef;
 use crate::planner::DUMMY_TABLE_INDEX;
 use crate::ColumnEntry;
 
 impl PhysicalPlan {
-    pub fn format(&self, metadata: MetadataRef) -> Result<String> {
-        to_format_tree(self, &metadata)?.format_pretty()
+    pub fn format(&self, metadata: MetadataRef) -> Result<FormatTreeNode<String>> {
+        to_format_tree(self, &metadata)
     }
 }
 
@@ -58,10 +61,10 @@ fn to_format_tree(plan: &PhysicalPlan, metadata: &MetadataRef) -> Result<FormatT
         PhysicalPlan::HashJoin(plan) => hash_join_to_format_tree(plan, metadata),
         PhysicalPlan::Exchange(plan) => exchange_to_format_tree(plan, metadata),
         PhysicalPlan::UnionAll(plan) => union_all_to_format_tree(plan, metadata),
-        PhysicalPlan::ExchangeSource(_)
-        | PhysicalPlan::ExchangeSink(_)
-        | PhysicalPlan::DistributedInsertSelect(_) => {
-            Err(ErrorCode::Internal("Invalid physical plan"))
+        PhysicalPlan::ExchangeSource(plan) => exchange_source_to_format_tree(plan),
+        PhysicalPlan::ExchangeSink(plan) => exchange_sink_to_format_tree(plan, metadata),
+        PhysicalPlan::DistributedInsertSelect(plan) => {
+            distributed_insert_to_format_tree(plan.as_ref(), metadata)
         }
     }
 }
@@ -103,34 +106,23 @@ fn table_scan_to_format_tree(
                 .map_or("NONE".to_string(), |limit| limit.to_string())
         });
 
-    let mut children = vec![
-        FormatTreeNode::new(format!("table: {table_name}")),
-        FormatTreeNode::new(format!("read rows: {}", plan.source.statistics.read_rows)),
-        FormatTreeNode::new(format!("read bytes: {}", plan.source.statistics.read_bytes)),
-        FormatTreeNode::new(format!(
-            "partitions total: {}",
-            plan.source.statistics.partitions_total
-        )),
-        FormatTreeNode::new(format!(
-            "partitions scanned: {}",
-            plan.source.statistics.partitions_scanned
-        )),
-        FormatTreeNode::new(format!(
-            "push downs: [filters: [{filters}], limit: {limit}]"
-        )),
-    ];
+    let mut children = vec![FormatTreeNode::new(format!("table: {table_name}"))];
 
-    let mut output_columns: Vec<usize> = Vec::new();
-    if let Some(scan_fields) = &plan.source.scan_fields {
-        output_columns = scan_fields.keys().cloned().collect();
-    };
+    // Part stats.
+    children.extend(part_stats_info_to_format_tree(&plan.source.statistics));
+    // Push downs.
+    children.push(FormatTreeNode::new(format!(
+        "push downs: [filters: [{filters}], limit: {limit}]"
+    )));
 
-    // If output_columns is empty, it indicates that scan all fields.
+    let output_columns = plan.source.output_schema.fields();
+
+    // If output_columns contains all columns of the source,
     // Then output_columns won't show in explain
-    if !output_columns.is_empty() {
+    if output_columns.len() < plan.source.source_info.schema().fields().len() {
         children.push(FormatTreeNode::new(format!(
             "output columns: [{}]",
-            output_columns.iter().join(", ")
+            output_columns.iter().map(|f| f.name()).join(", ")
         )));
     }
 
@@ -316,6 +308,11 @@ fn aggregate_final_to_format_tree(
         FormatTreeNode::new(format!("aggregate functions: [{agg_funcs}]")),
     ];
 
+    if let Some(limit) = &plan.limit {
+        let items = FormatTreeNode::new(format!("limit: {limit}"));
+        children.push(items);
+    }
+
     if let Some(info) = &plan.stat_info {
         let items = plan_stats_info_to_format_tree(info);
         children.extend(items);
@@ -479,9 +476,77 @@ fn union_all_to_format_tree(
     ))
 }
 
+fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNode<String>> {
+    let mut items = vec![
+        FormatTreeNode::new(format!("read rows: {}", info.read_rows)),
+        FormatTreeNode::new(format!("read bytes: {}", info.read_bytes)),
+        FormatTreeNode::new(format!("partitions total: {}", info.partitions_total)),
+        FormatTreeNode::new(format!("partitions scanned: {}", info.partitions_scanned)),
+    ];
+
+    if info.pruning_stats.segments_range_pruning_before > 0 {
+        items.push(FormatTreeNode::new(format!(
+            "pruning stats: [segments: <range pruning: {} to {}>, blocks: <range pruning: {} to {}, bloom pruning: {} to {}>]",
+            info.pruning_stats.segments_range_pruning_before,
+            info.pruning_stats.segments_range_pruning_after,
+            info.pruning_stats.blocks_range_pruning_before,
+            info.pruning_stats.blocks_range_pruning_after,
+            info.pruning_stats.blocks_bloom_pruning_before,
+            info.pruning_stats.blocks_bloom_pruning_after,
+        )))
+    }
+
+    items
+}
+
 fn plan_stats_info_to_format_tree(info: &PlanStatsInfo) -> Vec<FormatTreeNode<String>> {
     vec![FormatTreeNode::new(format!(
         "estimated rows: {0:.2}",
         info.estimated_rows
     ))]
+}
+
+fn exchange_source_to_format_tree(plan: &ExchangeSource) -> Result<FormatTreeNode<String>> {
+    let mut children = vec![];
+
+    children.push(FormatTreeNode::new(format!(
+        "source fragment: [{}]",
+        plan.source_fragment_id
+    )));
+
+    Ok(FormatTreeNode::with_children(
+        "ExchangeSource".to_string(),
+        children,
+    ))
+}
+
+fn exchange_sink_to_format_tree(
+    plan: &ExchangeSink,
+    metadata: &MetadataRef,
+) -> Result<FormatTreeNode<String>> {
+    let mut children = vec![];
+
+    children.push(FormatTreeNode::new(format!(
+        "destination fragment: [{}]",
+        plan.destination_fragment_id
+    )));
+
+    children.push(to_format_tree(&plan.input, metadata)?);
+
+    Ok(FormatTreeNode::with_children(
+        "ExchangeSink".to_string(),
+        children,
+    ))
+}
+
+fn distributed_insert_to_format_tree(
+    plan: &DistributedInsertSelect,
+    metadata: &MetadataRef,
+) -> Result<FormatTreeNode<String>> {
+    let children = vec![to_format_tree(&plan.input, metadata)?];
+
+    Ok(FormatTreeNode::with_children(
+        "DistributedInsertSelect".to_string(),
+        children,
+    ))
 }

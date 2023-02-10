@@ -24,7 +24,7 @@ use databend_query::interpreters::AlterTableClusterKeyInterpreter;
 use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::DropTableClusterKeyInterpreter;
 use databend_query::interpreters::Interpreter;
-use storages_common_table_meta::caches::LoadParams;
+use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -91,7 +91,6 @@ async fn test_fuse_alter_table_cluster_key() -> common_exception::Result<()> {
         location: snapshot_loc.clone(),
         len_hint: None,
         ver: TableSnapshot::VERSION,
-        schema: None,
     };
 
     let snapshot = reader.read(&load_params).await?;
@@ -127,7 +126,6 @@ async fn test_fuse_alter_table_cluster_key() -> common_exception::Result<()> {
         location: snapshot_loc.clone(),
         len_hint: None,
         ver: TableSnapshot::VERSION,
-        schema: None,
     };
 
     let snapshot = reader.read(&params).await?;

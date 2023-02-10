@@ -17,3 +17,8 @@ SELECT DISTINCT (number %3) c FROM numbers(1000) ORDER BY c
 1
 2
 
+query I
+SELECT count(distinct number %3) c FROM numbers(1000) where number > 3;
+----
+3
+

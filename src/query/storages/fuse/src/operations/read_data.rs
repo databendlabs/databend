@@ -29,17 +29,25 @@ use crate::operations::fuse_source::build_fuse_source_pipeline;
 use crate::FuseTable;
 
 impl FuseTable {
-    pub fn create_block_reader(&self, projection: Projection) -> Result<Arc<BlockReader>> {
+    pub fn create_block_reader(
+        &self,
+        projection: Projection,
+        ctx: Arc<dyn TableContext>,
+    ) -> Result<Arc<BlockReader>> {
         let table_schema = self.table_info.schema();
-        BlockReader::create(self.operator.clone(), table_schema, projection)
+        BlockReader::create(self.operator.clone(), table_schema, projection, ctx)
     }
 
     // Build the block reader.
-    fn build_block_reader(&self, plan: &DataSourcePlan) -> Result<Arc<BlockReader>> {
-        self.create_block_reader(PushDownInfo::projection_of_push_downs(
-            &self.table_info.schema(),
-            &plan.push_downs,
-        ))
+    fn build_block_reader(
+        &self,
+        plan: &DataSourcePlan,
+        ctx: Arc<dyn TableContext>,
+    ) -> Result<Arc<BlockReader>> {
+        self.create_block_reader(
+            PushDownInfo::projection_of_push_downs(&self.table_info.schema(), &plan.push_downs),
+            ctx,
+        )
     }
 
     fn adjust_io_request(&self, ctx: &Arc<dyn TableContext>) -> Result<usize> {
@@ -94,20 +102,13 @@ impl FuseTable {
                     Result::<_, ErrorCode>::Ok(partitions)
                 })?;
 
-                query_ctx.try_set_partitions(partitions)?;
+                query_ctx.set_partitions(partitions)?;
 
                 Ok(())
             });
         }
 
-        assert!(
-            plan.push_downs
-                .as_ref()
-                .and_then(|s| s.prewhere.as_ref())
-                .is_none()
-        );
-
-        let block_reader = self.build_block_reader(plan)?;
+        let block_reader = self.build_block_reader(plan, ctx.clone())?;
         let max_io_requests = self.adjust_io_request(&ctx)?;
 
         build_fuse_source_pipeline(
@@ -115,6 +116,7 @@ impl FuseTable {
             pipeline,
             self.storage_format,
             block_reader,
+            plan,
             max_io_requests,
         )
     }

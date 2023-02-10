@@ -25,7 +25,7 @@ runs:
       id: info
       shell: bash
       run: |
-        if [[ "${{ inputs.profile }}" == "debug" && "${{ inputs.target }}" =~ "linux" ]]; then
+        if [[ "${RUNNER_PROVIDER}" == "aws" ]]; then
           src="s3"
         else
           src="github"

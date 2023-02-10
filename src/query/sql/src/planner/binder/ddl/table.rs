@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_ast::ast::AlterTableAction;
 use common_ast::ast::AlterTableStmt;
 use common_ast::ast::AnalyzeTableStmt;
+use common_ast::ast::ColumnDefinition;
 use common_ast::ast::CompactTarget;
 use common_ast::ast::CreateTableSource;
 use common_ast::ast::CreateTableStmt;
@@ -74,11 +75,13 @@ use crate::optimizer::OptimizerContext;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::IdentifierNormalizer;
 use crate::planner::semantic::TypeChecker;
+use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CreateTablePlanV2;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropTableClusterKeyPlan;
+use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTablePlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::OptimizeTableAction;
@@ -97,11 +100,11 @@ use crate::ColumnBinding;
 use crate::Planner;
 use crate::SelectBuilder;
 
-impl<'a> Binder {
+impl Binder {
     pub(in crate::planner::binder) async fn bind_show_tables(
         &mut self,
         bind_context: &BindContext,
-        stmt: &ShowTablesStmt<'a>,
+        stmt: &ShowTablesStmt,
     ) -> Result<Plan> {
         let ShowTablesStmt {
             catalog,
@@ -173,7 +176,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_show_create_table(
         &mut self,
-        stmt: &ShowCreateTableStmt<'a>,
+        stmt: &ShowCreateTableStmt,
     ) -> Result<Plan> {
         let ShowCreateTableStmt {
             catalog,
@@ -205,7 +208,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_describe_table(
         &mut self,
-        stmt: &DescribeTableStmt<'a>,
+        stmt: &DescribeTableStmt,
     ) -> Result<Plan> {
         let DescribeTableStmt {
             catalog,
@@ -241,7 +244,7 @@ impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_show_tables_status(
         &mut self,
         bind_context: &BindContext,
-        stmt: &ShowTablesStatusStmt<'a>,
+        stmt: &ShowTablesStatusStmt,
     ) -> Result<Plan> {
         let ShowTablesStatusStmt { database, limit } = stmt;
 
@@ -307,7 +310,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_create_table(
         &mut self,
-        stmt: &CreateTableStmt<'a>,
+        stmt: &CreateTableStmt,
     ) -> Result<Plan> {
         let CreateTableStmt {
             if_not_exists,
@@ -485,7 +488,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_drop_table(
         &mut self,
-        stmt: &DropTableStmt<'a>,
+        stmt: &DropTableStmt,
     ) -> Result<Plan> {
         let DropTableStmt {
             if_exists,
@@ -518,7 +521,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_undrop_table(
         &mut self,
-        stmt: &UndropTableStmt<'a>,
+        stmt: &UndropTableStmt,
     ) -> Result<Plan> {
         let UndropTableStmt {
             catalog,
@@ -548,7 +551,7 @@ impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_alter_table(
         &mut self,
         bind_context: &BindContext,
-        stmt: &AlterTableStmt<'a>,
+        stmt: &AlterTableStmt,
     ) -> Result<Plan> {
         let AlterTableStmt {
             if_exists,
@@ -596,6 +599,27 @@ impl<'a> Binder {
                 Ok(Plan::RenameTable(Box::new(RenameTablePlan {
                     tenant,
                     entities,
+                })))
+            }
+            AlterTableAction::AddColumn { column } => {
+                let (schema, field_default_exprs, field_comments) = self
+                    .analyze_create_table_schema_by_columns(&[column.clone()])
+                    .await?;
+                Ok(Plan::AddTableColumn(Box::new(AddTableColumnPlan {
+                    catalog,
+                    database,
+                    table,
+                    schema,
+                    field_default_exprs,
+                    field_comments,
+                })))
+            }
+            AlterTableAction::DropColumn { column } => {
+                Ok(Plan::DropTableColumn(Box::new(DropTableColumnPlan {
+                    catalog,
+                    database,
+                    table,
+                    column: column.to_string(),
                 })))
             }
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
@@ -672,7 +696,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_rename_table(
         &mut self,
-        stmt: &RenameTableStmt<'a>,
+        stmt: &RenameTableStmt,
     ) -> Result<Plan> {
         let RenameTableStmt {
             if_exists,
@@ -727,7 +751,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_truncate_table(
         &mut self,
-        stmt: &TruncateTableStmt<'a>,
+        stmt: &TruncateTableStmt,
     ) -> Result<Plan> {
         let TruncateTableStmt {
             catalog,
@@ -757,7 +781,7 @@ impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_optimize_table(
         &mut self,
         bind_context: &BindContext,
-        stmt: &OptimizeTableStmt<'a>,
+        stmt: &OptimizeTableStmt,
     ) -> Result<Plan> {
         let OptimizeTableStmt {
             catalog,
@@ -814,7 +838,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_analyze_table(
         &mut self,
-        stmt: &AnalyzeTableStmt<'a>,
+        stmt: &AnalyzeTableStmt,
     ) -> Result<Plan> {
         let AnalyzeTableStmt {
             catalog,
@@ -841,7 +865,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_exists_table(
         &mut self,
-        stmt: &ExistsTableStmt<'a>,
+        stmt: &ExistsTableStmt,
     ) -> Result<Plan> {
         let ExistsTableStmt {
             catalog,
@@ -866,45 +890,55 @@ impl<'a> Binder {
         })))
     }
 
-    async fn analyze_create_table_schema(
+    async fn analyze_create_table_schema_by_columns(
         &self,
-        source: &CreateTableSource<'a>,
+        columns: &[ColumnDefinition],
     ) -> Result<(TableSchemaRef, Vec<Option<String>>, Vec<String>)> {
         let bind_context = BindContext::new();
+        let mut scalar_binder = ScalarBinder::new(
+            &bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+        );
+        let mut fields = Vec::with_capacity(columns.len());
+        let mut fields_default_expr = Vec::with_capacity(columns.len());
+        let mut fields_comments = Vec::with_capacity(columns.len());
+        for column in columns.iter() {
+            let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
+            let schema_data_type = TypeChecker::resolve_type_name(&column.data_type)?;
+
+            fields.push(TableField::new(&name, schema_data_type.clone()));
+            fields_default_expr.push({
+                if let Some(default_expr) = &column.default_expr {
+                    let (_expr, expr_type) = scalar_binder.bind(default_expr).await?;
+                    let data_type = DataType::from(&schema_data_type);
+                    if common_super_type(data_type.clone(), expr_type.clone()).is_none() {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "column {name} is of type {} but default expression is of type {}",
+                            data_type, expr_type
+                        )));
+                    }
+                    Some(default_expr.to_string())
+                } else {
+                    None
+                }
+            });
+            fields_comments.push(column.comment.clone().unwrap_or_default());
+        }
+        let schema = TableSchemaRefExt::create(fields);
+        Self::validate_create_table_schema(&schema)?;
+        Ok((schema, fields_default_expr, fields_comments))
+    }
+
+    async fn analyze_create_table_schema(
+        &self,
+        source: &CreateTableSource,
+    ) -> Result<(TableSchemaRef, Vec<Option<String>>, Vec<String>)> {
         match source {
             CreateTableSource::Columns(columns) => {
-                let mut scalar_binder = ScalarBinder::new(
-                    &bind_context,
-                    self.ctx.clone(),
-                    &self.name_resolution_ctx,
-                    self.metadata.clone(),
-                    &[],
-                );
-                let mut fields = Vec::with_capacity(columns.len());
-                let mut fields_default_expr = Vec::with_capacity(columns.len());
-                let mut fields_comments = Vec::with_capacity(columns.len());
-                for column in columns.iter() {
-                    let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
-                    let schema_data_type = TypeChecker::resolve_type_name(&column.data_type)?;
-
-                    fields.push(TableField::new(&name, schema_data_type.clone()));
-                    fields_default_expr.push({
-                        if let Some(default_expr) = &column.default_expr {
-                            let (_expr, expr_type) = scalar_binder.bind(default_expr).await?;
-                            let data_type = DataType::from(&schema_data_type);
-                            if common_super_type(data_type.clone(), expr_type.clone()).is_none() {
-                                return Err(ErrorCode::SemanticError(format!("column {name} is of type {} but default expression is of type {}", data_type, expr_type)));
-                            }
-                            Some(default_expr.to_string())
-                        } else {
-                            None
-                        }
-                    });
-                    fields_comments.push(column.comment.clone().unwrap_or_default());
-                }
-                let schema = TableSchemaRefExt::create(fields);
-                Self::validate_create_table_schema(&schema)?;
-                Ok((schema, fields_default_expr, fields_comments))
+                self.analyze_create_table_schema_by_columns(columns).await
             }
             CreateTableSource::Like {
                 catalog,
@@ -971,7 +1005,7 @@ impl<'a> Binder {
 
     async fn analyze_cluster_keys(
         &mut self,
-        cluster_by: &[Expr<'a>],
+        cluster_by: &[Expr],
         schema: TableSchemaRef,
     ) -> Result<Vec<String>> {
         // Build a temporary BindContext to resolve the expr

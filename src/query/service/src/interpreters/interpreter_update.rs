@@ -25,7 +25,7 @@ use common_sql::plans::CastExpr;
 use common_sql::plans::FunctionCall;
 use common_sql::BindContext;
 use common_sql::ColumnBinding;
-use common_sql::Scalar;
+use common_sql::ScalarExpr;
 use common_sql::Visibility;
 
 use crate::interpreters::Interpreter;
@@ -34,7 +34,6 @@ use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::plans::ScalarExpr;
 use crate::sql::plans::UpdatePlan;
 
 /// interprets UpdatePlan
@@ -64,7 +63,6 @@ impl Interpreter for UpdateInterpreter {
 
     #[tracing::instrument(level = "debug", name = "update_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        // TODO check privilege
         let catalog_name = self.plan.catalog.as_str();
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
@@ -78,7 +76,7 @@ impl Interpreter for UpdateInterpreter {
             (None, vec![])
         };
 
-        let predicate = Scalar::BoundColumnRef(BoundColumnRef {
+        let predicate = ScalarExpr::BoundColumnRef(BoundColumnRef {
             column: ColumnBinding {
                 database_name: None,
                 table_name: None,
@@ -93,12 +91,12 @@ impl Interpreter for UpdateInterpreter {
         let update_list = self.plan.update_list.iter().try_fold(
             Vec::with_capacity(self.plan.update_list.len()),
             |mut acc, (id, scalar)| {
-                let filed = schema.field(*id);
-                let left = Scalar::CastExpr(CastExpr {
+                let field = schema.field(*id);
+                let left = ScalarExpr::CastExpr(CastExpr {
                     is_try: false,
                     argument: Box::new(scalar.clone()),
                     from_type: Box::new(scalar.data_type()),
-                    target_type: Box::new(filed.data_type().clone()),
+                    target_type: Box::new(field.data_type().clone()),
                 });
                 let scalar = if col_indices.is_empty() {
                     // The condition is always true.
@@ -113,10 +111,10 @@ impl Interpreter for UpdateInterpreter {
                         if BindContext::match_column_binding(
                             Some(db_name),
                             Some(tbl_name),
-                            filed.name(),
+                            field.name(),
                             column_binding,
                         ) {
-                            right = Some(Scalar::BoundColumnRef(BoundColumnRef {
+                            right = Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
                                 column: column_binding.clone(),
                             }));
                             break;
@@ -124,7 +122,7 @@ impl Interpreter for UpdateInterpreter {
                     }
                     let right = right.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
                     let return_type = right.data_type();
-                    Scalar::FunctionCall(FunctionCall {
+                    ScalarExpr::FunctionCall(FunctionCall {
                         params: vec![],
                         arguments: vec![predicate.clone(), left, right],
                         func_name: "if".to_string(),
@@ -145,7 +143,7 @@ impl Interpreter for UpdateInterpreter {
             &mut pipeline,
         )
         .await?;
-        if !pipeline.pipes.is_empty() {
+        if !pipeline.is_empty() {
             let settings = self.ctx.get_settings();
             pipeline.set_max_threads(settings.get_max_threads()? as usize);
             let query_id = self.ctx.get_id();

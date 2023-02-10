@@ -62,7 +62,6 @@ impl HashFlightScatter {
                     &[key.as_expr(&BUILTIN_FUNCTIONS)],
                     &BUILTIN_FUNCTIONS,
                 )
-                .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))
             })
             .collect::<Result<_>>()?;
 
@@ -98,8 +97,7 @@ impl OneHashKeyFlightScatter {
                     &[],
                     &[hash_key.as_expr(&BUILTIN_FUNCTIONS)],
                     &BUILTIN_FUNCTIONS,
-                )
-                .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?,
+                )?,
                 Expr::Constant {
                     span: None,
                     scalar: Scalar::Number(NumberScalar::UInt64(scatter_size as u64)),
@@ -107,8 +105,7 @@ impl OneHashKeyFlightScatter {
                 },
             ],
             &BUILTIN_FUNCTIONS,
-        )
-        .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?;
+        )?;
 
         Ok(Box::new(OneHashKeyFlightScatter {
             scatter_size,
@@ -127,10 +124,10 @@ impl FlightScatter for OneHashKeyFlightScatter {
         let indices = get_hash_values(&indices, num)?;
         let data_blocks = DataBlock::scatter(data_block, &indices, self.scatter_size)?;
 
-        let block_meta = data_block.meta()?;
+        let block_meta = data_block.get_meta();
         let mut res = Vec::with_capacity(data_blocks.len());
         for data_block in data_blocks {
-            res.push(data_block.add_meta(block_meta.clone())?);
+            res.push(data_block.add_meta(block_meta.cloned())?);
         }
 
         Ok(res)
@@ -153,12 +150,12 @@ impl FlightScatter for HashFlightScatter {
             Ok(vec![0; num])
         }?;
 
-        let block_meta = data_block.meta()?;
+        let block_meta = data_block.get_meta();
         let data_blocks = DataBlock::scatter(data_block, &indices, self.scatter_size)?;
 
         let mut res = Vec::with_capacity(data_blocks.len());
         for data_block in data_blocks {
-            res.push(data_block.add_meta(block_meta.clone())?);
+            res.push(data_block.add_meta(block_meta.cloned())?);
         }
 
         Ok(res)

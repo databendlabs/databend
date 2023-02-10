@@ -194,6 +194,8 @@ dependencies = [
  "regex",
  "regex-syntax",
  "rustc_version",
+ "serde",
+ "serde_derive",
  "simdutf8",
  "streaming-iterator",
  "strength_reduce",
@@ -339,6 +341,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-task"
+version = "4.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a40729d2133846d9ed0ea60a8b9541bccddab49cd30f0715a1da672fe9a2524"
+
+[[package]]
 name = "async-trait"
 version = "0.1.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -368,6 +376,12 @@ checksum = "e3ff7eb3f316534d83a8a2c3d1674ace8a5a71198eba31e2e2b597833f699b28"
 dependencies = [
  "critical-section",
 ]
+
+[[package]]
+name = "atomic-waker"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "065374052e7df7ee4047b1160cca5e1467a12351a40b3da123c870ba0b8eda2a"
 
 [[package]]
 name = "atty"
@@ -630,6 +644,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "blocking"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c67b173a56acffd6d2326fb7ab938ba0b00a71480e14902b2591c87bc5741e8"
+dependencies = [
+ "async-channel",
+ "async-lock",
+ "async-task",
+ "atomic-waker",
+ "fastrand",
+ "futures-lite",
+]
+
+[[package]]
 name = "borsh"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -721,9 +749,9 @@ dependencies = [
 
 [[package]]
 name = "bumpalo"
-version = "3.11.1"
+version = "3.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "572f695136211188308f16ad2ca5c851a712c464060ae6974944458eb83880ba"
+checksum = "0d261e256854913907f67ed06efbc3338dfe6179796deefc1ff763fc1aee5535"
 
 [[package]]
 name = "byte-slice-cast"
@@ -1194,7 +1222,6 @@ dependencies = [
 name = "common-ast"
 version = "0.1.0"
 dependencies = [
- "codespan-reporting 0.11.1 (git+https://github.com/brendanzab/codespan?rev=c84116f5)",
  "common-base",
  "common-exception",
  "common-functions",
@@ -1263,7 +1290,7 @@ dependencies = [
  "anyhow",
  "cargo-license",
  "cargo_metadata 0.15.2",
- "git2",
+ "git2 0.16.1",
  "tracing",
  "vergen",
 ]
@@ -1283,6 +1310,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "common-arrow",
  "common-base",
  "common-exception",
  "common-expression",
@@ -1295,6 +1323,7 @@ dependencies = [
  "dashmap",
  "dyn-clone",
  "goldenfile",
+ "opendal 0.26.2",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -1311,6 +1340,7 @@ dependencies = [
  "common-exception",
  "common-grpc",
  "common-hive-meta-store",
+ "common-meta-app",
  "common-meta-types",
  "common-storage",
  "common-tracing",
@@ -1318,6 +1348,7 @@ dependencies = [
  "databend-thrift",
  "hex",
  "once_cell",
+ "pretty_assertions",
  "semver",
  "serde",
  "serfig",
@@ -1341,8 +1372,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bincode 2.0.0-rc.2",
+ "codespan-reporting 0.11.1 (git+https://github.com/brendanzab/codespan?rev=c84116f5)",
  "common-arrow",
- "opendal",
+ "opendal 0.26.2",
  "paste",
  "prost",
  "serde",
@@ -1364,9 +1396,11 @@ dependencies = [
  "common-exception",
  "common-io",
  "common-jsonb",
+ "dashmap",
  "educe",
  "enum-as-inner",
  "enum_dispatch",
+ "ethnum",
  "futures",
  "goldenfile",
  "hex",
@@ -1375,6 +1409,7 @@ dependencies = [
  "match-template",
  "micromarshal",
  "num-traits",
+ "once_cell",
  "ordered-float 3.4.0",
  "parking_lot 0.12.1",
  "pretty_assertions",
@@ -1399,6 +1434,7 @@ dependencies = [
  "common-expression",
  "common-io",
  "common-jsonb",
+ "common-meta-app",
  "common-meta-types",
  "common-settings",
  "lexical-core",
@@ -1539,6 +1575,7 @@ dependencies = [
  "byteorder",
  "fast-float",
  "ordered-float 3.4.0",
+ "serde",
  "serde_json",
 ]
 
@@ -1551,7 +1588,9 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-meta-api",
+ "common-meta-app",
  "common-meta-embedded",
+ "common-meta-kvapi",
  "common-meta-store",
  "common-meta-types",
  "common-proto-conv",
@@ -1568,10 +1607,10 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
- "common-base",
  "common-exception",
  "common-expression",
  "common-meta-app",
+ "common-meta-kvapi",
  "common-meta-types",
  "common-proto-conv",
  "common-protos",
@@ -1579,7 +1618,6 @@ dependencies = [
  "enumflags2",
  "maplit",
  "serde_json",
- "thiserror",
  "tonic",
  "tracing",
 ]
@@ -1588,16 +1626,25 @@ dependencies = [
 name = "common-meta-app"
 version = "0.1.0"
 dependencies = [
+ "anyerror",
+ "anyhow",
  "chrono",
  "common-building",
+ "common-exception",
  "common-expression",
+ "common-io",
+ "common-meta-kvapi",
  "common-meta-types",
- "common-storage",
  "enumflags2",
+ "hex",
  "maplit",
  "num-derive",
  "num-traits",
  "serde",
+ "serde_json",
+ "sha1",
+ "sha2",
+ "thiserror",
  "tonic-build",
 ]
 
@@ -1612,6 +1659,7 @@ dependencies = [
  "common-grpc",
  "common-meta-api",
  "common-meta-app",
+ "common-meta-kvapi",
  "common-meta-types",
  "common-metrics",
  "common-tracing",
@@ -1636,12 +1684,26 @@ dependencies = [
  "async-trait",
  "common-base",
  "common-meta-api",
+ "common-meta-kvapi",
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-stoerr",
  "common-meta-types",
  "once_cell",
  "tempfile",
+ "tracing",
+]
+
+[[package]]
+name = "common-meta-kvapi"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "common-meta-types",
+ "serde",
+ "thiserror",
+ "tokio",
  "tracing",
 ]
 
@@ -1658,6 +1720,7 @@ dependencies = [
  "common-exception",
  "common-grpc",
  "common-meta-api",
+ "common-meta-kvapi",
  "common-meta-sled-store",
  "common-meta-stoerr",
  "common-meta-types",
@@ -1667,8 +1730,10 @@ dependencies = [
  "maplit",
  "num",
  "once_cell",
+ "openraft",
  "pretty_assertions",
  "serde",
+ "serde_json",
  "tempfile",
  "tracing",
 ]
@@ -1715,9 +1780,9 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "common-grpc",
- "common-meta-api",
  "common-meta-client",
  "common-meta-embedded",
+ "common-meta-kvapi",
  "common-meta-types",
  "tracing",
 ]
@@ -1728,15 +1793,10 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
- "chrono",
  "common-building",
  "common-exception",
- "common-io",
  "common-meta-stoerr",
- "common-storage",
  "derive_more",
- "enumflags2",
- "hex",
  "num-derive",
  "num-traits",
  "once_cell",
@@ -1746,8 +1806,6 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "sha1",
- "sha2",
  "thiserror",
  "tonic",
  "tonic-build",
@@ -1763,6 +1821,7 @@ dependencies = [
  "metrics-exporter-prometheus",
  "once_cell",
  "parking_lot 0.12.1",
+ "procfs",
  "prometheus-parse",
  "serde",
  "tokio",
@@ -1779,7 +1838,10 @@ dependencies = [
  "common-io",
  "futures",
  "petgraph",
+ "serde",
+ "serde_json",
  "tokio",
+ "typetag",
 ]
 
 [[package]]
@@ -1809,7 +1871,7 @@ dependencies = [
  "common-expression",
  "common-formats",
  "common-io",
- "common-meta-types",
+ "common-meta-app",
  "common-pipeline-core",
  "common-settings",
  "crossbeam-channel",
@@ -1817,7 +1879,7 @@ dependencies = [
  "dashmap",
  "futures",
  "futures-util",
- "opendal",
+ "opendal 0.26.2",
  "parking_lot 0.12.1",
  "serde",
  "serde_json",
@@ -1845,12 +1907,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
- "common-datavalues",
  "common-expression",
  "common-meta-app",
- "common-meta-types",
  "common-protos",
- "common-storage",
  "convert_case 0.6.0",
  "enumflags2",
  "maplit",
@@ -1880,6 +1939,7 @@ dependencies = [
  "common-base",
  "common-config",
  "common-exception",
+ "common-meta-app",
  "common-meta-types",
  "common-users",
  "dashmap",
@@ -1904,7 +1964,7 @@ dependencies = [
  "http",
  "log",
  "moka",
- "opendal",
+ "opendal 0.26.2",
  "reqwest",
  "serde",
  "serde_json",
@@ -1927,6 +1987,7 @@ dependencies = [
  "bytes",
  "chrono",
  "chrono-tz",
+ "common-arrow",
  "common-ast",
  "common-base",
  "common-catalog",
@@ -1950,6 +2011,7 @@ dependencies = [
  "common-pipeline-transforms",
  "common-settings",
  "common-storage",
+ "common-storages-parquet",
  "common-storages-stage",
  "common-storages-view",
  "common-tracing",
@@ -1966,7 +2028,7 @@ dependencies = [
  "metrics",
  "naive-cityhash",
  "once_cell",
- "opendal",
+ "opendal 0.26.2",
  "opensrv-mysql",
  "ordered-float 3.4.0",
  "parking_lot 0.12.1",
@@ -1996,6 +2058,7 @@ name = "common-storage"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
  "backon",
  "bytes",
@@ -2003,12 +2066,16 @@ dependencies = [
  "common-auth",
  "common-base",
  "common-exception",
+ "common-expression",
+ "common-meta-app",
+ "common-meta-types",
  "futures",
  "globiter",
  "once_cell",
- "opendal",
+ "opendal 0.26.2",
  "parking_lot 0.12.1",
  "percent-encoding",
+ "regex",
  "serde",
 ]
 
@@ -2044,6 +2111,7 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-functions",
+ "common-io",
  "common-jsonb",
  "common-meta-app",
  "common-meta-types",
@@ -2057,10 +2125,12 @@ dependencies = [
  "futures-util",
  "itertools",
  "metrics",
- "opendal",
+ "opendal 0.26.2",
  "serde",
  "serde_json",
  "storages-common-blocks",
+ "storages-common-cache",
+ "storages-common-cache-manager",
  "storages-common-index",
  "storages-common-pruner",
  "storages-common-table-meta",
@@ -2076,7 +2146,6 @@ version = "0.1.0"
 dependencies = [
  "async-recursion",
  "async-trait",
- "backon",
  "chrono",
  "common-arrow",
  "common-base",
@@ -2092,9 +2161,11 @@ dependencies = [
  "common-storage",
  "databend-thrift",
  "futures",
- "opendal",
+ "opendal 0.26.2",
  "ordered-float 3.4.0",
  "serde",
+ "storages-common-cache",
+ "storages-common-cache-manager",
  "storages-common-index",
  "storages-common-table-meta",
  "tracing",
@@ -2116,7 +2187,7 @@ dependencies = [
  "futures",
  "iceberg-rs",
  "itertools",
- "opendal",
+ "opendal 0.24.6",
  "serde",
  "serde_json",
  "tracing",
@@ -2148,7 +2219,7 @@ dependencies = [
  "futures",
  "itertools",
  "once_cell",
- "opendal",
+ "opendal 0.26.2",
  "parking_lot 0.12.1",
  "serde",
  "serde_json",
@@ -2186,7 +2257,7 @@ dependencies = [
  "futures",
  "itertools",
  "once_cell",
- "opendal",
+ "opendal 0.26.2",
  "parking_lot 0.12.1",
  "serde",
  "serde_json",
@@ -2224,7 +2295,7 @@ dependencies = [
  "futures",
  "itertools",
  "once_cell",
- "opendal",
+ "opendal 0.26.2",
  "parking_lot 0.12.1",
  "serde",
  "serde_json",
@@ -2245,17 +2316,18 @@ dependencies = [
  "common-arrow",
  "common-base",
  "common-catalog",
- "common-config",
  "common-exception",
  "common-expression",
  "common-functions",
  "common-meta-app",
  "common-pipeline-core",
+ "common-pipeline-sources",
  "common-sql",
  "common-storage",
- "glob",
- "opendal",
+ "futures",
+ "opendal 0.26.2",
  "serde",
+ "storages-common-index",
  "storages-common-pruner",
  "storages-common-table-meta",
  "typetag",
@@ -2287,7 +2359,7 @@ dependencies = [
  "futures",
  "itertools",
  "once_cell",
- "opendal",
+ "opendal 0.26.2",
  "parking_lot 0.12.1",
  "serde",
  "serde_json",
@@ -2306,7 +2378,7 @@ dependencies = [
  "common-exception",
  "common-meta-app",
  "goldenfile",
- "opendal",
+ "opendal 0.26.2",
  "serde",
  "serde_json",
  "storages-common-table-meta",
@@ -2339,7 +2411,7 @@ dependencies = [
  "futures",
  "itertools",
  "once_cell",
- "opendal",
+ "opendal 0.26.2",
  "parking_lot 0.12.1",
  "regex",
  "serde",
@@ -2375,6 +2447,7 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
+ "common-sql",
  "common-storage",
  "common-storages-fuse",
  "common-storages-view",
@@ -2382,7 +2455,7 @@ dependencies = [
  "futures",
  "itertools",
  "once_cell",
- "opendal",
+ "opendal 0.26.2",
  "parking_lot 0.12.1",
  "serde",
  "serde_json",
@@ -2434,6 +2507,8 @@ dependencies = [
  "common-grpc",
  "common-management",
  "common-meta-api",
+ "common-meta-app",
+ "common-meta-kvapi",
  "common-meta-store",
  "common-meta-types",
  "jwt-simple",
@@ -2891,6 +2966,7 @@ dependencies = [
  "common-meta-app",
  "common-meta-client",
  "common-meta-embedded",
+ "common-meta-kvapi",
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-stoerr",
@@ -2932,12 +3008,14 @@ dependencies = [
  "common-http",
  "common-meta-api",
  "common-meta-client",
+ "common-meta-kvapi",
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-stoerr",
  "common-meta-types",
  "common-metrics",
  "common-tracing",
+ "derive_more",
  "env_logger 0.9.3",
  "futures",
  "itertools",
@@ -2970,8 +3048,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap 3.2.23",
- "common-meta-api",
  "common-meta-app",
+ "common-meta-kvapi",
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-types",
@@ -2982,7 +3060,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -3068,7 +3145,7 @@ dependencies = [
  "naive-cityhash",
  "num",
  "once_cell",
- "opendal",
+ "opendal 0.26.2",
  "opensrv-mysql",
  "p256",
  "parking_lot 0.12.1",
@@ -3086,6 +3163,8 @@ dependencies = [
  "serde_urlencoded",
  "state",
  "storages-common-blocks",
+ "storages-common-cache",
+ "storages-common-cache-manager",
  "storages-common-index",
  "storages-common-table-meta",
  "temp-env",
@@ -3505,6 +3584,9 @@ name = "ethnum"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0198b9d0078e0f30dedc7acbb21c974e838fc8fae3ee170128658a98cb2c1c04"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "event-listener"
@@ -3987,10 +4069,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "glob"
-version = "0.3.0"
+name = "git2"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
+checksum = "ccf7f68c2995f392c49fffb4f95ae2c873297830eb25c6bc4c114ce8f4562acc"
+dependencies = [
+ "bitflags",
+ "libc",
+ "libgit2-sys",
+ "log",
+ "url",
+]
+
+[[package]]
+name = "glob"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
 name = "globiter"
@@ -4128,12 +4223,14 @@ dependencies = [
 
 [[package]]
 name = "hdrs"
-version = "0.1.7"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "949814fc49979183bd43fcd899671f706f7246586738beb3f42fdafa528ec7f3"
+checksum = "70a8d6dab41a27fd3825810f6413f16f15733c84114504e41955516e4156676c"
 dependencies = [
+ "async-lock",
+ "blocking",
  "errno",
- "futures-io",
+ "futures",
  "hdfs-sys",
  "libc",
  "log",
@@ -4797,9 +4894,9 @@ checksum = "201de327520df007757c1f0adce6e827fe8562fbc28bfd9c15571c66ca1f5f79"
 
 [[package]]
 name = "libgit2-sys"
-version = "0.14.0+1.5.0"
+version = "0.14.2+1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47a00859c70c8a4f7218e6d1cc32875c4b55f6799445b842b0d8ed5e4c3d959b"
+checksum = "7f3d95f6b51075fe9810a7ae22c7095f12b98005ab364d8544797a825ce946a4"
 dependencies = [
  "cc",
  "libc",
@@ -5576,9 +5673,42 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.24.4"
+version = "0.24.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9ea6283b48c0365596bf784bf3785866f05c8c88e3289a0ef7bc165c5d27651"
+checksum = "3a657010a255640ce4b5e06b3bf275e3debe013208998cb22fa315eb40395919"
+dependencies = [
+ "anyhow",
+ "async-compat",
+ "async-trait",
+ "backon",
+ "base64 0.21.0",
+ "bincode 2.0.0-rc.2",
+ "bytes",
+ "flagset",
+ "futures",
+ "http",
+ "log",
+ "md-5",
+ "once_cell",
+ "parking_lot 0.12.1",
+ "percent-encoding",
+ "pin-project",
+ "quick-xml 0.27.1",
+ "reqsign 0.7.6",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "time 0.3.17",
+ "tokio",
+ "ureq",
+ "uuid 1.2.2",
+]
+
+[[package]]
+name = "opendal"
+version = "0.26.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c40ed33cc9fed187ce8293587416e0afd6ac9fcde17f2a20ad0dca14dd685ebe"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -5592,6 +5722,7 @@ dependencies = [
  "futures",
  "hdrs",
  "http",
+ "hyper",
  "log",
  "md-5",
  "metrics",
@@ -5603,13 +5734,14 @@ dependencies = [
  "prost",
  "quick-xml 0.27.1",
  "redis",
- "reqsign",
+ "reqsign 0.8.1",
  "reqwest",
  "serde",
  "serde_json",
  "time 0.3.17",
  "tokio",
  "tracing",
+ "trust-dns-resolver",
  "ureq",
  "uuid 1.2.2",
 ]
@@ -6390,6 +6522,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "procfs"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0941606b9934e2d98a3677759a971756eb821f75764d0e0d26946d08e74d9104"
+dependencies = [
+ "bitflags",
+ "byteorder",
+ "chrono",
+ "flate2",
+ "hex",
+ "lazy_static",
+ "libc",
+]
+
+[[package]]
 name = "prometheus-parse"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6777,13 +6924,42 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.7.5"
+version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64f8427141aacf5f9011c2f83ebc109e57764587d562f91e387ec1ffcc54a5a2"
+checksum = "642e28b7bf97b5112610ee78c7128f67d8e73fb17c88ce6f5f67dc9816957d52"
 dependencies = [
  "anyhow",
  "backon",
  "base64 0.20.0",
+ "bytes",
+ "dirs",
+ "form_urlencoded",
+ "hex",
+ "hmac",
+ "http",
+ "jsonwebtoken",
+ "log",
+ "once_cell",
+ "percent-encoding",
+ "quick-xml 0.27.1",
+ "rust-ini",
+ "serde",
+ "serde_json",
+ "sha1",
+ "sha2",
+ "time 0.3.17",
+ "ureq",
+]
+
+[[package]]
+name = "reqsign"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f446438814fde3785305a59a85a6d1b361ce2c9d29e58dd87c9103a242c40b6"
+dependencies = [
+ "anyhow",
+ "backon",
+ "base64 0.21.0",
  "bytes",
  "dirs",
  "form_urlencoded",
@@ -7463,9 +7639,11 @@ dependencies = [
  "common-base",
  "common-config",
  "common-exception",
+ "common-meta-app",
+ "common-meta-types",
  "common-storage",
  "once_cell",
- "opendal",
+ "opendal 0.26.2",
  "poem",
  "serde",
  "serde_json",
@@ -7739,10 +7917,23 @@ dependencies = [
  "common-cache",
  "common-exception",
  "metrics",
- "opendal",
+ "opendal 0.26.2",
  "parking_lot 0.12.1",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "storages-common-cache-manager"
+version = "0.1.0"
+dependencies = [
+ "common-arrow",
+ "common-base",
+ "common-config",
+ "common-exception",
+ "storages-common-cache",
+ "storages-common-index",
+ "storages-common-table-meta",
 ]
 
 [[package]]
@@ -7781,20 +7972,14 @@ dependencies = [
 name = "storages-common-table-meta"
 version = "0.1.0"
 dependencies = [
- "async-trait-fn",
  "chrono",
  "common-arrow",
  "common-base",
- "common-cache",
- "common-config",
  "common-datavalues",
  "common-exception",
  "common-expression",
  "enum-as-inner",
- "metrics",
  "once_cell",
- "opendal",
- "parking_lot 0.12.1",
  "serde",
 ]
 
@@ -7807,8 +7992,7 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 [[package]]
 name = "strawboat"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbad34588af0e413a53579cbc362700a5bb20d2fbcdc89cf738e5c099e86118a"
+source = "git+https://github.com/sundy-li/strawboat?rev=92a8e4f#92a8e4fcf499827145ac7f32315b2228552507e5"
 dependencies = [
  "arrow2",
  "bytemuck",
@@ -8169,9 +8353,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.23.1"
+version = "1.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38a54aca0c15d014013256222ba0ebed095673f89345dd79119d912eb561b7a8"
+checksum = "597a12a59981d9e3c38d216785b0c37399f6e415e8d0712047620f189371b0bb"
 dependencies = [
  "autocfg",
  "bytes",
@@ -8758,7 +8942,7 @@ dependencies = [
  "cfg-if",
  "enum-iterator",
  "getset",
- "git2",
+ "git2 0.15.0",
  "rustc_version",
  "rustversion",
  "sysinfo",

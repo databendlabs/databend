@@ -23,6 +23,9 @@ use std::sync::Arc;
 
 use thiserror::Error;
 
+use crate::span::pretty_print_error;
+use crate::Span;
+
 #[derive(Clone)]
 pub enum ErrorCodeBacktrace {
     Serialized(Arc<String>),
@@ -80,6 +83,7 @@ impl From<Arc<Backtrace>> for ErrorCodeBacktrace {
 pub struct ErrorCode {
     code: u16,
     display_text: String,
+    span: Span,
     // cause is only used to contain an `anyhow::Error`.
     // TODO: remove `cause` when we completely get rid of `anyhow::Error`.
     cause: Option<Box<dyn std::error::Error + Sync + Send>>,
@@ -101,21 +105,37 @@ impl ErrorCode {
     #[must_use]
     pub fn add_message(self, msg: impl AsRef<str>) -> Self {
         Self {
-            code: self.code(),
             display_text: format!("{}\n{}", msg.as_ref(), self.display_text),
-            cause: self.cause,
-            backtrace: self.backtrace,
+            ..self
         }
     }
 
     #[must_use]
     pub fn add_message_back(self, msg: impl AsRef<str>) -> Self {
         Self {
-            code: self.code(),
             display_text: format!("{}{}", self.display_text, msg.as_ref()),
-            cause: self.cause,
-            backtrace: self.backtrace,
+            ..self
         }
+    }
+
+    pub fn span(&self) -> Span {
+        self.span
+    }
+
+    /// Set sql span for this error.
+    ///
+    /// Used to pretty print the error when the error is related to a sql statement.
+    pub fn set_span(self, span: Span) -> Self {
+        Self { span, ..self }
+    }
+
+    /// Pretty display the error message onto sql statement if span is available.
+    pub fn display_with_sql(mut self, sql: &str) -> Self {
+        if let Some(span) = self.span.take() {
+            self.display_text =
+                pretty_print_error(sql, vec![(span, self.display_text.to_string())]);
+        }
+        self
     }
 
     /// Set backtrace info for this error.
@@ -189,6 +209,7 @@ impl ErrorCode {
         ErrorCode {
             code: 1001,
             display_text: error.to_string(),
+            span: None,
             cause: None,
             backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
         }
@@ -198,8 +219,19 @@ impl ErrorCode {
         ErrorCode {
             code: 1001,
             display_text: error,
+            span: None,
             cause: None,
             backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
+        }
+    }
+
+    pub fn from_string_no_backtrace(error: String) -> Self {
+        ErrorCode {
+            code: 1001,
+            display_text: error,
+            span: None,
+            cause: None,
+            backtrace: None,
         }
     }
 
@@ -212,6 +244,7 @@ impl ErrorCode {
         ErrorCode {
             code,
             display_text,
+            span: None,
             cause,
             backtrace,
         }

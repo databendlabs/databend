@@ -28,7 +28,7 @@ use crate::ast::CreateTableStmt;
 use crate::ast::CreateViewStmt;
 use crate::ast::TimeTravelPoint;
 
-pub(crate) fn pretty_create_table(stmt: CreateTableStmt) -> RcDoc {
+pub(crate) fn pretty_create_table(stmt: CreateTableStmt) -> RcDoc<'static> {
     RcDoc::text("CREATE")
         .append(if stmt.transient {
             RcDoc::space().append(RcDoc::text("TRANSIENT"))
@@ -103,7 +103,7 @@ pub(crate) fn pretty_create_table(stmt: CreateTableStmt) -> RcDoc {
         })
 }
 
-fn pretty_table_source(source: CreateTableSource) -> RcDoc {
+fn pretty_table_source(source: CreateTableSource) -> RcDoc<'static> {
     match source {
         CreateTableSource::Columns(columns) => RcDoc::space().append(parenthenized(
             interweave_comma(
@@ -134,7 +134,7 @@ fn pretty_table_source(source: CreateTableSource) -> RcDoc {
     }
 }
 
-pub(crate) fn pretty_alter_table(stmt: AlterTableStmt) -> RcDoc {
+pub(crate) fn pretty_alter_table(stmt: AlterTableStmt) -> RcDoc<'static> {
     RcDoc::text("ALTER TABLE")
         .append(if stmt.if_exists {
             RcDoc::space().append(RcDoc::text("IF EXISTS"))
@@ -149,11 +149,17 @@ pub(crate) fn pretty_alter_table(stmt: AlterTableStmt) -> RcDoc {
         .append(pretty_alter_table_action(stmt.action))
 }
 
-pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc {
+pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc<'static> {
     match action {
         AlterTableAction::RenameTable { new_table } => RcDoc::line()
             .append(RcDoc::text("RENAME TO "))
             .append(RcDoc::text(new_table.to_string())),
+        AlterTableAction::AddColumn { column } => RcDoc::line()
+            .append(RcDoc::text("ADD COLUMN "))
+            .append(RcDoc::text(column.to_string())),
+        AlterTableAction::DropColumn { column } => RcDoc::line()
+            .append(RcDoc::text("DROP COLUMN "))
+            .append(RcDoc::text(column.to_string())),
         AlterTableAction::AlterTableClusterKey { cluster_by } => RcDoc::line()
             .append(RcDoc::text("CLUSTER BY "))
             .append(parenthenized(
@@ -188,7 +194,7 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc {
     }
 }
 
-pub(crate) fn pretty_create_view(stmt: CreateViewStmt) -> RcDoc {
+pub(crate) fn pretty_create_view(stmt: CreateViewStmt) -> RcDoc<'static> {
     RcDoc::text("CREATE VIEW")
         .append(if stmt.if_not_exists {
             RcDoc::space().append(RcDoc::text("IF NOT EXISTS"))
@@ -218,7 +224,7 @@ pub(crate) fn pretty_create_view(stmt: CreateViewStmt) -> RcDoc {
         )
 }
 
-pub(crate) fn pretty_alter_view(stmt: AlterViewStmt) -> RcDoc {
+pub(crate) fn pretty_alter_view(stmt: AlterViewStmt) -> RcDoc<'static> {
     RcDoc::text("ALTER VIEW")
         .append(
             RcDoc::space()

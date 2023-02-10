@@ -24,21 +24,21 @@ use clap::Parser;
 use common_base::base::mask_string;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::AuthInfo;
-use common_meta_types::AuthType;
+use common_meta_app::principal::AuthInfo;
+use common_meta_app::principal::AuthType;
+use common_meta_app::storage::StorageAzblobConfig as InnerStorageAzblobConfig;
+use common_meta_app::storage::StorageFsConfig as InnerStorageFsConfig;
+use common_meta_app::storage::StorageGcsConfig as InnerStorageGcsConfig;
+use common_meta_app::storage::StorageHdfsConfig as InnerStorageHdfsConfig;
+use common_meta_app::storage::StorageMokaConfig as InnerStorageMokaConfig;
+use common_meta_app::storage::StorageObsConfig as InnerStorageObsConfig;
+use common_meta_app::storage::StorageOssConfig as InnerStorageOssConfig;
+use common_meta_app::storage::StorageParams;
+use common_meta_app::storage::StorageRedisConfig as InnerStorageRedisConfig;
+use common_meta_app::storage::StorageS3Config as InnerStorageS3Config;
 use common_meta_types::TenantQuota;
 use common_storage::CacheConfig as InnerCacheConfig;
-use common_storage::StorageAzblobConfig as InnerStorageAzblobConfig;
 use common_storage::StorageConfig as InnerStorageConfig;
-use common_storage::StorageFsConfig as InnerStorageFsConfig;
-use common_storage::StorageGcsConfig as InnerStorageGcsConfig;
-use common_storage::StorageHdfsConfig as InnerStorageHdfsConfig;
-use common_storage::StorageMokaConfig as InnerStorageMokaConfig;
-use common_storage::StorageObsConfig as InnerStorageObsConfig;
-use common_storage::StorageOssConfig as InnerStorageOssConfig;
-use common_storage::StorageParams;
-use common_storage::StorageRedisConfig as InnerStorageRedisConfig;
-use common_storage::StorageS3Config as InnerStorageS3Config;
 use common_tracing::Config as InnerLogConfig;
 use common_tracing::FileConfig as InnerFileLogConfig;
 use common_tracing::StderrConfig as InnerStderrLogConfig;
@@ -995,6 +995,10 @@ pub struct OssStorageConfig {
     #[serde(rename = "endpoint_url")]
     pub oss_endpoint_url: String,
 
+    #[clap(long = "storage-oss-presign-endpoint-url", default_value_t)]
+    #[serde(rename = "presign_endpoint_url")]
+    pub oss_presign_endpoint_url: String,
+
     #[clap(long = "storage-oss-root", default_value_t)]
     #[serde(rename = "root")]
     pub oss_root: String,
@@ -1028,6 +1032,7 @@ impl From<InnerStorageOssConfig> for OssStorageConfig {
             oss_access_key_secret: inner.access_key_secret,
             oss_bucket: inner.bucket,
             oss_endpoint_url: inner.endpoint_url,
+            oss_presign_endpoint_url: inner.presign_endpoint_url,
             oss_root: inner.root,
         }
     }
@@ -1039,6 +1044,7 @@ impl TryInto<InnerStorageOssConfig> for OssStorageConfig {
     fn try_into(self) -> Result<InnerStorageOssConfig, Self::Error> {
         Ok(InnerStorageOssConfig {
             endpoint_url: self.oss_endpoint_url,
+            presign_endpoint_url: self.oss_presign_endpoint_url,
             bucket: self.oss_bucket,
             access_key_id: self.oss_access_key_id,
             access_key_secret: self.oss_access_key_secret,
@@ -1287,9 +1293,13 @@ pub struct QueryConfig {
     #[clap(long, default_value = "3000")]
     pub table_cache_bloom_index_meta_count: u64,
 
-    /// Max bytes of cached bloom index, default value is 1GB
-    #[clap(long, default_value = "1073741824")]
-    pub table_cache_bloom_index_data_bytes: u64,
+    /// Max number of cached bloom index filters, default value is 1024 * 1024 items.
+    /// One bloom index filter per column of data block being indexed will be generated if necessary.
+    ///
+    /// For example, a table of 1024 columns, with 800 data blocks, a query that triggers a full
+    /// table filter on 2 columns, might populate 2 * 800 bloom index filter cache items (at most)
+    #[clap(long, default_value = "1048576")]
+    pub table_cache_bloom_index_filter_count: u64,
 
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
     #[clap(long)]
@@ -1375,7 +1385,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             table_cache_statistic_count: self.table_cache_statistic_count,
             table_cache_segment_count: self.table_cache_segment_count,
             table_cache_bloom_index_meta_count: self.table_cache_bloom_index_meta_count,
-            table_cache_bloom_index_data_bytes: self.table_cache_bloom_index_data_bytes,
+            table_cache_bloom_index_filter_count: self.table_cache_bloom_index_filter_count,
             management_mode: self.management_mode,
             jwt_key_file: self.jwt_key_file,
             async_insert_max_data_size: self.async_insert_max_data_size,
@@ -1440,7 +1450,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_cache_statistic_count: inner.table_cache_statistic_count,
             table_cache_segment_count: inner.table_cache_segment_count,
             table_cache_bloom_index_meta_count: inner.table_cache_bloom_index_meta_count,
-            table_cache_bloom_index_data_bytes: inner.table_cache_bloom_index_data_bytes,
+            table_cache_bloom_index_filter_count: inner.table_cache_bloom_index_filter_count,
             management_mode: inner.management_mode,
             jwt_key_file: inner.jwt_key_file,
             async_insert_max_data_size: inner.async_insert_max_data_size,
@@ -1655,7 +1665,10 @@ pub struct MetaConfig {
     #[clap(long = "meta-rpc-tls-meta-server-root-ca-cert", default_value_t)]
     pub rpc_tls_meta_server_root_ca_cert: String,
 
-    #[clap(long = "meta-rpc-tls-meta-service-domain-name", default_value_t)]
+    #[clap(
+        long = "meta-rpc-tls-meta-service-domain-name",
+        default_value = "localhost"
+    )]
     pub rpc_tls_meta_service_domain_name: String,
 }
 

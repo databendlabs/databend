@@ -18,9 +18,9 @@ use common_ast::ast::CreateStageStmt;
 use common_ast::ast::UriLocation;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::FileFormatOptions;
-use common_meta_types::OnErrorMode;
-use common_meta_types::UserStageInfo;
+use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::OnErrorMode;
+use common_meta_app::principal::UserStageInfo;
 
 use super::super::copy::parse_stage_location;
 use crate::binder::location::parse_uri_location;
@@ -30,7 +30,7 @@ use crate::plans::ListPlan;
 use crate::plans::Plan;
 use crate::plans::RemoveStagePlan;
 
-impl<'a> Binder {
+impl Binder {
     pub(in crate::planner::binder) async fn bind_list_stage(
         &mut self,
         location: &str,

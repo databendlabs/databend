@@ -24,7 +24,7 @@ use common_ast::VisitorMut;
 pub struct DistinctToGroupBy {}
 
 impl VisitorMut for DistinctToGroupBy {
-    fn visit_select_stmt(&mut self, stmt: &mut SelectStmt<'_>) {
+    fn visit_select_stmt(&mut self, stmt: &mut SelectStmt) {
         let SelectStmt {
             select_list,
             from,
@@ -51,16 +51,15 @@ impl VisitorMut for DistinctToGroupBy {
                     || name.name.to_ascii_lowercase() == "count_distinct")
                     && args.iter().all(|arg| !matches!(arg, Expr::Literal { .. }))
                 {
-                    let tmp_token = span[0].clone();
                     let subquery = Query {
-                        span: &[],
+                        span: None,
                         with: None,
                         body: SetExpr::Select(Box::new(SelectStmt {
-                            span: &[],
+                            span: None,
                             distinct: false,
                             select_list: vec![],
                             from: from.clone(),
-                            selection: None,
+                            selection: selection.clone(),
                             group_by: args.clone(),
                             having: None,
                         })),
@@ -71,16 +70,16 @@ impl VisitorMut for DistinctToGroupBy {
                     };
 
                     let new_stmt = SelectStmt {
-                        span: &[],
+                        span: None,
                         distinct: false,
                         select_list: vec![common_ast::ast::SelectTarget::AliasedExpr {
                             expr: Box::new(Expr::FunctionCall {
-                                span: &[],
+                                span: None,
                                 distinct: false,
                                 name: Identifier {
                                     name: "count".to_string(),
                                     quote: None,
-                                    span: tmp_token.clone(),
+                                    span: *span,
                                 },
                                 args: vec![],
                                 params: vec![],
@@ -88,11 +87,11 @@ impl VisitorMut for DistinctToGroupBy {
                             alias: alias.clone(),
                         }],
                         from: vec![TableReference::Subquery {
-                            span: &[],
+                            span: None,
                             subquery: Box::new(subquery),
                             alias: None,
                         }],
-                        selection: selection.clone(),
+                        selection: None,
                         group_by: vec![],
                         having: having.clone(),
                     };

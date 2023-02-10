@@ -14,6 +14,7 @@
 
 use std::io::Write;
 
+use common_ast::display_parser_error;
 use common_ast::parser::expr::*;
 use common_ast::parser::parse_sql;
 use common_ast::parser::query::*;
@@ -22,7 +23,6 @@ use common_ast::parser::tokenize_sql;
 use common_ast::rule;
 use common_ast::Backtrace;
 use common_ast::Dialect;
-use common_ast::DisplayError;
 use common_ast::Input;
 use common_exception::Result;
 use goldenfile::Mint;
@@ -46,7 +46,7 @@ macro_rules! run_parser {
                 writeln!($file, "\n").unwrap();
             }
             Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
-                let report = err.display_error(()).trim_end().to_string();
+                let report = display_parser_error(err, $source).trim_end().to_string();
                 writeln!($file, "---------- Input ----------").unwrap();
                 writeln!($file, "{}", $source).unwrap();
                 writeln!($file, "---------- Output ---------").unwrap();
@@ -76,6 +76,7 @@ fn test_statement() {
         r#"explain pipeline select a from b;"#,
         r#"describe a;"#,
         r#"describe a format TabSeparatedWithNamesAndTypes;"#,
+        r#"create table a (c decimal(38, 0))"#,
         r#"create table if not exists a.b (c integer not null default 1, b varchar);"#,
         r#"create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;"#,
         r#"create table if not exists a.b (c tuple(m integer, n string), d tuple(integer, string));"#,
@@ -101,6 +102,8 @@ fn test_statement() {
         r#"create view v as select number % 3 as a from numbers(1000);"#,
         r#"alter view v as select number % 3 as a from numbers(1000);"#,
         r#"drop view v;"#,
+        r#"create view v1(c1) as select number % 3 as a from numbers(1000);"#,
+        r#"alter view v1(c2) as select number % 3 as a from numbers(1000);"#,
         r#"rename table d.t to e.s;"#,
         r#"truncate table test;"#,
         r#"truncate table test_db.test;"#,
@@ -139,6 +142,7 @@ fn test_statement() {
         r#"select * from a where a.a = some (select b.a from b);"#,
         r#"select * from a where a.a > (select b.a from b);"#,
         r#"select 1 from numbers(1) where ((1 = 1) or 1)"#,
+        r#"select * from read_parquet('p1', 'p2', 'p3', prune_page => true, refresh_meta_cache => true);"#,
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into table t format json;"#,
         r#"insert into table t select * from t2;"#,
@@ -157,6 +161,8 @@ fn test_statement() {
         r#"ALTER TABLE t CLUSTER BY(c1);"#,
         r#"ALTER TABLE t DROP CLUSTER KEY;"#,
         r#"ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0;"#,
+        r#"ALTER TABLE t ADD COLUMN a float default 101 COMMENT 'hello';"#,
+        r#"ALTER TABLE t DROP COLUMN b;"#,
         r#"ALTER DATABASE IF EXISTS ctl.c RENAME TO a;"#,
         r#"ALTER DATABASE c RENAME TO a;"#,
         r#"ALTER DATABASE ctl.c RENAME TO a;"#,
@@ -190,7 +196,7 @@ fn test_statement() {
         r#"COPY INTO mytable
                 FROM @~/mybucket/data.csv
                 FILE_FORMAT = (
-                    type = 'CSV'
+                    type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
@@ -199,7 +205,7 @@ fn test_statement() {
         r#"COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
                 FILE_FORMAT = (
-                    type = 'CSV'
+                    type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
@@ -211,7 +217,7 @@ fn test_statement() {
                     ENDPOINT_URL = 'http://127.0.0.1:9900'
                 )
                 FILE_FORMAT = (
-                    type = 'CSV'
+                    type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
@@ -224,7 +230,7 @@ fn test_statement() {
                 )
                 size_limit=10
                 FILE_FORMAT = (
-                    type = 'CSV'
+                    type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
@@ -236,7 +242,7 @@ fn test_statement() {
         r#"COPY INTO mytable
                 FROM @my_stage
                 FILE_FORMAT = (
-                    type = 'CSV'
+                    type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
@@ -245,7 +251,7 @@ fn test_statement() {
         r#"COPY INTO 's3://mybucket/data.csv'
                 FROM mytable
                 FILE_FORMAT = (
-                    type = 'CSV'
+                    type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
@@ -254,7 +260,7 @@ fn test_statement() {
         r#"COPY INTO @my_stage
                 FROM mytable
                 FILE_FORMAT = (
-                    type = 'CSV'
+                    type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
@@ -267,7 +273,7 @@ fn test_statement() {
                     AWS_SECRET_KEY = 'secret_key'
                 )
                 FILE_FORMAT = (
-                    type = 'CSV'
+                    type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
@@ -276,7 +282,7 @@ fn test_statement() {
         r#"COPY INTO mytable
                 FROM @external_stage/path/to/file.csv
                 FILE_FORMAT = (
-                    type = 'CSV'
+                    type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
@@ -285,7 +291,7 @@ fn test_statement() {
         r#"COPY INTO mytable
                 FROM @external_stage/path/to/dir/
                 FILE_FORMAT = (
-                    type = 'CSV'
+                    type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
@@ -294,7 +300,7 @@ fn test_statement() {
         r#"COPY INTO mytable
                 FROM @external_stage/path/to/file.csv
                 FILE_FORMAT = (
-                    type = 'CSV'
+                    type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
@@ -303,7 +309,7 @@ fn test_statement() {
         r#"COPY INTO mytable
                 FROM 'fs:///path/to/data.csv'
                 FILE_FORMAT = (
-                    type = 'CSV'
+                    type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
@@ -327,6 +333,8 @@ fn test_statement() {
         r#"PRESIGN @my_stage/path/to/file"#,
         r#"PRESIGN DOWNLOAD @my_stage/path/to/file"#,
         r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200"#,
+        r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200 CONTENT_TYPE='application/octet-stream'"#,
+        r#"PRESIGN UPLOAD @my_stage/path/to/file CONTENT_TYPE='application/octet-stream' EXPIRE=7200"#,
         r#"CREATE SHARE t COMMENT='share comment';"#,
         r#"CREATE SHARE IF NOT EXISTS t;"#,
         r#"DROP SHARE a;"#,
@@ -379,6 +387,7 @@ fn test_statement_error() {
         r#"create table a (c float(10))"#,
         r#"create table a (c varch)"#,
         r#"create table a (c tuple())"#,
+        r#"create table a (c decimal)"#,
         r#"drop table if a.b"#,
         r#"truncate table a.b.c.d"#,
         r#"truncate a"#,

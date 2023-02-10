@@ -12,6 +12,7 @@ test = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
+common-arrow = { path = "../../common/arrow" }
 common-ast = { path = "../ast" }
 common-base = { path = "../../common/base" }
 common-catalog = { path = "../catalog" }
@@ -37,6 +38,7 @@ common-pipeline-transforms = { path = "../pipeline/transforms" }
 
 common-settings = { path = "../settings" }
 common-storage = { path = "../../common/storage" }
+common-storages-parquet = { path = "../storages/parquet" }
 common-storages-stage = { path = "../storages/stage" }
 common-storages-view = { path = "../storages/view" }
 common-tracing = { path = "../../common/tracing" }
@@ -53,7 +55,7 @@ async-recursion = "1.0.0"
 async-stream = "0.3.3"
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 backon = "0.2"
-bumpalo = "3.11.0"
+bumpalo = { workspace = true }
 byteorder = "1.4.3"
 bytes = "1.2.1"
 chrono = { workspace = true }

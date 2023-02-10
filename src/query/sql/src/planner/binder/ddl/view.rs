@@ -24,16 +24,17 @@ use crate::plans::CreateViewPlan;
 use crate::plans::DropViewPlan;
 use crate::plans::Plan;
 
-impl<'a> Binder {
+impl Binder {
     pub(in crate::planner::binder) async fn bind_create_view(
         &mut self,
-        stmt: &CreateViewStmt<'a>,
+        stmt: &CreateViewStmt,
     ) -> Result<Plan> {
         let CreateViewStmt {
             if_not_exists,
             catalog,
             database,
             view,
+            columns,
             query,
         } = stmt;
 
@@ -47,6 +48,10 @@ impl<'a> Binder {
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
         let viewname = normalize_identifier(view, &self.name_resolution_ctx).name;
+        let column_names = columns
+            .iter()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .collect::<Vec<_>>();
         let subquery = format!("{}", query);
 
         let plan = CreateViewPlan {
@@ -55,6 +60,7 @@ impl<'a> Binder {
             catalog,
             database,
             viewname,
+            column_names,
             subquery,
         };
         Ok(Plan::CreateView(Box::new(plan)))
@@ -62,12 +68,13 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_alter_view(
         &mut self,
-        stmt: &AlterViewStmt<'a>,
+        stmt: &AlterViewStmt,
     ) -> Result<Plan> {
         let AlterViewStmt {
             catalog,
             database,
             view,
+            columns,
             query,
         } = stmt;
 
@@ -81,6 +88,10 @@ impl<'a> Binder {
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
         let viewname = normalize_identifier(view, &self.name_resolution_ctx).name;
+        let column_names = columns
+            .iter()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .collect::<Vec<_>>();
         let subquery = format!("{}", query);
 
         let plan = AlterViewPlan {
@@ -88,6 +99,7 @@ impl<'a> Binder {
             catalog,
             database,
             viewname,
+            column_names,
             subquery,
         };
         Ok(Plan::AlterView(Box::new(plan)))
@@ -95,7 +107,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_drop_view(
         &mut self,
-        stmt: &DropViewStmt<'a>,
+        stmt: &DropViewStmt,
     ) -> Result<Plan> {
         let DropViewStmt {
             if_exists,

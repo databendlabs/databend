@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::default::Default;
-use std::path::Path;
 use std::sync::Arc;
 
 use chrono::TimeZone;
@@ -31,9 +30,8 @@ use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
-use common_ast::DisplayError;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
-use common_catalog::plan::StageTableInfo;
+use common_catalog::plan::ParquetReadOptions;
 use common_catalog::table::ColumnId;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::NavigationPoint;
@@ -42,22 +40,19 @@ use common_catalog::table_function::TableFunction;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::type_check::check_literal;
 use common_expression::types::DataType;
 use common_expression::ConstantFolder;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
-use common_meta_types::FileFormatOptions;
-use common_meta_types::StageFileCompression;
-use common_meta_types::StageFileFormatType;
-use common_meta_types::UserStageInfo;
-use common_pipeline_sources::processors::sources::input_formats::InputContext;
-use common_storages_stage::get_first_file;
-use common_storages_stage::StageTable;
+use common_meta_app::principal::StageFileFormatType;
+use common_meta_app::principal::UserStageInfo;
+use common_storage::StageFilesInfo;
+use common_storages_parquet::ParquetTable;
 use common_storages_view::view_table::QUERY;
 
 use crate::binder::copy::parse_stage_location_v2;
 use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
+use crate::binder::table_args::bind_table_args;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
 use crate::binder::CteInfo;
@@ -65,19 +60,17 @@ use crate::binder::Visibility;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
-use crate::plans::ConstantExpr;
-use crate::plans::Scalar;
 use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::BindContext;
 use crate::ColumnEntry;
 use crate::IndexType;
 
-impl<'a> Binder {
+impl Binder {
     pub(super) async fn bind_one_table(
         &mut self,
         bind_context: &BindContext,
-        stmt: &SelectStmt<'a>,
+        stmt: &SelectStmt,
     ) -> Result<(SExpr, BindContext)> {
         for select_target in &stmt.select_list {
             if let SelectTarget::QualifiedName {
@@ -86,9 +79,10 @@ impl<'a> Binder {
             {
                 for indirect in names {
                     if indirect == &Indirection::Star {
-                        return Err(ErrorCode::SemanticError(stmt.span.display_error(
+                        return Err(ErrorCode::SemanticError(
                             "SELECT * with no tables specified is not valid".to_string(),
-                        )));
+                        )
+                        .set_span(stmt.span));
                     }
                 }
             }
@@ -113,7 +107,7 @@ impl<'a> Binder {
     pub(super) async fn bind_table_reference(
         &mut self,
         bind_context: &BindContext,
-        table_ref: &TableReference<'a>,
+        table_ref: &TableReference,
     ) -> Result<(SExpr, BindContext)> {
         match table_ref {
             TableReference::Table {
@@ -221,6 +215,7 @@ impl<'a> Binder {
                 span: _,
                 name,
                 params,
+                named_params,
                 alias,
             } => {
                 let mut scalar_binder = ScalarBinder::new(
@@ -230,25 +225,7 @@ impl<'a> Binder {
                     self.metadata.clone(),
                     &[],
                 );
-                let mut args = Vec::with_capacity(params.len());
-                for arg in params.iter() {
-                    args.push(scalar_binder.bind(arg).await?);
-                }
-
-                let args = args
-                    .into_iter()
-                    .map(|(scalar, _)| match scalar {
-                        Scalar::ConstantExpr(ConstantExpr { value, .. }) => {
-                            Ok(check_literal(&value).0)
-                        }
-                        _ => Err(ErrorCode::Unimplemented(format!(
-                            "Unsupported table argument type: {:?}",
-                            scalar
-                        ))),
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-
-                let table_args = Some(args);
+                let table_args = bind_table_args(&mut scalar_binder, params, named_params).await?;
 
                 // Table functions always reside is default catalog
                 let table_meta: Arc<dyn TableFunction> = self
@@ -297,16 +274,10 @@ impl<'a> Binder {
             TableReference::Stage {
                 span: _,
                 location,
-                files,
+                options,
                 alias,
             } => {
-                let table_alias_name = if let Some(table_alias) = alias {
-                    Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
-                } else {
-                    None
-                };
-
-                let (mut user_stage_info, path) = match location.clone() {
+                let (user_stage_info, path) = match location.clone() {
                     FileLocation::Stage(location) => {
                         parse_stage_location_v2(&self.ctx, &location.name, &location.path).await?
                     }
@@ -324,65 +295,48 @@ impl<'a> Binder {
                     }
                 };
 
-                let op = StageTable::get_op(&user_stage_info)?;
+                if matches!(
+                    user_stage_info.file_format_options.format,
+                    StageFileFormatType::Parquet
+                ) {
+                    let files_info = StageFilesInfo {
+                        path,
+                        pattern: options.pattern.clone(),
+                        files: options.files.clone(),
+                    };
+                    let read_options = ParquetReadOptions::default();
 
-                let first_file = if files.is_empty() {
-                    let file = get_first_file(&op, &path).await?;
-                    match file {
-                        None => {
-                            return Err(ErrorCode::BadArguments(format!(
-                                "no file in {}",
-                                location
-                            )));
-                        }
-                        Some(f) => f.path().to_string(),
+                    let table =
+                        ParquetTable::create(user_stage_info.clone(), files_info, read_options)
+                            .await?;
+
+                    let table_alias_name = if let Some(table_alias) = alias {
+                        Some(
+                            normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name,
+                        )
+                    } else {
+                        None
+                    };
+
+                    let table_index = self.metadata.write().add_table(
+                        CATALOG_DEFAULT.to_string(),
+                        "system".to_string(),
+                        table.clone(),
+                        table_alias_name,
+                    );
+
+                    let (s_expr, mut bind_context) = self
+                        .bind_base_table(bind_context, "system", table_index)
+                        .await?;
+                    if let Some(alias) = alias {
+                        bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                     }
+                    Ok((s_expr, bind_context))
                 } else {
-                    Path::new(&path)
-                        .join(&files[0])
-                        .to_string_lossy()
-                        .to_string()
-                };
-
-                let format_type = StageFileFormatType::Parquet;
-                let input_format = InputContext::get_input_format(&format_type)?;
-                let schema = input_format.infer_schema(&first_file, &op).await?;
-                user_stage_info.file_format_options = FileFormatOptions {
-                    format: format_type,
-                    record_delimiter: "".to_string(),
-                    field_delimiter: "".to_string(),
-                    nan_display: "".to_string(),
-                    skip_header: 0,
-                    escape: "".to_string(),
-                    compression: StageFileCompression::default(),
-                    row_tag: "".to_string(),
-                    quote: "".to_string(),
-                };
-                let stage_table_info = StageTableInfo {
-                    schema,
-                    user_stage_info,
-                    path: path.to_string(),
-                    files: vec![],
-                    pattern: Default::default(),
-                    files_to_copy: None,
-                };
-
-                let stage_table = StageTable::try_create(stage_table_info)?;
-
-                let database = "default".to_string();
-                let table_index = self.metadata.write().add_table(
-                    database.clone(),
-                    "default".to_string(),
-                    stage_table,
-                    table_alias_name,
-                );
-                let (s_expr, mut bind_context) = self
-                    .bind_base_table(bind_context, database.as_str(), table_index)
-                    .await?;
-                if let Some(alias) = alias {
-                    bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    Err(ErrorCode::Unimplemented(
+                        "only support parquet format for 'select from stage' for now.",
+                    ))
                 }
-                Ok((s_expr, bind_context))
             }
         }
     }
@@ -437,6 +391,7 @@ impl<'a> Binder {
         let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
         let columns = self.metadata.read().columns_by_table_index(table_index);
         let table = self.metadata.read().table(table_index).clone();
+        let statistics_provider = table.table().column_statistics_provider().await?;
 
         let mut col_stats: HashMap<IndexType, Option<ColumnStatistics>> = HashMap::new();
         for column in columns.iter() {
@@ -464,11 +419,8 @@ impl<'a> Binder {
                     bind_context.add_column_binding(column_binding);
                     if path_indices.is_none() {
                         if let Some(col_id) = *leaf_index {
-                            let col_stat = table
-                                .table()
-                                .column_statistics_provider()
-                                .await?
-                                .column_statistics(col_id as ColumnId);
+                            let col_stat =
+                                statistics_provider.column_statistics(col_id as ColumnId);
                             col_stats.insert(*column_index, col_stat);
                         }
                     }
@@ -529,7 +481,7 @@ impl<'a> Binder {
     pub(crate) async fn resolve_data_travel_point(
         &self,
         bind_context: &BindContext,
-        travel_point: &TimeTravelPoint<'a>,
+        travel_point: &TimeTravelPoint,
     ) -> Result<NavigationPoint> {
         match travel_point {
             TimeTravelPoint::Snapshot(s) => Ok(NavigationPoint::SnapshotID(s.to_owned())),
@@ -546,7 +498,7 @@ impl<'a> Binder {
 
                 let (new_expr, _) = ConstantFolder::fold(
                     &scalar_expr,
-                    self.ctx.try_get_function_context()?,
+                    self.ctx.get_function_context()?,
                     &BUILTIN_FUNCTIONS,
                 );
 

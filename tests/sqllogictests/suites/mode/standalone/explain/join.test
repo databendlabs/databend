@@ -28,17 +28,19 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.default.t
 │   ├── read rows: 1
-│   ├── read bytes: 31
+│   ├── read bytes: 39
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t1
     ├── read rows: 10
-    ├── read bytes: 68
+    ├── read bytes: 65
     ├── partitions total: 1
     ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 10.00
 
@@ -48,23 +50,25 @@ explain select t.number from t, t1 where t.number = t1.number and t.number = t1.
 HashJoin
 ├── join type: INNER
 ├── build keys: [t.number (#0), t.number (#0)]
-├── probe keys: [t1.number (#1), plus(t1.number (#1), 1_u8)]
+├── probe keys: [t1.number (#1), plus(t1.number (#1), 1)]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.default.t
 │   ├── read rows: 1
-│   ├── read bytes: 31
+│   ├── read bytes: 39
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t1
     ├── read rows: 10
-    ├── read bytes: 68
+    ├── read bytes: 65
     ├── partitions total: 1
     ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 10.00
 
@@ -78,7 +82,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 1.11
 ├── Filter(Build)
-│   ├── filters: [gt(t.number (#0), CAST(1_u8 AS UInt64))]
+│   ├── filters: [gt(t.number (#0), to_uint64(1))]
 │   ├── estimated rows: 0.33
 │   └── TableScan
 │       ├── table: default.default.t
@@ -86,25 +90,27 @@ HashJoin
 │       ├── read bytes: 0
 │       ├── partitions total: 1
 │       ├── partitions scanned: 0
-│       ├── push downs: [filters: [gt(t.number (#0), 1_u64)], limit: NONE]
+│       ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
+│       ├── push downs: [filters: [gt(t.number (#0), 1)], limit: NONE]
 │       └── estimated rows: 1.00
 └── Filter(Probe)
-    ├── filters: [lt(CAST(1_u8 AS UInt64), t1.number (#1))]
+    ├── filters: [lt(to_uint64(1), t1.number (#1))]
     ├── estimated rows: 3.33
     └── TableScan
         ├── table: default.default.t1
         ├── read rows: 10
-        ├── read bytes: 68
+        ├── read bytes: 65
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── push downs: [filters: [lt(1_u64, t1.number (#1))], limit: NONE]
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── push downs: [filters: [lt(1, t1.number (#1))], limit: NONE]
         └── estimated rows: 10.00
 
 query T
 explain select t.number from t, t1 where t.number + t1.number = 1
 ----
 Filter
-├── filters: [eq(plus(t.number (#0), t1.number (#1)), CAST(1_u8 AS UInt64))]
+├── filters: [eq(plus(t.number (#0), t1.number (#1)), to_uint64(1))]
 ├── estimated rows: 3.33
 └── HashJoin
     ├── join type: CROSS
@@ -115,17 +121,19 @@ Filter
     ├── TableScan(Build)
     │   ├── table: default.default.t
     │   ├── read rows: 1
-    │   ├── read bytes: 31
+    │   ├── read bytes: 39
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     │   ├── push downs: [filters: [], limit: NONE]
     │   └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.default.t1
         ├── read rows: 10
-        ├── read bytes: 68
+        ├── read bytes: 65
         ├── partitions total: 1
         ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 10.00
 
@@ -134,44 +142,47 @@ query T
 explain select t.number from t, t1, t2 where t1.number = t2.number and t.number = 1
 ----
 HashJoin
-├── join type: INNER
-├── build keys: [t1.number (#1)]
-├── probe keys: [t2.number (#2)]
+├── join type: CROSS
+├── build keys: []
+├── probe keys: []
 ├── filters: []
-├── estimated rows: 0.01
-├── HashJoin(Build)
-│   ├── join type: CROSS
-│   ├── build keys: []
-│   ├── probe keys: []
-│   ├── filters: []
-│   ├── estimated rows: 3.33
-│   ├── Filter(Build)
-│   │   ├── filters: [eq(t.number (#0), CAST(1_u8 AS UInt64))]
-│   │   ├── estimated rows: 0.33
-│   │   └── TableScan
-│   │       ├── table: default.default.t
-│   │       ├── read rows: 0
-│   │       ├── read bytes: 0
-│   │       ├── partitions total: 1
-│   │       ├── partitions scanned: 0
-│   │       ├── push downs: [filters: [eq(t.number (#0), 1_u64)], limit: NONE]
-│   │       └── estimated rows: 1.00
-│   └── TableScan(Probe)
-│       ├── table: default.default.t1
-│       ├── read rows: 10
-│       ├── read bytes: 68
+├── estimated rows: 0.00
+├── Filter(Build)
+│   ├── filters: [eq(t.number (#0), to_uint64(1))]
+│   ├── estimated rows: 0.33
+│   └── TableScan
+│       ├── table: default.default.t
+│       ├── read rows: 0
+│       ├── read bytes: 0
 │       ├── partitions total: 1
-│       ├── partitions scanned: 1
-│       ├── push downs: [filters: [], limit: NONE]
-│       └── estimated rows: 10.00
-└── TableScan(Probe)
-    ├── table: default.default.t2
-    ├── read rows: 100
-    ├── read bytes: 431
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 100.00
+│       ├── partitions scanned: 0
+│       ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
+│       ├── push downs: [filters: [eq(t.number (#0), 1)], limit: NONE]
+│       └── estimated rows: 1.00
+└── HashJoin(Probe)
+    ├── join type: INNER
+    ├── build keys: [t1.number (#1)]
+    ├── probe keys: [t2.number (#2)]
+    ├── filters: []
+    ├── estimated rows: 0.01
+    ├── TableScan(Build)
+    │   ├── table: default.default.t1
+    │   ├── read rows: 10
+    │   ├── read bytes: 65
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    │   ├── push downs: [filters: [], limit: NONE]
+    │   └── estimated rows: 10.00
+    └── TableScan(Probe)
+        ├── table: default.default.t2
+        ├── read rows: 100
+        ├── read bytes: 172
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 100.00
 
 # check outer join is converted to inner join
 
@@ -197,7 +208,7 @@ query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 42
 ----
 Filter
-├── filters: [gt(b.x (#1), CAST(42_u8 AS Int32 NULL))]
+├── filters: [gt(b.x (#1), CAST(42 AS Int32 NULL))]
 ├── estimated rows: 2.67
 └── HashJoin
     ├── join type: LEFT OUTER
@@ -208,17 +219,19 @@ Filter
     ├── TableScan(Build)
     │   ├── table: default.default.twocolumn
     │   ├── read rows: 4
-    │   ├── read bytes: 79
+    │   ├── read bytes: 94
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     │   ├── push downs: [filters: [], limit: NONE]
     │   └── estimated rows: 4.00
     └── TableScan(Probe)
         ├── table: default.default.onecolumn
         ├── read rows: 4
-        ├── read bytes: 37
+        ├── read bytes: 45
         ├── partitions total: 1
         ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 4.00
 
@@ -226,7 +239,7 @@ query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 44 or b.x < 43
 ----
 Filter
-├── filters: [or(gt(b.x (#1), CAST(44_u8 AS Int32 NULL)), lt(b.x (#1), CAST(43_u8 AS Int32 NULL)))]
+├── filters: [or(gt(b.x (#1), CAST(44 AS Int32 NULL)), lt(b.x (#1), CAST(43 AS Int32 NULL)))]
 ├── estimated rows: 2.22
 └── HashJoin
     ├── join type: LEFT OUTER
@@ -237,17 +250,19 @@ Filter
     ├── TableScan(Build)
     │   ├── table: default.default.twocolumn
     │   ├── read rows: 4
-    │   ├── read bytes: 79
+    │   ├── read bytes: 94
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     │   ├── push downs: [filters: [], limit: NONE]
     │   └── estimated rows: 4.00
     └── TableScan(Probe)
         ├── table: default.default.onecolumn
         ├── read rows: 4
-        ├── read bytes: 37
+        ├── read bytes: 45
         ├── partitions total: 1
         ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 4.00
 
@@ -255,7 +270,7 @@ query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 42 and b.x < 45
 ----
 Filter
-├── filters: [gt(b.x (#1), CAST(42_u8 AS Int32 NULL)), lt(b.x (#1), CAST(45_u8 AS Int32 NULL))]
+├── filters: [gt(b.x (#1), CAST(42 AS Int32 NULL)), lt(b.x (#1), CAST(45 AS Int32 NULL))]
 ├── estimated rows: 1.78
 └── HashJoin
     ├── join type: LEFT OUTER
@@ -266,17 +281,19 @@ Filter
     ├── TableScan(Build)
     │   ├── table: default.default.twocolumn
     │   ├── read rows: 4
-    │   ├── read bytes: 79
+    │   ├── read bytes: 94
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     │   ├── push downs: [filters: [], limit: NONE]
     │   └── estimated rows: 4.00
     └── TableScan(Probe)
         ├── table: default.default.onecolumn
         ├── read rows: 4
-        ├── read bytes: 37
+        ├── read bytes: 45
         ├── partitions total: 1
         ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 4.00
 
@@ -286,7 +303,7 @@ query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 44 or a.x < 43
 ----
 Filter
-├── filters: [or(gt(b.x (#1), CAST(44_u8 AS Int32 NULL)), lt(a.x (#0), CAST(43_u8 AS Int32 NULL)))]
+├── filters: [or(gt(b.x (#1), CAST(44 AS Int32 NULL)), lt(a.x (#0), CAST(43 AS Int32 NULL)))]
 ├── estimated rows: 3.11
 └── HashJoin
     ├── join type: LEFT OUTER
@@ -297,17 +314,19 @@ Filter
     ├── TableScan(Build)
     │   ├── table: default.default.twocolumn
     │   ├── read rows: 4
-    │   ├── read bytes: 79
+    │   ├── read bytes: 94
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     │   ├── push downs: [filters: [], limit: NONE]
     │   └── estimated rows: 4.00
     └── TableScan(Probe)
         ├── table: default.default.onecolumn
         ├── read rows: 4
-        ├── read bytes: 37
+        ├── read bytes: 45
         ├── partitions total: 1
         ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 4.00
 
@@ -321,22 +340,24 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 1.78
 ├── Filter(Build)
-│   ├── filters: [gt(b.x (#1), CAST(42_u8 AS Int32 NULL)), lt(b.x (#1), CAST(45_u8 AS Int32 NULL))]
+│   ├── filters: [gt(b.x (#1), CAST(42 AS Int32 NULL)), lt(b.x (#1), CAST(45 AS Int32 NULL))]
 │   ├── estimated rows: 1.78
 │   └── TableScan
 │       ├── table: default.default.twocolumn
 │       ├── read rows: 4
-│       ├── read bytes: 79
+│       ├── read bytes: 94
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       ├── push downs: [filters: [gt(b.x (#1), 42_i32), lt(b.x (#1), 45_i32)], limit: NONE]
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│       ├── push downs: [filters: [gt(b.x (#1), 42), lt(b.x (#1), 45)], limit: NONE]
 │       └── estimated rows: 4.00
 └── TableScan(Probe)
     ├── table: default.default.onecolumn
     ├── read rows: 4
-    ├── read bytes: 37
+    ├── read bytes: 45
     ├── partitions total: 1
     ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 4.00
 

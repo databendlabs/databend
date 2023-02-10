@@ -14,7 +14,7 @@ query T
 explain select t1.a from t1 where a > 0
 ----
 Filter
-├── filters: [gt(t1.a (#0), CAST(0_u8 AS UInt64))]
+├── filters: [gt(t1.a (#0), to_uint64(0))]
 ├── estimated rows: 0.33
 └── TableScan
     ├── table: default.default.t1
@@ -22,15 +22,16 @@ Filter
     ├── read bytes: 0
     ├── partitions total: 1
     ├── partitions scanned: 0
-    ├── push downs: [filters: [gt(t1.a (#0), 0_u64)], limit: NONE]
-    ├── output columns: [0]
+    ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
+    ├── push downs: [filters: [gt(t1.a (#0), 0)], limit: NONE]
+    ├── output columns: [a]
     └── estimated rows: 1.00
 
 query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1)
 ----
 Filter
-├── filters: [or(gt(t1.a (#0), CAST(3_u8 AS UInt64)), and(gt(t2.a (#2), CAST(5_u8 AS UInt64)), gt(t1.a (#0), CAST(1_u8 AS UInt64))))]
+├── filters: [or(gt(t1.a (#0), to_uint64(3)), and(gt(t2.a (#2), to_uint64(5)), gt(t1.a (#0), to_uint64(1))))]
 ├── estimated rows: 0.19
 └── HashJoin
     ├── join type: INNER
@@ -39,7 +40,7 @@ Filter
     ├── filters: []
     ├── estimated rows: 0.56
     ├── Filter(Build)
-    │   ├── filters: [or(gt(t1.a (#0), CAST(3_u8 AS UInt64)), gt(t1.a (#0), CAST(1_u8 AS UInt64)))]
+    │   ├── filters: [or(gt(t1.a (#0), to_uint64(3)), gt(t1.a (#0), to_uint64(1)))]
     │   ├── estimated rows: 0.56
     │   └── TableScan
     │       ├── table: default.default.t1
@@ -47,14 +48,16 @@ Filter
     │       ├── read bytes: 0
     │       ├── partitions total: 1
     │       ├── partitions scanned: 0
-    │       ├── push downs: [filters: [or(gt(t1.a (#0), 3_u64), gt(t1.a (#0), 1_u64))], limit: NONE]
+    │       ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
+    │       ├── push downs: [filters: [or(gt(t1.a (#0), 3), gt(t1.a (#0), 1))], limit: NONE]
     │       └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.default.t2
         ├── read rows: 5
-        ├── read bytes: 94
+        ├── read bytes: 108
         ├── partitions total: 1
         ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 5.00
 
@@ -70,17 +73,19 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.default.t1
 │   ├── read rows: 1
-│   ├── read bytes: 62
+│   ├── read bytes: 78
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t2
     ├── read rows: 5
-    ├── read bytes: 94
+    ├── read bytes: 108
     ├── partitions total: 1
     ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 5.00
 
@@ -184,7 +189,7 @@ WHERE
 
 skipif clickhouse
 query T
-explain syntax copy into t1 from 's3://mybucket/data.csv' file_format = ( type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10
+explain syntax copy into t1 from 's3://mybucket/data.csv' file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10
 ----
 COPY
 INTO t1
@@ -200,7 +205,7 @@ PURGE = false
 
 skipif clickhouse
 query T
-explain syntax copy into 's3://mybucket/data.csv' from t1 file_format = ( type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10
+explain syntax copy into 's3://mybucket/data.csv' from t1 file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10
 ----
 COPY
 INTO 's3://mybucket/data.csv'
@@ -414,7 +419,7 @@ Delete (children 2)
 
 skipif clickhouse
 query T
-explain ast copy into t1 from 's3://mybucket/data.csv' file_format = ( type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10
+explain ast copy into t1 from 's3://mybucket/data.csv' file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10
 ----
 Copy (children 5)
 ├── CopyUnit (children 1)
@@ -520,27 +525,29 @@ UnionAll
 ├── TableScan
 │   ├── table: default.default.t1
 │   ├── read rows: 1
-│   ├── read bytes: 31
+│   ├── read bytes: 39
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
 │   ├── push downs: [filters: [], limit: NONE]
-│   ├── output columns: [0]
+│   ├── output columns: [a]
 │   └── estimated rows: 1.00
 └── TableScan
     ├── table: default.default.t2
     ├── read rows: 5
-    ├── read bytes: 47
+    ├── read bytes: 54
     ├── partitions total: 1
     ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [], limit: NONE]
-    ├── output columns: [0]
+    ├── output columns: [a]
     └── estimated rows: 5.00
 
 query T
 explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4)
 ----
 Filter
-├── filters: [or(and(gt(t1.a (#0), CAST(1_u8 AS UInt64)), gt(t2.a (#2), CAST(2_u8 AS UInt64))), and(lt(t1.b (#1), CAST(3_u8 AS UInt64)), lt(t2.b (#3), CAST(4_u8 AS UInt64))))]
+├── filters: [or(and(gt(t1.a (#0), to_uint64(1)), gt(t2.a (#2), to_uint64(2))), and(lt(t1.b (#1), to_uint64(3)), lt(t2.b (#3), to_uint64(4))))]
 ├── estimated rows: 0.71
 └── HashJoin
     ├── join type: CROSS
@@ -549,33 +556,35 @@ Filter
     ├── filters: []
     ├── estimated rows: 2.26
     ├── Filter(Build)
-    │   ├── filters: [or(gt(t1.a (#0), CAST(1_u8 AS UInt64)), lt(t1.b (#1), CAST(3_u8 AS UInt64)))]
+    │   ├── filters: [or(gt(t1.a (#0), to_uint64(1)), lt(t1.b (#1), to_uint64(3)))]
     │   ├── estimated rows: 0.56
     │   └── TableScan
     │       ├── table: default.default.t1
     │       ├── read rows: 1
-    │       ├── read bytes: 62
+    │       ├── read bytes: 78
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
-    │       ├── push downs: [filters: [or(gt(t1.a (#0), 1_u64), lt(t1.b (#1), 3_u64))], limit: NONE]
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    │       ├── push downs: [filters: [or(gt(t1.a (#0), 1), lt(t1.b (#1), 3))], limit: NONE]
     │       └── estimated rows: 1.00
     └── Filter(Probe)
-        ├── filters: [or(gt(t2.a (#2), CAST(2_u8 AS UInt64)), lt(t2.b (#3), CAST(4_u8 AS UInt64)))]
+        ├── filters: [or(gt(t2.a (#2), to_uint64(2)), lt(t2.b (#3), to_uint64(4)))]
         ├── estimated rows: 4.06
         └── TableScan
             ├── table: default.default.t2
             ├── read rows: 5
-            ├── read bytes: 94
+            ├── read bytes: 108
             ├── partitions total: 1
             ├── partitions scanned: 1
-            ├── push downs: [filters: [or(gt(t2.a (#2), 2_u64), lt(t2.b (#3), 4_u64))], limit: NONE]
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+            ├── push downs: [filters: [or(gt(t2.a (#2), 2), lt(t2.b (#3), 4))], limit: NONE]
             └── estimated rows: 5.00
 
 query T
 explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4) or t1.a = 2
 ----
 Filter
-├── filters: [or(or(and(gt(t1.a (#0), CAST(1_u8 AS UInt64)), gt(t2.a (#2), CAST(2_u8 AS UInt64))), and(lt(t1.b (#1), CAST(3_u8 AS UInt64)), lt(t2.b (#3), CAST(4_u8 AS UInt64)))), eq(t1.a (#0), CAST(2_u8 AS UInt64)))]
+├── filters: [or(or(and(gt(t1.a (#0), to_uint64(1)), gt(t2.a (#2), to_uint64(2))), and(lt(t1.b (#1), to_uint64(3)), lt(t2.b (#3), to_uint64(4)))), eq(t1.a (#0), to_uint64(2)))]
 ├── estimated rows: 1.91
 └── HashJoin
     ├── join type: CROSS
@@ -584,22 +593,24 @@ Filter
     ├── filters: []
     ├── estimated rows: 3.52
     ├── Filter(Build)
-    │   ├── filters: [or(gt(t1.a (#0), CAST(1_u8 AS UInt64)), or(lt(t1.b (#1), CAST(3_u8 AS UInt64)), eq(t1.a (#0), CAST(2_u8 AS UInt64))))]
+    │   ├── filters: [or(gt(t1.a (#0), to_uint64(1)), or(lt(t1.b (#1), to_uint64(3)), eq(t1.a (#0), to_uint64(2))))]
     │   ├── estimated rows: 0.70
     │   └── TableScan
     │       ├── table: default.default.t1
     │       ├── read rows: 1
-    │       ├── read bytes: 62
+    │       ├── read bytes: 78
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
-    │       ├── push downs: [filters: [or(gt(t1.a (#0), 1_u64), or(lt(t1.b (#1), 3_u64), eq(t1.a (#0), 2_u64)))], limit: NONE]
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
+    │       ├── push downs: [filters: [or(gt(t1.a (#0), 1), or(lt(t1.b (#1), 3), eq(t1.a (#0), 2)))], limit: NONE]
     │       └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.default.t2
         ├── read rows: 5
-        ├── read bytes: 94
+        ├── read bytes: 108
         ├── partitions total: 1
         ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 5.00
 
@@ -613,7 +624,7 @@ query T
 explain select * from t1,t2, t3 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4) or t3.a = 2
 ----
 Filter
-├── filters: [or(or(and(gt(t1.a (#0), CAST(1_u8 AS UInt64)), gt(t2.a (#2), CAST(2_u8 AS UInt64))), and(lt(t1.b (#1), CAST(3_u8 AS UInt64)), lt(t2.b (#3), CAST(4_u8 AS UInt64)))), eq(t3.a (#4), CAST(2_u8 AS UInt64)))]
+├── filters: [or(or(and(gt(t1.a (#0), to_uint64(1)), gt(t2.a (#2), to_uint64(2))), and(lt(t1.b (#1), to_uint64(3)), lt(t2.b (#3), to_uint64(4)))), eq(t3.a (#4), to_uint64(2)))]
 ├── estimated rows: 19.44
 └── HashJoin
     ├── join type: CROSS
@@ -621,36 +632,39 @@ Filter
     ├── probe keys: []
     ├── filters: []
     ├── estimated rows: 50.00
-    ├── HashJoin(Build)
-    │   ├── join type: CROSS
-    │   ├── build keys: []
-    │   ├── probe keys: []
-    │   ├── filters: []
-    │   ├── estimated rows: 5.00
-    │   ├── TableScan(Build)
-    │   │   ├── table: default.default.t1
-    │   │   ├── read rows: 1
-    │   │   ├── read bytes: 62
-    │   │   ├── partitions total: 1
-    │   │   ├── partitions scanned: 1
-    │   │   ├── push downs: [filters: [], limit: NONE]
-    │   │   └── estimated rows: 1.00
-    │   └── TableScan(Probe)
-    │       ├── table: default.default.t2
-    │       ├── read rows: 5
-    │       ├── read bytes: 94
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       ├── push downs: [filters: [], limit: NONE]
-    │       └── estimated rows: 5.00
-    └── TableScan(Probe)
-        ├── table: default.default.t3
-        ├── read rows: 10
-        ├── read bytes: 136
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 10.00
+    ├── TableScan(Build)
+    │   ├── table: default.default.t2
+    │   ├── read rows: 5
+    │   ├── read bytes: 108
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    │   ├── push downs: [filters: [], limit: NONE]
+    │   └── estimated rows: 5.00
+    └── HashJoin(Probe)
+        ├── join type: CROSS
+        ├── build keys: []
+        ├── probe keys: []
+        ├── filters: []
+        ├── estimated rows: 10.00
+        ├── TableScan(Build)
+        │   ├── table: default.default.t1
+        │   ├── read rows: 1
+        │   ├── read bytes: 78
+        │   ├── partitions total: 1
+        │   ├── partitions scanned: 1
+        │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        │   ├── push downs: [filters: [], limit: NONE]
+        │   └── estimated rows: 1.00
+        └── TableScan(Probe)
+            ├── table: default.default.t3
+            ├── read rows: 10
+            ├── read bytes: 130
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 10.00
 
 query T
 explain select * from t1,t2, t3 where ((t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4)) and t3.a > 1
@@ -662,7 +676,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 5.49
 ├── Filter(Build)
-│   ├── filters: [or(and(gt(t1.a (#0), CAST(1_u8 AS UInt64)), gt(t2.a (#2), CAST(2_u8 AS UInt64))), and(lt(t1.b (#1), CAST(3_u8 AS UInt64)), lt(t2.b (#3), CAST(4_u8 AS UInt64))))]
+│   ├── filters: [or(and(gt(t1.a (#0), to_uint64(1)), gt(t2.a (#2), to_uint64(2))), and(lt(t1.b (#1), to_uint64(3)), lt(t2.b (#3), to_uint64(4))))]
 │   ├── estimated rows: 0.71
 │   └── HashJoin
 │       ├── join type: CROSS
@@ -671,73 +685,85 @@ HashJoin
 │       ├── filters: []
 │       ├── estimated rows: 2.26
 │       ├── Filter(Build)
-│       │   ├── filters: [or(gt(t1.a (#0), CAST(1_u8 AS UInt64)), lt(t1.b (#1), CAST(3_u8 AS UInt64)))]
+│       │   ├── filters: [or(gt(t1.a (#0), to_uint64(1)), lt(t1.b (#1), to_uint64(3)))]
 │       │   ├── estimated rows: 0.56
 │       │   └── TableScan
 │       │       ├── table: default.default.t1
 │       │       ├── read rows: 1
-│       │       ├── read bytes: 62
+│       │       ├── read bytes: 78
 │       │       ├── partitions total: 1
 │       │       ├── partitions scanned: 1
-│       │       ├── push downs: [filters: [or(gt(t1.a (#0), 1_u64), lt(t1.b (#1), 3_u64))], limit: NONE]
+│       │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│       │       ├── push downs: [filters: [or(gt(t1.a (#0), 1), lt(t1.b (#1), 3))], limit: NONE]
 │       │       └── estimated rows: 1.00
 │       └── Filter(Probe)
-│           ├── filters: [or(gt(t2.a (#2), CAST(2_u8 AS UInt64)), lt(t2.b (#3), CAST(4_u8 AS UInt64)))]
+│           ├── filters: [or(gt(t2.a (#2), to_uint64(2)), lt(t2.b (#3), to_uint64(4)))]
 │           ├── estimated rows: 4.06
 │           └── TableScan
 │               ├── table: default.default.t2
 │               ├── read rows: 5
-│               ├── read bytes: 94
+│               ├── read bytes: 108
 │               ├── partitions total: 1
 │               ├── partitions scanned: 1
-│               ├── push downs: [filters: [or(gt(t2.a (#2), 2_u64), lt(t2.b (#3), 4_u64))], limit: NONE]
+│               ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│               ├── push downs: [filters: [or(gt(t2.a (#2), 2), lt(t2.b (#3), 4))], limit: NONE]
 │               └── estimated rows: 5.00
 └── Filter(Probe)
-    ├── filters: [gt(t3.a (#4), CAST(1_u8 AS UInt64))]
+    ├── filters: [gt(t3.a (#4), to_uint64(1))]
     ├── estimated rows: 7.78
     └── TableScan
         ├── table: default.default.t3
         ├── read rows: 10
-        ├── read bytes: 136
+        ├── read bytes: 130
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── push downs: [filters: [gt(t3.a (#4), 1_u64)], limit: NONE]
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── push downs: [filters: [gt(t3.a (#4), 1)], limit: NONE]
         └── estimated rows: 10.00
 
 query T
-explain select * from t1,t2 where ((t1.a > 1 or t1.b < 2) and t2.a > 2) or (t1.b < 3 and t2.b < 4)
+explain select * from t1,t2 where ((t1.a > 1 or t1.b < 2) and t2.a > 2) or (t1.b < 3 and t2.b < 4) order by 1 desc limit 3
 ----
-Filter
-├── filters: [or(and(or(gt(t1.a (#0), CAST(1_u8 AS UInt64)), lt(t1.b (#1), CAST(2_u8 AS UInt64))), gt(t2.a (#2), CAST(2_u8 AS UInt64))), and(lt(t1.b (#1), CAST(3_u8 AS UInt64)), lt(t2.b (#3), CAST(4_u8 AS UInt64))))]
+Limit
+├── limit: 3
+├── offset: 0
 ├── estimated rows: 1.01
-└── HashJoin
-    ├── join type: CROSS
-    ├── build keys: []
-    ├── probe keys: []
-    ├── filters: []
-    ├── estimated rows: 2.86
-    ├── Filter(Build)
-    │   ├── filters: [or(or(gt(t1.a (#0), CAST(1_u8 AS UInt64)), lt(t1.b (#1), CAST(2_u8 AS UInt64))), lt(t1.b (#1), CAST(3_u8 AS UInt64)))]
-    │   ├── estimated rows: 0.70
-    │   └── TableScan
-    │       ├── table: default.default.t1
-    │       ├── read rows: 1
-    │       ├── read bytes: 62
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       ├── push downs: [filters: [or(or(gt(t1.a (#0), 1_u64), lt(t1.b (#1), 2_u64)), lt(t1.b (#1), 3_u64))], limit: NONE]
-    │       └── estimated rows: 1.00
-    └── Filter(Probe)
-        ├── filters: [or(gt(t2.a (#2), CAST(2_u8 AS UInt64)), lt(t2.b (#3), CAST(4_u8 AS UInt64)))]
-        ├── estimated rows: 4.06
-        └── TableScan
-            ├── table: default.default.t2
-            ├── read rows: 5
-            ├── read bytes: 94
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── push downs: [filters: [or(gt(t2.a (#2), 2_u64), lt(t2.b (#3), 4_u64))], limit: NONE]
-            └── estimated rows: 5.00
+└── Sort
+    ├── sort keys: [a DESC NULLS LAST]
+    ├── estimated rows: 1.01
+    └── Filter
+        ├── filters: [or(and(or(gt(t1.a (#0), to_uint64(1)), lt(t1.b (#1), to_uint64(2))), gt(t2.a (#2), to_uint64(2))), and(lt(t1.b (#1), to_uint64(3)), lt(t2.b (#3), to_uint64(4))))]
+        ├── estimated rows: 1.01
+        └── HashJoin
+            ├── join type: CROSS
+            ├── build keys: []
+            ├── probe keys: []
+            ├── filters: []
+            ├── estimated rows: 2.86
+            ├── Filter(Build)
+            │   ├── filters: [or(or(gt(t1.a (#0), to_uint64(1)), lt(t1.b (#1), to_uint64(2))), lt(t1.b (#1), to_uint64(3)))]
+            │   ├── estimated rows: 0.70
+            │   └── TableScan
+            │       ├── table: default.default.t1
+            │       ├── read rows: 1
+            │       ├── read bytes: 78
+            │       ├── partitions total: 1
+            │       ├── partitions scanned: 1
+            │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+            │       ├── push downs: [filters: [or(or(gt(t1.a (#0), 1), lt(t1.b (#1), 2)), lt(t1.b (#1), 3))], limit: NONE]
+            │       └── estimated rows: 1.00
+            └── Filter(Probe)
+                ├── filters: [or(gt(t2.a (#2), to_uint64(2)), lt(t2.b (#3), to_uint64(4)))]
+                ├── estimated rows: 4.06
+                └── TableScan
+                    ├── table: default.default.t2
+                    ├── read rows: 5
+                    ├── read bytes: 108
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+                    ├── push downs: [filters: [or(gt(t2.a (#2), 2), lt(t2.b (#3), 4))], limit: NONE]
+                    └── estimated rows: 5.00
 
 query T
 explain select * from t1,t2 where (t1.a > 1 or t1.b < 2) and (t1.a > 1 or t1.b < 2)
@@ -749,22 +775,24 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 2.78
 ├── Filter(Build)
-│   ├── filters: [or(gt(t1.a (#0), CAST(1_u8 AS UInt64)), lt(t1.b (#1), CAST(2_u8 AS UInt64)))]
+│   ├── filters: [or(gt(t1.a (#0), to_uint64(1)), lt(t1.b (#1), to_uint64(2)))]
 │   ├── estimated rows: 0.56
 │   └── TableScan
 │       ├── table: default.default.t1
 │       ├── read rows: 1
-│       ├── read bytes: 62
+│       ├── read bytes: 78
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       ├── push downs: [filters: [or(gt(t1.a (#0), 1_u64), lt(t1.b (#1), 2_u64))], limit: NONE]
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+│       ├── push downs: [filters: [or(gt(t1.a (#0), 1), lt(t1.b (#1), 2))], limit: NONE]
 │       └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t2
     ├── read rows: 5
-    ├── read bytes: 94
+    ├── read bytes: 108
     ├── partitions total: 1
     ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 5.00
 
@@ -793,11 +821,12 @@ EvalScalar
                 └── TableScan
                     ├── table: default.default.t1
                     ├── read rows: 1
-                    ├── read bytes: 31
+                    ├── read bytes: 39
                     ├── partitions total: 1
                     ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
                     ├── push downs: [filters: [], limit: NONE]
-                    ├── output columns: [0]
+                    ├── output columns: [a]
                     └── estimated rows: 1.00
 
 query T
@@ -825,11 +854,12 @@ EvalScalar
                 └── TableScan
                     ├── table: default.default.t1
                     ├── read rows: 1
-                    ├── read bytes: 31
+                    ├── read bytes: 39
                     ├── partitions total: 1
                     ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
                     ├── push downs: [filters: [], limit: NONE]
-                    ├── output columns: [0]
+                    ├── output columns: [a]
                     └── estimated rows: 1.00
 
 statement ok
@@ -837,3 +867,40 @@ drop table t1
 
 statement ok
 drop table t2
+
+query T
+explain syntax select * from read_parquet('p1', 'p2', 'p3');
+----
+SELECT *
+FROM
+    read_parquet('p1', 'p2', 'p3')
+
+query T
+explain syntax select * from read_parquet(prune_page=>true, refresh_meta_cache=>true);
+----
+SELECT *
+FROM
+    read_parquet(prune_page=>TRUE, refresh_meta_cache=>TRUE)
+
+query T
+explain syntax select * from read_parquet('p1', 'p2', 'p3', prune_page=>true, refresh_meta_cache=>true);
+----
+SELECT *
+FROM
+    read_parquet('p1', 'p2', 'p3', prune_page=>TRUE, refresh_meta_cache=>TRUE)
+
+query T
+explain ast select * from read_parquet('p1', 'p2', 'p3', prune_page=>true, refresh_meta_cache=>true);
+----
+Query (children 1)
+└── QueryBody (children 1)
+    └── SelectQuery (children 2)
+        ├── SelectList (children 1)
+        │   └── Target *
+        └── TableList (children 1)
+            └── TableFunction read_parquet (children 5)
+                ├── Literal String("p1")
+                ├── Literal String("p2")
+                ├── Literal String("p3")
+                ├── prune_page=>Literal Boolean(true)
+                └── refresh_meta_cache=>Literal Boolean(true)

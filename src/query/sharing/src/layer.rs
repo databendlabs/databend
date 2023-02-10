@@ -23,9 +23,7 @@ use opendal::layers::LoggingLayer;
 use opendal::layers::MetricsLayer;
 use opendal::layers::RetryLayer;
 use opendal::layers::TracingLayer;
-use opendal::raw::apply_wrapper;
 use opendal::raw::new_request_build_error;
-use opendal::raw::output;
 use opendal::raw::parse_content_length;
 use opendal::raw::parse_error_response;
 use opendal::raw::parse_etag;
@@ -36,6 +34,7 @@ use opendal::raw::AccessorMetadata;
 use opendal::raw::AsyncBody;
 use opendal::raw::ErrorResponse;
 use opendal::raw::HttpClient;
+use opendal::raw::IncomingAsyncBody;
 use opendal::raw::Operation;
 use opendal::raw::PresignedRequest;
 use opendal::raw::RpRead;
@@ -59,7 +58,7 @@ pub fn create_share_table_operator(
     share_tenant_id: &str,
     share_name: &str,
     table_name: &str,
-) -> Operator {
+) -> Result<Operator> {
     let op = match share_endpoint_address {
         Some(share_endpoint_address) => {
             let signer = SharedSigner::new(
@@ -68,24 +67,24 @@ pub fn create_share_table_operator(
                     share_endpoint_address, share_tenant_id, share_name, table_name
                 ),
                 share_endpoint_token,
+                HttpClient::new()?,
             );
-            Operator::new(apply_wrapper(SharedAccessor {
-                signer,
-                client: HttpClient::new(),
-            }))
+            let client = HttpClient::new()?;
+            Operator::new(SharedAccessor { signer, client })
+                // Add retry
+                .layer(RetryLayer::new(ExponentialBackoff::default().with_jitter()))
+                // Add metrics
+                .layer(MetricsLayer)
+                // Add logging
+                .layer(LoggingLayer::default())
+                // Add tracing
+                .layer(TracingLayer)
+                .finish()
         }
-        None => Operator::new(DummySharedAccessor {}),
+        None => Operator::new(DummySharedAccessor {}).finish(),
     };
 
-    op
-        // Add retry
-        .layer(RetryLayer::new(ExponentialBackoff::default().with_jitter()))
-        // Add metrics
-        .layer(MetricsLayer)
-        // Add logging
-        .layer(LoggingLayer::default())
-        // Add tracing
-        .layer(TracingLayer)
+    Ok(op)
 }
 
 #[derive(Debug)]
@@ -96,6 +95,9 @@ struct SharedAccessor {
 
 #[async_trait]
 impl Accessor for SharedAccessor {
+    type Reader = IncomingAsyncBody;
+    type BlockingReader = ();
+
     fn metadata(&self) -> AccessorMetadata {
         let mut meta = AccessorMetadata::default();
         meta.set_scheme(Scheme::Custom("shared"))
@@ -103,7 +105,7 @@ impl Accessor for SharedAccessor {
         meta
     }
 
-    async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, output::Reader)> {
+    async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::Reader)> {
         let req: PresignedRequest =
             self.signer
                 .fetch(path, Operation::Read)
@@ -127,7 +129,7 @@ impl Accessor for SharedAccessor {
             let content_length = parse_content_length(resp.headers())
                 .unwrap()
                 .expect("content_length must be valid");
-            Ok((RpRead::new(content_length), resp.into_body().reader()))
+            Ok((RpRead::new(content_length), resp.into_body()))
         } else {
             let er = parse_error_response(resp).await?;
             let err = parse_error(er);
@@ -213,6 +215,9 @@ struct DummySharedAccessor {}
 
 #[async_trait]
 impl Accessor for DummySharedAccessor {
+    type Reader = ();
+    type BlockingReader = ();
+
     fn metadata(&self) -> AccessorMetadata {
         let mut meta = AccessorMetadata::default();
         meta.set_scheme(Scheme::Custom("shared"));

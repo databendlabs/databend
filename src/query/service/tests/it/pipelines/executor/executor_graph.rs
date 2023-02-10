@@ -20,13 +20,14 @@ use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::tokio::sync::mpsc::Sender;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_pipeline_sources::processors::sources::SyncReceiverSource;
+use common_pipeline_core::pipe::Pipe;
+use common_pipeline_core::pipe::PipeItem;
+use common_pipeline_sinks::SyncSenderSink;
+use common_pipeline_sources::SyncReceiverSource;
 use databend_query::pipelines::executor::RunningGraph;
 use databend_query::pipelines::processors::port::InputPort;
 use databend_query::pipelines::processors::port::OutputPort;
-use databend_query::pipelines::processors::SyncSenderSink;
 use databend_query::pipelines::processors::TransformDummy;
-use databend_query::pipelines::Pipe;
 use databend_query::pipelines::Pipeline;
 use databend_query::sessions::QueryContext;
 
@@ -203,59 +204,51 @@ fn create_source_pipe(
     size: usize,
 ) -> Result<(Vec<Sender<Result<DataBlock>>>, Pipe)> {
     let mut txs = Vec::with_capacity(size);
-    let mut outputs = Vec::with_capacity(size);
-    let mut processors = Vec::with_capacity(size);
+    let mut items = Vec::with_capacity(size);
 
     for _index in 0..size {
         let output = OutputPort::create();
         let (tx, rx) = channel(1);
         txs.push(tx);
-        outputs.push(output.clone());
-        processors.push(SyncReceiverSource::create(ctx.clone(), rx, output)?);
+        items.push(PipeItem::create(
+            SyncReceiverSource::create(ctx.clone(), rx, output.clone())?,
+            vec![],
+            vec![output],
+        ));
     }
-    Ok((txs, Pipe::SimplePipe {
-        processors,
-        inputs_port: vec![],
-        outputs_port: outputs,
-    }))
+    Ok((txs, Pipe::create(0, size, items)))
 }
 
 fn create_transform_pipe(size: usize) -> Result<Pipe> {
-    let mut inputs = Vec::with_capacity(size);
-    let mut outputs = Vec::with_capacity(size);
-    let mut processors = Vec::with_capacity(size);
+    let mut items = Vec::with_capacity(size);
 
     for _index in 0..size {
         let input = InputPort::create();
         let output = OutputPort::create();
 
-        inputs.push(input.clone());
-        outputs.push(output.clone());
-        processors.push(TransformDummy::create(input, output));
+        items.push(PipeItem::create(
+            TransformDummy::create(input.clone(), output.clone()),
+            vec![input],
+            vec![output],
+        ));
     }
 
-    Ok(Pipe::SimplePipe {
-        processors,
-        inputs_port: inputs,
-        outputs_port: outputs,
-    })
+    Ok(Pipe::create(size, size, items))
 }
 
 fn create_sink_pipe(size: usize) -> Result<(Vec<Receiver<Result<DataBlock>>>, Pipe)> {
     let mut rxs = Vec::with_capacity(size);
-    let mut inputs = Vec::with_capacity(size);
-    let mut processors = Vec::with_capacity(size);
+    let mut items = Vec::with_capacity(size);
     for _index in 0..size {
         let input = InputPort::create();
         let (tx, rx) = channel(1);
         rxs.push(rx);
-        inputs.push(input.clone());
-        processors.push(SyncSenderSink::create(tx, input));
+        items.push(PipeItem::create(
+            SyncSenderSink::create(tx, input.clone()),
+            vec![input],
+            vec![],
+        ));
     }
 
-    Ok((rxs, Pipe::SimplePipe {
-        processors,
-        inputs_port: inputs,
-        outputs_port: vec![],
-    }))
+    Ok((rxs, Pipe::create(size, 0, items)))
 }

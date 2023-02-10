@@ -15,10 +15,9 @@
 use std::hash::Hash;
 
 use common_ast::ast::TableAlias;
-use common_ast::parser::token::Token;
-use common_ast::DisplayError;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::Span;
 use common_expression::types::DataType;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
@@ -28,7 +27,7 @@ use dashmap::DashMap;
 use super::AggregateInfo;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
-use crate::plans::Scalar;
+use crate::plans::ScalarExpr;
 use crate::IndexType;
 use crate::NameResolutionContext;
 
@@ -77,7 +76,7 @@ impl Hash for ColumnBinding {
 #[derive(Debug, Clone)]
 pub enum NameResolutionResult {
     Column(ColumnBinding),
-    Alias { alias: String, scalar: Scalar },
+    Alias { alias: String, scalar: ScalarExpr },
 }
 
 /// `BindContext` stores all the free variables in a query and tracks the context of binding procedure.
@@ -184,8 +183,8 @@ impl BindContext {
         database: Option<&str>,
         table: Option<&str>,
         column: &str,
-        span: &Token<'_>,
-        available_aliases: &[(String, Scalar)],
+        span: Span,
+        available_aliases: &[(String, ScalarExpr)],
     ) -> Result<NameResolutionResult> {
         let mut result = vec![];
 
@@ -225,13 +224,12 @@ impl BindContext {
         }
 
         if result.is_empty() {
-            Err(ErrorCode::SemanticError(
-                span.display_error("column doesn't exist".to_string()),
-            ))
+            Err(ErrorCode::SemanticError("column doesn't exist".to_string()).set_span(span))
         } else if result.len() > 1 {
-            Err(ErrorCode::SemanticError(
-                span.display_error("column reference is ambiguous".to_string()),
-            ))
+            Err(
+                ErrorCode::SemanticError("column reference is ambiguous".to_string())
+                    .set_span(span),
+            )
         } else {
             Ok(result.remove(0))
         }

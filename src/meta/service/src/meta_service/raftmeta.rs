@@ -24,14 +24,13 @@ use common_base::base::tokio;
 use common_base::base::tokio::sync::watch;
 use common_base::base::tokio::sync::watch::error::RecvError;
 use common_base::base::tokio::sync::Mutex;
-use common_base::base::tokio::sync::RwLockReadGuard;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::tokio::time::Instant;
 use common_grpc::ConnectionFactory;
 use common_grpc::DNSResolver;
+use common_meta_raft_store::applied_state::AppliedState;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::key_spaces::GenericKV;
-use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::error::AddLearnerError;
 use common_meta_sled_store::openraft::DefensiveCheck;
@@ -41,16 +40,12 @@ use common_meta_stoerr::MetaStorageError;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::protobuf::raft_service_server::RaftServiceServer;
 use common_meta_types::protobuf::WatchRequest;
-use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::ConnectionError;
 use common_meta_types::Endpoint;
 use common_meta_types::ForwardRPCError;
-use common_meta_types::ForwardRequest;
-use common_meta_types::ForwardResponse;
 use common_meta_types::ForwardToLeader;
 use common_meta_types::InvalidReply;
-use common_meta_types::LeaveRequest;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaAPIError;
 use common_meta_types::MetaDataError;
@@ -76,9 +71,12 @@ use tracing::warn;
 use tracing::Instrument;
 
 use crate::configs::Config as MetaConfig;
+use crate::message::ForwardRequest;
+use crate::message::ForwardRequestBody;
+use crate::message::ForwardResponse;
+use crate::message::JoinRequest;
+use crate::message::LeaveRequest;
 use crate::meta_service::meta_leader::MetaLeader;
-use crate::meta_service::ForwardRequestBody;
-use crate::meta_service::JoinRequest;
 use crate::meta_service::RaftServiceImpl;
 use crate::metrics::server_metrics;
 use crate::network::Network;
@@ -582,12 +580,14 @@ impl MetaNode {
         ))))
     }
 
-    /// Join an existent cluster if `--join` is specified and this meta node is just created, i.e., not opening an already initialized store.
+    /// Join to an existent cluster if:
+    /// - `--join` is specified
+    /// - and this node is not in a cluster.
     #[tracing::instrument(level = "info", skip(conf, self))]
     pub async fn join_cluster(
         &self,
         conf: &RaftConfig,
-        grpc_api_addr: String,
+        grpc_api_advertise_address: Option<String>,
     ) -> Result<Result<(), String>, MetaManagementError> {
         if conf.join.is_empty() {
             info!("'--join' is empty, do not need joining cluster");
@@ -596,21 +596,33 @@ impl MetaNode {
 
         // Try to join a cluster only when this node has no log.
         // Joining a node with log has risk messing up the data in this node and in the target cluster.
-        let can_join_res = self
-            .can_join()
+        let in_cluster = self
+            .is_in_cluster()
             .await
             .map_err(|e| MetaManagementError::Join(AnyError::new(&e)))?;
 
-        if let Err(reason) = can_join_res {
+        if let Ok(reason) = in_cluster {
             info!("skip joining, because: {}", reason);
             return Ok(Err(format!("Did not join: {}", reason)));
         }
 
+        self.do_join_cluster(conf, grpc_api_advertise_address)
+            .await?;
+        Ok(Ok(()))
+    }
+
+    #[tracing::instrument(level = "info", skip(conf, self))]
+    async fn do_join_cluster(
+        &self,
+        conf: &RaftConfig,
+        grpc_api_advertise_address: Option<String>,
+    ) -> Result<(), MetaManagementError> {
         let mut errors = vec![];
         let addrs = &conf.join;
 
         // Joining cluster has to use advertise host instead of listen host.
         let advertise_endpoint = conf.raft_api_advertise_host_endpoint();
+
         #[allow(clippy::never_loop)]
         for addr in addrs {
             let timeout = Some(Duration::from_millis(10_000));
@@ -639,11 +651,11 @@ impl MetaNode {
 
             let req = ForwardRequest {
                 forward_to_leader: 1,
-                body: ForwardRequestBody::Join(JoinRequest {
-                    node_id: conf.id,
-                    endpoint: advertise_endpoint.clone(),
-                    grpc_api_addr: grpc_api_addr.clone(),
-                }),
+                body: ForwardRequestBody::Join(JoinRequest::new(
+                    conf.id,
+                    advertise_endpoint.clone(),
+                    grpc_api_advertise_address.clone(),
+                )),
             };
 
             let join_res = raft_client.forward(req.clone()).await;
@@ -657,7 +669,7 @@ impl MetaNode {
                     match res {
                         Ok(v) => {
                             info!("join cluster via {} success: {:?}", addr, v);
-                            return Ok(Ok(()));
+                            return Ok(());
                         }
                         Err(e) => {
                             error!("join cluster via {} fail: {}", addr, e.to_string());
@@ -686,8 +698,8 @@ impl MetaNode {
 
     /// Check meta-node state to see if it's appropriate to join to a cluster.
     ///
-    /// If there is no StorageError, it returns a `Result`: `Ok` indicates this node can join to a cluster.
-    /// `Err` explains the reason why it should not join.
+    /// If there is no StorageError, it returns a `Result`: `Ok` indicates this node is already in a cluster.
+    /// `Err` explains the reason why it is not in cluster.
     ///
     /// Meta node should decide whether to execute `join_cluster()`:
     ///
@@ -707,25 +719,28 @@ impl MetaNode {
     ///   Then the next leader does not know about this new node.
     ///
     ///   Only when the membership is committed, this node can be sure it is in a cluster.
-    async fn can_join(&self) -> Result<Result<(), String>, MetaStorageError> {
+    async fn is_in_cluster(&self) -> Result<Result<String, String>, MetaStorageError> {
         let m = {
             let sm = self.sto.get_state_machine().await;
             sm.get_membership()?
         };
-        info!("check can_join: membership: {:?}", m);
+        info!("is_in_cluster: membership: {:?}", m);
 
         let membership = match m {
             None => {
-                return Ok(Ok(()));
+                return Ok(Err(format!("node {} has empty membership", self.sto.id)));
             }
             Some(x) => x,
         };
 
         if membership.membership.contains(&self.sto.id) {
-            return Ok(Err(format!("node {} already in cluster", self.sto.id)));
+            return Ok(Ok(format!("node {} already in cluster", self.sto.id)));
         }
 
-        Ok(Ok(()))
+        Ok(Err(format!(
+            "node {} has membership but not in it",
+            self.sto.id
+        )))
     }
 
     async fn do_start(conf: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
@@ -800,8 +815,8 @@ impl MetaNode {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
-        let ns = sm.get_nodes()?;
-        Ok(ns)
+        let nodes = sm.get_nodes()?;
+        Ok(nodes)
     }
 
     pub async fn get_status(&self) -> Result<MetaNodeStatus, MetaError> {
@@ -852,7 +867,7 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_meta_addrs(&self) -> Result<Vec<String>, MetaStorageError> {
+    pub async fn get_grpc_advertise_addrs(&self) -> Result<Vec<String>, MetaStorageError> {
         // inconsistent get: from local state machine
 
         let nodes = {
@@ -862,8 +877,8 @@ impl MetaNode {
 
         let endpoints: Vec<String> = nodes
             .iter()
-            .map(|n| {
-                if let Some(addr) = n.grpc_api_addr.clone() {
+            .map(|n: &Node| {
+                if let Some(addr) = n.grpc_api_advertise_address.clone() {
                     addr
                 } else {
                     // for compatibility with old version that not have grpc_api_addr in NodeInfo.
@@ -917,13 +932,13 @@ impl MetaNode {
 
         let forward = req.forward_to_leader;
 
-        let as_leader_res = self.assume_leader().await;
-        debug!("as_leader: is_err: {}", as_leader_res.is_err());
+        let assume_leader_res = self.assume_leader().await;
+        debug!("assume_leader: is_err: {}", assume_leader_res.is_err());
 
         // Handle the request locally or return a ForwardToLeader error
-        let op_err = match as_leader_res {
+        let op_err = match assume_leader_res {
             Ok(leader) => {
-                let res = leader.handle_forwardable_req(req.clone()).await;
+                let res = leader.handle_request(req.clone()).await;
                 match res {
                     Ok(x) => return Ok(x),
                     Err(e) => e,
@@ -986,13 +1001,12 @@ impl MetaNode {
         node: Node,
     ) -> Result<AppliedState, MetaAPIError> {
         // TODO: use txid?
-        let resp = self
-            .write(LogEntry {
-                txid: None,
-                time_ms: None,
-                cmd: Cmd::AddNode { node_id, node },
-            })
-            .await?;
+        let cmd = Cmd::AddNode {
+            node_id,
+            node,
+            overriding: false,
+        };
+        let resp = self.write(LogEntry::new(cmd)).await?;
 
         self.raft
             .add_learner(node_id, false)
@@ -1002,10 +1016,6 @@ impl MetaNode {
                 AddLearnerError::Fatal(e) => MetaAPIError::DataError(MetaDataError::WriteError(e)),
             })?;
         Ok(resp)
-    }
-
-    pub async fn get_state_machine(&self) -> RwLockReadGuard<'_, StateMachine> {
-        self.sto.state_machine.read().await
     }
 
     /// Submit a write request to the known leader. Returns the response after applying the request.

@@ -200,44 +200,6 @@ impl Metadata {
         }
         table_index
     }
-
-    /// find_smallest_column in given indices.
-    pub fn find_smallest_column(&self, indices: &[IndexType]) -> IndexType {
-        let mut smallest_index = indices.iter().min().expect("indices must be valid");
-        let mut smallest_size = usize::MAX;
-        for idx in indices.iter() {
-            let entry = self.column(*idx);
-            if let ColumnEntry::BaseTableColumn {
-                data_type: TableDataType::Number(number_type),
-                ..
-            } = entry
-            {
-                if (number_type.bit_width() as usize) < smallest_size {
-                    smallest_size = number_type.bit_width() as usize;
-                    smallest_index = idx;
-                }
-            }
-        }
-        *smallest_index
-    }
-
-    /// find_smallest_column_by_table_index by given table_index
-    pub fn find_smallest_column_by_table_index(&self, table_index: IndexType) -> usize {
-        let indices: Vec<usize> = self
-            .columns
-            .iter()
-            .filter_map(|v| match v {
-                ColumnEntry::BaseTableColumn {
-                    table_index: index,
-                    column_index,
-                    ..
-                } if *index == table_index => Some(*column_index),
-                _ => None,
-            })
-            .collect();
-
-        self.find_smallest_column(&indices)
-    }
 }
 
 #[derive(Clone)]

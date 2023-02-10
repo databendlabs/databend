@@ -13,12 +13,11 @@
 //  limitations under the License.
 
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::FunctionContext;
-use common_expression::ScalarRef;
+use common_expression::Scalar;
 use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::ClusterStatistics;
 
@@ -29,8 +28,10 @@ pub struct ClusterStatsGenerator {
     pub(crate) cluster_key_index: Vec<usize>,
     pub(crate) extra_key_num: usize,
 
+    max_page_size: Option<usize>,
+
     level: i32,
-    block_compact_thresholds: BlockCompactThresholds,
+    block_compact_thresholds: BlockThresholds,
     operators: Vec<BlockOperator>,
     pub(crate) out_fields: Vec<DataField>,
     func_ctx: FunctionContext,
@@ -42,8 +43,9 @@ impl ClusterStatsGenerator {
         cluster_key_id: u32,
         cluster_key_index: Vec<usize>,
         extra_key_num: usize,
+        max_page_size: Option<usize>,
         level: i32,
-        block_compact_thresholds: BlockCompactThresholds,
+        block_compact_thresholds: BlockThresholds,
         operators: Vec<BlockOperator>,
         out_fields: Vec<DataField>,
         func_ctx: FunctionContext,
@@ -52,6 +54,7 @@ impl ClusterStatsGenerator {
             cluster_key_id,
             cluster_key_index,
             extra_key_num,
+            max_page_size,
             level,
             block_compact_thresholds,
             operators,
@@ -64,7 +67,7 @@ impl ClusterStatsGenerator {
         !self.cluster_key_index.is_empty()
     }
 
-    pub fn block_compact_thresholds(&self) -> BlockCompactThresholds {
+    pub fn block_compact_thresholds(&self) -> BlockThresholds {
         self.block_compact_thresholds
     }
 
@@ -120,31 +123,16 @@ impl ClusterStatsGenerator {
         if self.cluster_key_index.is_empty() {
             return Ok(None);
         }
-
         let mut min = Vec::with_capacity(self.cluster_key_index.len());
         let mut max = Vec::with_capacity(self.cluster_key_index.len());
 
         for key in self.cluster_key_index.iter() {
             let val = data_block.get_by_offset(*key);
             let val_ref = val.value.as_ref();
-            let mut left = unsafe { val_ref.index_unchecked(0) };
-            // To avoid high cardinality, for the string column,
-            // cluster statistics uses only the first 5 bytes.
-            if val.data_type == DataType::String {
-                let v = left.into_string().unwrap();
-                let l = v.len();
-                let e = if l < 5 { l } else { 5 };
-                left = ScalarRef::String(&v[0..e]);
-            }
+            let left = unsafe { val_ref.index_unchecked(0) };
             min.push(left.to_owned());
 
-            let mut right = unsafe { val_ref.index_unchecked(val_ref.len() - 1) };
-            if val.data_type == DataType::String {
-                let v = right.into_string().unwrap();
-                let l = v.len();
-                let e = if l < 5 { l } else { 5 };
-                right = ScalarRef::String(&v[0..e]);
-            }
+            let right = unsafe { val_ref.index_unchecked(val_ref.len() - 1) };
             max.push(right.to_owned());
         }
 
@@ -158,11 +146,29 @@ impl ClusterStatsGenerator {
             level
         };
 
+        let pages = if let Some(max_page_size) = self.max_page_size {
+            let mut values = Vec::with_capacity(data_block.num_rows() / max_page_size + 1);
+            for start in (0..data_block.num_rows()).step_by(max_page_size) {
+                let mut tuple_values = Vec::with_capacity(self.cluster_key_index.len());
+                for key in self.cluster_key_index.iter() {
+                    let val = data_block.get_by_offset(*key);
+                    let val_ref = val.value.as_ref();
+                    let left = unsafe { val_ref.index_unchecked(start) };
+                    tuple_values.push(left.to_owned());
+                }
+                values.push(Scalar::Tuple(tuple_values));
+            }
+            Some(values)
+        } else {
+            None
+        };
+
         Ok(Some(ClusterStatistics {
             cluster_key_id: self.cluster_key_id,
             min,
             max,
             level,
+            pages,
         }))
     }
 }

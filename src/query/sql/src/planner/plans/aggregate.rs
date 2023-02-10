@@ -27,7 +27,6 @@ use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
-use crate::ScalarExpr;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
 pub enum AggregateMode {
@@ -48,6 +47,7 @@ pub struct Aggregate {
     pub aggregate_functions: Vec<ScalarItem>,
     // True if the plan is generated from distinct, else the plan is a normal aggregate;
     pub from_distinct: bool,
+    pub limit: Option<usize>,
 }
 
 impl Aggregate {

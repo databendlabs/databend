@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::PruningStatistics;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -35,7 +36,7 @@ use storages_common_table_meta::meta::BlockMeta;
 use crate::operations::FuseTableSink;
 use crate::operations::ReclusterMutator;
 use crate::pipelines::Pipeline;
-use crate::pruning::BlockPruner;
+use crate::pruning::FusePruner;
 use crate::FuseTable;
 use crate::TableMutator;
 use crate::DEFAULT_AVG_DEPTH_THRESHOLD;
@@ -61,15 +62,9 @@ impl FuseTable {
         };
 
         let schema = self.table_info.schema();
-        let segments_locations = snapshot.segments.clone();
-        let block_metas = BlockPruner::prune(
-            &ctx,
-            self.operator.clone(),
-            schema,
-            &push_downs,
-            segments_locations,
-        )
-        .await?;
+        let segment_locations = snapshot.segments.clone();
+        let pruner = FusePruner::create(&ctx, self.operator.clone(), schema, &push_downs)?;
+        let block_metas = pruner.pruning(segment_locations).await?;
 
         let default_cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
         let mut blocks_map: BTreeMap<i32, Vec<(usize, Arc<BlockMeta>)>> = BTreeMap::new();
@@ -112,19 +107,25 @@ impl FuseTable {
         }
 
         let partitions_total = mutator.partitions_total();
+
+        let block_metas: Vec<_> = mutator
+            .selected_blocks()
+            .iter()
+            .map(|meta| (None, meta.clone()))
+            .collect();
         let (statistics, parts) = self.read_partitions_with_metas(
-            ctx.clone(),
             self.table_info.schema(),
             None,
-            mutator.selected_blocks(),
+            &block_metas,
             partitions_total,
+            PruningStatistics::default(),
         )?;
         let table_info = self.get_table_info();
         let description = statistics.get_description(&table_info.desc);
         let plan = DataSourcePlan {
             catalog: table_info.catalog().to_string(),
             source_info: DataSourceInfo::TableSource(table_info.clone()),
-            scan_fields: None,
+            output_schema: table_info.schema(),
             parts,
             statistics,
             description,
@@ -132,13 +133,20 @@ impl FuseTable {
             push_downs: None,
         };
 
-        ctx.try_set_partitions(plan.parts.clone())?;
+        ctx.set_partitions(plan.parts.clone())?;
 
         // ReadDataKind to avoid OOM.
         self.do_read_data(ctx.clone(), &plan, pipeline)?;
 
+        let max_page_size = if self.is_native() {
+            Some(self.get_write_settings().max_page_size)
+        } else {
+            None
+        };
+
         let cluster_stats_gen = self.get_cluster_stats_gen(
             ctx.clone(),
+            max_page_size,
             pipeline,
             mutator.level() + 1,
             block_compact_thresholds,

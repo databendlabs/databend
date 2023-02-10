@@ -46,10 +46,7 @@ impl TryFrom<&Settings> for NameResolutionContext {
 }
 
 /// Normalize identifier with given `NameResolutionContext`
-pub fn normalize_identifier<'a>(
-    ident: &Identifier<'a>,
-    context: &NameResolutionContext,
-) -> Identifier<'a> {
+pub fn normalize_identifier(ident: &Identifier, context: &NameResolutionContext) -> Identifier {
     if (ident.is_quoted() && context.quoted_ident_case_sensitive)
         || (!ident.is_quoted() && context.unquoted_ident_case_sensitive)
     {
@@ -58,7 +55,7 @@ pub fn normalize_identifier<'a>(
         Identifier {
             name: ident.name.to_lowercase(),
             quote: ident.quote,
-            span: ident.span.clone(),
+            span: ident.span,
         }
     }
 }
@@ -80,7 +77,7 @@ pub struct IdentifierNormalizer<'a> {
 }
 
 impl<'a> VisitorMut for IdentifierNormalizer<'a> {
-    fn visit_identifier(&mut self, ident: &mut Identifier<'_>) {
+    fn visit_identifier(&mut self, ident: &mut Identifier) {
         let normalized_ident = normalize_identifier(ident, self.ctx);
         *ident = normalized_ident;
     }

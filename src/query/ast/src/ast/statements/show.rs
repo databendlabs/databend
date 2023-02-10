@@ -18,12 +18,12 @@ use std::fmt::Formatter;
 use crate::ast::Expr;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ShowLimit<'a> {
+pub enum ShowLimit {
     Like { pattern: String },
-    Where { selection: Box<Expr<'a>> },
+    Where { selection: Box<Expr> },
 }
 
-impl<'a> Display for ShowLimit<'a> {
+impl Display for ShowLimit {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ShowLimit::Like { pattern } => write!(f, "LIKE '{pattern}'"),

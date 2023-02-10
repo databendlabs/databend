@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
@@ -25,7 +24,6 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::SExpr;
 use crate::plans::Exchange;
-use crate::plans::Limit;
 use crate::plans::RelOperator;
 
 pub fn optimize_distributed_query(ctx: Arc<dyn TableContext>, s_expr: &SExpr) -> Result<SExpr> {
@@ -58,29 +56,20 @@ fn push_down_topk_to_merge(s_expr: &mut SExpr, mut top_k: Option<TopK>) -> Resul
         if let Some(top_k) = top_k {
             let child = &mut s_expr.children[0];
             *child = SExpr::create_unary(top_k.sort.into(), child.clone());
-            *child = SExpr::create_unary(top_k.limit.into(), child.clone());
         }
         return Ok(());
     }
+
     for child in s_expr.children.iter_mut() {
+        top_k = None;
         if let RelOperator::Sort(sort) = &child.plan {
-            if let RelOperator::Limit(limit) = &s_expr.plan {
-                // If limit.limit is None, no need to push down.
-                if let Some(mut count) = limit.limit {
-                    count += limit.offset;
-                    top_k = Some(TopK {
-                        sort: sort.clone(),
-                        limit: Limit {
-                            limit: limit
-                                .limit
-                                .map(|origin_limit| cmp::max(origin_limit, count)),
-                            offset: 0,
-                        },
-                    });
-                }
+            if sort.limit.is_some() {
+                top_k = Some(TopK { sort: sort.clone() });
             }
         }
-        push_down_topk_to_merge(child, top_k.clone())?;
+        for child_child in child.children.iter_mut() {
+            push_down_topk_to_merge(child_child, top_k.clone())?;
+        }
     }
     Ok(())
 }

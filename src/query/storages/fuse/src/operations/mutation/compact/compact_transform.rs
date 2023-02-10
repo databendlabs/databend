@@ -23,13 +23,14 @@ use common_cache::Cache;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
+use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use opendal::Operator;
 use storages_common_blocks::blocks_to_parquet;
+use storages_common_cache_manager::CacheManager;
 use storages_common_index::BloomIndex;
-use storages_common_table_meta::caches::CacheManager;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::StatisticsOfColumns;
@@ -96,7 +97,7 @@ pub struct CompactTransform {
     compact_tasks: VecDeque<CompactTask>,
     block_metas: Vec<Arc<BlockMeta>>,
     order: usize,
-    thresholds: BlockCompactThresholds,
+    thresholds: BlockThresholds,
     write_settings: WriteSettings,
     abort_operation: AbortOperation,
 }
@@ -112,7 +113,7 @@ impl CompactTransform {
         location_gen: TableMetaLocationGenerator,
         dal: Operator,
         schema: TableSchemaRef,
-        thresholds: BlockCompactThresholds,
+        thresholds: BlockThresholds,
         write_settings: WriteSettings,
     ) -> Result<ProcessorPtr> {
         let settings = ctx.get_settings();
@@ -231,21 +232,21 @@ impl Processor for CompactTransform {
                     let (block_location, block_id) = self.location_gen.gen_block_location();
 
                     // build block index.
-                    let func_ctx = self.ctx.try_get_function_context()?;
-                    let bloom_index = BloomIndex::try_create(
+                    let func_ctx = self.ctx.get_function_context()?;
+                    let maybe_bloom_index = BloomIndex::try_create(
                         func_ctx,
                         self.schema.clone(),
                         block_location.1,
                         &[&new_block],
                     )?;
 
-                    let (index_data, index_size, index_location) = match bloom_index {
+                    let (index_data, index_size, index_location) = match maybe_bloom_index {
                         Some(bloom_index) => {
                             // write index
-                            let index_block = bloom_index.filter_block;
+                            let index_block = bloom_index.serialize_to_data_block()?;
+                            let index_block_schema = &bloom_index.filter_schema;
                             let location = self.location_gen.block_bloom_index_location(&block_id);
                             let mut data = Vec::with_capacity(100 * 1024);
-                            let index_block_schema = &bloom_index.filter_schema;
                             let (size, _) = blocks_to_parquet(
                                 index_block_schema,
                                 vec![index_block],
@@ -258,7 +259,7 @@ impl Processor for CompactTransform {
                     };
 
                     // serialize data block.
-                    let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
+                    let mut block_data = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
                     let (file_size, col_metas) = io::write_block(
                         &self.write_settings,
                         &self.schema,

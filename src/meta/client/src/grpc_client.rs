@@ -37,7 +37,7 @@ use common_grpc::ConnectionFactory;
 use common_grpc::GrpcConnectionError;
 use common_grpc::RpcClientConf;
 use common_grpc::RpcClientTlsConfig;
-use common_meta_api::KVApi;
+use common_meta_kvapi::kvapi::KVApi;
 use common_meta_types::anyerror::AnyError;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::ClientInfo;
@@ -235,11 +235,21 @@ impl ClientHandle {
         self.request(message::MakeClient {}).await
     }
 
-    pub async fn get_endpoints(&self) -> Result<Vec<String>, MetaError> {
+    /// Return the endpoints list cached on this client.
+    pub async fn get_cached_endpoints(&self) -> Result<Vec<String>, MetaError> {
         self.request(message::GetEndpoints {}).await
     }
 }
 
+// TODO: maybe it just needs a runtime, not a MetaGrpcClientWorker.
+//
+/// Meta grpc client has a internal worker task that deals with all traffic to remote meta service.
+///
+/// We expect meta-client should be cloneable.
+/// But the underlying hyper client has a worker that runs in its creating tokio-runtime.
+/// Thus a cloned meta client may try to talk to a destroyed hyper worker if the creating tokio-runtime is dropped.
+/// Thus we have to guarantee that as long as there is a meta-client, the huper worker runtime must not be dropped.
+/// Thus a meta client creates a runtime then spawn a MetaGrpcClientWorker.
 pub struct MetaGrpcClient {
     conn_pool: Pool<MetaChannelManager>,
     endpoints: RwLock<Vec<String>>,
@@ -255,7 +265,6 @@ pub struct MetaGrpcClient {
     /// If a background task is blocked, no meta-client will be able to proceed if meta-client is reused.
     ///
     /// Note that a thread_pool tokio runtime does not help: a scheduled tokio-task resides in `filo_slot` won't be stolen by other tokio-workers.
-    /// TODO: dead code
     #[allow(dead_code)]
     rt: Arc<Runtime>,
 }
@@ -401,7 +410,7 @@ impl MetaGrpcClient {
                     message::Response::MakeClient(resp)
                 }
                 message::Request::GetEndpoints(_) => {
-                    let resp = self.get_endpoints().await;
+                    let resp = self.get_cached_endpoints().await;
                     message::Response::GetEndpoints(Ok(resp))
                 }
                 message::Request::GetClientInfo(_) => {
@@ -475,7 +484,7 @@ impl MetaGrpcClient {
         &self,
     ) -> Result<MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>, MetaClientError>
     {
-        let mut eps = self.get_endpoints().await;
+        let mut eps = self.get_cached_endpoints().await;
         debug!("service endpoints: {:?}", eps);
 
         debug_assert!(!eps.is_empty());
@@ -578,7 +587,7 @@ impl MetaGrpcClient {
         Ok(())
     }
 
-    async fn get_endpoints(&self) -> Vec<String> {
+    async fn get_cached_endpoints(&self) -> Vec<String> {
         let eps = self.endpoints.read().await;
         (*eps).clone()
     }
@@ -630,12 +639,17 @@ impl MetaGrpcClient {
             }
         };
         let result: Vec<String> = endpoints?.data;
+        debug!("received meta endpoints: {:?}", result);
+
         self.set_endpoints(result).await?;
         Ok(())
     }
 
     async fn auto_sync_endpoints(self: Arc<Self>, mut cancel_tx: OneSend<()>) {
-        debug!("start auto sync endpoints");
+        info!(
+            "start auto sync endpoints: interval: {:?}",
+            self.auto_sync_interval
+        );
         if let Some(interval) = self.auto_sync_interval {
             loop {
                 select! {

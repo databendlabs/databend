@@ -22,7 +22,7 @@ static ASCII_TABLE: [&str; 128] = [
     "<ACK>",
     "<BEL>",
     "<BACKSPACE>",
-    "<HORIZONTAL TAB>",
+    "<TAB>",
     "<LINE FEED>",
     "<VERTICAL TAB>",
     "<FROM FEED>",

@@ -27,9 +27,9 @@ use common_expression::SortColumnDescription;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
-use common_pipeline_core::Pipe;
-use common_pipeline_sinks::processors::sinks::EmptySink;
-use common_pipeline_sinks::processors::sinks::UnionReceiveSink;
+use common_pipeline_sinks::EmptySink;
+use common_pipeline_sinks::Sinker;
+use common_pipeline_sinks::UnionReceiveSink;
 use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
@@ -52,7 +52,6 @@ use common_sql::plans::JoinType;
 use common_sql::ColumnBinding;
 use common_sql::IndexType;
 
-use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::transforms::efficiently_memory_final_aggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
@@ -68,7 +67,6 @@ use crate::pipelines::processors::LeftJoinCompactor;
 use crate::pipelines::processors::MarkJoinCompactor;
 use crate::pipelines::processors::RightJoinCompactor;
 use crate::pipelines::processors::SinkBuildHashTable;
-use crate::pipelines::processors::Sinker;
 use crate::pipelines::processors::SortMergeCompactor;
 use crate::pipelines::processors::TransformAggregator;
 use crate::pipelines::processors::TransformCastSchema;
@@ -216,7 +214,7 @@ impl PipelineBuilder {
 
     fn build_table_scan(&mut self, scan: &TableScan) -> Result<()> {
         let table = self.ctx.build_table_from_source_plan(&scan.source)?;
-        self.ctx.try_set_partitions(scan.source.parts.clone())?;
+        self.ctx.set_partitions(scan.source.parts.clone())?;
         table.read_data(self.ctx.clone(), &scan.source, &mut self.main_pipeline)?;
 
         let schema = scan.source.schema();
@@ -229,7 +227,7 @@ impl PipelineBuilder {
         // if projection is sequential, no need to add projection
         if projection != (0..schema.fields().len()).collect::<Vec<usize>>() {
             let ops = vec![BlockOperator::Project { projection }];
-            let func_ctx = self.ctx.try_get_function_context()?;
+            let func_ctx = self.ctx.get_function_context()?;
             self.main_pipeline.add_transform(|input, output| {
                 Ok(CompoundBlockOperator::create(
                     input,
@@ -251,7 +249,6 @@ impl PipelineBuilder {
             .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
             .try_reduce(|lhs, rhs| {
                 check_function(None, "and", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
-                    .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))
             })
             .transpose()
             .unwrap_or_else(|| {
@@ -264,7 +261,7 @@ impl PipelineBuilder {
             Ok(CompoundBlockOperator::create(
                 input,
                 output,
-                self.ctx.try_get_function_context()?,
+                self.ctx.get_function_context()?,
                 vec![BlockOperator::Filter {
                     expr: predicate.clone(),
                 }],
@@ -276,7 +273,7 @@ impl PipelineBuilder {
 
     fn build_project(&mut self, project: &Project) -> Result<()> {
         self.build_pipeline(&project.input)?;
-        let func_ctx = self.ctx.try_get_function_context()?;
+        let func_ctx = self.ctx.get_function_context()?;
 
         self.main_pipeline.add_transform(|input, output| {
             Ok(CompoundBlockOperator::create(
@@ -302,7 +299,7 @@ impl PipelineBuilder {
                 })
             })
             .collect::<Result<Vec<_>>>()?;
-        let func_ctx = self.ctx.try_get_function_context()?;
+        let func_ctx = self.ctx.get_function_context()?;
 
         self.main_pipeline.add_transform(|input, output| {
             Ok(CompoundBlockOperator::create(
@@ -323,16 +320,26 @@ impl PipelineBuilder {
             // aggregate.output_schema()?,
             &aggregate.group_by,
             &aggregate.agg_funcs,
+            None,
         )?;
+
+        let pass_state_to_final = self.enable_memory_efficient_aggregator(&params);
 
         self.main_pipeline.add_transform(|input, output| {
             TransformAggregator::try_create_partial(
                 AggregatorTransformParams::try_create(input, output, &params)?,
                 self.ctx.clone(),
+                pass_state_to_final,
             )
         })?;
 
         Ok(())
+    }
+
+    fn enable_memory_efficient_aggregator(&self, params: &Arc<AggregatorParams>) -> bool {
+        self.ctx.get_cluster().is_empty()
+            && !params.group_columns.is_empty()
+            && self.main_pipeline.output_len() > 1
     }
 
     fn build_aggregate_final(&mut self, aggregate: &AggregateFinal) -> Result<()> {
@@ -343,12 +350,10 @@ impl PipelineBuilder {
             // aggregate.output_schema()?,
             &aggregate.group_by,
             &aggregate.agg_funcs,
+            aggregate.limit,
         )?;
 
-        if self.ctx.get_cluster().is_empty()
-            && !params.group_columns.is_empty()
-            && self.main_pipeline.output_len() > 1
-        {
+        if self.enable_memory_efficient_aggregator(&params) {
             return efficiently_memory_final_aggregator(params, &mut self.main_pipeline);
         }
 
@@ -367,6 +372,7 @@ impl PipelineBuilder {
         input_schema: DataSchemaRef,
         group_by: &[IndexType],
         agg_funcs: &[AggregateFunctionDesc],
+        limit: Option<usize>,
     ) -> Result<Arc<AggregatorParams>> {
         let mut agg_args = Vec::with_capacity(agg_funcs.len());
         let (group_by, group_data_types) = group_by
@@ -403,6 +409,7 @@ impl PipelineBuilder {
             &group_by,
             &aggs,
             &agg_args,
+            limit,
         )?;
 
         Ok(params)
@@ -426,13 +433,14 @@ impl PipelineBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
+        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
         let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
 
-        if self.main_pipeline.output_len() == 1 {
-            let _ = self
-                .main_pipeline
-                .resize(self.ctx.get_settings().get_max_threads()? as usize);
+        // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
+        if self.main_pipeline.output_len() == 1 || max_threads == 1 {
+            self.main_pipeline.resize(max_threads)?;
         }
+
         // Sort
         self.main_pipeline.add_transform(|input, output| {
             TransformSortPartial::try_create(input, output, sort.limit, sort_desc.clone())
@@ -555,21 +563,11 @@ impl PipelineBuilder {
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
 
         let (tx, rx) = async_channel::unbounded();
-        let mut inputs_port = Vec::with_capacity(build_res.main_pipeline.output_len());
-        let mut processors = Vec::with_capacity(build_res.main_pipeline.output_len());
-        for _ in 0..build_res.main_pipeline.output_len() {
-            let input_port = InputPort::create();
-            processors.push(UnionReceiveSink::create(
-                Some(tx.clone()),
-                input_port.clone(),
-            ));
-            inputs_port.push(input_port);
-        }
-        build_res.main_pipeline.add_pipe(Pipe::SimplePipe {
-            outputs_port: vec![],
-            inputs_port,
-            processors,
-        });
+
+        build_res
+            .main_pipeline
+            .add_sink(|input_port| Ok(UnionReceiveSink::create(Some(tx.clone()), input_port)))?;
+
         self.pipelines.push(build_res.main_pipeline);
         self.pipelines
             .extend(build_res.sources_pipelines.into_iter());
@@ -604,7 +602,7 @@ impl PipelineBuilder {
 
         // should render result for select
         PipelineBuilder::render_result_set(
-            &self.ctx.try_get_function_context()?,
+            &self.ctx.get_function_context()?,
             insert_select.input.output_schema()?,
             &insert_select.select_column_bindings,
             &mut self.main_pipeline,
@@ -612,7 +610,7 @@ impl PipelineBuilder {
         )?;
 
         if insert_select.cast_needed {
-            let func_ctx = self.ctx.try_get_function_context()?;
+            let func_ctx = self.ctx.get_function_context()?;
             self.main_pipeline
                 .add_transform(|transform_input_port, transform_output_port| {
                     TransformCastSchema::try_create(

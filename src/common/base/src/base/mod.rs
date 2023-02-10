@@ -41,7 +41,6 @@ pub use string::convert_byte_size;
 pub use string::convert_number_size;
 pub use string::escape_for_key;
 pub use string::mask_string;
-pub use string::replace_nth_char;
 pub use string::unescape_for_key;
 pub use string::unescape_string;
 pub use tokio;

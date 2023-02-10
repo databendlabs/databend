@@ -28,6 +28,7 @@ use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table::TableStatistics;
+use common_catalog::table_args::TableArgs;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -37,7 +38,6 @@ use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Expr;
 use common_expression::RemoteExpr;
-use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
@@ -46,8 +46,8 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
-use common_pipeline_sources::processors::sources::sync_source::SyncSource;
-use common_pipeline_sources::processors::sources::sync_source::SyncSourcer;
+use common_pipeline_sources::SyncSource;
+use common_pipeline_sources::SyncSourcer;
 use common_storage::init_operator;
 use common_storage::DataOperator;
 use futures::TryStreamExt;
@@ -116,7 +116,7 @@ impl HiveTable {
         });
         let range_filter = match filter_expressions {
             Some(exprs) if !exprs.is_empty() => Some(RangeIndex::try_create(
-                ctx.try_get_function_context()?,
+                ctx.get_function_context()?,
                 &exprs,
                 self.table_info.schema(),
             )?),
@@ -187,14 +187,7 @@ impl HiveTable {
             |_| 0
         };
 
-        let output_projection = match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
-            None => {
-                PushDownInfo::projection_of_push_downs(&self.table_info.schema(), &plan.push_downs)
-            }
-            Some(v) => v.output_columns,
-        };
-        let output_schema = Arc::new(output_projection.project_schema(&plan.source_info.schema()));
-        let output_schema = Arc::new(DataSchema::from(output_schema));
+        let output_schema = Arc::new(DataSchema::from(plan.schema()));
 
         let prewhere_all_partitions =
             self.is_prewhere_column_partition_keys(self.table_info.schema(), &plan.push_downs)?;
@@ -586,7 +579,7 @@ impl Table for HiveTable {
         self.do_read_partitions(ctx, push_downs).await
     }
 
-    fn table_args(&self) -> Option<Vec<Scalar>> {
+    fn table_args(&self) -> Option<TableArgs> {
         None
     }
 

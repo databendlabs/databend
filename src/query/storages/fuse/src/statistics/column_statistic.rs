@@ -15,30 +15,20 @@
 use std::collections::HashMap;
 
 use common_exception::Result;
-use common_expression::types::DataType;
 use common_expression::types::NumberType;
 use common_expression::types::ValueType;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::Scalar;
+use common_expression::TableSchemaRef;
 use common_functions::aggregates::eval_aggr;
 use storages_common_index::Index;
 use storages_common_index::RangeIndex;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 
-pub fn calc_column_distinct_of_values(
-    column: &Column,
-    data_type: &DataType,
-    rows: usize,
-) -> Result<u64> {
-    let distinct_values = eval_aggr(
-        "approx_count_distinct",
-        vec![],
-        &[column.clone()],
-        &[data_type.clone()],
-        rows,
-    )?;
+pub fn calc_column_distinct_of_values(column: &Column, rows: usize) -> Result<u64> {
+    let distinct_values = eval_aggr("approx_count_distinct", vec![], &[column.clone()], rows)?;
     let col = NumberType::<u64>::try_downcast_column(&distinct_values.0).unwrap();
     Ok(col[0])
 }
@@ -50,12 +40,14 @@ pub fn get_traverse_columns_dfs(data_block: &DataBlock) -> traverse::TraverseRes
 pub fn gen_columns_statistics(
     data_block: &DataBlock,
     column_distinct_count: Option<HashMap<usize, usize>>,
+    schema: Option<&TableSchemaRef>,
 ) -> Result<StatisticsOfColumns> {
     let mut statistics = StatisticsOfColumns::new();
     let data_block = data_block.convert_to_full();
     let rows = data_block.num_rows();
 
     let leaves = get_traverse_columns_dfs(&data_block)?;
+    let column_ids = schema.map(|schema| schema.to_column_ids());
     for (idx, (col_idx, col, data_type)) in leaves.iter().enumerate() {
         if col.is_none() {
             continue;
@@ -71,8 +63,8 @@ pub fn gen_columns_statistics(
         let mut min = Scalar::Null;
         let mut max = Scalar::Null;
 
-        let (mins, _) = eval_aggr("min", vec![], &[col.clone()], &[data_type.clone()], rows)?;
-        let (maxs, _) = eval_aggr("max", vec![], &[col.clone()], &[data_type.clone()], rows)?;
+        let (mins, _) = eval_aggr("min", vec![], &[col.clone()], rows)?;
+        let (maxs, _) = eval_aggr("max", vec![], &[col.clone()], rows)?;
 
         if mins.len() > 0 {
             min = if let Some(v) = mins.index(0) {
@@ -116,10 +108,10 @@ pub fn gen_columns_statistics(
                         *value as u64
                     }
                 } else {
-                    calc_column_distinct_of_values(col, data_type, rows)?
+                    calc_column_distinct_of_values(col, rows)?
                 }
             }
-            (_, _) => calc_column_distinct_of_values(col, data_type, rows)?,
+            (_, _) => calc_column_distinct_of_values(col, rows)?,
         };
 
         let in_memory_size = col.memory_size() as u64;
@@ -131,7 +123,12 @@ pub fn gen_columns_statistics(
             distinct_of_values: Some(distinct_of_values),
         };
 
-        statistics.insert(idx as u32, col_stats);
+        // use column id as key instead of index
+        let column_id = match column_ids {
+            Some(ref column_ids) => column_ids[idx],
+            None => idx as u32,
+        };
+        statistics.insert(column_id, col_stats);
     }
     Ok(statistics)
 }

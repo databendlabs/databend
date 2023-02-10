@@ -19,7 +19,7 @@ use common_ast::ast::InsertStmt;
 use common_ast::ast::Statement;
 use common_exception::Result;
 use common_expression::TableSchemaRefExt;
-use common_meta_types::FileFormatOptions;
+use common_meta_app::principal::FileFormatOptions;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;
@@ -31,11 +31,11 @@ use crate::plans::InsertInputSource;
 use crate::plans::Plan;
 use crate::BindContext;
 
-impl<'a> Binder {
+impl Binder {
     pub(in crate::planner::binder) async fn bind_insert(
         &mut self,
         bind_context: &BindContext,
-        stmt: &InsertStmt<'a>,
+        stmt: &InsertStmt,
     ) -> Result<Plan> {
         let InsertStmt {
             catalog,

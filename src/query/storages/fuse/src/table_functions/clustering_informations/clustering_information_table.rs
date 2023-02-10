@@ -22,7 +22,6 @@ use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_expression::Scalar;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -34,7 +33,6 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::AsyncSource;
 use crate::pipelines::processors::AsyncSourcer;
-use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
 use crate::table_functions::string_literal;
@@ -103,11 +101,11 @@ impl Table for ClusteringInformationTable {
         Ok((PartStatistics::default(), Partitions::default()))
     }
 
-    fn table_args(&self) -> Option<Vec<Scalar>> {
-        Some(vec![
+    fn table_args(&self) -> Option<TableArgs> {
+        Some(TableArgs::new_positioned(vec![
             string_literal(self.arg_database_name.as_str()),
             string_literal(self.arg_table_name.as_str()),
-        ])
+        ]))
     }
 
     fn read_data(
@@ -116,18 +114,18 @@ impl Table for ClusteringInformationTable {
         _: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let output = OutputPort::create();
-        pipeline.add_pipe(Pipe::SimplePipe {
-            inputs_port: vec![],
-            outputs_port: vec![output.clone()],
-            processors: vec![ClusteringInformationSource::create(
-                ctx,
-                output,
-                self.arg_database_name.to_owned(),
-                self.arg_table_name.to_owned(),
-                self.arg_cluster_keys.to_owned(),
-            )?],
-        });
+        pipeline.add_source(
+            |output| {
+                ClusteringInformationSource::create(
+                    ctx.clone(),
+                    output,
+                    self.arg_database_name.to_owned(),
+                    self.arg_table_name.to_owned(),
+                    self.arg_cluster_keys.to_owned(),
+                )
+            },
+            1,
+        )?;
 
         Ok(())
     }

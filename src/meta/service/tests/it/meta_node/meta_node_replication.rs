@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_base::base::tokio;
-use common_meta_api::KVApi;
+use common_meta_kvapi::kvapi::KVApi;
 use common_meta_sled_store::openraft::LogIdOptionExt;
 use common_meta_sled_store::openraft::State;
 use common_meta_types::Cmd;
@@ -70,12 +70,8 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
 
     for i in 0..n_req {
         let key = format!("test_meta_node_snapshot_replication-key-{}", i);
-        mn.write(LogEntry {
-            txid: None,
-            time_ms: None,
-            cmd: Cmd::UpsertKV(UpsertKV::update(&key, b"v")),
-        })
-        .await?;
+        mn.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(&key, b"v"))))
+            .await?;
     }
     log_index += n_req;
 

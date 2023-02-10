@@ -14,7 +14,7 @@
 
 use std::ops::Deref;
 
-/// The identifier of a internal record used in an application upon KVApi.
+/// The identifier of a internal record used in an application upon kvapi::KVApi.
 ///
 /// E.g. TableId, DatabaseId.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

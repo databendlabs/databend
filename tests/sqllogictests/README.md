@@ -44,7 +44,7 @@ databend-sqllogictests --help
 ### Parallel
 If you want to run test files in parallel, please add the following args:
 ```shell
-databend-sqllogictest --senable_sandbox --parallel <number>
+databend-sqllogictest --enable_sandbox --parallel <number>
 ```
 
 When start databend query, please add `--internal-enable-sandbox-tenant`, such as:

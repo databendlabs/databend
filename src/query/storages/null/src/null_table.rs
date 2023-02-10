@@ -29,11 +29,10 @@ use common_expression::DataSchemaRef;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::Pipe;
 use common_pipeline_core::Pipeline;
-use common_pipeline_sinks::processors::sinks::EmptySink;
-use common_pipeline_sources::processors::sources::SyncSource;
-use common_pipeline_sources::processors::sources::SyncSourcer;
+use common_pipeline_sinks::EmptySink;
+use common_pipeline_sources::SyncSource;
+use common_pipeline_sources::SyncSourcer;
 
 pub struct NullTable {
     table_info: TableInfo,
@@ -77,13 +76,11 @@ impl Table for NullTable {
         _: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let output = OutputPort::create();
-        let schema = self.table_info.schema();
-        pipeline.add_pipe(Pipe::SimplePipe {
-            inputs_port: vec![],
-            outputs_port: vec![output.clone()],
-            processors: vec![NullSource::create(ctx, output, Arc::new(schema.into()))?],
-        });
+        let schema: DataSchemaRef = Arc::new(self.table_info.schema().into());
+        pipeline.add_source(
+            |output| NullSource::create(ctx.clone(), output, schema.clone()),
+            1,
+        )?;
 
         Ok(())
     }

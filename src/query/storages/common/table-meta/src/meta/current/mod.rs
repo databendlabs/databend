@@ -14,7 +14,6 @@
 
 pub use v0::ColumnMeta as SingleColumnMeta;
 pub use v1::TableSnapshotStatistics;
-pub use v2::BlockFilter;
 pub use v2::BlockMeta;
 pub use v2::ColumnMeta;
 pub use v2::SegmentInfo;

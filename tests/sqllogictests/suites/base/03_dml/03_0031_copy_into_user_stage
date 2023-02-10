@@ -11,16 +11,16 @@ statement ok
 CREATE TABLE test_table(id INTEGER, name VARCHAR, age INT)
 
 statement ok
-insert into test_table (id,name,age) values(1,'2',3), (4, '5', 6)
+insert into test_table (id,name,age) values (1,'2',3), (4, '5', 6)
 
 statement ok
 remove @~
 
 statement ok
-copy into @~ from test_table FILE_FORMAT = (type = 'CSV')
+copy into @~ from test_table FILE_FORMAT = (type = CSV)
 
 statement ok
-copy into test_table from @~
+copy into test_table from @~ FILE_FORMAT = (type = CSV)
 
 query A
 SELECT COUNT() FROM test_table

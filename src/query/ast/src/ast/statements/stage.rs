@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::default::Default;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -54,7 +55,7 @@ impl Display for CreateStageStmt {
         }
 
         if !self.on_error.is_empty() {
-            write!(f, " ON_ERROR = {}", self.on_error)?;
+            write!(f, " ON_ERROR = '{}'", self.on_error)?;
         }
 
         if self.size_limit != 0 {
@@ -70,5 +71,30 @@ impl Display for CreateStageStmt {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SelectStageOption {
+    Files(Vec<String>),
+    Pattern(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct SelectStageOptions {
+    pub files: Option<Vec<String>>,
+    pub pattern: Option<String>,
+}
+
+impl SelectStageOptions {
+    pub fn from(opts: Vec<SelectStageOption>) -> Self {
+        let mut options: SelectStageOptions = Default::default();
+        for opt in opts.into_iter() {
+            match opt {
+                SelectStageOption::Files(v) => options.files = Some(v),
+                SelectStageOption::Pattern(v) => options.pattern = Some(v),
+            }
+        }
+        options
     }
 }

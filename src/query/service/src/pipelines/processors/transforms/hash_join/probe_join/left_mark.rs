@@ -114,7 +114,7 @@ impl JoinHashTable {
             *has_null = true;
         }
 
-        let _func_ctx = self.ctx.try_get_function_context()?;
+        let _func_ctx = self.ctx.get_function_context()?;
         let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
 
         let mut row_ptrs = self.row_ptrs.write();

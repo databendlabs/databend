@@ -45,11 +45,11 @@ use crate::plans::UndropDatabasePlan;
 use crate::BindContext;
 use crate::SelectBuilder;
 
-impl<'a> Binder {
+impl Binder {
     pub(in crate::planner::binder) async fn bind_show_databases(
         &mut self,
         bind_context: &BindContext,
-        stmt: &ShowDatabasesStmt<'a>,
+        stmt: &ShowDatabasesStmt,
     ) -> Result<Plan> {
         let ShowDatabasesStmt {
             catalog,
@@ -92,7 +92,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_show_create_database(
         &self,
-        stmt: &ShowCreateDatabaseStmt<'a>,
+        stmt: &ShowCreateDatabaseStmt,
     ) -> Result<Plan> {
         let ShowCreateDatabaseStmt { catalog, database } = stmt;
 
@@ -115,7 +115,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_alter_database(
         &self,
-        stmt: &AlterDatabaseStmt<'a>,
+        stmt: &AlterDatabaseStmt,
     ) -> Result<Plan> {
         let AlterDatabaseStmt {
             if_exists,
@@ -151,7 +151,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_drop_database(
         &self,
-        stmt: &DropDatabaseStmt<'a>,
+        stmt: &DropDatabaseStmt,
     ) -> Result<Plan> {
         let DropDatabaseStmt {
             if_exists,
@@ -176,7 +176,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_undrop_database(
         &self,
-        stmt: &UndropDatabaseStmt<'a>,
+        stmt: &UndropDatabaseStmt,
     ) -> Result<Plan> {
         let UndropDatabaseStmt { catalog, database } = stmt;
 
@@ -196,7 +196,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_create_database(
         &self,
-        stmt: &CreateDatabaseStmt<'a>,
+        stmt: &CreateDatabaseStmt,
     ) -> Result<Plan> {
         let CreateDatabaseStmt {
             if_not_exists,

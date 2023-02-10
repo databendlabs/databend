@@ -24,7 +24,7 @@ use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_meta_types::UserDefinedFunction;
+use common_meta_app::principal::UserDefinedFunction;
 
 use crate::planner::udf_validator::UDFValidator;
 use crate::plans::AlterUDFPlan;
@@ -75,7 +75,7 @@ impl<'a> Binder {
         }
     }
 
-    pub async fn bind(mut self, stmt: &Statement<'a>) -> Result<Plan> {
+    pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
         let init_bind_context = BindContext::new();
         self.bind_statement(&init_bind_context, stmt).await
     }
@@ -84,7 +84,7 @@ impl<'a> Binder {
     pub(crate) async fn bind_statement(
         &mut self,
         bind_context: &BindContext,
-        stmt: &Statement<'a>,
+        stmt: &Statement,
     ) -> Result<Plan> {
         let plan = match stmt {
             Statement::Query(query) => {

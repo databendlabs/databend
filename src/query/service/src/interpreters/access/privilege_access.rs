@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::GrantObject;
-use common_meta_types::UserPrivilegeType;
+use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::UserPrivilegeType;
 
 use crate::interpreters::access::AccessChecker;
 use crate::sessions::QueryContext;
@@ -99,6 +99,30 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::RenameTable(_) => {}
+            Plan::AddTableColumn(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        UserPrivilegeType::Alter,
+                    )
+                    .await?;
+            }
+            Plan::DropTableColumn(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        UserPrivilegeType::Alter,
+                    )
+                    .await?;
+            }
             Plan::AlterTableClusterKey(plan) => {
                 session
                     .validate_privilege(
@@ -147,13 +171,46 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
-            Plan::OptimizeTable(_) => {}
+            Plan::OptimizeTable(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        UserPrivilegeType::Super,
+                    )
+                    .await?;
+            }
             Plan::AnalyzeTable(_) => {}
             Plan::ExistsTable(_) => {}
 
             // Others.
-            Plan::Insert(_) => {}
-            Plan::Delete(_) => {}
+            Plan::Insert(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        UserPrivilegeType::Insert,
+                    )
+                    .await?;
+            }
+            Plan::Delete(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog_name.clone(),
+                            plan.database_name.clone(),
+                            plan.table_name.clone(),
+                        ),
+                        UserPrivilegeType::Delete,
+                    )
+                    .await?;
+            }
             Plan::Update(plan) => {
                 session
                     .validate_privilege(

@@ -27,18 +27,18 @@ use super::Binder;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::CastExpr;
 use crate::plans::Plan;
-use crate::plans::Scalar;
+use crate::plans::ScalarExpr;
 use crate::plans::SettingPlan;
 use crate::plans::UnSettingPlan;
 use crate::plans::VarValue;
 
-impl<'a> Binder {
+impl Binder {
     pub(in crate::planner::binder) async fn bind_set_variable(
         &mut self,
         bind_context: &BindContext,
         is_global: bool,
-        variable: &Identifier<'a>,
-        value: &Expr<'a>,
+        variable: &Identifier,
+        value: &Expr,
     ) -> Result<Plan> {
         let mut type_checker = TypeChecker::new(
             bind_context,
@@ -50,7 +50,7 @@ impl<'a> Binder {
         let variable = variable.name.clone();
 
         let (scalar, data_type) = *type_checker.resolve(value, None).await?;
-        let scalar = Scalar::CastExpr(CastExpr {
+        let scalar = ScalarExpr::CastExpr(CastExpr {
             is_try: false,
             argument: Box::new(scalar),
             from_type: Box::new(data_type),
@@ -58,11 +58,8 @@ impl<'a> Binder {
         });
         let expr = scalar.as_expr_with_col_index()?;
 
-        let (new_expr, _) = ConstantFolder::fold(
-            &expr,
-            self.ctx.try_get_function_context()?,
-            &BUILTIN_FUNCTIONS,
-        );
+        let (new_expr, _) =
+            ConstantFolder::fold(&expr, self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
         match new_expr {
             common_expression::Expr::Constant { scalar, .. } => {
                 let value = String::from_utf8(scalar.into_string().unwrap())?;
@@ -80,7 +77,7 @@ impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_unset_variable(
         &mut self,
         _bind_context: &BindContext,
-        stmt: &UnSetStmt<'_>,
+        stmt: &UnSetStmt,
     ) -> Result<Plan> {
         match stmt.clone().source {
             UnSetSource::Var { variable } => {

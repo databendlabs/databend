@@ -18,11 +18,13 @@ use common_base::base::ProgressValues;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
+use common_catalog::plan::PruningStatistics;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::filter_helper::FilterHelpers;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::Column;
@@ -35,6 +37,8 @@ use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_pipeline_core::pipe::Pipe;
+use common_pipeline_core::pipe::PipeItem;
 use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -47,9 +51,8 @@ use crate::operations::mutation::MutationTransform;
 use crate::operations::mutation::SerializeDataTransform;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
-use crate::pruning::BlockPruner;
+use crate::pruning::FusePruner;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 
@@ -164,12 +167,12 @@ impl FuseTable {
         let filter_expr = filter
             .as_expr(&BUILTIN_FUNCTIONS)
             .project_column_ref(|name| schema.index_of(name).unwrap());
-        let func_ctx = ctx.try_get_function_context()?;
+        let func_ctx = ctx.get_function_context()?;
         let evaluator = Evaluator::new(&dummy_block, func_ctx, &BUILTIN_FUNCTIONS);
         let res = evaluator
             .run(&filter_expr)
-            .map_err(|(_, e)| ErrorCode::Internal(format!("eval try eval const failed: {}.", e)))?;
-        let predicates = DataBlock::cast_to_nonull_boolean(&res).ok_or_else(|| {
+            .map_err(|e| e.add_message("eval try eval const failed:"))?;
+        let predicates = FilterHelpers::cast_to_nonull_boolean(&res).ok_or_else(|| {
             ErrorCode::BadArguments("Result of filter expression cannot be converted to boolean.")
         })?;
 
@@ -188,7 +191,7 @@ impl FuseTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let projection = Projection::Columns(col_indices.clone());
-        self.mutation_block_purning(
+        self.mutation_block_pruning(
             ctx.clone(),
             vec![filter.clone()],
             projection.clone(),
@@ -196,7 +199,7 @@ impl FuseTable {
         )
         .await?;
 
-        let block_reader = self.create_block_reader(projection)?;
+        let block_reader = self.create_block_reader(projection, ctx.clone())?;
         let schema = block_reader.schema();
         let filter = Arc::new(Some(
             filter
@@ -215,7 +218,8 @@ impl FuseTable {
         } else {
             source_col_ids.extend_from_slice(&remain_col_ids);
             Arc::new(Some(
-                (*self.create_block_reader(Projection::Columns(remain_col_ids))?).clone(),
+                (*self.create_block_reader(Projection::Columns(remain_col_ids), ctx.clone())?)
+                    .clone(),
             ))
         };
 
@@ -242,7 +246,7 @@ impl FuseTable {
         )
     }
 
-    pub async fn mutation_block_purning(
+    pub async fn mutation_block_pruning(
         &self,
         ctx: Arc<dyn TableContext>,
         filters: Vec<RemoteExpr<String>>,
@@ -255,40 +259,38 @@ impl FuseTable {
             ..PushDownInfo::default()
         });
 
-        let segments_location = base_snapshot.segments.clone();
-        let block_metas = BlockPruner::prune(
+        let segment_locations = base_snapshot.segments.clone();
+        let pruner = FusePruner::create(
             &ctx,
             self.operator.clone(),
             self.table_info.schema(),
             &push_down,
-            segments_location,
-        )
-        .await?;
+        )?;
+        let block_metas = pruner.pruning(segment_locations).await?;
 
-        let mut index_stats = Vec::with_capacity(block_metas.len());
-        let mut metas = Vec::with_capacity(block_metas.len());
-        for (index, block_meta) in block_metas.into_iter() {
-            index_stats.push((index, block_meta.cluster_stats.clone()));
-            metas.push(block_meta);
-        }
+        let range_block_metas = block_metas
+            .clone()
+            .into_iter()
+            .map(|(a, b)| (a.range, b))
+            .collect::<Vec<_>>();
 
         let (_, inner_parts) = self.read_partitions_with_metas(
-            ctx.clone(),
             self.table_info.schema(),
             None,
-            metas,
+            &range_block_metas,
             base_snapshot.summary.block_count as usize,
+            PruningStatistics::default(),
         )?;
 
         let parts = Partitions::create(
             PartitionsShuffleKind::Mod,
-            index_stats
+            block_metas
                 .into_iter()
                 .zip(inner_parts.partitions.into_iter())
-                .map(|((a, b), c)| MutationPartInfo::create(a, b, c))
+                .map(|(a, c)| MutationPartInfo::create(a.0, a.1.cluster_stats.clone(), c))
                 .collect(),
         );
-        ctx.try_set_partitions(parts)
+        ctx.set_partitions(parts)
     }
 
     pub fn try_add_mutation_transform(
@@ -297,33 +299,33 @@ impl FuseTable {
         base_segments: Vec<Location>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        match pipeline.pipes.last() {
-            None => Err(ErrorCode::Internal("The pipeline is empty.")),
-            Some(pipe) if pipe.output_size() == 0 => {
-                Err(ErrorCode::Internal("The output of the last pipe is 0."))
-            }
-            Some(pipe) => {
-                let input_size = pipe.output_size();
-                let mut inputs_port = Vec::with_capacity(input_size);
-                for _ in 0..input_size {
+        if pipeline.is_empty() {
+            return Err(ErrorCode::Internal("The pipeline is empty."));
+        }
+
+        match pipeline.output_len() {
+            0 => Err(ErrorCode::Internal("The output of the last pipe is 0.")),
+            last_pipe_size => {
+                let mut inputs_port = Vec::with_capacity(last_pipe_size);
+                for _ in 0..last_pipe_size {
                     inputs_port.push(InputPort::create());
                 }
                 let output_port = OutputPort::create();
-                let processor = MutationTransform::try_create(
-                    ctx,
-                    self.schema(),
-                    inputs_port.clone(),
-                    output_port.clone(),
-                    self.get_operator(),
-                    self.meta_location_generator().clone(),
-                    base_segments,
-                    self.get_block_compact_thresholds(),
-                )?;
-                pipeline.pipes.push(Pipe::ResizePipe {
+                pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
+                    MutationTransform::try_create(
+                        ctx,
+                        self.schema(),
+                        inputs_port.clone(),
+                        output_port.clone(),
+                        self.get_operator(),
+                        self.meta_location_generator().clone(),
+                        base_segments,
+                        self.get_block_compact_thresholds(),
+                    )?,
                     inputs_port,
-                    outputs_port: vec![output_port],
-                    processor,
-                });
+                    vec![output_port],
+                )]));
+
                 Ok(())
             }
         }
@@ -337,7 +339,7 @@ impl FuseTable {
         let input_schema = self.table_info.schema();
         let mut merged: Vec<DataField> =
             input_schema.fields().iter().map(DataField::from).collect();
-        let func_ctx = ctx.try_get_function_context()?;
+        let func_ctx = ctx.get_function_context()?;
         let cluster_keys = self.cluster_keys(ctx);
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
         let mut extra_key_num = 0;
@@ -362,10 +364,17 @@ impl FuseTable {
             cluster_key_index.push(index);
         }
 
+        let max_page_size = if self.is_native() {
+            Some(self.get_write_settings().max_page_size)
+        } else {
+            None
+        };
+
         Ok(ClusterStatsGenerator::new(
             self.cluster_key_meta.as_ref().unwrap().0,
             cluster_key_index,
             extra_key_num,
+            max_page_size,
             0,
             self.get_block_compact_thresholds(),
             operators,

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use common_ast::ast::Expr;
-use common_ast::parser::token::Token;
 use common_exception::Result;
+use common_exception::Span;
 
 use super::select::SelectList;
 use crate::binder::aggregate::AggregateRewriter;
@@ -23,19 +23,19 @@ use crate::binder::ScalarBinder;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::GroupingChecker;
 use crate::plans::Filter;
-use crate::plans::Scalar;
+use crate::plans::ScalarExpr;
 use crate::BindContext;
 use crate::Binder;
 
-impl<'a> Binder {
+impl Binder {
     /// Analyze aggregates in having clause, this will rewrite aggregate functions.
     /// See `AggregateRewriter` for more details.
-    pub(super) async fn analyze_aggregate_having(
+    pub(super) async fn analyze_aggregate_having<'a>(
         &mut self,
         bind_context: &mut BindContext,
         select_list: &SelectList<'a>,
-        having: &Expr<'a>,
-    ) -> Result<(Scalar, &'a [Token<'a>])> {
+        having: &Expr,
+    ) -> Result<(ScalarExpr, Span)> {
         let aliases = select_list
             .items
             .iter()
@@ -56,14 +56,14 @@ impl<'a> Binder {
     pub(super) async fn bind_having(
         &mut self,
         bind_context: &BindContext,
-        having: Scalar,
-        span: &'a [Token<'a>],
+        having: ScalarExpr,
+        span: Span,
         child: SExpr,
     ) -> Result<SExpr> {
         let scalar = if bind_context.in_grouping {
             // If we are in grouping context, we will perform the grouping check
             let mut grouping_checker = GroupingChecker::new(bind_context);
-            grouping_checker.resolve(&having, Some(span))?
+            grouping_checker.resolve(&having, span)?
         } else {
             // Otherwise we just fallback to a normal selection as `WHERE` clause.
             // This follows behavior of MySQL and Snowflake.

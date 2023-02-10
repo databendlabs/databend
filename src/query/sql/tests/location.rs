@@ -23,18 +23,18 @@ use common_ast::ast::UriLocation;
 use common_base::base::GlobalInstance;
 use common_config::Config;
 use common_config::GlobalConfig;
-use common_sql::planner::binder::parse_uri_location;
-use common_storage::StorageFsConfig;
+use common_meta_app::storage::StorageFsConfig;
 // use common_storage::StorageFtpConfig;
-use common_storage::StorageGcsConfig;
-use common_storage::StorageHttpConfig;
-use common_storage::StorageIpfsConfig;
-use common_storage::StorageOssConfig;
-use common_storage::StorageParams;
-use common_storage::StorageS3Config;
-use common_storage::STORAGE_GCS_DEFAULT_ENDPOINT;
-use common_storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
-use common_storage::STORAGE_S3_DEFAULT_ENDPOINT;
+use common_meta_app::storage::StorageGcsConfig;
+use common_meta_app::storage::StorageHttpConfig;
+use common_meta_app::storage::StorageIpfsConfig;
+use common_meta_app::storage::StorageOssConfig;
+use common_meta_app::storage::StorageParams;
+use common_meta_app::storage::StorageS3Config;
+use common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
+use common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
+use common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
+use common_sql::planner::binder::parse_uri_location;
 
 #[test]
 fn test_parse_uri_location() -> Result<()> {
@@ -86,6 +86,7 @@ fn test_parse_uri_location() -> Result<()> {
             (
                 StorageParams::Oss(StorageOssConfig {
                     endpoint_url: "https://oss-cn-litang.example.com".to_string(),
+                    presign_endpoint_url: "".to_string(),
                     root: "/highest/".to_string(),
                     bucket: "zhen".to_string(),
                     access_key_id: "dzin".to_string(),

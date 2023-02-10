@@ -212,7 +212,7 @@ impl StringColumn {
 }
 
 pub struct StringIterator<'a> {
-    data: &'a Buffer<u8>,
+    data: &'a [u8],
     offsets: std::slice::Windows<'a, u64>,
 }
 
@@ -257,6 +257,14 @@ impl StringColumnBuilder {
             need_estimated: col.data.is_empty(),
             data: buffer_into_mut(col.data),
             offsets: col.offsets.to_vec(),
+        }
+    }
+
+    pub fn from_data(data: Vec<u8>, offsets: Vec<u64>) -> Self {
+        StringColumnBuilder {
+            need_estimated: false,
+            data,
+            offsets,
         }
     }
 

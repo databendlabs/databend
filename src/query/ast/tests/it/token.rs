@@ -34,7 +34,7 @@ fn run_lexer(file: &mut File, source: &str) {
             writeln!(file, "\n").unwrap();
         }
         Err(err) => {
-            let report = err.message().trim().to_string();
+            let report = err.display_with_sql(source).message().trim().to_string();
             writeln!(file, "---------- Input ----------").unwrap();
             writeln!(file, "{}", source).unwrap();
             writeln!(file, "---------- Output ---------").unwrap();

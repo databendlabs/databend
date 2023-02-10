@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_meta_app::storage::StorageFsConfig;
+use common_meta_app::storage::StorageGcsConfig;
+use common_meta_app::storage::StorageOssConfig;
+use common_meta_app::storage::StorageS3Config;
 use common_protos::pb;
-use common_storage::StorageFsConfig;
-use common_storage::StorageGcsConfig;
-use common_storage::StorageOssConfig;
-use common_storage::StorageS3Config;
 
 use crate::reader_check_msg;
 use crate::FromToProto;
@@ -136,6 +136,7 @@ impl FromToProto for StorageOssConfig {
 
         Ok(StorageOssConfig {
             endpoint_url: p.endpoint_url,
+            presign_endpoint_url: "".to_string(),
             bucket: p.bucket,
             root: p.root,
 

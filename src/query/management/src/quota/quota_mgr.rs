@@ -17,26 +17,27 @@ use std::sync::Arc;
 use common_base::base::escape_for_key;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_api::KVApi;
+use common_meta_kvapi::kvapi;
+use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::IntoSeqV;
+use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::TenantQuota;
-use common_meta_types::UpsertKVReq;
 
 use super::quota_api::QuotaApi;
 
 static QUOTA_API_KEY_PREFIX: &str = "__fd_quotas";
 
 pub struct QuotaMgr {
-    kv_api: Arc<dyn KVApi>,
+    kv_api: Arc<dyn kvapi::KVApi<Error = KVAppError>>,
     key: String,
 }
 
 impl QuotaMgr {
-    pub fn create(kv_api: Arc<dyn KVApi>, tenant: &str) -> Result<Self> {
+    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = KVAppError>>, tenant: &str) -> Result<Self> {
         if tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
                 "Tenant can not empty(while quota mgr create)",
@@ -51,10 +52,10 @@ impl QuotaMgr {
 
 #[async_trait::async_trait]
 impl QuotaApi for QuotaMgr {
-    async fn get_quota(&self, seq: Option<u64>) -> Result<SeqV<TenantQuota>> {
+    async fn get_quota(&self, seq: MatchSeq) -> Result<SeqV<TenantQuota>> {
         let res = self.kv_api.get_kv(&self.key).await?;
         match res {
-            Some(seq_value) => match MatchSeq::from(seq).match_seq(&seq_value) {
+            Some(seq_value) => match seq.match_seq(&seq_value) {
                 Ok(_) => Ok(seq_value.into_seqv()?),
                 Err(_) => Err(ErrorCode::TenantQuotaUnknown("seq not match")),
             },
@@ -62,17 +63,13 @@ impl QuotaApi for QuotaMgr {
         }
     }
 
-    async fn set_quota(&self, quota: &TenantQuota, seq: Option<u64>) -> Result<u64> {
+    async fn set_quota(&self, quota: &TenantQuota, seq: MatchSeq) -> Result<u64> {
         let value = serde_json::to_vec(quota)?;
-        let match_seq = match seq {
-            None => MatchSeq::Any,
-            Some(seq) => MatchSeq::Exact(seq),
-        };
         let res = self
             .kv_api
             .upsert_kv(UpsertKVReq::new(
                 &self.key,
-                match_seq,
+                seq,
                 Operation::Update(value),
                 None,
             ))

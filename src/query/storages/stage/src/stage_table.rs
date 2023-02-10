@@ -33,17 +33,14 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
+use common_meta_app::principal::UserStageInfo;
 use common_meta_app::schema::TableInfo;
-use common_meta_types::StageType;
-use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
-use common_pipeline_sources::processors::sources::input_formats::InputContext;
-use common_pipeline_sources::processors::sources::input_formats::SplitInfo;
-use common_storage::init_operator;
-use common_storage::DataOperator;
-use opendal::layers::SubdirLayer;
+use common_pipeline_sources::input_formats::InputContext;
+use common_pipeline_sources::input_formats::SplitInfo;
+use common_storage::init_stage_operator;
 use opendal::Operator;
 use parking_lot::Mutex;
 use regex::Regex;
@@ -59,7 +56,7 @@ pub struct StageTable {
     // But the Table trait need it:
     // fn get_table_info(&self) -> &TableInfo).
     table_info_placeholder: TableInfo,
-    block_compact_threshold: Mutex<Option<BlockCompactThresholds>>,
+    block_compact_threshold: Mutex<Option<BlockThresholds>>,
 }
 
 impl StageTable {
@@ -75,12 +72,7 @@ impl StageTable {
 
     /// Get operator with correctly prefix.
     pub fn get_op(stage: &UserStageInfo) -> Result<Operator> {
-        if stage.stage_type == StageType::External {
-            Ok(init_operator(&stage.stage_params.storage)?)
-        } else {
-            let pop = DataOperator::instance().operator();
-            Ok(pop.layer(SubdirLayer::new(&stage.stage_prefix())))
-        }
+        init_stage_operator(stage)
     }
 
     pub async fn list_files(stage_info: &StageTableInfo) -> Result<Vec<StageFileInfo>> {
@@ -118,10 +110,10 @@ impl StageTable {
         Ok(all_files)
     }
 
-    fn get_block_compact_thresholds_with_default(&self) -> BlockCompactThresholds {
+    fn get_block_compact_thresholds_with_default(&self) -> BlockThresholds {
         let guard = self.block_compact_threshold.lock();
         match guard.deref() {
-            None => BlockCompactThresholds::default(),
+            None => BlockThresholds::default(),
             Some(t) => *t,
         }
     }
@@ -284,12 +276,12 @@ impl Table for StageTable {
         ))
     }
 
-    fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
+    fn get_block_compact_thresholds(&self) -> BlockThresholds {
         let guard = self.block_compact_threshold.lock();
         (*guard).expect("must success")
     }
 
-    fn set_block_compact_thresholds(&self, thresholds: BlockCompactThresholds) {
+    fn set_block_compact_thresholds(&self, thresholds: BlockThresholds) {
         let mut guard = self.block_compact_threshold.lock();
         (*guard) = Some(thresholds)
     }

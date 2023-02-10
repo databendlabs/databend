@@ -88,7 +88,7 @@ impl JoinHashTable {
             .collect::<Vec<_>>();
         let mut markers = Self::init_markers(&cols, input.num_rows());
 
-        let _func_ctx = self.ctx.try_get_function_context()?;
+        let _func_ctx = self.ctx.get_function_context()?;
         let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
 
         let mut probe_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);

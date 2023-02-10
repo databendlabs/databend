@@ -19,7 +19,7 @@ use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::BlockCompactThresholds;
+use common_expression::BlockThresholds;
 use common_expression::DataField;
 use common_expression::Expr;
 use common_expression::SortColumnDescription;
@@ -71,8 +71,18 @@ impl FuseTable {
             }
         }
 
-        let cluster_stats_gen =
-            self.get_cluster_stats_gen(ctx.clone(), pipeline, 0, block_compact_thresholds)?;
+        let max_page_size = if self.is_native() {
+            Some(write_settings.max_page_size)
+        } else {
+            None
+        };
+        let cluster_stats_gen = self.get_cluster_stats_gen(
+            ctx.clone(),
+            max_page_size,
+            pipeline,
+            0,
+            block_compact_thresholds,
+        )?;
 
         let cluster_keys = &cluster_stats_gen.cluster_key_index;
         if !cluster_keys.is_empty() {
@@ -130,9 +140,10 @@ impl FuseTable {
     pub fn get_cluster_stats_gen(
         &self,
         ctx: Arc<dyn TableContext>,
+        max_page_size: Option<usize>,
         pipeline: &mut Pipeline,
         level: i32,
-        block_compactor: BlockCompactThresholds,
+        block_compactor: BlockThresholds,
     ) -> Result<ClusterStatsGenerator> {
         let cluster_keys = self.cluster_keys(ctx.clone());
         if cluster_keys.is_empty() {
@@ -167,7 +178,7 @@ impl FuseTable {
             cluster_key_index.push(offset);
         }
 
-        let func_ctx = ctx.try_get_function_context()?;
+        let func_ctx = ctx.get_function_context()?;
         if !operators.is_empty() {
             pipeline.add_transform(move |input, output| {
                 Ok(CompoundBlockOperator::create(
@@ -183,6 +194,7 @@ impl FuseTable {
             self.cluster_key_meta.as_ref().unwrap().0,
             cluster_key_index,
             extra_key_num,
+            max_page_size,
             level,
             block_compactor,
             vec![],

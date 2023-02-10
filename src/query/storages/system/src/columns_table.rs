@@ -17,7 +17,9 @@ use std::sync::Arc;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::infer_table_schema;
 use common_expression::types::StringType;
 use common_expression::utils::FromData;
 use common_expression::DataBlock;
@@ -27,6 +29,9 @@ use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_sql::Planner;
+use common_storages_view::view_table::QUERY;
+use common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -48,6 +53,7 @@ impl AsyncSystemTable for ColumnsTable {
         let mut names: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut tables: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut databases: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
+        let mut types: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut data_types: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut default_kinds: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut default_exprs: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
@@ -57,8 +63,8 @@ impl AsyncSystemTable for ColumnsTable {
             names.push(field.name().clone().into_bytes());
             tables.push(table_name.into_bytes());
             databases.push(database_name.into_bytes());
-
-            let data_type = field.data_type().sql_name();
+            types.push(field.data_type().wrapped_display().into_bytes());
+            let data_type = field.data_type().remove_recursive_nullable().sql_name();
             data_types.push(data_type.into_bytes());
 
             let mut default_kind = "".to_string();
@@ -82,6 +88,7 @@ impl AsyncSystemTable for ColumnsTable {
             StringType::from_data(names),
             StringType::from_data(databases),
             StringType::from_data(tables),
+            StringType::from_data(types),
             StringType::from_data(data_types),
             StringType::from_data(default_kinds),
             StringType::from_data(default_exprs),
@@ -97,7 +104,10 @@ impl ColumnsTable {
             TableField::new("name", TableDataType::String),
             TableField::new("database", TableDataType::String),
             TableField::new("table", TableDataType::String),
+            // inner wrapped display style
             TableField::new("type", TableDataType::String),
+            // mysql display style for 3rd party tools
+            TableField::new("data_type", TableDataType::String),
             TableField::new("default_kind", TableDataType::String),
             TableField::new("default_expression", TableDataType::String),
             TableField::new("is_nullable", TableDataType::String),
@@ -133,7 +143,21 @@ impl ColumnsTable {
                 .list_tables(tenant.as_str(), database.name())
                 .await?
             {
-                for field in table.schema().fields() {
+                let fields = if table.engine() == VIEW_ENGINE {
+                    if let Some(query) = table.options().get(QUERY) {
+                        let mut planner = Planner::new(ctx.clone());
+                        let (plan, _, _) = planner.plan_sql(query).await?;
+                        let schema = infer_table_schema(&plan.schema())?;
+                        schema.fields().clone()
+                    } else {
+                        return Err(ErrorCode::Internal(
+                            "Logical error, View Table must have a SelectQuery inside.",
+                        ));
+                    }
+                } else {
+                    table.schema().fields().clone()
+                };
+                for field in fields {
                     rows.push((database.name().into(), table.name().into(), field.clone()))
                 }
             }

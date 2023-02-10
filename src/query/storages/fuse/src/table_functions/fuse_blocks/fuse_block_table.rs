@@ -22,7 +22,6 @@ use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_expression::Scalar;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -32,7 +31,6 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::AsyncSource;
 use crate::pipelines::processors::AsyncSourcer;
-use crate::pipelines::Pipe;
 use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
 use crate::table_functions::string_literal;
@@ -102,7 +100,7 @@ impl Table for FuseBlockTable {
         Ok((PartStatistics::default(), Partitions::default()))
     }
 
-    fn table_args(&self) -> Option<Vec<Scalar>> {
+    fn table_args(&self) -> Option<TableArgs> {
         let mut args = Vec::new();
         args.push(string_literal(self.arg_database_name.as_str()));
         args.push(string_literal(self.arg_table_name.as_str()));
@@ -111,7 +109,7 @@ impl Table for FuseBlockTable {
                 self.arg_snapshot_id.clone().unwrap().as_str(),
             ));
         }
-        Some(args)
+        Some(TableArgs::new_positioned(args))
     }
 
     fn read_data(
@@ -120,18 +118,18 @@ impl Table for FuseBlockTable {
         _: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let output = OutputPort::create();
-        pipeline.add_pipe(Pipe::SimplePipe {
-            inputs_port: vec![],
-            outputs_port: vec![output.clone()],
-            processors: vec![FuseBlockSource::create(
-                ctx,
-                output,
-                self.arg_database_name.to_owned(),
-                self.arg_table_name.to_owned(),
-                self.arg_snapshot_id.to_owned(),
-            )?],
-        });
+        pipeline.add_source(
+            |output| {
+                FuseBlockSource::create(
+                    ctx.clone(),
+                    output,
+                    self.arg_database_name.to_owned(),
+                    self.arg_table_name.to_owned(),
+                    self.arg_snapshot_id.to_owned(),
+                )
+            },
+            1,
+        )?;
 
         Ok(())
     }

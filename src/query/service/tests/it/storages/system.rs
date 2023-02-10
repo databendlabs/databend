@@ -19,18 +19,19 @@ use common_base::base::tokio;
 use common_catalog::table::Table;
 use common_exception::Result;
 use common_expression::block_debug::pretty_format_blocks;
-use common_meta_types::AuthInfo;
-use common_meta_types::AuthType;
-use common_meta_types::RoleInfo;
-use common_meta_types::UserGrantSet;
-use common_meta_types::UserInfo;
-use common_meta_types::UserOption;
-use common_meta_types::UserQuota;
+use common_meta_app::principal::AuthInfo;
+use common_meta_app::principal::AuthType;
+use common_meta_app::principal::RoleInfo;
+use common_meta_app::principal::UserGrantSet;
+use common_meta_app::principal::UserInfo;
+use common_meta_app::principal::UserOption;
+use common_meta_app::principal::UserQuota;
+// use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use common_meta_app::storage::StorageParams;
+use common_meta_app::storage::StorageS3Config;
 use common_metrics::init_default_metrics_recorder;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
-// use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
-use common_storage::StorageParams;
-use common_storage::StorageS3Config;
+use common_storages_system::BuildOptionsTable;
 use common_storages_system::CatalogsTable;
 use common_storages_system::ClustersTable;
 use common_storages_system::ColumnsTable;
@@ -89,6 +90,21 @@ async fn run_table_tests(
         writeln!(file, "{}", line).unwrap();
     }
     write!(file, "\n\n").unwrap();
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_build_options_table() -> Result<()> {
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
+
+    let table = BuildOptionsTable::create(1);
+    let source_plan = table.read_plan(ctx.clone(), None).await?;
+
+    let stream = table.read_data_block_stream(ctx, &source_plan).await?;
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 2);
+    assert!(block.num_rows() > 0);
     Ok(())
 }
 

@@ -15,11 +15,11 @@
 use std::fmt::Display;
 
 use common_exception::Result;
-use common_meta_types::PrincipalIdentity;
-use common_meta_types::UserIdentity;
+use common_exception::Span;
+use common_meta_app::principal::PrincipalIdentity;
+use common_meta_app::principal::UserIdentity;
 
 use crate::ast::*;
-use crate::parser::token::Token;
 use crate::visitors::Visitor;
 
 pub fn format_statement(stmt: Statement) -> Result<String> {
@@ -98,7 +98,7 @@ impl AstFormatVisitor {
 }
 
 impl<'ast> Visitor<'ast> for AstFormatVisitor {
-    fn visit_identifier(&mut self, ident: &'ast Identifier<'ast>) {
+    fn visit_identifier(&mut self, ident: &'ast Identifier) {
         let format_ctx = AstFormatContext::new(format!("Identifier {ident}"));
         let node = FormatTreeNode::new(format_ctx);
         self.children.push(node);
@@ -106,8 +106,8 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_database_ref(
         &mut self,
-        catalog: &'ast Option<Identifier<'ast>>,
-        database: &'ast Identifier<'ast>,
+        catalog: &'ast Option<Identifier>,
+        database: &'ast Identifier,
     ) {
         let mut name = String::new();
         name.push_str("DatabaseIdentifier ");
@@ -123,9 +123,9 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_table_ref(
         &mut self,
-        catalog: &'ast Option<Identifier<'ast>>,
-        database: &'ast Option<Identifier<'ast>>,
-        table: &'ast Identifier<'ast>,
+        catalog: &'ast Option<Identifier>,
+        database: &'ast Option<Identifier>,
+        table: &'ast Identifier,
     ) {
         let mut name = String::new();
         name.push_str("TableIdentifier ");
@@ -145,10 +145,10 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_column_ref(
         &mut self,
-        _span: &'ast [Token<'ast>],
-        database: &'ast Option<Identifier<'ast>>,
-        table: &'ast Option<Identifier<'ast>>,
-        column: &'ast Identifier<'ast>,
+        _span: Span,
+        database: &'ast Option<Identifier>,
+        table: &'ast Option<Identifier>,
+        column: &'ast Identifier,
     ) {
         let mut name = String::new();
         name.push_str("ColumnIdentifier ");
@@ -166,7 +166,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_is_null(&mut self, _span: &'ast [Token<'ast>], expr: &'ast Expr<'ast>, not: bool) {
+    fn visit_is_null(&mut self, _span: Span, expr: &'ast Expr, not: bool) {
         let name = if not {
             "Function IsNotNull".to_string()
         } else {
@@ -181,9 +181,9 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_is_distinct_from(
         &mut self,
-        _span: &'ast [Token<'ast>],
-        left: &'ast Expr<'ast>,
-        right: &'ast Expr<'ast>,
+        _span: Span,
+        left: &'ast Expr,
+        right: &'ast Expr,
         not: bool,
     ) {
         let name = if not {
@@ -200,13 +200,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_in_list(
-        &mut self,
-        _span: &'ast [Token<'ast>],
-        expr: &'ast Expr<'ast>,
-        list: &'ast [Expr<'ast>],
-        not: bool,
-    ) {
+    fn visit_in_list(&mut self, _span: Span, expr: &'ast Expr, list: &'ast [Expr], not: bool) {
         self.visit_expr(expr);
         let expr_child = self.children.pop().unwrap();
 
@@ -230,9 +224,9 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_in_subquery(
         &mut self,
-        _span: &'ast [Token<'ast>],
-        expr: &'ast Expr<'ast>,
-        subquery: &'ast Query<'ast>,
+        _span: Span,
+        expr: &'ast Expr,
+        subquery: &'ast Query,
         not: bool,
     ) {
         self.visit_expr(expr);
@@ -252,10 +246,10 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_between(
         &mut self,
-        _span: &'ast [Token<'ast>],
-        expr: &'ast Expr<'ast>,
-        low: &'ast Expr<'ast>,
-        high: &'ast Expr<'ast>,
+        _span: Span,
+        expr: &'ast Expr,
+        low: &'ast Expr,
+        high: &'ast Expr,
         not: bool,
     ) {
         self.visit_expr(expr);
@@ -281,10 +275,10 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_binary_op(
         &mut self,
-        _span: &'ast [Token<'ast>],
+        _span: Span,
         op: &'ast BinaryOperator,
-        left: &'ast Expr<'ast>,
-        right: &'ast Expr<'ast>,
+        left: &'ast Expr,
+        right: &'ast Expr,
     ) {
         self.visit_expr(left);
         let left_child = self.children.pop().unwrap();
@@ -297,12 +291,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_unary_op(
-        &mut self,
-        _span: &'ast [Token<'ast>],
-        op: &'ast UnaryOperator,
-        expr: &'ast Expr<'ast>,
-    ) {
+    fn visit_unary_op(&mut self, _span: Span, op: &'ast UnaryOperator, expr: &'ast Expr) {
         self.visit_expr(expr);
         let expr_child = self.children.pop().unwrap();
 
@@ -314,8 +303,8 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_cast(
         &mut self,
-        _span: &'ast [Token<'ast>],
-        expr: &'ast Expr<'ast>,
+        _span: Span,
+        expr: &'ast Expr,
         target_type: &'ast TypeName,
         _pg_style: bool,
     ) {
@@ -330,12 +319,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_try_cast(
-        &mut self,
-        _span: &'ast [Token<'ast>],
-        expr: &'ast Expr<'ast>,
-        target_type: &'ast TypeName,
-    ) {
+    fn visit_try_cast(&mut self, _span: Span, expr: &'ast Expr, target_type: &'ast TypeName) {
         self.visit_expr(expr);
         let expr_child = self.children.pop().unwrap();
         let target_format_ctx = AstFormatContext::new(format!("TargetType {target_type}"));
@@ -347,12 +331,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_extract(
-        &mut self,
-        _span: &'ast [Token<'ast>],
-        kind: &'ast IntervalKind,
-        expr: &'ast Expr<'ast>,
-    ) {
+    fn visit_extract(&mut self, _span: Span, kind: &'ast IntervalKind, expr: &'ast Expr) {
         self.visit_expr(expr);
         let expr_child = self.children.pop().unwrap();
         let kind_format_ctx = AstFormatContext::new(format!("IntervalKind {kind}"));
@@ -364,12 +343,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_positon(
-        &mut self,
-        _span: &'ast [Token<'ast>],
-        substr_expr: &'ast Expr<'ast>,
-        str_expr: &'ast Expr<'ast>,
-    ) {
+    fn visit_positon(&mut self, _span: Span, substr_expr: &'ast Expr, str_expr: &'ast Expr) {
         self.visit_expr(substr_expr);
         let substr_expr_child = self.children.pop().unwrap();
         self.visit_expr(str_expr);
@@ -384,10 +358,10 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_substring(
         &mut self,
-        _span: &'ast [Token<'ast>],
-        expr: &'ast Expr<'ast>,
-        substring_from: &'ast Expr<'ast>,
-        substring_for: &'ast Option<Box<Expr<'ast>>>,
+        _span: Span,
+        expr: &'ast Expr,
+        substring_from: &'ast Expr,
+        substring_for: &'ast Option<Box<Expr>>,
     ) {
         let mut children = Vec::with_capacity(1);
         self.visit_expr(expr);
@@ -406,9 +380,9 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_trim(
         &mut self,
-        _span: &'ast [Token<'ast>],
-        expr: &'ast Expr<'ast>,
-        trim_where: &'ast Option<(TrimWhere, Box<Expr<'ast>>)>,
+        _span: Span,
+        expr: &'ast Expr,
+        trim_where: &'ast Option<(TrimWhere, Box<Expr>)>,
     ) {
         let mut children = Vec::with_capacity(1);
         self.visit_expr(expr);
@@ -423,21 +397,21 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_literal(&mut self, _span: &'ast [Token<'ast>], lit: &'ast Literal) {
+    fn visit_literal(&mut self, _span: Span, lit: &'ast Literal) {
         let name = format!("Literal {:?}", lit);
         let format_ctx = AstFormatContext::new(name);
         let node = FormatTreeNode::new(format_ctx);
         self.children.push(node);
     }
 
-    fn visit_count_all(&mut self, _span: &'ast [Token<'ast>]) {
+    fn visit_count_all(&mut self, _span: Span) {
         let name = "Function CountAll".to_string();
         let format_ctx = AstFormatContext::new(name);
         let node = FormatTreeNode::new(format_ctx);
         self.children.push(node);
     }
 
-    fn visit_tuple(&mut self, _span: &'ast [Token<'ast>], elements: &'ast [Expr<'ast>]) {
+    fn visit_tuple(&mut self, _span: Span, elements: &'ast [Expr]) {
         let mut children = Vec::with_capacity(elements.len());
         for element in elements.iter() {
             self.visit_expr(element);
@@ -451,10 +425,10 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_function_call(
         &mut self,
-        _span: &'ast [Token<'ast>],
+        _span: Span,
         distinct: bool,
-        name: &'ast Identifier<'ast>,
-        args: &'ast [Expr<'ast>],
+        name: &'ast Identifier,
+        args: &'ast [Expr],
         _params: &'ast [Literal],
     ) {
         let mut children = Vec::with_capacity(args.len());
@@ -474,11 +448,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_case_when(
         &mut self,
-        _span: &'ast [Token<'ast>],
-        operand: &'ast Option<Box<Expr<'ast>>>,
-        conditions: &'ast [Expr<'ast>],
-        results: &'ast [Expr<'ast>],
-        else_result: &'ast Option<Box<Expr<'ast>>>,
+        _span: Span,
+        operand: &'ast Option<Box<Expr>>,
+        conditions: &'ast [Expr],
+        results: &'ast [Expr],
+        else_result: &'ast Option<Box<Expr>>,
     ) {
         let mut children = Vec::new();
         if let Some(operand) = operand {
@@ -525,7 +499,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_exists(&mut self, _span: &'ast [Token<'ast>], not: bool, subquery: &'ast Query<'ast>) {
+    fn visit_exists(&mut self, _span: Span, not: bool, subquery: &'ast Query) {
         self.visit_query(subquery);
         let child = self.children.pop().unwrap();
 
@@ -541,9 +515,9 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_subquery(
         &mut self,
-        _span: &'ast [Token<'ast>],
+        _span: Span,
         modifier: &'ast Option<SubqueryModifier>,
-        subquery: &'ast Query<'ast>,
+        subquery: &'ast Query,
     ) {
         self.visit_query(subquery);
         let child = self.children.pop().unwrap();
@@ -558,12 +532,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_map_access(
-        &mut self,
-        _span: &'ast [Token<'ast>],
-        expr: &'ast Expr<'ast>,
-        accessor: &'ast MapAccessor<'ast>,
-    ) {
+    fn visit_map_access(&mut self, _span: Span, expr: &'ast Expr, accessor: &'ast MapAccessor) {
         self.visit_expr(expr);
         let expr_child = self.children.pop().unwrap();
 
@@ -582,7 +551,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_array(&mut self, _span: &'ast [Token<'ast>], exprs: &'ast [Expr<'ast>]) {
+    fn visit_array(&mut self, _span: Span, exprs: &'ast [Expr]) {
         let mut children = Vec::with_capacity(exprs.len());
         for expr in exprs.iter() {
             self.visit_expr(expr);
@@ -594,12 +563,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_interval(
-        &mut self,
-        _span: &'ast [Token<'ast>],
-        expr: &'ast Expr<'ast>,
-        unit: &'ast IntervalKind,
-    ) {
+    fn visit_interval(&mut self, _span: Span, expr: &'ast Expr, unit: &'ast IntervalKind) {
         self.visit_expr(expr);
         let child = self.children.pop().unwrap();
 
@@ -611,10 +575,10 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_date_add(
         &mut self,
-        _span: &'ast [Token<'ast>],
+        _span: Span,
         unit: &'ast IntervalKind,
-        interval: &'ast Expr<'ast>,
-        date: &'ast Expr<'ast>,
+        interval: &'ast Expr,
+        date: &'ast Expr,
     ) {
         self.visit_expr(date);
         let date_child = self.children.pop().unwrap();
@@ -629,10 +593,10 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_date_sub(
         &mut self,
-        _span: &'ast [Token<'ast>],
+        _span: Span,
         unit: &'ast IntervalKind,
-        interval: &'ast Expr<'ast>,
-        date: &'ast Expr<'ast>,
+        interval: &'ast Expr,
+        date: &'ast Expr,
     ) {
         self.visit_expr(date);
         let date_child = self.children.pop().unwrap();
@@ -645,12 +609,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_date_trunc(
-        &mut self,
-        _span: &'ast [Token<'ast>],
-        unit: &'ast IntervalKind,
-        date: &'ast Expr<'ast>,
-    ) {
+    fn visit_date_trunc(&mut self, _span: Span, unit: &'ast IntervalKind, date: &'ast Expr) {
         self.visit_expr(date);
         let child = self.children.pop().unwrap();
 
@@ -660,7 +619,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_query(&mut self, query: &'ast Query<'ast>) {
+    fn visit_query(&mut self, query: &'ast Query) {
         let mut children = Vec::new();
         if let Some(with) = &query.with {
             self.visit_with(with);
@@ -705,7 +664,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_explain(&mut self, kind: &'ast ExplainKind, query: &'ast Statement<'ast>) {
+    fn visit_explain(&mut self, kind: &'ast ExplainKind, query: &'ast Statement) {
         self.visit_statement(query);
         let child = self.children.pop().unwrap();
 
@@ -724,7 +683,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_copy(&mut self, copy: &'ast CopyStmt<'ast>) {
+    fn visit_copy(&mut self, copy: &'ast CopyStmt) {
         let mut children = Vec::new();
         self.visit_copy_unit(&copy.src);
         children.push(self.children.pop().unwrap());
@@ -789,7 +748,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_copy_unit(&mut self, copy_unit: &'ast CopyUnit<'ast>) {
+    fn visit_copy_unit(&mut self, copy_unit: &'ast CopyUnit) {
         match copy_unit {
             CopyUnit::Table {
                 catalog,
@@ -865,7 +824,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_show_functions(&mut self, limit: &'ast Option<ShowLimit<'ast>>) {
+    fn visit_show_functions(&mut self, limit: &'ast Option<ShowLimit>) {
         let mut children = Vec::new();
         if let Some(limit) = limit {
             self.visit_show_limit(limit);
@@ -877,7 +836,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_show_limit(&mut self, limit: &'ast ShowLimit<'ast>) {
+    fn visit_show_limit(&mut self, limit: &'ast ShowLimit) {
         match limit {
             ShowLimit::Like { pattern } => {
                 let name = format!("LimitLike {}", pattern);
@@ -906,8 +865,8 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_set_variable(
         &mut self,
         is_global: bool,
-        variable: &'ast Identifier<'ast>,
-        value: &'ast Expr<'ast>,
+        variable: &'ast Identifier,
+        value: &'ast Expr,
     ) {
         let mut children = Vec::with_capacity(1);
         self.visit_expr(value);
@@ -923,14 +882,14 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_unset_variable(&mut self, stmt: &'ast UnSetStmt<'ast>) {
+    fn visit_unset_variable(&mut self, stmt: &'ast UnSetStmt) {
         let name = format!("UnSet {}", stmt);
         let format_ctx = AstFormatContext::new(name);
         let node = FormatTreeNode::new(format_ctx);
         self.children.push(node);
     }
 
-    fn visit_insert(&mut self, insert: &'ast InsertStmt<'ast>) {
+    fn visit_insert(&mut self, insert: &'ast InsertStmt) {
         let mut children = Vec::new();
         self.visit_table_ref(&insert.catalog, &insert.database, &insert.table);
         children.push(self.children.pop().unwrap());
@@ -959,7 +918,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_insert_source(&mut self, insert_source: &'ast InsertSource<'ast>) {
+    fn visit_insert_source(&mut self, insert_source: &'ast InsertSource) {
         match insert_source {
             InsertSource::Streaming { format, .. } => {
                 let streaming_name = format!("StreamSource {}", format);
@@ -1002,8 +961,8 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_delete(
         &mut self,
-        table_reference: &'ast TableReference<'ast>,
-        selection: &'ast Option<Expr<'ast>>,
+        table_reference: &'ast TableReference,
+        selection: &'ast Option<Expr>,
     ) {
         let mut children = Vec::new();
         self.visit_table_reference(table_reference);
@@ -1019,7 +978,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_update(&mut self, update: &'ast UpdateStmt<'ast>) {
+    fn visit_update(&mut self, update: &'ast UpdateStmt) {
         let mut children = Vec::new();
         self.visit_table_reference(&update.table);
         children.push(self.children.pop().unwrap());
@@ -1040,7 +999,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_show_databases(&mut self, stmt: &'ast ShowDatabasesStmt<'ast>) {
+    fn visit_show_databases(&mut self, stmt: &'ast ShowDatabasesStmt) {
         let mut children = Vec::new();
         if let Some(limit) = &stmt.limit {
             self.visit_show_limit(limit);
@@ -1052,7 +1011,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_show_create_databases(&mut self, stmt: &'ast ShowCreateDatabaseStmt<'ast>) {
+    fn visit_show_create_databases(&mut self, stmt: &'ast ShowCreateDatabaseStmt) {
         self.visit_database_ref(&stmt.catalog, &stmt.database);
         let child = self.children.pop().unwrap();
         let name = "ShowCreateDatabase".to_string();
@@ -1061,7 +1020,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_create_database(&mut self, stmt: &'ast CreateDatabaseStmt<'ast>) {
+    fn visit_create_database(&mut self, stmt: &'ast CreateDatabaseStmt) {
         let mut children = Vec::new();
         self.visit_database_ref(&stmt.catalog, &stmt.database);
         children.push(self.children.pop().unwrap());
@@ -1091,7 +1050,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_drop_database(&mut self, stmt: &'ast DropDatabaseStmt<'ast>) {
+    fn visit_drop_database(&mut self, stmt: &'ast DropDatabaseStmt) {
         self.visit_database_ref(&stmt.catalog, &stmt.database);
         let child = self.children.pop().unwrap();
         let name = "DropDatabase".to_string();
@@ -1100,7 +1059,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_undrop_database(&mut self, stmt: &'ast UndropDatabaseStmt<'ast>) {
+    fn visit_undrop_database(&mut self, stmt: &'ast UndropDatabaseStmt) {
         self.visit_database_ref(&stmt.catalog, &stmt.database);
         let child = self.children.pop().unwrap();
         let name = "UndropDatabase".to_string();
@@ -1109,7 +1068,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_alter_database(&mut self, stmt: &'ast AlterDatabaseStmt<'ast>) {
+    fn visit_alter_database(&mut self, stmt: &'ast AlterDatabaseStmt) {
         self.visit_database_ref(&stmt.catalog, &stmt.database);
         let database_child = self.children.pop().unwrap();
 
@@ -1127,7 +1086,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_use_database(&mut self, database: &'ast Identifier<'ast>) {
+    fn visit_use_database(&mut self, database: &'ast Identifier) {
         self.visit_identifier(database);
         let child = self.children.pop().unwrap();
         let name = "UseDatabase".to_string();
@@ -1136,7 +1095,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_show_tables(&mut self, stmt: &'ast ShowTablesStmt<'ast>) {
+    fn visit_show_tables(&mut self, stmt: &'ast ShowTablesStmt) {
         let mut children = Vec::new();
         if let Some(database) = &stmt.database {
             let database_name = format!("Database {}", database);
@@ -1154,7 +1113,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_show_create_table(&mut self, stmt: &'ast ShowCreateTableStmt<'ast>) {
+    fn visit_show_create_table(&mut self, stmt: &'ast ShowCreateTableStmt) {
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
         let child = self.children.pop().unwrap();
         let name = "ShowCreateTable".to_string();
@@ -1163,7 +1122,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_describe_table(&mut self, stmt: &'ast DescribeTableStmt<'ast>) {
+    fn visit_describe_table(&mut self, stmt: &'ast DescribeTableStmt) {
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
         let child = self.children.pop().unwrap();
         let name = "DescribeTable".to_string();
@@ -1172,7 +1131,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_show_tables_status(&mut self, stmt: &'ast ShowTablesStatusStmt<'ast>) {
+    fn visit_show_tables_status(&mut self, stmt: &'ast ShowTablesStatusStmt) {
         let mut children = Vec::new();
         if let Some(database) = &stmt.database {
             let database_name = format!("Database {}", database);
@@ -1190,7 +1149,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_create_table(&mut self, stmt: &'ast CreateTableStmt<'ast>) {
+    fn visit_create_table(&mut self, stmt: &'ast CreateTableStmt) {
         let mut children = Vec::new();
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
         children.push(self.children.pop().unwrap());
@@ -1244,7 +1203,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_create_table_source(&mut self, source: &'ast CreateTableSource<'ast>) {
+    fn visit_create_table_source(&mut self, source: &'ast CreateTableSource) {
         match source {
             CreateTableSource::Columns(columns) => {
                 let mut children = Vec::with_capacity(columns.len());
@@ -1272,7 +1231,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         }
     }
 
-    fn visit_column_definition(&mut self, column_definition: &'ast ColumnDefinition<'ast>) {
+    fn visit_column_definition(&mut self, column_definition: &'ast ColumnDefinition) {
         let type_name = format!("DataType {}", column_definition.data_type);
         let type_format_ctx = AstFormatContext::new(type_name);
         let type_node = FormatTreeNode::new(type_format_ctx);
@@ -1283,7 +1242,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_drop_table(&mut self, stmt: &'ast DropTableStmt<'ast>) {
+    fn visit_drop_table(&mut self, stmt: &'ast DropTableStmt) {
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
         let child = self.children.pop().unwrap();
 
@@ -1293,7 +1252,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_undrop_table(&mut self, stmt: &'ast UndropTableStmt<'ast>) {
+    fn visit_undrop_table(&mut self, stmt: &'ast UndropTableStmt) {
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
         let child = self.children.pop().unwrap();
 
@@ -1303,13 +1262,23 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_alter_table(&mut self, stmt: &'ast AlterTableStmt<'ast>) {
+    fn visit_alter_table(&mut self, stmt: &'ast AlterTableStmt) {
         self.visit_table_reference(&stmt.table_reference);
         let table_child = self.children.pop().unwrap();
 
         let action_child = match &stmt.action {
             AlterTableAction::RenameTable { new_table } => {
                 let action_name = format!("Action RenameTo {}", new_table);
+                let action_format_ctx = AstFormatContext::new(action_name);
+                FormatTreeNode::new(action_format_ctx)
+            }
+            AlterTableAction::AddColumn { column } => {
+                let action_name = format!("Action Add column {}", column);
+                let action_format_ctx = AstFormatContext::new(action_name);
+                FormatTreeNode::new(action_format_ctx)
+            }
+            AlterTableAction::DropColumn { column } => {
+                let action_name = format!("Action Drop column {}", column);
                 let action_format_ctx = AstFormatContext::new(action_name);
                 FormatTreeNode::new(action_format_ctx)
             }
@@ -1355,7 +1324,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_rename_table(&mut self, stmt: &'ast RenameTableStmt<'ast>) {
+    fn visit_rename_table(&mut self, stmt: &'ast RenameTableStmt) {
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
         let old_child = self.children.pop().unwrap();
         self.visit_table_ref(&stmt.new_catalog, &stmt.new_database, &stmt.new_table);
@@ -1367,7 +1336,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_truncate_table(&mut self, stmt: &'ast TruncateTableStmt<'ast>) {
+    fn visit_truncate_table(&mut self, stmt: &'ast TruncateTableStmt) {
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
         let child = self.children.pop().unwrap();
 
@@ -1377,7 +1346,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_optimize_table(&mut self, stmt: &'ast OptimizeTableStmt<'ast>) {
+    fn visit_optimize_table(&mut self, stmt: &'ast OptimizeTableStmt) {
         let mut children = Vec::new();
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
         children.push(self.children.pop().unwrap());
@@ -1391,7 +1360,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_analyze_table(&mut self, stmt: &'ast AnalyzeTableStmt<'ast>) {
+    fn visit_analyze_table(&mut self, stmt: &'ast AnalyzeTableStmt) {
         let mut children = Vec::new();
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
         children.push(self.children.pop().unwrap());
@@ -1402,7 +1371,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_exists_table(&mut self, stmt: &'ast ExistsTableStmt<'ast>) {
+    fn visit_exists_table(&mut self, stmt: &'ast ExistsTableStmt) {
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
         let child = self.children.pop().unwrap();
 
@@ -1412,7 +1381,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_create_view(&mut self, stmt: &'ast CreateViewStmt<'ast>) {
+    fn visit_create_view(&mut self, stmt: &'ast CreateViewStmt) {
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.view);
         let view_child = self.children.pop().unwrap();
         self.visit_query(&stmt.query);
@@ -1424,7 +1393,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_alter_view(&mut self, stmt: &'ast AlterViewStmt<'ast>) {
+    fn visit_alter_view(&mut self, stmt: &'ast AlterViewStmt) {
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.view);
         let view_child = self.children.pop().unwrap();
         self.visit_query(&stmt.query);
@@ -1436,7 +1405,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_drop_view(&mut self, stmt: &'ast DropViewStmt<'ast>) {
+    fn visit_drop_view(&mut self, stmt: &'ast DropViewStmt) {
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.view);
         let child = self.children.pop().unwrap();
 
@@ -1668,9 +1637,9 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_create_udf(
         &mut self,
         _if_not_exists: bool,
-        udf_name: &'ast Identifier<'ast>,
-        parameters: &'ast [Identifier<'ast>],
-        definition: &'ast Expr<'ast>,
+        udf_name: &'ast Identifier,
+        parameters: &'ast [Identifier],
+        definition: &'ast Expr,
         description: &'ast Option<String>,
     ) {
         let mut children = Vec::new();
@@ -1709,7 +1678,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_drop_udf(&mut self, _if_exists: bool, udf_name: &'ast Identifier<'ast>) {
+    fn visit_drop_udf(&mut self, _if_exists: bool, udf_name: &'ast Identifier) {
         let udf_name_format_ctx = AstFormatContext::new(format!("UdfIdentifier {}", udf_name));
         let child = FormatTreeNode::new(udf_name_format_ctx);
 
@@ -1721,9 +1690,9 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_alter_udf(
         &mut self,
-        udf_name: &'ast Identifier<'ast>,
-        parameters: &'ast [Identifier<'ast>],
-        definition: &'ast Expr<'ast>,
+        udf_name: &'ast Identifier,
+        parameters: &'ast [Identifier],
+        definition: &'ast Expr,
         description: &'ast Option<String>,
     ) {
         let mut children = Vec::new();
@@ -1879,7 +1848,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_create_share(&mut self, stmt: &'ast CreateShareStmt<'ast>) {
+    fn visit_create_share(&mut self, stmt: &'ast CreateShareStmt) {
         let mut children = Vec::new();
         let share_format_ctx = AstFormatContext::new(format!("ShareIdentifier {}", stmt.share));
         children.push(FormatTreeNode::new(share_format_ctx));
@@ -1894,7 +1863,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_drop_share(&mut self, stmt: &'ast DropShareStmt<'ast>) {
+    fn visit_drop_share(&mut self, stmt: &'ast DropShareStmt) {
         let share_format_ctx = AstFormatContext::new(format!("ShareIdentifier {}", stmt.share));
         let child = FormatTreeNode::new(share_format_ctx);
 
@@ -1904,7 +1873,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_grant_share_object(&mut self, stmt: &'ast GrantShareObjectStmt<'ast>) {
+    fn visit_grant_share_object(&mut self, stmt: &'ast GrantShareObjectStmt) {
         let mut children = Vec::new();
         let share_format_ctx = AstFormatContext::new(format!("ShareIdentifier {}", stmt.share));
         children.push(FormatTreeNode::new(share_format_ctx));
@@ -1919,7 +1888,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_revoke_share_object(&mut self, stmt: &'ast RevokeShareObjectStmt<'ast>) {
+    fn visit_revoke_share_object(&mut self, stmt: &'ast RevokeShareObjectStmt) {
         let mut children = Vec::new();
         let share_format_ctx = AstFormatContext::new(format!("ShareIdentifier {}", stmt.share));
         children.push(FormatTreeNode::new(share_format_ctx));
@@ -1934,7 +1903,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_alter_share_tenants(&mut self, stmt: &'ast AlterShareTenantsStmt<'ast>) {
+    fn visit_alter_share_tenants(&mut self, stmt: &'ast AlterShareTenantsStmt) {
         let mut children = Vec::new();
         let share_format_ctx = AstFormatContext::new(format!("ShareIdentifier {}", stmt.share));
         children.push(FormatTreeNode::new(share_format_ctx));
@@ -1957,7 +1926,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_desc_share(&mut self, stmt: &'ast DescShareStmt<'ast>) {
+    fn visit_desc_share(&mut self, stmt: &'ast DescShareStmt) {
         let share_format_ctx = AstFormatContext::new(format!("ShareIdentifier {}", stmt.share));
         let child = FormatTreeNode::new(share_format_ctx);
 
@@ -1994,7 +1963,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_with(&mut self, with: &'ast With<'ast>) {
+    fn visit_with(&mut self, with: &'ast With) {
         let mut children = Vec::with_capacity(with.ctes.len());
         for cte in with.ctes.iter() {
             self.visit_query(&cte.query);
@@ -2014,7 +1983,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_set_expr(&mut self, expr: &'ast SetExpr<'ast>) {
+    fn visit_set_expr(&mut self, expr: &'ast SetExpr) {
         match expr {
             SetExpr::Select(select_stmt) => self.visit_select_stmt(select_stmt),
             SetExpr::Query(query) => self.visit_query(query),
@@ -2028,7 +1997,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_set_operation(&mut self, set_operation: &'ast SetOperation<'ast>) {
+    fn visit_set_operation(&mut self, set_operation: &'ast SetOperation) {
         self.visit_set_expr(&set_operation.left);
         let left_child = self.children.pop().unwrap();
         self.visit_set_expr(&set_operation.right);
@@ -2044,7 +2013,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_order_by(&mut self, order_by: &'ast OrderByExpr<'ast>) {
+    fn visit_order_by(&mut self, order_by: &'ast OrderByExpr) {
         self.visit_expr(&order_by.expr);
         let child = self.children.pop().unwrap();
         let format_ctx = AstFormatContext::with_children("OrderByElement".to_string(), 1);
@@ -2052,7 +2021,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_select_stmt(&mut self, stmt: &'ast SelectStmt<'ast>) {
+    fn visit_select_stmt(&mut self, stmt: &'ast SelectStmt) {
         let mut children = Vec::new();
         if !stmt.select_list.is_empty() {
             let mut select_list_children = Vec::with_capacity(stmt.select_list.len());
@@ -2117,7 +2086,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_select_target(&mut self, target: &'ast SelectTarget<'ast>) {
+    fn visit_select_target(&mut self, target: &'ast SelectTarget) {
         match target {
             SelectTarget::AliasedExpr { expr, alias } => {
                 self.visit_expr(expr);
@@ -2140,7 +2109,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         }
     }
 
-    fn visit_table_reference(&mut self, table: &'ast TableReference<'ast>) {
+    fn visit_table_reference(&mut self, table: &'ast TableReference) {
         match table {
             TableReference::Table {
                 span: _,
@@ -2199,12 +2168,22 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 span: _,
                 name,
                 params,
+                named_params,
                 alias,
             } => {
                 let mut children = Vec::with_capacity(params.len());
                 for param in params.iter() {
                     self.visit_expr(param);
                     children.push(self.children.pop().unwrap());
+                }
+                for (name, param) in named_params.iter() {
+                    self.visit_expr(param);
+                    let child = self.children.pop().unwrap();
+                    let node = FormatTreeNode::with_children(
+                        AstFormatContext::new(format!("{}=>{}", name, child.payload)),
+                        child.children,
+                    );
+                    children.push(node);
                 }
                 let func_name = format!("TableFunction {}", name);
                 let format_ctx = if let Some(alias) = alias {
@@ -2230,14 +2209,18 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             TableReference::Stage {
                 span: _,
                 location,
-                files,
+                options,
                 alias,
             } => {
                 let mut children = Vec::new();
-                if !files.is_empty() {
+                if let Some(files) = &options.files {
                     let files = files.join(",");
                     let files = format!("files = {}", files);
                     children.push(FormatTreeNode::new(AstFormatContext::new(files)))
+                }
+                if let Some(pattern) = &options.pattern {
+                    let pattern = format!("pattern = {}", pattern);
+                    children.push(FormatTreeNode::new(AstFormatContext::new(pattern)))
                 }
                 let stage_name = format!("Stage {:?}", location);
                 let format_ctx = if let Some(alias) = alias {
@@ -2255,7 +2238,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         }
     }
 
-    fn visit_time_travel_point(&mut self, time: &'ast TimeTravelPoint<'ast>) {
+    fn visit_time_travel_point(&mut self, time: &'ast TimeTravelPoint) {
         match time {
             TimeTravelPoint::Snapshot(sid) => {
                 let name = format!("Snapshot {}", sid);
@@ -2274,7 +2257,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         }
     }
 
-    fn visit_join(&mut self, join: &'ast Join<'ast>) {
+    fn visit_join(&mut self, join: &'ast Join) {
         let mut children = Vec::new();
         self.visit_table_reference(&join.left);
         children.push(self.children.pop().unwrap());

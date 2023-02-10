@@ -23,7 +23,6 @@ use std::sync::Arc;
 use std::sync::Weak;
 use std::time::SystemTime;
 
-use chrono_tz::Tz;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
@@ -33,21 +32,23 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::StageTableInfo;
+use common_catalog::table_args::TableArgs;
 use common_catalog::table_context::StageAttachment;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::date_helper::TzFactory;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
-use common_expression::Scalar;
 use common_io::prelude::FormatSettings;
+use common_meta_app::principal::RoleInfo;
+use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::TableInfo;
-use common_meta_types::RoleInfo;
-use common_meta_types::UserInfo;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
 use common_storages_fuse::TableContext;
+use common_storages_parquet::ParquetTable;
 use common_storages_stage::StageTable;
 use parking_lot::RwLock;
 use tracing::debug;
@@ -93,15 +94,14 @@ impl QueryContext {
         &self,
         catalog_name: &str,
         table_info: &TableInfo,
-        table_args: Option<Vec<Scalar>>,
+        table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
         let catalog = self.get_catalog(catalog_name)?;
-        if table_args.is_none() {
-            catalog.get_table_by_info(table_info)
-        } else {
-            Ok(catalog
+        match table_args {
+            None => catalog.get_table_by_info(table_info),
+            Some(table_args) => Ok(catalog
                 .get_table_function(&table_info.name, table_args)?
-                .as_table())
+                .as_table()),
         }
     }
 
@@ -112,7 +112,7 @@ impl QueryContext {
         &self,
         _catalog: &str,
         table_info: &StageTableInfo,
-        _table_args: Option<Vec<Scalar>>,
+        _table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
         StageTable::try_create(table_info.clone())
     }
@@ -212,32 +212,39 @@ impl TableContext for QueryContext {
             DataSourceInfo::StageSource(stage_info) => {
                 self.build_external_by_table_info(&plan.catalog, stage_info, plan.tbl_args.clone())
             }
+            DataSourceInfo::ParquetSource(table_info) => ParquetTable::from_info(table_info),
         }
     }
+
     fn get_scan_progress(&self) -> Arc<Progress> {
         self.shared.scan_progress.clone()
     }
+
     fn get_scan_progress_value(&self) -> ProgressValues {
         self.shared.scan_progress.as_ref().get_values()
     }
+
     fn get_write_progress(&self) -> Arc<Progress> {
         self.shared.write_progress.clone()
     }
+
     fn get_write_progress_value(&self) -> ProgressValues {
         self.shared.write_progress.as_ref().get_values()
     }
+
     fn get_result_progress(&self) -> Arc<Progress> {
         self.shared.result_progress.clone()
     }
+
     fn get_result_progress_value(&self) -> ProgressValues {
         self.shared.result_progress.as_ref().get_values()
     }
 
-    fn try_get_part(&self) -> Option<PartInfoPtr> {
+    fn get_partition(&self) -> Option<PartInfoPtr> {
         self.partition_queue.write().pop_front()
     }
 
-    fn try_get_parts(&self, num: usize) -> Vec<PartInfoPtr> {
+    fn get_partitions(&self, num: usize) -> Vec<PartInfoPtr> {
         let mut res = Vec::with_capacity(num);
         let mut partition_queue = self.partition_queue.write();
 
@@ -256,7 +263,7 @@ impl TableContext for QueryContext {
     }
 
     // Update the context partition pool from the pipeline builder.
-    fn try_set_partitions(&self, partitions: Partitions) -> Result<()> {
+    fn set_partitions(&self, partitions: Partitions) -> Result<()> {
         let mut partition_queue = self.partition_queue.write();
 
         partition_queue.clear();
@@ -265,8 +272,14 @@ impl TableContext for QueryContext {
         }
         Ok(())
     }
+
     fn attach_query_str(&self, kind: String, query: &str) {
         self.shared.attach_query_str(kind, query);
+    }
+
+    /// Get the session running query.
+    fn get_query_str(&self) -> String {
+        self.shared.get_query_str()
     }
 
     fn get_fragment_id(&self) -> usize {
@@ -282,6 +295,7 @@ impl TableContext for QueryContext {
     fn get_id(&self) -> String {
         self.shared.init_query_id.as_ref().read().clone()
     }
+
     fn get_current_catalog(&self) -> String {
         self.shared.get_current_catalog()
     }
@@ -293,64 +307,82 @@ impl TableContext for QueryContext {
     fn get_current_database(&self) -> String {
         self.shared.get_current_database()
     }
+
     fn get_current_user(&self) -> Result<UserInfo> {
         self.shared.get_current_user()
     }
+
     fn get_current_role(&self) -> Option<RoleInfo> {
         self.shared.get_current_role()
     }
+
     fn get_fuse_version(&self) -> String {
         self.version.clone()
-    }
-    fn get_changed_settings(&self) -> Arc<Settings> {
-        self.shared.get_changed_settings()
-    }
-    fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
-        self.shared.apply_changed_settings(changed_settings)
     }
 
     fn get_format_settings(&self) -> Result<FormatSettings> {
         self.shared.session.get_format_settings()
     }
+
     fn get_tenant(&self) -> String {
         self.shared.get_tenant()
-    }
-
-    /// Get the session running query.
-    fn get_query_str(&self) -> String {
-        self.shared.get_query_str()
     }
 
     fn get_query_kind(&self) -> String {
         self.shared.get_query_kind()
     }
 
-    // Get the storage data accessor operator from the session manager.
-    fn get_data_operator(&self) -> Result<DataOperator> {
-        Ok(self.shared.data_operator.clone())
-    }
-    fn push_precommit_block(&self, block: DataBlock) {
-        self.shared.push_precommit_block(block)
-    }
-    fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
-        self.shared.consume_precommit_blocks()
-    }
-    fn try_get_function_context(&self) -> Result<FunctionContext> {
+    fn get_function_context(&self) -> Result<FunctionContext> {
         let tz = self.get_settings().get_timezone()?;
-        let tz = tz.parse::<Tz>().map_err(|_| {
-            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
-        })?;
+        let tz = TzFactory::instance().get_by_name(&tz)?;
         Ok(FunctionContext { tz })
     }
+
     fn get_connection_id(&self) -> String {
         self.shared.get_connection_id()
     }
+
     fn get_settings(&self) -> Arc<Settings> {
         self.shared.get_settings()
     }
 
     fn get_cluster(&self) -> Arc<Cluster> {
         self.shared.get_cluster()
+    }
+
+    // Get all the processes list info.
+    fn get_processes_info(&self) -> Vec<ProcessInfo> {
+        SessionManager::instance().processes_info()
+    }
+
+    // Get Stage Attachment.
+    fn get_stage_attachment(&self) -> Option<StageAttachment> {
+        self.shared.get_stage_attachment()
+    }
+
+    fn set_on_error_map(&self, map: Option<HashMap<String, ErrorCode>>) {
+        self.shared.set_on_error_map(map);
+    }
+
+    fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
+        self.shared.apply_changed_settings(changed_settings)
+    }
+
+    fn get_changed_settings(&self) -> Arc<Settings> {
+        self.shared.get_changed_settings()
+    }
+
+    // Get the storage data accessor operator from the session manager.
+    fn get_data_operator(&self) -> Result<DataOperator> {
+        Ok(self.shared.data_operator.clone())
+    }
+
+    fn push_precommit_block(&self, block: DataBlock) {
+        self.shared.push_precommit_block(block)
+    }
+
+    fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
+        self.shared.consume_precommit_blocks()
     }
 
     /// Fetch a Table by db and table name.
@@ -367,20 +399,6 @@ impl TableContext for QueryContext {
         table: &str,
     ) -> Result<Arc<dyn Table>> {
         self.shared.get_table(catalog, database, table).await
-    }
-
-    // Get all the processes list info.
-    fn get_processes_info(&self) -> Vec<ProcessInfo> {
-        SessionManager::instance().processes_info()
-    }
-
-    // Get Stage Attachment.
-    fn get_stage_attachment(&self) -> Option<StageAttachment> {
-        self.shared.get_stage_attachment()
-    }
-
-    fn set_on_error_map(&self, map: Option<HashMap<String, ErrorCode>>) {
-        self.shared.set_on_error_map(map);
     }
 }
 

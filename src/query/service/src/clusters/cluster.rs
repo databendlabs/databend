@@ -41,6 +41,7 @@ use common_management::ClusterApi;
 use common_management::ClusterMgr;
 use common_meta_store::MetaStore;
 use common_meta_store::MetaStoreProvider;
+use common_meta_types::MatchSeq;
 use common_meta_types::NodeInfo;
 use common_metrics::label_counter_with_val_and_labels;
 use futures::future::select;
@@ -305,7 +306,8 @@ impl ClusterDiscovery {
             // Restart in a very short time(< heartbeat timeout) after abnormal shutdown, Which will
             // lead to some invalid information
             if before_node.flight_address.eq(&node_info.flight_address) {
-                let drop_invalid_node = self.api_provider.drop_node(before_node.id, None);
+                let drop_invalid_node =
+                    self.api_provider.drop_node(before_node.id, MatchSeq::GE(1));
                 if let Err(cause) = drop_invalid_node.await {
                     warn!("Drop invalid node failure: {:?}", cause);
                 }
@@ -327,7 +329,10 @@ impl ClusterDiscovery {
 
         let mut mut_signal_pin = signal.as_mut();
         let signal_future = Box::pin(mut_signal_pin.next());
-        let drop_node = Box::pin(self.api_provider.drop_node(self.local_id.clone(), None));
+        let drop_node = Box::pin(
+            self.api_provider
+                .drop_node(self.local_id.clone(), MatchSeq::GE(1)),
+        );
         match futures::future::select(drop_node, signal_future).await {
             Either::Left((drop_node_result, _)) => {
                 if let Err(drop_node_failure) = drop_node_result {
@@ -445,7 +450,7 @@ impl ClusterHeartbeat {
                     }
                     Either::Right((_, new_shutdown_notified)) => {
                         shutdown_notified = new_shutdown_notified;
-                        let heartbeat = cluster_api.heartbeat(&node, None);
+                        let heartbeat = cluster_api.heartbeat(&node, MatchSeq::GE(1));
                         if let Err(failure) = heartbeat.await {
                             label_counter_with_val_and_labels(
                                 super::metrics::METRIC_CLUSTER_HEARTBEAT_COUNT,

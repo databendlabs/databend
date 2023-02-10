@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_pipeline_core::Pipeline;
@@ -25,7 +26,6 @@ use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::DeletePlan;
-use crate::sql::plans::ScalarExpr;
 
 /// interprets DeletePlan
 pub struct DeleteInterpreter {
@@ -54,7 +54,6 @@ impl Interpreter for DeleteInterpreter {
 
     #[tracing::instrument(level = "debug", name = "delete_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        // TODO check privilege
         let catalog_name = self.plan.catalog_name.as_str();
         let db_name = self.plan.database_name.as_str();
         let tbl_name = self.plan.table_name.as_str();
@@ -65,13 +64,18 @@ impl Interpreter for DeleteInterpreter {
             let col_indices = scalar.used_columns().into_iter().collect();
             (Some(filter), col_indices)
         } else {
+            if self.plan.input_expr.is_some() {
+                return Err(ErrorCode::Unimplemented(
+                    "Delete with subquery isn't supported",
+                ));
+            }
             (None, vec![])
         };
 
         let mut pipeline = Pipeline::create();
         tbl.delete(self.ctx.clone(), filter, col_indices, &mut pipeline)
             .await?;
-        if !pipeline.pipes.is_empty() {
+        if !pipeline.is_empty() {
             let settings = self.ctx.get_settings();
             pipeline.set_max_threads(settings.get_max_threads()? as usize);
             let query_id = self.ctx.get_id();

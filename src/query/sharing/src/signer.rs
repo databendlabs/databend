@@ -58,7 +58,7 @@ impl Debug for SharedSigner {
 
 impl SharedSigner {
     /// Create a new SharedSigner.
-    pub fn new(endpoint: &str, token: RefreshableToken) -> Self {
+    pub fn new(endpoint: &str, token: RefreshableToken, client: HttpClient) -> Self {
         let cache = Cache::builder()
             // Databend Cloud Presign will expire after 3600s (1 hour).
             // We will expire them 10 minutes before to avoid edge cases.
@@ -68,7 +68,7 @@ impl SharedSigner {
         Self {
             endpoint: endpoint.to_string(),
             cache,
-            client: HttpClient::new(),
+            client,
             token,
         }
     }

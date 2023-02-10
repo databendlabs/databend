@@ -35,10 +35,9 @@ use crate::optimizer::Statistics as OpStatistics;
 use crate::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::Scalar;
+use crate::plans::ScalarExpr;
 use crate::plans::SortItem;
 use crate::IndexType;
-use crate::ScalarExpr;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Prewhere {
@@ -47,7 +46,7 @@ pub struct Prewhere {
     // columns needed to conduct prewhere filter
     pub prewhere_columns: ColumnSet,
     // prewhere filter predicates
-    pub predicates: Vec<Scalar>,
+    pub predicates: Vec<ScalarExpr>,
 }
 
 #[derive(Clone, Debug)]
@@ -63,7 +62,7 @@ pub struct Statistics {
 pub struct Scan {
     pub table_index: IndexType,
     pub columns: ColumnSet,
-    pub push_down_predicates: Option<Vec<Scalar>>,
+    pub push_down_predicates: Option<Vec<ScalarExpr>>,
     pub limit: Option<usize>,
     pub order_by: Option<Vec<SortItem>>,
     pub prewhere: Option<Prewhere>,

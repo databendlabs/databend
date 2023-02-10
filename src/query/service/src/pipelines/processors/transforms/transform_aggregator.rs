@@ -18,8 +18,7 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataBlock;
-use common_expression::HashMethodKind;
+use common_expression::*;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -49,96 +48,28 @@ impl TransformAggregator {
         }
 
         match aggregator_params.aggregate_functions.is_empty() {
-            true => match transform_params.method.clone() {
-                HashMethodKind::KeysU8(method) => AggregatorTransform::create(
+            true => with_mappedhash_method!(|T| match transform_params.method.clone() {
+                HashMethodKind::T(method) => AggregatorTransform::create(
                     ctx.clone(),
                     transform_params,
-                    KeysU8FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
+                    ParallelFinalAggregator::<false, T>::create(ctx, method, aggregator_params)?,
                 ),
-                HashMethodKind::KeysU16(method) => AggregatorTransform::create(
+            }),
+
+            false => with_mappedhash_method!(|T| match transform_params.method.clone() {
+                HashMethodKind::T(method) => AggregatorTransform::create(
                     ctx.clone(),
                     transform_params,
-                    KeysU16FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
+                    ParallelFinalAggregator::<true, T>::create(ctx, method, aggregator_params)?,
                 ),
-                HashMethodKind::KeysU32(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    KeysU32FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU64(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    KeysU64FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
-                ),
-                HashMethodKind::Serializer(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    SerializerFinalAggregator::<false>::create(ctx, method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU128(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    KeysU128FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU256(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    KeysU256FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU512(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    KeysU512FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
-                ),
-            },
-            false => match transform_params.method.clone() {
-                HashMethodKind::KeysU8(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    KeysU8FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU16(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    KeysU16FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU32(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    KeysU32FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU64(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    KeysU64FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
-                ),
-                HashMethodKind::Serializer(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    SerializerFinalAggregator::<true>::create(ctx, method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU128(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    KeysU128FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU256(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    KeysU256FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU512(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    KeysU512FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
-                ),
-            },
+            }),
         }
     }
 
     pub fn try_create_partial(
         transform_params: AggregatorTransformParams,
         ctx: Arc<QueryContext>,
+        pass_state_to_final: bool,
     ) -> Result<ProcessorPtr> {
         let aggregator_params = transform_params.aggregator_params.clone();
 
@@ -152,90 +83,28 @@ impl TransformAggregator {
         }
 
         match aggregator_params.aggregate_functions.is_empty() {
-            true => match transform_params.method.clone() {
-                HashMethodKind::KeysU8(method) => AggregatorTransform::create(
+            true => with_mappedhash_method!(|T| match transform_params.method.clone() {
+                HashMethodKind::T(method) => AggregatorTransform::create(
                     ctx,
                     transform_params,
-                    Keys8Grouper::create(method, aggregator_params)?,
+                    PartialAggregator::<false, T>::create(
+                        method,
+                        aggregator_params,
+                        pass_state_to_final,
+                    )?,
                 ),
-                HashMethodKind::KeysU16(method) => AggregatorTransform::create(
+            }),
+            false => with_mappedhash_method!(|T| match transform_params.method.clone() {
+                HashMethodKind::T(method) => AggregatorTransform::create(
                     ctx,
                     transform_params,
-                    Keys16Grouper::create(method, aggregator_params)?,
+                    PartialAggregator::<true, T>::create(
+                        method,
+                        aggregator_params,
+                        pass_state_to_final,
+                    )?,
                 ),
-                HashMethodKind::KeysU32(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    Keys32Grouper::create(method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU64(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    Keys64Grouper::create(method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU128(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    Keys128Grouper::create(method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU256(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    Keys256Grouper::create(method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU512(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    Keys512Grouper::create(method, aggregator_params)?,
-                ),
-                HashMethodKind::Serializer(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    KeysSerializerGrouper::create(method, aggregator_params)?,
-                ),
-            },
-            false => match transform_params.method.clone() {
-                HashMethodKind::KeysU8(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    Keys8Aggregator::create(method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU16(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    Keys16Aggregator::create(method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU32(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    Keys32Aggregator::create(method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU64(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    Keys64Aggregator::create(method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU128(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    Keys128Aggregator::create(method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU256(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    Keys256Aggregator::create(method, aggregator_params)?,
-                ),
-                HashMethodKind::KeysU512(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    Keys512Aggregator::create(method, aggregator_params)?,
-                ),
-                HashMethodKind::Serializer(method) => AggregatorTransform::create(
-                    ctx,
-                    transform_params,
-                    KeysSerializerAggregator::create(method, aggregator_params)?,
-                ),
-            },
+            }),
         }
     }
 }
@@ -244,18 +113,21 @@ pub trait Aggregator: Sized + Send {
     const NAME: &'static str;
 
     fn consume(&mut self, data: DataBlock) -> Result<()>;
+    // Generate could be called multiple times util it returns empty.
     fn generate(&mut self) -> Result<Vec<DataBlock>>;
 }
 
-enum AggregatorTransform<TAggregator: Aggregator + TwoLevelAggregatorLike> {
+enum AggregatorTransform<TAggregator: Aggregator + PartitionedAggregatorLike> {
     ConsumeData(ConsumeState<TAggregator>),
-    TwoLevelConsumeData(TwoLevelConsumeState<TAggregator>),
+    PartitionedConsumeData(PartitionedConsumeState<TAggregator>),
     Generate(GenerateState<TAggregator>),
-    TwoLevelGenerate(GenerateState<TwoLevelAggregator<TAggregator>>),
+    PartitionedGenerate(GenerateState<PartitionedAggregator<TAggregator>>),
     Finished,
 }
 
-impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTransform<TAggregator> {
+impl<TAggregator: Aggregator + PartitionedAggregatorLike + 'static>
+    AggregatorTransform<TAggregator>
+{
     pub fn create(
         ctx: Arc<QueryContext>,
         transform_params: AggregatorTransformParams,
@@ -293,8 +165,8 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
                     output_data_block: vec![],
                 }))
             }
-            AggregatorTransform::TwoLevelConsumeData(s) => {
-                Ok(AggregatorTransform::TwoLevelGenerate(GenerateState {
+            AggregatorTransform::PartitionedConsumeData(s) => {
+                Ok(AggregatorTransform::PartitionedGenerate(GenerateState {
                     inner: s.inner,
                     is_generated: false,
                     output_port: s.output_port,
@@ -307,9 +179,9 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
 
     pub fn convert_to_two_level_consume(self) -> Result<Self> {
         match self {
-            AggregatorTransform::ConsumeData(s) => Ok(AggregatorTransform::TwoLevelConsumeData(
-                TwoLevelConsumeState {
-                    inner: s.inner.convert_two_level()?,
+            AggregatorTransform::ConsumeData(s) => Ok(AggregatorTransform::PartitionedConsumeData(
+                PartitionedConsumeState {
+                    inner: s.inner.convert_partitioned()?,
                     input_port: s.input_port,
                     output_port: s.output_port,
                     input_data_block: None,
@@ -320,7 +192,7 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
     }
 }
 
-impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> Processor
+impl<TAggregator: Aggregator + PartitionedAggregatorLike + 'static> Processor
     for AggregatorTransform<TAggregator>
 {
     fn name(&self) -> String {
@@ -336,8 +208,8 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> Processor
             AggregatorTransform::Finished => Ok(Event::Finished),
             AggregatorTransform::Generate(_) => self.generate_event(),
             AggregatorTransform::ConsumeData(_) => self.consume_event(),
-            AggregatorTransform::TwoLevelConsumeData(_) => self.consume_event(),
-            AggregatorTransform::TwoLevelGenerate(_) => self.generate_event(),
+            AggregatorTransform::PartitionedConsumeData(_) => self.consume_event(),
+            AggregatorTransform::PartitionedGenerate(_) => self.generate_event(),
         }
     }
 
@@ -346,13 +218,15 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> Processor
             AggregatorTransform::Finished => Ok(()),
             AggregatorTransform::ConsumeData(state) => state.consume(),
             AggregatorTransform::Generate(state) => state.generate(),
-            AggregatorTransform::TwoLevelConsumeData(state) => state.consume(),
-            AggregatorTransform::TwoLevelGenerate(state) => state.generate(),
+            AggregatorTransform::PartitionedConsumeData(state) => state.consume(),
+            AggregatorTransform::PartitionedGenerate(state) => state.generate(),
         }
     }
 }
 
-impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTransform<TAggregator> {
+impl<TAggregator: Aggregator + PartitionedAggregatorLike + 'static>
+    AggregatorTransform<TAggregator>
+{
     #[inline(always)]
     fn consume_event(&mut self) -> Result<Event> {
         if let AggregatorTransform::ConsumeData(state) = self {
@@ -394,7 +268,7 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
             };
         }
 
-        if let AggregatorTransform::TwoLevelConsumeData(state) = self {
+        if let AggregatorTransform::PartitionedConsumeData(state) = self {
             if state.input_data_block.is_some() {
                 return Ok(Event::Sync);
             }
@@ -454,7 +328,7 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
             return Ok(Event::Sync);
         }
 
-        if let AggregatorTransform::TwoLevelGenerate(state) = self {
+        if let AggregatorTransform::PartitionedGenerate(state) = self {
             if state.output_port.is_finished() {
                 let mut temp_state = AggregatorTransform::Finished;
                 std::mem::swap(self, &mut temp_state);
@@ -507,15 +381,15 @@ impl<TAggregator: Aggregator> ConsumeState<TAggregator> {
     }
 }
 
-struct TwoLevelConsumeState<TAggregator: Aggregator + TwoLevelAggregatorLike> {
-    inner: TwoLevelAggregator<TAggregator>,
+struct PartitionedConsumeState<TAggregator: Aggregator + PartitionedAggregatorLike> {
+    inner: PartitionedAggregator<TAggregator>,
 
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
     input_data_block: Option<DataBlock>,
 }
 
-impl<TAggregator: Aggregator + TwoLevelAggregatorLike> TwoLevelConsumeState<TAggregator> {
+impl<TAggregator: Aggregator + PartitionedAggregatorLike> PartitionedConsumeState<TAggregator> {
     pub fn consume(&mut self) -> Result<()> {
         if let Some(input_data) = self.input_data_block.take() {
             self.inner.consume(input_data)?;
@@ -535,10 +409,13 @@ struct GenerateState<TAggregator: Aggregator> {
 impl<TAggregator: Aggregator> GenerateState<TAggregator> {
     pub fn generate(&mut self) -> Result<()> {
         if !self.is_generated {
-            self.is_generated = true;
             self.output_data_block = self.inner.generate()?;
-        }
 
+            // if it's empty, it means the aggregator is finished.
+            if self.output_data_block.is_empty() {
+                self.is_generated = true;
+            }
+        }
         Ok(())
     }
 }

@@ -22,11 +22,11 @@ use super::ShowLimit;
 use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ShowCatalogsStmt<'a> {
-    pub limit: Option<ShowLimit<'a>>,
+pub struct ShowCatalogsStmt {
+    pub limit: Option<ShowLimit>,
 }
 
-impl Display for ShowCatalogsStmt<'_> {
+impl Display for ShowCatalogsStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "SHOW CATALOGS")?;
         if let Some(limit) = &self.limit {
@@ -38,11 +38,11 @@ impl Display for ShowCatalogsStmt<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ShowCreateCatalogStmt<'a> {
-    pub catalog: Identifier<'a>,
+pub struct ShowCreateCatalogStmt {
+    pub catalog: Identifier,
 }
 
-impl Display for ShowCreateCatalogStmt<'_> {
+impl Display for ShowCreateCatalogStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "SHOW CREATE CATALOG {}", &self.catalog)
     }
@@ -73,12 +73,12 @@ impl Display for CreateCatalogStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DropCatalogStmt<'a> {
+pub struct DropCatalogStmt {
     pub if_exists: bool,
-    pub catalog: Identifier<'a>,
+    pub catalog: Identifier,
 }
 
-impl Display for DropCatalogStmt<'_> {
+impl Display for DropCatalogStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DROP CATALOG ")?;
         if self.if_exists {

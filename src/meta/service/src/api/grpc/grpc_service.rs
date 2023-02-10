@@ -21,8 +21,8 @@ use common_arrow::arrow_format::flight::data::BasicAuth;
 use common_base::base::tokio::sync::mpsc;
 use common_grpc::GrpcClaim;
 use common_grpc::GrpcToken;
-use common_meta_api::KVApi;
 use common_meta_client::MetaGrpcReq;
+use common_meta_kvapi::kvapi::KVApi;
 use common_meta_types::protobuf::meta_service_server::MetaService;
 use common_meta_types::protobuf::ClientInfo;
 use common_meta_types::protobuf::Empty;
@@ -164,14 +164,6 @@ impl MetaService for MetaServiceImpl {
         }
     }
 
-    async fn write_msg(&self, r: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
-        self.kv_api(r).await
-    }
-
-    async fn read_msg(&self, r: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
-        self.kv_api(r).await
-    }
-
     async fn kv_api(&self, r: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
         let _guard = RequestInFlight::guard();
 
@@ -206,6 +198,26 @@ impl MetaService for MetaServiceImpl {
         network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
 
         Ok(Response::new(reply))
+    }
+
+    async fn transaction(
+        &self,
+        request: Request<TxnRequest>,
+    ) -> Result<Response<TxnReply>, Status> {
+        self.check_token(request.metadata())?;
+        network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+        let _guard = RequestInFlight::guard();
+
+        common_tracing::extract_remote_span_as_parent(&request);
+
+        let request = request.into_inner();
+
+        info!("Receive txn_request: {}", request);
+
+        let body = self.execute_txn(request).await;
+        network_metrics::incr_sent_bytes(body.encoded_len() as u64);
+
+        Ok(Response::new(body))
     }
 
     type ExportStream =
@@ -256,35 +268,16 @@ impl MetaService for MetaServiceImpl {
         }
     }
 
-    async fn transaction(
-        &self,
-        request: Request<TxnRequest>,
-    ) -> Result<Response<TxnReply>, Status> {
-        self.check_token(request.metadata())?;
-        network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
-        let _guard = RequestInFlight::guard();
-
-        common_tracing::extract_remote_span_as_parent(&request);
-
-        let request = request.into_inner();
-
-        info!("Receive txn_request: {}", request);
-
-        let body = self.execute_txn(request).await;
-        network_metrics::incr_sent_bytes(body.encoded_len() as u64);
-
-        Ok(Response::new(body))
-    }
-
     async fn member_list(
         &self,
         request: Request<MemberListRequest>,
     ) -> Result<Response<MemberListReply>, Status> {
         self.check_token(request.metadata())?;
+
         let _guard = RequestInFlight::guard();
 
         let meta_node = &self.meta_node;
-        let members = meta_node.get_meta_addrs().await.map_err(|e| {
+        let members = meta_node.get_grpc_advertise_addrs().await.map_err(|e| {
             Status::internal(format!("Cannot get metasrv member list, error: {:?}", e))
         })?;
 

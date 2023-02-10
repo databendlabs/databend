@@ -21,20 +21,20 @@ use crate::ast::Identifier;
 use crate::ast::TableReference;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct UpdateStmt<'a> {
-    pub table: TableReference<'a>,
-    pub update_list: Vec<UpdateExpr<'a>>,
-    pub selection: Option<Expr<'a>>,
+pub struct UpdateStmt {
+    pub table: TableReference,
+    pub update_list: Vec<UpdateExpr>,
+    pub selection: Option<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct UpdateExpr<'a> {
-    pub name: Identifier<'a>,
-    pub expr: Expr<'a>,
+pub struct UpdateExpr {
+    pub name: Identifier,
+    pub expr: Expr,
 }
 
-impl Display for UpdateStmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for UpdateStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "UPDATE {} SET ", self.table)?;
         write_comma_separated_list(f, &self.update_list)?;
         if let Some(conditions) = &self.selection {
@@ -44,8 +44,8 @@ impl Display for UpdateStmt<'_> {
     }
 }
 
-impl Display for UpdateExpr<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for UpdateExpr {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{} = {}", self.name, self.expr)
     }
 }
