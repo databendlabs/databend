@@ -43,8 +43,8 @@ A [PCRE2](https://www.pcre.org/current/doc/html/)-based regular expression patte
 Generate a parquet file in a stage:
 
 ```sql
-CREATE STAGE infer_parquet FILE_FORMAT = (type = PARQUET);
-COPY INTO @infer_parquet FROM (SELECT * FROM numbers(10)) FILE_FORMAT = (type = PARQUET);
+CREATE STAGE infer_parquet FILE_FORMAT = (TYPE = PARQUET);
+COPY INTO @infer_parquet FROM (SELECT * FROM numbers(10)) FILE_FORMAT = (TYPE = PARQUET);
 ```
 
 ```sql
