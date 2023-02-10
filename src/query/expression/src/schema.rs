@@ -963,14 +963,14 @@ impl TableDataType {
             // useless for now.
             TableDataType::Decimal(t) => match t {
                 DecimalDataType::Decimal128(x) => BlockEntry {
-                    data_type: DataType::Decimal(t.clone()),
+                    data_type: DataType::Decimal(*t),
                     value: Value::Column(Column::Decimal(DecimalColumn::Decimal128(
                         vec![0i128; len].into(),
                         *x,
                     ))),
                 },
                 DecimalDataType::Decimal256(x) => BlockEntry {
-                    data_type: DataType::Decimal(t.clone()),
+                    data_type: DataType::Decimal(*t),
                     value: Value::Column(Column::Decimal(DecimalColumn::Decimal256(
                         vec![i256::ZERO; len].into(),
                         *x,

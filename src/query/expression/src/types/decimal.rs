@@ -21,11 +21,13 @@ use common_exception::Result;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 use itertools::Itertools;
+use num_traits::ToPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
 
 use super::SimpleDomain;
 use crate::utils::arrow::buffer_into_mut;
+use crate::Column;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
 pub enum DecimalDataType {
@@ -63,7 +65,7 @@ pub struct DecimalSize {
     pub scale: u8,
 }
 
-pub trait Decimal {
+pub trait Decimal: Sized {
     fn one() -> Self;
     // 10**scale
     fn e(n: u32) -> Self;
@@ -71,8 +73,15 @@ pub trait Decimal {
     fn min_for_precision(precision: u8) -> Self;
     fn max_for_precision(precision: u8) -> Self;
 
-    fn to_column(value: Vec<Self>, size: DecimalSize) -> DecimalColumn
-    where Self: Sized;
+    fn from_float(value: f64) -> Self;
+
+    fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)>;
+
+    fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn;
+
+    fn to_column(value: Vec<Self>, size: DecimalSize) -> DecimalColumn {
+        Self::to_column_from_buffer(value.into(), size)
+    }
 }
 
 impl Decimal for i128 {
@@ -93,9 +102,20 @@ impl Decimal for i128 {
         9_i128.saturating_pow(1 + to_precision as u32)
     }
 
-    fn to_column(value: Vec<Self>, size: DecimalSize) -> DecimalColumn
-    where Self: Sized {
-        DecimalColumn::Decimal128(Buffer::from(value), size)
+    fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn {
+        DecimalColumn::Decimal128(value, size)
+    }
+
+    fn from_float(value: f64) -> Self {
+        value.to_i128().unwrap()
+    }
+
+    fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)> {
+        let column = column.as_decimal()?;
+        match column {
+            DecimalColumn::Decimal128(c, size) => Some((c.clone(), *size)),
+            DecimalColumn::Decimal256(_, _) => None,
+        }
     }
 }
 
@@ -118,9 +138,20 @@ impl Decimal for i256 {
         (i256::ONE * 9).saturating_pow(1 + to_precision as u32)
     }
 
-    fn to_column(value: Vec<Self>, size: DecimalSize) -> DecimalColumn
-    where Self: Sized {
-        DecimalColumn::Decimal256(Buffer::from(value), size)
+    fn from_float(value: f64) -> Self {
+        i256::from(value.to_i128().unwrap())
+    }
+
+    fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn {
+        DecimalColumn::Decimal256(value, size)
+    }
+
+    fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)> {
+        let column = column.as_decimal()?;
+        match column {
+            DecimalColumn::Decimal128(_, _) => None,
+            DecimalColumn::Decimal256(c, size) => Some((c.clone(), *size)),
+        }
     }
 }
 
@@ -169,7 +200,7 @@ impl DecimalDataType {
     }
 
     pub fn max_result_precision(&self, other: &Self) -> u8 {
-        if matches!(self, DecimalDataType::Decimal128(_)) {
+        if matches!(other, DecimalDataType::Decimal128(_)) {
             return self.max_precision();
         }
         other.max_precision()
@@ -182,62 +213,35 @@ impl DecimalDataType {
         is_divide: bool,
         is_plus_minus: bool,
     ) -> Result<Self> {
-        let mut scale = 0;
+        let mut scale = a.scale().max(b.scale());
+        let mut precision = a.max_result_precision(b);
+
+        let multiply_precision = a.precision() + b.precision();
+        let divide_precision = a.precision() + b.scale();
+
+        // for addition/subtraction, we add 1 to the width to ensure we don't overflow
+        let plus_min_precision =
+            (a.precision() - a.scale()).max(b.precision() - b.scale()) + scale + 1;
+
         if is_multiply {
             scale = a.scale() + b.scale();
+            precision = precision.min(multiply_precision);
         } else if is_divide {
             scale = a.scale();
+            precision = precision.min(divide_precision);
         } else if is_plus_minus {
             scale = std::cmp::max(a.scale(), b.scale());
+            precision = precision.min(plus_min_precision);
         }
-        let precision = a.max_result_precision(b);
 
         Self::from_size(DecimalSize { precision, scale })
     }
 
-    pub fn convert_from(&self, col: &DecimalColumn) -> Result<DecimalColumn> {
-        match col {
-            DecimalColumn::Decimal128(buffer, from) => {
-                match self {
-                    DecimalDataType::Decimal128(size) => {
-                        // faster path
-                        if from.scale == size.scale && from.precision <= size.precision {
-                            return Ok(DecimalColumn::Decimal128(buffer.clone(), *size));
-                        }
-                        if from.scale > size.scale {
-                            let factor = i128::e((from.scale - size.scale) as u32);
-                            let mut new_buffer = Vec::with_capacity(buffer.len());
-                            for x in buffer.iter() {
-                                new_buffer.push(x.checked_div(factor).ok_or_else(|| {
-                                    ErrorCode::Overflow(format!(
-                                        "Decimal overflow when converting from {:?} to {:?}",
-                                        from, size
-                                    ))
-                                })?);
-                            }
-                            Ok(DecimalColumn::Decimal128(new_buffer.into(), *size))
-                        } else {
-                            let factor = i128::e((size.scale - from.scale) as u32);
-                            let mut new_buffer = Vec::with_capacity(buffer.len());
-                            for x in buffer.iter() {
-                                new_buffer.push(x.checked_mul(factor).ok_or_else(|| {
-                                    ErrorCode::Overflow(format!(
-                                        "Decimal overflow when converting from {:?} to {:?}",
-                                        from, size
-                                    ))
-                                })?);
-                            }
-                            Ok(DecimalColumn::Decimal128(new_buffer.into(), *size))
-                        }
-                    }
-                    DecimalDataType::Decimal256(_) => todo!(),
-                }
-            }
-            DecimalColumn::Decimal256(_buffer, _from) => match self {
-                DecimalDataType::Decimal128(_) => todo!(),
-                DecimalDataType::Decimal256(_) => todo!(),
-            },
-        }
+    // Decimal X Number or Nunmber X Decimal
+    pub fn binary_upgrade_to_max_precision(&self) -> Result<DecimalDataType> {
+        let scale = self.scale();
+        let precision = self.max_precision();
+        Self::from_size(DecimalSize { precision, scale })
     }
 }
 
