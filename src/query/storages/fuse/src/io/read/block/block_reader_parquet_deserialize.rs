@@ -109,6 +109,10 @@ impl BlockReader {
         let mut need_to_fill_default_val = false;
         let mut deserialized_column_arrays = Vec::with_capacity(self.projection.len());
         for (column, is_nested_field) in &fields {
+            eprintln!(
+                "deser col {}, idx {:?}",
+                column.field.name, &column.leaf_column_ids
+            );
             match self.deserialize_field(
                 column,
                 column_metas,
@@ -151,13 +155,12 @@ impl BlockReader {
             DataBlock::from_arrow_chunk(&chunk, &self.data_schema())
         } else {
             let data_schema = self.data_schema();
-            let schema_default_vals = self.default_vals.clone();
             let mut default_vals = Vec::with_capacity(need_default_vals.len());
             for (i, need_default_val) in need_default_vals.iter().enumerate() {
                 if !need_default_val {
                     default_vals.push(None);
                 } else {
-                    default_vals.push(Some(schema_default_vals[i].clone()));
+                    default_vals.push(Some(self.default_vals[i].clone()));
                 }
             }
             DataBlock::create_with_default_value_and_chunk(
@@ -174,6 +177,7 @@ impl BlockReader {
             for item in deserialized_column_arrays.into_iter() {
                 if let DeserializedArray::Deserialized((column_id, array, size)) = item {
                     let key = TableDataColumnCacheKey::new(block_path, column_id);
+                    eprintln!("caching key {}", key.as_ref());
                     cache.put(key.into(), Arc::new((array, size)))
                 }
             }
@@ -231,7 +235,7 @@ impl BlockReader {
         )?)
     }
 
-    // TODO: refactor this method
+    // TODO: refactor this method, too many args
     #[allow(clippy::too_many_arguments)]
     fn deserialize_field<'a>(
         &self,
@@ -244,19 +248,32 @@ impl BlockReader {
         is_nested_column: bool,
     ) -> Result<Option<DeserializedArray<'a>>> {
         let indices = &column.leaf_ids;
+        let is_nested = is_nested_column || indices.len() > 1;
+        eprintln!(
+            "column name {}, nested {}, index {:?}, leaves {:?}",
+            column.field.name.as_str(),
+            is_nested,
+            indices,
+            &column.leaf_column_ids,
+        );
         // column passed in may be a compound field (with sub leaves),
         // or a leaf column of compound field
-        let is_nested = is_nested_column || indices.len() > 1;
         let estimated_cap = indices.len();
         let mut field_column_metas = Vec::with_capacity(estimated_cap);
         let mut field_column_data = Vec::with_capacity(estimated_cap);
         let mut field_column_descriptors = Vec::with_capacity(estimated_cap);
         let mut field_uncompressed_size = 0;
 
+        let mut column_id = 0;
         for (i, leaf_column_id) in indices.iter().enumerate() {
-            let column_id = column.leaf_column_ids[i];
+            column_id = column.leaf_column_ids[i];
+            eprintln!(
+                "column name {}, column id{:?}",
+                column.field.name.as_str(),
+                column_id,
+            );
             if let Some(column_meta) = column_metas.get(&column_id) {
-                if let Some(chunk) = column_chunks.get(&(*leaf_column_id as ColumnId)) {
+                if let Some(chunk) = column_chunks.get(&column_id) {
                     match chunk {
                         DataItem::RawData(data) => {
                             let column_descriptor =
@@ -278,7 +295,7 @@ impl BlockReader {
                         }
                     }
                 } else {
-                    // no raw data or cache item of given column id, it is unexpected
+                    // no raw data of given column id, it is unexpected
                     return Err(ErrorCode::StorageOther("unexpected: column data not found"));
                 }
             } else {
@@ -309,11 +326,13 @@ impl BlockReader {
             // mark the array
             if is_nested {
                 // the array is not intended to be cached
+                // currently, caching of compound filed columns is not support
                 Ok(Some(DeserializedArray::NoNeedToCache(array)))
             } else {
                 // the array is deserialized from raw bytes, should be cached
+                // let column_id = column.leaf_column_ids[indices[0]];
                 Ok(Some(DeserializedArray::Deserialized((
-                    indices[0] as ColumnId,
+                    column_id,
                     array,
                     field_uncompressed_size,
                 ))))
