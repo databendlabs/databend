@@ -14,7 +14,7 @@
 
 use common_base::base::GlobalInstance;
 use common_exception::Result;
-use common_meta_types::StorageParams;
+use common_meta_app::storage::StorageParams;
 use common_storage::init_operator;
 use opendal::Operator;
 use time::Duration;

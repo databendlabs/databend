@@ -14,12 +14,7 @@
 
 //! Test UserStageInfo
 
-use common_meta_types as mt;
-use common_meta_types::StorageFsConfig;
-use common_meta_types::StorageGcsConfig;
-use common_meta_types::StorageOssConfig;
-use common_meta_types::StorageParams;
-use common_meta_types::StorageS3Config;
+use common_meta_app as mt;
 
 use crate::common;
 use crate::user_proto_conv::test_fs_stage_info;
@@ -65,27 +60,27 @@ fn test_user_stage_fs_v22() -> anyhow::Result<()> {
         10, 3, 32, 154, 5, 16, 142, 8, 24, 1, 50, 4, 116, 101, 115, 116, 160, 6, 22, 168, 6, 1,
     ];
 
-    let want = mt::UserStageInfo {
+    let want = mt::principal::UserStageInfo {
         stage_name: "fs://dir/to/files".to_string(),
-        stage_type: mt::StageType::LegacyInternal,
-        stage_params: mt::StageParams {
-            storage: StorageParams::Fs(StorageFsConfig {
+        stage_type: mt::principal::StageType::LegacyInternal,
+        stage_params: mt::principal::StageParams {
+            storage: mt::storage::StorageParams::Fs(mt::storage::StorageFsConfig {
                 root: "/dir/to/files".to_string(),
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "NaN".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             escape: "\\".to_string(),
             row_tag: "row".to_string(),
             quote: "\'\'".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: true,
@@ -112,27 +107,27 @@ fn test_user_stage_fs_v21() -> anyhow::Result<()> {
         5, 16, 142, 8, 24, 1, 50, 4, 116, 101, 115, 116, 160, 6, 21, 168, 6, 1,
     ];
 
-    let want = mt::UserStageInfo {
+    let want = mt::principal::UserStageInfo {
         stage_name: "fs://dir/to/files".to_string(),
-        stage_type: mt::StageType::LegacyInternal,
-        stage_params: mt::StageParams {
-            storage: StorageParams::Fs(StorageFsConfig {
+        stage_type: mt::principal::StageType::LegacyInternal,
+        stage_params: mt::principal::StageParams {
+            storage: mt::storage::StorageParams::Fs(mt::storage::StorageFsConfig {
                 root: "/dir/to/files".to_string(),
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "NaN".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             escape: "\\".to_string(),
             row_tag: "row".to_string(),
             quote: "".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: true,
@@ -158,27 +153,27 @@ fn test_user_stage_fs_v20() -> anyhow::Result<()> {
         92, 58, 3, 114, 111, 119, 160, 6, 20, 168, 6, 1, 42, 10, 10, 3, 32, 154, 5, 16, 142, 8, 24,
         1, 50, 4, 116, 101, 115, 116, 160, 6, 20, 168, 6, 1,
     ];
-    let want = mt::UserStageInfo {
+    let want = mt::principal::UserStageInfo {
         stage_name: "fs://dir/to/files".to_string(),
-        stage_type: mt::StageType::LegacyInternal,
-        stage_params: mt::StageParams {
-            storage: StorageParams::Fs(StorageFsConfig {
+        stage_type: mt::principal::StageType::LegacyInternal,
+        stage_params: mt::principal::StageParams {
+            storage: mt::storage::StorageParams::Fs(mt::storage::StorageFsConfig {
                 root: "/dir/to/files".to_string(),
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             escape: "\\".to_string(),
             row_tag: "row".to_string(),
             quote: "".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: true,
@@ -205,27 +200,27 @@ fn test_user_stage_fs_v16() -> anyhow::Result<()> {
         160, 6, 16, 168, 6, 1,
     ];
 
-    let want = mt::UserStageInfo {
+    let want = mt::principal::UserStageInfo {
         stage_name: "fs://dir/to/files".to_string(),
-        stage_type: mt::StageType::LegacyInternal,
-        stage_params: mt::StageParams {
-            storage: StorageParams::Fs(StorageFsConfig {
+        stage_type: mt::principal::StageType::LegacyInternal,
+        stage_params: mt::principal::StageParams {
+            storage: mt::storage::StorageParams::Fs(mt::storage::StorageFsConfig {
                 root: "/dir/to/files".to_string(),
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "".to_string(),
             escape: "".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: true,
@@ -258,11 +253,11 @@ fn test_user_stage_s3_v16() -> anyhow::Result<()> {
         4, 116, 101, 115, 116, 160, 6, 16, 168, 6, 1,
     ];
 
-    let want = mt::UserStageInfo {
+    let want = mt::principal::UserStageInfo {
         stage_name: "s3://mybucket/data/files".to_string(),
-        stage_type: mt::StageType::External,
-        stage_params: mt::StageParams {
-            storage: StorageParams::S3(StorageS3Config {
+        stage_type: mt::principal::StageType::External,
+        stage_params: mt::principal::StageParams {
+            storage: mt::storage::StorageParams::S3(mt::storage::StorageS3Config {
                 bucket: "mybucket".to_string(),
                 root: "/data/files".to_string(),
                 access_key_id: "my_key_id".to_string(),
@@ -272,19 +267,19 @@ fn test_user_stage_s3_v16() -> anyhow::Result<()> {
                 ..Default::default()
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "".to_string(),
             escape: "".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: true,
@@ -314,30 +309,30 @@ fn test_user_stage_gcs_v16() -> anyhow::Result<()> {
         24, 1, 50, 4, 116, 101, 115, 116, 160, 6, 16, 168, 6, 1,
     ];
     //
-    let want = mt::UserStageInfo {
+    let want = mt::principal::UserStageInfo {
         stage_name: "gcs://my_bucket/data/files".to_string(),
-        stage_type: mt::StageType::External,
-        stage_params: mt::StageParams {
-            storage: StorageParams::Gcs(StorageGcsConfig {
+        stage_type: mt::principal::StageType::External,
+        stage_params: mt::principal::StageParams {
+            storage: mt::storage::StorageParams::Gcs(mt::storage::StorageGcsConfig {
                 endpoint_url: "https://storage.googleapis.com".to_string(),
                 bucket: "my_bucket".to_string(),
                 root: "/data/files".to_string(),
                 credential: "my_credential".to_string(),
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "".to_string(),
             escape: "".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: true,
@@ -367,11 +362,11 @@ fn test_user_stage_oss_v16() -> anyhow::Result<()> {
         142, 8, 24, 1, 50, 4, 116, 101, 115, 116, 160, 6, 16, 168, 6, 1,
     ];
 
-    let want = mt::UserStageInfo {
+    let want = mt::principal::UserStageInfo {
         stage_name: "oss://my_bucket/data/files".to_string(),
-        stage_type: mt::StageType::External,
-        stage_params: mt::StageParams {
-            storage: StorageParams::Oss(StorageOssConfig {
+        stage_type: mt::principal::StageType::External,
+        stage_params: mt::principal::StageParams {
+            storage: mt::storage::StorageParams::Oss(mt::storage::StorageOssConfig {
                 endpoint_url: "https://oss-cn-litang.example.com".to_string(),
                 bucket: "my_bucket".to_string(),
                 root: "/data/files".to_string(),
@@ -381,19 +376,19 @@ fn test_user_stage_oss_v16() -> anyhow::Result<()> {
                 access_key_secret: "access_key_secret".to_string(),
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "".to_string(),
             escape: "".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: true,
@@ -425,11 +420,11 @@ fn test_user_stage_oss_v13() -> anyhow::Result<()> {
         154, 5, 16, 142, 8, 24, 1, 50, 4, 116, 101, 115, 116, 160, 6, 13, 168, 6, 1,
     ];
 
-    let want = mt::UserStageInfo {
+    let want = mt::principal::UserStageInfo {
         stage_name: "oss://my_bucket/data/files".to_string(),
-        stage_type: mt::StageType::External,
-        stage_params: mt::StageParams {
-            storage: StorageParams::Oss(StorageOssConfig {
+        stage_type: mt::principal::StageType::External,
+        stage_params: mt::principal::StageParams {
+            storage: mt::storage::StorageParams::Oss(mt::storage::StorageOssConfig {
                 endpoint_url: "https://oss-cn-litang.example.com".to_string(),
                 presign_endpoint_url: "".to_string(),
                 bucket: "my_bucket".to_string(),
@@ -439,19 +434,19 @@ fn test_user_stage_oss_v13() -> anyhow::Result<()> {
                 access_key_secret: "access_key_secret".to_string(),
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "".to_string(),
             escape: "".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: true,
@@ -483,11 +478,11 @@ fn test_user_stage_s3_v11() -> anyhow::Result<()> {
         4, 116, 101, 115, 116, 160, 6, 11, 168, 6, 1,
     ];
 
-    let want = mt::UserStageInfo {
+    let want = mt::principal::UserStageInfo {
         stage_name: "s3://mybucket/data/files".to_string(),
-        stage_type: mt::StageType::External,
-        stage_params: mt::StageParams {
-            storage: StorageParams::S3(StorageS3Config {
+        stage_type: mt::principal::StageType::External,
+        stage_params: mt::principal::StageParams {
+            storage: mt::storage::StorageParams::S3(mt::storage::StorageS3Config {
                 bucket: "mybucket".to_string(),
                 root: "/data/files".to_string(),
                 access_key_id: "my_key_id".to_string(),
@@ -497,19 +492,19 @@ fn test_user_stage_s3_v11() -> anyhow::Result<()> {
                 ..Default::default()
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "".to_string(),
             escape: "".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: true,
@@ -540,11 +535,11 @@ fn test_user_stage_s3_v8() -> anyhow::Result<()> {
         116, 101, 115, 116, 160, 6, 8, 168, 6, 1,
     ];
 
-    let want = mt::UserStageInfo {
+    let want = mt::principal::UserStageInfo {
         stage_name: "s3://mybucket/data/files".to_string(),
-        stage_type: mt::StageType::External,
-        stage_params: mt::StageParams {
-            storage: StorageParams::S3(StorageS3Config {
+        stage_type: mt::principal::StageType::External,
+        stage_params: mt::principal::StageParams {
+            storage: mt::storage::StorageParams::S3(mt::storage::StorageS3Config {
                 bucket: "mybucket".to_string(),
                 root: "/data/files".to_string(),
                 access_key_id: "my_key_id".to_string(),
@@ -553,19 +548,19 @@ fn test_user_stage_s3_v8() -> anyhow::Result<()> {
                 ..Default::default()
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "".to_string(),
             escape: "".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: true,
@@ -592,27 +587,27 @@ fn test_user_stage_fs_v6() -> anyhow::Result<()> {
         6, 6, 168, 6, 1,
     ];
 
-    let want = mt::UserStageInfo {
+    let want = mt::principal::UserStageInfo {
         stage_name: "fs://dir/to/files".to_string(),
-        stage_type: mt::StageType::LegacyInternal,
-        stage_params: mt::StageParams {
-            storage: StorageParams::Fs(StorageFsConfig {
+        stage_type: mt::principal::StageType::LegacyInternal,
+        stage_params: mt::principal::StageParams {
+            storage: mt::storage::StorageParams::Fs(mt::storage::StorageFsConfig {
                 root: "/dir/to/files".to_string(),
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "".to_string(),
             escape: "".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: true,
@@ -644,11 +639,11 @@ fn test_user_stage_s3_v6() -> anyhow::Result<()> {
         116, 101, 115, 116, 160, 6, 6, 168, 6, 1,
     ];
 
-    let want = mt::UserStageInfo {
+    let want = mt::principal::UserStageInfo {
         stage_name: "s3://mybucket/data/files".to_string(),
-        stage_type: mt::StageType::External,
-        stage_params: mt::StageParams {
-            storage: StorageParams::S3(StorageS3Config {
+        stage_type: mt::principal::StageType::External,
+        stage_params: mt::principal::StageParams {
+            storage: mt::storage::StorageParams::S3(mt::storage::StorageS3Config {
                 bucket: "mybucket".to_string(),
                 root: "/data/files".to_string(),
                 access_key_id: "my_key_id".to_string(),
@@ -657,19 +652,19 @@ fn test_user_stage_s3_v6() -> anyhow::Result<()> {
                 ..Default::default()
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "".to_string(),
             escape: "".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: true,
@@ -699,30 +694,30 @@ fn test_user_stage_gcs_v6() -> anyhow::Result<()> {
         1, 50, 4, 116, 101, 115, 116, 160, 6, 6, 168, 6, 1,
     ];
     //
-    let want = mt::UserStageInfo {
+    let want = mt::principal::UserStageInfo {
         stage_name: "gcs://my_bucket/data/files".to_string(),
-        stage_type: mt::StageType::External,
-        stage_params: mt::StageParams {
-            storage: StorageParams::Gcs(StorageGcsConfig {
+        stage_type: mt::principal::StageType::External,
+        stage_params: mt::principal::StageParams {
+            storage: mt::storage::StorageParams::Gcs(mt::storage::StorageGcsConfig {
                 endpoint_url: "https://storage.googleapis.com".to_string(),
                 bucket: "my_bucket".to_string(),
                 root: "/data/files".to_string(),
                 credential: "my_credential".to_string(),
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "".to_string(),
             escape: "".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: true,
@@ -748,27 +743,27 @@ fn test_user_stage_fs_v4() -> anyhow::Result<()> {
         168, 6, 1,
     ];
 
-    let want = mt::UserStageInfo {
+    let want = mt::principal::UserStageInfo {
         stage_name: "fs://dir/to/files".to_string(),
-        stage_type: mt::StageType::LegacyInternal,
-        stage_params: mt::StageParams {
-            storage: StorageParams::Fs(StorageFsConfig {
+        stage_type: mt::principal::StageType::LegacyInternal,
+        stage_params: mt::principal::StageParams {
+            storage: mt::storage::StorageParams::Fs(mt::storage::StorageFsConfig {
                 root: "/dir/to/files".to_string(),
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "".to_string(),
             escape: "".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: false,
@@ -800,11 +795,11 @@ fn test_user_stage_s3_v4() -> anyhow::Result<()> {
         115, 116, 160, 6, 4, 168, 6, 1,
     ];
 
-    let want = mt::UserStageInfo {
+    let want = mt::principal::UserStageInfo {
         stage_name: "s3://mybucket/data/files".to_string(),
-        stage_type: mt::StageType::External,
-        stage_params: mt::StageParams {
-            storage: StorageParams::S3(StorageS3Config {
+        stage_type: mt::principal::StageType::External,
+        stage_params: mt::principal::StageParams {
+            storage: mt::storage::StorageParams::S3(mt::storage::StorageS3Config {
                 bucket: "mybucket".to_string(),
                 root: "/data/files".to_string(),
                 access_key_id: "my_key_id".to_string(),
@@ -813,19 +808,19 @@ fn test_user_stage_s3_v4() -> anyhow::Result<()> {
                 ..Default::default()
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "".to_string(),
             escape: "".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: false,
@@ -854,30 +849,30 @@ fn test_user_stage_gcs_v4() -> anyhow::Result<()> {
         124, 34, 2, 47, 47, 40, 2, 160, 6, 4, 168, 6, 1, 42, 8, 10, 3, 32, 154, 5, 16, 142, 8, 50,
         4, 116, 101, 115, 116, 160, 6, 4, 168, 6, 1,
     ];
-    let want = mt::UserStageInfo {
+    let want = mt::principal::UserStageInfo {
         stage_name: "gcs://my_bucket/data/files".to_string(),
-        stage_type: mt::StageType::External,
-        stage_params: mt::StageParams {
-            storage: StorageParams::Gcs(StorageGcsConfig {
+        stage_type: mt::principal::StageType::External,
+        stage_params: mt::principal::StageParams {
+            storage: mt::storage::StorageParams::Gcs(mt::storage::StorageGcsConfig {
                 endpoint_url: "https://storage.googleapis.com".to_string(),
                 bucket: "my_bucket".to_string(),
                 root: "/data/files".to_string(),
                 credential: "my_credential".to_string(),
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "".to_string(),
             escape: "".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: false,
@@ -906,11 +901,11 @@ fn test_user_stage_s3_v1() -> anyhow::Result<()> {
         2, 160, 6, 1, 42, 8, 10, 3, 32, 154, 5, 16, 142, 8, 50, 4, 116, 101, 115, 116, 160, 6, 1,
     ];
 
-    let want = mt::UserStageInfo {
+    let want = mt::principal::UserStageInfo {
         stage_name: "s3://mybucket/data/files".to_string(),
-        stage_type: mt::StageType::External,
-        stage_params: mt::StageParams {
-            storage: StorageParams::S3(StorageS3Config {
+        stage_type: mt::principal::StageType::External,
+        stage_params: mt::principal::StageParams {
+            storage: mt::storage::StorageParams::S3(mt::storage::StorageS3Config {
                 bucket: "mybucket".to_string(),
                 root: "/data/files".to_string(),
                 access_key_id: "my_key_id".to_string(),
@@ -919,19 +914,19 @@ fn test_user_stage_s3_v1() -> anyhow::Result<()> {
                 ..Default::default()
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "".to_string(),
             escape: "".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: false,
@@ -960,27 +955,27 @@ fn test_internal_stage_v17() -> anyhow::Result<()> {
         116, 160, 6, 17, 168, 6, 1,
     ];
 
-    let want = mt::UserStageInfo {
+    let want = mt::principal::UserStageInfo {
         stage_name: "fs://dir/to/files".to_string(),
-        stage_type: mt::StageType::Internal,
-        stage_params: mt::StageParams {
-            storage: StorageParams::Fs(StorageFsConfig {
+        stage_type: mt::principal::StageType::Internal,
+        stage_params: mt::principal::StageParams {
+            storage: mt::storage::StorageParams::Fs(mt::storage::StorageFsConfig {
                 root: "/dir/to/files".to_string(),
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "".to_string(),
             escape: "".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: true,
@@ -1008,27 +1003,27 @@ fn test_user_stage_v19() -> anyhow::Result<()> {
         24, 1, 50, 4, 116, 101, 115, 116, 160, 6, 19, 168, 6, 1,
     ];
 
-    let want = mt::UserStageInfo {
+    let want = mt::principal::UserStageInfo {
         stage_name: "root".to_string(),
-        stage_type: mt::StageType::User,
-        stage_params: mt::StageParams {
-            storage: StorageParams::Fs(StorageFsConfig {
+        stage_type: mt::principal::StageType::User,
+        stage_params: mt::principal::StageParams {
+            storage: mt::storage::StorageParams::Fs(mt::storage::StorageFsConfig {
                 root: "/dir/to/files".to_string(),
             }),
         },
-        file_format_options: mt::FileFormatOptions {
-            format: mt::StageFileFormatType::Json,
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             nan_display: "".to_string(),
             escape: "".to_string(),
-            compression: mt::StageFileCompression::Bz2,
+            compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
         },
-        copy_options: mt::CopyOptions {
-            on_error: mt::OnErrorMode::SkipFileNum(666),
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
             split_size: 0,
             purge: true,

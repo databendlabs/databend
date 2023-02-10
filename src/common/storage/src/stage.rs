@@ -16,8 +16,8 @@ use std::path::Path;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::StageType;
-use common_meta_types::UserStageInfo;
+use common_meta_app::principal::StageType;
+use common_meta_app::principal::UserStageInfo;
 use futures::TryStreamExt;
 use opendal::ObjectMetadata;
 use opendal::ObjectMode;

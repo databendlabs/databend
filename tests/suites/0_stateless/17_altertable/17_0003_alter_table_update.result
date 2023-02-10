@@ -1,0 +1,10 @@
+alter table add a column
+update table column
+ERROR 1105 (HY000) at line 1: Code: 1104, displayText = index out of bounds: the len is 2 but the index is 2.
+alter table drop a column
+update table column
+ERROR 1105 (HY000) at line 1: Code: 1104, displayText = index out of bounds: the len is 0 but the index is 0.
+alter table add a column
+update table column
+alter table drop a column
+update table column

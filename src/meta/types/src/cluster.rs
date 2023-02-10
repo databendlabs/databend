@@ -17,19 +17,10 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 
 use common_exception::exception::Result;
-use openraft::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::Endpoint;
-
-/// A slot is a virtual and intermediate allocation unit in a distributed storage.
-/// The key of an object is mapped to a slot by some hashing algo.
-/// A slot is assigned to several physical servers(normally 3 for durability).
-#[derive(Serialize, Deserialize, Debug, Default, Clone)]
-pub struct Slot {
-    pub node_ids: Vec<NodeId>,
-}
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq)]
 pub struct Node {
@@ -39,10 +30,13 @@ pub struct Node {
     /// Raft service endpoint to connect to.
     pub endpoint: Endpoint,
 
+    /// For backward compatibility, it can not be removed.
+    /// 2023-02-09
     #[serde(skip)]
     #[deprecated(note = "it is listening addr, not advertise addr")]
     pub grpc_api_addr: Option<String>,
 
+    /// The address `ip:port` for a meta-client to connect to.
     pub grpc_api_advertise_address: Option<String>,
 }
 

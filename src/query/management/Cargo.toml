@@ -17,6 +17,7 @@ common-base = { path = "../../common/base" }
 common-exception = { path = "../../common/exception" }
 common-functions = { path = "../functions" }
 common-meta-api = { path = "../../meta/api" }
+common-meta-app = { path = "../../meta/app" }
 common-meta-kvapi = { path = "../../meta/kvapi" }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }

@@ -16,7 +16,7 @@ use std::str::FromStr;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::StageFileFormatType;
+use common_meta_app::principal::StageFileFormatType;
 
 const SUFFIX_WITH_NAMES_AND_TYPES: &str = "withnamesandtypes";
 const SUFFIX_WITH_NAMES: &str = "withnames";

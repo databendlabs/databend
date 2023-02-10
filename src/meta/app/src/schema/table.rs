@@ -26,11 +26,11 @@ use common_exception::Result;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_meta_types::MatchSeq;
-use common_meta_types::StorageParams;
 use maplit::hashmap;
 
 use crate::schema::database::DatabaseNameIdent;
 use crate::share::ShareNameIdent;
+use crate::storage::StorageParams;
 
 /// Globally unique identifier of a version of TableMeta.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq, Default)]

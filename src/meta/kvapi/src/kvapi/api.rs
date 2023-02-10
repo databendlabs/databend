@@ -15,15 +15,15 @@
 use std::ops::Deref;
 
 use async_trait::async_trait;
-use common_meta_types::GetKVReply;
-use common_meta_types::ListKVReply;
-use common_meta_types::MGetKVReply;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
-use common_meta_types::UpsertKVReply;
-use common_meta_types::UpsertKVReq;
 
 use crate::kvapi;
+use crate::kvapi::GetKVReply;
+use crate::kvapi::ListKVReply;
+use crate::kvapi::MGetKVReply;
+use crate::kvapi::UpsertKVReply;
+use crate::kvapi::UpsertKVReq;
 
 /// Build an API impl instance or a cluster of API impl
 #[async_trait]

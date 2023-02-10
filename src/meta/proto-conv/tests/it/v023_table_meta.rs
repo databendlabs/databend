@@ -19,7 +19,7 @@ use chrono::Utc;
 use common_expression as ex;
 use common_expression::types::NumberDataType;
 use common_meta_app::schema as mt;
-use common_meta_types::StorageParams;
+use common_meta_app::storage::StorageParams;
 use maplit::btreemap;
 
 use crate::common;
