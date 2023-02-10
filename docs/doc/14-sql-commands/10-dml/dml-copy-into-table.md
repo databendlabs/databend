@@ -187,13 +187,13 @@ The parameter ON_ERROR currently does not work for parquet files.
 ### Loading Data from an Internal Stage
 
 ```sql
-COPY INTO mytable FROM @my_internal_s1 pattern = 'books.*parquet' file_format = (type = 'PARQUET');
+COPY INTO mytable FROM @my_internal_s1 pattern = 'books.*parquet' file_format = (type = PARQUET);
 ```
 
 ### Loading Data from an External Stage
 
 ```sql
-COPY INTO mytable FROM @my_external_s1 pattern = 'books.*parquet' file_format = (type = 'PARQUET');
+COPY INTO mytable FROM @my_external_s1 pattern = 'books.*parquet' file_format = (type = PARQUET);
 ```
 
 ### Loading Data from External Locations

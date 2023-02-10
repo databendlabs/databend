@@ -180,7 +180,7 @@ COPY INTO books FROM @my_int_stage files=('books.csv') file_format = (type = CSV
 <TabItem value="parquet" label="Parquet">
 
 ```sql
-COPY INTO books FROM @my_int_stage files=('books.parquet') file_format = (type = 'Parquet');
+COPY INTO books FROM @my_int_stage files=('books.parquet') file_format = (type = Parquet);
 ```
 
 </TabItem>
