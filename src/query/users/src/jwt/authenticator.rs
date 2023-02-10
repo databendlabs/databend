@@ -19,6 +19,7 @@ use jwt_simple::algorithms::ES256PublicKey;
 use jwt_simple::algorithms::RS256PublicKey;
 use jwt_simple::algorithms::RSAPublicKeyLike;
 use jwt_simple::prelude::JWTClaims;
+use jwt_simple::token::Token;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -56,6 +57,10 @@ impl CustomClaims {
         }
     }
 
+    pub fn empty(&self) -> bool {
+        self.role.is_none() && self.tenant_id.is_none() && self.ensure_user.is_none()
+    }
+
     pub fn with_tenant_id(mut self, tenant_id: &str) -> Self {
         self.tenant_id = Some(tenant_id.to_string());
         self
@@ -73,27 +78,27 @@ impl CustomClaims {
 }
 
 impl JwtAuthenticator {
-    pub fn try_create(
-        jwt_key_file: String,
-        additional_jwt_key_files: Vec<String>,
-    ) -> Result<Option<Self>> {
-        if jwt_key_file.is_empty() {
+    pub fn try_create(jwt_key_file: String, jwt_key_files: Vec<String>) -> Result<Option<Self>> {
+        if jwt_key_file.is_empty() && jwt_key_files.is_empty() {
             return Ok(None);
         }
         // init a vec of key store
         let mut key_stores = vec![jwk::JwkKeyStore::new(jwt_key_file)];
-        for u in additional_jwt_key_files {
+        for u in jwt_key_files {
             key_stores.push(jwk::JwkKeyStore::new(u))
         }
         Ok(Some(JwtAuthenticator { key_stores }))
     }
 
+    // parse jwt claims from single source, if custom claim is not matching on desired, claim parsed would be empty
     pub async fn parse_jwt_claims_from_store(
         &self,
         token: &str,
         key_store: &jwk::JwkKeyStore,
     ) -> Result<JWTClaims<CustomClaims>> {
-        let pub_key = key_store.get_key(None).await?;
+        let metadata = Token::decode_metadata(token);
+        let key_id = metadata.map_or(None, |e| e.key_id().map(|s| s.to_string()));
+        let pub_key = key_store.get_key(key_id).await?;
         let r = match &pub_key {
             PubKey::RSA256(pk) => pk.verify_token::<CustomClaims>(token, None),
             PubKey::ES256(pk) => pk.verify_token::<CustomClaims>(token, None),

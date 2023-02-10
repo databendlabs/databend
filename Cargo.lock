@@ -2485,6 +2485,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
+ "wiremock",
 ]
 
 [[package]]

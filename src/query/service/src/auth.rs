@@ -45,7 +45,7 @@ impl AuthMgr {
         Ok(Arc::new(AuthMgr {
             jwt_auth: JwtAuthenticator::try_create(
                 cfg.query.jwt_key_file.clone(),
-                cfg.query.additional_jwt_key_files.clone(),
+                cfg.query.jwt_key_files.clone(),
             )?,
         }))
     }

@@ -16,7 +16,9 @@ use base64::encode_config;
 use base64::URL_SAFE_NO_PAD;
 use common_base::base::tokio;
 use common_exception::Result;
+use common_meta_types::AuthInfo;
 use common_meta_types::UserIdentity;
+use common_meta_types::UserInfo;
 use common_users::CustomClaims;
 use common_users::EnsureUser;
 use common_users::UserApiProvider;
@@ -29,6 +31,12 @@ use wiremock::matchers::path;
 use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;
+
+#[derive(Serialize, Deserialize)]
+struct NonCustomClaims {
+    user_is_admin: bool,
+    user_country: String,
+}
 
 fn get_jwks_file_rs256(kid: &str) -> (RS256KeyPair, String) {
     let key_pair = RS256KeyPair::generate(2048).unwrap().with_key_id(kid);
@@ -69,7 +77,7 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
     let first_url = format!("http://{}{}", server.address(), json_path);
     let second_url = format!("http://{}{}", server.address(), second_path);
     conf.query.jwt_key_file = first_url.clone();
-    conf.query.additional_jwt_key_files = vec![second_url];
+    conf.query.jwt_key_files = vec![second_url];
     let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
     let auth_mgr = ctx.get_auth_manager();
     {
@@ -128,6 +136,32 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
         assert_eq!(roles.len(), 1);
         assert!(!roles.contains(&"test-auth-role2".to_string()));
 
+        let non_custom_claim = NonCustomClaims {
+            user_is_admin: false,
+            user_country: "Springfield".to_string(),
+        };
+        let user2 = "service_account:mysql@123";
+        let claims = Claims::with_custom_claims(non_custom_claim, Duration::from_hours(2))
+            .with_subject(user2.to_string());
+        let token2 = pair2.sign(claims)?;
+        let tenant = ctx.get_current_session().get_current_tenant();
+        let user2_info = UserInfo::new(user2, "1.1.1.1", AuthInfo::JWT);
+        UserApiProvider::instance()
+            .add_user(tenant.as_str(), user2_info.clone(), true)
+            .await?;
+        let res2 = auth_mgr
+            .auth(ctx.get_current_session(), &Credential::Jwt {
+                token: token2,
+                hostname: Some("1.1.1.1".to_string()),
+            })
+            .await;
+        assert!(res2.is_ok());
+        assert_eq!(
+            ctx.get_current_session().get_current_user().unwrap(),
+            user2_info
+        );
+
+        // it would not work on claim with unknown jwt keys
         let claim3 = CustomClaims::new()
             .with_ensure_user(EnsureUser {
                 roles: Some(vec![role_name.to_string()]),

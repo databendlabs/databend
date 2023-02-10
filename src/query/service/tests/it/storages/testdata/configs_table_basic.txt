@@ -22,7 +22,6 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | "meta"    | "rpc_tls_meta_server_root_ca_cert"     | ""                               | ""       |
 | "meta"    | "rpc_tls_meta_service_domain_name"     | "localhost"                      | ""       |
 | "meta"    | "username"                             | "root"                           | ""       |
-| "query"   | "additional_jwt_key_files"             | ""                               | ""       |
 | "query"   | "admin_api_address"                    | "127.0.0.1:8080"                 | ""       |
 | "query"   | "api_tls_server_cert"                  | ""                               | ""       |
 | "query"   | "api_tls_server_key"                   | ""                               | ""       |
@@ -45,6 +44,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | "query"   | "http_handler_tls_server_root_ca_cert" | ""                               | ""       |
 | "query"   | "internal_enable_sandbox_tenant"       | "false"                          | ""       |
 | "query"   | "jwt_key_file"                         | ""                               | ""       |
+| "query"   | "jwt_key_files"                        | ""                               | ""       |
 | "query"   | "management_mode"                      | "false"                          | ""       |
 | "query"   | "max_active_sessions"                  | "256"                            | ""       |
 | "query"   | "max_memory_limit_enabled"             | "false"                          | ""       |
