@@ -16,18 +16,13 @@ use std::alloc::Allocator;
 use std::mem;
 use std::mem::MaybeUninit;
 
-use common_base::mem_allocator::GlobalAllocator;
 use common_base::mem_allocator::MmapAllocator;
 
 use crate::table0::Entry;
 use crate::HashtableLike;
 
-pub struct LookupHashtable<
-    K: Sized,
-    const CAPACITY: usize,
-    V,
-    A: Allocator + Clone = MmapAllocator<GlobalAllocator>,
-> {
+pub struct LookupHashtable<K: Sized, const CAPACITY: usize, V, A: Allocator + Clone = MmapAllocator>
+{
     flags: Box<[bool; CAPACITY], A>,
     data: Box<[Entry<K, V>; CAPACITY], A>,
     len: usize,

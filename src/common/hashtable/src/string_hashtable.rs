@@ -17,7 +17,6 @@ use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 
 use bumpalo::Bump;
-use common_base::mem_allocator::GlobalAllocator;
 use common_base::mem_allocator::MmapAllocator;
 
 use super::container::HeapContainer;
@@ -37,7 +36,7 @@ use crate::table_empty::TableEmptyIterMut;
 /// Simple unsized hashtable is used for storing unsized keys in arena. It can be worked with HashMethodSerializer.
 /// Different from `ShortStringHashTable`, it doesn't use adpative sub hashtable to store key values via key size.
 /// It can be considered as a minimal hashtable implementation of ShortStringHashTable
-pub struct StringHashtable<K, V, A = MmapAllocator<GlobalAllocator>>
+pub struct StringHashtable<K, V, A = MmapAllocator>
 where
     K: UnsizedKeyable + ?Sized,
     A: Allocator + Clone,
