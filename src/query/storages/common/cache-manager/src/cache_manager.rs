@@ -176,11 +176,11 @@ impl CacheManager {
         population_queue_size: u32,
         disk_cache_bytes_size: u64,
     ) -> Result<Option<TableDataCache>> {
-        if disk_cache_mb_size > 0 {
+        if disk_cache_bytes_size > 0 {
             let cache_holder = TableDataCacheBuilder::new_table_data_disk_cache(
                 path,
                 population_queue_size,
-                disk_cache_mb_size,
+                disk_cache_bytes_size,
             )?;
             Ok(Some(cache_holder))
         } else {
