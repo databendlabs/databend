@@ -29,7 +29,7 @@ common-storages-view = { path = "../view" }
 common-users = { path = "../../users" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
-backon = "0.2"
+backon = "0.4"
 chrono = { workspace = true }
 futures = "0.3.24"
 itertools = "0.10.5"

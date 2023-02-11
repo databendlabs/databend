@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use backon::ExponentialBackoff;
+use backon::ExponentialBuilder;
 use backon::Retryable;
 use common_arrow::arrow::chunk::Chunk as ArrowChunk;
 use common_arrow::native::write::NativeWriter;
@@ -77,7 +77,7 @@ pub async fn write_data(data: &[u8], data_accessor: &Operator, location: &str) -
     let object = data_accessor.object(location);
 
     { || object.write(data) }
-        .retry(ExponentialBackoff::default().with_jitter())
+        .retry(&ExponentialBuilder::default().with_jitter())
         .when(|err| err.is_temporary())
         .notify(|err, dur| {
             warn!(
