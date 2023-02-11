@@ -329,24 +329,31 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc<'static> {
                 res.clone()
                     .append(RcDoc::text(","))
                     .append(RcDoc::space())
-                    .append(RcDoc::text("ASC"));
+                    .append(RcDoc::text("'"))
+                    .append(RcDoc::text("ASC"))
+                    .append(RcDoc::text("'"));
             } else {
                 res.clone()
                     .append(RcDoc::text(","))
                     .append(RcDoc::space())
-                    .append(RcDoc::text("DESC"));
+                    .append(RcDoc::text("'"))
+                    .append(RcDoc::text("DESC"))
+                    .append(RcDoc::text("'"));
             }
             if null_first {
                 res.clone()
                     .append(RcDoc::text(","))
                     .append(RcDoc::space())
+                    .append(RcDoc::text("'"))
                     .append(RcDoc::text("NULL FIRST"))
-                    .append(RcDoc::space());
+                    .append(RcDoc::text("'"));
             } else {
                 res.clone()
                     .append(RcDoc::text(","))
                     .append(RcDoc::space())
-                    .append(RcDoc::text("NULL LAST"));
+                    .append(RcDoc::text("'"))
+                    .append(RcDoc::text("NULL LAST"))
+                    .append(RcDoc::text("'"));
             }
             res.clone().append(RcDoc::text(")"))
         }
