@@ -32,7 +32,7 @@ impl Default for WriteSettings {
     fn default() -> Self {
         Self {
             storage_format: FuseStorageFormat::Parquet,
-            table_compression: TableCompression::LZ4,
+            table_compression: TableCompression::default(),
             max_page_size: DEFAULT_ROW_PER_PAGE,
             block_per_seg: DEFAULT_BLOCK_PER_SEGMENT,
         }

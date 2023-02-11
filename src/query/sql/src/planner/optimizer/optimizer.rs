@@ -141,7 +141,7 @@ pub fn optimize_query(
     bind_context: Box<BindContext>,
     s_expr: SExpr,
 ) -> Result<SExpr> {
-    let rules = RuleList::create(DEFAULT_REWRITE_RULES.clone())?;
+    let rules = RuleList::create(DEFAULT_REWRITE_RULES.clone(), Some(metadata.clone()))?;
 
     let contains_local_table_scan = contains_local_table_scan(&s_expr, &metadata);
 
@@ -169,7 +169,7 @@ fn get_optimized_memo(
     metadata: MetadataRef,
     bind_context: Box<BindContext>,
 ) -> Result<(Memo, HashMap<IndexType, CostContext>)> {
-    let rules = RuleList::create(DEFAULT_REWRITE_RULES.clone())?;
+    let rules = RuleList::create(DEFAULT_REWRITE_RULES.clone(), Some(metadata.clone()))?;
 
     let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata, rules);
     let result = heuristic.optimize(s_expr)?;

@@ -14,33 +14,47 @@
 
 use common_exception::Result;
 use common_expression::type_check::common_super_type;
+use common_expression::types::DataType;
+use common_expression::TableDataType;
 use itertools::Itertools;
 
+use crate::binder::satisfied_by;
 use crate::binder::JoinPredicate;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;
+use crate::optimizer::RelationalProperty;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::planner::binder::wrap_cast;
+use crate::plans::AggregateFunction;
 use crate::plans::AndExpr;
+use crate::plans::BoundColumnRef;
+use crate::plans::CastExpr;
+use crate::plans::ComparisonExpr;
 use crate::plans::Filter;
+use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinType;
+use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
+use crate::ColumnBinding;
+use crate::ColumnEntry;
 use crate::ColumnSet;
 use crate::IndexType;
+use crate::MetadataRef;
 
 pub struct RulePushDownFilterJoin {
     id: RuleID,
     pattern: SExpr,
+    metadata: MetadataRef,
 }
 
 impl RulePushDownFilterJoin {
-    pub fn new() -> Self {
+    pub fn new(metadata: MetadataRef) -> Self {
         Self {
             id: RuleID::PushDownFilterJoin,
             // Filter
@@ -73,6 +87,7 @@ impl RulePushDownFilterJoin {
                     ),
                 ),
             ),
+            metadata,
         }
     }
 
@@ -89,8 +104,21 @@ impl RulePushDownFilterJoin {
             ScalarExpr::BoundColumnRef(column_binding) => {
                 nullable_columns.push(column_binding.column.index);
             }
-            ScalarExpr::AndExpr(_) => {
-                unreachable!("`Scalar::AndExpr` should have been split in binder")
+            ScalarExpr::AndExpr(expr) => {
+                let mut left_cols = vec![];
+                let mut right_cols = vec![];
+                self.find_nullable_columns(
+                    &expr.left,
+                    left_output_columns,
+                    right_output_columns,
+                    &mut left_cols,
+                )?;
+                self.find_nullable_columns(
+                    &expr.right,
+                    left_output_columns,
+                    right_output_columns,
+                    &mut right_cols,
+                )?;
             }
             ScalarExpr::OrExpr(expr) => {
                 let mut left_cols = vec![];
@@ -159,12 +187,12 @@ impl RulePushDownFilterJoin {
     }
 
     #[allow(dead_code)]
-    fn convert_outer_to_inner_join(&self, s_expr: &SExpr) -> Result<SExpr> {
+    fn convert_outer_to_inner_join(&self, s_expr: &SExpr) -> Result<(SExpr, bool)> {
         let filter: Filter = s_expr.plan().clone().try_into()?;
         let mut join: Join = s_expr.child(0)?.plan().clone().try_into()?;
         let origin_join_type = join.join_type.clone();
         if !origin_join_type.is_outer_join() {
-            return Ok(s_expr.clone());
+            return Ok((s_expr.clone(), false));
         }
         let s_join_expr = s_expr.child(0)?;
         let join_expr = RelExpr::with_s_expr(s_join_expr);
@@ -222,7 +250,7 @@ impl RulePushDownFilterJoin {
 
         let changed_join_type = join.join_type.clone();
         if origin_join_type == changed_join_type {
-            return Ok(s_expr.clone());
+            return Ok((s_expr.clone(), false));
         }
         let mut result = SExpr::create_binary(
             join.into(),
@@ -231,7 +259,7 @@ impl RulePushDownFilterJoin {
         );
         // wrap filter s_expr
         result = SExpr::create_unary(filter.into(), result);
-        Ok(result)
+        Ok((result, true))
     }
 
     fn convert_mark_to_semi_join(&self, s_expr: &SExpr) -> Result<SExpr> {
@@ -290,10 +318,23 @@ impl Rule for RulePushDownFilterJoin {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         // First, try to convert outer join to inner join
-        // Todo(xudong): find a way to avoid type conflict and then open the rule
-        // let mut s_expr = self.convert_outer_to_inner_join(s_expr)?;
+        let join: Join = s_expr.child(0)?.plan().clone().try_into()?;
+        let origin_join_type = join.join_type;
+        let (mut s_expr, converted) = self.convert_outer_to_inner_join(s_expr)?;
+        if converted {
+            // If outer join is converted to inner join, we need to change datatype of filter predicate
+            let mut filter: Filter = s_expr.plan().clone().try_into()?;
+            let mut new_predicates = Vec::with_capacity(filter.predicates.len());
+            for predicate in filter.predicates.iter() {
+                let new_predicate =
+                    remove_nullable(&s_expr, predicate, &origin_join_type, self.metadata.clone())?;
+                new_predicates.push(new_predicate);
+            }
+            filter.predicates = new_predicates;
+            s_expr = SExpr::create_unary(filter.into(), s_expr.child(0)?.clone())
+        }
         // Second, check if can convert mark join to semi join
-        let s_expr = self.convert_mark_to_semi_join(s_expr)?;
+        s_expr = self.convert_mark_to_semi_join(&s_expr)?;
         let filter: Filter = s_expr.plan().clone().try_into()?;
         if filter.predicates.is_empty() {
             state.add_result(s_expr);
@@ -547,5 +588,185 @@ fn make_or_expr(scalars: &[ScalarExpr]) -> ScalarExpr {
         left: Box::new(scalars[0].clone()),
         right: Box::new(make_or_expr(&scalars[1..])),
         return_type: Box::new(scalars[0].data_type()),
+    })
+}
+
+fn remove_nullable(
+    s_expr: &SExpr,
+    predicate: &ScalarExpr,
+    join_type: &JoinType,
+    metadata: MetadataRef,
+) -> Result<ScalarExpr> {
+    let join_expr = s_expr.child(0)?;
+
+    let rel_expr = RelExpr::with_s_expr(join_expr);
+    let left_prop = rel_expr.derive_relational_prop_child(0)?;
+    let right_prop = rel_expr.derive_relational_prop_child(1)?;
+
+    remove_column_nullable(predicate, &left_prop, &right_prop, join_type, metadata)
+}
+
+fn remove_column_nullable(
+    scalar_expr: &ScalarExpr,
+    left_prop: &RelationalProperty,
+    right_prop: &RelationalProperty,
+    join_type: &JoinType,
+    metadata: MetadataRef,
+) -> Result<ScalarExpr> {
+    Ok(match scalar_expr {
+        ScalarExpr::BoundColumnRef(column) => {
+            let mut data_type = column.column.data_type.clone();
+            let metadata = metadata.read();
+            let column_entry = metadata.column(column.column.index);
+            let mut need_remove = true;
+            // If the column type is nullable when the table is created
+            // Do not need to remove nullable.
+            match column_entry {
+                ColumnEntry::BaseTableColumn(base) => {
+                    if let TableDataType::Nullable(_) = base.data_type {
+                        need_remove = false;
+                    }
+                }
+                ColumnEntry::DerivedColumn(derived) => {
+                    if let DataType::Nullable(_) = derived.data_type {
+                        need_remove = false;
+                    }
+                }
+            }
+            match join_type {
+                JoinType::Left => {
+                    if satisfied_by(scalar_expr, right_prop) && need_remove {
+                        data_type = Box::new(column.column.data_type.remove_nullable());
+                    }
+                }
+                JoinType::Right => {
+                    if satisfied_by(scalar_expr, left_prop) && need_remove {
+                        data_type = Box::new(column.column.data_type.remove_nullable());
+                    }
+                }
+                JoinType::Full => {
+                    if need_remove {
+                        data_type = Box::new(column.column.data_type.remove_nullable())
+                    }
+                }
+                _ => {}
+            };
+            ScalarExpr::BoundColumnRef(BoundColumnRef {
+                column: ColumnBinding {
+                    database_name: column.column.database_name.clone(),
+                    table_name: column.column.table_name.clone(),
+                    column_name: column.column.column_name.clone(),
+                    index: column.column.index,
+                    data_type,
+                    visibility: column.column.visibility.clone(),
+                },
+            })
+        }
+        ScalarExpr::AndExpr(expr) => {
+            let left_expr = remove_column_nullable(
+                &expr.left,
+                left_prop,
+                right_prop,
+                join_type,
+                metadata.clone(),
+            )?;
+            let right_expr =
+                remove_column_nullable(&expr.right, left_prop, right_prop, join_type, metadata)?;
+            ScalarExpr::AndExpr(AndExpr {
+                left: Box::new(left_expr),
+                right: Box::new(right_expr),
+                return_type: expr.return_type.clone(),
+            })
+        }
+        ScalarExpr::OrExpr(expr) => {
+            let left_expr = remove_column_nullable(
+                &expr.left,
+                left_prop,
+                right_prop,
+                join_type,
+                metadata.clone(),
+            )?;
+            let right_expr =
+                remove_column_nullable(&expr.right, left_prop, right_prop, join_type, metadata)?;
+            ScalarExpr::OrExpr(OrExpr {
+                left: Box::new(left_expr),
+                right: Box::new(right_expr),
+                return_type: expr.return_type.clone(),
+            })
+        }
+        ScalarExpr::NotExpr(expr) => {
+            let new_expr =
+                remove_column_nullable(&expr.argument, left_prop, right_prop, join_type, metadata)?;
+            ScalarExpr::NotExpr(NotExpr {
+                argument: Box::new(new_expr),
+                return_type: expr.return_type.clone(),
+            })
+        }
+        ScalarExpr::ComparisonExpr(expr) => {
+            let left_expr = remove_column_nullable(
+                &expr.left,
+                left_prop,
+                right_prop,
+                join_type,
+                metadata.clone(),
+            )?;
+            let right_expr =
+                remove_column_nullable(&expr.right, left_prop, right_prop, join_type, metadata)?;
+            ScalarExpr::ComparisonExpr(ComparisonExpr {
+                op: expr.op.clone(),
+                left: Box::new(left_expr),
+                right: Box::new(right_expr),
+                return_type: expr.return_type.clone(),
+            })
+        }
+        ScalarExpr::AggregateFunction(expr) => {
+            let mut args = Vec::with_capacity(expr.args.len());
+            for arg in expr.args.iter() {
+                args.push(remove_column_nullable(
+                    arg,
+                    left_prop,
+                    right_prop,
+                    join_type,
+                    metadata.clone(),
+                )?);
+            }
+            ScalarExpr::AggregateFunction(AggregateFunction {
+                display_name: expr.display_name.clone(),
+                func_name: expr.func_name.clone(),
+                distinct: expr.distinct,
+                params: expr.params.clone(),
+                args,
+                return_type: expr.return_type.clone(),
+            })
+        }
+        ScalarExpr::FunctionCall(expr) => {
+            let mut args = Vec::with_capacity(expr.arguments.len());
+            for arg in expr.arguments.iter() {
+                args.push(remove_column_nullable(
+                    arg,
+                    left_prop,
+                    right_prop,
+                    join_type,
+                    metadata.clone(),
+                )?);
+            }
+            ScalarExpr::FunctionCall(FunctionCall {
+                params: expr.params.clone(),
+                arguments: args,
+                func_name: expr.func_name.clone(),
+                return_type: expr.return_type.clone(),
+            })
+        }
+        ScalarExpr::CastExpr(expr) => {
+            let new_expr =
+                remove_column_nullable(&expr.argument, left_prop, right_prop, join_type, metadata)?;
+            ScalarExpr::CastExpr(CastExpr {
+                is_try: expr.is_try,
+                argument: Box::new(new_expr),
+                from_type: expr.from_type.clone(),
+                target_type: expr.target_type.clone(),
+            })
+        }
+        ScalarExpr::ConstantExpr(_) | ScalarExpr::SubqueryExpr(_) => scalar_expr.clone(),
     })
 }
