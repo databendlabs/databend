@@ -142,7 +142,7 @@ function install_protobuf {
 		PB_REL="https://github.com/protocolbuffers/protobuf/releases"
 		curl -LO $PB_REL/download/v3.15.8/protoc-3.15.8-linux-${arch}.zip
 		unzip protoc-3.15.8-linux-${arch}.zip -d protoc-3.15.8
-		sudo cp protoc-3.15.8/bin/protoc /usr/bin/
+		sudo cp protoc-3.15.8/bin/protoc /usr/local/bin/
 		sudo rm -rf protoc-3.15.8*
 		;;
 	esac
