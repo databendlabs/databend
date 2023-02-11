@@ -196,39 +196,3 @@ pub fn field_default_value(ctx: Arc<dyn TableContext>, field: &TableField) -> Re
         None => Ok(data_type.default_value()),
     }
 }
-
-pub fn leaf_field_default_values(
-    ctx: Arc<dyn TableContext>,
-    field: &TableField,
-) -> Result<Vec<Scalar>> {
-    fn field_leaf_scalars(
-        field: &TableField,
-        field_scalar: Scalar,
-        leaf_scalars: &mut Vec<Scalar>,
-    ) {
-        leaf_scalars.push(field_scalar.clone());
-        if let TableDataType::Tuple {
-            fields_name,
-            fields_type,
-        } = field.data_type()
-        {
-            if let Scalar::Tuple(scalars) = field_scalar {
-                let field_name = field.name();
-                fields_name.iter().zip(fields_type).zip(scalars).for_each(
-                    |((name, ty), scalar)| {
-                        let inner_name = format!("{}:{}", field_name, name.to_lowercase());
-                        let field = TableField::new(&inner_name, ty.clone());
-                        field_leaf_scalars(&field, scalar, leaf_scalars);
-                    },
-                );
-            }
-        }
-    }
-
-    let mut default_vals = Vec::new();
-    let field_scalar = field_default_value(ctx, field)?;
-
-    field_leaf_scalars(field, field_scalar, &mut default_vals);
-
-    Ok(default_vals)
-}
