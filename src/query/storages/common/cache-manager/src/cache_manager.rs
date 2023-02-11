@@ -55,13 +55,13 @@ impl CacheManager {
     pub fn init(config: &QueryConfig) -> Result<()> {
         // setup table data cache
         let table_data_cache = if config.table_data_cache_enabled {
-            None
-        } else {
             Self::new_block_data_cache(
                 &config.table_disk_cache_root,
                 config.table_data_cache_population_queue_size,
                 config.table_disk_cache_mb_size * 1024 * 1024,
             )?
+        } else {
+            None
         };
 
         // setup in-memory table column cache
