@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use once_cell::sync::Lazy;
 use roaring::RoaringBitmap;
 use strum::IntoEnumIterator;
 
@@ -45,6 +46,13 @@ use crate::optimizer::rule::transform::RuleLeftExchangeJoin;
 use crate::optimizer::rule::transform::RuleRightExchangeJoin;
 use crate::optimizer::rule::RuleID;
 use crate::optimizer::rule::RulePtr;
+
+// read only, so thread safe
+static mut RULE_FACTORY: Lazy<RuleFactory> = Lazy::new(|| {
+    let mut factory = RuleFactory::create();
+    factory.init_rules();
+    factory
+});
 
 pub struct RuleFactory {
     rule_set: RuleSet,
