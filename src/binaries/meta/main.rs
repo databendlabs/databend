@@ -45,6 +45,7 @@ mod kvapi;
 
 pub use kvapi::KvApiCommand;
 
+#[cfg(feature = "jemalloc")]
 #[global_allocator]
 pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
 
