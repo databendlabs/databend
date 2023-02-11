@@ -43,7 +43,7 @@ Check out what we've done this week to make Databend even better for you.
 
 **Expression**
 
-- move negative funtions to binder ([#9484](https://github.com/datafuselabs/databend/pull/9484))
+- move negative functions to binder ([#9484](https://github.com/datafuselabs/databend/pull/9484))
 - use error_to_null() to eval try_cast ([#9545](https://github.com/datafuselabs/databend/pull/9545))
   
 **Functions**

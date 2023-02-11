@@ -25,7 +25,7 @@ Plus, we assume that your databend destination is **S3 Compatible** since we use
 To check whether your backend support the integration, you could simply run the following command
 
 ```sql
-CREATE STAGE IF NOT EXISTS airbyte_stage;
+CREATE STAGE IF NOT EXISTS airbyte_stage FILE_FORMAT = (TYPE = CSV);
 PRESIGN UPLOAD @airbyte_stage/test.csv;
 ```
 

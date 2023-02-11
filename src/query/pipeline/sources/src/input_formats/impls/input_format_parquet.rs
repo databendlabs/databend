@@ -266,11 +266,11 @@ impl RowGroupInMemory {
     fn get_arrow_chunk(&mut self) -> Result<ArrowChunk<Box<dyn Array>>> {
         let mut column_chunks = vec![];
         let field_arrays = mem::take(&mut self.field_arrays);
-        for (f, datas) in field_arrays.into_iter().enumerate() {
+        for (f, data) in field_arrays.into_iter().enumerate() {
             let meta_iters = self.field_meta_indexes[f]
                 .iter()
                 .map(|c| &self.meta.columns()[*c]);
-            let meta_data = meta_iters.zip(datas.into_iter()).collect::<Vec<_>>();
+            let meta_data = meta_iters.zip(data.into_iter()).collect::<Vec<_>>();
             let array_iters = to_deserializer(
                 meta_data,
                 self.fields_to_read[f].clone(),

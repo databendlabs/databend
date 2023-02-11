@@ -25,7 +25,7 @@ struct TtlValue<V> {
 /// `CleanPolicy` provides three ways to clean up data.
 /// `CleanPolicy::ReadModify` triggers cleanup on every read or modification.
 /// `CleanPolicy::Modify` triggers cleanup on every modification.
-/// `CleanPolicy::Manual` never triggers cleanup automaticlly.
+/// `CleanPolicy::Manual` never triggers cleanup automatically.
 pub enum CleanPolicy {
     ReadModify,
     Modify,

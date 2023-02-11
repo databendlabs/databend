@@ -25,7 +25,7 @@ SUBSTRING(str FROM pos FOR len)
 | ----------- | ----------- |
 | str | The main string from where the character to be extracted |
 | pos | The position (starting from 1) the substring to start at. If negative, counts from the end |
-| len | The maximun length of the substring to extract |
+| len | The maximum length of the substring to extract |
 
 ## Return Type
 

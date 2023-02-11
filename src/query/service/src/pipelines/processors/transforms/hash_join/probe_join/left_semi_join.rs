@@ -259,10 +259,10 @@ impl JoinHashTable {
     fn fill_null_for_semi_join(
         &self,
         bm: &mut MutableBitmap,
-        probe_indexs: &[u32],
+        probe_indexes: &[u32],
         row_state: &mut [u32],
     ) {
-        for (index, row) in probe_indexs.iter().enumerate() {
+        for (index, row) in probe_indexes.iter().enumerate() {
             let row = *row as usize;
             if bm.get(index) {
                 if row_state[row] == 0 {
@@ -281,10 +281,10 @@ impl JoinHashTable {
     fn fill_null_for_anti_join(
         &self,
         bm: &mut MutableBitmap,
-        probe_indexs: &[u32],
+        probe_indexes: &[u32],
         row_state: &mut [u32],
     ) {
-        for (index, row) in probe_indexs.iter().enumerate() {
+        for (index, row) in probe_indexes.iter().enumerate() {
             let row = *row as usize;
             if row_state[row] == 0 {
                 // if state is not matched, anti result will take one

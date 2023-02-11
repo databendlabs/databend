@@ -35,7 +35,7 @@ runs:
         bash ./scripts/ci/ci-run-tests-embedded-meta.sh
 
     - name: Upload failure
-      if: failure()
+      if: failure() || cancelled()
       uses: ./.github/actions/artifact_failure
       with:
         name: test-stateless-standalone-macos

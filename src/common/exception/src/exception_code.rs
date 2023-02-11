@@ -62,13 +62,13 @@ build_exceptions! {
     /// # Notes
     ///
     /// This error should never be used to for error checking. An error
-    /// that returns as internal error could be assigned a seperate error
+    /// that returns as internal error could be assigned a separate error
     /// code at anytime.
     Internal(1001),
 
     /// Unimplemented means this is a not implemented feature.
     ///
-    /// Deveopers could implement the feature to resolve this error at anytime,
+    /// Developers could implement the feature to resolve this error at anytime,
     ///
     /// # Notes
     ///

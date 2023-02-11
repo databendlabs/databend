@@ -49,7 +49,7 @@ impl SettingMgr {
 impl SettingApi for SettingMgr {
     async fn set_setting(&self, setting: UserSetting) -> Result<u64> {
         // Upsert.
-        let seq = MatchSeq::Any;
+        let seq = MatchSeq::GE(0);
         let val = Operation::Update(serde_json::to_vec(&setting)?);
         let key = format!("{}/{}", self.setting_prefix, setting.name);
         let upsert = self

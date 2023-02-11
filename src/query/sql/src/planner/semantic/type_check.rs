@@ -854,7 +854,7 @@ impl<'a> TypeChecker<'a> {
 
             Expr::Interval { span, .. } => {
                 return Err(ErrorCode::SemanticError(
-                    "Unsupport interval expression yet".to_string(),
+                    "Unsupported interval expression yet".to_string(),
                 )
                 .set_span(*span));
             }
@@ -949,11 +949,11 @@ impl<'a> TypeChecker<'a> {
         required_type: Option<DataType>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Check if current function is a virtual function, e.g. `database`, `version`
-        if let Some(rewriten_func_result) = self
+        if let Some(rewritten_func_result) = self
             .try_rewrite_scalar_function(span, func_name, arguments)
             .await
         {
-            return rewriten_func_result;
+            return rewritten_func_result;
         }
 
         let mut args = vec![];

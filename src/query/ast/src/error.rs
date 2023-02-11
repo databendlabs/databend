@@ -181,18 +181,18 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
         None => return String::new(),
     };
 
-    let mut lables = vec![];
+    let mut labels = vec![];
 
-    // Plain text error has the hightest priority. Only display it if exists.
+    // Plain text error has the highest priority. Only display it if exists.
     for kind in &inner.errors {
         if let ErrorKind::Other(msg) = kind {
-            lables = vec![(inner.span, msg.to_string())];
+            labels = vec![(inner.span, msg.to_string())];
             break;
         }
     }
 
     // List all expected tokens in alternative branches.
-    if lables.is_empty() {
+    if labels.is_empty() {
         let expected_tokens = error
             .errors
             .iter()
@@ -230,16 +230,16 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
             msg += error;
         }
 
-        lables = vec![(inner.span, msg)];
+        labels = vec![(inner.span, msg)];
     }
 
-    // Append contexts as secondary lables.
-    lables.extend(
+    // Append contexts as secondary labels.
+    labels.extend(
         error
             .contexts
             .iter()
             .map(|(span, msg)| (*span, format!("while parsing {}", msg))),
     );
 
-    pretty_print_error(source, lables)
+    pretty_print_error(source, labels)
 }

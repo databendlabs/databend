@@ -136,7 +136,7 @@ impl UpsertKV {
     pub fn update(key: impl ToString, value: &[u8]) -> Self {
         Self {
             key: key.to_string(),
-            seq: MatchSeq::Any,
+            seq: MatchSeq::GE(0),
             value: Operation::Update(value.to_vec()),
             value_meta: None,
         }
@@ -145,7 +145,7 @@ impl UpsertKV {
     pub fn delete(key: impl ToString) -> Self {
         Self {
             key: key.to_string(),
-            seq: MatchSeq::Any,
+            seq: MatchSeq::GE(0),
             value: Operation::Delete,
             value_meta: None,
         }
