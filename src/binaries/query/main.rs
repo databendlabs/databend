@@ -43,12 +43,8 @@ use databend_query::servers::ShutdownHandle;
 use databend_query::GlobalServices;
 use tracing::info;
 
-#[cfg(feature = "jemalloc")]
 #[global_allocator]
 pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
-#[cfg(not(feature = "jemalloc"))]
-pub static GLOBAL_ALLOCATOR: common_base::mem_allocator::StdAllocator =
-    common_base::mem_allocator::StdAllocator;
 
 fn main() {
     match Runtime::with_default_worker_threads() {

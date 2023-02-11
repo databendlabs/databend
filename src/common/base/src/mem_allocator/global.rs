@@ -22,6 +22,7 @@ use std::ptr::NonNull;
 use crate::mem_allocator::DefaultAllocator;
 
 /// Global allocator, default is JeAllocator.
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GlobalAllocator;
 
