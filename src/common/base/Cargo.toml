@@ -12,6 +12,7 @@ test = false
 
 [features]
 tracing = ["tokio/tracing"]
+jemalloc = []
 memory-profiling = [
     "tikv-jemalloc-ctl",
     "tikv-jemalloc-sys/stats",
