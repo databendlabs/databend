@@ -777,7 +777,7 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                     }];
                     let columns = vec![BlockEntry{
                         data_type: arr.data_type(),
-                        value: Value::Column(arr.clone())
+                        value: Value::Column(arr)
                     }];
                     let sort_block = DataBlock::sort(&DataBlock::new(columns, len), &sort_desc, None).unwrap();
                     sort_block.columns()[0].value.clone().into_column().unwrap()
