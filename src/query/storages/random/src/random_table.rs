@@ -211,7 +211,7 @@ impl SyncSource for RandomSource {
             .map(|f| f.data_type().create_random_column(self.rows))
             .collect();
 
-        // The partition garantees the number of rows is less than or equal to `max_block_size`.
+        // The partition guarantees the number of rows is less than or equal to `max_block_size`.
         // And we generate all the `self.rows` at once.
         let num_rows = self.rows;
         self.rows = 0;

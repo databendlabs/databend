@@ -109,7 +109,7 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
 
  *Let's take function `sqrt` as an example*
 
-- Declar the function named `SqrtFunction`
+- Declare the function named `SqrtFunction`
 ``` rust
 #[derive(Clone)]
 pub struct SqrtFunction {

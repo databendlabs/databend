@@ -56,7 +56,7 @@ use crate::storage::StorageParams;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum StageType {
-    /// LegacyInternal will be depracated.
+    /// LegacyInternal will be deprecated.
     ///
     /// Please never use this variant except in `proto_conv`. We keep this
     /// stage type for backword compatible.
@@ -165,7 +165,7 @@ pub enum StageFileFormatType {
 
 impl Default for StageFileFormatType {
     fn default() -> Self {
-        Self::Csv
+        Self::Parquet
     }
 }
 

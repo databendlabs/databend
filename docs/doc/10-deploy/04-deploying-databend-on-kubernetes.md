@@ -28,7 +28,7 @@ import TabItem from '@theme/TabItem';
   * [minikube](https://minikube.sigs.k8s.io/docs/start/)
 
 * Create a Cloud Object Storage with corresponding credentials, i.e., `access_key_id` and `secret_access_key`.
-  * AWS S3 or other S3 compatiable storage service
+  * AWS S3 or other S3 compatible storage service
   * Azure Storage Blob
   * Other storage services supported by [opendal](https://github.com/datafuselabs/opendal#services)
 
@@ -37,7 +37,7 @@ import TabItem from '@theme/TabItem';
     Authentication methods without access keys are also supported:
     * [IRSA](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html) on aws
     * [RRSA](https://www.alibabacloud.com/help/container-service-for-kubernetes/latest/use-rrsa-to-enforce-access-control) on aliyun
-    * [InstanceProfile](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html) on aws (comming soon)
+    * [InstanceProfile](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html) on aws (coming soon)
 
   :::
 
@@ -99,7 +99,7 @@ import TabItem from '@theme/TabItem';
 
   ````
 
-* **[Recommanded]** Ensure Prometheus Operator running in Kubernetes cluster, if you want to monitor the status for Databend Meta and Databend Query.
+* **[Recommended]** Ensure Prometheus Operator running in Kubernetes cluster, if you want to monitor the status for Databend Meta and Databend Query.
 
   :::tip Steps for a simple Kube Prometheus Stack
 
@@ -158,7 +158,7 @@ import TabItem from '@theme/TabItem';
 
 ### Step 1. Deploy a Databend Meta Cluster
 
-It is **higly recommended** to deploy an at least 3-nodes cluster
+It is **highly recommended** to deploy an at least 3-nodes cluster
 with persistent storage on each node for high availability.
 
 1. Create a values file with persistent and monitoring enabled:
@@ -203,7 +203,7 @@ data-databend-meta-2   Bound    pvc-08bd4ceb-15c2-47f3-a637-c1cc10441874   20Gi 
 
 ### Step 2. Deploy a Databend Query Cluster
 
-1. Create a vlaues file with builtin user `databend:databend` and cluster name `example_cluster` with 3 nodes.
+1. Create a values file with builtin user `databend:databend` and cluster name `example_cluster` with 3 nodes.
 
 Detailed and default values are available at [documentation](https://github.com/datafuselabs/helm-charts/blob/main/charts/databend-query/values.yaml)
 
@@ -250,7 +250,7 @@ When setting the service type to `LoadBalancer`,
 almost all cloud platform would assign a public ip address for the query service,
 this may lead to security problem.
 
-Then annotations would be nessesary to tell the cloud platform create an internal loadbalancer.
+Then annotations would be necessary to tell the cloud platform create an internal loadbalancer.
 
 For different cloud providers:
 
@@ -467,7 +467,7 @@ to scale up or down the query cluster, there are two ways
 
 ### Upgrade
 
-to upgarde the query cluster, we need to modify the `values.yaml` for query cluster above.
+to upgrade the query cluster, we need to modify the `values.yaml` for query cluster above.
 
 ```diff title="diff values.yaml"
 replicaCount: 3

@@ -2208,6 +2208,10 @@ siphash64(Boolean NULL) :: UInt64 NULL
 siphash64(Variant) :: UInt64
 siphash64(Variant NULL) :: UInt64 NULL
 sleep(Float64) :: UInt8
+slice(Array(Nothing), UInt64) :: Array(Nothing)
+slice(Array(Nothing) NULL, UInt64 NULL) :: Array(Nothing) NULL
+slice(Array(T0), UInt64) :: Array(T0)
+slice(Array(T0) NULL, UInt64 NULL) :: Array(T0) NULL
 slice(Array(Nothing), UInt64, UInt64) :: Array(Nothing)
 slice(Array(Nothing) NULL, UInt64 NULL, UInt64 NULL) :: Array(Nothing) NULL
 slice(Array(T0), UInt64, UInt64) :: Array(T0)
@@ -3145,6 +3149,7 @@ yesterday() :: Date
 
 Factory functions:
 array
+array_any
 array_avg
 array_count
 array_max
@@ -3153,6 +3158,7 @@ array_sum
 char
 concat
 concat_ws
+divide
 eq
 get
 gt
@@ -3161,14 +3167,18 @@ if
 ignore
 lt
 lte
+minus
 multi_if
+multiply
 noteq
+plus
 point_in_ellipses
 point_in_polygon
 regexp_instr
 regexp_like
 regexp_replace
 regexp_substr
+to_decimal
 tuple
 
 Function aliases (alias to origin):

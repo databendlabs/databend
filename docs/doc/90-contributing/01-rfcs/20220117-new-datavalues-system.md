@@ -237,7 +237,7 @@ impl Series {
 }
 ```
 
-- Convinient way to view a column by `ColumnViewer`
+- Convenient way to view a column by `ColumnViewer`
 
 No need to care about `Constants` and `Nullable`.
 

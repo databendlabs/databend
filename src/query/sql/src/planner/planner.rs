@@ -132,13 +132,13 @@ impl Planner {
         }
     }
 
-    fn add_max_rows_limit(&self, statment: &mut Statement) {
+    fn add_max_rows_limit(&self, statement: &mut Statement) {
         let max_rows = self.ctx.get_settings().get_max_result_rows().unwrap();
         if max_rows == 0 {
             return;
         }
 
-        if let Statement::Query(query) = statment {
+        if let Statement::Query(query) = statement {
             if query.limit.is_empty() {
                 query.limit = vec![Expr::Literal {
                     span: None,

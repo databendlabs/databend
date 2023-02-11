@@ -175,7 +175,7 @@ impl CsvReaderState {
         match result {
             ReadRecordResult::InputEmpty => {
                 if input.is_empty() {
-                    Err(self.csv_error("unexpect eof"))
+                    Err(self.csv_error("unexpected eof"))
                 } else {
                     Ok((false, n_in, n_out))
                 }
@@ -192,7 +192,7 @@ impl CsvReaderState {
             }
             ReadRecordResult::End => {
                 if !input.is_empty() {
-                    Err(self.csv_error("unexpect eof"))
+                    Err(self.csv_error("unexpected eof"))
                 } else {
                     Ok((false, n_in, n_out))
                 }

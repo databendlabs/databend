@@ -67,12 +67,13 @@ use siphasher::sip128::SipHasher24;
 use crate::aggregates::eval_aggr;
 use crate::AggregateFunctionFactory;
 
-const ARRAY_AGGREGATE_FUNCTIONS: &[(&str, &str); 5] = &[
+const ARRAY_AGGREGATE_FUNCTIONS: &[(&str, &str); 6] = &[
     ("array_avg", "avg"),
     ("array_count", "count"),
     ("array_max", "max"),
     ("array_min", "min"),
     ("array_sum", "sum"),
+    ("array_any", "any"),
 ];
 
 pub fn register(registry: &mut FunctionRegistry) {
@@ -235,6 +236,40 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
+    registry
+        .register_passthrough_nullable_2_arg::<EmptyArrayType, UInt64Type, EmptyArrayType, _, _>(
+            "slice",
+            FunctionProperty::default(),
+            |_, _| FunctionDomain::Full,
+            vectorize_with_builder_2_arg::<EmptyArrayType, UInt64Type, EmptyArrayType>(
+                |_, _, output, _| {
+                    *output += 1;
+                },
+            ),
+        );
+
+    registry.register_passthrough_nullable_2_arg::<ArrayType<GenericType<0>>, UInt64Type, ArrayType<GenericType<0>>, _, _>(
+        "slice",
+        FunctionProperty::default(),
+        |domain, _| FunctionDomain::Domain(domain.clone()),
+        vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, UInt64Type, ArrayType<GenericType<0>>>(
+            |arr, start, output, _| {
+                let start = if start > 0 {
+                    start as usize - 1
+                } else {
+                    start as usize
+                };
+                if arr.len() == 0 || start >= arr.len() {
+                    output.push_default();
+                } else {
+                    let range = Range { start, end: arr.len() };
+                    let arr_slice = arr.slice(range);
+                    output.push(arr_slice);
+                }
+            }
+        ),
+    );
+
     registry.register_passthrough_nullable_3_arg::<EmptyArrayType, UInt64Type, UInt64Type, EmptyArrayType, _, _>(
         "slice",
         FunctionProperty::default(),
@@ -249,7 +284,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_3_arg::<ArrayType<GenericType<0>>, UInt64Type, UInt64Type, ArrayType<GenericType<0>>, _, _>(
         "slice",
         FunctionProperty::default(),
-        |domain,_, _| FunctionDomain::Domain(domain.clone()),
+        |domain, _, _| FunctionDomain::Domain(domain.clone()),
         vectorize_with_builder_3_arg::<ArrayType<GenericType<0>>, UInt64Type, UInt64Type, ArrayType<GenericType<0>>>(
             |arr, start, end, output, _| {
                 let start = if start > 0 {

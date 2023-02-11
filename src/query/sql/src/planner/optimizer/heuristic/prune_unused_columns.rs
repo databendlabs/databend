@@ -123,7 +123,7 @@ impl UnusedColumnPruner {
                     })
                 }
                 if used.is_empty() {
-                    // Eliminate unneccessary `EvalScalar`
+                    // Eliminate unnecessary `EvalScalar`
                     Self::keep_required_columns(expr.child(0)?, required)
                 } else {
                     Ok(SExpr::create_unary(

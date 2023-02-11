@@ -118,7 +118,7 @@ pub struct Config {
     ///
     /// Note:
     ///
-    /// when coverted from inner config, all catalog configurations will store in `catalogs`
+    /// when converted from inner config, all catalog configurations will store in `catalogs`
     #[clap(skip)]
     pub catalogs: HashMap<String, CatalogConfig>,
 }
@@ -245,7 +245,7 @@ impl TryInto<InnerConfig> for Config {
 /// [storage.cache]
 /// type = "redis"
 ///
-/// [storage.temperary]
+/// [storage.temporary]
 /// type = "s3"
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]

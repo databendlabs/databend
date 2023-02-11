@@ -343,13 +343,13 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_positon(&mut self, _span: Span, substr_expr: &'ast Expr, str_expr: &'ast Expr) {
+    fn visit_position(&mut self, _span: Span, substr_expr: &'ast Expr, str_expr: &'ast Expr) {
         self.visit_expr(substr_expr);
         let substr_expr_child = self.children.pop().unwrap();
         self.visit_expr(str_expr);
         let str_expr_child = self.children.pop().unwrap();
 
-        let name = "Function Positon".to_string();
+        let name = "Function Position".to_string();
         let format_ctx = AstFormatContext::with_children(name, 2);
         let node =
             FormatTreeNode::with_children(format_ctx, vec![substr_expr_child, str_expr_child]);

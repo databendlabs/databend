@@ -71,7 +71,7 @@ fn normalize_falsy_predicate(predicates: Vec<ScalarExpr>) -> Vec<ScalarExpr> {
 
 /// Rule to normalize a Filter, including:
 /// - Remove true predicates
-/// - If there is a NULL or FALSE conjuction, replace the
+/// - If there is a NULL or FALSE conjunction, replace the
 /// whole filter with FALSE
 pub struct RuleNormalizeScalarFilter {
     id: RuleID,

@@ -27,6 +27,7 @@ use common_exception::Result;
 use common_jsonb::Number as JsonbNumber;
 use common_jsonb::Object as JsonbObject;
 use common_jsonb::Value as JsonbValue;
+use ethnum::i256;
 use itertools::Itertools;
 use rand::distributions::Alphanumeric;
 use rand::distributions::DistString;
@@ -39,6 +40,7 @@ use serde::Serialize;
 use crate::types::array::ArrayColumn;
 use crate::types::date::DATE_MAX;
 use crate::types::date::DATE_MIN;
+use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalDataType;
 use crate::types::decimal::DecimalSize;
 use crate::types::nullable::NullableColumn;
@@ -205,7 +207,7 @@ impl DataSchema {
             .find(|&(_, c)| c.name() == name)
     }
 
-    /// Check to see if `self` is a superset of `other` schema. Here are the comparision rules:
+    /// Check to see if `self` is a superset of `other` schema. Here are the comparison rules:
     pub fn contains(&self, other: &DataSchema) -> bool {
         if self.fields.len() != other.fields.len() {
             return false;
@@ -486,7 +488,7 @@ impl TableSchema {
             .find(|&(_, c)| c.name == name)
     }
 
-    /// Check to see if `self` is a superset of `other` schema. Here are the comparision rules:
+    /// Check to see if `self` is a superset of `other` schema. Here are the comparison rules:
     pub fn contains(&self, other: &TableSchema) -> bool {
         if self.fields.len() != other.fields.len() {
             return false;
@@ -958,7 +960,23 @@ impl TableDataType {
                     ),
                 })),
             },
-            TableDataType::Decimal(_) => todo!("decimal"),
+            // useless for now.
+            TableDataType::Decimal(t) => match t {
+                DecimalDataType::Decimal128(x) => BlockEntry {
+                    data_type: DataType::Decimal(*t),
+                    value: Value::Column(Column::Decimal(DecimalColumn::Decimal128(
+                        vec![0i128; len].into(),
+                        *x,
+                    ))),
+                },
+                DecimalDataType::Decimal256(x) => BlockEntry {
+                    data_type: DataType::Decimal(*t),
+                    value: Value::Column(Column::Decimal(DecimalColumn::Decimal256(
+                        vec![i256::ZERO; len].into(),
+                        *x,
+                    ))),
+                },
+            },
             TableDataType::Timestamp => BlockEntry {
                 data_type: DataType::Timestamp,
                 value: Value::Column(TimestampType::from_data(
@@ -1353,6 +1371,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         DataType::String => Ok(TableDataType::String),
         DataType::Number(number_type) => Ok(TableDataType::Number(*number_type)),
         DataType::Timestamp => Ok(TableDataType::Timestamp),
+        DataType::Decimal(x) => Ok(TableDataType::Decimal(*x)),
         DataType::Date => Ok(TableDataType::Date),
         DataType::Nullable(inner_type) => Ok(TableDataType::Nullable(Box::new(infer_schema_type(
             inner_type,
@@ -1379,7 +1398,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
                 fields_type,
             })
         }
-        _ => Err(ErrorCode::SemanticError(format!(
+        DataType::Generic(_) => Err(ErrorCode::SemanticError(format!(
             "Cannot create table with type: {}",
             data_type
         ))),
