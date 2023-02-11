@@ -51,6 +51,14 @@ enum DeserializedArray<'a> {
     NoNeedToCache(Box<dyn Array>),
 }
 
+pub struct FieldDeserializationContext<'a> {
+    column_metas: &'a HashMap<ColumnId, ColumnMeta>,
+    column_chunks: &'a HashMap<ColumnId, DataItem<'a>>,
+    num_rows: usize,
+    compression: &'a Compression,
+    uncompressed_buffer: &'a Option<Arc<UncompressedBuffer>>,
+}
+
 impl BlockReader {
     /// Deserialize column chunks data from parquet format to DataBlock.
     pub fn deserialize_parquet_chunks(
@@ -108,16 +116,15 @@ impl BlockReader {
         let mut need_default_vals = Vec::with_capacity(fields.len());
         let mut need_to_fill_default_val = false;
         let mut deserialized_column_arrays = Vec::with_capacity(self.projection.len());
+        let field_deserialization_ctx = FieldDeserializationContext {
+            column_metas,
+            column_chunks: &column_chunks,
+            num_rows,
+            compression,
+            uncompressed_buffer: &uncompressed_buffer,
+        };
         for (column, is_nested_field) in &fields {
-            match self.deserialize_field(
-                column,
-                column_metas,
-                &column_chunks,
-                num_rows,
-                compression,
-                &uncompressed_buffer,
-                *is_nested_field,
-            )? {
+            match self.deserialize_field(&field_deserialization_ctx, column, *is_nested_field)? {
                 None => {
                     need_to_fill_default_val = true;
                     need_default_vals.push(true);
@@ -230,22 +237,19 @@ impl BlockReader {
         )?)
     }
 
-    // TODO: refactor this method, too many args
-    #[allow(clippy::too_many_arguments)]
     fn deserialize_field<'a>(
         &self,
+        deserialization_context: &'a FieldDeserializationContext,
         column: &ColumnNode,
-        column_metas: &HashMap<ColumnId, ColumnMeta>,
-        column_chunks: &'a HashMap<ColumnId, DataItem<'a>>,
-        num_rows: usize,
-        compression: &Compression,
-        uncompressed_buffer: &'a Option<Arc<UncompressedBuffer>>,
         is_nested_column: bool,
     ) -> Result<Option<DeserializedArray<'a>>> {
         let indices = &column.leaf_ids;
-        let is_nested = is_nested_column || indices.len() > 1;
+        let column_chunks = deserialization_context.column_chunks;
+        let compression = deserialization_context.compression;
+        let uncompressed_buffer = deserialization_context.uncompressed_buffer;
         // column passed in may be a compound field (with sub leaves),
         // or a leaf column of compound field
+        let is_nested = is_nested_column || indices.len() > 1;
         let estimated_cap = indices.len();
         let mut field_column_metas = Vec::with_capacity(estimated_cap);
         let mut field_column_data = Vec::with_capacity(estimated_cap);
@@ -255,7 +259,7 @@ impl BlockReader {
         let mut column_id = 0;
         for (i, leaf_column_id) in indices.iter().enumerate() {
             column_id = column.leaf_column_ids[i];
-            if let Some(column_meta) = column_metas.get(&column_id) {
+            if let Some(column_meta) = deserialization_context.column_metas.get(&column_id) {
                 if let Some(chunk) = column_chunks.get(&column_id) {
                     match chunk {
                         DataItem::RawData(data) => {
@@ -288,6 +292,7 @@ impl BlockReader {
             }
         }
 
+        let num_rows = deserialization_context.num_rows;
         if !field_column_metas.is_empty() {
             let field_name = column.field.name.to_owned();
             let mut array_iter = Self::chunks_to_parquet_array_iter(

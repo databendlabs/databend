@@ -17,12 +17,12 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_cache::CountableMeter;
-use common_cache::LruCache;
 use common_exception::Result;
 use parking_lot::RwLock;
 
 use super::loader::LoadParams;
 use crate::metrics::metrics_inc_cache_miss_load_millisecond;
+use crate::providers::ImMemoryCache;
 use crate::CacheAccessor;
 use crate::Loader;
 use crate::NamedCache;
@@ -33,7 +33,7 @@ pub struct CachedReader<L, C> {
     loader: L,
 }
 
-pub type CacheHolder<V, S, M> = Arc<RwLock<LruCache<String, Arc<V>, S, M>>>;
+pub type CacheHolder<V, S, M> = Arc<RwLock<ImMemoryCache<V, S, M>>>;
 
 impl<V, L, S, M> CachedReader<L, NamedCache<CacheHolder<V, S, M>>>
 where
