@@ -1837,7 +1837,7 @@ impl<KV: kvapi::KVApi<Error = KVAppError>> SchemaApi for KV {
                 Some(db_name_ident) => db_name_ident,
                 None => {
                     return Err(KVAppError::AppError(AppError::UnknownDatabaseId(
-                        UnknownDatabaseId::new(dbid_tbname.db_id, format!("drop_table_by_id")),
+                        UnknownDatabaseId::new(dbid_tbname.db_id, "drop_table_by_id"),
                     )));
                 }
             };
