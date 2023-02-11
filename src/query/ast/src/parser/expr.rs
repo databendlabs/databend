@@ -282,9 +282,9 @@ pub enum ExprElement {
     ArraySort {
         expr: Box<Expr>,
         // Optional `ASC` or `DESC`
-        asc: Option<bool>,
+        asc: Option<String>,
         // Optional `NULLS FIRST` or `NULLS LAST`
-        nulls_first: Option<bool>,
+        nulls_first: Option<String>,
     },
     Interval {
         expr: Expr,
@@ -474,9 +474,26 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 asc,
                 nulls_first,
             } => {
-                let asc = if let Some(asc) = asc { asc } else { true };
+                let asc = if let Some(asc) = asc {
+                    if asc.to_lowercase() == "asc" {
+                        true
+                    } else if asc.to_lowercase() == "desc" {
+                        false
+                    } else {
+                        return Err("Sorting order must be either ASC or DESC");
+                    }
+                } else {
+                    true
+                };
                 let null_first = if let Some(nulls_first) = nulls_first {
-                    nulls_first
+                    let null_first = nulls_first.trim().to_lowercase();
+                    if null_first == "nulls first" {
+                        true
+                    } else if null_first == "nulls last" {
+                        false
+                    } else {
+                        return Err("Null sorting order must be either NULLS FIRST or NULLS LAST");
+                    }
                 } else {
                     true
                 };
@@ -862,14 +879,14 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             ( ARRAY_SORT )
             ~ "("
             ~ #subexpr(0)
-            ~ ( "," ~ ( ASC | DESC ) )?
-            ~ ( "," ~ NULLS ~ ( FIRST | LAST ) )?
+            ~ ( "," ~ #literal_string )?
+            ~ ( "," ~ #literal_string )?
             ~ ")"
         },
         |(_, _, expr, opt_asc, opt_null_first, _)| ExprElement::ArraySort {
             expr: Box::new(expr),
-            asc: opt_asc.map(|(_, asc)| asc.kind == ASC),
-            nulls_first: opt_null_first.map(|(_, _, first_last)| first_last.kind == FIRST),
+            asc: opt_asc.map(|(_, asc)| asc),
+            nulls_first: opt_null_first.map(|(_, first_last)| first_last),
         },
     );
     let date_add = map(
@@ -932,7 +949,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND) FROM ...)`"
             | #position : "`POSITION(... IN ...)`"
             | #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
-            | #array_sort : "`ARRAY_SORT([...], ASC | DESC, NULLS FIRST | LAST)`"
+            | #array_sort : "`ARRAY_SORT([...], 'ASC' | 'DESC', 'NULLS FIRST' | 'NULLS LAST')`"
             | #trim : "`TRIM(...)`"
             | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
         ),

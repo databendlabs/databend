@@ -1649,7 +1649,7 @@ Substring {
 ---------- Input ----------
 array_sort([2])
 ---------- Output ---------
-ARRAY_SORT([2]) , ASC , NULLS FIRST)
+ARRAY_SORT([2]) , 'ASC' , 'NULLS FIRST')
 ---------- AST ------------
 ArraySort {
     span: Some(
@@ -1676,13 +1676,13 @@ ArraySort {
 
 
 ---------- Input ----------
-array_sort([2,0.1], ASC)
+array_sort([2,0.1], 'ASC')
 ---------- Output ---------
-ARRAY_SORT([2, 0.1]) , ASC , NULLS FIRST)
+ARRAY_SORT([2, 0.1]) , 'ASC' , 'NULLS FIRST')
 ---------- AST ------------
 ArraySort {
     span: Some(
-        0..24,
+        0..26,
     ),
     expr: Array {
         span: Some(
@@ -1713,13 +1713,13 @@ ArraySort {
 
 
 ---------- Input ----------
-array_sort([3,2], DESC, NULLS FIRST)
+array_sort([3,2], 'DESC', 'NULLS FIRST')
 ---------- Output ---------
-ARRAY_SORT([3, 2]) , DESC , NULLS FIRST)
+ARRAY_SORT([3, 2]) , 'DESC' , 'NULLS FIRST')
 ---------- AST ------------
 ArraySort {
     span: Some(
-        0..36,
+        0..40,
     ),
     expr: Array {
         span: Some(

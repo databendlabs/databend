@@ -882,14 +882,14 @@ impl Display for Expr {
                 write!(f, "ARRAY_SORT(")?;
                 write!(f, "{expr})")?;
                 if *asc {
-                    write!(f, " , ASC")?;
+                    write!(f, " , 'ASC'")?;
                 } else {
-                    write!(f, " , DESC")?;
+                    write!(f, " , 'DESC'")?;
                 }
                 if *null_first {
-                    write!(f, " , NULLS FIRST")?;
+                    write!(f, " , 'NULLS FIRST'")?;
                 } else {
-                    write!(f, " , NULLS LAST")?;
+                    write!(f, " , 'NULLS LAST'")?;
                 }
                 write!(f, ")")?;
             }

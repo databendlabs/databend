@@ -285,14 +285,11 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
             asc,
             null_first,
         } => {
-            let name = if asc && null_first {
-                "array_sort_asc_null_first".to_string()
-            } else if asc && !null_first {
-                "array_sort_asc_null_last".to_string()
-            } else if !asc && null_first {
-                "array_sort_desc_null_first".to_string()
-            } else {
-                "array_sort_desc_null_last".to_string()
+            let name = match (asc, null_first) {
+                (true, true) => "array_sort_asc_null_first".to_string(),
+                (true, false) => "array_sort_asc_null_last".to_string(),
+                (false, true) => "array_sort_desc_null_first".to_string(),
+                (false, false) => "array_sort_desc_null_last".to_string(),
             };
             RawExpr::FunctionCall {
                 span,

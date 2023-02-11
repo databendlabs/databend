@@ -768,23 +768,22 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
             FunctionProperty::default(),
             |_| FunctionDomain::Full,
             vectorize_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(|arr, _| {
-                let data_type = arr.data_type();
-                let sort_desc = vec![SortColumnDescription {
-                    offset: 0,
-                    asc: sort_desc.0,
-                    nulls_first: sort_desc.1,
-                }];
-                let columns = vec![arr];
-                let len = columns.get(0).map_or(1, |c| c.len());
-                let columns = columns
-                    .iter()
-                    .map(|col| BlockEntry {
-                        data_type: col.data_type(),
-                        value: Value::Column(col.clone()),
-                    })
-                    .collect();
-                let sort_block = DataBlock::sort(&DataBlock::new(columns, len), &sort_desc, None).unwrap();
-                sort_block.columns()[0].value.convert_to_full_column(&data_type, 1)
+                let len = arr.len();
+                if arr.len() > 1 {
+                    let sort_desc = vec![SortColumnDescription {
+                        offset: 0,
+                        asc: sort_desc.0,
+                        nulls_first: sort_desc.1,
+                    }];
+                    let columns = vec![BlockEntry{
+                        data_type: arr.data_type(),
+                        value: Value::Column(arr.clone())
+                    }];
+                    let sort_block = DataBlock::sort(&DataBlock::new(columns, len), &sort_desc, None).unwrap();
+                    sort_block.columns()[0].value.clone().into_column().unwrap()
+                } else {
+                    arr
+                }
             },
             ),
         );

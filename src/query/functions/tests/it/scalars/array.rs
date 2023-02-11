@@ -485,34 +485,35 @@ fn test_array_any(file: &mut impl Write) {
 fn test_array_sort(file: &mut impl Write) {
     run_ast(file, "array_sort([])", &[]);
     run_ast(file, "array_sort(NULL)", &[]);
-    run_ast(file, "array_sort([8, 20, 1, 2, 3, 4, 5, 6, 7], ASC)", &[]);
-    run_ast(file, "array_sort([], ASC)", &[]);
-    run_ast(file, "array_sort([], DESC)", &[]);
-    run_ast(file, "array_sort([8, 20, 1, 2, 3, 4, 5, 6, 7], DESC)", &[]);
+    run_ast(file, "array_sort([8, 20, 1, 2, 3, 4, 5, 6, 7], 'ASC')", &[]);
+    run_ast(file, "array_sort([], 'ASC')", &[]);
+    run_ast(file, "array_sort([], 'DESC')", &[]);
+    run_ast(file, "array_sort([8, 20, 1, 2, 3, 4, 5, 6, 7], 'DESC')", &[
+    ]);
     run_ast(file, "array_sort([9.32, 0, 1.2, 3.4, 5.6, 7.8])", &[]);
     run_ast(file, "array_sort(['x', 0, 1.2, 3.4, 5.6, 7.8])", &[]);
     run_ast(
         file,
-        "array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], DESC, NULLS FIRST)",
+        "array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'DESC', 'NULLS FIRST')",
         &[],
     );
-    run_ast(file, "array_sort([], DESC, NULLS FIRST)", &[]);
+    run_ast(file, "array_sort([], 'DESC', 'NULLS FIRST')", &[]);
     run_ast(
         file,
-        "array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], DESC, NULLS LAST)",
+        "array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'DESC', 'NULLS LAST')",
         &[],
     );
-    run_ast(file, "array_sort([], DESC, NULLS LAST)", &[]);
+    run_ast(file, "array_sort([], 'DESC', 'NULLS LAST')", &[]);
     run_ast(
         file,
-        "array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], ASC, NULLS FIRST)",
+        "array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'ASC', 'NULLS FIRST')",
         &[],
     );
-    run_ast(file, "array_sort([], ASC, NULLS FIRST)", &[]);
+    run_ast(file, "array_sort([], 'ASC', 'NULLS FIRST')", &[]);
     run_ast(
         file,
-        "array_sort(['z', 'a', NULL, 'v', 'd', NULL], ASC, NULLS LAST)",
+        "array_sort(['z', 'a', NULL, 'v', 'd', NULL], 'ASC', 'NULLS LAST')",
         &[],
     );
-    run_ast(file, "array_sort([], ASC, NULLS LAST)", &[]);
+    run_ast(file, "array_sort([], 'ASC', 'NULLS LAST')", &[]);
 }

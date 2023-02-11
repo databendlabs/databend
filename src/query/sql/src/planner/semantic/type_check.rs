@@ -1759,14 +1759,11 @@ impl<'a> TypeChecker<'a> {
         null_first: &bool,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let box (arg, _type) = self.resolve(expr, None).await?;
-        let func_name = if *asc && *null_first {
-            "array_sort_asc_null_first"
-        } else if *asc && !(*null_first) {
-            "array_sort_asc_null_last"
-        } else if !(*asc) && *null_first {
-            "array_sort_desc_null_first"
-        } else {
-            "array_sort_desc_null_last"
+        let func_name = match (*asc, *null_first) {
+            (true, true) => "array_sort_asc_null_first",
+            (true, false) => "array_sort_asc_null_last",
+            (false, true) => "array_sort_desc_null_first",
+            (false, false) => "array_sort_desc_null_last",
         };
         self.resolve_scalar_function_call(span, func_name, vec![], vec![arg], None)
             .await
