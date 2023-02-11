@@ -16,6 +16,7 @@ concurrency:
 
 env:
   BUILD_PROFILE: release
+  CARGO_INCREMENTAL: 0
 
 jobs:
   check:

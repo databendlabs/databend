@@ -17,6 +17,7 @@ concurrency:
 
 env:
   BUILD_PROFILE: debug
+  CARGO_INCREMENTAL: 0
 
 jobs:
   build_macos:
