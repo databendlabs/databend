@@ -11,7 +11,7 @@ edition = { workspace = true }
 default = ["simd", "jemalloc"]
 memory-profiling = ["databend-meta/memory-profiling", "databend-query/memory-profiling", "common-base/memory-profiling"]
 simd = ["databend-meta/simd", "databend-query/simd"]
-jemalloc = []
+jemalloc = ["common-base/jemalloc"]
 tokio-console = [
     "databend-meta/tokio-console",
     "databend-query/io-uring",

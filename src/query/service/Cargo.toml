@@ -14,7 +14,7 @@ test = false
 [features]
 default = ["simd"]
 simd = ["common-arrow/simd"]
-jemalloc = []
+
 tokio-console = ["common-tracing/console", "common-base/tracing"]
 memory-profiling = ["common-base/memory-profiling", "common-http/memory-profiling", "tempfile"]
 storage-hdfs = ["opendal/services-hdfs", "common-storage/storage-hdfs"]
