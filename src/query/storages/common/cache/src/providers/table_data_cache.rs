@@ -28,6 +28,7 @@ use tracing::warn;
 use crate::metrics_inc_cache_access_count;
 use crate::metrics_inc_cache_hit_count;
 use crate::metrics_inc_cache_miss_count;
+use crate::metrics_inc_cache_population_overflow_count;
 use crate::metrics_inc_cache_population_pending_count;
 use crate::CacheAccessor;
 use crate::DiskBytesCache;
@@ -117,10 +118,11 @@ impl CacheAccessor<String, Vec<u8>, DefaultHashBuilder, Count> for TableDataCach
                 }
                 Err(TrySendError::Full(_)) => {
                     metrics_inc_cache_population_pending_count(-1, TABLE_DATA_CACHE_NAME);
-                    warn!("external cache population queue is full");
+                    metrics_inc_cache_population_overflow_count(-1, TABLE_DATA_CACHE_NAME);
+                    warn!("table data cache population queue is full");
                 }
                 Err(TrySendError::Disconnected(_)) => {
-                    error!("external cache population thread is down");
+                    error!("table data cache population thread is down");
                 }
             }
         }
@@ -164,7 +166,8 @@ where T: CacheAccessor<String, Vec<u8>, DefaultHashBuilder, Count> + Send + Sync
     }
 
     fn start(self: Arc<Self>) -> Result<JoinHandle<()>> {
-        let thread_builder = std::thread::Builder::new().name("cache-population".to_owned());
+        let thread_builder =
+            std::thread::Builder::new().name("table-data-cache-population".to_owned());
         thread_builder.spawn(move || self.populate()).map_err(|e| {
             ErrorCode::StorageOther(format!("spawn cache population worker thread failed, {e}"))
         })
