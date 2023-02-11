@@ -132,7 +132,14 @@ fn inner_project_field_default_values(default_vals: &[Scalar], paths: &[usize]) 
 
     match &default_vals[index] {
         Scalar::Tuple(s) => inner_project_field_default_values(s, &paths[1..]),
-        _ => inner_project_field_default_values(&[default_vals[index].clone()], &paths[1..]),
+        _ => {
+            if paths.len() > 1 {
+                return Err(ErrorCode::BadArguments(
+                    "Unable to get field default value by paths".to_string(),
+                ));
+            }
+            inner_project_field_default_values(&[default_vals[index].clone()], &paths[1..])
+        }
     }
 }
 
