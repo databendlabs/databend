@@ -545,8 +545,8 @@ pub enum TokenKind {
     METRICS,
     #[token("MICROSECONDS", ignore(ascii_case))]
     MICROSECONDS,
-    #[token("MILLENIUM", ignore(ascii_case))]
-    MILLENIUM,
+    #[token("MILLENNIUM", ignore(ascii_case))]
+    MILLENNIUM,
     #[token("MILLISECONDS", ignore(ascii_case))]
     MILLISECONDS,
     #[token("MINUTE", ignore(ascii_case))]

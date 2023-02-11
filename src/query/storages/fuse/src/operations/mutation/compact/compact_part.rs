@@ -25,7 +25,7 @@ use storages_common_table_meta::meta::SegmentInfo;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum CompactTask {
     // Only one block, no need to do a compact.
-    Trival(Arc<BlockMeta>),
+    Trivial(Arc<BlockMeta>),
     // Multiple blocks, need to do compact.
     Normal(Vec<Arc<BlockMeta>>),
 }
@@ -33,7 +33,7 @@ pub enum CompactTask {
 impl CompactTask {
     pub fn get_block_metas(&self) -> Vec<Arc<BlockMeta>> {
         match self {
-            CompactTask::Trival(block_meta) => vec![block_meta.clone()],
+            CompactTask::Trivial(block_meta) => vec![block_meta.clone()],
             CompactTask::Normal(block_metas) => block_metas.clone(),
         }
     }

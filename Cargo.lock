@@ -1465,6 +1465,7 @@ dependencies = [
  "crc32fast",
  "criterion",
  "ctor",
+ "ethnum",
  "geo",
  "geohash",
  "goldenfile",

@@ -57,7 +57,7 @@ Int --> Variant
 6. `Array<T>` --> `Array<U>` if `T` --> `U`.
 7. `Nullable<T>` --> `Nullable<U>` if `T`--> `U`.
 8. `Null` --> `Nullable<T>` for any `T` datatype.
-9. Numberic can be implicitly casted to other numeric datatype if there is no lossy.
+9. Numeric can be implicitly casted to other numeric datatype if there is no lossy.
 
 
 ## FAQ
@@ -73,7 +73,7 @@ select 39 > '301';
 select 39 = '  39  ';
 ```
 
-We don't know how to compare them with numberic rules or String rules. Because they are different result accoring to different rules.
+We don't know how to compare them with numeric rules or String rules. Because they are different result according to different rules.
 
 `select 39 > 301` is false where `select '39' > '301'` is true.
 
@@ -98,4 +98,4 @@ That means you got a null in your source column. You can use `TRY_CAST` function
 
 You can improve the SQL to `select concat('1', col)`.
 
-We may improve the expression in the future which could parse the literal `1` into String value if possible (the concat function just accpet String parameters). 
+We may improve the expression in the future which could parse the literal `1` into String value if possible (the concat function just accept String parameters).

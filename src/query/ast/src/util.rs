@@ -178,11 +178,11 @@ fn non_reserved_keyword(
     }
 }
 
-/// Parse one two two idents seperated by a period, fulfilling from the right.
+/// Parse one two two idents separated by a period, fulfilling from the right.
 ///
 /// Example: `table.column`
 #[allow(clippy::needless_lifetimes)]
-pub fn peroid_separated_idents_1_to_2<'a>(
+pub fn period_separated_idents_1_to_2<'a>(
     i: Input<'a>,
 ) -> IResult<'a, (Option<Identifier>, Identifier)> {
     map(
@@ -196,11 +196,11 @@ pub fn peroid_separated_idents_1_to_2<'a>(
     )(i)
 }
 
-/// Parse one two three idents seperated by a period, fulfilling from the right.
+/// Parse one two three idents separated by a period, fulfilling from the right.
 ///
 /// Example: `db.table.column`
 #[allow(clippy::needless_lifetimes)]
-pub fn peroid_separated_idents_1_to_3<'a>(
+pub fn period_separated_idents_1_to_3<'a>(
     i: Input<'a>,
 ) -> IResult<'a, (Option<Identifier>, Option<Identifier>, Identifier)> {
     map(
@@ -221,7 +221,7 @@ pub fn comma_separated_list0<'a, T>(
     separated_list0(match_text(","), item)
 }
 
-pub fn comma_separated_list0_ignore_trailling<'a, T>(
+pub fn comma_separated_list0_ignore_trailing<'a, T>(
     item: impl FnMut(Input<'a>) -> IResult<'a, T>,
 ) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
     nom::multi::separated_list0(match_text(","), item)

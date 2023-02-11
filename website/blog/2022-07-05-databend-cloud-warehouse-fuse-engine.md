@@ -160,7 +160,7 @@ git cat-file -p 576c63e580846fa6df2337c1f074c8d840e0b70a
 
 ### Blob File
 
-The Blob files are raw data files. You can veiw the file content using `git cat-file` (if you use Git to manage code, blobs are the code files).
+The Blob files are raw data files. You can view the file content using `git cat-file` (if you use Git to manage code, blobs are the code files).
 
 ```shell
 git cat-file -p 688de5069f9e873c7e7bd15aa67c6c33e0594dde

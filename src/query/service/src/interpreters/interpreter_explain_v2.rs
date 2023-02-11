@@ -109,8 +109,8 @@ impl Interpreter for ExplainInterpreter {
             ExplainKind::Ast(display_string)
             | ExplainKind::Syntax(display_string)
             | ExplainKind::Memo(display_string) => {
-                let line_splitted_result: Vec<&str> = display_string.lines().collect();
-                let column = StringType::from_data(line_splitted_result);
+                let line_split_result: Vec<&str> = display_string.lines().collect();
+                let column = StringType::from_data(line_split_result);
                 vec![DataBlock::new_from_columns(vec![column])]
             }
         };
@@ -133,8 +133,8 @@ impl ExplainInterpreter {
 
     pub fn explain_plan(&self, plan: &Plan) -> Result<Vec<DataBlock>> {
         let result = plan.format_indent()?;
-        let line_splitted_result: Vec<&str> = result.lines().collect();
-        let formatted_plan = StringType::from_data(line_splitted_result);
+        let line_split_result: Vec<&str> = result.lines().collect();
+        let formatted_plan = StringType::from_data(line_split_result);
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 
@@ -144,8 +144,8 @@ impl ExplainInterpreter {
         metadata: &MetadataRef,
     ) -> Result<Vec<DataBlock>> {
         let result = plan.format(metadata.clone())?.format_pretty()?;
-        let line_splitted_result: Vec<&str> = result.lines().collect();
-        let formatted_plan = StringType::from_data(line_splitted_result);
+        let line_split_result: Vec<&str> = result.lines().collect();
+        let formatted_plan = StringType::from_data(line_split_result);
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 
@@ -161,19 +161,19 @@ impl ExplainInterpreter {
 
         let mut blocks = Vec::with_capacity(1 + build_res.sources_pipelines.len());
         // Format root pipeline
-        let line_splitted_result = format!("{}", build_res.main_pipeline.display_indent())
+        let line_split_result = format!("{}", build_res.main_pipeline.display_indent())
             .lines()
             .map(|s| s.as_bytes().to_vec())
             .collect::<Vec<_>>();
-        let column = StringType::from_data(line_splitted_result);
+        let column = StringType::from_data(line_split_result);
         blocks.push(DataBlock::new_from_columns(vec![column]));
         // Format child pipelines
         for pipeline in build_res.sources_pipelines.iter() {
-            let line_splitted_result = format!("\n{}", pipeline.display_indent())
+            let line_split_result = format!("\n{}", pipeline.display_indent())
                 .lines()
                 .map(|s| s.as_bytes().to_vec())
                 .collect::<Vec<_>>();
-            let column = StringType::from_data(line_splitted_result);
+            let column = StringType::from_data(line_split_result);
             blocks.push(DataBlock::new_from_columns(vec![column]));
         }
         Ok(blocks)
@@ -195,11 +195,11 @@ impl ExplainInterpreter {
         root_fragment.get_actions(ctx, &mut fragments_actions)?;
 
         let display_string = fragments_actions.display_indent(&metadata).to_string();
-        let line_splitted_result = display_string
+        let line_split_result = display_string
             .lines()
             .map(|s| s.as_bytes().to_vec())
             .collect::<Vec<_>>();
-        let formatted_plan = StringType::from_data(line_splitted_result);
+        let formatted_plan = StringType::from_data(line_split_result);
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 }

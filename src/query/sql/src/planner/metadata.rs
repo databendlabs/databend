@@ -134,6 +134,7 @@ impl Metadata {
         database: String,
         table_meta: Arc<dyn Table>,
         table_alias_name: Option<String>,
+        source_of_view: bool,
     ) -> IndexType {
         let table_name = table_meta.name().to_string();
         let table_index = self.tables.len();
@@ -145,6 +146,7 @@ impl Metadata {
             catalog,
             table: table_meta.clone(),
             alias_name: table_alias_name,
+            source_of_view,
         };
         self.tables.push(table_entry);
         let mut fields = VecDeque::new();
@@ -209,6 +211,7 @@ pub struct TableEntry {
     name: String,
     alias_name: Option<String>,
     index: IndexType,
+    source_of_view: bool,
 
     table: Arc<dyn Table>,
 }
@@ -240,6 +243,7 @@ impl TableEntry {
             database,
             table,
             alias_name,
+            source_of_view: false,
         }
     }
 
@@ -271,6 +275,11 @@ impl TableEntry {
     /// Get the table of this table entry.
     pub fn table(&self) -> Arc<dyn Table> {
         self.table.clone()
+    }
+
+    /// Return true if it is source from view.
+    pub fn is_source_of_view(&self) -> bool {
+        self.source_of_view
     }
 }
 

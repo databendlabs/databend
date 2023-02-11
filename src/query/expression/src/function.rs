@@ -61,7 +61,7 @@ pub struct EvalContext<'a> {
     pub tz: TzLUT,
 
     /// Validity bitmap of outer nullable column. This is an optimization
-    /// to avoid recording errors on the NULL value which has a coresponding
+    /// to avoid recording errors on the NULL value which has a corresponding
     /// default value in nullable's inner column.
     pub validity: Option<Bitmap>,
     pub errors: Option<(MutableBitmap, String)>,
@@ -145,10 +145,30 @@ pub struct Function {
     pub eval: Box<dyn Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Send + Sync>,
 }
 
+impl Function {
+    pub fn wrap_nullable(self) -> Self {
+        Self {
+            signature: FunctionSignature {
+                name: self.signature.name.clone(),
+                args_type: self
+                    .signature
+                    .args_type
+                    .iter()
+                    .map(|ty| ty.wrap_nullable())
+                    .collect(),
+                return_type: self.signature.return_type.wrap_nullable(),
+                property: self.signature.property.clone(),
+            },
+            calc_domain: Box::new(|_| FunctionDomain::Full),
+            eval: Box::new(wrap_nullable(self.eval)),
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct FunctionRegistry {
     pub funcs: HashMap<String, Vec<Arc<Function>>>,
-    /// A function to build function depending on the const parameters and the type of arguments (before coersion).
+    /// A function to build function depending on the const parameters and the type of arguments (before coercion).
     ///
     /// The first argument is the const parameters and the second argument is the number of arguments.
     #[allow(clippy::type_complexity)]
@@ -278,10 +298,8 @@ impl FunctionRegistry {
     }
 }
 
-pub fn wrap_nullable<F>(
-    f: F,
-) -> impl Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Copy
-where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Copy {
+pub fn wrap_nullable<F>(f: F) -> impl Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType>
+where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
     move |args, ctx| {
         type T = NullableType<AnyType>;
         type Result = AnyType;

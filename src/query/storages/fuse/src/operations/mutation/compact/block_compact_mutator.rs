@@ -178,11 +178,11 @@ impl CompactPartBuilder {
 
         if self.block_count > 2 * self.threshold {
             self.block_count = 0;
-            let trival = vec![segment];
+            let trivial = vec![segment];
             if self.segments.is_empty() {
-                return vec![trival];
+                return vec![trivial];
             } else {
-                return vec![std::mem::take(&mut self.segments), trival];
+                return vec![std::mem::take(&mut self.segments), trivial];
             }
         }
 

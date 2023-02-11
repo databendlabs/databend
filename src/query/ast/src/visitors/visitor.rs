@@ -161,7 +161,7 @@ pub trait Visitor<'ast>: Sized {
         walk_expr(self, expr);
     }
 
-    fn visit_positon(&mut self, _span: Span, substr_expr: &'ast Expr, str_expr: &'ast Expr) {
+    fn visit_position(&mut self, _span: Span, substr_expr: &'ast Expr, str_expr: &'ast Expr) {
         walk_expr(self, substr_expr);
         walk_expr(self, str_expr);
     }

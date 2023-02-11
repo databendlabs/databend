@@ -13,7 +13,7 @@
 // limitations under the License.
 
 //! *Credits to the work of https://github.com/pola-rs/polars, which served as
-//! insipration for the crate*
+//! inspiration for the crate*
 
 #![allow(clippy::uninlined_format_args)]
 #![feature(trusted_len)]

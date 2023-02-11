@@ -44,7 +44,7 @@ runs:
         ./scripts/ci/ci-run-stateful-tests-standalone-s3.sh
 
     - name: Upload failure
-      if: failure()
+      if: failure() || cancelled()
       uses: ./.github/actions/artifact_failure
       with:
         name: test-stateful-standalone-linux

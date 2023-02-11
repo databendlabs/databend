@@ -56,7 +56,7 @@ message DatabaseMeta {
   // Comment about this database.
   string comment = 22;
 
-  // The time table droped.
+  // The time table dropped.
   optional string drop_on = 23;
 
   repeated uint64 shared_by = 24;

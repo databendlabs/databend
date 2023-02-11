@@ -25,11 +25,11 @@ use crate::types::array::ArrayColumnBuilder;
 use crate::types::decimal::DecimalColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
+use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::types::AnyType;
 use crate::types::ArrayType;
 use crate::types::BooleanType;
-use crate::types::StringType;
 use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::with_decimal_type;
@@ -131,14 +131,8 @@ impl Column {
                 filter,
             ),
             Column::String(column) => {
-                let bytes_per_row = column.data.len() / filter.len().max(1);
-                let data_capacity = (filter.len() - filter.unset_bits()) * bytes_per_row;
-
-                Self::filter_scalar_types::<StringType>(
-                    column,
-                    StringColumnBuilder::with_capacity(length, data_capacity),
-                    filter,
-                )
+                let column = Self::filter_string_scalars(column, filter);
+                Column::String(column)
             }
             Column::Timestamp(column) => {
                 let ts = Self::filter_primitive_types(column, filter);
@@ -246,7 +240,7 @@ impl Column {
 
     // low-level API using unsafe to improve performance
     fn filter_primitive_types<T: Copy>(values: &Buffer<T>, filter: &Bitmap) -> Buffer<T> {
-        assert_eq!(values.len(), filter.len());
+        debug_assert_eq!(values.len(), filter.len());
         let selected = filter.len() - filter.unset_bits();
         if selected == values.len() {
             return values.clone();
@@ -316,5 +310,88 @@ impl Column {
 
         unsafe { new.set_len(selected) };
         new.into()
+    }
+
+    // low-level API using unsafe to improve performance
+    fn filter_string_scalars(values: &StringColumn, filter: &Bitmap) -> StringColumn {
+        debug_assert_eq!(values.len(), filter.len());
+        let selected = filter.len() - filter.unset_bits();
+        if selected == values.len() {
+            return values.clone();
+        }
+        let data = values.data.as_slice();
+        let offsets = values.offsets.as_slice();
+
+        let mut res_offsets = Vec::with_capacity(selected + 1);
+        res_offsets.push(0);
+
+        let mut res_data = vec![];
+        let hint_size = data.len() / (values.len() + 1) * selected;
+
+        static MAX_HINT_SIZE: usize = 1000000000;
+        if hint_size < MAX_HINT_SIZE && values.len() < MAX_HINT_SIZE {
+            res_data.reserve(hint_size)
+        }
+
+        let mut pos = 0;
+
+        let (mut slice, offset, mut length) = filter.as_slice();
+        if offset > 0 {
+            // Consume the offset
+            let n = 8 - offset;
+            values
+                .iter()
+                .zip(filter.iter())
+                .take(n)
+                .for_each(|(value, is_selected)| {
+                    if is_selected {
+                        res_data.extend_from_slice(value);
+                        res_offsets.push(res_data.len() as u64);
+                    }
+                });
+            slice = &slice[1..];
+            length -= n;
+            pos += n;
+        }
+
+        const CHUNK_SIZE: usize = 64;
+        let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
+
+        for mut mask in mask_chunks.by_ref() {
+            if mask == u64::MAX {
+                let data = &data[offsets[pos] as usize..offsets[pos + CHUNK_SIZE] as usize];
+                res_data.extend_from_slice(data);
+
+                let mut last_len = *res_offsets.last().unwrap();
+                for i in 0..CHUNK_SIZE {
+                    last_len += offsets[pos + i + 1] - offsets[pos + i];
+                    res_offsets.push(last_len);
+                }
+            } else {
+                while mask != 0 {
+                    let n = mask.trailing_zeros() as usize;
+                    let data = &data[offsets[pos + n] as usize..offsets[pos + n + 1] as usize];
+                    res_data.extend_from_slice(data);
+                    res_offsets.push(res_data.len() as u64);
+
+                    mask = mask & (mask - 1);
+                }
+            }
+            pos += CHUNK_SIZE;
+        }
+
+        for is_select in mask_chunks.remainder_iter() {
+            if is_select {
+                let data = &data[offsets[pos] as usize..offsets[pos + 1] as usize];
+                res_data.extend_from_slice(data);
+                res_offsets.push(res_data.len() as u64);
+            }
+            pos += 1;
+        }
+
+        StringColumn {
+            data: res_data.into(),
+            offsets: res_offsets.into(),
+        }
     }
 }
