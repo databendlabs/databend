@@ -213,5 +213,9 @@ pub fn select_stage_option(i: Input) -> IResult<SelectStageOption> {
             rule! { PATTERN ~ "=>" ~ #literal_string },
             |(_, _, pattern)| SelectStageOption::Pattern(pattern),
         ),
+        map(
+            rule! { FILE_FORMAT ~ "=>" ~ #literal_string },
+            |(_, _, file_format)| SelectStageOption::FileFormat(file_format),
+        ),
     ))(i)
 }
