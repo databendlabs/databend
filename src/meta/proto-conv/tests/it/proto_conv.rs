@@ -16,6 +16,8 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
+use ce::types::decimal::DecimalSize;
+use ce::types::DecimalDataType;
 use ce::types::NumberDataType;
 use chrono::TimeZone;
 use chrono::Utc;
@@ -196,6 +198,37 @@ fn new_table_meta() -> mt::TableMeta {
     }
 }
 
+pub(crate) fn new_latest_schema() -> TableSchema {
+    let b1 = TableDataType::Tuple {
+        fields_name: vec!["b11".to_string(), "b12".to_string()],
+        fields_type: vec![TableDataType::Boolean, TableDataType::String],
+    };
+    let b = TableDataType::Tuple {
+        fields_name: vec!["b1".to_string(), "b2".to_string()],
+        fields_type: vec![b1, TableDataType::Number(NumberDataType::Int64)],
+    };
+    let fields = vec![
+        TableField::new("a", TableDataType::Number(NumberDataType::UInt64)),
+        TableField::new("b", b),
+        TableField::new("c", TableDataType::Number(NumberDataType::UInt64)),
+        TableField::new(
+            "decimal128",
+            TableDataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
+                precision: 18,
+                scale: 3,
+            })),
+        ),
+        ce::TableField::new(
+            "decimal256",
+            TableDataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
+                precision: 46,
+                scale: 6,
+            })),
+        ),
+    ];
+    TableSchema::new(fields)
+}
+
 pub(crate) fn new_table_copied_file_info_v6() -> mt::TableCopiedFileInfo {
     mt::TableCopiedFileInfo {
         etag: Some("etag".to_string()),
@@ -338,21 +371,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
 
     // schema
     {
-        let b1 = TableDataType::Tuple {
-            fields_name: vec!["b11".to_string(), "b12".to_string()],
-            fields_type: vec![TableDataType::Boolean, TableDataType::String],
-        };
-        let b = TableDataType::Tuple {
-            fields_name: vec!["b1".to_string(), "b2".to_string()],
-            fields_type: vec![b1, TableDataType::Number(NumberDataType::Int64)],
-        };
-        let fields = vec![
-            TableField::new("a", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new("b", b),
-            TableField::new("c", TableDataType::Number(NumberDataType::UInt64)),
-        ];
-        let schema = TableSchema::new(fields);
-
+        let schema = new_latest_schema();
         let p = schema.to_pb()?;
 
         let mut buf = vec![];
