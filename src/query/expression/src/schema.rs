@@ -59,7 +59,6 @@ use crate::with_number_type;
 use crate::BlockEntry;
 use crate::Column;
 use crate::FromData;
-use crate::Scalar;
 use crate::TypeDeserializerImpl;
 use crate::Value;
 use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
@@ -587,60 +586,6 @@ impl TableSchema {
             "Unable to get field paths. Valid fields: {:?}",
             valid_fields
         )))
-    }
-
-    /// project with inner scalars by path.
-    pub fn inner_project_scalars(
-        &self,
-        path_indices: &BTreeMap<usize, Vec<usize>>,
-        field_scalars: Vec<Scalar>,
-    ) -> Vec<Scalar> {
-        fn scalar_of_field(
-            fields: &[TableField],
-            path: &[usize],
-            field_scalars: &[Scalar],
-        ) -> Result<Scalar> {
-            if path.is_empty() {
-                return Err(ErrorCode::BadArguments(
-                    "path should not be empty".to_string(),
-                ));
-            }
-            let index = path[0];
-            let field = &fields[index];
-            if path.len() == 1 {
-                return Ok(field_scalars[index].clone());
-            }
-
-            if let TableDataType::Tuple {
-                fields_name,
-                fields_type,
-            } = &field.data_type
-            {
-                let field_name = field.name();
-                let fields = fields_name
-                    .iter()
-                    .zip(fields_type)
-                    .map(|(name, ty)| {
-                        let inner_name = format!("{}:{}", field_name, name.to_lowercase());
-                        TableField::new(&inner_name, ty.clone())
-                    })
-                    .collect::<Vec<_>>();
-                return scalar_of_field(&fields, &path[1..], &field_scalars[index + 1..]);
-            }
-            let valid_fields: Vec<String> = fields.iter().map(|f| f.name.clone()).collect();
-            Err(ErrorCode::BadArguments(format!(
-                "Unable to get field paths. Valid fields: {:?}",
-                valid_fields
-            )))
-        }
-
-        let paths: Vec<Vec<usize>> = path_indices.values().cloned().collect();
-        let schema_fields = self.fields();
-
-        paths
-            .iter()
-            .map(|path| scalar_of_field(schema_fields, path, &field_scalars).unwrap())
-            .collect()
     }
 
     // return leaf fields and column ids

@@ -36,7 +36,6 @@ use common_expression::Scalar;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_sql::field_default_value;
-use common_sql::leaf_field_default_values;
 use common_storage::ColumnNode;
 use common_storage::ColumnNodes;
 use futures::future::try_join_all;
@@ -120,6 +119,27 @@ where Self: 'static
     }
 }
 
+fn inner_project_field_default_values(default_vals: &[Scalar], paths: &[usize]) -> Result<Scalar> {
+    if paths.is_empty() {
+        return Err(ErrorCode::BadArguments(
+            "path should not be empty".to_string(),
+        ));
+    }
+    let index = paths[0];
+    if paths.len() == 1 {
+        return Ok(default_vals[index].clone());
+    }
+
+    match &default_vals[index] {
+        Scalar::Tuple(s) => {
+            return inner_project_field_default_values(&s, &paths[1..]);
+        }
+        _ => {
+            return inner_project_field_default_values(&[default_vals[index].clone()], &paths[1..]);
+        }
+    }
+}
+
 impl BlockReader {
     pub fn create(
         operator: Operator,
@@ -142,15 +162,22 @@ impl BlockReader {
             }
             Projection::InnerColumns(ref path_indices) => {
                 let projected_schema = TableSchemaRef::new(schema.inner_project(path_indices));
-                let mut default_vals = Vec::with_capacity(schema.fields().len());
+                let mut field_default_vals = Vec::with_capacity(schema.fields().len());
 
                 // If projection by InnerColumns, first calc default value of all schema fields.
                 for field in schema.fields() {
-                    default_vals.extend(leaf_field_default_values(ctx.clone(), field)?);
+                    field_default_vals.push(field_default_value(ctx.clone(), field)?);
                 }
 
                 // Then calc project scalars by path_indices
-                let default_vals = schema.inner_project_scalars(path_indices, default_vals);
+                let mut default_vals = Vec::with_capacity(schema.fields().len());
+                let paths: Vec<Vec<usize>> = path_indices.values().cloned().collect();
+                paths.iter().for_each(|path| {
+                    default_vals.push(
+                        inner_project_field_default_values(&field_default_vals, &path).unwrap(),
+                    );
+                });
+
                 (projected_schema, default_vals)
             }
         };
