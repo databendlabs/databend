@@ -29,19 +29,19 @@ use storages_common_table_meta::meta::TableSnapshotStatistics;
 use crate::cache_manager::CacheManager;
 
 /// In memory object cache of SegmentInfo
-pub type SegmentInfoCache = InMemoryItemCacheHolder<SegmentInfo>;
+pub type SegmentInfoCache = NamedCache<InMemoryItemCacheHolder<SegmentInfo>>;
 /// In memory object cache of TableSnapshot
-pub type TableSnapshotCache = InMemoryItemCacheHolder<TableSnapshot>;
+pub type TableSnapshotCache = NamedCache<InMemoryItemCacheHolder<TableSnapshot>>;
 /// In memory object cache of TableSnapshotStatistics
-pub type TableSnapshotStatisticCache = InMemoryItemCacheHolder<TableSnapshotStatistics>;
+pub type TableSnapshotStatisticCache = NamedCache<InMemoryItemCacheHolder<TableSnapshotStatistics>>;
 /// In memory object cache of bloom filter.
 /// For each indexed data block, the bloom xor8 filter of column is cached individually
-pub type BloomIndexFilterCache = InMemoryItemCacheHolder<Xor8Filter>;
+pub type BloomIndexFilterCache = NamedCache<InMemoryItemCacheHolder<Xor8Filter>>;
 pub struct BloomIndexMeta(pub FileMetaData);
 /// In memory object cache of parquet FileMetaData of bloom index data
-pub type BloomIndexMetaCache = InMemoryItemCacheHolder<BloomIndexMeta>;
+pub type BloomIndexMetaCache = NamedCache<InMemoryItemCacheHolder<BloomIndexMeta>>;
 /// In memory object cache of parquet FileMetaData of external parquet files
-pub type FileMetaDataCache = InMemoryItemCacheHolder<FileMetaData>;
+pub type FileMetaDataCache = NamedCache<InMemoryItemCacheHolder<FileMetaData>>;
 
 /// In memory object cache of parquet FileMetaData of external parquet files
 pub type ColumnArrayCache =

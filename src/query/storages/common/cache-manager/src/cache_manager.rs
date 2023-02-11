@@ -84,14 +84,24 @@ impl CacheManager {
                 table_column_array_cache,
             }));
         } else {
-            let table_snapshot_cache = Self::new_item_cache(config.table_cache_snapshot_count);
-            let table_statistic_cache = Self::new_item_cache(config.table_cache_statistic_count);
-            let segment_info_cache = Self::new_item_cache(config.table_cache_segment_count);
-            let bloom_index_filter_cache =
-                Self::new_item_cache(config.table_cache_bloom_index_filter_count);
-            let bloom_index_meta_cache =
-                Self::new_item_cache(config.table_cache_bloom_index_meta_count);
-            let file_meta_data_cache = Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS);
+            let table_snapshot_cache =
+                Self::new_item_cache(config.table_cache_snapshot_count, "table_snapshot_cache");
+            let table_statistic_cache =
+                Self::new_item_cache(config.table_cache_statistic_count, "table_statistics_cache");
+            let segment_info_cache =
+                Self::new_item_cache(config.table_cache_segment_count, "segment_info_cache");
+            let bloom_index_filter_cache = Self::new_item_cache(
+                config.table_cache_bloom_index_filter_count,
+                "bloom_index_filter_cache",
+            );
+            let bloom_index_meta_cache = Self::new_item_cache(
+                config.table_cache_bloom_index_meta_count,
+                "bloom_index_file_meta_data_cache",
+            );
+            let file_meta_data_cache = Self::new_item_cache(
+                DEFAULT_FILE_META_DATA_CACHE_ITEMS,
+                "parquet_file_meta_cache",
+            );
             GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache,
                 segment_info_cache,
@@ -144,9 +154,12 @@ impl CacheManager {
     }
 
     // create cache that meters size by `Count`
-    fn new_item_cache<V>(capacity: u64) -> Option<InMemoryItemCacheHolder<V>> {
+    fn new_item_cache<V>(
+        capacity: u64,
+        name: impl Into<String>,
+    ) -> Option<NamedCache<InMemoryItemCacheHolder<V>>> {
         if capacity > 0 {
-            Some(InMemoryCacheBuilder::new_item_cache(capacity))
+            Some(InMemoryCacheBuilder::new_item_cache(capacity).name_with(name.into()))
         } else {
             None
         }

@@ -66,11 +66,7 @@ impl BloomColumnFilterReader {
             column_descriptor: column_chunk_meta.descriptor().clone(),
         };
 
-        let cached_reader = CachedReader::new(
-            Xor8Filter::cache(),
-            "bloom_index_filter_cache".to_owned(),
-            loader,
-        );
+        let cached_reader = CachedReader::new(Xor8Filter::cache(), loader);
 
         let param = LoadParams {
             location: index_path,

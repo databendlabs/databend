@@ -22,34 +22,27 @@ use common_exception::Result;
 use parking_lot::RwLock;
 
 use super::loader::LoadParams;
-use crate::metrics::metrics_inc_cache_access_count;
-use crate::metrics::metrics_inc_cache_hit_count;
-use crate::metrics::metrics_inc_cache_miss_count;
 use crate::metrics::metrics_inc_cache_miss_load_millisecond;
 use crate::CacheAccessor;
 use crate::Loader;
+use crate::NamedCache;
 
 /// A cache-aware reader
 pub struct CachedReader<L, C> {
     cache: Option<C>,
     loader: L,
-    cache_name: String,
 }
 
 pub type CacheHolder<V, S, M> = Arc<RwLock<LruCache<String, Arc<V>, S, M>>>;
 
-impl<V, L, S, M> CachedReader<L, CacheHolder<V, S, M>>
+impl<V, L, S, M> CachedReader<L, NamedCache<CacheHolder<V, S, M>>>
 where
     L: Loader<V> + Sync,
     S: BuildHasher,
     M: CountableMeter<String, Arc<V>>,
 {
-    pub fn new(cache: Option<CacheHolder<V, S, M>>, name: impl Into<String>, loader: L) -> Self {
-        Self {
-            cache,
-            cache_name: name.into(),
-            loader,
-        }
+    pub fn new(cache: Option<NamedCache<CacheHolder<V, S, M>>>, loader: L) -> Self {
+        Self { cache, loader }
     }
 
     /// Load the object at `location`, uses/populates the cache if possible/necessary.
@@ -57,21 +50,9 @@ where
         match &self.cache {
             None => Ok(Arc::new(self.loader.load(params).await?)),
             Some(cache) => {
-                // Perf.
-                {
-                    metrics_inc_cache_access_count(1, &self.cache_name);
-                }
-
                 let cache_key = self.loader.cache_key(params);
                 match cache.get(cache_key.as_str()) {
-                    Some(item) => {
-                        // Perf.
-                        {
-                            metrics_inc_cache_hit_count(1, &self.cache_name);
-                        }
-
-                        Ok(item)
-                    }
+                    Some(item) => Ok(item),
                     None => {
                         let start = Instant::now();
 
@@ -80,10 +61,9 @@ where
 
                         // Perf.
                         {
-                            metrics_inc_cache_miss_count(1, &self.cache_name);
                             metrics_inc_cache_miss_load_millisecond(
                                 start.elapsed().as_millis() as u64,
-                                &self.cache_name,
+                                cache.name(),
                             );
                         }
 
@@ -96,6 +76,6 @@ where
     }
 
     pub fn name(&self) -> &str {
-        self.cache_name.as_str()
+        self.cache.as_ref().map(|c| c.name()).unwrap_or("")
     }
 }

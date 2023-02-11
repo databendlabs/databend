@@ -15,6 +15,7 @@
 use crate::read::cached_reader::CachedReader;
 use crate::InMemoryBytesCacheHolder;
 use crate::InMemoryItemCacheHolder;
+use crate::NamedCache;
 
-pub type InMemoryItemCacheReader<T, L> = CachedReader<L, InMemoryItemCacheHolder<T>>;
-pub type InMemoryBytesCacheReader<L> = CachedReader<L, InMemoryBytesCacheHolder>;
+pub type InMemoryItemCacheReader<T, L> = CachedReader<L, NamedCache<InMemoryItemCacheHolder<T>>>;
+pub type InMemoryBytesCacheReader<L> = CachedReader<L, NamedCache<InMemoryBytesCacheHolder>>;

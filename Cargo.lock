@@ -2104,7 +2104,6 @@ dependencies = [
  "chrono",
  "common-arrow",
  "common-base",
- "common-cache",
  "common-catalog",
  "common-exception",
  "common-expression",

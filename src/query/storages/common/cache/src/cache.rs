@@ -41,8 +41,11 @@ where
 pub trait Named
 where Self: Sized
 {
-    fn name_with(self, name: String) -> NamedCache<Self> {
-        NamedCache { name, cache: self }
+    fn name_with(self, name: impl Into<String>) -> NamedCache<Self> {
+        NamedCache {
+            name: name.into(),
+            cache: self,
+        }
     }
 }
 
@@ -53,6 +56,13 @@ impl<T> Named for T where T: Sized + Clone {}
 pub struct NamedCache<C> {
     name: String,
     cache: C,
+}
+
+impl<C> NamedCache<C> {
+    #[inline]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
 }
 
 impl<K, V, S, M, C> CacheAccessor<K, V, S, M> for NamedCache<C>
