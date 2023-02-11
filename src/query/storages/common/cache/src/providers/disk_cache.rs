@@ -35,8 +35,8 @@ pub struct DiskBytesCache {
 
 pub struct DiskCacheBuilder;
 impl DiskCacheBuilder {
-    pub fn new_disk_cache(path: &str, disk_cache_size: u64) -> Result<DiskBytesCache> {
-        let external_cache = DiskCache::new(path, disk_cache_size * 1024 * 1024)
+    pub fn new_disk_cache(path: &str, disk_cache_bytes_size: u64) -> Result<DiskBytesCache> {
+        let external_cache = DiskCache::new(path, disk_cache_size)
             .map_err(|e| ErrorCode::StorageOther(format!("create disk cache failed, {e}")))?;
         let inner = Arc::new(RwLock::new(external_cache));
         Ok(DiskBytesCache { inner })

@@ -52,7 +52,6 @@ impl BlockReader {
         projection: Projection,
         ctx: Arc<dyn TableContext>,
     ) -> Result<Arc<BlockReader>> {
-        eprintln!("self schema {:#?}", schema);
         let projected_schema = match projection {
             Projection::Columns(ref indices) => TableSchemaRef::new(schema.project(indices)),
             Projection::InnerColumns(ref path_indices) => {
@@ -64,9 +63,6 @@ impl BlockReader {
         let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
 
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&schema));
-        for x in &column_nodes.column_nodes {
-            eprintln!("field: {}, ids {:?}", x.field.name, x.leaf_column_ids);
-        }
 
         let project_column_nodes: Vec<ColumnNode> = projection
             .project_column_nodes(&column_nodes)?

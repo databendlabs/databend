@@ -80,7 +80,7 @@ impl TableDataCacheBuilder {
     pub fn new_table_data_disk_cache(
         path: &str,
         population_queue_size: u32,
-        disk_cache_mb_size: u64,
+        disk_cache_bytes_size: u64,
     ) -> Result<TableDataCache<DiskBytesCache>> {
         let disk_cache = DiskCacheBuilder::new_disk_cache(path, disk_cache_mb_size)?;
         let (rx, tx) = crossbeam_channel::bounded(population_queue_size as usize);
