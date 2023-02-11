@@ -40,7 +40,9 @@ use crate::executor::ExchangeSource;
 use crate::executor::FragmentKind;
 use crate::planner::MetadataRef;
 use crate::planner::DUMMY_TABLE_INDEX;
+use crate::BaseTableColumn;
 use crate::ColumnEntry;
+use crate::DerivedColumn;
 
 impl PhysicalPlan {
     pub fn format(&self, metadata: MetadataRef) -> Result<FormatTreeNode<String>> {
@@ -170,8 +172,9 @@ fn project_to_format_tree(
             format!(
                 "{} (#{})",
                 match metadata.read().column(*column) {
-                    ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
-                    ColumnEntry::DerivedColumn { alias, .. } => alias,
+                    ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) =>
+                        column_name,
+                    ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
                 },
                 column
             )
@@ -227,8 +230,10 @@ pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata
             .map(|&index| {
                 let column = metadata.read().column(index).clone();
                 match column {
-                    ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
-                    ColumnEntry::DerivedColumn { alias, .. } => alias,
+                    ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => {
+                        column_name
+                    }
+                    ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
                 }
             })
             .collect::<Vec<_>>()
@@ -246,8 +251,8 @@ fn aggregate_partial_to_format_tree(
         .map(|column| {
             let column = metadata.read().column(*column).clone();
             let name = match column {
-                ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
-                ColumnEntry::DerivedColumn { alias, .. } => alias,
+                ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => column_name,
+                ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
             };
             Ok(name)
         })
@@ -288,8 +293,8 @@ fn aggregate_final_to_format_tree(
         .map(|column| {
             let column = metadata.read().column(*column).clone();
             let name = match column {
-                ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
-                ColumnEntry::DerivedColumn { alias, .. } => alias,
+                ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => column_name,
+                ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
             };
             Ok(name)
         })
@@ -336,8 +341,9 @@ fn sort_to_format_tree(plan: &Sort, metadata: &MetadataRef) -> Result<FormatTree
             Ok(format!(
                 "{} {} {}",
                 match column {
-                    ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
-                    ColumnEntry::DerivedColumn { alias, .. } => alias,
+                    ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) =>
+                        column_name,
+                    ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
                 },
                 if sort_key.asc { "ASC" } else { "DESC" },
                 if sort_key.nulls_first {

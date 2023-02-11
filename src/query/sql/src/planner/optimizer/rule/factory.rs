@@ -46,6 +46,7 @@ use crate::optimizer::rule::transform::RuleLeftExchangeJoin;
 use crate::optimizer::rule::transform::RuleRightExchangeJoin;
 use crate::optimizer::rule::RuleID;
 use crate::optimizer::rule::RulePtr;
+use crate::MetadataRef;
 
 // read only, so thread safe
 pub static mut RULE_FACTORY: Lazy<RuleFactory> = Lazy::new(|| {
@@ -88,12 +89,14 @@ impl RuleFactory {
         self.rule_set.get(id)
     }
 
-    pub fn create_rule(&self, id: RuleID) -> Result<RulePtr> {
+    pub fn create_rule(&self, id: RuleID, metadata: Option<MetadataRef>) -> Result<RulePtr> {
         match id {
             RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new())),
             RuleID::PushDownFilterUnion => Ok(Box::new(RulePushDownFilterUnion::new())),
             RuleID::PushDownFilterEvalScalar => Ok(Box::new(RulePushDownFilterEvalScalar::new())),
-            RuleID::PushDownFilterJoin => Ok(Box::new(RulePushDownFilterJoin::new())),
+            RuleID::PushDownFilterJoin => {
+                Ok(Box::new(RulePushDownFilterJoin::new(metadata.unwrap())))
+            }
             RuleID::PushDownFilterScan => Ok(Box::new(RulePushDownFilterScan::new())),
             RuleID::PushDownLimitUnion => Ok(Box::new(RulePushDownLimitUnion::new())),
             RuleID::PushDownLimitScan => Ok(Box::new(RulePushDownLimitScan::new())),

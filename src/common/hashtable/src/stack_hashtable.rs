@@ -16,7 +16,6 @@ use std::alloc::Allocator;
 use std::intrinsics::unlikely;
 use std::mem::MaybeUninit;
 
-use common_base::mem_allocator::GlobalAllocator;
 use common_base::mem_allocator::MmapAllocator;
 
 use super::container::StackContainer;
@@ -27,7 +26,7 @@ use super::table0::Table0IterMut;
 use super::traits::Keyable;
 use super::utils::ZeroEntry;
 
-pub struct StackHashtable<K, V, const N: usize = 16, A = MmapAllocator<GlobalAllocator>>
+pub struct StackHashtable<K, V, const N: usize = 16, A = MmapAllocator>
 where
     K: Keyable,
     A: Allocator + Clone,

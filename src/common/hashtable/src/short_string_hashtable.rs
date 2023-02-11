@@ -19,7 +19,6 @@ use std::num::NonZeroU64;
 use std::ptr::NonNull;
 
 use bumpalo::Bump;
-use common_base::mem_allocator::GlobalAllocator;
 use common_base::mem_allocator::MmapAllocator;
 
 use super::container::HeapContainer;
@@ -38,7 +37,7 @@ use crate::table_empty::TableEmpty;
 use crate::table_empty::TableEmptyIter;
 use crate::table_empty::TableEmptyIterMut;
 
-pub struct ShortStringHashtable<K, V, A = MmapAllocator<GlobalAllocator>>
+pub struct ShortStringHashtable<K, V, A = MmapAllocator>
 where
     K: UnsizedKeyable + ?Sized,
     A: Allocator + Clone,

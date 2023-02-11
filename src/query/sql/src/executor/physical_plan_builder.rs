@@ -57,7 +57,9 @@ use crate::plans::Exchange;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::Scan;
+use crate::BaseTableColumn;
 use crate::ColumnEntry;
+use crate::DerivedColumn;
 use crate::IndexType;
 use crate::Metadata;
 use crate::MetadataRef;
@@ -85,8 +87,10 @@ impl PhysicalPlanBuilder {
                 .iter()
                 .map(|index| {
                     let name = match metadata.column(*index) {
-                        ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
-                        ColumnEntry::DerivedColumn { alias, .. } => alias,
+                        ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => {
+                            column_name
+                        }
+                        ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
                     };
                     schema.index_of(name).unwrap()
                 })
@@ -99,18 +103,18 @@ impl PhysicalPlanBuilder {
                 .map(|index| {
                     let column = metadata.column(*index);
                     match column {
-                        ColumnEntry::BaseTableColumn {
+                        ColumnEntry::BaseTableColumn(BaseTableColumn {
                             column_name,
                             path_indices,
                             ..
-                        } => match path_indices {
+                        }) => match path_indices {
                             Some(path_indices) => (column.index(), path_indices.to_vec()),
                             None => {
                                 let idx = schema.index_of(column_name).unwrap();
                                 (column.index(), vec![idx])
                             }
                         },
-                        ColumnEntry::DerivedColumn { alias, .. } => {
+                        ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => {
                             let idx = schema.index_of(alias).unwrap();
                             (column.index(), vec![idx])
                         }
@@ -134,15 +138,19 @@ impl PhysicalPlanBuilder {
                 let metadata = self.metadata.read().clone();
                 for index in scan.columns.iter() {
                     let column = metadata.column(*index);
-                    if let ColumnEntry::BaseTableColumn { path_indices, .. } = column {
+                    if let ColumnEntry::BaseTableColumn(BaseTableColumn { path_indices, .. }) =
+                        column
+                    {
                         if path_indices.is_some() {
                             has_inner_column = true;
                         }
                     }
 
                     let name = match column {
-                        ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
-                        ColumnEntry::DerivedColumn { alias, .. } => alias,
+                        ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => {
+                            column_name
+                        }
+                        ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
                     };
                     if let Some(prewhere) = &scan.prewhere {
                         // if there is a prewhere optimization,
@@ -660,14 +668,14 @@ impl PhysicalPlanBuilder {
                         let metadata = self.metadata.read();
                         let column = metadata.column(item.index);
                         let (name, data_type) = match column {
-                            ColumnEntry::BaseTableColumn {
+                            ColumnEntry::BaseTableColumn(BaseTableColumn {
                                 column_name,
                                 data_type,
                                 ..
-                            } => (column_name.clone(), DataType::from(data_type)),
-                            ColumnEntry::DerivedColumn {
+                            }) => (column_name.clone(), DataType::from(data_type)),
+                            ColumnEntry::DerivedColumn(DerivedColumn {
                                 alias, data_type, ..
-                            } => (alias.clone(), data_type.clone()),
+                            }) => (alias.clone(), data_type.clone()),
                         };
 
                         // sort item is already a column

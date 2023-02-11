@@ -33,3 +33,4 @@ mod v023_table_meta;
 mod v024_table_meta;
 mod v025_user_stage;
 mod v026_schema;
+mod v027_schema;
