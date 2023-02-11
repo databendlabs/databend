@@ -48,17 +48,17 @@ use crate::optimizer::rule::RuleID;
 use crate::optimizer::rule::RulePtr;
 
 // read only, so thread safe
-static mut RULE_FACTORY: Lazy<RuleFactory> = Lazy::new(|| {
+pub static mut RULE_FACTORY: Lazy<RuleFactory> = Lazy::new(|| {
     let mut factory = RuleFactory::create();
     factory.init_rules();
     factory
 });
 
 pub struct RuleFactory {
-    rule_set: RuleSet,
+    pub rule_set: RuleSet,
 
-    transformation_rules: roaring::RoaringBitmap,
-    exploration_rules: roaring::RoaringBitmap,
+    pub transformation_rules: roaring::RoaringBitmap,
+    pub exploration_rules: roaring::RoaringBitmap,
 }
 
 impl RuleFactory {
@@ -82,6 +82,10 @@ impl RuleFactory {
                 self.exploration_rules.insert(rule.id() as u32);
             }
         }
+    }
+
+    pub fn get_rule(&self, id: &RuleID) -> Option<&RulePtr> {
+        self.rule_set.get(id)
     }
 
     pub fn create_rule(&self, id: RuleID) -> Result<RulePtr> {

@@ -58,6 +58,10 @@ impl RuleSet {
     pub fn iter(&self) -> impl Iterator<Item = &RulePtr> {
         self.rules.values()
     }
+
+    pub fn get(&self, id: &RuleID) -> Option<&RulePtr> {
+        self.rules.get(id)
+    }
 }
 
 /// A bitmap to store information about applied rules
