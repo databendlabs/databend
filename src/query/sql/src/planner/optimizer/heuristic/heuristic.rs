@@ -128,7 +128,7 @@ impl HeuristicOptimizer {
     fn apply_transform_rules(&self, s_expr: &SExpr, _rule_list: &RuleList) -> Result<SExpr> {
         let mut s_expr = s_expr.clone();
         let rule_set: roaring::RoaringBitmap;
-        let mut rule: &RulePtr;
+        let mut rule: RulePtr;
 
         unsafe {
             rule_set = s_expr
@@ -139,9 +139,10 @@ impl HeuristicOptimizer {
 
         for rule_id in rule_set.iter() {
             unsafe {
-                rule = RULE_FACTORY
-                    .get_rule(std::mem::transmute::<u64, &RuleID>(rule_id as u64))
-                    .unwrap();
+                rule = RULE_FACTORY.create_rule(
+                    std::mem::transmute::<u8, RuleID>(rule_id as u8),
+                    Some(self.metadata.clone()),
+                )?
             }
             let mut state = TransformResult::new();
             if s_expr.match_pattern(rule.pattern()) && !s_expr.applied_rule(&rule.id()) {
