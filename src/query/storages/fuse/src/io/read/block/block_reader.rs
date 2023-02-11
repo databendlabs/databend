@@ -167,8 +167,7 @@ impl BlockReader {
 
                 // Then calc project scalars by path_indices
                 let mut default_vals = Vec::with_capacity(schema.fields().len());
-                let paths: Vec<Vec<usize>> = path_indices.values().cloned().collect();
-                paths.iter().for_each(|path| {
+                path_indices.values().for_each(|path| {
                     default_vals.push(
                         inner_project_field_default_values(&field_default_vals, path).unwrap(),
                     );
