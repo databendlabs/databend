@@ -33,7 +33,6 @@ use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
-use common_expression::TableDataType;
 use common_expression::TableField;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;

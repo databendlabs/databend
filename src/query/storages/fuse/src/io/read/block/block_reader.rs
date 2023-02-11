@@ -131,12 +131,8 @@ fn inner_project_field_default_values(default_vals: &[Scalar], paths: &[usize]) 
     }
 
     match &default_vals[index] {
-        Scalar::Tuple(s) => {
-            return inner_project_field_default_values(&s, &paths[1..]);
-        }
-        _ => {
-            return inner_project_field_default_values(&[default_vals[index].clone()], &paths[1..]);
-        }
+        Scalar::Tuple(s) => inner_project_field_default_values(s, &paths[1..]),
+        _ => inner_project_field_default_values(&[default_vals[index].clone()], &paths[1..]),
     }
 }
 
@@ -174,7 +170,7 @@ impl BlockReader {
                 let paths: Vec<Vec<usize>> = path_indices.values().cloned().collect();
                 paths.iter().for_each(|path| {
                     default_vals.push(
-                        inner_project_field_default_values(&field_default_vals, &path).unwrap(),
+                        inner_project_field_default_values(&field_default_vals, path).unwrap(),
                     );
                 });
 
