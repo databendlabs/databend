@@ -62,8 +62,10 @@ use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::Scan;
 use crate::plans::Statistics;
+use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnEntry;
+use crate::DerivedColumn;
 use crate::IndexType;
 
 impl Binder {
@@ -408,14 +410,14 @@ impl Binder {
         let mut col_stats: HashMap<IndexType, Option<ColumnStatistics>> = HashMap::new();
         for column in columns.iter() {
             match column {
-                ColumnEntry::BaseTableColumn {
+                ColumnEntry::BaseTableColumn(BaseTableColumn {
                     column_name,
                     column_index,
                     path_indices,
                     data_type,
                     leaf_index,
                     ..
-                } => {
+                }) => {
                     let column_binding = ColumnBinding {
                         database_name: Some(database_name.to_string()),
                         table_name: Some(table.name().to_string()),
@@ -452,8 +454,12 @@ impl Binder {
                     columns: columns
                         .into_iter()
                         .map(|col| match col {
-                            ColumnEntry::BaseTableColumn { column_index, .. } => column_index,
-                            ColumnEntry::DerivedColumn { column_index, .. } => column_index,
+                            ColumnEntry::BaseTableColumn(BaseTableColumn {
+                                column_index, ..
+                            }) => column_index,
+                            ColumnEntry::DerivedColumn(DerivedColumn { column_index, .. }) => {
+                                column_index
+                            }
                         })
                         .collect(),
                     push_down_predicates: None,

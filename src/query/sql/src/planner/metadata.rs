@@ -69,11 +69,11 @@ impl Metadata {
 
     pub fn table_index_by_column_indexes(&self, column_indexes: &ColumnSet) -> Option<IndexType> {
         self.columns.iter().find_map(|v| match v {
-            ColumnEntry::BaseTableColumn {
+            ColumnEntry::BaseTableColumn(BaseTableColumn {
                 column_index,
                 table_index,
                 ..
-            } if column_indexes.contains(column_index) => Some(*table_index),
+            }) if column_indexes.contains(column_index) => Some(*table_index),
             _ => None,
         })
     }
@@ -91,7 +91,7 @@ impl Metadata {
     pub fn columns_by_table_index(&self, index: IndexType) -> Vec<ColumnEntry> {
         self.columns
             .iter()
-            .filter(|v| matches!(v, ColumnEntry::BaseTableColumn { table_index, .. } if index == *table_index))
+            .filter(|v| matches!(v, ColumnEntry::BaseTableColumn(BaseTableColumn { table_index, .. }) if index == *table_index))
             .cloned()
             .collect()
     }
@@ -105,25 +105,25 @@ impl Metadata {
         leaf_index: Option<IndexType>,
     ) -> IndexType {
         let column_index = self.columns.len();
-        let column_entry = ColumnEntry::BaseTableColumn {
+        let column_entry = ColumnEntry::BaseTableColumn(BaseTableColumn {
             column_name: name,
             data_type,
             column_index,
             table_index,
             path_indices,
             leaf_index,
-        };
+        });
         self.columns.push(column_entry);
         column_index
     }
 
     pub fn add_derived_column(&mut self, alias: String, data_type: DataType) -> IndexType {
         let column_index = self.columns.len();
-        let column_entry = ColumnEntry::DerivedColumn {
+        let column_entry = ColumnEntry::DerivedColumn(DerivedColumn {
             column_index,
             alias,
             data_type,
-        };
+        });
         self.columns.push(column_entry);
         column_index
     }
@@ -284,34 +284,40 @@ impl TableEntry {
 }
 
 #[derive(Clone, Debug)]
+pub struct BaseTableColumn {
+    pub table_index: IndexType,
+    pub column_index: IndexType,
+    pub column_name: String,
+    pub data_type: TableDataType,
+
+    /// Path indices for inner column of struct data type.
+    pub path_indices: Option<Vec<usize>>,
+    /// Leaf index is the primitive column index in Parquet, constructed in DFS order.
+    /// None if the data type of column is struct.
+    pub leaf_index: Option<usize>,
+}
+
+#[derive(Clone, Debug)]
+pub struct DerivedColumn {
+    pub column_index: IndexType,
+    pub alias: String,
+    pub data_type: DataType,
+}
+
+#[derive(Clone, Debug)]
 pub enum ColumnEntry {
     /// Column from base table, for example `SELECT t.a, t.b FROM t`.
-    BaseTableColumn {
-        table_index: IndexType,
-        column_index: IndexType,
-        column_name: String,
-        data_type: TableDataType,
-
-        /// Path indices for inner column of struct data type.
-        path_indices: Option<Vec<usize>>,
-        /// Leaf index is the primitive column index in Parquet, constructed in DFS order.
-        /// None if the data type of column is struct.
-        leaf_index: Option<usize>,
-    },
+    BaseTableColumn(BaseTableColumn),
 
     /// Column synthesized from other columns, for example `SELECT t.a + t.b AS a FROM t`.
-    DerivedColumn {
-        column_index: IndexType,
-        alias: String,
-        data_type: DataType,
-    },
+    DerivedColumn(DerivedColumn),
 }
 
 impl ColumnEntry {
     pub fn index(&self) -> IndexType {
         match self {
-            ColumnEntry::BaseTableColumn { column_index, .. } => *column_index,
-            ColumnEntry::DerivedColumn { column_index, .. } => *column_index,
+            ColumnEntry::BaseTableColumn(base) => base.column_index,
+            ColumnEntry::DerivedColumn(derived) => derived.column_index,
         }
     }
 }
