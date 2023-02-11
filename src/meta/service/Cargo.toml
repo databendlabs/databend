@@ -46,7 +46,7 @@ sled = { workspace = true }
 anyerror = { workspace = true }
 anyhow = { workspace = true }
 async-trait = "0.1.57"
-backon = "0.2.0"
+backon = "0.4"
 clap = { workspace = true }
 derive_more = { workspace = true }
 futures = "0.3.24"
