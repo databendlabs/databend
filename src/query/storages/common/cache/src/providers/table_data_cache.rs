@@ -112,9 +112,11 @@ impl CacheAccessor<String, Vec<u8>, DefaultHashBuilder, Count> for TableDataCach
             // populate the cache to external cache(disk/redis) asyncly
             let msg = CacheItem { key: k, value: v };
             match self.population_queue.try_send(msg) {
-                Ok(_) => {}
-                Err(TrySendError::Full(_)) => {
+                Ok(_) => {
                     metrics_inc_cache_population_pending_count(1, TABLE_DATA_CACHE_NAME);
+                }
+                Err(TrySendError::Full(_)) => {
+                    metrics_inc_cache_population_pending_count(-1, TABLE_DATA_CACHE_NAME);
                     warn!("external cache population queue is full");
                 }
                 Err(TrySendError::Disconnected(_)) => {
