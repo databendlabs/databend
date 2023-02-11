@@ -9,7 +9,7 @@ authors:
   image_url: https://github.com/psiace.png
 ---
 
-[Databend](https://github.com/datafuselabs/databend) is a modern cloud data warehouse focusing on Low-Cost and Low-Complexity for your massive-scale analytics needs. Open source alternative to Snowflake. Also available in the cloud: <https://app.databend.com> .
+[Databend](https://github.com/datafuselabs/databend) is a modern cloud data warehouse, serving your massive-scale analytics needs at low cost and complexity. Open source alternative to Snowflake. Also available in the cloud: <https://app.databend.com> .
 
 ## What's New
 
@@ -99,9 +99,9 @@ Stay connected with the latest news about Databend.
 
 ### Why You Should Try Sccache
 
-[Sccache](https://github.com/mozilla/sccache) is a [ccache](https://ccache.dev/)-like project started by the Mozilla team, supporting C/CPP, Rust and other languages, and storing caches locally or in a cloud storage backend. In v0.3.3, Sccache added native support for the Github Action Cache Service; in the subsequent [v0.4.0-pre.6](https://github.com/mozilla/sccache/releases/tag/v0.4.0-pre.6), the community has continued to improve this functionality, and it is now ready for use in the production CI.
+[Sccache](https://github.com/mozilla/sccache) is a [ccache](https://ccache.dev/)-like project started by the Mozilla team, supporting C/CPP, Rust and other languages, and storing caches locally or in a cloud storage backend. The community first added native support for the Github Action Cache Service to Sccache in version 0.3.3, then improved the functionality in [v0.4.0-pre.6](https://github.com/mozilla/sccache/releases/tag/v0.4.0-pre.6) so that the production CI can now use it.
 
-> Now, [opendal](https://github.com/datafuselabs/opendal), open-sourced by [Datafuse Labs](https://github.com/datafuselabs), is functioning as a storage access layer for sccache to interface with various storage services (s3/gcs/azlob etc.).
+> Now, [opendal](https://github.com/datafuselabs/opendal), open-sourced by [Datafuse Labs](https://github.com/datafuselabs), acts as a storage access layer for sccache to interface with various storage services (s3/gcs/azlob etc.).
 
 **Learn More**
 
