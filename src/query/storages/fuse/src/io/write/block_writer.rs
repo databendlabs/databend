@@ -61,6 +61,7 @@ pub fn write_block(
             writer.write(&batch)?;
             writer.finish()?;
 
+            let leaf_column_ids = schema.to_leaf_column_ids();
             let mut metas = HashMap::with_capacity(writer.metas.len());
             for (idx, meta) in writer.metas.iter().enumerate() {
                 // use column id as key instead of index
