@@ -29,6 +29,6 @@ echo "select * from @s2;" | $MYSQL_CLIENT_CONNECT
 echo '--- file_format'
 echo "drop stage if exists s3;" | $MYSQL_CLIENT_CONNECT
 echo "create stage s3 url = '${DATADIR}' FILE_FORMAT = (type = CSV);"  | $MYSQL_CLIENT_CONNECT
-echo "select * from @s2 (FILE_FORMAT => 'PARQUET');" | $MYSQL_CLIENT_CONNECT
+echo "select * from @s3 (FILE_FORMAT => 'PARQUET');" | $MYSQL_CLIENT_CONNECT
 
 rm -rf ${DATADIR_PATH}
