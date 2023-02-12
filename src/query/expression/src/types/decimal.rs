@@ -73,6 +73,8 @@ pub trait Decimal: Sized {
     fn min_for_precision(precision: u8) -> Self;
     fn max_for_precision(precision: u8) -> Self;
 
+    fn default_decimal_size() -> DecimalSize;
+
     fn from_float(value: f64) -> Self;
 
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)>;
@@ -100,6 +102,13 @@ impl Decimal for i128 {
 
     fn max_for_precision(to_precision: u8) -> Self {
         9_i128.saturating_pow(1 + to_precision as u32)
+    }
+
+    fn default_decimal_size() -> DecimalSize {
+        DecimalSize {
+            precision: MAX_DECIMAL128_PRECISION,
+            scale: 0,
+        }
     }
 
     fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn {
@@ -138,6 +147,13 @@ impl Decimal for i256 {
         (i256::ONE * 9).saturating_pow(1 + to_precision as u32)
     }
 
+    fn default_decimal_size() -> DecimalSize {
+        DecimalSize {
+            precision: MAX_DECIMAL256_PRECISION,
+            scale: 0,
+        }
+    }
+
     fn from_float(value: f64) -> Self {
         i256::from(value.to_i128().unwrap())
     }
@@ -155,8 +171,8 @@ impl Decimal for i256 {
     }
 }
 
-static MAX_DECIMAL128_PRECISION: u8 = 38;
-static MAX_DECIMAL256_PRECISION: u8 = 76;
+pub static MAX_DECIMAL128_PRECISION: u8 = 38;
+pub static MAX_DECIMAL256_PRECISION: u8 = 76;
 
 impl DecimalDataType {
     pub fn from_size(size: DecimalSize) -> Result<DecimalDataType> {

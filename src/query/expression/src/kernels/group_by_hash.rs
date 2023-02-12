@@ -24,17 +24,21 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::BinaryWrite;
 use common_io::prelude::FormatSettings;
+use ethnum::i256;
+use ethnum::u256;
+use ethnum::U256;
 use micromarshal::Marshal;
-use primitive_types::U256;
-use primitive_types::U512;
 
 use crate::types::boolean::BooleanType;
+use crate::types::decimal::Decimal;
+
 use crate::types::nullable::NullableColumn;
 use crate::types::number::Number;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::types::string::StringIterator;
 use crate::types::DataType;
+use crate::types::DecimalDataType;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
 use crate::types::ValueType;
@@ -47,8 +51,7 @@ use crate::TypeDeserializer;
 pub enum KeysState {
     Column(Column),
     U128(Vec<u128>),
-    U256(Vec<U256>),
-    U512(Vec<U512>),
+    U256(Vec<u256>),
 }
 
 pub trait HashMethod: Clone {
@@ -73,8 +76,7 @@ pub type HashMethodKeysU16 = HashMethodFixedKeys<u16>;
 pub type HashMethodKeysU32 = HashMethodFixedKeys<u32>;
 pub type HashMethodKeysU64 = HashMethodFixedKeys<u64>;
 pub type HashMethodKeysU128 = HashMethodFixedKeys<u128>;
-pub type HashMethodKeysU256 = HashMethodFixedKeys<U256>;
-pub type HashMethodKeysU512 = HashMethodFixedKeys<U512>;
+pub type HashMethodKeysU256 = HashMethodFixedKeys<u256>;
 
 /// These methods are `generic` method to generate hash key,
 /// that is the 'numeric' or 'binary` representation of each column value as hash key.
@@ -88,7 +90,6 @@ pub enum HashMethodKind {
     KeysU64(HashMethodKeysU64),
     KeysU128(HashMethodKeysU128),
     KeysU256(HashMethodKeysU256),
-    KeysU512(HashMethodKeysU512),
 }
 
 #[macro_export]
@@ -96,7 +97,7 @@ macro_rules! with_hash_method {
     ( | $t:tt | $($tail:tt)* ) => {
         match_template::match_template! {
             $t = [Serializer, SingleString, KeysU8, KeysU16,
-            KeysU32, KeysU64, KeysU128, KeysU256, KeysU512],
+            KeysU32, KeysU64, KeysU128, KeysU256],
             $($tail)*
         }
     }
@@ -115,7 +116,6 @@ macro_rules! with_mappedhash_method {
                 KeysU64 => HashMethodKeysU64,
                 KeysU128 => HashMethodKeysU128,
                 KeysU256 => HashMethodKeysU256,
-                KeysU512 => HashMethodKeysU512
             ],
             $($tail)*
         }
@@ -137,9 +137,12 @@ impl HashMethodKind {
             HashMethodKind::KeysU16(_) => DataType::Number(NumberDataType::UInt16),
             HashMethodKind::KeysU32(_) => DataType::Number(NumberDataType::UInt32),
             HashMethodKind::KeysU64(_) => DataType::Number(NumberDataType::UInt64),
-            HashMethodKind::KeysU128(_)
-            | HashMethodKind::KeysU256(_)
-            | HashMethodKind::KeysU512(_) => DataType::String,
+            HashMethodKind::KeysU128(_) => {
+                DataType::Decimal(DecimalDataType::Decimal128(i128::default_decimal_size()))
+            }
+            HashMethodKind::KeysU256(_) => {
+                DataType::Decimal(DecimalDataType::Decimal256(i256::default_decimal_size()))
+            }
         }
     }
 }
@@ -463,7 +466,6 @@ macro_rules! impl_hash_method_fixed_large_keys {
 
 impl_hash_method_fixed_large_keys! {u128, U128}
 impl_hash_method_fixed_large_keys! {U256, U256}
-impl_hash_method_fixed_large_keys! {U512, U512}
 
 #[inline]
 fn build(

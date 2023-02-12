@@ -15,12 +15,12 @@
 // To avoid RUSTFLAGS="-C target-feature=+sse4.2" warning.
 #![allow(unused_imports)]
 use std::hash::BuildHasher;
+use std::hash::Hasher;
 use std::mem::MaybeUninit;
 use std::num::NonZeroU64;
 
+use ethnum::U256;
 use ordered_float::OrderedFloat;
-use primitive_types::U256;
-use primitive_types::U512;
 
 /// # Safety
 ///
@@ -81,29 +81,12 @@ impl_key_for_primitive_types!(i128);
 unsafe impl Keyable for U256 {
     #[inline(always)]
     fn equals_zero(this: &Self) -> bool {
-        U256::is_zero(this)
+        *this == U256::ZERO
     }
 
     #[inline(always)]
     fn is_zero(this: &MaybeUninit<Self>) -> bool {
-        U256::is_zero(unsafe { this.assume_init_ref() })
-    }
-
-    #[inline(always)]
-    fn hash(&self) -> u64 {
-        self.fast_hash()
-    }
-}
-
-unsafe impl Keyable for U512 {
-    #[inline(always)]
-    fn is_zero(this: &MaybeUninit<Self>) -> bool {
-        U512::is_zero(unsafe { this.assume_init_ref() })
-    }
-
-    #[inline(always)]
-    fn equals_zero(this: &Self) -> bool {
-        U512::is_zero(this)
+        *unsafe { this.assume_init_ref() } == U256::ZERO
     }
 
     #[inline(always)]
@@ -269,35 +252,10 @@ impl FastHash for U256 {
                 use std::arch::x86_64::_mm_crc32_u64;
                 let mut high = CRC_A;
                 let mut low = CRC_B;
-                for x in self.0 {
-                    high = unsafe { _mm_crc32_u64(high as u64, x) as u32 };
-                    low = unsafe { _mm_crc32_u64(low as u64, x) as u32 };
-                }
-                (high as u64) << 32 | low as u64
-            } else {
-                 use std::hash::Hasher;
-                let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
-                let mut hasher = state.build_hasher();
-                for x in self.0 {
-                    hasher.write_u64(x);
-                }
-                hasher.finish()
-            }
-        }
-    }
-}
 
-impl FastHash for U512 {
-    #[inline(always)]
-    fn fast_hash(&self) -> u64 {
-        cfg_if::cfg_if! {
-            if #[cfg(target_feature = "sse4.2")] {
-                use std::arch::x86_64::_mm_crc32_u64;
-                let mut high = CRC_A;
-                let mut low = CRC_B;
                 for x in self.0 {
-                    high = unsafe { _mm_crc32_u64(high as u64, x) as u32 };
-                    low = unsafe { _mm_crc32_u64(low as u64, x) as u32 };
+                    high = unsafe { _mm_crc32_u64(high as u64, x as u64) as u32 };
+                    low = unsafe { _mm_crc32_u64(low as u64, (x >> 64) as u64) as u32 };
                 }
                 (high as u64) << 32 | low as u64
             } else {
@@ -305,7 +263,7 @@ impl FastHash for U512 {
                 let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
                 let mut hasher = state.build_hasher();
                 for x in self.0 {
-                    hasher.write_u64(x);
+                    hasher.write_u128(x);
                 }
                 hasher.finish()
             }

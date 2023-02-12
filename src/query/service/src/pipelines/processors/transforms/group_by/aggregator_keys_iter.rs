@@ -16,6 +16,7 @@ use std::slice::Iter;
 
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
+
 use common_expression::types::number::Number;
 use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringIterator;
@@ -52,18 +53,12 @@ impl<T: Number> KeysColumnIter<T> for FixedKeysColumnIter<T> {
 }
 
 pub struct LargeFixedKeysColumnIter<T: LargeNumber> {
-    holder: Vec<T>,
+    holder: Buffer<T>,
 }
 
 impl<T: LargeNumber> LargeFixedKeysColumnIter<T> {
-    pub fn create(inner: &StringColumn) -> Result<Self> {
-        let mut array = Vec::with_capacity(inner.len());
-
-        for bs in inner.iter() {
-            array.push(T::from_bytes(bs)?);
-        }
-
-        Ok(Self { holder: array })
+    pub fn create(holder: Buffer<T>) -> Result<Self> {
+        Ok(Self { holder })
     }
 }
 

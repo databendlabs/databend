@@ -25,7 +25,6 @@ use crate::types::DataType;
 use crate::DataBlock;
 use crate::HashMethodKeysU128;
 use crate::HashMethodKeysU256;
-use crate::HashMethodKeysU512;
 
 impl DataBlock {
     pub fn choose_hash_method(chunk: &DataBlock, indices: &[usize]) -> Result<HashMethodKind> {
@@ -74,7 +73,6 @@ impl DataBlock {
             5..=8 => Ok(HashMethodKind::KeysU64(HashMethodKeysU64::default())),
             9..=16 => Ok(HashMethodKind::KeysU128(HashMethodKeysU128::default())),
             17..=32 => Ok(HashMethodKind::KeysU256(HashMethodKeysU256::default())),
-            33..=64 => Ok(HashMethodKind::KeysU512(HashMethodKeysU512::default())),
             _ => Ok(HashMethodKind::Serializer(HashMethodSerializer::default())),
         }
     }
