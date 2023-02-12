@@ -58,7 +58,7 @@ impl CacheManager {
             Self::new_block_data_cache(
                 &config.table_disk_cache_root,
                 config.table_data_cache_population_queue_size,
-                config.table_disk_cache_mb_size * 1024 * 1024,
+                config.table_disk_cache_max_size,
             )?
         } else {
             None
@@ -66,7 +66,7 @@ impl CacheManager {
 
         // setup in-memory table column cache
         let table_column_array_cache = Self::new_in_memory_cache(
-            config.table_data_cache_in_memory_column_mb_size * 1024 * 1024,
+            config.table_data_cache_in_memory_max_size,
             ColumnArrayMeter,
             "table_data_column_array",
         );

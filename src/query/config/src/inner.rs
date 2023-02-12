@@ -164,18 +164,18 @@ pub struct QueryConfig {
     pub table_cache_bloom_index_meta_count: u64,
     /// Max number of cached bloom index filters
     pub table_cache_bloom_index_filter_count: u64,
-    /// Max size of in memory table column object cache
+    /// Max size(bytes) of in memory table column object cache
     ///
     /// The cache items are deserialized object, may take a lot of memory.
     /// Please set it to zero to disable it.
-    pub table_data_cache_in_memory_column_mb_size: u64,
+    pub table_data_cache_in_memory_max_size: u64,
     /// Indicates if table data cache is enabled
     pub table_data_cache_enabled: bool,
     /// Table disk cache folder root
     pub table_disk_cache_root: String,
     /// Max size of external cache population queue length
     ///
-    /// the items being queued reference table column row data, which are
+    /// the items being queued reference table column raw data, which are
     /// un-deserialized and usually compressed (depends on table compression options).
     ///
     /// - please monitor the 'table_data_cache_population_pending_count' metric
@@ -185,8 +185,8 @@ pub struct QueryConfig {
     ///   if it keeps increasing, and disk cache hits rate is not as expected. please consider
     ///   increase this value.
     pub table_data_cache_population_queue_size: u32,
-    /// Table disk cache size (MB)
-    pub table_disk_cache_mb_size: u64,
+    /// Table disk cache size (bytes), default value is 21474836480
+    pub table_disk_cache_max_size: u64,
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
     pub management_mode: bool,
     pub jwt_key_file: String,
@@ -240,11 +240,11 @@ impl Default for QueryConfig {
             table_cache_segment_count: 10240,
             table_cache_bloom_index_meta_count: 3000,
             table_cache_bloom_index_filter_count: 1024 * 1024,
-            table_data_cache_in_memory_column_mb_size: 0,
+            table_data_cache_in_memory_max_size: 0,
             table_data_cache_enabled: false,
             table_data_cache_population_queue_size: 65536,
             table_disk_cache_root: "_cache".to_string(),
-            table_disk_cache_mb_size: 20 * 1024,
+            table_disk_cache_max_size: 20 * 1024 * 1024 * 1024,
             management_mode: false,
             jwt_key_file: "".to_string(),
             async_insert_max_data_size: 10000,

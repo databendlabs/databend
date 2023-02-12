@@ -1273,9 +1273,9 @@ pub struct QueryConfig {
     #[clap(long, default_value = "_cache")]
     pub table_disk_cache_root: String,
 
-    /// Table disk cache size (mb)
-    #[clap(long, default_value = "20480")]
-    pub table_disk_cache_mb_size: u64,
+    /// Table disk cache size (bytes), default values is 20GB
+    #[clap(long, default_value = "21474836480")]
+    pub table_disk_cache_max_size: u64,
 
     /// Max number of cached table snapshot
     #[clap(long, default_value = "256")]
@@ -1309,15 +1309,16 @@ pub struct QueryConfig {
     /// memory, the working set can be fitted into, and the access pattern will benefit from
     /// caching, consider enabled this cache.
     #[clap(long, default_value = "0")]
-    pub table_data_cache_in_memory_column_mb_size: u64,
+    pub table_data_cache_in_memory_max_size: u64,
 
     /// Indicates if table data cached is enabled, default false
     #[clap(long)]
     pub table_data_cache_enabled: bool,
 
-    /// Max item that could be pending in the external cache population queue
-    /// default value 65536 items. Increase this value if it takes too much times
-    /// to fully populate the disk cache.
+    /// Max number of items that could be pending in the table data cache population queue
+    /// default value 65536 items.
+    /// Increase this value if it takes too much times to fully populate the disk cache.
+    /// Decrease this value if it takes too much memory to queue the items being cached.
     #[clap(long, default_value = "65536")]
     pub table_data_cache_population_queue_size: u32,
 
@@ -1404,12 +1405,11 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             table_cache_segment_count: self.table_cache_segment_count,
             table_cache_bloom_index_meta_count: self.table_cache_bloom_index_meta_count,
             table_cache_bloom_index_filter_count: self.table_cache_bloom_index_filter_count,
-            table_data_cache_in_memory_column_mb_size: self
-                .table_data_cache_in_memory_column_mb_size,
+            table_data_cache_in_memory_max_size: self.table_data_cache_in_memory_max_size,
             table_data_cache_enabled: self.table_data_cache_enabled,
             table_data_cache_population_queue_size: self.table_data_cache_population_queue_size,
             table_disk_cache_root: self.table_disk_cache_root,
-            table_disk_cache_mb_size: self.table_disk_cache_mb_size,
+            table_disk_cache_max_size: self.table_disk_cache_max_size,
             management_mode: self.management_mode,
             jwt_key_file: self.jwt_key_file,
             async_insert_max_data_size: self.async_insert_max_data_size,
@@ -1469,14 +1469,13 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_cache_block_meta_count: inner.table_cache_block_meta_count,
             table_memory_cache_mb_size: inner.table_memory_cache_mb_size,
             table_disk_cache_root: inner.table_disk_cache_root,
-            table_disk_cache_mb_size: inner.table_disk_cache_mb_size,
+            table_disk_cache_max_size: inner.table_disk_cache_max_size,
             table_cache_snapshot_count: inner.table_cache_snapshot_count,
             table_cache_statistic_count: inner.table_cache_statistic_count,
             table_cache_segment_count: inner.table_cache_segment_count,
             table_cache_bloom_index_meta_count: inner.table_cache_bloom_index_meta_count,
             table_cache_bloom_index_filter_count: inner.table_cache_bloom_index_filter_count,
-            table_data_cache_in_memory_column_mb_size: inner
-                .table_data_cache_in_memory_column_mb_size,
+            table_data_cache_in_memory_max_size: inner.table_data_cache_in_memory_max_size,
             table_data_cache_enabled: inner.table_data_cache_enabled,
             table_data_cache_population_queue_size: inner.table_data_cache_population_queue_size,
             management_mode: inner.management_mode,
