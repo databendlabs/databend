@@ -235,12 +235,14 @@ pub enum TokenKind {
     // Steps to add keyword:
     // 1. Add the keyword to token kind variants by alphabetical order.
     // 2. Search in this file to see if the new keyword is a commented
-    //    out reserverd keyword. If so, uncomment the keyword in the
+    //    out reserved keyword. If so, uncomment the keyword in the
     //    reserved list.
     #[token("ALL", ignore(ascii_case))]
     ALL,
     #[token("ACCESS_KEY_ID", ignore(ascii_case))]
     ACCESS_KEY_ID,
+    #[token("ACCESS_KEY_SECRET", ignore(ascii_case))]
+    ACCESS_KEY_SECRET,
     #[token("ADD", ignore(ascii_case))]
     ADD,
     #[token("ANY", ignore(ascii_case))]
@@ -316,6 +318,8 @@ pub enum TokenKind {
     #[token("CHAR", ignore(ascii_case))]
     CHAR,
     #[token("CHARACTER", ignore(ascii_case))]
+    #[token("COLUMN", ignore(ascii_case))]
+    COLUMN,
     CHARACTER,
     #[token("COMPRESSION", ignore(ascii_case))]
     COMPRESSION,
@@ -353,6 +357,8 @@ pub enum TokenKind {
     DAY,
     #[token("DECADE", ignore(ascii_case))]
     DECADE,
+    #[token("DECIMAL", ignore(ascii_case))]
+    DECIMAL,
     #[token("DEFAULT", ignore(ascii_case))]
     DEFAULT,
     #[token("DEFLATE", ignore(ascii_case))]

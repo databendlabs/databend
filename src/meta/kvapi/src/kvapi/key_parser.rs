@@ -102,7 +102,7 @@ impl<'s> KeyParser<'s> {
     }
 
     /// Return trailing raw string that is not processed.
-    pub fn tail(&mut self) -> Result<&str, KeyError> {
+    pub fn tail_raw(&mut self) -> Result<&str, KeyError> {
         let index = self.index;
         let _ = self.next_raw()?;
 
@@ -200,25 +200,25 @@ mod tests {
 
         {
             let mut kp = KeyParser::new(s);
-            assert_eq!(Ok(s), kp.tail());
+            assert_eq!(Ok(s), kp.tail_raw());
         }
         {
             let mut kp = KeyParser::new(s);
             kp.next_raw()?;
-            assert_eq!(Ok("bar%20-/123"), kp.tail());
-        }
-        {
-            let mut kp = KeyParser::new(s);
-            kp.next_raw()?;
-            kp.next_raw()?;
-            assert_eq!(Ok("123"), kp.tail());
+            assert_eq!(Ok("bar%20-/123"), kp.tail_raw());
         }
         {
             let mut kp = KeyParser::new(s);
             kp.next_raw()?;
             kp.next_raw()?;
+            assert_eq!(Ok("123"), kp.tail_raw());
+        }
+        {
+            let mut kp = KeyParser::new(s);
             kp.next_raw()?;
-            assert!(kp.tail().is_err());
+            kp.next_raw()?;
+            kp.next_raw()?;
+            assert!(kp.tail_raw().is_err());
         }
 
         Ok(())

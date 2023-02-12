@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::PrincipalIdentity;
+use common_meta_app::principal::PrincipalIdentity;
 use common_sql::plans::RevokePrivilegePlan;
 use common_users::UserApiProvider;
 
@@ -63,7 +63,7 @@ impl Interpreter for RevokePrivilegeInterpreter {
             }
             PrincipalIdentity::Role(role) => {
                 user_mgr
-                    .revoke_privileges_from_role(&tenant, role, plan.on, plan.priv_types)
+                    .revoke_privileges_from_role(&tenant, &role, plan.on, plan.priv_types)
                     .await?;
             }
         }

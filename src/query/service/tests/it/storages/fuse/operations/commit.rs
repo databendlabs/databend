@@ -35,6 +35,8 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
+use common_meta_app::principal::RoleInfo;
+use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -65,8 +67,6 @@ use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
-use common_meta_types::RoleInfo;
-use common_meta_types::UserInfo;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storages_fuse::operations::AppendOperationLogEntry;
@@ -127,12 +127,12 @@ async fn test_fuse_occ_retry() -> Result<()> {
         .await?;
 
     let expected = vec![
-        "+----------+------------------+",
-        "| Column 0 | Column 1         |",
-        "+----------+------------------+",
-        "| 1_i32    | (2_i32, 3_i32)   |",
-        "| 5_i32    | (10_i32, 15_i32) |",
-        "+----------+------------------+",
+        "+----------+----------+",
+        "| Column 0 | Column 1 |",
+        "+----------+----------+",
+        "| 1        | (2, 3)   |",
+        "| 5        | (10, 15) |",
+        "+----------+----------+",
     ];
     common_expression::block_debug::assert_blocks_sorted_eq(expected, blocks.as_slice());
 

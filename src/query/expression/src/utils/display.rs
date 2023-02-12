@@ -15,9 +15,12 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::fmt::Write;
 
+use chrono_tz::Tz;
 use comfy_table::Cell;
 use comfy_table::Table;
+use ethnum::i256;
 use itertools::Itertools;
 use num_traits::FromPrimitive;
 use rust_decimal::Decimal;
@@ -33,6 +36,10 @@ use crate::property::Domain;
 use crate::property::FunctionProperty;
 use crate::types::boolean::BooleanDomain;
 use crate::types::date::date_to_string;
+use crate::types::decimal::DecimalColumn;
+use crate::types::decimal::DecimalDataType;
+use crate::types::decimal::DecimalDomain;
+use crate::types::decimal::DecimalScalar;
 use crate::types::nullable::NullableDomain;
 use crate::types::number::NumberColumn;
 use crate::types::number::NumberDataType;
@@ -101,8 +108,18 @@ impl<'a> Debug for ScalarRef<'a> {
             ScalarRef::Null => write!(f, "NULL"),
             ScalarRef::EmptyArray => write!(f, "[] :: Array(Nothing)"),
             ScalarRef::Number(val) => write!(f, "{val:?}"),
+            ScalarRef::Decimal(val) => write!(f, "{val:?}"),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
-            ScalarRef::String(s) => write!(f, "{:?}", String::from_utf8_lossy(s)),
+            ScalarRef::String(s) => match std::str::from_utf8(s) {
+                Ok(v) => write!(f, "{:?}", v),
+                Err(_e) => {
+                    write!(f, "0x")?;
+                    for c in *s {
+                        write!(f, "{:02x}", c)?;
+                    }
+                    Ok(())
+                }
+            },
             ScalarRef::Timestamp(t) => write!(f, "{t:?}"),
             ScalarRef::Date(d) => write!(f, "{d:?}"),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
@@ -130,6 +147,7 @@ impl Debug for Column {
             Column::Null { len } => f.debug_struct("Null").field("len", len).finish(),
             Column::EmptyArray { len } => f.debug_struct("EmptyArray").field("len", len).finish(),
             Column::Number(col) => write!(f, "{col:?}"),
+            Column::Decimal(col) => write!(f, "{col:?}"),
             Column::Boolean(col) => f.debug_tuple("Boolean").field(col).finish(),
             Column::String(col) => write!(f, "{col:?}"),
             Column::Timestamp(col) => write!(f, "{col:?}"),
@@ -151,11 +169,21 @@ impl<'a> Display for ScalarRef<'a> {
         match self {
             ScalarRef::Null => write!(f, "NULL"),
             ScalarRef::EmptyArray => write!(f, "[]"),
-            ScalarRef::Number(val) => write!(f, "{:?}", val),
+            ScalarRef::Number(val) => write!(f, "{val}"),
+            ScalarRef::Decimal(val) => write!(f, "{val}"),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
-            ScalarRef::String(s) => write!(f, "{:?}", String::from_utf8_lossy(s)),
-            ScalarRef::Timestamp(t) => write!(f, "{}", timestamp_to_string(*t, chrono_tz::Tz::UTC)),
-            ScalarRef::Date(d) => write!(f, "{}", date_to_string(*d as i64, chrono_tz::Tz::UTC)),
+            ScalarRef::String(s) => match std::str::from_utf8(s) {
+                Ok(v) => write!(f, "{:?}", v),
+                Err(_e) => {
+                    write!(f, "0x")?;
+                    for c in *s {
+                        write!(f, "{:02x}", c)?;
+                    }
+                    Ok(())
+                }
+            },
+            ScalarRef::Timestamp(t) => write!(f, "{}", timestamp_to_string(*t, Tz::UTC)),
+            ScalarRef::Date(d) => write!(f, "{}", date_to_string(*d as i64, Tz::UTC)),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Tuple(fields) => {
                 write!(f, "(")?;
@@ -179,45 +207,8 @@ impl<'a> Display for ScalarRef<'a> {
 }
 
 impl Display for Scalar {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            Scalar::Null => write!(f, "NULL"),
-            Scalar::EmptyArray => write!(f, "[]"),
-            Scalar::Number(n) => write!(f, "{}", n),
-            Scalar::Boolean(b) => write!(f, "{}", b),
-            Scalar::String(s) => match std::str::from_utf8(s) {
-                Ok(v) => write!(f, "{}", v),
-                Err(_e) => {
-                    for c in s {
-                        write!(f, "{:02x}", c)?;
-                    }
-                    Ok(())
-                }
-            },
-            Scalar::Timestamp(t) => write!(f, "{}", timestamp_to_string(*t, chrono_tz::Tz::UTC)),
-            Scalar::Date(d) => write!(f, "{}", date_to_string(*d as i64, chrono_tz::Tz::UTC)),
-            Scalar::Array(v) => {
-                write!(
-                    f,
-                    "[{}]",
-                    v.iter()
-                        .map(|v| v.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            }
-            Scalar::Tuple(v) => {
-                write!(
-                    f,
-                    "({})",
-                    v.iter()
-                        .map(|v| v.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            }
-            Scalar::Variant(v) => write!(f, "{}", common_jsonb::to_string(v)),
-        }
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_ref())
     }
 }
 
@@ -255,6 +246,32 @@ impl Display for NumberScalar {
     }
 }
 
+impl Debug for DecimalScalar {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DecimalScalar::Decimal128(val, size) => {
+                write!(f, "{}_d128", display_decimal_128(*val, size.scale))
+            }
+            DecimalScalar::Decimal256(val, size) => {
+                write!(f, "{}_d256", display_decimal_256(*val, size.scale))
+            }
+        }
+    }
+}
+
+impl Display for DecimalScalar {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DecimalScalar::Decimal128(val, size) => {
+                write!(f, "{}", display_decimal_128(*val, size.scale))
+            }
+            DecimalScalar::Decimal256(val, size) => {
+                write!(f, "{}", display_decimal_256(*val, size.scale))
+            }
+        }
+    }
+}
+
 impl Debug for NumberColumn {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -270,35 +287,38 @@ impl Debug for NumberColumn {
                 .debug_tuple("Float32")
                 .field(&format_args!(
                     "[{}]",
-                    &val.iter()
-                        .map(|x| match Decimal::from_f32(x.0) {
-                            Some(d) => d
-                                .round_dp_with_strategy(
-                                    FLOAT_NUM_FRAC_DIGITS,
-                                    RoundingStrategy::ToZero
-                                )
-                                .normalize()
-                                .to_string(),
-                            None => x.to_string(),
-                        })
-                        .join(", ")
+                    &val.iter().map(|x| display_f32(x.0)).join(", ")
                 ))
                 .finish(),
             NumberColumn::Float64(val) => f
                 .debug_tuple("Float64")
                 .field(&format_args!(
                     "[{}]",
+                    &val.iter().map(|x| display_f64(x.0)).join(", ")
+                ))
+                .finish(),
+        }
+    }
+}
+
+impl Debug for DecimalColumn {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DecimalColumn::Decimal128(val, size) => f
+                .debug_tuple("Decimal128")
+                .field(&format_args!(
+                    "[{}]",
                     &val.iter()
-                        .map(|x| match Decimal::from_f64(x.0) {
-                            Some(d) => d
-                                .round_dp_with_strategy(
-                                    FLOAT_NUM_FRAC_DIGITS,
-                                    RoundingStrategy::ToZero
-                                )
-                                .normalize()
-                                .to_string(),
-                            None => x.to_string(),
-                        })
+                        .map(|x| display_decimal_128(*x, size.scale))
+                        .join(", ")
+                ))
+                .finish(),
+            DecimalColumn::Decimal256(val, size) => f
+                .debug_tuple("Decimal256")
+                .field(&format_args!(
+                    "[{}]",
+                    &val.iter()
+                        .map(|x| display_decimal_256(*x, size.scale))
                         .join(", ")
                 ))
                 .finish(),
@@ -391,6 +411,7 @@ impl Display for DataType {
             DataType::Boolean => write!(f, "Boolean"),
             DataType::String => write!(f, "String"),
             DataType::Number(num) => write!(f, "{num}"),
+            DataType::Decimal(decimal) => write!(f, "{decimal}"),
             DataType::Timestamp => write!(f, "Timestamp"),
             DataType::Date => write!(f, "Date"),
             DataType::Null => write!(f, "NULL"),
@@ -423,6 +444,7 @@ impl Display for TableDataType {
             TableDataType::Boolean => write!(f, "Boolean"),
             TableDataType::String => write!(f, "String"),
             TableDataType::Number(num) => write!(f, "{num}"),
+            TableDataType::Decimal(decimal) => write!(f, "{decimal}"),
             TableDataType::Timestamp => write!(f, "Timestamp"),
             TableDataType::Date => write!(f, "Date"),
             TableDataType::Null => write!(f, "NULL"),
@@ -464,6 +486,19 @@ impl Display for NumberDataType {
             NumberDataType::Int64 => write!(f, "Int64"),
             NumberDataType::Float32 => write!(f, "Float32"),
             NumberDataType::Float64 => write!(f, "Float64"),
+        }
+    }
+}
+
+impl Display for DecimalDataType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        match &self {
+            DecimalDataType::Decimal128(size) => {
+                write!(f, "Decimal({}, {})", size.precision, size.scale)
+            }
+            DecimalDataType::Decimal256(size) => {
+                write!(f, "Decimal({}, {})", size.precision, size.scale)
+            }
         }
     }
 }
@@ -630,6 +665,25 @@ impl Display for NumberDomain {
     }
 }
 
+impl Display for DecimalDomain {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            DecimalDomain::Decimal128(SimpleDomain { min, max }, size) => {
+                write!(f, "{}", SimpleDomain {
+                    min: display_decimal_128(*min, size.scale),
+                    max: display_decimal_128(*max, size.scale),
+                })
+            }
+            DecimalDomain::Decimal256(SimpleDomain { min, max }, size) => {
+                write!(f, "{}", SimpleDomain {
+                    min: display_decimal_256(*min, size.scale),
+                    max: display_decimal_256(*max, size.scale),
+                })
+            }
+        }
+    }
+}
+
 impl<T: Display> Display for SimpleDomain<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{{{}..={}}}", self.min, self.max)
@@ -639,6 +693,7 @@ impl Display for Domain {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Domain::Number(domain) => write!(f, "{domain}"),
+            Domain::Decimal(domain) => write!(f, "{domain}"),
             Domain::Boolean(domain) => write!(f, "{domain}"),
             Domain::String(domain) => write!(f, "{domain}"),
             Domain::Timestamp(domain) => write!(f, "{domain}"),
@@ -683,4 +738,40 @@ fn display_f64(num: f64) -> String {
             .to_string(),
         None => num.to_string(),
     }
+}
+
+fn display_decimal_128(num: i128, scale: u8) -> String {
+    let mut buf = String::new();
+    if scale == 0 {
+        write!(buf, "{}", num).unwrap();
+    } else {
+        let pow_scale = 10_i128.pow(scale as u32);
+        write!(
+            buf,
+            "{}.{:0>width$}",
+            num / pow_scale,
+            num % pow_scale,
+            width = scale as usize
+        )
+        .unwrap();
+    }
+    buf
+}
+
+fn display_decimal_256(num: i256, scale: u8) -> String {
+    let mut buf = String::new();
+    if scale == 0 {
+        write!(buf, "{}", num).unwrap();
+    } else {
+        let pow_scale = i256::from(10).pow(scale as u32);
+        write!(
+            buf,
+            "{}.{:0>width$}",
+            num / pow_scale,
+            num % pow_scale,
+            width = scale as usize
+        )
+        .unwrap();
+    }
+    buf
 }

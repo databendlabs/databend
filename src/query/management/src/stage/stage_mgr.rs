@@ -20,7 +20,10 @@ use common_exception::Result;
 use common_meta_api::txn_cond_seq;
 use common_meta_api::txn_op_del;
 use common_meta_api::txn_op_put;
+use common_meta_app::principal::StageFile;
+use common_meta_app::principal::UserStageInfo;
 use common_meta_kvapi::kvapi;
+use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::errors::app_error::TxnRetryMaxTimes;
 use common_meta_types::ConditionResult::Eq;
 use common_meta_types::KVAppError;
@@ -29,11 +32,8 @@ use common_meta_types::MatchSeqExt;
 use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
-use common_meta_types::StageFile;
 use common_meta_types::TxnOp;
 use common_meta_types::TxnRequest;
-use common_meta_types::UpsertKVReq;
-use common_meta_types::UserStageInfo;
 
 use crate::serde::deserialize_struct;
 use crate::serde::serialize_struct;
@@ -90,7 +90,7 @@ impl StageApi for StageMgr {
         Ok(res.seq)
     }
 
-    async fn get_stage(&self, name: &str, seq: Option<u64>) -> Result<SeqV<UserStageInfo>> {
+    async fn get_stage(&self, name: &str, seq: MatchSeq) -> Result<SeqV<UserStageInfo>> {
         let key = format!("{}/{}", self.stage_prefix, escape_for_key(name)?);
         let kv_api = self.kv_api.clone();
         let get_kv = async move { kv_api.get_kv(&key).await };
@@ -98,7 +98,7 @@ impl StageApi for StageMgr {
         let seq_value =
             res.ok_or_else(|| ErrorCode::UnknownStage(format!("Unknown stage {}", name)))?;
 
-        match MatchSeq::from(seq).match_seq(&seq_value) {
+        match seq.match_seq(&seq_value) {
             Ok(_) => Ok(SeqV::new(
                 seq_value.seq,
                 deserialize_struct(&seq_value.data, ErrorCode::IllegalUserStageFormat, || "")?,

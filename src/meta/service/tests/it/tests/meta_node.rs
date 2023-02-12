@@ -18,9 +18,9 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
 
+use common_meta_raft_store::applied_state::AppliedState;
 use common_meta_sled_store::openraft::NodeId;
 use common_meta_sled_store::openraft::State;
-use common_meta_types::AppliedState;
 use common_meta_types::Node;
 use databend_meta::meta_service::MetaNode;
 use databend_meta::Opened;
@@ -199,11 +199,11 @@ pub(crate) async fn start_meta_node_non_voter(
     {
         // add node to cluster as a non-voter
         let resp = leader
-            .add_node(id, Node {
-                name: id.to_string(),
-                endpoint: addr.clone(),
-                grpc_api_addr: Some(tc.config.grpc_api_address.clone()),
-            })
+            .add_node(
+                id,
+                Node::new(id, addr.clone())
+                    .with_grpc_advertise_address(tc.config.grpc_api_advertise_address()),
+            )
             .await?;
         match resp {
             AppliedState::Node { prev: _, result } => {

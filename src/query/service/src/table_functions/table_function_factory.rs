@@ -15,11 +15,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_catalog::table_args::TableArgs;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Scalar;
 use common_meta_types::MetaId;
-use common_storages_parquet::ParquetTable;
+use common_storages_fuse::table_functions::InferSchemaTable;
 use parking_lot::RwLock;
 
 use crate::catalogs::SYS_TBL_FUC_ID_END;
@@ -34,7 +34,6 @@ use crate::table_functions::numbers::NumbersTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::TableFunction;
 
-pub type TableArgs = Option<Vec<Scalar>>;
 type TableFunctionCreators = RwLock<HashMap<String, (MetaId, Arc<dyn TableFunctionCreator>)>>;
 
 pub trait TableFunctionCreator: Send + Sync {
@@ -61,6 +60,18 @@ where
     ) -> Result<Arc<dyn TableFunction>> {
         self(db_name, tbl_func_name, tbl_id, arg)
     }
+}
+
+fn create_disabled_table_function(
+    _database_name: &str,
+    table_func_name: &str,
+    _table_id: u64,
+    _table_args: TableArgs,
+) -> Result<Arc<dyn TableFunction>> {
+    Err(ErrorCode::UnknownFunction(format!(
+        "table function `{}` cannot be called",
+        table_func_name
+    )))
 }
 
 #[derive(Default)]
@@ -133,8 +144,13 @@ impl TableFunctionFactory {
         );
 
         creators.insert(
+            "infer_schema".to_string(),
+            (next_id(), Arc::new(InferSchemaTable::create)),
+        );
+
+        creators.insert(
             "read_parquet".to_string(),
-            (next_id(), Arc::new(ParquetTable::create_table_function)),
+            (next_id(), Arc::new(create_disabled_table_function)),
         );
 
         TableFunctionFactory {
@@ -150,14 +166,5 @@ impl TableFunctionFactory {
         })?;
         let func = factory.try_create("", &func_name, *id, tbl_args)?;
         Ok(func)
-    }
-
-    pub fn get_id(&self, func_name: &str) -> Result<MetaId> {
-        let lock = self.creators.read();
-        let func_name = func_name.to_lowercase();
-        let (id, _) = lock.get(&func_name).ok_or_else(|| {
-            ErrorCode::UnknownTable(format!("Unknown table function {}", func_name))
-        })?;
-        Ok(*id)
     }
 }

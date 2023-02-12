@@ -36,5 +36,4 @@ Databend supports three Semi-structured types: ARRAY, OBJECT and VARIANT.
 | Name    |    Aliases   | Build From Values       | Description
 |---------|--------------|-------------------------|----------------
 | ARRAY   |              | [1,2,3]                 | Zero-based indexed list, each value can have difference data type.
-| OBJECT  |  MAP         | {"a":1,"b":{"c":2}}     | Collection of key-value pairs, each key is a VARCHAR, and each value is a VARIANT.
 | VARIANT |  JSON        | [1,{"a":1,"b":{"c":2}}] | Collection of elements of different data types., including ARRAY and OBJECT.

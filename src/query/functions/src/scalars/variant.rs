@@ -64,8 +64,6 @@ use common_jsonb::to_i64;
 use common_jsonb::to_str;
 use common_jsonb::to_u64;
 use common_jsonb::JsonPathRef;
-use common_jsonb::Number as JsonbNumber;
-use common_jsonb::Value as JsonbValue;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<StringType, VariantType, _, _>(
@@ -125,131 +123,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         }),
     );
-
-    registry.register_passthrough_nullable_1_arg::<BooleanType, VariantType, _, _>(
-        "parse_json",
-        FunctionProperty::default(),
-        |_| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<BooleanType, VariantType>(|s, output, _| {
-            let value = if s {
-                JsonbValue::Bool(true)
-            } else {
-                JsonbValue::Bool(false)
-            };
-            value.write_to_vec(&mut output.data);
-            output.commit_row();
-        }),
-    );
-
-    registry.register_combine_nullable_1_arg::<BooleanType, VariantType, _, _>(
-        "try_parse_json",
-        FunctionProperty::default(),
-        |_| {
-            FunctionDomain::Domain(NullableDomain {
-                has_null: false,
-                value: Some(Box::new(())),
-            })
-        },
-        vectorize_with_builder_1_arg::<BooleanType, NullableType<VariantType>>(|s, output, _| {
-            let value = if s {
-                JsonbValue::Bool(true)
-            } else {
-                JsonbValue::Bool(false)
-            };
-            output.validity.push(true);
-            value.write_to_vec(&mut output.builder.data);
-            output.builder.commit_row();
-        }),
-    );
-
-    registry.register_combine_nullable_1_arg::<BooleanType, StringType, _, _>(
-        "check_json",
-        FunctionProperty::default(),
-        |_| {
-            FunctionDomain::Domain(NullableDomain {
-                has_null: true,
-                value: None,
-            })
-        },
-        vectorize_with_builder_1_arg::<BooleanType, NullableType<StringType>>(|_, output, _| {
-            output.push_null();
-        }),
-    );
-
-    for src_type in ALL_NUMERICS_TYPES {
-        with_number_mapped_type!(|NUM_TYPE| match src_type {
-            NumberDataType::NUM_TYPE => {
-                registry
-                    .register_passthrough_nullable_1_arg::<NumberType<NUM_TYPE>, VariantType, _, _>(
-                        "parse_json",
-                        FunctionProperty::default(),
-                        |_| FunctionDomain::Full,
-                        vectorize_with_builder_1_arg::<NumberType<NUM_TYPE>, VariantType>(
-                            move |s, output, _| {
-                                let value = if src_type.is_float() {
-                                    let v = num_traits::cast::cast(s).unwrap();
-                                    JsonbValue::Number(JsonbNumber::Float64(v))
-                                } else if src_type.is_signed() {
-                                    let v = num_traits::cast::cast(s).unwrap();
-                                    JsonbValue::Number(JsonbNumber::Int64(v))
-                                } else {
-                                    let v = num_traits::cast::cast(s).unwrap();
-                                    JsonbValue::Number(JsonbNumber::UInt64(v))
-                                };
-                                value.write_to_vec(&mut output.data);
-                                output.commit_row();
-                            },
-                        ),
-                    );
-
-                registry
-                    .register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, VariantType, _, _>(
-                        "try_parse_json",
-                        FunctionProperty::default(),
-                        |_| {
-                            FunctionDomain::Domain(NullableDomain {
-                                has_null: false,
-                                value: Some(Box::new(())),
-                            })
-                        },
-                        vectorize_with_builder_1_arg::<
-                            NumberType<NUM_TYPE>,
-                            NullableType<VariantType>,
-                        >(move |s, output, _ctx| {
-                            let value = if src_type.is_float() {
-                                let v = num_traits::cast::cast(s).unwrap();
-                                JsonbValue::Number(JsonbNumber::Float64(v))
-                            } else if src_type.is_signed() {
-                                let v = num_traits::cast::cast(s).unwrap();
-                                JsonbValue::Number(JsonbNumber::Int64(v))
-                            } else {
-                                let v = num_traits::cast::cast(s).unwrap();
-                                JsonbValue::Number(JsonbNumber::UInt64(v))
-                            };
-                            output.validity.push(true);
-                            value.write_to_vec(&mut output.builder.data);
-                            output.builder.commit_row();
-                        }),
-                    );
-
-                registry.register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, StringType, _, _>(
-                    "check_json",
-                    FunctionProperty::default(),
-                    |_| {
-                        FunctionDomain::Domain(NullableDomain {
-                            has_null: true,
-                            value: None,
-                        })
-                    },
-                    vectorize_with_builder_1_arg::<NumberType<NUM_TYPE>, NullableType<StringType>>(
-                        |_, output, _| {
-                            output.push_null();
-                        },
-                    ),
-                );
-            }
-        });
-    }
 
     registry.register_1_arg_core::<NullableType<VariantType>, NullableType<UInt32Type>, _, _>(
         "length",
@@ -593,7 +466,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, DateType>(|val, output, ctx| {
-            match as_str(val).and_then(|val| string_to_date(val.as_bytes(), ctx.tz)) {
+            match as_str(val).and_then(|val| string_to_date(val.as_bytes(), ctx.tz.tz)) {
                 Some(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
                 None => {
                     ctx.set_error(output.len(), "unable to cast to type `DATE`");
@@ -608,7 +481,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<DateType>>(|val, output, ctx| {
-            match as_str(val).and_then(|str_value| string_to_date(str_value.as_bytes(), ctx.tz)) {
+            match as_str(val).and_then(|str_value| string_to_date(str_value.as_bytes(), ctx.tz.tz))
+            {
                 Some(date) => output.push(date.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
                 None => output.push_null(),
             }
@@ -621,7 +495,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, TimestampType>(
             |val, output, ctx| match as_str(val)
-                .and_then(|val| string_to_timestamp(val.as_bytes(), ctx.tz))
+                .and_then(|val| string_to_timestamp(val.as_bytes(), ctx.tz.tz))
             {
                 Some(ts) => output.push(ts.timestamp_micros()),
                 None => {
@@ -639,7 +513,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_1_arg::<VariantType, NullableType<TimestampType>>(
             |val, output, ctx| match as_str(val) {
                 Some(str_val) => {
-                    let timestamp = string_to_timestamp(str_val.as_bytes(), ctx.tz)
+                    let timestamp = string_to_timestamp(str_val.as_bytes(), ctx.tz.tz)
                         .map(|ts| ts.timestamp_micros());
                     match timestamp {
                         Some(timestamp) => output.push(timestamp),

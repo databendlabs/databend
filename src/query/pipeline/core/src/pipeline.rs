@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -50,6 +52,12 @@ pub struct Pipeline {
     pub pipes: Vec<Pipe>,
     on_init: Option<InitCallback>,
     on_finished: Option<FinishedCallback>,
+}
+
+impl Debug for Pipeline {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", &self.pipes)
+    }
 }
 
 pub type InitCallback = Arc<Box<dyn Fn() -> Result<()> + Send + Sync + 'static>>;

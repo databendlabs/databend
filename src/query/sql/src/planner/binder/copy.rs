@@ -32,9 +32,9 @@ use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::FileFormatOptions;
-use common_meta_types::OnErrorMode;
-use common_meta_types::UserStageInfo;
+use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::OnErrorMode;
+use common_meta_app::principal::UserStageInfo;
 use common_users::UserApiProvider;
 use tracing::debug;
 
@@ -247,7 +247,7 @@ impl<'a> Binder {
                 pattern: stmt.pattern.clone(),
                 files_to_copy: None,
             }),
-            scan_fields: None,
+            output_schema: table.schema(),
             parts: Partitions::default(),
             statistics: Default::default(),
             description: "".to_string(),
@@ -305,7 +305,7 @@ impl<'a> Binder {
                 pattern: stmt.pattern.clone(),
                 files_to_copy: None,
             }),
-            scan_fields: None,
+            output_schema: table.schema(),
             parts: Partitions::default(),
             statistics: Default::default(),
             description: "".to_string(),

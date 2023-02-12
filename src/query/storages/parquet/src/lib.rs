@@ -15,13 +15,12 @@
 #![allow(clippy::uninlined_format_args)]
 #![deny(unused_crate_dependencies)]
 
+mod deserialize_transform;
 mod parquet_part;
 mod parquet_reader;
 mod parquet_source;
 mod parquet_table;
 mod pruning;
 mod statistics;
-mod table_function;
 
 pub use parquet_table::ParquetTable;
-pub use table_function::parse_parquet_table_args;

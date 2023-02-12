@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::ops::BitAnd;
 use std::sync::Arc;
 
-use chrono_tz::Tz;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
@@ -26,6 +25,7 @@ use itertools::Itertools;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::date_helper::TzLUT;
 use crate::property::Domain;
 use crate::property::FunctionProperty;
 use crate::types::nullable::NullableColumn;
@@ -49,22 +49,16 @@ pub struct FunctionSignature {
 
 pub type AutoCastSignature = Vec<(DataType, DataType)>;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct FunctionContext {
-    pub tz: Tz,
-}
-
-impl Default for FunctionContext {
-    fn default() -> Self {
-        Self { tz: Tz::UTC }
-    }
+    pub tz: TzLUT,
 }
 
 #[derive(Clone)]
 pub struct EvalContext<'a> {
     pub generics: &'a GenericMap,
     pub num_rows: usize,
-    pub tz: Tz,
+    pub tz: TzLUT,
 
     /// Validity bitmap of outer nullable column. This is an optimization
     /// to avoid recording errors on the NULL value which has a coresponding

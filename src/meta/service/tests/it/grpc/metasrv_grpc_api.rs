@@ -19,11 +19,11 @@ use common_base::base::tokio;
 use common_base::base::Stoppable;
 use common_meta_client::MetaGrpcClient;
 use common_meta_kvapi::kvapi::KVApi;
+use common_meta_kvapi::kvapi::UpsertKVReply;
+use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
-use common_meta_types::UpsertKVReply;
-use common_meta_types::UpsertKVReq;
 use databend_meta::init_meta_ut;
 use pretty_assertions::assert_eq;
 use tokio::time::Duration;
@@ -57,7 +57,7 @@ async fn test_restart() -> anyhow::Result<()> {
         let res = client
             .upsert_kv(UpsertKVReq::new(
                 "foo",
-                MatchSeq::Any,
+                MatchSeq::GE(0),
                 Operation::Update(b"bar".to_vec()),
                 None,
             ))
@@ -232,7 +232,7 @@ async fn test_join() -> anyhow::Result<()> {
             let res = cli
                 .upsert_kv(UpsertKVReq::new(
                     k.as_str(),
-                    MatchSeq::Any,
+                    MatchSeq::GE(0),
                     Operation::Update(k.clone().into_bytes()),
                     None,
                 ))
@@ -320,7 +320,7 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
         let res = client
             .upsert_kv(UpsertKVReq::new(
                 k.as_str(),
-                MatchSeq::Any,
+                MatchSeq::GE(0),
                 Operation::Update(k.clone().into_bytes()),
                 None,
             ))
@@ -358,7 +358,7 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
     info!("--- check endpoints are equal");
     {
         tokio::time::sleep(Duration::from_secs(20)).await;
-        let res = client.get_endpoints().await?;
+        let res = client.get_cached_endpoints().await?;
         let res: HashSet<String> = HashSet::from_iter(res.into_iter());
 
         assert_eq!(addrs, res, "endpoints should be equal");
@@ -389,7 +389,7 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
 
             debug!("got leader, metrics: {metrics:?}");
         }
-        let res = client.get_endpoints().await?;
+        let res = client.get_cached_endpoints().await?;
         let res: HashSet<String> = HashSet::from_iter(res.into_iter());
 
         assert_eq!(3, res.len());
@@ -422,7 +422,7 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
         let mut i = 0;
         let mut res = vec![];
         while i < 15 {
-            res = client.get_endpoints().await?;
+            res = client.get_cached_endpoints().await?;
             if res.contains(&addr3) {
                 break;
             } else {

@@ -308,7 +308,7 @@ mod utils {
 
         let blocks: std::vec::Vec<DataBlock> = stream.try_collect().await?;
         for block in blocks {
-            let stats = gen_columns_statistics(&block, None)?;
+            let stats = gen_columns_statistics(&block, None, Some(&schema))?;
             let block_meta = block_writer
                 .write(FuseStorageFormat::Parquet, &schema, block, stats, None)
                 .await?;

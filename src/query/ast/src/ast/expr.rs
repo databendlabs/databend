@@ -249,6 +249,10 @@ pub enum TypeName {
     Int64,
     Float32,
     Float64,
+    Decimal {
+        precision: u8,
+        scale: u8,
+    },
     Date,
     Timestamp,
     String,
@@ -546,6 +550,9 @@ impl Display for TypeName {
             }
             TypeName::Float64 => {
                 write!(f, "Float64")?;
+            }
+            TypeName::Decimal { precision, scale } => {
+                write!(f, "Decimal({}, {})", precision, scale)?;
             }
             TypeName::Date => {
                 write!(f, "DATE")?;

@@ -16,8 +16,8 @@ use std::fmt::Display;
 
 use common_exception::Result;
 use common_exception::Span;
-use common_meta_types::PrincipalIdentity;
-use common_meta_types::UserIdentity;
+use common_meta_app::principal::PrincipalIdentity;
+use common_meta_app::principal::UserIdentity;
 
 use crate::ast::*;
 use crate::visitors::Visitor;
@@ -1272,6 +1272,16 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let action_format_ctx = AstFormatContext::new(action_name);
                 FormatTreeNode::new(action_format_ctx)
             }
+            AlterTableAction::AddColumn { column } => {
+                let action_name = format!("Action Add column {}", column);
+                let action_format_ctx = AstFormatContext::new(action_name);
+                FormatTreeNode::new(action_format_ctx)
+            }
+            AlterTableAction::DropColumn { column } => {
+                let action_name = format!("Action Drop column {}", column);
+                let action_format_ctx = AstFormatContext::new(action_name);
+                FormatTreeNode::new(action_format_ctx)
+            }
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
                 let mut cluster_by_children = Vec::with_capacity(cluster_by.len());
                 for cluster_by_expr in cluster_by.iter() {
@@ -2199,14 +2209,18 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             TableReference::Stage {
                 span: _,
                 location,
-                files,
+                options,
                 alias,
             } => {
                 let mut children = Vec::new();
-                if !files.is_empty() {
+                if let Some(files) = &options.files {
                     let files = files.join(",");
                     let files = format!("files = {}", files);
                     children.push(FormatTreeNode::new(AstFormatContext::new(files)))
+                }
+                if let Some(pattern) = &options.pattern {
+                    let pattern = format!("pattern = {}", pattern);
+                    children.push(FormatTreeNode::new(AstFormatContext::new(pattern)))
                 }
                 let stage_name = format!("Stage {:?}", location);
                 let format_ctx = if let Some(alias) = alias {

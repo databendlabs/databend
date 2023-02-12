@@ -7,6 +7,10 @@ This command loads data into Databend from files in a variety of locations.
 
 See Also: [COPY INTO location](dml-copy-into-location.md)
 
+:::note
+Databend ensures idempotency for COPY INTO. The command will remember previous files processed for a default period of 7 days (configurable via the global setting load_file_metadata_expire_hours). This means duplicate files can be detected and skipped if you run the command multiple times against the same files. If your files come from a stage, you can also use the PURGE option to purge them after data loading. See [copyOptions](#copyoptions) for details.
+:::
+
 ## Supported File Locations
 
 Your data files must be located in one of these locations for COPY INTO to work:
@@ -183,13 +187,13 @@ The parameter ON_ERROR currently does not work for parquet files.
 ### Loading Data from an Internal Stage
 
 ```sql
-COPY INTO mytable FROM @my_internal_s1 pattern = 'books.*parquet' file_format = (type = 'PARQUET');
+COPY INTO mytable FROM @my_internal_s1 pattern = 'books.*parquet' FILE_FORMAT = (TYPE = PARQUET);
 ```
 
 ### Loading Data from an External Stage
 
 ```sql
-COPY INTO mytable FROM @my_external_s1 pattern = 'books.*parquet' file_format = (type = 'PARQUET');
+COPY INTO mytable FROM @my_external_s1 pattern = 'books.*parquet' FILE_FORMAT = (TYPE = PARQUET);
 ```
 
 ### Loading Data from External Locations
@@ -236,7 +240,7 @@ COPY INTO mytable
   CONNECTION = (
       ACCESS_KEY_ID = '<your-access-key-ID>'
       SECRET_ACCESS_KEY = '<your-secret-access-key>')
-  FILE_FORMAT = (type = PARQUET);
+  FILE_FORMAT = (TYPE = PARQUET);
 ```
 
 **Azure Blob storage**

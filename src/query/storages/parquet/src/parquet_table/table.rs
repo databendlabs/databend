@@ -32,44 +32,38 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::TableSchema;
+use common_meta_app::principal::UserStageInfo;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use common_storage::init_stage_operator;
+use common_storage::StageFilesInfo;
 use opendal::Operator;
 
 pub struct ParquetTable {
-    pub(super) file_locations: Vec<String>,
+    pub(super) read_options: ParquetReadOptions,
+    pub(super) stage_info: UserStageInfo,
+    pub(super) files_info: StageFilesInfo,
+
+    pub(super) operator: Operator,
+
     pub(super) table_info: TableInfo,
     pub(super) arrow_schema: ArrowSchema,
-    pub(super) operator: Operator,
-    pub(super) read_options: ParquetReadOptions,
-    pub(super) stage_info: Option<UserStageInfo>,
 }
 
 impl ParquetTable {
     pub fn from_info(info: &ParquetTableInfo) -> Result<Arc<dyn Table>> {
-        let operator = match &info.user_stage_info {
-            Some(info) => init_stage_operator(info),
-            None => Self::get_local_operator(),
-        }?;
+        let operator = init_stage_operator(&info.user_stage_info)?;
 
         Ok(Arc::new(ParquetTable {
-            file_locations: info.file_locations.clone(),
             table_info: info.table_info.clone(),
             arrow_schema: info.arrow_schema.clone(),
             operator,
             read_options: info.read_options,
             stage_info: info.user_stage_info.clone(),
+            files_info: info.files_info.clone(),
         }))
-    }
-
-    fn get_local_operator() -> Result<Operator> {
-        let mut builder = opendal::services::fs::Builder::default();
-        builder.root("/");
-        Ok(Operator::new(builder.build()?))
     }
 }
 
@@ -77,6 +71,10 @@ impl ParquetTable {
 impl Table for ParquetTable {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn is_local(&self) -> bool {
+        false
     }
 
     fn get_table_info(&self) -> &TableInfo {
@@ -98,10 +96,10 @@ impl Table for ParquetTable {
     fn get_data_source_info(&self) -> DataSourceInfo {
         DataSourceInfo::ParquetSource(ParquetTableInfo {
             table_info: self.table_info.clone(),
-            file_locations: self.file_locations.clone(),
             arrow_schema: self.arrow_schema.clone(),
             read_options: self.read_options,
             user_stage_info: self.stage_info.clone(),
+            files_info: self.files_info.clone(),
         })
     }
 
@@ -149,9 +147,9 @@ pub(crate) fn arrow_to_table_schema(mut schema: ArrowSchema) -> TableSchema {
     TableSchema::from(&schema)
 }
 
-pub(super) fn create_parquet_table_info(table_id: u64, schema: ArrowSchema) -> TableInfo {
+pub(super) fn create_parquet_table_info(schema: ArrowSchema) -> TableInfo {
     TableInfo {
-        ident: TableIdent::new(table_id, 0),
+        ident: TableIdent::new(0, 0),
         desc: "''.'read_parquet'".to_string(),
         name: "read_parquet".to_string(),
         meta: TableMeta {

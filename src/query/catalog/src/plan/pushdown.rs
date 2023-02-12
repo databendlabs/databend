@@ -21,13 +21,25 @@ use common_expression::TableSchema;
 
 use crate::plan::Projection;
 
+/// Information about prewhere optimization.
+///
+/// Prewhere steps:
+///
+/// 1. Read columns by `prewhere_columns`.
+/// 2. Filter data by `filter`.
+/// 3. Read columns by `remain_columns`.
+/// 4. Combine columns from step 1 and step 3, and prune columns to be `output_columns`.
+///
+/// **NOTE: the [`Projection`] is to be applied for the [`TableSchema`] of the data source.**
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct PrewhereInfo {
     /// columns to be output by prewhere scan
+    /// After building [`crate::plan::DataSourcePlan`],
+    /// we can get the output schema after projection by `output_columns` from the plan directly.
     pub output_columns: Projection,
-    /// columns used for prewhere
+    /// columns of prewhere reading stage.
     pub prewhere_columns: Projection,
-    /// remain_columns = scan.columns - need_columns
+    /// columns of remain reading stage.
     pub remain_columns: Projection,
     /// filter for prewhere
     pub filter: RemoteExpr<String>,
@@ -36,7 +48,8 @@ pub struct PrewhereInfo {
 /// Extras is a wrapper for push down items.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, PartialEq, Eq)]
 pub struct PushDownInfo {
-    /// Optional column indices to use as a projection
+    /// Optional column indices to use as a projection.
+    /// It represents the columns to be read from the source.
     pub projection: Option<Projection>,
     /// Optional filter expression plan
     /// split_conjunctions by `and` operator
@@ -72,20 +85,22 @@ impl PushDownInfo {
             }
 
             if let RemoteExpr::<String>::ColumnRef { id, .. } = &order.0 {
+                // TODO: support sub column of nested type.
                 let field = schema.field_with_name(id).unwrap();
                 let data_type: DataType = field.data_type().into();
                 if !support(&data_type) {
                     return None;
                 }
 
-                let leaf_fields = schema.leaf_fields();
-                let column_id = leaf_fields.iter().position(|p| p == field).unwrap();
+                let (leaf_column_ids, leaf_fields) = schema.leaf_fields();
+                let index = leaf_fields.iter().position(|p| p == field).unwrap();
+                let column_id = leaf_column_ids[index];
 
                 let top_k = TopK {
                     limit: self.limit.unwrap(),
                     order_by: field.clone(),
                     asc: order.1,
-                    column_id: column_id as u32,
+                    column_id,
                 };
                 Some(top_k)
             } else {

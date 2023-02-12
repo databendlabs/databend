@@ -38,6 +38,7 @@ use serde::Serialize;
 use serde::Serializer;
 
 use super::aggregator::AggregateHashStateInfo;
+use super::group_by::BUCKETS_LG2;
 use crate::pipelines::processors::transforms::aggregator::AggregateInfo;
 use crate::pipelines::processors::transforms::aggregator::BucketAggregator;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
@@ -111,7 +112,6 @@ pub struct TransformConvertGrouping<Method: HashMethod + PolymorphicKeysHelper<M
     method: Method,
     working_bucket: isize,
     pushing_bucket: isize,
-    all_inputs_is_finished: bool,
     initialized_all_inputs: bool,
     params: Arc<AggregatorParams>,
     buckets_blocks: HashMap<isize, Vec<DataBlock>>,
@@ -141,7 +141,6 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
             pushing_bucket: 0,
             output: OutputPort::create(),
             buckets_blocks: HashMap::new(),
-            all_inputs_is_finished: false,
             unsplitted_blocks: vec![],
             initialized_all_inputs: false,
         })
@@ -275,10 +274,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
 
         for key_item in keys_iter.iter() {
             let hash = self.method.get_hash(key_item);
-            indices.push((hash as usize >> (64u32 - 8)) as u16);
+            indices.push((hash as usize >> (64u32 - BUCKETS_LG2)) as u16);
         }
 
-        DataBlock::scatter(&data_block, &indices, 256)
+        DataBlock::scatter(&data_block, &indices, 1 << BUCKETS_LG2)
     }
 }
 
@@ -295,9 +294,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
     }
 
     fn event(&mut self) -> Result<Event> {
-        if self.all_inputs_is_finished || self.output.is_finished() {
-            self.output.finish();
-
+        if self.output.is_finished() {
             for input_state in &self.inputs {
                 input_state.port.finish();
             }
@@ -353,7 +350,6 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
             }
 
             if all_inputs_is_finished {
-                self.all_inputs_is_finished = true;
                 break;
             }
 

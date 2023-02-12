@@ -17,6 +17,7 @@ use common_exception::Result;
 use itertools::Itertools;
 
 use crate::types::array::ArrayColumnBuilder;
+use crate::types::decimal::DecimalColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumnBuilder;
@@ -33,6 +34,7 @@ use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::types::VariantType;
+use crate::with_decimal_type;
 use crate::with_number_mapped_type;
 use crate::BlockEntry;
 use crate::Column;
@@ -102,6 +104,21 @@ impl Column {
             Column::Number(col) => with_number_mapped_type!(|NUM_TYPE| match col {
                 NumberColumn::NUM_TYPE(_) => {
                     Self::concat_arg_types::<NumberType<NUM_TYPE>>(columns)
+                }
+            }),
+            Column::Decimal(col) => with_decimal_type!(|DECIMAL_TYPE| match col {
+                DecimalColumn::DECIMAL_TYPE(_, size) => {
+                    let mut builder = Vec::with_capacity(capacity);
+                    for c in columns {
+                        match c {
+                            Column::Decimal(DecimalColumn::DECIMAL_TYPE(col, size)) => {
+                                debug_assert_eq!(size, size);
+                                builder.extend_from_slice(col);
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+                    Column::Decimal(DecimalColumn::DECIMAL_TYPE(builder.into(), *size))
                 }
             }),
             Column::Boolean(_) => Self::concat_arg_types::<BooleanType>(columns),

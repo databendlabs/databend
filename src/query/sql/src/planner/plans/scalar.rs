@@ -414,10 +414,9 @@ pub struct SubqueryExpr {
     // Comparison operator for Any/All, such as t1.a = Any (...), `compare_op` is `=`.
     pub compare_op: Option<ComparisonOp>,
     // Output column of Any/All and scalar subqueries.
-    pub output_column: IndexType,
+    pub output_column: ColumnBinding,
     pub projection_index: Option<IndexType>,
     pub(crate) data_type: Box<DataType>,
-    pub allow_multi_rows: bool,
     pub outer_columns: ColumnSet,
 }
 

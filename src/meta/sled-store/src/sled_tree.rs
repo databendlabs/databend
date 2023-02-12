@@ -417,7 +417,7 @@ impl<'a> TransactionSledTree<'a> {
         }
 
         self.changes
-            .push(Change::new_with_id(key.to_string(), prev, result))
+            .push(Change::new(prev, result).with_id(key.to_string()))
     }
 }
 

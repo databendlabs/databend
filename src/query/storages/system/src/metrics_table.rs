@@ -57,7 +57,7 @@ impl SyncSystemTable for MetricsTable {
         let mut values: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
         for sample in samples.into_iter() {
             metrics.push(sample.name.clone().into_bytes());
-            kinds.push(sample.kind.clone().into_bytes());
+            kinds.push(sample.value.kind().into_bytes());
             labels.push(self.display_sample_labels(&sample.labels)?.into_bytes());
             values.push(self.display_sample_value(&sample.value)?.into_bytes());
         }

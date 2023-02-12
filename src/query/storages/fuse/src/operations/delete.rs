@@ -191,7 +191,7 @@ impl FuseTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let projection = Projection::Columns(col_indices.clone());
-        self.mutation_block_purning(
+        self.mutation_block_pruning(
             ctx.clone(),
             vec![filter.clone()],
             projection.clone(),
@@ -199,7 +199,7 @@ impl FuseTable {
         )
         .await?;
 
-        let block_reader = self.create_block_reader(projection)?;
+        let block_reader = self.create_block_reader(projection, ctx.clone())?;
         let schema = block_reader.schema();
         let filter = Arc::new(Some(
             filter
@@ -218,7 +218,8 @@ impl FuseTable {
         } else {
             source_col_ids.extend_from_slice(&remain_col_ids);
             Arc::new(Some(
-                (*self.create_block_reader(Projection::Columns(remain_col_ids))?).clone(),
+                (*self.create_block_reader(Projection::Columns(remain_col_ids), ctx.clone())?)
+                    .clone(),
             ))
         };
 
@@ -245,7 +246,7 @@ impl FuseTable {
         )
     }
 
-    pub async fn mutation_block_purning(
+    pub async fn mutation_block_pruning(
         &self,
         ctx: Arc<dyn TableContext>,
         filters: Vec<RemoteExpr<String>>,

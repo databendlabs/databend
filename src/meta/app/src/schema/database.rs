@@ -329,7 +329,9 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_DATABASE_BY_ID;
 
         fn to_string_key(&self) -> String {
-            format!("{}/{}", Self::PREFIX, self.db_id,)
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.db_id)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
@@ -347,7 +349,9 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_DATABASE_ID_TO_NAME;
 
         fn to_string_key(&self) -> String {
-            format!("{}/{}", Self::PREFIX, self.db_id,)
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.db_id)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {

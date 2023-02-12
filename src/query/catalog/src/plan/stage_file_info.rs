@@ -14,7 +14,7 @@
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_meta_types::UserIdentity;
+use common_meta_app::principal::UserIdentity;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum StageFileStatus {

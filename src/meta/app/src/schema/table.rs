@@ -22,13 +22,15 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use common_exception::Result;
+use common_expression::TableField;
 use common_expression::TableSchema;
 use common_meta_types::MatchSeq;
-use common_meta_types::StorageParams;
 use maplit::hashmap;
 
 use crate::schema::database::DatabaseNameIdent;
 use crate::share::ShareNameIdent;
+use crate::storage::StorageParams;
 
 /// Globally unique identifier of a version of TableMeta.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq, Default)]
@@ -222,6 +224,25 @@ pub struct TableMeta {
     // if used in CreateTableReq, this field MUST set to None.
     pub drop_on: Option<DateTime<Utc>>,
     pub statistics: TableStatistics,
+}
+
+impl TableMeta {
+    pub fn add_columns(&mut self, fields: &[TableField], field_comments: &[String]) -> Result<()> {
+        let mut new_schema = self.schema.as_ref().to_owned();
+        new_schema.add_columns(fields)?;
+        self.schema = Arc::new(new_schema);
+        field_comments.iter().for_each(|c| {
+            self.field_comments.push(c.to_owned());
+        });
+        Ok(())
+    }
+
+    pub fn drop_column(&mut self, column: &str) -> Result<()> {
+        let mut new_schema = self.schema.as_ref().to_owned();
+        new_schema.drop_column(column)?;
+        self.schema = Arc::new(new_schema);
+        Ok(())
+    }
 }
 
 impl TableInfo {
@@ -754,7 +775,9 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_TABLE_ID_TO_NAME;
 
         fn to_string_key(&self) -> String {
-            format!("{}/{}", Self::PREFIX, self.table_id,)
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.table_id)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
@@ -772,7 +795,9 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_TABLE_BY_ID;
 
         fn to_string_key(&self) -> String {
-            format!("{}/{}", Self::PREFIX, self.table_id,)
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.table_id)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
@@ -812,7 +837,9 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_TABLE_COUNT;
 
         fn to_string_key(&self) -> String {
-            format!("{}/{}", Self::PREFIX, self.tenant)
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_raw(&self.tenant)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
@@ -830,14 +857,20 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_TABLE_COPIED_FILES;
 
         fn to_string_key(&self) -> String {
-            format!("{}/{}/{}", Self::PREFIX, self.table_id, self.file)
+            // TODO: file is not escaped!!!
+            //       There already are non escaped data stored on disk.
+            //       We can not change it anymore.
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.table_id)
+                .push_raw(&self.file)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
             let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
             let table_id = p.next_u64()?;
-            let file = p.tail()?.to_string();
+            let file = p.tail_raw()?.to_string();
 
             Ok(TableCopiedFileNameIdent { table_id, file })
         }
@@ -848,7 +881,9 @@ mod kvapi_key_impl {
         const PREFIX: &'static str = PREFIX_TABLE_COPIED_FILES_LOCK;
 
         fn to_string_key(&self) -> String {
-            format!("{}/{}", Self::PREFIX, self.table_id)
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.table_id)
+                .done()
         }
 
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {

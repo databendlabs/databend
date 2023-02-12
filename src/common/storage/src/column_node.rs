@@ -20,6 +20,7 @@ use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::TableSchema;
 
 #[derive(Debug, Clone)]
 pub struct ColumnNodes {
@@ -27,12 +28,16 @@ pub struct ColumnNodes {
 }
 
 impl ColumnNodes {
-    pub fn new_from_schema(schema: &ArrowSchema) -> Self {
+    pub fn new_from_schema(schema: &ArrowSchema, table_schema: Option<&TableSchema>) -> Self {
         let mut leaf_id = 0;
         let mut column_nodes = Vec::with_capacity(schema.fields.len());
 
+        let leaf_column_ids = table_schema.map(|table_schema| table_schema.to_leaf_column_ids());
         for field in &schema.fields {
-            let column_node = Self::traverse_fields_dfs(field, false, &mut leaf_id);
+            let mut column_node = Self::traverse_fields_dfs(field, false, &mut leaf_id);
+            if let Some(ref leaf_column_ids) = leaf_column_ids {
+                column_node.build_leaf_column_ids(leaf_column_ids);
+            }
             column_nodes.push(column_node);
         }
 
@@ -117,6 +122,7 @@ pub struct ColumnNode {
     pub leaf_ids: Vec<usize>,
     // Optional children column for nested types.
     pub children: Option<Vec<ColumnNode>>,
+    pub leaf_column_ids: Vec<u32>,
 }
 
 impl ColumnNode {
@@ -131,6 +137,26 @@ impl ColumnNode {
             is_nested,
             leaf_ids,
             children,
+            leaf_column_ids: vec![],
+        }
+    }
+
+    pub fn build_leaf_column_ids(&mut self, leaf_column_ids: &Vec<u32>) {
+        let mut node_leaf_column_ids = Vec::with_capacity(self.leaf_ids.len());
+        for index in &self.leaf_ids {
+            node_leaf_column_ids.push(leaf_column_ids[*index]);
+        }
+        self.leaf_column_ids = node_leaf_column_ids;
+
+        if let Some(ref children) = self.children {
+            let mut new_children = Vec::with_capacity(children.len());
+            for child in children {
+                let mut new_child = child.clone();
+                new_child.build_leaf_column_ids(leaf_column_ids);
+                new_children.push(new_child);
+            }
+
+            self.children = Some(new_children);
         }
     }
 }

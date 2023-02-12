@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::PrincipalIdentity;
+use common_meta_app::principal::PrincipalIdentity;
 use common_sql::plans::RevokeRolePlan;
 use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
@@ -55,7 +55,7 @@ impl Interpreter for RevokeRoleInterpreter {
             }
             PrincipalIdentity::Role(role) => {
                 UserApiProvider::instance()
-                    .revoke_role_from_role(&tenant, role.clone(), plan.role)
+                    .revoke_role_from_role(&tenant, &role, &plan.role)
                     .await?;
             }
         }

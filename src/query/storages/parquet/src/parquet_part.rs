@@ -25,12 +25,17 @@ use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Scalar;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct ColumnMeta {
     pub offset: u64,
     pub length: u64,
     pub compression: Compression,
+    pub min_max: Option<(Scalar, Scalar)>,
+
+    // if has dictionary, we can not push down predicate to deserialization.
+    pub has_dictionary: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
@@ -39,6 +44,14 @@ pub struct ParquetRowGroupPart {
     pub num_rows: usize,
     pub column_metas: HashMap<usize, ColumnMeta>,
     pub row_selection: Option<Vec<Interval>>,
+
+    pub sort_min_max: Option<(Scalar, Scalar)>,
+}
+
+impl ParquetRowGroupPart {
+    pub fn convert_to_part_info(self) -> PartInfoPtr {
+        Arc::new(Box::new(self))
+    }
 }
 
 #[typetag::serde(name = "parquet_row_group")]
@@ -62,20 +75,6 @@ impl PartInfo for ParquetRowGroupPart {
 }
 
 impl ParquetRowGroupPart {
-    pub fn create(
-        location: String,
-        num_rows: usize,
-        column_metas: HashMap<usize, ColumnMeta>,
-        row_selection: Option<Vec<Interval>>,
-    ) -> Arc<Box<dyn PartInfo>> {
-        Arc::new(Box::new(ParquetRowGroupPart {
-            location,
-            num_rows,
-            column_metas,
-            row_selection,
-        }))
-    }
-
     pub fn from_part(info: &PartInfoPtr) -> Result<&ParquetRowGroupPart> {
         match info.as_any().downcast_ref::<ParquetRowGroupPart>() {
             Some(part_ref) => Ok(part_ref),

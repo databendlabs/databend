@@ -24,7 +24,7 @@ use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_meta_types::UserDefinedFunction;
+use common_meta_app::principal::UserDefinedFunction;
 
 use crate::planner::udf_validator::UDFValidator;
 use crate::plans::AlterUDFPlan;

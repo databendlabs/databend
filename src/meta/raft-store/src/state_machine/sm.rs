@@ -35,7 +35,6 @@ use common_meta_types::protobuf as pb;
 use common_meta_types::txn_condition;
 use common_meta_types::txn_op;
 use common_meta_types::txn_op_response;
-use common_meta_types::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
 use common_meta_types::ConditionResult;
@@ -71,6 +70,7 @@ use tracing::debug;
 use tracing::error;
 use tracing::info;
 
+use crate::applied_state::AppliedState;
 use crate::config::RaftConfig;
 use crate::key_spaces::ClientLastResps;
 use crate::key_spaces::Expire;
@@ -389,18 +389,25 @@ impl StateMachine {
         &self,
         node_id: &u64,
         node: &Node,
+        overriding: bool,
         txn_tree: &TransactionSledTree,
     ) -> Result<AppliedState, MetaStorageError> {
         let sm_nodes = txn_tree.key_space::<Nodes>();
 
         let prev = sm_nodes.get(node_id)?;
 
-        if prev.is_some() {
-            Ok((prev, None).into())
-        } else {
+        if prev.is_none() {
             sm_nodes.insert(node_id, node)?;
-            info!("applied AddNode: {}={:?}", node_id, node);
+            info!("applied AddNode(non-overriding): {}={:?}", node_id, node);
+            return Ok((prev, Some(node.clone())).into());
+        }
+
+        if overriding {
+            sm_nodes.insert(node_id, node)?;
+            info!("applied AddNode(overriding): {}={:?}", node_id, node);
             Ok((prev, Some(node.clone())).into())
+        } else {
+            Ok((prev.clone(), prev).into())
         }
     }
 
@@ -764,7 +771,8 @@ impl StateMachine {
             Cmd::AddNode {
                 ref node_id,
                 ref node,
-            } => self.apply_add_node_cmd(node_id, node, txn_tree),
+                overriding,
+            } => self.apply_add_node_cmd(node_id, node, *overriding, txn_tree),
 
             Cmd::RemoveNode { ref node_id } => self.apply_remove_node_cmd(node_id, txn_tree),
 

@@ -37,17 +37,6 @@ impl<T> Debug for Operation<T> {
     }
 }
 
-impl<T> From<Option<T>> for Operation<T>
-where for<'x> T: serde::Serialize + serde::Deserialize<'x> + Debug + Clone
-{
-    fn from(v: Option<T>) -> Self {
-        match v {
-            None => Operation::Delete,
-            Some(x) => Operation::Update(x),
-        }
-    }
-}
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GCDroppedDataReq {
     pub tenant: String,

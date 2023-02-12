@@ -41,19 +41,20 @@ pub static METACLI_COMMIT_SEMVER: Lazy<Version> = Lazy::new(|| {
 /// Oldest compatible nightly metasrv version
 ///
 /// ```text
-/// now  --.
-///        |
-/// 8.79 . |
-///      | |
-///      | '---> 8.35
-///      |    .--'
-///      |    |
-///      '-----> 8.30
-///           |  |
-///           |  |
-/// 7.59 <----+--'
-///
-/// Client       Server
+/// time
+/// ^
+/// | now  --.     now --.
+/// |        |           |
+/// |        |           '----> 8.80
+/// | 8.79 . |                  8.79
+/// |      | |
+/// |      | '---> 8.35 -.
+/// |      |             |
+/// |      '-----> 8.30 -+
+/// |                    |
+/// | 7.59               '----> 7.59
+/// |-----------------------------------
+/// | Client       Server       Client
 ///
 /// --> : pointing to min compatible version
 /// ```
@@ -62,6 +63,11 @@ pub static METACLI_COMMIT_SEMVER: Lazy<Version> = Lazy::new(|| {
 ///   Update min compatible server to 0.8.35:
 ///   Since which, meta-server adds new API kv_api() to replace write_msg() and read_msg();
 ///   Feature commit: 69a05aca41036976fec37ad7a8b447e2868ef08b 2022-09-14
+///
+/// - 2023-02-04: since 0.9.24:
+///   Remove read_msg and write_msg from service definition meta.proto
+///   Update server.min_cli_ver to 0.8.80, the min ver in which meta-client switched from
+///   `read_msg/write_msg` to `kv_api`
 pub static MIN_METASRV_SEMVER: Version = Version {
     major: 0,
     minor: 8,

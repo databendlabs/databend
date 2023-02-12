@@ -18,15 +18,15 @@ use common_base::base::escape_for_key;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::is_builtin_function;
+use common_meta_app::principal::UserDefinedFunction;
 use common_meta_kvapi::kvapi;
+use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::IntoSeqV;
 use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
-use common_meta_types::UpsertKVReq;
-use common_meta_types::UserDefinedFunction;
 
 use crate::udf::UdfApi;
 
@@ -76,7 +76,7 @@ impl UdfApi for UdfMgr {
         Ok(res.seq)
     }
 
-    async fn update_udf(&self, info: UserDefinedFunction, seq: Option<u64>) -> Result<u64> {
+    async fn update_udf(&self, info: UserDefinedFunction, seq: MatchSeq) -> Result<u64> {
         if is_builtin_function(info.name.as_str()) {
             return Err(ErrorCode::UdfAlreadyExists(format!(
                 "Builtin function can not be updated: {}",
@@ -89,9 +89,9 @@ impl UdfApi for UdfMgr {
 
         let val = Operation::Update(serde_json::to_vec(&info)?);
         let key = format!("{}/{}", self.udf_prefix, escape_for_key(&info.name)?);
-        let upsert_info =
-            self.kv_api
-                .upsert_kv(UpsertKVReq::new(&key, MatchSeq::from(seq), val, None));
+        let upsert_info = self
+            .kv_api
+            .upsert_kv(UpsertKVReq::new(&key, seq, val, None));
 
         let res = upsert_info.await?;
         match res.result {
@@ -103,7 +103,7 @@ impl UdfApi for UdfMgr {
         }
     }
 
-    async fn get_udf(&self, udf_name: &str, seq: Option<u64>) -> Result<SeqV<UserDefinedFunction>> {
+    async fn get_udf(&self, udf_name: &str, seq: MatchSeq) -> Result<SeqV<UserDefinedFunction>> {
         let key = format!("{}/{}", self.udf_prefix, escape_for_key(udf_name)?);
         let kv_api = self.kv_api.clone();
         let get_kv = async move { kv_api.get_kv(&key).await };
@@ -111,7 +111,7 @@ impl UdfApi for UdfMgr {
         let seq_value =
             res.ok_or_else(|| ErrorCode::UnknownUDF(format!("Unknown Function {}", udf_name)))?;
 
-        match MatchSeq::from(seq).match_seq(&seq_value) {
+        match seq.match_seq(&seq_value) {
             Ok(_) => Ok(seq_value.into_seqv()?),
             Err(_) => Err(ErrorCode::UnknownUDF(format!(
                 "Unknown Function {}",
@@ -131,12 +131,12 @@ impl UdfApi for UdfMgr {
         Ok(udfs)
     }
 
-    async fn drop_udf(&self, udf_name: &str, seq: Option<u64>) -> Result<()> {
+    async fn drop_udf(&self, udf_name: &str, seq: MatchSeq) -> Result<()> {
         let key = format!("{}/{}", self.udf_prefix, escape_for_key(udf_name)?);
         let kv_api = self.kv_api.clone();
         let upsert_kv = async move {
             kv_api
-                .upsert_kv(UpsertKVReq::new(&key, seq.into(), Operation::Delete, None))
+                .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Delete, None))
                 .await
         };
         let res = upsert_kv.await?;

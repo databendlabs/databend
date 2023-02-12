@@ -1110,6 +1110,19 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     );
     let ty_float32 = value(TypeName::Float32, rule! { FLOAT32 | FLOAT });
     let ty_float64 = value(TypeName::Float64, rule! { FLOAT64 | DOUBLE });
+    let ty_decimal = map_res(
+        rule! { DECIMAL ~ "(" ~ #literal_u64 ~ "," ~ #literal_u64 ~ ")" },
+        |(_, _, precision, _, scale, _)| {
+            Ok(TypeName::Decimal {
+                precision: precision
+                    .try_into()
+                    .map_err(|_| ErrorKind::Other("precision is too large"))?,
+                scale: scale
+                    .try_into()
+                    .map_err(|_| ErrorKind::Other("scale is too large"))?,
+            })
+        },
+    );
     let ty_array = map(
         rule! { ARRAY ~ ( "(" ~ #type_name ~ ")" )? },
         |(_, opt_item_type)| TypeName::Array {
@@ -1168,6 +1181,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_int64
             | #ty_float32
             | #ty_float64
+            | #ty_decimal
             | #ty_array
             | #ty_tuple
             | #ty_date

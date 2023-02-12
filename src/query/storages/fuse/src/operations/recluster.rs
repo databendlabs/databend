@@ -125,7 +125,7 @@ impl FuseTable {
         let plan = DataSourcePlan {
             catalog: table_info.catalog().to_string(),
             source_info: DataSourceInfo::TableSource(table_info.clone()),
-            scan_fields: None,
+            output_schema: table_info.schema(),
             parts,
             statistics,
             description,

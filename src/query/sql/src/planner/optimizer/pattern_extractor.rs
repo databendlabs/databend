@@ -38,9 +38,7 @@ impl PatternExtractor {
                 m_expr.plan.clone(),
                 vec![],
                 Some(m_expr.group_index),
-                Some(Box::new(
-                    memo.group(m_expr.group_index)?.relational_prop.clone(),
-                )),
+                Some(memo.group(m_expr.group_index)?.relational_prop.clone()),
             )]);
         }
 
@@ -93,9 +91,7 @@ impl PatternExtractor {
                 m_expr.plan.clone(),
                 vec![],
                 Some(m_expr.group_index),
-                Some(Box::new(
-                    memo.group(m_expr.group_index)?.relational_prop.clone(),
-                )),
+                Some(memo.group(m_expr.group_index)?.relational_prop.clone()),
             ));
             return Ok(results);
         }
@@ -109,9 +105,7 @@ impl PatternExtractor {
                 m_expr.plan.clone(),
                 children,
                 Some(m_expr.group_index),
-                Some(Box::new(
-                    memo.group(m_expr.group_index)?.relational_prop.clone(),
-                )),
+                Some(memo.group(m_expr.group_index)?.relational_prop.clone()),
             ));
 
             let mut shifted = false;

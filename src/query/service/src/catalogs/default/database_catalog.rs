@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_catalog::table_args::TableArgs;
 use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -56,7 +57,6 @@ use crate::catalogs::default::MutableCatalog;
 use crate::databases::Database;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
-use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
 use crate::table_functions::TableFunctionFactory;
 
@@ -472,10 +472,6 @@ impl Catalog for DatabaseCatalog {
         tbl_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         self.table_function_factory.get(func_name, tbl_args)
-    }
-
-    fn get_table_function_id(&self, func_name: &str) -> Result<MetaId> {
-        self.table_function_factory.get_id(func_name)
     }
 
     fn get_table_engines(&self) -> Vec<StorageDescription> {
