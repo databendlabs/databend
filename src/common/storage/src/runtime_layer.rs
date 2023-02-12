@@ -17,23 +17,18 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common_base::base::tokio::runtime::Handle;
 use common_base::runtime::TrackedFuture;
+use opendal::ops::*;
 use opendal::raw::input;
 use opendal::raw::Accessor;
 use opendal::raw::Layer;
 use opendal::raw::LayeredAccessor;
-use opendal::raw::ObjectPager;
 use opendal::raw::RpCreate;
 use opendal::raw::RpDelete;
 use opendal::raw::RpList;
 use opendal::raw::RpRead;
+use opendal::raw::RpScan;
 use opendal::raw::RpStat;
 use opendal::raw::RpWrite;
-use opendal::OpCreate;
-use opendal::OpDelete;
-use opendal::OpList;
-use opendal::OpRead;
-use opendal::OpStat;
-use opendal::OpWrite;
 use opendal::Result;
 
 /// # TODO
@@ -77,6 +72,8 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
     type Inner = A;
     type Reader = A::Reader;
     type BlockingReader = A::BlockingReader;
+    type Pager = A::Pager;
+    type BlockingPager = A::BlockingPager;
 
     fn inner(&self) -> &Self::Inner {
         &self.inner
@@ -122,7 +119,7 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
         self.runtime.spawn(future).await.expect("join must success")
     }
 
-    async fn list(&self, path: &str, args: OpList) -> Result<(RpList, ObjectPager)> {
+    async fn list(&self, path: &str, args: OpList) -> Result<(RpList, Self::Pager)> {
         let op = self.inner.clone();
         let path = path.to_string();
         let future = async move { op.list(&path, args).await };
@@ -130,7 +127,23 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
         self.runtime.spawn(future).await.expect("join must success")
     }
 
+    async fn scan(&self, path: &str, args: OpScan) -> Result<(RpScan, Self::Pager)> {
+        let op = self.inner.clone();
+        let path = path.to_string();
+        let future = async move { op.scan(&path, args).await };
+        let future = TrackedFuture::create(future);
+        self.runtime.spawn(future).await.expect("join must success")
+    }
+
     fn blocking_read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::BlockingReader)> {
         self.inner.blocking_read(path, args)
+    }
+
+    fn blocking_list(&self, path: &str, args: OpList) -> Result<(RpList, Self::BlockingPager)> {
+        self.inner.blocking_list(path, args)
+    }
+
+    fn blocking_scan(&self, path: &str, args: OpScan) -> Result<(RpScan, Self::BlockingPager)> {
+        self.inner.blocking_scan(path, args)
     }
 }

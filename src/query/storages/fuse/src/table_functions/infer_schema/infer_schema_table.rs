@@ -13,7 +13,7 @@
 //  limitations under the License.
 
 use std::any::Any;
-use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
@@ -47,8 +47,7 @@ use common_storage::StageFilesInfo;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
-use crate::table_functions::infer_schema::table_args::parse_infer_schema_args;
-use crate::table_functions::string_literal;
+use crate::table_functions::infer_schema::table_args::InferSchemaArgsParsed;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
 use crate::Table;
@@ -57,8 +56,8 @@ const INFER_SCHEMA: &str = "infer_schema";
 
 pub struct InferSchemaTable {
     table_info: TableInfo,
-    location: String,
-    files_info: StageFilesInfo,
+    args_parsed: InferSchemaArgsParsed,
+    table_args: TableArgs,
 }
 
 impl InferSchemaTable {
@@ -68,7 +67,7 @@ impl InferSchemaTable {
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        let (location, files_info) = parse_infer_schema_args(&table_args)?;
+        let args_parsed = InferSchemaArgsParsed::parse(&table_args)?;
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
             desc: format!("'{}'.'{}'", database_name, table_func_name),
@@ -83,8 +82,8 @@ impl InferSchemaTable {
 
         Ok(Arc::new(Self {
             table_info,
-            location,
-            files_info,
+            args_parsed,
+            table_args,
         }))
     }
 
@@ -117,12 +116,7 @@ impl Table for InferSchemaTable {
     }
 
     fn table_args(&self) -> Option<TableArgs> {
-        let mut args = HashMap::new();
-        args.insert("location".to_string(), string_literal(&self.location));
-        if let Some(pattern) = &self.files_info.pattern {
-            args.insert("pattern".to_string(), string_literal(pattern));
-        }
-        Some(TableArgs::new_named(args))
+        Some(self.table_args.clone())
     }
 
     fn read_data(
@@ -132,14 +126,7 @@ impl Table for InferSchemaTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_source(
-            |output| {
-                InferSchemaSource::create(
-                    ctx.clone(),
-                    output,
-                    self.location.to_owned(),
-                    self.files_info.clone(),
-                )
-            },
+            |output| InferSchemaSource::create(ctx.clone(), output, self.args_parsed.clone()),
             1,
         )?;
         Ok(())
@@ -160,22 +147,19 @@ impl TableFunction for InferSchemaTable {
 struct InferSchemaSource {
     is_finished: bool,
     ctx: Arc<dyn TableContext>,
-    location: String,
-    files_info: StageFilesInfo,
+    args_parsed: InferSchemaArgsParsed,
 }
 
 impl InferSchemaSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        location: String,
-        files_info: StageFilesInfo,
+        args_parsed: InferSchemaArgsParsed,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.clone(), output, InferSchemaSource {
             is_finished: false,
             ctx,
-            location,
-            files_info,
+            args_parsed,
         })
     }
 }
@@ -191,15 +175,20 @@ impl AsyncSource for InferSchemaSource {
         }
         self.is_finished = true;
 
-        let (stage_info, path) = parse_stage_location(&self.ctx, &self.location).await?;
+        let (stage_info, path) =
+            parse_stage_location(&self.ctx, &self.args_parsed.location).await?;
         let files_info = StageFilesInfo {
             path,
-            ..self.files_info.clone()
+            ..self.args_parsed.files_info.clone()
         };
         let operator = init_stage_operator(&stage_info)?;
 
         let first_file = files_info.first_file(&operator).await?;
-        let schema = match stage_info.file_format_options.format {
+        let file_format = match &self.args_parsed.file_format {
+            Some(f) => StageFileFormatType::from_str(f)?,
+            None => stage_info.file_format_options.format.clone(),
+        };
+        let schema = match file_format {
             StageFileFormatType::Parquet => {
                 let arrow_schema = read_parquet_schema_async(&operator, &first_file.path).await?;
                 TableSchema::from(&arrow_schema)

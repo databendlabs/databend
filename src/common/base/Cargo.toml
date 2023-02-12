@@ -12,8 +12,8 @@ test = false
 
 [features]
 tracing = ["tokio/tracing"]
+jemalloc = []
 memory-profiling = [
-    "tikv-jemalloc-ctl",
     "tikv-jemalloc-sys/stats",
     "tikv-jemalloc-sys/profiling",
     "tikv-jemalloc-sys/unprefixed_malloc_on_supported_platforms",
@@ -45,7 +45,7 @@ pprof = { version = "0.10.1", features = [
 semver = "1.0.10"
 serde = { workspace = true }
 state = "0.5"
-tikv-jemalloc-ctl = { workspace = true, optional = true }
+tikv-jemalloc-ctl = { workspace = true }
 tikv-jemalloc-sys = "0.5.2"
 tokio = { workspace = true }
 tracing = "0.1.36"

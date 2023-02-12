@@ -1,5 +1,5 @@
 ---
-title: Load Data into Databend
+title: Loading Data into Databend
 slug: ./
 ---
 These topics describe how to load data into Databend.

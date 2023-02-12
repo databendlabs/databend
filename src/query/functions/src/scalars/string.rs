@@ -855,7 +855,7 @@ fn substr_utf8(builder: &mut StringColumnBuilder, str: &str, pos: i64, len: u64)
     builder.commit_row();
 }
 
-/// String to String scalar function with estimiated ouput column capacity.
+/// String to String scalar function with estimiated output column capacity.
 pub fn vectorize_string_to_string(
     estimate_bytes: impl Fn(&StringColumn) -> usize + Copy,
     func: impl Fn(&[u8], &mut StringColumnBuilder, &mut EvalContext) + Copy,
@@ -878,7 +878,7 @@ pub fn vectorize_string_to_string(
     }
 }
 
-/// (String, String) to String scalar function with estimiated ouput column capacity.
+/// (String, String) to String scalar function with estimiated output column capacity.
 fn vectorize_string_to_string_2_arg(
     estimate_bytes: impl Fn(&StringColumn, &StringColumn) -> usize + Copy,
     func: impl Fn(&[u8], &[u8], &mut EvalContext, &mut StringColumnBuilder) + Copy,

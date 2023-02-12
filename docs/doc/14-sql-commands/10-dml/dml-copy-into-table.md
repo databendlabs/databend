@@ -81,7 +81,7 @@ externalLocation ::=
   'azblob://<container>[<path>]'
   CONNECTION = (
         ENDPOINT_URL = 'https://<endpoint-URL>'
-        ACCOUT_NAME = '<your-account-name>'
+        ACCOUNT_NAME = '<your-account-name>'
         ACCOUNT_KEY = '<your-account-key>'
   )
 ```

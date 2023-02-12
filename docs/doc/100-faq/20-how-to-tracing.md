@@ -167,7 +167,7 @@ RUST_LOG=DEBUG, DATABEND_JAEGER_AGENT_ENDPOINT=localhost:6831 ./databend-query
 docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 jaegertracing/all-in-one:latest
 ```
 
-### Create table and init datas
+### Create table and init data
 
 ```
 CREATE TABLE t1(a INT);

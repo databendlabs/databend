@@ -8,7 +8,6 @@ on:
       - "docs/**"
       - "website/**"
       - "**.md"
-      - "scripts/setup/**"
       - "docker/**"
       - ".devcontainer/**"
 
@@ -19,6 +18,7 @@ concurrency:
 env:
   BUILD_PROFILE: debug
   RUNNER_PROVIDER: aws
+  CARGO_INCREMENTAL: 0
 
 jobs:
   check:

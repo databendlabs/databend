@@ -41,7 +41,7 @@ impl RuleSet {
             if rule_set.contains(&id) {
                 return Err(ErrorCode::Internal(format!("Duplicated Rule: {id}",)));
             }
-            rule_set.insert(factory.create_rule(id)?);
+            rule_set.insert(factory.create_rule(id, None)?);
         }
 
         Ok(rule_set)

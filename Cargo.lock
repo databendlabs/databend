@@ -165,8 +165,9 @@ dependencies = [
 
 [[package]]
 name = "arrow2"
-version = "0.15.0"
-source = "git+https://github.com/jorgecarleitao/arrow2?rev=40182a1#40182a1b4b26fe4a82fc024260a4e2feb38396f0"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a4c5b03335bc1cb0fd9f5297f8fd3bbfd6fb04f3cb0bc7d6c91b7128cb8336a"
 dependencies = [
  "ahash 0.8.2",
  "arrow-format",
@@ -470,9 +471,9 @@ dependencies = [
 
 [[package]]
 name = "backon"
-version = "0.2.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6cd1a59bc091e593ee9ed62df4e4a07115e00a0e0a52fd7e0e04540773939b80"
+checksum = "f34fac4d7cdaefa2deded0eda2d5d59dbfd43370ff3f856209e72340ae84c294"
 dependencies = [
  "futures",
  "pin-project",
@@ -1319,7 +1320,6 @@ dependencies = [
  "dashmap",
  "dyn-clone",
  "goldenfile",
- "opendal",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -1467,6 +1467,7 @@ dependencies = [
  "crc32fast",
  "criterion",
  "ctor",
+ "ethnum",
  "geo",
  "geohash",
  "goldenfile",
@@ -2957,7 +2958,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sharing-endpoint",
- "tikv-jemalloc-ctl",
  "tokio-stream",
  "tonic",
  "tracing",
@@ -5633,9 +5633,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.26.2"
+version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c40ed33cc9fed187ce8293587416e0afd6ac9fcde17f2a20ad0dca14dd685ebe"
+checksum = "e889a1a8bb1ae339055c6a7b5b4c6cccbb89bac626a7fff58b6e739604df7250"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -5643,7 +5643,6 @@ dependencies = [
  "async-trait",
  "backon",
  "base64 0.21.0",
- "bincode 2.0.0-rc.2",
  "bytes",
  "flagset",
  "futures",
@@ -6852,9 +6851,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f446438814fde3785305a59a85a6d1b361ce2c9d29e58dd87c9103a242c40b6"
+checksum = "7e0154ced5e44389686689a3c96c49ca5a70ad9c708e0989982adae2e0378bbf"
 dependencies = [
  "anyhow",
  "backon",
@@ -7891,7 +7890,7 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 [[package]]
 name = "strawboat"
 version = "0.1.0"
-source = "git+https://github.com/b41sh/strawboat?rev=797480e#797480e1339be246a6cc5a1bf6b66407223d14f6"
+source = "git+https://github.com/b41sh/strawboat?rev=38127d4#38127d4b8a427da7a8c8dd2b500f372981994a88"
 dependencies = [
  "arrow2",
  "bytemuck",

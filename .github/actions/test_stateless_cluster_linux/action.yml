@@ -28,7 +28,7 @@ runs:
         build-tool bash ./scripts/ci/ci-run-stateless-tests-cluster.sh
 
     - name: Upload failure
-      if: failure()
+      if: failure() || cancelled()
       uses: ./.github/actions/artifact_failure
       with:
         name: test-stateless-cluster-linux

@@ -1,0 +1,114 @@
+query I
+select 1::Decimal(17, 3), 2::Decimal(19, 4), 3::Decimal(20, 5), cast(10 as Decimal(7, 2));
+----
+1.000 2.0000 3.00000 10.00
+
+## parser overflow
+statement error 1005
+select 2::Decimal(2000, 3);
+
+
+## runtime overflow
+statement error 1001
+select 20000::Decimal(4, 3);
+
+
+## tests from chatgpt
+## some result should be modified if we parse 1.23 as Decimal instead of float by default, cc @yangsongfeng
+## Test addition
+
+## add
+
+query I
+SELECT CAST(1.23 AS DECIMAL(6, 2)) + CAST(4.56 AS DECIMAL(6, 2)) AS result;
+----
+5.78
+
+query I
+SELECT CAST(123456789.12 AS DECIMAL(20, 2)) + CAST(987654321.34 AS DECIMAL(20, 2)) AS result;
+----
+1111111110.46
+
+query I
+SELECT CAST(1.23 AS DECIMAL(6, 2)) + CAST(987654321.34 AS DECIMAL(20, 2)) AS result;
+----
+987654322.57
+
+
+
+## sub
+
+query I
+SELECT CAST(4.56 AS DECIMAL(6, 2)) - CAST(1.23 AS DECIMAL(6, 2)) AS result;
+----
+3.32
+
+query I
+SELECT CAST(987654321.34 AS DECIMAL(20, 2)) - CAST(123456789.12 AS DECIMAL(20, 2)) AS result;
+----
+864197532.22
+
+query I
+SELECT CAST(987654321.34 AS DECIMAL(20, 2)) - CAST(1.23 AS DECIMAL(6, 2)) AS result;
+----
+987654320.11
+
+## mul
+
+query I
+SELECT CAST(1.23 AS DECIMAL(6, 2)) * CAST(4.56 AS DECIMAL(6, 2)) AS result;
+----
+5.5965
+
+query I
+SELECT CAST(123456789.12 AS DECIMAL(20, 2)) * CAST(987654321.34 AS DECIMAL(20, 2)) AS result;
+----
+121932631273129095.8208
+
+query I
+SELECT CAST(1.23 AS DECIMAL(6, 2)) * CAST(987654321.34 AS DECIMAL(20, 2)) AS result;
+----
+1214814815.2482
+
+
+## div
+
+query I
+SELECT CAST(4.56 AS DECIMAL(6, 2)) / CAST(1.23 AS DECIMAL(6, 2)) AS result;
+----
+3.69
+
+query I
+SELECT CAST(987654321.34 AS DECIMAL(20, 2)) / CAST(123456789.12 AS DECIMAL(20, 2)) AS result;
+----
+8.00
+
+query I
+SELECT CAST(987654321.34 AS DECIMAL(20, 2)) / CAST(1.23 AS DECIMAL(6, 2)) AS result;
+ 
+----
+802970992.95
+
+
+
+## negative
+
+query I
+SELECT CAST(-1.23 AS DECIMAL(6, 2)) + CAST(-4.56 AS DECIMAL(6, 2)) AS result;
+----
+-5.78
+
+query I
+SELECT CAST(-4.56 AS DECIMAL(6, 2)) - CAST(1.23 AS DECIMAL(6, 2)) AS result;
+----
+-5.78
+
+query I
+SELECT CAST(-1.23 AS DECIMAL(6, 2)) * CAST(-4.56 AS DECIMAL(6, 2)) AS result;
+----
+5.5965
+
+query I
+SELECT CAST(-4.56 AS DECIMAL(6, 2)) / CAST(-1.23 AS DECIMAL(6, 2)) AS result;
+----
+3.69

@@ -35,7 +35,7 @@ Check out what we've done this week to make Databend even better for you.
 
 - rangefilter support in ([#9330](https://github.com/datafuselabs/databend/pull/9330))
 - try to improve object storage io read ([#9335](https://github.com/datafuselabs/databend/pull/9335))
-- supprot table compression ([#9370](https://github.com/datafuselabs/databend/pull/9370))
+- support table compression ([#9370](https://github.com/datafuselabs/databend/pull/9370))
 
 **Metrics**
 

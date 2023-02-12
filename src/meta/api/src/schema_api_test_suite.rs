@@ -1456,7 +1456,7 @@ impl SchemaApiTestSuite {
         info!("--- drop table on unknown db");
         {
             // casually create a drop table plan
-            // should be not vunerable?
+            // should be not vulnerable?
             let plan = DropTableReq {
                 if_exists: false,
                 name_ident: TableNameIdent {

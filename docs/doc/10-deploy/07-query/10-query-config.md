@@ -46,7 +46,7 @@ You can find [sample configuration files](https://github.com/datafuselabs/databe
 
 ### password
 
-* The password used to connect to the Meta service. Databend recommends using the enviorment variable to provide the password.
+* The password used to connect to the Meta service. Databend recommends using the environment variable to provide the password.
 * Default: `"root"`
 * Env variable: `META_PASSWORD`
 
