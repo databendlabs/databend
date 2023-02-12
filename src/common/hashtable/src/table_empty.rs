@@ -120,7 +120,7 @@ impl<'a, V> Iterator for TableEmptyIter<'a, V> {
         }
     }
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let len = usize::from(!self.i);
+        let len = if self.i > 0 { 0 } else { 1 };
         (len, Some(len))
     }
 }
