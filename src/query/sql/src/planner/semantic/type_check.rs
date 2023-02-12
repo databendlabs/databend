@@ -75,6 +75,7 @@ use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
@@ -902,6 +903,17 @@ impl<'a> TypeChecker<'a> {
             } => self.resolve_trim_function(*span, expr, trim_where).await?,
 
             Expr::Array { span, exprs, .. } => self.resolve_array(*span, exprs).await?,
+
+            Expr::ArraySort {
+                span,
+                expr,
+                asc,
+                null_first,
+                ..
+            } => {
+                self.resolve_array_sort(*span, expr, asc, null_first)
+                    .await?
+            }
 
             Expr::Position {
                 substr_expr,
@@ -1739,6 +1751,25 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    async fn resolve_array_sort(
+        &mut self,
+        span: Span,
+        expr: &Expr,
+        asc: &bool,
+        null_first: &bool,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let box (arg, _type) = self.resolve(expr, None).await?;
+        let func_name = match (*asc, *null_first) {
+            (true, true) => "array_sort_asc_null_first",
+            (true, false) => "array_sort_asc_null_last",
+            (false, true) => "array_sort_desc_null_first",
+            (false, false) => "array_sort_desc_null_last",
+        };
+        self.resolve_scalar_function_call(span, func_name, vec![], vec![arg], None)
+            .await
+    }
+
+    #[async_recursion::async_recursion]
     async fn resolve_tuple(
         &mut self,
         span: Span,
@@ -1816,7 +1847,9 @@ impl<'a> TypeChecker<'a> {
         if let Expr::ColumnRef { column: ident, .. } = expr {
             if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column }) = scalar {
                 let column_entry = self.metadata.read().column(column.index).clone();
-                if let ColumnEntry::BaseTableColumn { data_type, .. } = column_entry {
+                if let ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) =
+                    column_entry
+                {
                     table_data_type = data_type;
                     if let TableDataType::Tuple { .. } = table_data_type {
                         let box (inner_scalar, _inner_data_type) = self
@@ -2238,6 +2271,19 @@ impl<'a> TypeChecker<'a> {
                         .iter()
                         .map(|expr| self.clone_expr_with_replacement(expr, replacement_fn))
                         .collect::<Result<Vec<Expr>>>()?,
+                }),
+                Expr::ArraySort {
+                    span,
+                    expr,
+                    asc,
+                    null_first,
+                } => Ok(Expr::ArraySort {
+                    span: *span,
+                    expr: Box::new(
+                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
+                    ),
+                    asc: *asc,
+                    null_first: *null_first,
                 }),
                 Expr::Interval { span, expr, unit } => Ok(Expr::Interval {
                     span: *span,

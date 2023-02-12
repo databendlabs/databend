@@ -13,7 +13,6 @@ on:
       - "docs/**"
       - "website/**"
       - "**.md"
-      - "scripts/setup/**"
       - "docker/**"
       - ".devcontainer/**"
   # schedule:
@@ -30,6 +29,7 @@ concurrency:
 env:
   BUILD_PROFILE: release
   RUNNER_PROVIDER: aws
+  CARGO_INCREMENTAL: 0
 
 jobs:
   build_release:

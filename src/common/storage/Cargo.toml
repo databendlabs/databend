@@ -21,7 +21,7 @@ common-meta-types = { path = "../../meta/types" }
 anyhow = { workspace = true }
 async-stream = "0.3.3"
 async-trait = "0.1"
-backon = "0.2"
+backon = "0.4"
 bytes = "1"
 futures = "0.3"
 globiter = "0.1"

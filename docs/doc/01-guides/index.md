@@ -31,6 +31,11 @@ These tutorials are intended to help you get started with Databend:
 * [How to Load Data from Local File System](../12-load-data/02-local.md)
 * [How to Load Data from Remote Files](../12-load-data/04-http.md)
 
+
+## Unloading Data from Databend
+
+* [How to Unload Data from Databend](../12-unload-data/index.md)
+
 ## Managing Users
 
 * [How to Create a User](../14-sql-commands/00-ddl/30-user/01-user-create-user.md)

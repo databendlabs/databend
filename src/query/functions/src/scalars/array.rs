@@ -44,8 +44,10 @@ use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
 use common_expression::vectorize_with_builder_3_arg;
 use common_expression::with_number_mapped_type;
+use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
+use common_expression::DataBlock;
 use common_expression::Domain;
 use common_expression::EvalContext;
 use common_expression::Function;
@@ -55,6 +57,7 @@ use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::Scalar;
 use common_expression::ScalarRef;
+use common_expression::SortColumnDescription;
 use common_expression::Value;
 use common_expression::ValueRef;
 use common_hashtable::HashtableKeyable;
@@ -74,6 +77,13 @@ const ARRAY_AGGREGATE_FUNCTIONS: &[(&str, &str); 6] = &[
     ("array_min", "min"),
     ("array_sum", "sum"),
     ("array_any", "any"),
+];
+
+const ARRAY_SORT_FUNCTIONS: &[(&str, (bool, bool)); 4] = &[
+    ("array_sort_asc_null_first", (true, true)),
+    ("array_sort_desc_null_first", (false, true)),
+    ("array_sort_asc_null_last", (true, false)),
+    ("array_sort_desc_null_last", (false, false)),
 ];
 
 pub fn register(registry: &mut FunctionRegistry) {
@@ -743,5 +753,39 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                 eval: Box::new(|args, ctx| eval_array_aggr(name, args, ctx)),
             }))
         });
+    }
+
+    for (fn_name, sort_desc) in ARRAY_SORT_FUNCTIONS {
+        registry.register_passthrough_nullable_1_arg::<EmptyArrayType, EmptyArrayType, _, _>(
+            fn_name,
+            FunctionProperty::default(),
+            |_| FunctionDomain::Full,
+            vectorize_1_arg::<EmptyArrayType, EmptyArrayType>(|arr, _| arr),
+        );
+
+        registry.register_passthrough_nullable_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
+            fn_name,
+            FunctionProperty::default(),
+            |_| FunctionDomain::Full,
+            vectorize_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(|arr, _| {
+                let len = arr.len();
+                if arr.len() > 1 {
+                    let sort_desc = vec![SortColumnDescription {
+                        offset: 0,
+                        asc: sort_desc.0,
+                        nulls_first: sort_desc.1,
+                    }];
+                    let columns = vec![BlockEntry{
+                        data_type: arr.data_type(),
+                        value: Value::Column(arr)
+                    }];
+                    let sort_block = DataBlock::sort(&DataBlock::new(columns, len), &sort_desc, None).unwrap();
+                    sort_block.columns()[0].value.clone().into_column().unwrap()
+                } else {
+                    arr
+                }
+            },
+            ),
+        );
     }
 }

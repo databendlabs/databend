@@ -261,6 +261,10 @@ pub trait VisitorMut: Sized {
         }
     }
 
+    fn visit_array_sort(&mut self, _span: Span, expr: &mut Expr, _asc: bool, _null_first: bool) {
+        walk_expr_mut(self, expr);
+    }
+
     fn visit_interval(&mut self, _span: Span, expr: &mut Expr, _unit: &mut IntervalKind) {
         walk_expr_mut(self, expr);
     }

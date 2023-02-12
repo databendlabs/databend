@@ -16,7 +16,6 @@ use std::alloc::Allocator;
 use std::intrinsics::unlikely;
 use std::mem::MaybeUninit;
 
-use common_base::mem_allocator::GlobalAllocator;
 use common_base::mem_allocator::MmapAllocator;
 
 use super::container::HeapContainer;
@@ -29,7 +28,7 @@ use super::traits::Keyable;
 use super::utils::ZeroEntry;
 use crate::FastHash;
 
-pub struct Hashtable<K, V, A = MmapAllocator<GlobalAllocator>>
+pub struct Hashtable<K, V, A = MmapAllocator>
 where
     K: Keyable,
     A: Allocator + Clone,
