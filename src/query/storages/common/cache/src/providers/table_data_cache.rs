@@ -62,9 +62,6 @@ impl AsRef<str> for TableDataColumnCacheKey {
     }
 }
 
-/// Tiered cache which consist of
-/// - a bounded channel that keep the references of items being cached
-/// - a disk or redis based external cache
 #[derive(Clone)]
 pub struct TableDataCache<T = LruDiskCacheHolder> {
     external_cache: T,
