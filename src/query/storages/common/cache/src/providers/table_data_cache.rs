@@ -22,7 +22,6 @@ use common_exception::Result;
 use crossbeam_channel::TrySendError;
 use tracing::error;
 use tracing::info;
-use tracing::warn;
 
 use crate::metrics_inc_cache_access_count;
 use crate::metrics_inc_cache_hit_count;
@@ -73,7 +72,7 @@ pub struct TableDataCache<T = LruDiskCacheHolder> {
     _cache_populator: DiskCachePopulator,
 }
 
-const TABLE_DATA_CACHE_NAME: &str = "table_data_cache";
+const TABLE_DATA_CACHE_NAME: &str = "table_data";
 
 pub struct TableDataCacheBuilder;
 impl TableDataCacheBuilder {
@@ -118,7 +117,6 @@ impl CacheAccessor<String, Vec<u8>, DefaultHashBuilder, Count> for TableDataCach
                 Err(TrySendError::Full(_)) => {
                     metrics_inc_cache_population_pending_count(-1, TABLE_DATA_CACHE_NAME);
                     metrics_inc_cache_population_overflow_count(-1, TABLE_DATA_CACHE_NAME);
-                    warn!("table data cache population queue is full");
                 }
                 Err(TrySendError::Disconnected(_)) => {
                     error!("table data cache population thread is down");
@@ -157,7 +155,7 @@ where T: CacheAccessor<String, Vec<u8>, DefaultHashBuilder, Count> + Send + Sync
                     metrics_inc_cache_population_pending_count(-1, TABLE_DATA_CACHE_NAME);
                 }
                 Err(_) => {
-                    info!("cache work shutdown");
+                    info!("table data cache worker shutdown");
                     break;
                 }
             }
