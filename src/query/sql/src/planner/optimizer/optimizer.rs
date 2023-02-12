@@ -145,10 +145,10 @@ pub fn optimize_query(
 
     let contains_local_table_scan = contains_local_table_scan(&s_expr, &metadata);
 
-    let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata, rules);
+    let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata.clone(), rules);
     let mut result = heuristic.optimize(s_expr)?;
 
-    let mut cascades = CascadesOptimizer::create(ctx.clone())?;
+    let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata.clone())?;
     result = cascades.optimize(result)?;
 
     // So far, we don't have ability to execute distributed query
@@ -171,10 +171,10 @@ fn get_optimized_memo(
 ) -> Result<(Memo, HashMap<IndexType, CostContext>)> {
     let rules = RuleList::create(DEFAULT_REWRITE_RULES.clone(), Some(metadata.clone()))?;
 
-    let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata, rules);
+    let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata.clone(), rules);
     let result = heuristic.optimize(s_expr)?;
 
-    let mut cascades = CascadesOptimizer::create(ctx)?;
+    let mut cascades = CascadesOptimizer::create(ctx, metadata)?;
     cascades.optimize(result)?;
     Ok((cascades.memo, cascades.best_cost_map))
 }

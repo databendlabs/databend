@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::BitAnd;
 use std::rc::Rc;
 
 use common_exception::Result;
@@ -22,6 +23,9 @@ use super::Task;
 use crate::optimizer::cascades::scheduler::Scheduler;
 use crate::optimizer::cascades::tasks::SharedCounter;
 use crate::optimizer::cascades::CascadesOptimizer;
+use crate::optimizer::RuleID;
+use crate::optimizer::RULE_FACTORY;
+use crate::plans::Operator;
 use crate::IndexType;
 
 #[derive(Clone, Copy, Debug)]
@@ -149,16 +153,33 @@ impl ExploreExprTask {
             .memo
             .group(self.group_index)?
             .m_expr(self.m_expr_index)?;
+        let rule_set: roaring::RoaringBitmap;
+        unsafe {
+            rule_set = m_expr
+                .plan
+                .transrormation_candidate_rules()
+                .bitand(&RULE_FACTORY.transformation_rules);
+        }
 
-        for rule in optimizer.explore_rules.iter() {
+        for rule_id in rule_set.iter() {
             let apply_rule_task = ApplyRuleTask::with_parent(
-                rule.id(),
+                unsafe { std::mem::transmute::<u8, RuleID>(rule_id as u8) },
                 m_expr.group_index,
                 m_expr.index,
                 &self.ref_count,
             );
             scheduler.add_task(Task::ApplyRule(apply_rule_task));
         }
+
+        // for rule in optimizer.explore_rules.iter() {
+        //     let apply_rule_task = ApplyRuleTask::with_parent(
+        //         rule.id(),
+        //         m_expr.group_index,
+        //         m_expr.index,
+        //         &self.ref_count,
+        //     );
+        //     scheduler.add_task(Task::ApplyRule(apply_rule_task));
+        // }
 
         if let Some(parent) = &self.parent {
             parent.dec();

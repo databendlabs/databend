@@ -25,6 +25,7 @@ use crate::optimizer::m_expr::MExpr;
 use crate::optimizer::s_expr::SExpr;
 use crate::plans::RelOperator;
 use crate::IndexType;
+use crate::MetadataRef;
 
 /// `Memo` is a search space which memoize possible plans of a query.
 /// The plans inside `Memo` are organized with `Group`s.
@@ -37,14 +38,17 @@ pub struct Memo {
     /// Hash table for detecting duplicated expressions.
     /// The entry is `(plan, children) -> (group_index, m_expr_index)`.
     pub m_expr_lookup_table: HashMap<(RelOperator, Vec<IndexType>), (IndexType, IndexType)>,
+
+    pub metadata: MetadataRef,
 }
 
 impl Memo {
-    pub fn create() -> Self {
+    pub fn create(metadata: &MetadataRef) -> Self {
         Memo {
             groups: vec![],
             root: None,
             m_expr_lookup_table: HashMap::new(),
+            metadata: metadata.clone(),
         }
     }
 
