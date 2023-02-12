@@ -237,7 +237,7 @@ async fn main_entrypoint() -> Result<()> {
             "unlimited".to_string()
         }
     });
-    println!("    global allocator: {}", GlobalAllocator::name());
+    println!("    allocator name: {}", GlobalAllocator::name());
     println!("    allocator config: {}", {
         use tikv_jemalloc_ctl::config;
         config::malloc_conf::mib()
