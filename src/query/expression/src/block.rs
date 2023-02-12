@@ -371,13 +371,12 @@ impl DataBlock {
                     value: Value::Scalar(default_val.to_owned()),
                 },
                 None => {
-                    let chunk_column = chunk_columns.get(chunk_idx).unwrap();
+                    let chunk_column = &chunk_columns[chunk_idx];
                     chunk_idx += 1;
-                    let entry = BlockEntry {
+                    BlockEntry {
                         data_type: data_type.clone(),
                         value: Value::Column(Column::from_arrow(chunk_column.as_ref(), data_type)),
-                    };
-                    entry
+                    }
                 }
             };
 
