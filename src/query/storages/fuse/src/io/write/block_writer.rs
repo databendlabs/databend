@@ -64,8 +64,8 @@ pub fn write_block(
             let mut metas = HashMap::with_capacity(writer.metas.len());
             for (idx, meta) in writer.metas.iter().enumerate() {
                 // use column id as key instead of index
-                let column_id = schema.column_id_of_index(idx)?;
-                metas.insert(column_id, ColumnMeta::Native(meta.clone()));
+                let column_id = leaf_column_ids.get(idx).unwrap();
+                metas.insert(*column_id, ColumnMeta::Native(meta.clone()));
             }
 
             Ok((writer.total_size() as u64, metas))

@@ -233,16 +233,13 @@ impl NativeDeserializeDataTransform {
         let field = column_node.field.clone();
         let is_nested = column_node.is_nested;
         let skipped_readers = match skip_bitmap {
-            Some(ref skip_bitmap) => {
-                let skipped_readers = readers
-                    .into_iter()
-                    .map(|mut reader| {
-                        reader.set_skip_pages(skip_bitmap.clone());
-                        reader
-                    })
-                    .collect::<Vec<_>>();
-                skipped_readers
-            }
+            Some(ref skip_bitmap) => readers
+                .into_iter()
+                .map(|mut reader| {
+                    reader.set_skip_pages(skip_bitmap.clone());
+                    reader
+                })
+                .collect::<Vec<_>>(),
             None => readers,
         };
 
@@ -264,7 +261,7 @@ impl NativeDeserializeDataTransform {
             }
         } else {
             let mut i = 0;
-            while let Some(array) = array_iter.next() {
+            for array in array_iter {
                 arrays.insert(i, array?);
                 i += 1;
             }
@@ -512,7 +509,7 @@ impl Processor for NativeDeserializeDataTransform {
             // Step 6: fill missing field default value if need
             let data_block = self
                 .block_reader
-                .fill_missing_native_column_values(data_block, &part)?;
+                .fill_missing_native_column_values(data_block, part)?;
 
             // Step 7: Add the block to output data
             self.add_block(data_block)?;

@@ -64,7 +64,7 @@ impl BlockReader {
                 .leaf_column_ids
                 .iter()
                 .filter_map(|column_id| part.columns_meta.get(column_id))
-                .map(|x| x.clone())
+                .cloned()
                 .collect::<Vec<_>>();
 
             join_handlers.push(Self::read_native_columns_data(
@@ -141,7 +141,7 @@ impl BlockReader {
                 .leaf_column_ids
                 .iter()
                 .filter_map(|column_id| part.columns_meta.get(column_id))
-                .map(|x| x.clone())
+                .cloned()
                 .collect::<Vec<_>>();
 
             let readers = Self::sync_read_native_column(op.object(&location), metas, &part.range)?;
