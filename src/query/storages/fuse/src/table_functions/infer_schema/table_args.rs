@@ -19,36 +19,53 @@ use common_storage::StageFilesInfo;
 use crate::table_functions::string_value;
 use crate::table_functions::TableArgs;
 
-pub fn parse_infer_schema_args(table_args: &TableArgs) -> Result<(String, StageFilesInfo)> {
-    let args = table_args.expect_all_named("infer_schema")?;
+#[derive(Clone)]
+pub(crate) struct InferSchemaArgsParsed {
+    pub(crate) location: String,
+    pub(crate) file_format: Option<String>,
+    pub(crate) files_info: StageFilesInfo,
+}
 
-    let mut location = None;
-    let mut files_info = StageFilesInfo {
-        path: "".to_string(),
-        files: None,
-        pattern: None,
-    };
+impl InferSchemaArgsParsed {
+    pub(crate) fn parse(table_args: &TableArgs) -> Result<Self> {
+        let args = table_args.expect_all_named("infer_schema")?;
 
-    for (k, v) in &args {
-        match k.to_lowercase().as_str() {
-            "pattern" => {
-                files_info.pattern = Some(string_value(v)?);
-            }
-            "location" => {
-                location = Some(string_value(v)?);
-            }
-            _ => {
-                return Err(ErrorCode::BadArguments(format!(
-                    "unknown param {} for infer_schema",
-                    k
-                )));
+        let mut location = None;
+        let mut file_format = None;
+        let mut files_info = StageFilesInfo {
+            path: "".to_string(),
+            files: None,
+            pattern: None,
+        };
+
+        for (k, v) in &args {
+            match k.to_lowercase().as_str() {
+                "location" => {
+                    location = Some(string_value(v)?);
+                }
+                "pattern" => {
+                    files_info.pattern = Some(string_value(v)?);
+                }
+                "file_format" => {
+                    file_format = Some(string_value(v)?);
+                }
+                _ => {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "unknown param {} for infer_schema",
+                        k
+                    )));
+                }
             }
         }
+
+        let location = location.ok_or(ErrorCode::BadArguments(
+            "infer_schema must specify location",
+        ))?;
+
+        Ok(Self {
+            location,
+            file_format,
+            files_info,
+        })
     }
-
-    let location = location.ok_or(ErrorCode::BadArguments(
-        "infer_schema must specify location",
-    ))?;
-
-    Ok((location, files_info))
 }
