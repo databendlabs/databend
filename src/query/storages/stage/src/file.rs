@@ -67,7 +67,7 @@ pub async fn list_file(op: &Operator, path: &str) -> Result<Vec<StageFileInfo>> 
     if let Some(dir) = dir_path {
         match op.object(&dir).metadata().await {
             Ok(_) => {
-                let mut ds = op.batch().walk_top_down(&dir)?;
+                let mut ds = op.object(&dir).scan().await?;
                 while let Some(de) = ds.try_next().await? {
                     if de.mode().await?.is_file() {
                         let path = de.path().to_string();

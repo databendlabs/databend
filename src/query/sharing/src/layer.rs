@@ -15,7 +15,6 @@
 use std::fmt::Debug;
 
 use async_trait::async_trait;
-use backon::ExponentialBackoff;
 use common_auth::RefreshableToken;
 use http::Request;
 use http::StatusCode;
@@ -23,6 +22,7 @@ use opendal::layers::LoggingLayer;
 use opendal::layers::MetricsLayer;
 use opendal::layers::RetryLayer;
 use opendal::layers::TracingLayer;
+use opendal::ops::*;
 use opendal::raw::new_request_build_error;
 use opendal::raw::parse_content_length;
 use opendal::raw::parse_error_response;
@@ -43,8 +43,6 @@ use opendal::Error;
 use opendal::ErrorKind;
 use opendal::ObjectMetadata;
 use opendal::ObjectMode;
-use opendal::OpRead;
-use opendal::OpStat;
 use opendal::Operator;
 use opendal::Result;
 use opendal::Scheme;
@@ -72,7 +70,7 @@ pub fn create_share_table_operator(
             let client = HttpClient::new()?;
             Operator::new(SharedAccessor { signer, client })
                 // Add retry
-                .layer(RetryLayer::new(ExponentialBackoff::default().with_jitter()))
+                .layer(RetryLayer::new().with_jitter())
                 // Add metrics
                 .layer(MetricsLayer)
                 // Add logging
@@ -97,6 +95,8 @@ struct SharedAccessor {
 impl Accessor for SharedAccessor {
     type Reader = IncomingAsyncBody;
     type BlockingReader = ();
+    type Pager = ();
+    type BlockingPager = ();
 
     fn metadata(&self) -> AccessorMetadata {
         let mut meta = AccessorMetadata::default();
@@ -217,6 +217,8 @@ struct DummySharedAccessor {}
 impl Accessor for DummySharedAccessor {
     type Reader = ();
     type BlockingReader = ();
+    type Pager = ();
+    type BlockingPager = ();
 
     fn metadata(&self) -> AccessorMetadata {
         let mut meta = AccessorMetadata::default();
