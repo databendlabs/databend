@@ -26,6 +26,16 @@ use crate::mem_allocator::DefaultAllocator;
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GlobalAllocator;
 
+impl GlobalAllocator {
+    pub fn name() -> String {
+        DefaultAllocator::name()
+    }
+
+    pub fn conf() -> String {
+        DefaultAllocator::conf()
+    }
+}
+
 unsafe impl Allocator for GlobalAllocator {
     #[inline(always)]
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {

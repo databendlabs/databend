@@ -904,6 +904,17 @@ impl<'a> TypeChecker<'a> {
 
             Expr::Array { span, exprs, .. } => self.resolve_array(*span, exprs).await?,
 
+            Expr::ArraySort {
+                span,
+                expr,
+                asc,
+                null_first,
+                ..
+            } => {
+                self.resolve_array_sort(*span, expr, asc, null_first)
+                    .await?
+            }
+
             Expr::Position {
                 substr_expr,
                 str_expr,
@@ -1740,6 +1751,25 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    async fn resolve_array_sort(
+        &mut self,
+        span: Span,
+        expr: &Expr,
+        asc: &bool,
+        null_first: &bool,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let box (arg, _type) = self.resolve(expr, None).await?;
+        let func_name = match (*asc, *null_first) {
+            (true, true) => "array_sort_asc_null_first",
+            (true, false) => "array_sort_asc_null_last",
+            (false, true) => "array_sort_desc_null_first",
+            (false, false) => "array_sort_desc_null_last",
+        };
+        self.resolve_scalar_function_call(span, func_name, vec![], vec![arg], None)
+            .await
+    }
+
+    #[async_recursion::async_recursion]
     async fn resolve_tuple(
         &mut self,
         span: Span,
@@ -2241,6 +2271,19 @@ impl<'a> TypeChecker<'a> {
                         .iter()
                         .map(|expr| self.clone_expr_with_replacement(expr, replacement_fn))
                         .collect::<Result<Vec<Expr>>>()?,
+                }),
+                Expr::ArraySort {
+                    span,
+                    expr,
+                    asc,
+                    null_first,
+                } => Ok(Expr::ArraySort {
+                    span: *span,
+                    expr: Box::new(
+                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
+                    ),
+                    asc: *asc,
+                    null_first: *null_first,
                 }),
                 Expr::Interval { span, expr, unit } => Ok(Expr::Interval {
                     span: *span,
