@@ -16,7 +16,7 @@ Array Functions
 | `array_slice(array, start[, end])`  | Extract a sublist using slice conventions(index 1-based)     |  `array_slice([1,21,32,4], 2, 3)`         |  `[21, 32]`
 | `array_sort(array)`  | Sort an array     |  `array_sort([1,4,3,2])`         |  `[1,2,3,4]`
 | `array_<aggr>(array)`  | Aggregate the array using aggr name(currently support: sum, count, avg, min, max, any)     |  `array_sum([1,2,3,4]`         |  10
-| `array_unique(array)`  | Counts the unique elements of an array      |  `array_unique([1,2,3,3,4])`         |  4
+| `array_unique(array)`  | Counts the unique elements of an array other than NULL |  `array_unique([1,2,3,3,4])`         |  4
 | `array_distinct(array)`  | Removes all duplicates and NULLs from an array. Does not preserve the original order.      |  `array_distinct([1,2,2,4])`         |  [1,2,4]
 | `array_prepend(item, array)`  | Prepend item into an array      |  `array_prepend(1, [3, 4])`         |  [1,3,4]
 | `array_append(array, item)`  | Append item into an array      |  `array_append([3, 4], 5)`         |  [3,4,5]
