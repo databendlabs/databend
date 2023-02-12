@@ -66,9 +66,9 @@ impl CacheManager {
 
         // setup in-memory table column cache
         let table_column_array_cache = Self::new_in_memory_cache(
-            config.table_cache_column_mb_size * 1024 * 1024,
+            config.table_data_cache_in_memory_column_mb_size * 1024 * 1024,
             ColumnArrayMeter,
-            "table_data_cache_column_array",
+            "table_data_column_array",
         );
 
         // setup in-memory table meta cache
@@ -85,23 +85,21 @@ impl CacheManager {
             }));
         } else {
             let table_snapshot_cache =
-                Self::new_item_cache(config.table_cache_snapshot_count, "table_snapshot_cache");
+                Self::new_item_cache(config.table_cache_snapshot_count, "table_snapshot");
             let table_statistic_cache =
-                Self::new_item_cache(config.table_cache_statistic_count, "table_statistics_cache");
+                Self::new_item_cache(config.table_cache_statistic_count, "table_statistics");
             let segment_info_cache =
-                Self::new_item_cache(config.table_cache_segment_count, "segment_info_cache");
+                Self::new_item_cache(config.table_cache_segment_count, "segment_info");
             let bloom_index_filter_cache = Self::new_item_cache(
                 config.table_cache_bloom_index_filter_count,
-                "bloom_index_filter_cache",
+                "bloom_index_filter",
             );
             let bloom_index_meta_cache = Self::new_item_cache(
                 config.table_cache_bloom_index_meta_count,
-                "bloom_index_file_meta_data_cache",
+                "bloom_index_file_meta_data",
             );
-            let file_meta_data_cache = Self::new_item_cache(
-                DEFAULT_FILE_META_DATA_CACHE_ITEMS,
-                "parquet_file_meta_cache",
-            );
+            let file_meta_data_cache =
+                Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS, "parquet_file_meta");
             GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache,
                 segment_info_cache,

@@ -151,7 +151,8 @@ pub struct QueryConfig {
     pub table_meta_cache_enabled: bool,
     /// Max number of cached table block meta
     pub table_cache_block_meta_count: u64,
-    /// Table memory cache size (MB)
+    /// Table memory cache size (MB),
+    /// @deprecated
     pub table_memory_cache_mb_size: u64,
     /// Max number of cached table snapshot
     pub table_cache_snapshot_count: u64,
@@ -164,14 +165,25 @@ pub struct QueryConfig {
     /// Max number of cached bloom index filters
     pub table_cache_bloom_index_filter_count: u64,
     /// Max size of in memory table column object cache
-    pub table_cache_column_mb_size: u64,
+    ///
+    /// The cache items are deserialized object, may take a lot of memory.
+    /// Please set it to zero to disable it.
+    pub table_data_cache_in_memory_column_mb_size: u64,
     /// Indicates if table data cache is enabled
     pub table_data_cache_enabled: bool,
     /// Table disk cache folder root
     pub table_disk_cache_root: String,
     /// Max size of external cache population queue length
-    /// TODO explain this, how it effect the memory usage
-    /// the item being queued are typically referencing items that inside in-memory cached data cache
+    ///
+    /// the items being queued reference table column row data, which are
+    /// un-deserialized and usually compressed (depends on table compression options).
+    ///
+    /// - please monitor the 'table_data_cache_population_pending_count' metric
+    ///   if it is too high, and takes too much memory, please consider decrease this value
+    ///
+    /// - please monitor the 'population_overflow_count' metric
+    ///   if it keeps increasing, and disk cache hits rate is not as expected. please consider
+    ///   increase this value.
     pub table_data_cache_population_queue_size: u32,
     /// Table disk cache size (MB)
     pub table_disk_cache_mb_size: u64,
@@ -228,7 +240,7 @@ impl Default for QueryConfig {
             table_cache_segment_count: 10240,
             table_cache_bloom_index_meta_count: 3000,
             table_cache_bloom_index_filter_count: 1024 * 1024,
-            table_cache_column_mb_size: 10 * 1024,
+            table_data_cache_in_memory_column_mb_size: 0,
             table_data_cache_enabled: false,
             table_data_cache_population_queue_size: 65536,
             table_disk_cache_root: "_cache".to_string(),

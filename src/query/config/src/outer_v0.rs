@@ -1301,10 +1301,15 @@ pub struct QueryConfig {
     #[clap(long, default_value = "1048576")]
     pub table_cache_bloom_index_filter_count: u64,
 
-    /// Max size of in memory table column object cache, default value is 10 GiB
-    /// To disable this cache , jus set it to 0
-    #[clap(long, default_value = "10240")]
-    pub table_cache_column_mb_size: u64,
+    /// Max size of in memory table column object cache
+    ///
+    /// The cache items are deserialized table column objects, may take a lot of memory.
+    ///
+    /// Default value is 0, which disable this cache. If query nodes have plenty of un-utilized
+    /// memory, the working set can be fitted into, and the access pattern will benefit from
+    /// caching, consider enabled this cache.
+    #[clap(long, default_value = "0")]
+    pub table_data_cache_in_memory_column_mb_size: u64,
 
     /// Indicates if table data cached is enabled, default false
     #[clap(long)]
@@ -1399,7 +1404,8 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             table_cache_segment_count: self.table_cache_segment_count,
             table_cache_bloom_index_meta_count: self.table_cache_bloom_index_meta_count,
             table_cache_bloom_index_filter_count: self.table_cache_bloom_index_filter_count,
-            table_cache_column_mb_size: self.table_cache_column_mb_size,
+            table_data_cache_in_memory_column_mb_size: self
+                .table_data_cache_in_memory_column_mb_size,
             table_data_cache_enabled: self.table_data_cache_enabled,
             table_data_cache_population_queue_size: self.table_data_cache_population_queue_size,
             table_disk_cache_root: self.table_disk_cache_root,
@@ -1469,7 +1475,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_cache_segment_count: inner.table_cache_segment_count,
             table_cache_bloom_index_meta_count: inner.table_cache_bloom_index_meta_count,
             table_cache_bloom_index_filter_count: inner.table_cache_bloom_index_filter_count,
-            table_cache_column_mb_size: inner.table_cache_column_mb_size,
+            table_data_cache_in_memory_column_mb_size: inner
+                .table_data_cache_in_memory_column_mb_size,
             table_data_cache_enabled: inner.table_data_cache_enabled,
             table_data_cache_population_queue_size: inner.table_data_cache_population_queue_size,
             management_mode: inner.management_mode,
