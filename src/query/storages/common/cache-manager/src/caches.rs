@@ -43,7 +43,7 @@ pub type BloomIndexMetaCache = NamedCache<InMemoryItemCacheHolder<BloomIndexMeta
 /// In memory object cache of parquet FileMetaData of external parquet files
 pub type FileMetaDataCache = NamedCache<InMemoryItemCacheHolder<FileMetaData>>;
 
-/// In memory object cache of parquet FileMetaData of external parquet files
+/// In memory object cache of table column array
 pub type ColumnArrayCache =
     NamedCache<InMemoryItemCacheHolder<SizedColumnArray, DefaultHashBuilder, ColumnArrayMeter>>;
 pub type ArrayRawDataUncompressedSize = usize;
