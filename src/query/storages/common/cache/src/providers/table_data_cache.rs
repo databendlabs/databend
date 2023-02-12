@@ -116,7 +116,7 @@ impl CacheAccessor<String, Vec<u8>, DefaultHashBuilder, Count> for TableDataCach
                 }
                 Err(TrySendError::Full(_)) => {
                     metrics_inc_cache_population_pending_count(-1, TABLE_DATA_CACHE_NAME);
-                    metrics_inc_cache_population_overflow_count(-1, TABLE_DATA_CACHE_NAME);
+                    metrics_inc_cache_population_overflow_count(1, TABLE_DATA_CACHE_NAME);
                 }
                 Err(TrySendError::Disconnected(_)) => {
                     error!("table data cache population thread is down");
