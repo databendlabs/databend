@@ -176,10 +176,10 @@ fn test_add_get_lru() {
         c.insert_single_slice("file1", &[1; 10]).unwrap();
         c.insert_single_slice("file2", &[2; 10]).unwrap();
         // Get the file to bump its LRU status.
-        assert_eq!(read_all(&mut c.get_file("file1").unwrap()).unwrap(), vec![
-            1u8;
-            10
-        ]);
+        assert_eq!(
+            read_all(&mut File::open(c.get_cache_path("file1").unwrap()).unwrap()).unwrap(),
+            vec![1u8; 10]
+        );
         // Adding this third file should put the cache above the limit.
         c.insert_single_slice("file3", &[3; 10]).unwrap();
         assert_eq!(c.size(), 20);

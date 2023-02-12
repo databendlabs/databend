@@ -227,15 +227,12 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
         self.cache.contains(&cache_key.0)
     }
 
-    /// Get an opened `File` for `key`, if one exists and can be opened. Updates the Cache state
-    /// of the file if present. Avoid using this method if at all possible, prefer `.get`.
-    pub fn get_file(&mut self, key: &str) -> self::result::Result<File> {
+    pub fn get_cache_path(&mut self, key: &str) -> Option<PathBuf> {
         let cache_key = self.cache_key(key);
-        let path = self.abs_path_of_cache_key(&cache_key);
         self.cache
             .get(&cache_key.0)
-            .ok_or(Error::FileNotInCache)
-            .and_then(|_len| File::open(path).map_err(Into::into))
+            .map(|_| ()) // release the &mut self
+            .map(|_| self.abs_path_of_cache_key(&cache_key))
     }
 
     /// Remove the given key from the cache.
@@ -265,8 +262,6 @@ pub mod result {
         /// The file was too large to fit in the cache.
         FileTooLarge,
         /// The file was not in the cache.
-        FileNotInCache,
-        /// The file was not in the cache.
         MalformedPath,
         /// An IO Error occurred.
         Io(io::Error),
@@ -276,7 +271,6 @@ pub mod result {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             match self {
                 Error::FileTooLarge => write!(f, "File too large"),
-                Error::FileNotInCache => write!(f, "File not in cache"),
                 Error::MalformedPath => write!(f, "Malformed catch file path"),
                 Error::Io(ref e) => write!(f, "{e}"),
             }
@@ -309,40 +303,44 @@ impl CacheAccessor<String, Vec<u8>, common_cache::DefaultHashBuilder, Count>
 {
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Vec<u8>>> {
         let k = k.as_ref();
-        // check disk cache
-        let read_file = || {
-            let mut file = {
-                let mut cache = self.write();
-                cache.get_file(k)?
+        {
+            let mut cache = self.write();
+            cache.get_cache_path(k)
+        }
+        .and_then(|cache_file_path| {
+            // check disk cache
+            let get_cache_content = || {
+                let mut v = vec![];
+                let mut file = File::open(cache_file_path)?;
+                file.read_to_end(&mut v)?;
+                Ok::<_, Box<dyn std::error::Error>>(v)
             };
-            let mut v = vec![];
-            file.read_to_end(&mut v)?;
-            Ok::<_, Box<dyn std::error::Error>>(v)
-        };
-        match read_file() {
-            Ok(mut bytes) => {
-                if let Err(e) = validate_checksum(bytes.as_slice()) {
-                    error!("data cache, of key {k},  crc validation failure: {e}");
-                    {
-                        // remove the invalid cache, error of removal ignored
-                        let mut cache = self.write();
-                        let _ = cache.remove(k);
+
+            match get_cache_content() {
+                Ok(mut bytes) => {
+                    if let Err(e) = validate_checksum(bytes.as_slice()) {
+                        error!("data cache, of key {k},  crc validation failure: {e}");
+                        {
+                            // remove the invalid cache, error of removal ignored
+                            let mut cache = self.write();
+                            let _ = cache.remove(k);
+                        }
+                        None
+                    } else {
+                        // trim the checksum bytes and return
+                        let total_len = bytes.len();
+                        let body_len = total_len - 4;
+                        bytes.truncate(body_len);
+                        let item = Arc::new(bytes);
+                        Some(item)
                     }
+                }
+                Err(e) => {
+                    error!("get disk cache item failed, cache_key {k}. {e}");
                     None
-                } else {
-                    // trim the checksum bytes and return
-                    let total_len = bytes.len();
-                    let body_len = total_len - 4;
-                    bytes.truncate(body_len);
-                    let item = Arc::new(bytes);
-                    Some(item)
                 }
             }
-            Err(e) => {
-                error!("get disk cache item failed, {}", e);
-                None
-            }
-        }
+        })
     }
 
     fn put(&self, key: String, value: Arc<Vec<u8>>) {
