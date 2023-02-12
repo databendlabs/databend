@@ -17,7 +17,6 @@ use std::thread::JoinHandle;
 
 use common_cache::Count;
 use common_cache::DefaultHashBuilder;
-pub use common_cache::LruDiskCache as DiskCache;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use crossbeam_channel::TrySendError;
@@ -30,9 +29,9 @@ use crate::metrics_inc_cache_hit_count;
 use crate::metrics_inc_cache_miss_count;
 use crate::metrics_inc_cache_population_overflow_count;
 use crate::metrics_inc_cache_population_pending_count;
+use crate::providers::LruDiskCacheHolder;
 use crate::CacheAccessor;
-use crate::DiskBytesCache;
-use crate::DiskCacheBuilder;
+use crate::LruDiskCacheBuilder;
 
 struct CacheItem {
     key: String,
@@ -68,7 +67,7 @@ impl AsRef<str> for TableDataColumnCacheKey {
 /// - a bounded channel that keep the references of items being cached
 /// - a disk or redis based external cache
 #[derive(Clone)]
-pub struct TableDataCache<T = DiskBytesCache> {
+pub struct TableDataCache<T = LruDiskCacheHolder> {
     external_cache: T,
     population_queue: crossbeam_channel::Sender<CacheItem>,
     _cache_populator: DiskCachePopulator,
@@ -82,8 +81,8 @@ impl TableDataCacheBuilder {
         path: &str,
         population_queue_size: u32,
         disk_cache_bytes_size: u64,
-    ) -> Result<TableDataCache<DiskBytesCache>> {
-        let disk_cache = DiskCacheBuilder::new_disk_cache(path, disk_cache_bytes_size)?;
+    ) -> Result<TableDataCache<LruDiskCacheHolder>> {
+        let disk_cache = LruDiskCacheBuilder::new_disk_cache(path, disk_cache_bytes_size)?;
         let (rx, tx) = crossbeam_channel::bounded(population_queue_size as usize);
         let num_population_thread = 1;
         Ok(TableDataCache {

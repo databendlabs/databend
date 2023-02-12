@@ -58,7 +58,6 @@ impl InMemoryCacheBuilder {
     }
 }
 
-// TODO move this to super
 // default impls
 mod impls {
     use std::sync::Arc;

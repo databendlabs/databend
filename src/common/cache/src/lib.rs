@@ -19,14 +19,10 @@
 extern crate heapsize_;
 
 mod cache;
-mod lru_disk_cache;
 mod meter;
 
 pub use cache::lru::LruCache;
 pub use cache::Cache;
-pub use lru_disk_cache::result::Error as DiskCacheError;
-pub use lru_disk_cache::result::Result as DiskCacheResult;
-pub use lru_disk_cache::*;
 pub use meter::bytes_meter::BytesMeter;
 pub use meter::count_meter::Count;
 pub use meter::count_meter::CountableMeter;

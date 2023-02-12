@@ -21,10 +21,10 @@ use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
-use common_cache::CacheKey;
-use common_cache::DiskCacheError;
-use common_cache::DiskCacheResult;
-use common_cache::LruDiskCache;
+use storages_common_cache::DiskCacheError;
+use storages_common_cache::DiskCacheKey;
+use storages_common_cache::DiskCacheResult;
+use storages_common_cache::LruDiskCache as DiskCache;
 use tempfile::TempDir;
 
 struct TestFixture {
@@ -37,7 +37,7 @@ trait InsertSingleSlice {
     fn insert_single_slice(&mut self, key: &str, bytes: &[u8]) -> DiskCacheResult<()>;
 }
 
-impl InsertSingleSlice for LruDiskCache {
+impl InsertSingleSlice for DiskCache {
     fn insert_single_slice(&mut self, key: &str, bytes: &[u8]) -> DiskCacheResult<()> {
         self.insert_bytes(key, &[bytes])
     }
@@ -86,13 +86,13 @@ impl TestFixture {
 #[test]
 fn test_empty_dir() {
     let f = TestFixture::new();
-    LruDiskCache::new(f.tmp(), 1024).unwrap();
+    DiskCache::new(f.tmp(), 1024).unwrap();
 }
 
 #[test]
 fn test_missing_root() {
     let f = TestFixture::new();
-    LruDiskCache::new(f.tmp().join("not-here"), 1024).unwrap();
+    DiskCache::new(f.tmp().join("not-here"), 1024).unwrap();
 }
 
 #[test]
@@ -103,12 +103,12 @@ fn test_some_existing_files() {
     let total_bytes: u64 = sizes.clone().sum();
     for i in sizes {
         let file_name = format!("file-{i}");
-        let test_key = CacheKey::from(file_name.as_str());
+        let test_key = DiskCacheKey::from(file_name.as_str());
         let test_path = PathBuf::from(&test_key);
         f.create_file(test_path, i as usize);
     }
 
-    let c = LruDiskCache::new(f.tmp(), total_bytes).unwrap();
+    let c = DiskCache::new(f.tmp(), total_bytes).unwrap();
     assert_eq!(c.size(), total_bytes);
     assert_eq!(c.len(), items);
 }
@@ -123,11 +123,11 @@ fn test_existing_file_too_large() {
     let sizes = (0..).take(items_count);
     for i in sizes {
         let file_name = format!("file-{i}");
-        let test_key = CacheKey::from(file_name.as_str());
+        let test_key = DiskCacheKey::from(file_name.as_str());
         let test_path = PathBuf::from(&test_key);
         f.create_file(test_path, item_size);
     }
-    let c = LruDiskCache::new(f.tmp(), capacity as u64).unwrap();
+    let c = DiskCache::new(f.tmp(), capacity as u64).unwrap();
 
     assert_eq!(c.size(), capacity as u64);
     assert_eq!(c.len(), items_count_shall_be_kept);
@@ -140,7 +140,7 @@ fn test_existing_file_too_large() {
 #[test]
 fn test_insert_bytes() {
     let f = TestFixture::new();
-    let mut c = LruDiskCache::new(f.tmp(), 25).unwrap();
+    let mut c = DiskCache::new(f.tmp(), 25).unwrap();
     c.insert_single_slice("a/b/c", &[0; 10]).unwrap();
     assert!(c.contains_key("a/b/c"));
     c.insert_single_slice("a/b/d", &[0; 10]).unwrap();
@@ -151,7 +151,7 @@ fn test_insert_bytes() {
     // The least-recently-used file should have been removed.
     assert!(!c.contains_key("a/b/c"));
 
-    let evicted_file_path = PathBuf::from(&CacheKey::from("a/b/c"));
+    let evicted_file_path = PathBuf::from(&DiskCacheKey::from("a/b/c"));
     assert!(!f.tmp().join(evicted_file_path).exists());
 }
 
@@ -159,7 +159,7 @@ fn test_insert_bytes() {
 fn test_insert_bytes_exact() {
     // Test that files adding up to exactly the size limit works.
     let f = TestFixture::new();
-    let mut c = LruDiskCache::new(f.tmp(), 20).unwrap();
+    let mut c = DiskCache::new(f.tmp(), 20).unwrap();
     c.insert_single_slice("file1", &[1; 10]).unwrap();
     c.insert_single_slice("file2", &[2; 10]).unwrap();
     assert_eq!(c.size(), 20);
@@ -172,7 +172,7 @@ fn test_insert_bytes_exact() {
 fn test_add_get_lru() {
     let f = TestFixture::new();
     {
-        let mut c = LruDiskCache::new(f.tmp(), 25).unwrap();
+        let mut c = DiskCache::new(f.tmp(), 25).unwrap();
         c.insert_single_slice("file1", &[1; 10]).unwrap();
         c.insert_single_slice("file2", &[2; 10]).unwrap();
         // Get the file to bump its LRU status.
@@ -191,9 +191,9 @@ fn test_add_get_lru() {
 #[test]
 fn test_insert_bytes_too_large() {
     let f = TestFixture::new();
-    let mut c = LruDiskCache::new(f.tmp(), 1).unwrap();
+    let mut c = DiskCache::new(f.tmp(), 1).unwrap();
     match c.insert_single_slice("a/b/c", &[0; 2]) {
         Err(DiskCacheError::FileTooLarge) => {}
-        x => panic!("Unexpected result: {:?}", x),
+        x => panic!("Unexpected result: {x:?}"),
     }
 }

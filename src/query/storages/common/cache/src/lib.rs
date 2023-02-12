@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(write_all_vectored)]
+
 mod cache;
 mod metrics;
 mod providers;
@@ -20,12 +22,15 @@ mod read;
 pub use cache::CacheAccessor;
 pub use cache::Named;
 pub use cache::NamedCache;
-pub use providers::DiskBytesCache;
-pub use providers::DiskCache;
-pub use providers::DiskCacheBuilder;
+pub use providers::DiskCacheError;
+pub use providers::DiskCacheKey;
+pub use providers::DiskCacheResult;
 pub use providers::InMemoryBytesCacheHolder;
 pub use providers::InMemoryCacheBuilder;
 pub use providers::InMemoryItemCacheHolder;
+pub use providers::LruDiskCache;
+pub use providers::LruDiskCacheBuilder;
+pub use providers::LruDiskCacheHolder;
 pub use providers::TableDataCache;
 pub use providers::TableDataCacheBuilder;
 pub use providers::TableDataColumnCacheKey;

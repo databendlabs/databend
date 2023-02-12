@@ -1298,7 +1298,6 @@ dependencies = [
  "hex",
  "ritelinked",
  "siphasher",
- "tempfile",
  "tracing",
  "walkdir",
 ]
@@ -7824,13 +7823,17 @@ dependencies = [
  "common-exception",
  "crc32fast",
  "crossbeam-channel",
+ "hex",
  "metrics",
  "opendal",
  "parking_lot 0.12.1",
  "ringbuffer",
  "serde",
  "serde_json",
+ "siphasher",
+ "tempfile",
  "tracing",
+ "walkdir",
 ]
 
 [[package]]
