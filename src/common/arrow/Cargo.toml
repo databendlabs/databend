@@ -43,7 +43,7 @@ arrow = { package = "arrow2", version = "0.15.0", default-features = false, feat
 
 arrow-format = { version = "0.8.0", features = ["flight-data", "flight-service", "ipc"] }
 futures = "0.3.24"
-native = { package = "strawboat", git = "https://github.com/sundy-li/strawboat", rev = "92a8e4f" }
+native = { package = "strawboat", git = "https://github.com/sundy-li/strawboat", rev = "24bd7f6" }
 parquet2 = { version = "0.17.0", default_features = false, features = ["serde_types"] }
 
 [dev-dependencies]
