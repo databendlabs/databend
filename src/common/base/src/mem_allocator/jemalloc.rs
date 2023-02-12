@@ -24,6 +24,12 @@ impl JEAllocator {
     pub fn name() -> String {
         "jemalloc".to_string()
     }
+
+    pub fn conf() -> String {
+        tikv_jemalloc_ctl::config::malloc_conf::mib()
+            .and_then(|mib| mib.read().map(|v| v.to_owned()))
+            .unwrap_or_else(|e| format!("N/A: failed to read jemalloc config, {}", e))
+    }
 }
 
 #[cfg(target_os = "linux")]

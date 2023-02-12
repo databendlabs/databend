@@ -28,6 +28,10 @@ impl StdAllocator {
     pub fn name() -> String {
         "std".to_string()
     }
+
+    pub fn conf() -> String {
+        "".to_string()
+    }
 }
 
 unsafe impl Allocator for StdAllocator {

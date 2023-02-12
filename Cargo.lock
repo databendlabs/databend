@@ -2955,7 +2955,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sharing-endpoint",
- "tikv-jemalloc-ctl",
  "tokio-stream",
  "tonic",
  "tracing",
