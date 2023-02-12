@@ -237,12 +237,14 @@ async fn main_entrypoint() -> Result<()> {
             "unlimited".to_string()
         }
     });
+    println!("    global allocator: {}", GlobalAllocator::name());
     println!("    allocator config: {}", {
         use tikv_jemalloc_ctl::config;
         config::malloc_conf::mib()
             .and_then(|mib| mib.read().map(|v| v.to_owned()))
             .unwrap_or_else(|e| format!("N/A: failed to read jemalloc config, {}", e))
     });
+
     println!("Cluster: {}", {
         let cluster = ClusterDiscovery::instance().discover(&conf).await?;
         let nodes = cluster.nodes.len();

@@ -20,6 +20,12 @@
 #[derive(Debug, Clone, Copy, Default)]
 pub struct JEAllocator;
 
+impl JEAllocator {
+    pub fn name() -> String {
+        "jemalloc".to_string()
+    }
+}
+
 #[cfg(target_os = "linux")]
 pub mod linux {
     use std::alloc::AllocError;
