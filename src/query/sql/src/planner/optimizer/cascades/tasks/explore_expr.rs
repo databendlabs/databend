@@ -157,8 +157,8 @@ impl ExploreExprTask {
         unsafe {
             rule_set = m_expr
                 .plan
-                .transrormation_candidate_rules()
-                .bitand(&RULE_FACTORY.transformation_rules);
+                .exploration_candidate_rules()
+                .bitand(&RULE_FACTORY.exploration_rules);
         }
 
         for rule_id in rule_set.iter() {
