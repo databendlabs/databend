@@ -360,6 +360,11 @@ where K: Keyable
             Some(res)
         }
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remain = self.slice.len() - self.i;
+        (remain, Some(remain))
+    }
 }
 
 pub struct Table0IterMut<'a, K, V> {

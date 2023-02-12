@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::alloc::Allocator;
+use std::iter::TrustedLen;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 
@@ -216,7 +217,19 @@ where K: UnsizedKeyable + ?Sized
         }
         None
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let (l, u) = self
+            .it_empty
+            .as_ref()
+            .map_or((0, Some(0)), |it| it.size_hint());
+        let (l2, u2) = self.it.as_ref().map_or((0, Some(0)), |it| it.size_hint());
+
+        (l + l2, u.and_then(|u| u2.map(|u2| u + u2)))
+    }
 }
+
+unsafe impl<'a, K, V> TrustedLen for StringHashtableIter<'a, K, V> where K: UnsizedKeyable + ?Sized {}
 
 pub struct StringHashtableIterMut<'a, K, V>
 where K: UnsizedKeyable + ?Sized
