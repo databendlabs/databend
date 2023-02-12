@@ -19,8 +19,10 @@ use common_storage::StageFilesInfo;
 use crate::table_functions::string_value;
 use crate::table_functions::TableArgs;
 
+#[derive(Clone)]
 pub(crate) struct InferSchemaArgsParsed {
     pub(crate) location: String,
+    pub(crate) file_format: Option<String>,
     pub(crate) files_info: StageFilesInfo,
 }
 
@@ -29,6 +31,7 @@ impl InferSchemaArgsParsed {
         let args = table_args.expect_all_named("infer_schema")?;
 
         let mut location = None;
+        let mut file_format = None;
         let mut files_info = StageFilesInfo {
             path: "".to_string(),
             files: None,
@@ -42,6 +45,9 @@ impl InferSchemaArgsParsed {
                 }
                 "pattern" => {
                     files_info.pattern = Some(string_value(v)?);
+                }
+                "file_format" => {
+                    file_format = Some(string_value(v)?);
                 }
                 _ => {
                     return Err(ErrorCode::BadArguments(format!(
@@ -58,6 +64,7 @@ impl InferSchemaArgsParsed {
 
         Ok(Self {
             location,
+            file_format,
             files_info,
         })
     }

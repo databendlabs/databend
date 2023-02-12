@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::any::Any;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
@@ -125,14 +126,7 @@ impl Table for InferSchemaTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_source(
-            |output| {
-                InferSchemaSource::create(
-                    ctx.clone(),
-                    output,
-                    self.args_parsed.location.to_owned(),
-                    self.args_parsed.files_info.clone(),
-                )
-            },
+            |output| InferSchemaSource::create(ctx.clone(), output, self.args_parsed.clone()),
             1,
         )?;
         Ok(())
@@ -153,22 +147,19 @@ impl TableFunction for InferSchemaTable {
 struct InferSchemaSource {
     is_finished: bool,
     ctx: Arc<dyn TableContext>,
-    location: String,
-    files_info: StageFilesInfo,
+    args_parsed: InferSchemaArgsParsed,
 }
 
 impl InferSchemaSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        location: String,
-        files_info: StageFilesInfo,
+        args_parsed: InferSchemaArgsParsed,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.clone(), output, InferSchemaSource {
             is_finished: false,
             ctx,
-            location,
-            files_info,
+            args_parsed,
         })
     }
 }
@@ -184,15 +175,20 @@ impl AsyncSource for InferSchemaSource {
         }
         self.is_finished = true;
 
-        let (stage_info, path) = parse_stage_location(&self.ctx, &self.location).await?;
+        let (stage_info, path) =
+            parse_stage_location(&self.ctx, &self.args_parsed.location).await?;
         let files_info = StageFilesInfo {
             path,
-            ..self.files_info.clone()
+            ..self.args_parsed.files_info.clone()
         };
         let operator = init_stage_operator(&stage_info)?;
 
         let first_file = files_info.first_file(&operator).await?;
-        let schema = match stage_info.file_format_options.format {
+        let file_format = match &self.args_parsed.file_format {
+            Some(f) => StageFileFormatType::from_str(f)?,
+            None => stage_info.file_format_options.format.clone(),
+        };
+        let schema = match file_format {
             StageFileFormatType::Parquet => {
                 let arrow_schema = read_parquet_schema_async(&operator, &first_file.path).await?;
                 TableSchema::from(&arrow_schema)
