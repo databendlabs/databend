@@ -421,7 +421,10 @@ pub type LruDiskCacheHolder = Arc<RwLock<LruDiskCache>>;
 
 pub struct LruDiskCacheBuilder;
 impl LruDiskCacheBuilder {
-    pub fn new_disk_cache(path: &str, disk_cache_bytes_size: u64) -> Result<LruDiskCacheHolder> {
+    pub fn new_disk_cache(
+        path: &PathBuf,
+        disk_cache_bytes_size: u64,
+    ) -> Result<LruDiskCacheHolder> {
         let external_cache = DiskCache::new(path, disk_cache_bytes_size)
             .map_err(|e| ErrorCode::StorageOther(format!("create disk cache failed, {e}")))?;
         Ok(Arc::new(RwLock::new(external_cache)))

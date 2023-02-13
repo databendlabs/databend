@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 
@@ -74,7 +75,7 @@ const TABLE_DATA_CACHE_NAME: &str = "table_data";
 pub struct TableDataCacheBuilder;
 impl TableDataCacheBuilder {
     pub fn new_table_data_disk_cache(
-        path: &str,
+        path: &PathBuf,
         population_queue_size: u32,
         disk_cache_bytes_size: u64,
     ) -> Result<TableDataCache<LruDiskCacheHolder>> {

@@ -13,6 +13,7 @@
 // limitations under the License.
 //
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use common_base::base::GlobalInstance;
@@ -55,8 +56,11 @@ impl CacheManager {
     pub fn init(config: &QueryConfig) -> Result<()> {
         // setup table data cache
         let table_data_cache = if config.table_data_cache_enabled {
+            let real_disk_cache_root = PathBuf::from(&config.table_disk_cache_root)
+                .join(&config.tenant_id)
+                .join("v1");
             Self::new_block_data_cache(
-                &config.table_disk_cache_root,
+                &real_disk_cache_root,
                 config.table_data_cache_population_queue_size,
                 config.table_disk_cache_max_size,
             )?
@@ -183,7 +187,7 @@ impl CacheManager {
     }
 
     fn new_block_data_cache(
-        path: &str,
+        path: &PathBuf,
         population_queue_size: u32,
         disk_cache_bytes_size: u64,
     ) -> Result<Option<TableDataCache>> {
