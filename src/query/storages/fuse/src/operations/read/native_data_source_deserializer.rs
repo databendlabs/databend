@@ -260,10 +260,8 @@ impl NativeDeserializeDataTransform {
                 }
             }
         } else {
-            let mut i = 0;
-            for array in array_iter {
+            for (i, array) in array_iter.enumerate() {
                 arrays.insert(i, array?);
-                i += 1;
             }
         }
         Ok(arrays)
