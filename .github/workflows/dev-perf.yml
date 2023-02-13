@@ -57,33 +57,6 @@ jobs:
           profile: release
           sha: ${{ github.sha }}
           target: x86_64-unknown-linux-gnu
-      - name: Prepare Databend
-        run: |
-          killall databend-query || true
-          killall databend-meta || true
-          sleep 1
-          for bin in databend-query databend-meta; do
-            if test -n "$(pgrep $bin)"; then
-              echo "The $bin is not killed. force killing."
-            killall -9 $bin || true
-            fi
-          done
-          echo 'Start databend-meta...'
-          nohup target/${BUILD_PROFILE}/databend-meta --single &
-          echo "Waiting on databend-meta 10 seconds..."
-          python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
-          echo 'Start databend-query...'
-          nohup target/${BUILD_PROFILE}/databend-query \
-            --meta-endpoints 127.0.0.1:9191 \
-            --storage-type s3 \
-            --storage-s3-region us-east-2 \
-            --storage-s3-bucket databend-ci \
-            --storage-s3-root "perf/data/${{ github.run_id }}" \
-            --tenant-id perf \
-            --cluster-id "${{ github.run_id }}" \
-            --storage-allow-insecure &
-          echo "Waiting on databend-query 10 seconds..."
-          python3 scripts/ci/wait_tcp.py --timeout 5 --port 3307
       - name: Setup BendSQL
         run: |
           curl -fsSLo ./bendsql.tar.gz https://github.com/databendcloud/bendsql/releases/download/v0.3.0/bendsql-linux-amd64.tar.gz
@@ -92,34 +65,33 @@ jobs:
           sudo cp ./linux-amd64/bendsql /usr/local/bin/bendsql
           bendsql version
           bendsql connect
-      - name: Load Data
+      - name: Run Benchmark
+        working-directory: scripts/ci/clickbench
+        env:
+          BENCHMARK_ID: ${{ github.run_id }}
         run: |
-          ./scripts/benchmark/query/load/hits.sh
+          ./benchmark.sh
       - name: Prepare Metadata
+        working-directory: scripts/ci/clickbench
         run: |
-          mkdir -p /tmp/databend-perf/
-          echo "INSTANCE_TYPE=c5.4xlarge" > /tmp/databend-perf/metadata.info
-          echo "COMMIT=${{ github.sha }}" > /tmp/databend-perf/metadata.info
           case ${{ github.event_name }} in
             pull_request)
-              echo "PR_NUMBER=${{ github.event.number }}" >> /tmp/databend-perf/metadata.info
+              BENCHMARK_SYSTEM="Databend(PR#${{ github.event.number }})"
+              BENCHMARK_TYPE="PR"
               ;;
             push)
-              echo "RELEASE_TAG=${{ github.ref_name }}" >> /tmp/databend-perf/metadata.info
+              BENCHMARK_SYSTEM="Databend(Release@${{ github.ref_name }})"
+              BENCHMARK_TYPE="Release"
               ;;
           esac
-      - name: Run Benchmark
-        run: |
-          bendsql benchmark \
-            --warm 3 \
-            --count 10 \
-            --test-dir ./scripts/benchmark/query/benchmarks/ \
-            --output-format json,md \
-            --output-dir /tmp/databend-perf/ \
-            --size 'c5.4xlarge'
-          cat /tmp/databend-perf/hits.md
+          jq ".system = \"${BENCHMARK_SYSTEM}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+          jq ".date = \"$(date -u +%Y-%m-%d)\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+          jq ".machine = \"c5.4xlarge\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+          jq ".cluster_size = 1" <result.json >result.json.tmp && mv result.json.tmp result.json
+          jq ".comment = \"commit:${{ github.sha }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+          jq ".tags = [\"Rust\", \"${BENCHMARK_TYPE}\"]" <result.json >result.json.tmp && mv result.json.tmp result.json
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
           name: benchmark-results
-          path: /tmp/databend-perf/
+          path: scripts/ci/clickbench/result.json
