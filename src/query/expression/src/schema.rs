@@ -594,32 +594,49 @@ impl TableSchema {
     }
 
     // return leaf fields and column ids
-    pub fn leaf_fields(&self) -> (Vec<ColumnId>, Vec<TableField>) {
-        fn collect_in_field(field: &TableField, fields: &mut Vec<TableField>) {
+    pub fn leaf_fields(&self) -> Vec<TableField> {
+        fn collect_in_field(
+            field: &TableField,
+            fields: &mut Vec<TableField>,
+            next_column_id: &mut ColumnId,
+        ) {
             match field.data_type() {
                 TableDataType::Tuple {
                     fields_type,
                     fields_name,
                 } => {
                     for (name, ty) in fields_name.iter().zip(fields_type) {
-                        collect_in_field(&TableField::new(name, ty.clone()), fields);
+                        collect_in_field(
+                            &TableField::new_from_column_id(name, ty.clone(), *next_column_id),
+                            fields,
+                            next_column_id,
+                        );
                     }
                 }
                 TableDataType::Array(ty) => {
                     collect_in_field(
-                        &TableField::new(&format!("{}:0", field.name()), ty.as_ref().to_owned()),
+                        &TableField::new_from_column_id(
+                            &format!("{}:0", field.name()),
+                            ty.as_ref().to_owned(),
+                            *next_column_id,
+                        ),
                         fields,
+                        next_column_id,
                     );
                 }
-                _ => fields.push(field.clone()),
+                _ => {
+                    *next_column_id += 1;
+                    fields.push(field.clone())
+                }
             }
         }
 
         let mut fields = Vec::new();
         for field in self.fields() {
-            collect_in_field(field, &mut fields);
+            let mut next_column_id = field.column_id;
+            collect_in_field(field, &mut fields, &mut next_column_id);
         }
-        (self.to_leaf_column_ids(), fields)
+        fields
     }
 
     /// project will do column pruning.

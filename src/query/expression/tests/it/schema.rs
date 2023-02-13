@@ -77,9 +77,9 @@ fn test_project_schema_from_tuple() -> Result<()> {
                 (2, "b12"),
                 (3, "b2"),
             ];
-            let (column_ids, leaf_fields) = project_schema.leaf_fields();
-            for (i, (column_id, leaf_field)) in column_ids.iter().zip(leaf_fields).enumerate() {
-                assert_eq!(expected_column_id_field[i].0, *column_id);
+            let leaf_fields = project_schema.leaf_fields();
+            for (i, leaf_field) in leaf_fields.iter().enumerate() {
+                assert_eq!(expected_column_id_field[i].0, leaf_field.column_id());
                 assert_eq!(expected_column_id_field[i].1, leaf_field.name());
             }
         }
@@ -151,11 +151,12 @@ fn test_schema_from_simple_type() -> Result<()> {
     assert_eq!(schema.to_leaf_column_ids(), vec![0, 1, 2]);
     assert_eq!(schema.next_column_id(), 3);
 
-    let (leaf_column_ids, leaf_fields) = schema.leaf_fields();
-    assert_eq!(leaf_column_ids, schema.to_leaf_column_ids());
+    let leaf_fields = schema.leaf_fields();
     let leaf_field_names = vec!["a", "b", "c"];
+    let leaf_column_ids = vec![0, 1, 2];
     for (i, field) in leaf_fields.iter().enumerate() {
-        assert_eq!(field.name(), leaf_field_names[i])
+        assert_eq!(field.name(), leaf_field_names[i]);
+        assert_eq!(field.column_id(), leaf_column_ids[i]);
     }
 
     Ok(())
@@ -166,8 +167,7 @@ fn test_schema_from_struct() -> Result<()> {
     let schema = create_test_complex_schema();
     let flat_column_ids = schema.to_leaf_column_ids();
 
-    let (leaf_column_ids, leaf_fields) = schema.leaf_fields();
-    assert_eq!(leaf_column_ids, schema.to_leaf_column_ids());
+    let leaf_fields = schema.leaf_fields();
     let expected_fields = vec![
         ("u64", TableDataType::Number(NumberDataType::UInt64)),
         ("0", TableDataType::Number(NumberDataType::UInt64)),
@@ -195,10 +195,12 @@ fn test_schema_from_struct() -> Result<()> {
         ("a", TableDataType::Number(NumberDataType::Int32)),
         ("b", TableDataType::Number(NumberDataType::Int32)),
     ];
+
     for (i, field) in leaf_fields.iter().enumerate() {
         let expected_field = &expected_fields[i];
         assert_eq!(field.name(), expected_field.0);
         assert_eq!(field.data_type().to_owned(), expected_field.1);
+        assert_eq!(field.column_id(), i as u32);
     }
 
     let expeted_column_ids = vec![
@@ -262,9 +264,9 @@ fn test_schema_from_struct() -> Result<()> {
             (10, "a"),
             (11, "b"),
         ];
-        let (column_ids, leaf_fields) = schema.leaf_fields();
-        for (i, (column_id, leaf_field)) in column_ids.iter().zip(leaf_fields).enumerate() {
-            assert_eq!(expected_column_id_field[i].0, *column_id);
+        let leaf_fields = schema.leaf_fields();
+        for (i, leaf_field) in leaf_fields.iter().enumerate() {
+            assert_eq!(expected_column_id_field[i].0, leaf_field.column_id());
             assert_eq!(expected_column_id_field[i].1, leaf_field.name());
         }
     }
@@ -380,9 +382,9 @@ fn test_schema_modify_field() -> Result<()> {
             (5, "1"),
             (6, "ary:0:0"),
         ];
-        let (column_ids, leaf_fields) = schema.leaf_fields();
-        for (i, (column_id, leaf_field)) in column_ids.iter().zip(leaf_fields).enumerate() {
-            assert_eq!(expected_column_id_field[i].0, *column_id);
+        let leaf_fields = schema.leaf_fields();
+        for (i, leaf_field) in leaf_fields.iter().enumerate() {
+            assert_eq!(expected_column_id_field[i].0, leaf_field.column_id());
             assert_eq!(expected_column_id_field[i].1, leaf_field.name());
         }
     }
