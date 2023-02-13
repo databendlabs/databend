@@ -25,9 +25,11 @@ use common_expression::Scalar;
 use common_expression::TableSchemaRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use opendal::Operator;
+use storages_common_index::filters::BlockFilter;
 use storages_common_index::BloomIndex;
 use storages_common_index::FilterEvalResult;
 use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::Versioned;
 
 use crate::io::BloomBlockFilterReader;
 
@@ -92,7 +94,11 @@ impl BloomPrunerCreator {
                 let mut filter_block_cols = vec![];
                 let mut scalar_map = HashMap::<Scalar, u64>::new();
                 for (col_name, scalar, ty) in point_query_cols.iter() {
-                    filter_block_cols.push(BloomIndex::build_filter_column_name(col_name));
+                    let field = schema.field_with_name(col_name)?;
+                    filter_block_cols.push(BloomIndex::build_filter_column_name(
+                        BlockFilter::VERSION,
+                        field,
+                    )?);
                     if !scalar_map.contains_key(scalar) {
                         let digest = BloomIndex::calculate_scalar_digest(func_ctx, scalar, ty)?;
                         scalar_map.insert(scalar.clone(), digest);
