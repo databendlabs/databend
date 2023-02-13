@@ -256,9 +256,8 @@ impl BlockReader {
         let mut field_column_descriptors = Vec::with_capacity(estimated_cap);
         let mut field_uncompressed_size = 0;
 
-        let mut column_id = 0;
         for (i, leaf_index) in indices.iter().enumerate() {
-            column_id = column.leaf_column_ids[i];
+            let column_id = column.leaf_column_ids[i];
             if let Some(column_meta) = deserialization_context.column_metas.get(&column_id) {
                 if let Some(chunk) = column_chunks.get(&column_id) {
                     match chunk {
@@ -319,7 +318,7 @@ impl BlockReader {
                 Ok(Some(DeserializedArray::NoNeedToCache(array)))
             } else {
                 // the array is deserialized from raw bytes, should be cached
-                // let column_id = column.leaf_column_ids[indices[0]];
+                let column_id = column.leaf_column_ids[0];
                 Ok(Some(DeserializedArray::Deserialized((
                     column_id,
                     array,
