@@ -30,12 +30,12 @@ impl BlockReader {
         let columns_meta = &meta.col_metas;
 
         // Get the merged IO read result.
-        let fetched = self
-            .read_columns_data_by_merge_io(settings, &meta.location.0, &columns_meta)
+        let merge_io_read_result = self
+            .read_columns_data_by_merge_io(settings, &meta.location.0, columns_meta)
             .await?;
 
         // Get the columns chunk.
-        let column_chunks = fetched.columns_chunks()?;
+        let column_chunks = merge_io_read_result.columns_chunks()?;
 
         let num_rows = meta.row_count as usize;
 
@@ -43,7 +43,7 @@ impl BlockReader {
             &meta.location.0,
             num_rows,
             &meta.compression,
-            &columns_meta,
+            columns_meta,
             column_chunks,
             None,
         )
