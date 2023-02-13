@@ -24,7 +24,7 @@ use common_storage::ColumnNodes;
 fn test_node_leaf_index_match_column_ids(schema: &TableSchema, column_node: &ColumnNode) {
     let leaf_column_ids = schema.to_leaf_column_ids();
 
-    for (j, lead_index) in column_node.leaf_ids.iter().enumerate() {
+    for (j, lead_index) in column_node.leaf_indices.iter().enumerate() {
         assert_eq!(leaf_column_ids[*lead_index], column_node.leaf_column_ids[j]);
     }
 }
@@ -89,11 +89,11 @@ fn test_column_leaf_schema_from_struct_of_old_version() -> Result<()> {
         .zip(new_column_leaves.column_nodes.iter())
     {
         assert_eq!(old_leaf.field.name, new_leaf.field.name);
-        assert_eq!(old_leaf.leaf_ids, new_leaf.leaf_ids);
+        assert_eq!(old_leaf.leaf_indices, new_leaf.leaf_indices);
 
         // assert new column node column ids equal to old column node leaf ids.
         for (leaf_id, column_id) in old_leaf
-            .leaf_ids
+            .leaf_indices
             .iter()
             .zip(new_leaf.leaf_column_ids.iter())
         {
@@ -104,7 +104,7 @@ fn test_column_leaf_schema_from_struct_of_old_version() -> Result<()> {
     Ok(())
 }
 
-// add/drop column from schema, and test column_ids match leaf_ids
+// add/drop column from schema, and test column_ids match leaf_indices
 #[test]
 fn test_alter_schema_column() -> Result<()> {
     let fields = vec![TableField::new(

@@ -22,6 +22,8 @@ use common_base::base::tokio;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
+use common_expression::ColumnId;
+use common_expression::FieldIndex;
 use common_expression::Scalar;
 use common_storage::ColumnNode;
 use common_storage::ColumnNodes;
@@ -56,10 +58,10 @@ fn test_to_partitions() -> Result<()> {
         })
     };
 
-    let col_nodes_gen = |col_id| ColumnNode {
+    let col_nodes_gen = |field_index| ColumnNode {
         field: ArrowField::new("".to_string(), ArrowType::Int64, false),
-        leaf_ids: vec![col_id],
-        leaf_column_ids: vec![col_id as u32],
+        leaf_indices: vec![field_index],
+        leaf_column_ids: vec![field_index as ColumnId],
         children: None,
     };
 
@@ -67,12 +69,12 @@ fn test_to_partitions() -> Result<()> {
     // for simplicity, we set `in_memory_size` and the `len` to the value of `col_id`
     let cols_stats = (0..num_of_col)
         .into_iter()
-        .map(|col_id| (col_id as u32, col_stats_gen(col_id)))
+        .map(|field_index| (field_index as ColumnId, col_stats_gen(field_index)))
         .collect::<HashMap<_, _>>();
 
     let cols_metas = (0..num_of_col)
         .into_iter()
-        .map(|col_id| (col_id as u32, col_metas_gen(col_id)))
+        .map(|field_index| (field_index as ColumnId, col_metas_gen(field_index)))
         .collect::<HashMap<_, _>>();
 
     let cluster_stats = None;
@@ -120,16 +122,16 @@ fn test_to_partitions() -> Result<()> {
 
     // CASE II: col pruning
     // projection which keeps the odd ones
-    let col_ids = (0..num_of_col)
+    let field_indices = (0..num_of_col)
         .into_iter()
         .filter(|v| v & 1 != 0)
         .collect::<Vec<usize>>();
-    let proj = Projection::Columns(col_ids.clone());
+    let proj = Projection::Columns(field_indices.clone());
 
     // for each block, the block size we expects (after pruning)
     let expected_block_size: u64 = cols_metas
         .iter()
-        .filter(|(cid, _)| col_ids.contains(&(**cid as usize)))
+        .filter(|(cid, _)| field_indices.contains(&(**cid as FieldIndex)))
         .map(|(_, col_meta)| col_meta.offset_length().1)
         .sum();
 

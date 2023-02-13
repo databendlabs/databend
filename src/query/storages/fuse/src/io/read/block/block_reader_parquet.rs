@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
+use common_expression::FieldIndex;
 use storages_common_table_meta::meta::BlockMeta;
 
 use crate::io::read::ReadSettings;

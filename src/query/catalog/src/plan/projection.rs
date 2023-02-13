@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::fmt::Formatter;
 
 use common_exception::Result;
+use common_expression::FieldIndex;
 use common_expression::TableSchema;
 use common_storage::ColumnNode;
 use common_storage::ColumnNodes;
@@ -23,11 +24,11 @@ use common_storage::ColumnNodes;
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub enum Projection {
     /// column indices of the table
-    Columns(Vec<usize>),
+    Columns(Vec<FieldIndex>),
     /// inner column indices for tuple data type with inner columns.
     /// the key is the column_index of ColumnEntry.
     /// the value is the path indices of inner columns.
-    InnerColumns(BTreeMap<usize, Vec<usize>>),
+    InnerColumns(BTreeMap<FieldIndex, Vec<FieldIndex>>),
 }
 
 impl Projection {
@@ -106,7 +107,7 @@ impl Projection {
         Ok(column_nodes)
     }
 
-    pub fn add_col(&mut self, col: usize) {
+    pub fn add_col(&mut self, col: FieldIndex) {
         match self {
             Projection::Columns(indices) => {
                 if indices.contains(&col) {
@@ -121,7 +122,7 @@ impl Projection {
         }
     }
 
-    pub fn remove_col(&mut self, col: usize) {
+    pub fn remove_col(&mut self, col: FieldIndex) {
         match self {
             Projection::Columns(indices) => {
                 if let Some(pos) = indices.iter().position(|x| *x == col) {

@@ -19,13 +19,14 @@ use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_catalog::plan::Projection;
-use common_catalog::table::ColumnId;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
+use common_expression::ColumnId;
 use common_expression::DataField;
 use common_expression::DataSchema;
+use common_expression::FieldIndex;
 use common_expression::Scalar;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
@@ -40,7 +41,7 @@ pub struct BlockReader {
     pub(crate) operator: Operator,
     pub(crate) projection: Projection,
     pub(crate) projected_schema: TableSchemaRef,
-    pub(crate) project_indices: BTreeMap<usize, (ColumnId, Field, DataType)>,
+    pub(crate) project_indices: BTreeMap<FieldIndex, (ColumnId, Field, DataType)>,
     pub(crate) column_nodes: ColumnNodes,
     pub(crate) parquet_schema_descriptor: SchemaDescriptor,
     pub(crate) default_vals: Vec<Scalar>,
@@ -138,13 +139,13 @@ impl BlockReader {
         self.operator.metadata().can_blocking()
     }
 
-    // Build non duplicate leaf_ids to avoid repeated read column from parquet
+    // Build non duplicate leaf_indices to avoid repeated read column from parquet
     pub(crate) fn build_projection_indices(
         columns: &[ColumnNode],
-    ) -> BTreeMap<usize, (ColumnId, Field, DataType)> {
+    ) -> BTreeMap<FieldIndex, (ColumnId, Field, DataType)> {
         let mut indices = BTreeMap::new();
         for column in columns {
-            for (i, index) in column.leaf_ids.iter().enumerate() {
+            for (i, index) in column.leaf_indices.iter().enumerate() {
                 let f: TableField = (&column.field).into();
                 let data_type: DataType = f.data_type().into();
                 indices.insert(

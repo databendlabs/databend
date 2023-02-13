@@ -87,7 +87,7 @@ members = [
 # databend maintains:
 openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.7.4-alpha.3" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
-opendal = { version = "0.27.0" }
+opendal = { version = "0.27.1" }
 ordered-float = { version = "3.4.0", default-features = false }
 
 # type helper
