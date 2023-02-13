@@ -33,6 +33,7 @@ use parking_lot::RwLock;
 use siphasher::sip128;
 use siphasher::sip128::Hasher128;
 use tracing::error;
+use tracing::warn;
 
 use crate::CacheAccessor;
 
@@ -322,8 +323,13 @@ impl CacheAccessor<String, Vec<u8>, common_cache::DefaultHashBuilder, Count>
                         error!("data cache, of key {k},  crc validation failure: {e}");
                         {
                             // remove the invalid cache, error of removal ignored
-                            let mut cache = self.write();
-                            let _ = cache.remove(k);
+                            let r = {
+                                let mut cache = self.write();
+                                cache.remove(k)
+                            };
+                            if let Err(e) = r {
+                                warn!("failed to remove invalid cache item, key {k}. {e}");
+                            }
                         }
                         None
                     } else {
