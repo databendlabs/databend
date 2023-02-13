@@ -22,9 +22,9 @@ use std::sync::Arc;
 
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
-use common_catalog::table::ColumnId;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ColumnId;
 use common_expression::Scalar;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::Compression;

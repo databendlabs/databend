@@ -110,19 +110,19 @@ impl FuseTable {
         base_snapshot: &TableSnapshot,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let all_col_ids = self.all_the_columns_ids();
+        let all_column_indices = self.all_column_indices();
         let schema = self.schema();
 
         let mut offset_map = BTreeMap::new();
         let mut remain_reader = None;
         let mut pos = 0;
         let (projection, input_schema) = if col_indices.is_empty() {
-            all_col_ids.iter().for_each(|&id| {
+            all_column_indices.iter().for_each(|&id| {
                 offset_map.insert(id, pos);
                 pos += 1;
             });
 
-            (Projection::Columns(all_col_ids), schema.clone())
+            (Projection::Columns(all_column_indices), schema.clone())
         } else {
             col_indices.iter().for_each(|&id| {
                 offset_map.insert(id, pos);
@@ -134,18 +134,18 @@ impl FuseTable {
                 .map(|idx| schema.fields()[*idx].clone())
                 .collect();
 
-            let remain_col_ids: Vec<usize> = all_col_ids
+            let remain_col_indices: Vec<usize> = all_column_indices
                 .into_iter()
                 .filter(|id| !col_indices.contains(id))
                 .collect();
-            if !remain_col_ids.is_empty() {
-                remain_col_ids.iter().for_each(|&id| {
+            if !remain_col_indices.is_empty() {
+                remain_col_indices.iter().for_each(|&id| {
                     offset_map.insert(id, pos);
                     pos += 1;
                 });
 
                 let reader =
-                    self.create_block_reader(Projection::Columns(remain_col_ids), ctx.clone())?;
+                    self.create_block_reader(Projection::Columns(remain_col_indices), ctx.clone())?;
                 fields.extend_from_slice(reader.schema().fields());
                 remain_reader = Some((*reader).clone());
             }
