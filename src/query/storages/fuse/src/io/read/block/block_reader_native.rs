@@ -19,6 +19,7 @@ use std::ops::Range;
 use std::time::Instant;
 
 use common_arrow::arrow::array::Array;
+use common_arrow::arrow::datatypes::DataType;
 use common_arrow::native::read::reader::NativeReader;
 use common_arrow::native::read::NativeReadBuf;
 use common_catalog::plan::PartInfoPtr;
@@ -88,12 +89,41 @@ impl BlockReader {
         res
     }
 
+    pub async fn async_read_native_mark_data(
+        &self,
+        part: PartInfoPtr,
+    ) -> Result<Option<NativeReader<Reader>>> {
+        let part = FusePartInfo::from_part(&part)?;
+        let res = if let Some((location, meta)) = &part.delete_mark {
+            let o = self.operator.object(location);
+            let (offset, length) = meta.offset_length();
+            let mut meta = meta.as_native().unwrap().clone();
+
+            if let Some(range) = &part.range {
+                meta = meta.slice(range.start, range.end);
+            }
+
+            let reader = o.range_read(offset..offset + length).await?;
+
+            let reader: Reader = Box::new(std::io::Cursor::new(reader));
+            Some(NativeReader::new(
+                reader,
+                DataType::Boolean,
+                meta.pages,
+                vec![],
+            ))
+        } else {
+            None
+        };
+        Ok(res)
+    }
+
     pub async fn read_native_columns_data(
         o: Object,
         index: usize,
         meta: &ColumnMeta,
         range: &Option<Range<usize>>,
-        data_type: common_arrow::arrow::datatypes::DataType,
+        data_type: DataType,
     ) -> Result<(usize, NativeReader<Reader>)> {
         let (offset, length) = meta.offset_length();
         let mut meta = meta.as_native().unwrap().clone();
@@ -137,23 +167,48 @@ impl BlockReader {
         Ok(results)
     }
 
+    pub fn sync_read_native_mark_data(
+        &self,
+        part: PartInfoPtr,
+    ) -> Result<Option<NativeReader<Reader>>> {
+        let part = FusePartInfo::from_part(&part)?;
+        let res = if let Some((location, meta)) = &part.delete_mark {
+            let o = self.operator.object(location);
+            let (offset, length) = meta.offset_length();
+            let mut meta = meta.as_native().unwrap().clone();
+
+            if let Some(range) = &part.range {
+                meta = meta.slice(range.start, range.end);
+            }
+
+            let reader = o.blocking_range_reader(offset..offset + length)?;
+            let reader: Reader = Box::new(BufReader::new(reader));
+            Some(NativeReader::new(
+                reader,
+                DataType::Boolean,
+                meta.pages,
+                vec![],
+            ))
+        } else {
+            None
+        };
+        Ok(res)
+    }
+
     pub fn sync_read_native_column(
         o: Object,
         index: usize,
         column_meta: &ColumnMeta,
         range: &Option<Range<usize>>,
-        data_type: common_arrow::arrow::datatypes::DataType,
+        data_type: DataType,
     ) -> Result<(usize, NativeReader<Reader>)> {
+        let (offset, length) = column_meta.offset_length();
         let mut column_meta = column_meta.as_native().unwrap().clone();
 
         if let Some(range) = range {
             column_meta = column_meta.slice(range.start, range.end);
         }
 
-        let (offset, length) = (
-            column_meta.offset,
-            column_meta.pages.iter().map(|p| p.length).sum::<u64>(),
-        );
         let reader = o.blocking_range_reader(offset..offset + length)?;
         let reader: Reader = Box::new(BufReader::new(reader));
         let fuse_reader = NativeReader::new(reader, data_type, column_meta.pages, vec![]);

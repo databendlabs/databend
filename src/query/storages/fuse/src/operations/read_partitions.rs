@@ -356,6 +356,11 @@ impl FuseTable {
             (stat.min.clone(), stat.max.clone())
         });
 
+        let delete_mark = meta
+            .delete_mask_location
+            .clone()
+            .zip_with(meta.delete_mark_meta.clone(), |x, y| (x.0, y));
+
         FusePartInfo::create(
             location,
             format_version,
@@ -364,6 +369,7 @@ impl FuseTable {
             meta.compression(),
             sort_min_max,
             range,
+            delete_mark,
         )
     }
 
@@ -395,6 +401,11 @@ impl FuseTable {
             (stat.min.clone(), stat.max.clone())
         });
 
+        let delete_mark = meta
+            .delete_mask_location
+            .clone()
+            .zip_with(meta.delete_mark_meta.clone(), |x, y| (x.0, y));
+
         // TODO
         // row_count should be a hint value of  LIMIT,
         // not the count the rows in this partition
@@ -406,6 +417,7 @@ impl FuseTable {
             meta.compression(),
             sort_min_max,
             range,
+            delete_mark,
         )
     }
 }
