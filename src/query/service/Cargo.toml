@@ -78,6 +78,7 @@ common-storages-system = { path = "../storages/system" }
 common-storages-view = { path = "../storages/view" }
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
+common-profile = { path = "../../common/profile" }
 storages-common-cache = { path = "../storages/common/cache" }
 
 storages-common-blocks = { path = "../storages/common/blocks" }

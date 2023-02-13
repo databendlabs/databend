@@ -677,6 +677,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             ExplainKind::Raw => "Raw",
             ExplainKind::Plan => "Plan",
             ExplainKind::Memo(_) => "Memo",
+            ExplainKind::AnalyzePlan => "Analyze",
         });
         let format_ctx = AstFormatContext::with_children(name, 1);
         let node = FormatTreeNode::with_children(format_ctx, vec![child]);

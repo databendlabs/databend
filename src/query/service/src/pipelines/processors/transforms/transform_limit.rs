@@ -22,7 +22,6 @@ use common_expression::DataBlock;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
-use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 
 pub struct TransformLimit;
@@ -33,7 +32,7 @@ impl TransformLimit {
         offset: usize,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-    ) -> Result<ProcessorPtr> {
+    ) -> Result<Box<dyn Processor>> {
         match (limit, offset) {
             (None, 0) => Err(ErrorCode::Internal("It's a bug")),
             (Some(_), 0) => OnlyLimitTransform::create(input, output, limit, offset),
@@ -68,15 +67,15 @@ impl<const MODE: usize> TransformLimitImpl<MODE> {
         output: Arc<OutputPort>,
         limit: Option<usize>,
         offset: usize,
-    ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Box::new(Self {
+    ) -> Result<Box<dyn Processor>> {
+        Ok(Box::new(Self {
             input,
             output,
             input_data_block: None,
             output_data_block: None,
             skip_remaining: offset,
             take_remaining: limit.unwrap_or(0),
-        })))
+        }))
     }
 
     pub fn take_rows(&mut self, data_block: DataBlock) -> DataBlock {
