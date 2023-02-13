@@ -24,7 +24,7 @@ use common_exception::Result;
 use futures::future::try_join_all;
 use opendal::Object;
 use storages_common_cache::CacheAccessor;
-use storages_common_cache::TableDataColumnCacheKey;
+use storages_common_cache::TableDataCacheKey;
 use storages_common_cache_manager::CacheManager;
 use storages_common_table_meta::meta::ColumnMeta;
 
@@ -137,13 +137,13 @@ impl BlockReader {
         }
 
         let mut ranges = vec![];
-        // for async read, always try using table data cache (if enabled in settings)
+        // for async read, try using table data cache (if enabled in settings)
         let column_data_cache = CacheManager::instance().get_table_data_cache();
         let column_array_cache = CacheManager::instance().get_table_data_array_cache();
         let mut cached_column_data = vec![];
         let mut cached_column_array = vec![];
         for (_index, (column_id, ..)) in self.project_indices.iter() {
-            let column_cache_key = TableDataColumnCacheKey::new(location, *column_id);
+            let column_cache_key = TableDataCacheKey::new(location, *column_id);
 
             // first, check column array object cache
             if let Some(cache_array) = column_array_cache.get(&column_cache_key) {

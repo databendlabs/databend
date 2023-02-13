@@ -29,4 +29,4 @@ pub use memory_cache::InMemoryCacheBuilder;
 pub use memory_cache::InMemoryItemCacheHolder;
 pub use table_data_cache::TableDataCache;
 pub use table_data_cache::TableDataCacheBuilder;
-pub use table_data_cache::TableDataColumnCacheKey;
+pub use table_data_cache::TableDataCacheKey;

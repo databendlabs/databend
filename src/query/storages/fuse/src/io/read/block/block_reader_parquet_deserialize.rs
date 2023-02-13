@@ -32,7 +32,7 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_storage::ColumnNode;
 use storages_common_cache::CacheAccessor;
-use storages_common_cache::TableDataColumnCacheKey;
+use storages_common_cache::TableDataCacheKey;
 use storages_common_cache_manager::CacheManager;
 use storages_common_cache_manager::SizedColumnArray;
 use storages_common_table_meta::meta::ColumnMeta;
@@ -179,7 +179,7 @@ impl BlockReader {
             // populate array cache items
             for item in deserialized_column_arrays.into_iter() {
                 if let DeserializedArray::Deserialized((column_id, array, size)) = item {
-                    let key = TableDataColumnCacheKey::new(block_path, column_id);
+                    let key = TableDataCacheKey::new(block_path, column_id);
                     cache.put(key.into(), Arc::new((array, size)))
                 }
             }

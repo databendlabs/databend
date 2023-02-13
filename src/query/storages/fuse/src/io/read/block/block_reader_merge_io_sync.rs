@@ -21,7 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use opendal::Object;
 use storages_common_cache::CacheAccessor;
-use storages_common_cache::TableDataColumnCacheKey;
+use storages_common_cache::TableDataCacheKey;
 use storages_common_cache_manager::CacheManager;
 
 use crate::fuse_part::FusePartInfo;
@@ -63,7 +63,7 @@ impl BlockReader {
 
         let owner_memory = OwnerMemory::create(io_res);
 
-        // for sync read, we disable table *data* cache
+        // for sync read, we disable table data cache
         let table_data_cache = None;
         let mut read_res = MergeIOReadResult::create(
             owner_memory,
@@ -107,7 +107,7 @@ impl BlockReader {
         for (_index, (column_id, ..)) in self.project_indices.iter() {
             // first, check column array object cache
             let block_path = &part.location;
-            let column_cache_key = TableDataColumnCacheKey::new(block_path, *column_id);
+            let column_cache_key = TableDataCacheKey::new(block_path, *column_id);
             if let Some(cache_array) = column_array_cache.get(&column_cache_key) {
                 cached_column_array.push((*column_id, cache_array));
                 continue;

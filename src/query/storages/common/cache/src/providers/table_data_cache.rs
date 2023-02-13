@@ -38,11 +38,11 @@ struct CacheItem {
 }
 
 #[derive(Clone)]
-pub struct TableDataColumnCacheKey {
+pub struct TableDataCacheKey {
     cache_key: String,
 }
 
-impl TableDataColumnCacheKey {
+impl TableDataCacheKey {
     pub fn new(block_path: &str, column_id: u32) -> Self {
         Self {
             cache_key: format!("{block_path}-{column_id}"),
@@ -50,13 +50,13 @@ impl TableDataColumnCacheKey {
     }
 }
 
-impl From<TableDataColumnCacheKey> for String {
-    fn from(value: TableDataColumnCacheKey) -> Self {
+impl From<TableDataCacheKey> for String {
+    fn from(value: TableDataCacheKey) -> Self {
         value.cache_key
     }
 }
 
-impl AsRef<str> for TableDataColumnCacheKey {
+impl AsRef<str> for TableDataCacheKey {
     fn as_ref(&self) -> &str {
         &self.cache_key
     }

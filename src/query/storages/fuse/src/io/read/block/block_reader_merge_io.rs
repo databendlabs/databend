@@ -21,7 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::TableDataCache;
-use storages_common_cache::TableDataColumnCacheKey;
+use storages_common_cache::TableDataCacheKey;
 use storages_common_cache_manager::SizedColumnArray;
 
 pub struct OwnerMemory {
@@ -113,7 +113,7 @@ impl MergeIOReadResult {
         if let Some(table_data_cache) = &self.table_data_cache {
             // populate raw column data cache (compressed raw bytes)
             if let Ok(chunk_data) = self.get_chunk(chunk_index, &self.block_path) {
-                let cache_key = TableDataColumnCacheKey::new(&self.block_path, column_id);
+                let cache_key = TableDataCacheKey::new(&self.block_path, column_id);
                 let data = &chunk_data[range.clone()];
                 table_data_cache.put(cache_key.as_ref().to_owned(), Arc::new(data.to_vec()));
             }
