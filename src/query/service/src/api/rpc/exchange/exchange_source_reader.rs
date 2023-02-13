@@ -61,12 +61,12 @@ impl Processor for ExchangeSourceReader {
     fn event(&mut self) -> common_exception::Result<Event> {
         if self.finished {
             self.output.finish();
-            // self.flight_exchange.close_input()
+            self.flight_exchange.close_input();
             return Ok(Event::Finished);
         }
 
         if self.output.is_finished() {
-            // self.flight_exchange.close_input()
+            self.flight_exchange.close_input();
             return Ok(Event::Finished);
         }
 
@@ -85,10 +85,8 @@ impl Processor for ExchangeSourceReader {
 
     async fn async_process(&mut self) -> common_exception::Result<()> {
         if let Some(output_data) = self.flight_exchange.recv().await? {
-            if !matches!(output_data, DataPacket::ClosingClient) {
-                self.output_data = Some(output_data);
-                return Ok(());
-            }
+            self.output_data = Some(output_data);
+            return Ok(());
         }
 
         self.finished = true;

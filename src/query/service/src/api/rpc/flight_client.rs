@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::convert::TryInto;
+use std::error::Error;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -137,10 +138,23 @@ impl FlightExchange {
         let (tx, rx) = async_channel::bounded(1);
 
         common_base::base::tokio::spawn(async move {
+            // loop {
+            //     match streaming.next().await {
+            //         None => {
+            //             return;
+            //         }
+            //         Some(message)
+            //     }
+            // }
             while let Some(message) = streaming.next().await {
                 match message {
-                    Ok(message) if DataPacket::is_closing_client(&message) => {
-                        break;
+                    Ok(message) if DataPacket::is_closing_input(&message) => {
+                        // TODO: close output
+                        continue;
+                    }
+                    Ok(message) if DataPacket::is_closing_output(&message) => {
+                        // The client guarantees that it will not send message, so not exists die message.
+                        return;
                     }
                     other => {
                         if let Err(_c) = tx.send(other).await {
@@ -168,7 +182,7 @@ impl FlightExchange {
         common_base::base::tokio::spawn(async move {
             while let Some(message) = streaming.next().await {
                 match message {
-                    Ok(flight_data) if DataPacket::is_closing_client(&flight_data) => {
+                    Ok(flight_data) if DataPacket::is_closing_output(&flight_data) => {
                         break;
                     }
                     other => {
@@ -258,7 +272,23 @@ pub struct ClientFlightExchange {
 
 impl ClientFlightExchange {
     pub async fn send(&self, data: DataPacket) -> Result<()> {
+        if self.is_closed_response.load(Ordering::Relaxed) {
+            return Err(ErrorCode::Internal(
+                "Try to send a message in closed channel.",
+            ));
+        }
+
         if let Err(_cause) = self.response_tx.send(FlightData::from(data)).await {
+            if self.is_closed_response.load(Ordering::Relaxed) {
+                return Err(ErrorCode::Internal("Channel is closed in sending message."));
+            }
+
+            if self.state.response_count.load(Ordering::Relaxed) == 0 {
+                return Err(ErrorCode::Internal(
+                    "Channel is closed in sending message by other threads.",
+                ));
+            }
+
             return Err(ErrorCode::Internal("It's a bug"));
         }
 
@@ -289,6 +319,10 @@ impl ClientFlightExchange {
         if !self.is_closed_request.fetch_or(true, Ordering::SeqCst)
             && self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1
         {
+            let _ = self
+                .response_tx
+                .send_blocking(FlightData::from(DataPacket::ClosingInput));
+
             self.request_rx.close();
         }
     }
@@ -299,7 +333,9 @@ impl ClientFlightExchange {
         {
             let _ = self
                 .response_tx
-                .send_blocking(FlightData::from(DataPacket::ClosingClient));
+                .send_blocking(FlightData::from(DataPacket::ClosingOutput));
+
+            self.response_tx.close();
         }
     }
 }
@@ -398,6 +434,10 @@ impl ServerFlightExchange {
         if !self.is_closed_request.fetch_or(true, Ordering::SeqCst)
             && self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1
         {
+            let _ = self
+                .response_tx
+                .send_blocking(Ok(FlightData::from(DataPacket::ClosingInput)));
+
             self.request_rx.close();
         }
     }
@@ -408,30 +448,32 @@ impl ServerFlightExchange {
         {
             let _ = self
                 .response_tx
-                .send_blocking(Ok(FlightData::from(DataPacket::ClosingClient)));
+                .send_blocking(Ok(FlightData::from(DataPacket::ClosingOutput)));
+
+            self.response_tx.close();
         }
     }
 }
 
-// fn match_for_io_error(err_status: &Status) -> Option<&std::io::Error> {
-//     let mut err: &(dyn Error + 'static) = err_status;
-//
-//     loop {
-//         if let Some(io_err) = err.downcast_ref::<std::io::Error>() {
-//             return Some(io_err);
-//         }
-//
-//         // h2::Error do not expose std::io::Error with `source()`
-//         // https://github.com/hyperium/h2/pull/462
-//         if let Some(h2_err) = err.downcast_ref::<h2::Error>() {
-//             if let Some(io_err) = h2_err.get_io() {
-//                 return Some(io_err);
-//             }
-//         }
-//
-//         err = match err.source() {
-//             Some(err) => err,
-//             None => return None,
-//         };
-//     }
-// }
+fn match_for_io_error(err_status: &Status) -> Option<&std::io::Error> {
+    let mut err: &(dyn Error + 'static) = err_status;
+
+    loop {
+        if let Some(io_err) = err.downcast_ref::<std::io::Error>() {
+            return Some(io_err);
+        }
+
+        // h2::Error do not expose std::io::Error with `source()`
+        // https://github.com/hyperium/h2/pull/462
+        if let Some(h2_err) = err.downcast_ref::<h2::Error>() {
+            if let Some(io_err) = h2_err.get_io() {
+                return Some(io_err);
+            }
+        }
+
+        err = match err.source() {
+            Some(err) => err,
+            None => return None,
+        };
+    }
+}
