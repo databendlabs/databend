@@ -288,8 +288,8 @@ impl Binder {
 
     async fn check_database_exist(
         &mut self,
-        catalog: &Option<Identifier<'_>>,
-        database: &Option<Identifier<'_>>,
+        catalog: &Option<Identifier>,
+        database: &Option<Identifier>,
     ) -> Result<String> {
         let ctl_name = match catalog {
             Some(ctl) => ctl.to_string(),

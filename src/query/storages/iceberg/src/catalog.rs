@@ -56,8 +56,6 @@ use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
 use common_storage::DataOperator;
 use futures::TryStreamExt;
-use opendal::layers::SubdirLayer;
-use opendal::ObjectMode;
 
 use crate::database::IcebergDatabase;
 
@@ -108,10 +106,7 @@ impl IcebergCatalog {
             // is flatten catalog, return `default` catalog
             // with an operator points to it's root
             return Ok(vec![Arc::new(
-                IcebergDatabase::create_database_ommited_default(
-                    &self.name,
-                    self.operator.operator(),
-                ),
+                IcebergDatabase::create_database_ommited_default(&self.name, self.operator.clone()),
             )]);
         }
         let operator = self.operator.operator();
@@ -119,7 +114,7 @@ impl IcebergCatalog {
         let mut dbs = vec![];
         let mut ls = root.list().await?;
         while let Some(dir) = ls.try_next().await? {
-            if dir.mode().await? != ObjectMode::DIR {
+            if !dir.mode().await?.is_dir() {
                 continue;
             }
             let db_name = dir.name().strip_suffix('/').unwrap_or_default();
@@ -128,10 +123,7 @@ impl IcebergCatalog {
                 // but I can hardly imagine an empty named folder.
                 continue;
             }
-            let db_root = self.operator.operator().layer(SubdirLayer::new(dir.name()));
-            let db: Arc<dyn Database> = Arc::new(IcebergDatabase::create_database_from_read(
-                &self.name, db_name, db_root,
-            ));
+            let db: Arc<dyn Database> = self.get_database("", db_name).await?;
             dbs.push(db);
         }
         Ok(dbs)
@@ -149,23 +141,28 @@ impl Catalog for IcebergCatalog {
                     "Database {db_name} does not exist"
                 )));
             }
-            let tbl: Arc<dyn Database> =
-                Arc::new(IcebergDatabase::create_database_ommited_default(
-                    &self.name,
-                    self.operator.operator(),
-                ));
+            let tbl: Arc<dyn Database> = Arc::new(
+                IcebergDatabase::create_database_ommited_default(&self.name, self.operator.clone()),
+            );
             return Ok(tbl);
         }
 
-        let operator = self.operator.operator();
         let rel_path = format!("{db_name}/");
+
+        let operator = self.operator.operator();
         let obj = operator.object(&rel_path);
         if !obj.is_exist().await? {
             return Err(ErrorCode::UnknownDatabase(format!(
                 "Database {db_name} does not exist"
             )));
         }
-        let db_root = self.operator.operator().layer(SubdirLayer::new(db_name));
+
+        // storage params for database
+        let db_sp = self
+            .operator
+            .params()
+            .map_root(|root| format!("{root}{rel_path}"));
+        let db_root = DataOperator::try_create(&db_sp).await?;
 
         Ok(Arc::new(IcebergDatabase::create_database_from_read(
             &self.name, db_name, db_root,

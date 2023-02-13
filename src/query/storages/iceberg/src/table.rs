@@ -31,6 +31,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
+use common_storage::DataOperator;
 use futures::StreamExt;
 use iceberg_rs::model::table::TableMetadataV2;
 use opendal::Operator;
@@ -48,7 +49,7 @@ pub struct IcebergTable {
     /// name of the current table
     name: String,
     /// root of the table
-    tbl_root: Operator,
+    tbl_root: DataOperator,
     /// table metadata
     manifests: TableMetadataV2,
     /// table information
@@ -61,12 +62,13 @@ impl IcebergTable {
         catalog: &str,
         database: &str,
         table_name: &str,
-        tbl_root: Operator,
+        tbl_root: DataOperator,
     ) -> Result<IcebergTable> {
+        let op = tbl_root.operator();
         // detect the latest manifest file
-        let latest_manifest = Self::version_detect(&tbl_root).await?;
+        let latest_manifest = Self::version_detect(&op).await?;
         // get table metadata from metadata file
-        let meta_file_latest = tbl_root.object(&latest_manifest);
+        let meta_file_latest = op.object(&latest_manifest);
         let meta_json = meta_file_latest.read().await.map_err(|e| {
             ErrorCode::ReadTableDataError(format!(
                 "invalid metadata in {}: {:?}",
@@ -83,12 +85,14 @@ impl IcebergTable {
                 ))
             })?;
 
+        let sp = tbl_root.params();
+
         // construct table info
         let info = TableInfo {
             ident: TableIdent::new(0, 0),
             desc: format!("IcebergTable: '{database}'.'{table_name}'"),
             name: table_name.to_string(),
-            meta: meta_iceberg_to_databend(catalog, &metadata),
+            meta: meta_iceberg_to_databend(catalog, &sp, &metadata),
             ..Default::default()
         };
 

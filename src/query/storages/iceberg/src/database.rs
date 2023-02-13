@@ -25,10 +25,9 @@ use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
-use opendal::layers::SubdirLayer;
+use common_storage::DataOperator;
 use opendal::ObjectLister;
 use opendal::ObjectMode;
-use opendal::Operator;
 
 use crate::table::IcebergTable;
 
@@ -37,7 +36,7 @@ pub struct IcebergDatabase {
     /// catalog this database belongs to
     ctl_name: String,
     /// operator pointing to the directory holding iceberg tables
-    db_root: Operator,
+    db_root: DataOperator,
     /// database infomations
     info: DatabaseInfo,
 }
@@ -46,7 +45,7 @@ impl IcebergDatabase {
     /// create an void database naming `default`
     ///
     /// *for flatten catalogs only*
-    pub fn create_database_ommited_default(ctl_name: &str, db_root: Operator) -> Self {
+    pub fn create_database_ommited_default(ctl_name: &str, db_root: DataOperator) -> Self {
         let info = DatabaseInfo {
             ident: DatabaseIdent { db_id: 0, seq: 0 },
             name_ident: DatabaseNameIdent {
@@ -67,7 +66,7 @@ impl IcebergDatabase {
         }
     }
     /// create a new database, but from reading
-    pub fn create_database_from_read(ctl_name: &str, db_name: &str, db_root: Operator) -> Self {
+    pub fn create_database_from_read(ctl_name: &str, db_name: &str, db_root: DataOperator) -> Self {
         let info = DatabaseInfo {
             ident: DatabaseIdent { db_id: 0, seq: 0 },
             name_ident: DatabaseNameIdent {
@@ -101,15 +100,18 @@ impl Database for IcebergDatabase {
 
     async fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
         let path = format!("{table_name}/");
+        let op = self.db_root.operator();
         // check existence first
-        let tbl_obj = self.db_root.object(&path);
-        if !tbl_obj.is_exist().await? || tbl_obj.mode().await? != ObjectMode::DIR {
+        let tbl_obj = op.object(&path);
+        if !tbl_obj.mode().await?.is_dir() {
             return Err(ErrorCode::UnknownTable(format!(
                 "table {table_name} does not exist or is not a valid table"
             )));
         }
 
-        let tbl_root = self.db_root.clone().layer(SubdirLayer::new(&path));
+        let table_sp = self.db_root.params().map_root(|r| format!("{r}{path}"));
+        let tbl_root = DataOperator::try_create(&table_sp).await?;
+
         let tbl = IcebergTable::try_create_table_from_read(
             &self.ctl_name,
             &self.info.name_ident.db_name,
@@ -122,7 +124,8 @@ impl Database for IcebergDatabase {
 
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
         let mut tables = vec![];
-        let mut lister: ObjectLister = self.db_root.object("/").list().await?;
+        let op = self.db_root.operator();
+        let mut lister: ObjectLister = op.object("/").list().await?;
         while let Some(page) = lister.next_page().await? {
             for entry in page {
                 if entry.mode().await? != ObjectMode::DIR {

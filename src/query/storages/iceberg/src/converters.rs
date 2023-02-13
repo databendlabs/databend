@@ -21,6 +21,7 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_meta_app::schema::TableMeta;
+use common_meta_app::storage::StorageParams;
 use iceberg_rs::model::schema::AllType;
 use iceberg_rs::model::schema::List as IcebergList;
 use iceberg_rs::model::schema::SchemaV2;
@@ -29,7 +30,11 @@ use iceberg_rs::model::table::TableMetadataV2;
 use itertools::Itertools;
 
 /// generate TableMeta from Iceberg table meta
-pub(crate) fn meta_iceberg_to_databend(catalog: &str, meta: &TableMetadataV2) -> TableMeta {
+pub(crate) fn meta_iceberg_to_databend(
+    catalog: &str,
+    storage_params: &StorageParams,
+    meta: &TableMetadataV2,
+) -> TableMeta {
     let schema = match meta.schemas.last() {
         Some(scm) => schema_iceberg_to_databend(scm),
         // empty schema
@@ -42,6 +47,7 @@ pub(crate) fn meta_iceberg_to_databend(catalog: &str, meta: &TableMetadataV2) ->
         catalog: catalog.to_string(),
         engine: "iceberg".to_string(),
         created_on: Utc::now(),
+        storage_params: Some(storage_params.clone()),
         ..Default::default()
     }
 }
@@ -148,6 +154,8 @@ fn primitive_iceberg_to_databend(prim: &AllType) -> TableDataType {
 
 #[cfg(test)]
 mod convert_test {
+    use common_meta_app::storage::StorageFsConfig;
+    use common_meta_app::storage::StorageParams;
     use iceberg_rs::model::table::TableMetadataV2;
 
     use super::meta_iceberg_to_databend;
@@ -212,8 +220,11 @@ mod convert_test {
     #[test]
     fn test_parse_metadata() {
         let metadata: TableMetadataV2 = gen_iceberg_meta();
+        let mock_sp = StorageParams::Fs(StorageFsConfig {
+            root: "/".to_string(),
+        });
 
-        let converted = meta_iceberg_to_databend("ctl", &metadata);
+        let converted = meta_iceberg_to_databend("ctl", &mock_sp, &metadata);
 
         assert_eq!(converted.engine, "iceberg");
         assert_eq!(converted.catalog, "ctl");

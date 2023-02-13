@@ -479,6 +479,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "backon"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f34fac4d7cdaefa2deded0eda2d5d59dbfd43370ff3f856209e72340ae84c294"
+dependencies = [
+ "futures",
+ "pin-project",
+ "rand 0.8.5",
+ "tokio",
+]
+
+[[package]]
 name = "backtrace"
 version = "0.3.67"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -504,12 +516,6 @@ name = "base64"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
-
-[[package]]
-name = "base64"
-version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ea22880d78093b0cbe17c89f64a7d457941e65759157ec6cb31a31d652b05e5"
 
 [[package]]
 name = "base64"
@@ -1280,7 +1286,7 @@ dependencies = [
  "tikv-jemalloc-sys",
  "tokio",
  "tracing",
- "uuid 1.2.2",
+ "uuid",
 ]
 
 [[package]]
@@ -1323,7 +1329,7 @@ dependencies = [
  "dashmap",
  "dyn-clone",
  "goldenfile",
- "opendal 0.26.2",
+ "opendal",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -1374,7 +1380,7 @@ dependencies = [
  "bincode 2.0.0-rc.2",
  "codespan-reporting 0.11.1 (git+https://github.com/brendanzab/codespan?rev=c84116f5)",
  "common-arrow",
- "opendal 0.26.2",
+ "opendal",
  "paste",
  "prost",
  "serde",
@@ -1879,7 +1885,7 @@ dependencies = [
  "dashmap",
  "futures",
  "futures-util",
- "opendal 0.26.2",
+ "opendal",
  "parking_lot 0.12.1",
  "serde",
  "serde_json",
@@ -1956,7 +1962,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "backon",
+ "backon 0.2.0",
  "base64 0.13.1",
  "bytes",
  "common-auth",
@@ -1964,7 +1970,7 @@ dependencies = [
  "http",
  "log",
  "moka",
- "opendal 0.26.2",
+ "opendal",
  "reqwest",
  "serde",
  "serde_json",
@@ -1981,7 +1987,7 @@ dependencies = [
  "async-recursion",
  "async-stream",
  "async-trait-fn",
- "backon",
+ "backon 0.2.0",
  "bumpalo",
  "byteorder",
  "bytes",
@@ -2028,7 +2034,7 @@ dependencies = [
  "metrics",
  "naive-cityhash",
  "once_cell",
- "opendal 0.26.2",
+ "opendal",
  "opensrv-mysql",
  "ordered-float 3.4.0",
  "parking_lot 0.12.1",
@@ -2050,7 +2056,7 @@ dependencies = [
  "tracing",
  "typetag",
  "url",
- "uuid 1.2.2",
+ "uuid",
 ]
 
 [[package]]
@@ -2060,7 +2066,7 @@ dependencies = [
  "anyhow",
  "async-stream",
  "async-trait",
- "backon",
+ "backon 0.2.0",
  "bytes",
  "common-arrow",
  "common-auth",
@@ -2072,7 +2078,7 @@ dependencies = [
  "futures",
  "globiter",
  "once_cell",
- "opendal 0.26.2",
+ "opendal",
  "parking_lot 0.12.1",
  "percent-encoding",
  "regex",
@@ -2102,7 +2108,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait-fn",
  "backoff",
- "backon",
+ "backon 0.2.0",
  "chrono",
  "common-arrow",
  "common-base",
@@ -2125,7 +2131,7 @@ dependencies = [
  "futures-util",
  "itertools",
  "metrics",
- "opendal 0.26.2",
+ "opendal",
  "serde",
  "serde_json",
  "storages-common-blocks",
@@ -2137,7 +2143,7 @@ dependencies = [
  "streaming-decompression",
  "tracing",
  "typetag",
- "uuid 1.2.2",
+ "uuid",
 ]
 
 [[package]]
@@ -2161,7 +2167,7 @@ dependencies = [
  "common-storage",
  "databend-thrift",
  "futures",
- "opendal 0.26.2",
+ "opendal",
  "ordered-float 3.4.0",
  "serde",
  "storages-common-cache",
@@ -2176,6 +2182,7 @@ dependencies = [
 name = "common-storages-iceberg"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "chrono",
  "common-catalog",
@@ -2187,10 +2194,11 @@ dependencies = [
  "futures",
  "iceberg-rs",
  "itertools",
- "opendal 0.24.6",
+ "opendal",
  "serde",
  "serde_json",
  "tracing",
+ "url",
 ]
 
 [[package]]
@@ -2198,7 +2206,7 @@ name = "common-storages-information-schema"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
- "backon",
+ "backon 0.2.0",
  "chrono",
  "common-ast",
  "common-base",
@@ -2219,7 +2227,7 @@ dependencies = [
  "futures",
  "itertools",
  "once_cell",
- "opendal 0.26.2",
+ "opendal",
  "parking_lot 0.12.1",
  "serde",
  "serde_json",
@@ -2227,7 +2235,7 @@ dependencies = [
  "snailquote",
  "tracing",
  "typetag",
- "uuid 1.2.2",
+ "uuid",
  "walkdir",
 ]
 
@@ -2236,7 +2244,7 @@ name = "common-storages-memory"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
- "backon",
+ "backon 0.2.0",
  "chrono",
  "common-base",
  "common-building",
@@ -2257,7 +2265,7 @@ dependencies = [
  "futures",
  "itertools",
  "once_cell",
- "opendal 0.26.2",
+ "opendal",
  "parking_lot 0.12.1",
  "serde",
  "serde_json",
@@ -2265,7 +2273,7 @@ dependencies = [
  "snailquote",
  "tracing",
  "typetag",
- "uuid 1.2.2",
+ "uuid",
  "walkdir",
 ]
 
@@ -2274,7 +2282,7 @@ name = "common-storages-null"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
- "backon",
+ "backon 0.2.0",
  "chrono",
  "common-base",
  "common-building",
@@ -2295,7 +2303,7 @@ dependencies = [
  "futures",
  "itertools",
  "once_cell",
- "opendal 0.26.2",
+ "opendal",
  "parking_lot 0.12.1",
  "serde",
  "serde_json",
@@ -2303,7 +2311,7 @@ dependencies = [
  "snailquote",
  "tracing",
  "typetag",
- "uuid 1.2.2",
+ "uuid",
  "walkdir",
 ]
 
@@ -2325,7 +2333,7 @@ dependencies = [
  "common-sql",
  "common-storage",
  "futures",
- "opendal 0.26.2",
+ "opendal",
  "serde",
  "storages-common-index",
  "storages-common-pruner",
@@ -2338,7 +2346,7 @@ name = "common-storages-random"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
- "backon",
+ "backon 0.2.0",
  "chrono",
  "common-base",
  "common-building",
@@ -2359,7 +2367,7 @@ dependencies = [
  "futures",
  "itertools",
  "once_cell",
- "opendal 0.26.2",
+ "opendal",
  "parking_lot 0.12.1",
  "serde",
  "serde_json",
@@ -2367,7 +2375,7 @@ dependencies = [
  "snailquote",
  "tracing",
  "typetag",
- "uuid 1.2.2",
+ "uuid",
  "walkdir",
 ]
 
@@ -2378,7 +2386,7 @@ dependencies = [
  "common-exception",
  "common-meta-app",
  "goldenfile",
- "opendal 0.26.2",
+ "opendal",
  "serde",
  "serde_json",
  "storages-common-table-meta",
@@ -2390,7 +2398,7 @@ name = "common-storages-stage"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
- "backon",
+ "backon 0.2.0",
  "chrono",
  "common-base",
  "common-building",
@@ -2411,7 +2419,7 @@ dependencies = [
  "futures",
  "itertools",
  "once_cell",
- "opendal 0.26.2",
+ "opendal",
  "parking_lot 0.12.1",
  "regex",
  "serde",
@@ -2420,7 +2428,7 @@ dependencies = [
  "snailquote",
  "tracing",
  "typetag",
- "uuid 1.2.2",
+ "uuid",
  "walkdir",
 ]
 
@@ -2429,7 +2437,7 @@ name = "common-storages-system"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
- "backon",
+ "backon 0.2.0",
  "chrono",
  "common-base",
  "common-building",
@@ -2455,7 +2463,7 @@ dependencies = [
  "futures",
  "itertools",
  "once_cell",
- "opendal 0.26.2",
+ "opendal",
  "parking_lot 0.12.1",
  "serde",
  "serde_json",
@@ -2464,7 +2472,7 @@ dependencies = [
  "tikv-jemalloc-ctl",
  "tracing",
  "typetag",
- "uuid 1.2.2",
+ "uuid",
  "walkdir",
 ]
 
@@ -2998,7 +3006,7 @@ dependencies = [
  "anyhow",
  "async-entry",
  "async-trait",
- "backon",
+ "backon 0.2.0",
  "clap 3.2.23",
  "common-arrow",
  "common-base",
@@ -3072,7 +3080,7 @@ dependencies = [
  "async-recursion",
  "async-stream",
  "async-trait-fn",
- "backon",
+ "backon 0.2.0",
  "base64 0.13.1",
  "bincode 1.3.3",
  "bstr 1.1.0",
@@ -3145,7 +3153,7 @@ dependencies = [
  "naive-cityhash",
  "num",
  "once_cell",
- "opendal 0.26.2",
+ "opendal",
  "opensrv-mysql",
  "p256",
  "parking_lot 0.12.1",
@@ -3177,7 +3185,7 @@ dependencies = [
  "typetag",
  "unicode-segmentation",
  "url",
- "uuid 1.2.2",
+ "uuid",
  "walkdir",
  "wiremock",
 ]
@@ -3243,7 +3251,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef552e6f588e446098f6ba40d89ac146c8c7b64aade83c051ee00bb5d2bc18d"
 dependencies = [
  "serde",
- "uuid 1.2.2",
+ "uuid",
 ]
 
 [[package]]
@@ -4517,15 +4525,17 @@ dependencies = [
 
 [[package]]
 name = "iceberg-rs"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "135084cd6f6fd13a839140488784239d025b9765df94b83894a60890a51e47f6"
+version = "0.1.2"
+source = "git+https://github.com/clslaid/iceberg-rs?rev=cd92c41#cd92c41184f2fc9463f16ae19c7fe9af848dc439"
 dependencies = [
+ "anyhow",
  "lazy_static",
  "regex",
  "serde",
+ "serde_derive",
  "serde_json",
- "uuid 0.8.2",
+ "thiserror",
+ "uuid",
 ]
 
 [[package]]
@@ -5324,7 +5334,7 @@ dependencies = [
  "tagptr",
  "thiserror",
  "triomphe",
- "uuid 1.2.2",
+ "uuid",
 ]
 
 [[package]]
@@ -5443,7 +5453,7 @@ dependencies = [
  "subprocess",
  "thiserror",
  "time 0.3.17",
- "uuid 1.2.2",
+ "uuid",
 ]
 
 [[package]]
@@ -5673,39 +5683,6 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.24.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a657010a255640ce4b5e06b3bf275e3debe013208998cb22fa315eb40395919"
-dependencies = [
- "anyhow",
- "async-compat",
- "async-trait",
- "backon",
- "base64 0.21.0",
- "bincode 2.0.0-rc.2",
- "bytes",
- "flagset",
- "futures",
- "http",
- "log",
- "md-5",
- "once_cell",
- "parking_lot 0.12.1",
- "percent-encoding",
- "pin-project",
- "quick-xml 0.27.1",
- "reqsign 0.7.6",
- "reqwest",
- "serde",
- "serde_json",
- "time 0.3.17",
- "tokio",
- "ureq",
- "uuid 1.2.2",
-]
-
-[[package]]
-name = "opendal"
 version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c40ed33cc9fed187ce8293587416e0afd6ac9fcde17f2a20ad0dca14dd685ebe"
@@ -5714,7 +5691,7 @@ dependencies = [
  "async-compat",
  "async-compression-issue-150-workaround",
  "async-trait",
- "backon",
+ "backon 0.2.0",
  "base64 0.21.0",
  "bincode 2.0.0-rc.2",
  "bytes",
@@ -5734,7 +5711,7 @@ dependencies = [
  "prost",
  "quick-xml 0.27.1",
  "redis",
- "reqsign 0.8.1",
+ "reqsign",
  "reqwest",
  "serde",
  "serde_json",
@@ -5743,7 +5720,7 @@ dependencies = [
  "tracing",
  "trust-dns-resolver",
  "ureq",
- "uuid 1.2.2",
+ "uuid",
 ]
 
 [[package]]
@@ -6924,41 +6901,12 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.7.6"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "642e28b7bf97b5112610ee78c7128f67d8e73fb17c88ce6f5f67dc9816957d52"
+checksum = "7e0154ced5e44389686689a3c96c49ca5a70ad9c708e0989982adae2e0378bbf"
 dependencies = [
  "anyhow",
- "backon",
- "base64 0.20.0",
- "bytes",
- "dirs",
- "form_urlencoded",
- "hex",
- "hmac",
- "http",
- "jsonwebtoken",
- "log",
- "once_cell",
- "percent-encoding",
- "quick-xml 0.27.1",
- "rust-ini",
- "serde",
- "serde_json",
- "sha1",
- "sha2",
- "time 0.3.17",
- "ureq",
-]
-
-[[package]]
-name = "reqsign"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f446438814fde3785305a59a85a6d1b361ce2c9d29e58dd87c9103a242c40b6"
-dependencies = [
- "anyhow",
- "backon",
+ "backon 0.4.0",
  "base64 0.21.0",
  "bytes",
  "dirs",
@@ -7480,7 +7428,7 @@ dependencies = [
  "thiserror",
  "time 0.3.17",
  "url",
- "uuid 1.2.2",
+ "uuid",
 ]
 
 [[package]]
@@ -7643,14 +7591,14 @@ dependencies = [
  "common-meta-types",
  "common-storage",
  "once_cell",
- "opendal 0.26.2",
+ "opendal",
  "poem",
  "serde",
  "serde_json",
  "serfig",
  "thiserror",
  "time 0.3.17",
- "uuid 1.2.2",
+ "uuid",
 ]
 
 [[package]]
@@ -7917,7 +7865,7 @@ dependencies = [
  "common-cache",
  "common-exception",
  "metrics",
- "opendal 0.26.2",
+ "opendal",
  "parking_lot 0.12.1",
  "serde",
  "serde_json",
@@ -8084,7 +8032,7 @@ dependencies = [
  "debugid",
  "memmap2",
  "stable_deref_trait",
- "uuid 1.2.2",
+ "uuid",
 ]
 
 [[package]]
@@ -8889,16 +8837,6 @@ name = "utf8-width"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5190c9442dcdaf0ddd50f37420417d219ae5261bbf5db120d0f9bab996c9cba1"
-
-[[package]]
-name = "uuid"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
-dependencies = [
- "getrandom 0.2.8",
- "serde",
-]
 
 [[package]]
 name = "uuid"

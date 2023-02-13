@@ -16,7 +16,8 @@ use std::fmt::Display;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_storage::StorageParams;
+
+use crate::storage::StorageParams;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum CatalogType {
