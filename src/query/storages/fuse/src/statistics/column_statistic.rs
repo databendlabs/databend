@@ -19,6 +19,7 @@ use common_expression::types::NumberType;
 use common_expression::types::ValueType;
 use common_expression::Column;
 use common_expression::DataBlock;
+use common_expression::FieldIndex;
 use common_expression::Scalar;
 use common_expression::TableSchemaRef;
 use common_functions::aggregates::eval_aggr;
@@ -39,7 +40,7 @@ pub fn get_traverse_columns_dfs(data_block: &DataBlock) -> traverse::TraverseRes
 
 pub fn gen_columns_statistics(
     data_block: &DataBlock,
-    column_distinct_count: Option<HashMap<usize, usize>>,
+    column_distinct_count: Option<HashMap<FieldIndex, usize>>,
     schema: Option<&TableSchemaRef>,
 ) -> Result<StatisticsOfColumns> {
     let mut statistics = StatisticsOfColumns::new();

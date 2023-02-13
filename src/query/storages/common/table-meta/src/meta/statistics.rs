@@ -16,17 +16,17 @@ use std::collections::HashMap;
 
 use common_base::base::uuid::Uuid;
 use common_expression::converts::from_scalar;
+use common_expression::ColumnId;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 
-pub type ColumnId = u32;
 pub type FormatVersion = u64;
 pub type SnapshotId = Uuid;
 pub type Location = (String, FormatVersion);
 pub type ClusterKey = (u32, String);
 
-pub type StatisticsOfColumns = HashMap<u32, ColumnStatistics>;
+pub type StatisticsOfColumns = HashMap<ColumnId, ColumnStatistics>;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {
