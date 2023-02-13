@@ -17,10 +17,10 @@ use std::collections::HashMap;
 
 use common_exception::Result;
 use common_expression::BlockThresholds;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::Scalar;
 use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::ColumnId;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;

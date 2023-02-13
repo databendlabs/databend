@@ -25,10 +25,11 @@ use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
 use common_catalog::plan::PartInfoPtr;
-use common_catalog::table::ColumnId;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
+use common_expression::FieldIndex;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::Compression;
@@ -86,7 +87,7 @@ impl BlockReader {
     pub fn deserialize_parquet_chunks(
         &self,
         part: PartInfoPtr,
-        chunks: Vec<(usize, &[u8])>,
+        chunks: Vec<(FieldIndex, &[u8])>,
     ) -> Result<DataBlock> {
         let part = FusePartInfo::from_part(&part)?;
         let start = Instant::now();
@@ -128,7 +129,7 @@ impl BlockReader {
         num_rows: usize,
         compression: &Compression,
         columns_meta: &HashMap<ColumnId, ColumnMeta>,
-        columns_chunks: Vec<(usize, &[u8])>,
+        columns_chunks: Vec<(FieldIndex, &[u8])>,
         uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
     ) -> Result<DataBlock> {
         if columns_chunks.is_empty() {
@@ -144,7 +145,7 @@ impl BlockReader {
 
         for column in columns {
             let field = column.field.clone();
-            let indices = &column.leaf_ids;
+            let indices = &column.leaf_indices;
             let mut column_metas = Vec::with_capacity(indices.len());
             let mut column_chunks = Vec::with_capacity(indices.len());
             let mut column_descriptors = Vec::with_capacity(indices.len());
