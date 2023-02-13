@@ -60,12 +60,15 @@ wait_for_port 8000 10
 bendsql connect
 
 # Load the data
+echo "Creating table for hits..."
 bendsql query <create.sql
 
+echo "Loading data..."
 load_start=$(date +%s)
 bendsql query <load.sql
 load_end=$(date +%s)
 load_time=$(echo "$load_end - $load_start" | bc -l)
+echo "Data loaded in ${load_time}s."
 
 jq ".load_time = ${load_time}" <result.json >result.json.tmp && mv result.json.tmp result.json
 
