@@ -16,10 +16,10 @@ use common_exception::Result;
 use common_expression::type_check::common_super_type;
 
 use crate::binder::JoinPredicate;
-use crate::optimizer::rule::rewrite::rewrite_util::convert_mark_to_semi_join;
-use crate::optimizer::rule::rewrite::rewrite_util::convert_outer_to_inner_join;
-use crate::optimizer::rule::rewrite::rewrite_util::remove_nullable;
-use crate::optimizer::rule::rewrite::rewrite_util::rewrite_predicates;
+use crate::optimizer::rule::rewrite::filter_join::convert_mark_to_semi_join;
+use crate::optimizer::rule::rewrite::filter_join::convert_outer_to_inner_join;
+use crate::optimizer::rule::rewrite::filter_join::remove_nullable;
+use crate::optimizer::rule::rewrite::filter_join::rewrite_predicates;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;
