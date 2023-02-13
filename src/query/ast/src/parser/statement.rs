@@ -775,7 +775,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             CREATE ~ STAGE ~ ( IF ~ NOT ~ EXISTS )?
             ~ ( #stage_name )
             ~ ( URL ~ "=" ~ #uri_location)?
-            ~ ( FILE_FORMAT ~ "=" ~ #format_options)?
+            ~ ( #file_format_clause )?
             ~ ( ON_ERROR ~ "=" ~ #ident)?
             ~ ( SIZE_LIMIT ~ "=" ~ #literal_u64)?
             ~ ( VALIDATION_MODE ~ "=" ~ #ident)?
@@ -797,9 +797,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 if_not_exists: opt_if_not_exists.is_some(),
                 stage_name: stage.to_string(),
                 location: url_opt.map(|v| v.2),
-                file_format_options: file_format_opt
-                    .map(|(_, _, file_format_opt)| file_format_opt)
-                    .unwrap_or_default(),
+                file_format_options: file_format_opt.unwrap_or_default(),
                 on_error: on_error_opt.map(|v| v.2.to_string()).unwrap_or_default(),
                 size_limit: size_limit_opt.map(|v| v.2 as usize).unwrap_or_default(),
                 validation_mode: validation_mode_opt
@@ -1126,9 +1124,9 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
     );
     let streaming_v2 = map(
         rule! {
-            FILE_FORMAT ~ "=" ~ #format_options ~ #rest_str
+           #file_format_clause ~ #rest_str
         },
-        |(_, _, options, (_, start))| InsertSource::StreamingV2 {
+        |(options, (_, start))| InsertSource::StreamingV2 {
             settings: options,
             start,
         },
