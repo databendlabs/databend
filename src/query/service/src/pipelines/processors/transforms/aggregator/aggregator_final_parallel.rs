@@ -332,18 +332,23 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                 values
             };
 
-            for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
-                let places = self
-                    .hash_table
-                    .iter()
-                    .map(|group_entity| {
-                        let place = Into::<StateAddr>::into(*group_entity.get());
-                        place.next(offsets_aggregate_states[idx])
-                    })
-                    .collect();
+            let mut places: Vec<StateAddr> = self
+                .hash_table
+                .iter()
+                .map(|group_entity| Into::<StateAddr>::into(*group_entity.get()))
+                .collect();
 
+            for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
                 let builder = aggregates_column_builder[idx].borrow_mut();
-                aggregate_function.batch_merge_result(places, builder)?;
+
+                if idx > 0 {
+                    for place in places.iter_mut() {
+                        *place = place.next(
+                            offsets_aggregate_states[idx] - offsets_aggregate_states[idx - 1],
+                        );
+                    }
+                }
+                aggregate_function.batch_merge_result(&places, builder)?;
             }
 
             for group_entity in self.hash_table.iter() {

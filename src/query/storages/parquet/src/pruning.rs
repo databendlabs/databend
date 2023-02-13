@@ -35,6 +35,7 @@ use common_catalog::plan::TopK;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Expr;
+use common_expression::FieldIndex;
 use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
 use common_storage::ColumnNodes;
@@ -60,7 +61,7 @@ pub struct PartitionPruner {
     /// OpenDAL operator
     pub operator: Operator,
     /// The projected column indices.
-    pub columns_to_read: HashSet<usize>,
+    pub columns_to_read: HashSet<FieldIndex>,
     /// The projected column nodes.
     pub column_nodes: ColumnNodes,
     /// Whether to skip pruning.

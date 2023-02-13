@@ -27,6 +27,7 @@ use common_expression::types::StringType;
 use common_expression::types::TimestampType;
 use common_expression::types::ValueType;
 use common_expression::with_number_mapped_type;
+use common_expression::ColumnId;
 use common_expression::ConstantFolder;
 use common_expression::Domain;
 use common_expression::Expr;
@@ -43,7 +44,7 @@ use crate::Index;
 pub struct RangeIndex {
     expr: Expr<String>,
     func_ctx: FunctionContext,
-    column_ids: HashMap<String, u32>,
+    column_ids: HashMap<String, ColumnId>,
 }
 
 impl RangeIndex {

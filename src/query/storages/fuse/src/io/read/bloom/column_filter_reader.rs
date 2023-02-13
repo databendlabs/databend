@@ -27,6 +27,7 @@ use common_arrow::parquet::read::PageReader;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Column;
+use common_expression::ColumnId;
 use opendal::Operator;
 use storages_common_cache::CacheKey;
 use storages_common_cache::InMemoryItemCacheReader;
@@ -35,7 +36,6 @@ use storages_common_cache::Loader;
 use storages_common_cache_manager::CachedObject;
 use storages_common_index::filters::Filter;
 use storages_common_index::filters::Xor8Filter;
-use storages_common_table_meta::meta::ColumnId;
 
 use crate::metrics::metrics_inc_block_index_read_bytes;
 

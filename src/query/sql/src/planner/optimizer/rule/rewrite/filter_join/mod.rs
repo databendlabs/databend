@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod jwt;
-mod role_cache_mgr;
-mod role_mgr;
-mod user_mgr;
-mod user_udf;
+mod extract_or_predicates;
+mod mark_join_to_semi_join;
+mod outer_join_to_inner_join;
+
+pub use extract_or_predicates::rewrite_predicates;
+pub use mark_join_to_semi_join::convert_mark_to_semi_join;
+pub use outer_join_to_inner_join::convert_outer_to_inner_join;
+pub use outer_join_to_inner_join::remove_nullable;

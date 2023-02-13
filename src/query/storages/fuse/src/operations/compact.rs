@@ -140,8 +140,8 @@ impl FuseTable {
             max_threads,
         )?;
 
-        let all_col_ids = self.all_the_columns_ids();
-        let projection = Projection::Columns(all_col_ids);
+        let all_column_indices = self.all_column_indices();
+        let projection = Projection::Columns(all_column_indices);
         let block_reader = self.create_block_reader(projection, ctx.clone())?;
 
         pipeline.add_transform(|input, output| {
