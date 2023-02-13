@@ -26,6 +26,9 @@ use super::*;
 use crate::interpreters::access::Accessor;
 use crate::interpreters::interpreter_catalog_drop::DropCatalogInterpreter;
 use crate::interpreters::interpreter_copy_v2::CopyInterpreterV2;
+use crate::interpreters::interpreter_file_format_create::CreateFileFormatInterpreter;
+use crate::interpreters::interpreter_file_format_drop::DropFileFormatInterpreter;
+use crate::interpreters::interpreter_file_format_show::ShowFileFormatsInterpreter;
 use crate::interpreters::interpreter_presign::PresignInterpreter;
 use crate::interpreters::interpreter_role_show::ShowRolesInterpreter;
 use crate::interpreters::interpreter_table_create_v2::CreateTableInterpreterV2;
@@ -259,6 +262,17 @@ impl InterpreterFactory {
                 ctx,
                 *s.clone(),
             )?)),
+
+            // FileFormats
+            Plan::CreateFileFormat(create_file_format) => Ok(Arc::new(
+                CreateFileFormatInterpreter::try_create(ctx, *create_file_format.clone())?,
+            )),
+            Plan::DropFileFormat(drop_file_format) => Ok(Arc::new(
+                DropFileFormatInterpreter::try_create(ctx, *drop_file_format.clone())?,
+            )),
+            Plan::ShowFileFormats(show_file_formats) => Ok(Arc::new(
+                ShowFileFormatsInterpreter::try_create(ctx, *show_file_formats.clone())?,
+            )),
 
             // Grant
             Plan::GrantPriv(grant_priv) => Ok(Arc::new(GrantPrivilegeInterpreter::try_create(

@@ -17,6 +17,7 @@
 mod principal_identity;
 mod role_info;
 mod user_auth;
+mod user_defined_file_format;
 mod user_defined_function;
 mod user_grant;
 mod user_identity;
@@ -32,6 +33,7 @@ pub use role_info::RoleInfoSerdeError;
 pub use user_auth::AuthInfo;
 pub use user_auth::AuthType;
 pub use user_auth::PasswordHashMethod;
+pub use user_defined_file_format::UserDefinedFileFormat;
 pub use user_defined_function::UserDefinedFunction;
 pub use user_grant::GrantEntry;
 pub use user_grant::GrantObject;

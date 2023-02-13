@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use common_meta_app::principal::AuthType;
+use common_meta_app::principal::FileFormatOptions;
 use common_meta_app::principal::PrincipalIdentity;
 use common_meta_app::principal::UserIdentity;
 use common_meta_app::principal::UserPrivilegeType;
@@ -986,6 +987,34 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         |(_, _)| Statement::ShowShares(ShowSharesStmt {}),
     );
 
+    let create_file_format = map_res(
+        rule! {
+            CREATE ~ FILE ~ FORMAT ~ ( IF ~ NOT ~ EXISTS )?
+            ~ #ident ~ #format_options
+        },
+        |(_, _, _, opt_if_not_exists, name, file_format_options)| {
+            let file_format_options = FileFormatOptions::from_map(&file_format_options)
+                .map_err(|_| ErrorKind::Other("invalid statement"))?;
+            Ok(Statement::CreateFileFormat {
+                if_not_exists: opt_if_not_exists.is_some(),
+                name: name.to_string(),
+                file_format_options,
+            })
+        },
+    );
+
+    let drop_file_format = map(
+        rule! {
+            DROP ~ FILE ~ FORMAT ~ ( IF ~  EXISTS )? ~ #ident
+        },
+        |(_, _, _, opt_if_exists, name)| Statement::DropFileFormat {
+            if_exists: opt_if_exists.is_some(),
+            name: name.to_string(),
+        },
+    );
+
+    let show_file_formats = value(Statement::ShowFileFormats, rule! { SHOW ~ FILE ~ FORMATS });
+
     let statement_body = alt((
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
@@ -1055,6 +1084,11 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #list_stage: "`LIST @<stage_name> [pattern = '<pattern>']`"
             | #remove_stage: "`REMOVE @<stage_name> [pattern = '<pattern>']`"
             | #drop_stage: "`DROP STAGE <stage_name>`"
+        ),
+        rule!(
+            #create_file_format: "`CREATE FILE FORMAT [ IF NOT EXISTS ] <format_name> formatTypeOptions`"
+            | #show_file_formats: "`SHOW FILE FORMATS`"
+            | #drop_file_format: "`DROP FILE FORMAT  [ IF EXISTS ] <format_name>`"
         ),
         rule! (
             #copy_into: "`COPY
@@ -1728,10 +1762,9 @@ pub fn copy_option(i: Input) -> IResult<CopyOption> {
             rule! { PATTERN ~ "=" ~ #literal_string },
             |(_, _, pattern)| CopyOption::Pattern(pattern),
         ),
-        map(
-            rule! { FILE_FORMAT ~ "=" ~ #format_options },
-            |(_, _, options)| CopyOption::FileFormat(options),
-        ),
+        map(rule! { #file_format_clause }, |options| {
+            CopyOption::FileFormat(options)
+        }),
         map(
             rule! { VALIDATION_MODE ~ "=" ~ #literal_string },
             |(_, _, validation_mode)| CopyOption::ValidationMode(validation_mode),

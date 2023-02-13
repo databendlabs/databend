@@ -208,6 +208,7 @@ pub struct FileFormatOptions {
     pub compression: StageFileCompression,
     pub row_tag: String,
     pub quote: String,
+    pub name: Option<String>,
 }
 
 impl Default for FileFormatOptions {
@@ -222,6 +223,7 @@ impl Default for FileFormatOptions {
             compression: StageFileCompression::default(),
             row_tag: "row".to_string(),
             quote: "".to_string(),
+            name: None,
         }
     }
 }
@@ -238,6 +240,7 @@ impl FileFormatOptions {
             compression: StageFileCompression::None,
             row_tag: "".to_string(),
             quote: "".to_string(),
+            name: None,
         }
     }
 
@@ -285,6 +288,31 @@ impl FileFormatOptions {
                     }
                 }
             }
+        }
+        Ok(())
+    }
+}
+
+impl Display for FileFormatOptions {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "TYPE = {}", self.format.to_string())?;
+        match self.format {
+            StageFileFormatType::Csv => {
+                write!(f, " FIELD_DELIMITER = {}", self.field_delimiter)?;
+                write!(f, " RECORD_DELIMITER = {}", self.record_delimiter)?;
+                write!(f, " QUOTE = {}", self.quote)?;
+                write!(f, " ESCAPE = {}", self.escape)?;
+                write!(f, " SKIP_HEADER = {}", self.skip_header)?;
+                write!(f, " NAN_DISPLAY = {}", self.nan_display)?;
+            }
+            StageFileFormatType::Tsv => {
+                write!(f, " FIELD_DELIMITER = {}", self.format.to_string())?;
+                write!(f, " RECORD_DELIMITER = {}", self.record_delimiter)?;
+            }
+            StageFileFormatType::Xml => {
+                write!(f, " ROW_TAG= {}", self.row_tag)?;
+            }
+            _ => {}
         }
         Ok(())
     }
