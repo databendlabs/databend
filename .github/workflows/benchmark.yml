@@ -67,6 +67,10 @@ jobs:
           chmod +x ./linux-amd64/bendsql
           sudo cp ./linux-amd64/bendsql /usr/local/bin/bendsql
           bendsql version
+      - name: Install script dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y jq netcat bc
       - name: Run Benchmark
         working-directory: scripts/ci/clickbench
         env:

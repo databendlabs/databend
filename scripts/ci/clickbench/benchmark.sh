@@ -4,6 +4,12 @@ set -e
 
 BENCHMARK_ID=${BENCHMARK_ID:-$(date +%s)}
 
+echo "Checking script dependencies..."
+nc --version
+bc --version
+jq --version
+bendsql version
+
 function wait_for_port() {
     # Wait for a port to be open
     # Usage: wait_for_port 8080 10
