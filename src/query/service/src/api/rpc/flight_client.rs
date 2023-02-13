@@ -135,7 +135,7 @@ impl FlightExchange {
         streaming: Request<Streaming<FlightData>>,
         response_tx: Sender<Result<FlightData, Status>>,
     ) -> FlightExchange {
-        let mut streaming = streaming.into_inner();
+        let streaming = streaming.into_inner();
         let state = Arc::new(ChannelState::create());
         let rx = Self::listen_request(state.clone(), response_tx.clone(), streaming);
 
@@ -150,7 +150,7 @@ impl FlightExchange {
 
     pub fn from_client(
         response_tx: Sender<FlightData>,
-        mut streaming: Streaming<FlightData>,
+        streaming: Streaming<FlightData>,
     ) -> FlightExchange {
         let state = Arc::new(ChannelState::create());
         let rx = Self::listen_request(state.clone(), response_tx.clone(), streaming);
@@ -164,7 +164,7 @@ impl FlightExchange {
         })
     }
 
-    fn listen_request<ResponseT>(
+    fn listen_request<ResponseT: Send + 'static>(
         state: Arc<ChannelState>,
         response: Sender<ResponseT>,
         mut streaming: Streaming<FlightData>,
@@ -182,10 +182,10 @@ impl FlightExchange {
                         return;
                     }
                     other => {
-                        if let Some(status) = other {
-                            if let Some(error) = match_for_io_error(&status) {
+                        if let Err(status) = &other {
+                            if let Some(error) = match_for_io_error(status) {
                                 {
-                                    let may_recv_error = state.may_recv_error.lock();
+                                    let mut may_recv_error = state.may_recv_error.lock();
                                     *may_recv_error = Some(std::io::Error::new(error.kind(), ""));
                                 }
 

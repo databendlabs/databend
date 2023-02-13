@@ -66,7 +66,7 @@ pub enum DataPacket {
 
 impl DataPacket {
     pub fn is_closing_input(data: &FlightData) -> bool {
-        data.app_metadata.last() == Some(&0x05)
+        data.app_metadata.last() == Some(&0x06)
     }
 
     pub fn is_closing_output(data: &FlightData) -> bool {

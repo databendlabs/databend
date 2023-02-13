@@ -48,7 +48,7 @@ impl AsyncSink for ExchangeWriterSink {
     }
 
     #[async_trait::unboxed_simple]
-    async fn consume(&mut self, mut data_block: DataBlock) -> Result<()> {
+    async fn consume(&mut self, mut data_block: DataBlock) -> Result<bool> {
         let packet = match data_block.take_meta() {
             None => Err(ErrorCode::Internal(
                 "ExchangeWriterSink only recv ExchangeSerializeMeta.",
@@ -64,8 +64,11 @@ impl AsyncSink for ExchangeWriterSink {
             },
         }?;
 
-        self.exchange.send(packet).await?;
-        Ok(())
+        match self.exchange.send(packet).await {
+            Ok(_) => Ok(false),
+            Err(error) if error.code() == ErrorCode::ABORTED_QUERY => Ok(true),
+            Err(error) => Err(error),
+        }
     }
 }
 
