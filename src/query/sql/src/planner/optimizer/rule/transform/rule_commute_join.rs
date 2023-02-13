@@ -102,6 +102,6 @@ impl Rule for RuleCommuteJoin {
     }
 
     fn transformation(&self) -> bool {
-        return false;
+        false
     }
 }

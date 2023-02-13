@@ -88,6 +88,6 @@ impl Rule for RuleMergeFilter {
     }
 
     fn transformation(&self) -> bool {
-        return true;
+        true
     }
 }

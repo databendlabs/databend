@@ -83,6 +83,6 @@ impl Rule for RuleEliminateFilter {
     }
 
     fn transformation(&self) -> bool {
-        return true;
+        true
     }
 }

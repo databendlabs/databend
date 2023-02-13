@@ -159,6 +159,6 @@ impl Rule for RuleFoldCountAggregate {
     }
 
     fn transformation(&self) -> bool {
-        return true;
+        true
     }
 }

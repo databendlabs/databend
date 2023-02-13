@@ -213,6 +213,6 @@ impl Rule for RuleLeftExchangeJoin {
     }
 
     fn transformation(&self) -> bool {
-        return false;
+        false
     }
 }

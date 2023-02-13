@@ -79,6 +79,6 @@ impl Rule for RuleSplitAggregate {
     }
 
     fn transformation(&self) -> bool {
-        return true;
+        true
     }
 }

@@ -90,6 +90,6 @@ impl Rule for RulePushDownLimitAggregate {
     }
 
     fn transformation(&self) -> bool {
-        return true;
+        true
     }
 }

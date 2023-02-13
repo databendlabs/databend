@@ -88,6 +88,6 @@ impl Rule for RulePushDownSortScan {
     }
 
     fn transformation(&self) -> bool {
-        return true;
+        true
     }
 }

@@ -91,6 +91,6 @@ impl Rule for RuleEliminateEvalScalar {
     }
 
     fn transformation(&self) -> bool {
-        return true;
+        true
     }
 }

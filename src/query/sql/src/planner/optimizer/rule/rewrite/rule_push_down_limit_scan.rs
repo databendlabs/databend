@@ -86,6 +86,6 @@ impl Rule for RulePushDownLimitScan {
     }
 
     fn transformation(&self) -> bool {
-        return true;
+        true
     }
 }

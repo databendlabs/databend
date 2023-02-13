@@ -211,6 +211,6 @@ impl Rule for RuleRightExchangeJoin {
     }
 
     fn transformation(&self) -> bool {
-        return false;
+        false
     }
 }

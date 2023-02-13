@@ -260,6 +260,6 @@ impl Rule for RuleExchangeJoin {
     }
 
     fn transformation(&self) -> bool {
-        return false;
+        false
     }
 }

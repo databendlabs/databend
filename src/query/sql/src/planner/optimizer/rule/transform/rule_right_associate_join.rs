@@ -209,6 +209,6 @@ impl Rule for RuleRightAssociateJoin {
     }
 
     fn transformation(&self) -> bool {
-        return false;
+        false
     }
 }

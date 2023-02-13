@@ -112,6 +112,6 @@ impl Rule for RulePushDownLimitUnion {
     }
 
     fn transformation(&self) -> bool {
-        return true;
+        true
     }
 }

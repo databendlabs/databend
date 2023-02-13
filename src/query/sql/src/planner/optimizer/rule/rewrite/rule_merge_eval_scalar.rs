@@ -103,6 +103,6 @@ impl Rule for RuleMergeEvalScalar {
     }
 
     fn transformation(&self) -> bool {
-        return true;
+        true
     }
 }

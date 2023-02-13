@@ -126,7 +126,7 @@ impl Rule for RulePushDownFilterUnion {
     }
 
     fn transformation(&self) -> bool {
-        return true;
+        true
     }
 }
 

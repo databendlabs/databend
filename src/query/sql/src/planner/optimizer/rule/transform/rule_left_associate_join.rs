@@ -213,6 +213,6 @@ impl Rule for RuleLeftAssociateJoin {
     }
 
     fn transformation(&self) -> bool {
-        return false;
+        false
     }
 }

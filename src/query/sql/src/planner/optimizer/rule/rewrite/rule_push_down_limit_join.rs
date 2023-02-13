@@ -107,6 +107,6 @@ impl Rule for RulePushDownLimitOuterJoin {
     }
 
     fn transformation(&self) -> bool {
-        return true;
+        true
     }
 }

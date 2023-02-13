@@ -99,6 +99,6 @@ impl Rule for RulePushDownFilterEvalScalar {
     }
 
     fn transformation(&self) -> bool {
-        return true;
+        true
     }
 }

@@ -168,7 +168,7 @@ impl Rule for RuleNormalizeDisjunctiveFilter {
     }
 
     fn transformation(&self) -> bool {
-        return true;
+        true
     }
 }
 

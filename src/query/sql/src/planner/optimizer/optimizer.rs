@@ -148,7 +148,7 @@ pub fn optimize_query(
     let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata.clone(), rules);
     let mut result = heuristic.optimize(s_expr)?;
 
-    let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata.clone())?;
+    let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata)?;
     result = cascades.optimize(result)?;
 
     // So far, we don't have ability to execute distributed query

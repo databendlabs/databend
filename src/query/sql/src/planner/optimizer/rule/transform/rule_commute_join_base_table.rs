@@ -105,6 +105,6 @@ impl Rule for RuleCommuteJoinBaseTable {
     }
 
     fn transformation(&self) -> bool {
-        return false;
+        false
     }
 }
