@@ -40,6 +40,7 @@ use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalColumnBuilder;
 use crate::types::decimal::DecimalDataType;
 use crate::types::decimal::DecimalScalar;
+use crate::types::decimal::DecimalSize;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableColumnBuilder;
 use crate::types::nullable::NullableDomain;
@@ -155,7 +156,7 @@ impl<'a, T: ValueType> ValueRef<'a, T> {
         }
     }
 
-    pub fn sematically_eq(&'a self, other: &'a Self) -> bool {
+    pub fn semantically_eq(&'a self, other: &'a Self) -> bool {
         match (self, other) {
             (ValueRef::Scalar(s1), ValueRef::Scalar(s2)) => s1 == s2,
             (ValueRef::Column(c1), ValueRef::Column(c2)) => c1 == c2,
@@ -832,14 +833,17 @@ impl Column {
                 )
                 .unwrap(),
             ),
-            Column::Decimal(DecimalColumn::Decimal256(col, _)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<common_arrow::arrow::types::i256>::try_new(
-                    arrow_type,
-                    col.iter().cloned().map(common_arrow::arrow::types::i256).collect::<Vec<_>>().into(),
-                    None,
+            Column::Decimal(DecimalColumn::Decimal256(col, _)) => {
+                let values = unsafe { std::mem::transmute(col.clone()) };
+                Box::new(
+                    common_arrow::arrow::array::PrimitiveArray::<common_arrow::arrow::types::i256>::try_new(
+                        arrow_type,
+                        values,
+                        None,
+                    )
+                    .unwrap()
                 )
-                .unwrap(),
-            ),
+            }
             Column::Boolean(col) => Box::new(
                 common_arrow::arrow::array::BooleanArray::try_new(arrow_type, col.clone(), None)
                     .unwrap(),
@@ -1205,6 +1209,31 @@ impl Column {
                     fields,
                     len: arrow_col.len(),
                 }
+            }
+            ArrowDataType::Decimal(precision, scale) => {
+                let arrow_col = arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::PrimitiveArray<i128>>()
+                    .expect("fail to read from arrow: array should be `DecimalArray`");
+                Column::Decimal(DecimalColumn::Decimal128(
+                    arrow_col.values().clone(),
+                    DecimalSize {
+                        precision: *precision as u8,
+                        scale: *scale as u8,
+                    },
+                ))
+            }
+            ArrowDataType::Decimal256(precision, scale) => {
+                let arrow_col = arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::PrimitiveArray<common_arrow::arrow::types::i256>>()
+                    .expect("fail to read from arrow: array should be `DecimalArray`");
+
+                let values = unsafe { std::mem::transmute(arrow_col.values().clone()) };
+                Column::Decimal(DecimalColumn::Decimal256(values, DecimalSize {
+                    precision: *precision as u8,
+                    scale: *scale as u8,
+                }))
             }
             ty => unimplemented!("unsupported arrow type {ty:?}"),
         };

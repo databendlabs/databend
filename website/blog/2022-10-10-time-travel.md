@@ -38,7 +38,7 @@ The saved snapshots are the behind-the-scenes heroes that make the time travel b
 
 The Time Travel feature makes it possible to create an OLD table, which means you can create a table to hold and move on from a previous version of your data. 
 
-The [CREATE TABLE](https://databend.rs/doc/reference/sql/ddl/table/ddl-create-table) statement can include a [SNAPSHOT_LOCATION](https://databend.rs/doc/reference/sql/ddl/table/ddl-create-table#create-table--snapshot_location) clause that allows you to specify a snapshot file that holds your old data. This command enables you to insert the data stored in the snapshot file when you create a table. Please note that the table you create must have same column definations as the data from the snapshot.
+The [CREATE TABLE](https://databend.rs/doc/reference/sql/ddl/table/ddl-create-table) statement can include a [SNAPSHOT_LOCATION](https://databend.rs/doc/reference/sql/ddl/table/ddl-create-table#create-table--snapshot_location) clause that allows you to specify a snapshot file that holds your old data. This command enables you to insert the data stored in the snapshot file when you create a table. Please note that the table you create must have same column definitions as the data from the snapshot.
 
 ## Go without Time Travel
 

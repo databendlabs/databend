@@ -33,7 +33,7 @@ use crate::io::BloomBlockFilterReader;
 
 #[async_trait::async_trait]
 pub trait BloomPruner {
-    // returns ture, if target should NOT be pruned (false positive allowed)
+    // returns true, if target should NOT be pruned (false positive allowed)
     async fn should_keep(&self, index_location: &Option<Location>, index_length: u64) -> bool;
 }
 
@@ -131,7 +131,7 @@ impl BloomPrunerCreator {
             .apply(self.filter_expression.clone(), &self.scalar_map)?
                 != FilterEvalResult::MustFalse),
             Err(e) if e.code() == ErrorCode::DEPRECATED_INDEX_FORMAT => {
-                // In case that the index is no longer supported, just return ture to indicate
+                // In case that the index is no longer supported, just return true to indicate
                 // that the block being pruned should be kept. (Although the caller of this method
                 // "FilterPruner::should_keep",  will ignore any exceptions returned)
                 Ok(true)
@@ -150,7 +150,7 @@ impl BloomPruner for BloomPrunerCreator {
                 Ok(v) => v,
                 Err(e) => {
                     // swallow exceptions intentionally, corrupted index should not prevent execution
-                    tracing::warn!("failed to apply bloom pruner, returning ture. {}", e);
+                    tracing::warn!("failed to apply bloom pruner, returning true. {}", e);
                     true
                 }
             }

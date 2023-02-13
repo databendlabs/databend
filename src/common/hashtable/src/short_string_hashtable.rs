@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use std::alloc::Allocator;
+use std::iter::TrustedLen;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::num::NonZeroU64;
 use std::ptr::NonNull;
 
 use bumpalo::Bump;
-use common_base::mem_allocator::GlobalAllocator;
 use common_base::mem_allocator::MmapAllocator;
 
 use super::container::HeapContainer;
@@ -38,7 +38,7 @@ use crate::table_empty::TableEmpty;
 use crate::table_empty::TableEmptyIter;
 use crate::table_empty::TableEmptyIterMut;
 
-pub struct ShortStringHashtable<K, V, A = MmapAllocator<GlobalAllocator>>
+pub struct ShortStringHashtable<K, V, A = MmapAllocator>
 where
     K: UnsizedKeyable + ?Sized,
     A: Allocator + Clone,
@@ -342,7 +342,30 @@ where K: UnsizedKeyable + ?Sized
         }
         None
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let mut size = 0;
+        if let Some(it) = self.it_0.as_ref() {
+            size += it.size_hint().0;
+        }
+        if let Some(it) = self.it_1.as_ref() {
+            size += it.size_hint().0;
+        }
+        if let Some(it) = self.it_2.as_ref() {
+            size += it.size_hint().0;
+        }
+        if let Some(it) = self.it_3.as_ref() {
+            size += it.size_hint().0;
+        }
+        if let Some(it) = self.it_4.as_ref() {
+            size += it.size_hint().0;
+        }
+        (size, Some(size))
+    }
 }
+
+unsafe impl<'a, K, V> TrustedLen for ShortStringHashtableIter<'a, K, V> where K: UnsizedKeyable + ?Sized
+{}
 
 pub struct ShortStringHashtableIterMut<'a, K, V>
 where K: UnsizedKeyable + ?Sized

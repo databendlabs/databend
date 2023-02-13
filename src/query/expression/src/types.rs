@@ -41,7 +41,7 @@ pub use self::any::AnyType;
 pub use self::array::ArrayType;
 pub use self::boolean::BooleanType;
 pub use self::date::DateType;
-use self::decimal::DecimalDataType;
+pub use self::decimal::DecimalDataType;
 pub use self::empty_array::EmptyArrayType;
 pub use self::generic::GenericType;
 pub use self::map::MapType;
@@ -121,6 +121,15 @@ impl DataType {
         }
     }
 
+    pub fn is_signed_numeric(&self) -> bool {
+        match self {
+            DataType::Number(ty) => {
+                ALL_INTEGER_TYPES.contains(ty) && !ALL_UNSIGNED_INTEGER_TYPES.contains(ty)
+            }
+            _ => false,
+        }
+    }
+
     pub fn is_numeric(&self) -> bool {
         match self {
             DataType::Number(ty) => ALL_NUMERICS_TYPES.contains(ty),
@@ -142,6 +151,10 @@ impl DataType {
             DataType::Number(ty) => ALL_FLOAT_TYPES.contains(ty),
             _ => false,
         }
+    }
+
+    pub fn is_decimal(&self) -> bool {
+        matches!(self, DataType::Decimal(_ty))
     }
 
     #[inline]

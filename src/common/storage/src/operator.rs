@@ -19,7 +19,6 @@ use std::io::Result;
 use std::time::Duration;
 
 use anyhow::anyhow;
-use backon::ExponentialBackoff;
 use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
@@ -84,7 +83,7 @@ pub fn build_operator<A: Accessor>(acc: A) -> Operator {
 
     ob
         // Add retry
-        .layer(RetryLayer::new(ExponentialBackoff::default().with_jitter()))
+        .layer(RetryLayer::new().with_jitter())
         // Add metrics
         .layer(MetricsLayer)
         // Add logging

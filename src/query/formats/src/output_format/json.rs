@@ -85,7 +85,7 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
                 JsonValue::Number(serde_json::Number::from_f64(v.into()).unwrap())
             }
         },
-        ScalarRef::Decimal(_) => todo!("decimal"),
+        ScalarRef::Decimal(x) => serde_json::to_value(x.to_string()).unwrap(),
         ScalarRef::Date(v) => {
             let dt = DateConverter::to_date(&v, format.timezone);
             serde_json::to_value(dt.format("%Y-%m-%d").to_string()).unwrap()

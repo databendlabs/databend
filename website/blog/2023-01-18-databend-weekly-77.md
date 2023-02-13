@@ -19,7 +19,7 @@ Check out what we've done this week to make Databend even better for you.
 
 **Meta**
 
-- use `expressin::TableSchema` to replace obsolete `datavalues::DataSchema` ([#9506](https://github.com/datafuselabs/databend/pull/9506))
+- use `expression::TableSchema` to replace obsolete `datavalues::DataSchema` ([#9506](https://github.com/datafuselabs/databend/pull/9506))
 - `iter()` iterate every tree and every records in theses trees ([#9621](https://github.com/datafuselabs/databend/pull/9621))
 
 **Expression**
@@ -70,7 +70,7 @@ Check out what we've done this week to make Databend even better for you.
 
 **Expression**
 
-- constant folder should run repeatly until stable ([#9572](https://github.com/datafuselabs/databend/pull/9572))
+- constant folder should run repeatedly until stable ([#9572](https://github.com/datafuselabs/databend/pull/9572))
 - `check_date()` and `to_string(boolean)` may panic ([#9561](https://github.com/datafuselabs/databend/pull/9561))
 
 **Planner**

@@ -314,9 +314,9 @@ impl QueryContextShared {
     pub fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
         let mut blocks = self.precommit_blocks.write();
 
-        let mut swaped_precommit_blocks = vec![];
-        std::mem::swap(&mut *blocks, &mut swaped_precommit_blocks);
-        swaped_precommit_blocks
+        let mut swapped_precommit_blocks = vec![];
+        std::mem::swap(&mut *blocks, &mut swapped_precommit_blocks);
+        swapped_precommit_blocks
     }
 
     pub fn get_stage_attachment(&self) -> Option<StageAttachment> {

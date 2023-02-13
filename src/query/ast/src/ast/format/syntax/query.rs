@@ -275,7 +275,7 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             named_params,
             alias,
         } => {
-            let seperator = if !named_params.is_empty() && !params.is_empty() {
+            let separator = if !named_params.is_empty() && !params.is_empty() {
                 RcDoc::text(", ")
             } else {
                 RcDoc::nil()
@@ -283,7 +283,7 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             RcDoc::text(name.to_string())
                 .append(RcDoc::text("("))
                 .append(inline_comma(params.into_iter().map(pretty_expr)))
-                .append(seperator)
+                .append(separator)
                 .append(inline_comma(named_params.into_iter().map(|(k, v)| {
                     RcDoc::text(k)
                         .append(RcDoc::text("=>"))

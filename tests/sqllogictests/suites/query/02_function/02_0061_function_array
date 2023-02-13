@@ -16,6 +16,26 @@ create table t(col1 Array(Int Null), col2 Array(String), col3 Array(Date), col4 
 statement ok
 insert into t values([1,2,3,3],['x','x','y','z'], ['2022-02-02'], ['2023-01-01 02:00:01'], [[1,2],[],[null]])
 
+query IIII
+select length(col1), length(col2), length(col3), length(col4) from t
+----
+4 4 1 1
+
+query ITT
+select get(col1, 3), get(col2, 2), get(col3, 1) from t
+----
+3 x 2022-02-02
+
+query TTTT
+select slice(col1, 1), slice(col1, 2, 3), slice(col2, 2), slice(col2, 3, 3) from t
+----
+[1,2,3,3] [2,3] ['x','y','z'] ['y']
+
+query BBB
+select contains(col1, 3), contains(col2, 'x'), contains(col3, '2021-01-01') from t
+----
+1 1 0
+
 query T
 select array_concat(col1, col5) from t
 ----
@@ -100,6 +120,36 @@ query ITT
 select array_min(col1), array_min(col2), array_min(col3) from t
 ----
 1 x 2022-02-02
+
+query ITT
+select array_any(col1), array_any(col2), array_any(col3) from t
+----
+1 x 2022-02-02
+
+query TTTTT
+select array_sort(col1),array_sort(col2),array_sort(col3),array_sort(col4),array_sort(col5) from t
+----
+[1,2,3,3] ['x','x','y','z'] ['2022-02-02'] ['2023-01-01 02:00:01.000000'] [[],[NULL],[1,2]]
+
+statement ok
+drop table t;
+
+statement ok
+create table t(col1 Array(Int Null), col2 Array(String), col3 Array(Date), col4 Array(Timestamp), col5 Array(Array(Int null)))
+
+statement ok
+insert into t values([1,2,3,3],['x','x','y','z'], ['2022-02-02'], ['2023-01-01 02:00:01'], [[1,2],[],[2,1,3,null]])
+
+query TTTTT
+select array_sort(col1, 'asc', 'NULLS FIRST'),array_sort(col2, 'desc'),array_sort(col3, 'desc', 'nulls last'),array_sort(col4),array_sort(col5, 'DESC', 'NULLS FIRST') from t
+----
+[1,2,3,3] ['z','y','x','x'] ['2022-02-02'] ['2023-01-01 02:00:01.000000'] [[2,1,3,NULL],[1,2],[]]
+
+statement error 1005
+select array_sort(col1, 'asc', 'nulls fir') from t;
+
+statement error 1005
+select array_sort(col1, 'asca', 'nulls firt') from t;
 
 statement ok
 DROP DATABASE array_func_test

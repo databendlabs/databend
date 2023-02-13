@@ -386,7 +386,7 @@ impl CopyInterpreterV2 {
                 }
 
                 return GlobalIORuntime::instance().block_on(async move {
-                    // 1. Commit datas.
+                    // 1. Commit data.
                     let operations = ctx.consume_precommit_blocks();
                     info!(
                         "copy: try to commit operations:{}, elapsed:{}",

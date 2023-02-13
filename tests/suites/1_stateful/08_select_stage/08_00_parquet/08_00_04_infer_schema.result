@@ -4,6 +4,9 @@ t	(A INT32, B STRING)	0	1
 --- file:
 id	INT	0	0
 t	(A INT32, B STRING)	0	1
+--- file_format:
+id	INT	0	0
+t	(A INT32, B STRING)	0	1
 --- pattern:
 id	INT	0	0
 t	(A INT32, B STRING)	0	1

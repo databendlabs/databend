@@ -43,6 +43,8 @@ fn test_array() {
     test_array_count(file);
     test_array_max(file);
     test_array_min(file);
+    test_array_any(file);
+    test_array_sort(file);
 }
 
 fn test_create(file: &mut impl Write) {
@@ -83,6 +85,15 @@ fn test_get(file: &mut impl Write) {
 }
 
 fn test_slice(file: &mut impl Write) {
+    run_ast(file, "slice([], 1)", &[]);
+    run_ast(file, "slice([0, 1, 2, 3], 2)", &[]);
+    run_ast(file, "slice(['a', 'b', 'c', 'd'], 3)", &[]);
+    run_ast(file, "slice([a, b, c], 2)", &[
+        ("a", Int16Type::from_data(vec![0i16, 1, 2])),
+        ("b", Int16Type::from_data(vec![3i16, 4, 5])),
+        ("c", Int16Type::from_data(vec![7i16, 8, 9])),
+    ]);
+
     run_ast(file, "slice([], 1, 2)", &[]);
     run_ast(file, "slice([1], 1, 2)", &[]);
     run_ast(file, "slice([NULL, 1, 2, 3], 0, 2)", &[]);
@@ -435,4 +446,74 @@ fn test_array_min(file: &mut impl Write) {
             UInt64Type::from_data_with_validity(vec![4u64, 6, 5, 0], vec![true, true, true, false]),
         ),
     ]);
+}
+
+fn test_array_any(file: &mut impl Write) {
+    run_ast(file, "array_any([])", &[]);
+    run_ast(file, "array_any([1, 2, 3])", &[]);
+    run_ast(file, "array_any([NULL, 3, 2, 1])", &[]);
+    run_ast(file, "array_any(['a', 'b', 'c'])", &[]);
+    run_ast(file, "array_any([NULL, 'x', 'y', 'z'])", &[]);
+
+    run_ast(file, "array_any([a, b, c, d])", &[
+        ("a", Int16Type::from_data(vec![1i16, 5, 8, 3])),
+        ("b", Int16Type::from_data(vec![2i16, 6, 1, 2])),
+        ("c", Int16Type::from_data(vec![3i16, 7, 7, 6])),
+        ("d", Int16Type::from_data(vec![4i16, 8, 1, 9])),
+    ]);
+
+    run_ast(file, "array_any([a, b, c, d])", &[
+        (
+            "a",
+            UInt64Type::from_data_with_validity(vec![1u64, 2, 0, 4], vec![true, true, false, true]),
+        ),
+        (
+            "b",
+            UInt64Type::from_data_with_validity(vec![2u64, 0, 5, 6], vec![true, false, true, true]),
+        ),
+        (
+            "c",
+            UInt64Type::from_data_with_validity(vec![3u64, 7, 8, 9], vec![true, true, true, true]),
+        ),
+        (
+            "d",
+            UInt64Type::from_data_with_validity(vec![4u64, 6, 5, 0], vec![true, true, true, false]),
+        ),
+    ]);
+}
+
+fn test_array_sort(file: &mut impl Write) {
+    run_ast(file, "array_sort([])", &[]);
+    run_ast(file, "array_sort(NULL)", &[]);
+    run_ast(file, "array_sort([8, 20, 1, 2, 3, 4, 5, 6, 7], 'ASC')", &[]);
+    run_ast(file, "array_sort([], 'ASC')", &[]);
+    run_ast(file, "array_sort([], 'DESC')", &[]);
+    run_ast(file, "array_sort([8, 20, 1, 2, 3, 4, 5, 6, 7], 'DESC')", &[
+    ]);
+    run_ast(file, "array_sort([9.32, 0, 1.2, 3.4, 5.6, 7.8])", &[]);
+    run_ast(file, "array_sort(['x', 0, 1.2, 3.4, 5.6, 7.8])", &[]);
+    run_ast(
+        file,
+        "array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'DESC', 'NULLS FIRST')",
+        &[],
+    );
+    run_ast(file, "array_sort([], 'DESC', 'NULLS FIRST')", &[]);
+    run_ast(
+        file,
+        "array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'DESC', 'NULLS LAST')",
+        &[],
+    );
+    run_ast(file, "array_sort([], 'DESC', 'NULLS LAST')", &[]);
+    run_ast(
+        file,
+        "array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'ASC', 'NULLS FIRST')",
+        &[],
+    );
+    run_ast(file, "array_sort([], 'ASC', 'NULLS FIRST')", &[]);
+    run_ast(
+        file,
+        "array_sort(['z', 'a', NULL, 'v', 'd', NULL], 'ASC', 'NULLS LAST')",
+        &[],
+    );
+    run_ast(file, "array_sort([], 'ASC', 'NULLS LAST')", &[]);
 }

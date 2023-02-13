@@ -16,17 +16,20 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use crate::mem_allocator::JEAllocator;
+
 /// mmap allocator.
-/// This is used for some hash tables.
-/// T is a fallback inner allocator for some memory special case.
+/// For better performance, we use jemalloc as the inner allocator.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct MmapAllocator<T> {
-    allocator: T,
+pub struct MmapAllocator {
+    allocator: JEAllocator,
 }
 
-impl<T> MmapAllocator<T> {
-    pub fn new(allocator: T) -> Self {
-        Self { allocator }
+impl MmapAllocator {
+    pub fn new() -> Self {
+        Self {
+            allocator: JEAllocator::default(),
+        }
     }
 }
 
@@ -46,7 +49,7 @@ pub mod linux {
 
     const THRESHOLD: usize = 64 << 20;
 
-    impl<T: Allocator> MmapAllocator<T> {
+    impl MmapAllocator {
         #[inline(always)]
         fn mmap_alloc(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
             debug_assert!(layout.align() <= page_size());
@@ -128,7 +131,7 @@ pub mod linux {
         }
     }
 
-    unsafe impl<T: Allocator> Allocator for MmapAllocator<T> {
+    unsafe impl Allocator for MmapAllocator {
         #[inline(always)]
         fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
             if layout.align() > page_size() {
@@ -310,7 +313,7 @@ pub mod not_linux {
 
     use super::MmapAllocator;
 
-    unsafe impl<T: Allocator> Allocator for MmapAllocator<T> {
+    unsafe impl Allocator for MmapAllocator {
         #[inline(always)]
         fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
             self.allocator.allocate(layout)

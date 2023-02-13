@@ -24,15 +24,16 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use futures::AsyncRead;
+use opendal::ops::*;
 use opendal::raw::input;
 use opendal::raw::output;
 use opendal::raw::Accessor;
 use opendal::raw::Layer;
 use opendal::raw::LayeredAccessor;
+use opendal::raw::RpList;
 use opendal::raw::RpRead;
+use opendal::raw::RpScan;
 use opendal::raw::RpWrite;
-use opendal::OpRead;
-use opendal::OpWrite;
 use opendal::Result;
 use parking_lot::RwLock;
 
@@ -188,6 +189,8 @@ impl<A: Accessor> LayeredAccessor for StorageMetricsAccessor<A> {
     type Inner = A;
     type Reader = StorageMetricsReader<A::Reader>;
     type BlockingReader = StorageMetricsReader<A::BlockingReader>;
+    type Pager = A::Pager;
+    type BlockingPager = A::BlockingPager;
 
     fn inner(&self) -> &Self::Inner {
         &self.inner
@@ -214,6 +217,22 @@ impl<A: Accessor> LayeredAccessor for StorageMetricsAccessor<A> {
         self.inner
             .blocking_read(path, args)
             .map(|(rp, r)| (rp, StorageMetricsReader::new(r, self.metrics.clone())))
+    }
+
+    async fn list(&self, path: &str, args: OpList) -> Result<(RpList, Self::Pager)> {
+        self.inner.list(path, args).await
+    }
+
+    async fn scan(&self, path: &str, args: OpScan) -> Result<(RpScan, Self::Pager)> {
+        self.inner.scan(path, args).await
+    }
+
+    fn blocking_list(&self, path: &str, args: OpList) -> Result<(RpList, Self::BlockingPager)> {
+        self.inner.blocking_list(path, args)
+    }
+
+    fn blocking_scan(&self, path: &str, args: OpScan) -> Result<(RpScan, Self::BlockingPager)> {
+        self.inner.blocking_scan(path, args)
     }
 }
 

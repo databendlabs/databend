@@ -403,8 +403,8 @@ impl Binder {
                 (schema, vec![], vec![])
             }
             (Some(source), Some(query)) => {
-                // e.g. `CREATE TABLE t (i INT) AS SELECT * from old_t` with columns speicified
-                let (source_schema, source_default_exprs, source_coments) =
+                // e.g. `CREATE TABLE t (i INT) AS SELECT * from old_t` with columns specified
+                let (source_schema, source_default_exprs, source_comments) =
                     self.analyze_create_table_schema(source).await?;
                 let init_bind_context = BindContext::new();
                 let (_, bind_context) = self.bind_query(&init_bind_context, query).await?;
@@ -422,7 +422,7 @@ impl Binder {
                     return Err(ErrorCode::BadArguments("Number of columns does not match"));
                 }
                 Self::validate_create_table_schema(&source_schema)?;
-                (source_schema, source_default_exprs, source_coments)
+                (source_schema, source_default_exprs, source_comments)
             }
             _ => Err(ErrorCode::BadArguments(
                 "Incorrect CREATE query: required list of column descriptions or AS section or SELECT..",
@@ -730,7 +730,7 @@ impl Binder {
 
         if new_catalog != catalog {
             return Err(ErrorCode::BadArguments(
-                "alter catalog not allowed while reanme table",
+                "alter catalog not allowed while rename table",
             ));
         }
 

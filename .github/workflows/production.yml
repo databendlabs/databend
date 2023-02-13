@@ -8,7 +8,6 @@ on:
       - "docs/**"
       - "website/**"
       - "**.md"
-      - "scripts/setup/**"
       - ".devcontainer/**"
 
 concurrency:
@@ -17,6 +16,7 @@ concurrency:
 
 env:
   BUILD_PROFILE: release
+  CARGO_INCREMENTAL: 0
 
 jobs:
   check:

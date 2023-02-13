@@ -44,7 +44,7 @@ CREATE TABLE nginx.access_logs (
   `server_protocol` VARCHAR,
   `status` INT,
   `bytes_sent` INT,
-  `http_referer` VARCHAR,
+  `http_referrer` VARCHAR,
   `http_user_agent` VARCHAR,
   `upstream_addr` VARCHAR,
   `scheme` VARCHAR,
@@ -94,7 +94,7 @@ http {
         ##
         # Logging Settings
         ##
-	    log_format upstream '$remote_addr "$time_local" $host "$request_method $request_uri $server_protocol" $status $bytes_sent "$http_referer" "$http_user_agent" $remote_port $upstream_addr $scheme $gzip_ratio $request_length $request_time $ssl_protocol "$upstream_response_time"';
+	    log_format upstream '$remote_addr "$time_local" $host "$request_method $request_uri $server_protocol" $status $bytes_sent "$http_referrer" "$http_user_agent" $remote_port $upstream_addr $scheme $gzip_ratio $request_length $request_time $ssl_protocol "$upstream_response_time"';
 
         access_log /var/log/nginx/access.log upstream;
         error_log /var/log/nginx/error.log;
@@ -136,7 +136,7 @@ inputs = ["nginx_access_log"]
 drop_on_error = true
 
 // highlight-next-line
-#nginx log_format upstream '$remote_addr "$time_local" $host "$request_method $request_uri $server_protocol" $status $bytes_sent "$http_referer" "$http_user_agent" $remote_port $upstream_addr $scheme $gzip_ratio $request_length $request_time $ssl_protocol "$upstream_response_time"';
+#nginx log_format upstream '$remote_addr "$time_local" $host "$request_method $request_uri $server_protocol" $status $bytes_sent "$http_referrer" "$http_user_agent" $remote_port $upstream_addr $scheme $gzip_ratio $request_length $request_time $ssl_protocol "$upstream_response_time"';
 
 source = """
     parsed_log, err = parse_regex(.message, r'^(?P<remote_addr>\\S+) \
@@ -145,7 +145,7 @@ source = """
 \"(?P<request_method>\\S+) (?P<request_uri>.+) (?P<server_protocol>HTTP/\\S+)\" \
 (?P<status>\\d+) \
 (?P<bytes_sent>\\d+) \
-\"(?P<http_referer>.*)\" \
+\"(?P<http_referrer>.*)\" \
 \"(?P<http_user_agent>.*)\" \
 (?P<remote_port>\\d+) \
 (?P<upstream_addr>.+) \
@@ -243,7 +243,7 @@ source = """
         assert_eq!(.server_protocol, "HTTP/1.1")
         assert_eq!(.status, 304)
         assert_eq!(.bytes_sent, 189)
-        assert_eq!(.http_referer, "-")
+        assert_eq!(.http_referrer, "-")
         assert_eq!(.http_user_agent, "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36")
         assert_eq!(.remote_port, 50758)
         assert_eq!(.upstream_addr, "-")

@@ -38,8 +38,7 @@ To do so, you must add the setting `allow_insecure` to the configuration file `d
 ```toml
 ...
 [storage]
-# fs | s3 | azblob | obs
-type = "fs"
+...
 allow_insecure = true
 ...
 ```
