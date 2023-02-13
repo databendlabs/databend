@@ -7,9 +7,9 @@ function append_result() {
     local seq=$2
     local value=$3
     if [[ $seq -eq 1 ]]; then
-        jq ".result += [${value}]" <result.json >result.json.tmp && mv result.json.tmp result.json
+        jq ".result += [[${value}]]" <result.json >result.json.tmp && mv result.json.tmp result.json
     else
-        jq ".result[${query_num} - 1] += ${value}" <result.json >result.json.tmp && mv result.json.tmp result.json
+        jq ".result[${query_num} - 1] += [${value}]" <result.json >result.json.tmp && mv result.json.tmp result.json
     fi
 }
 
@@ -24,10 +24,10 @@ function run_query() {
     if echo "$query" | bendsql query; then
         q_end=$(date +%s.%N)
         q_time=$(echo "$q_end - $q_start" | bc -l)
-        echo "Query ${QUERY_NUM}[$seq] succeeded in $q_time seconds"
+        echo "Q${QUERY_NUM}[$seq] succeeded in $q_time seconds"
         append_result "$query_num" "$seq" "$q_time"
     else
-        echo "Query ${QUERY_NUM}[$seq] failed"
+        echo "Q${QUERY_NUM}[$seq] failed"
         append_result "$query_num" "$seq" "null"
     fi
 }
@@ -35,6 +35,7 @@ function run_query() {
 TRIES=3
 QUERY_NUM=1
 while read -r query; do
+    echo "Running Q${QUERY_NUM}: ${query}"
     for i in $(seq 1 $TRIES); do
         run_query "$QUERY_NUM" "$i" "$query"
     done

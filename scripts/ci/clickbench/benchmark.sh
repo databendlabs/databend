@@ -78,9 +78,7 @@ load_time=$(echo "$load_end - $load_start" | bc -l)
 echo "Data loaded in ${load_time}s."
 
 echo '{}' >result.json
-jq ".load_time = ${load_time}" <result.json >result.json.tmp && mv result.json.tmp result.json
+jq ".load_time = ${load_time} | .result = []" <result.json >result.json.tmp && mv result.json.tmp result.json
 
-echo 'select count(*) from hits;' | bendsql query
-
-jq '.result = []' <result.json >result.json.tmp && mv result.json.tmp result.json
+echo "Running queries..."
 ./run.sh
