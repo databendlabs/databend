@@ -14,11 +14,11 @@ for bin in databend-query databend-meta; do
     fi
 done
 echo 'Start databend-meta...'
-nohup target/release/databend-meta --single &
+nohup databend-meta --single &
 echo "Waiting on databend-meta 10 seconds..."
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
 echo 'Start databend-query...'
-nohup target/release/databend-query \
+nohup databend-query \
     --meta-endpoints 127.0.0.1:9191 \
     --storage-type s3 \
     --storage-s3-region us-east-2 \
