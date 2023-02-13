@@ -229,8 +229,11 @@ pub struct UnknownDatabaseId {
 }
 
 impl UnknownDatabaseId {
-    pub fn new(db_id: u64, context: String) -> UnknownDatabaseId {
-        Self { db_id, context }
+    pub fn new(db_id: u64, context: impl Into<String>) -> UnknownDatabaseId {
+        Self {
+            db_id,
+            context: context.into(),
+        }
     }
 }
 
