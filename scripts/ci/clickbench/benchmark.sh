@@ -30,7 +30,8 @@ nohup target/release/databend-query \
 echo "Waiting on databend-query 10 seconds..."
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 3307
 
-echo 'select version();' | bendsql query
+# Connect to databend-query
+bendsql connect
 
 # Load the data
 bendsql query <create.sql

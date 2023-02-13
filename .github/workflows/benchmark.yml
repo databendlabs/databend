@@ -42,7 +42,7 @@ jobs:
           target: x86_64-unknown-linux-gnu
           profile: release
 
-  hits:
+  clickbench:
     needs: build_release
     timeout-minutes: 30
     runs-on: [self-hosted, X64, Linux, perf]
@@ -56,12 +56,11 @@ jobs:
           target: x86_64-unknown-linux-gnu
       - name: Setup BendSQL
         run: |
-          curl -fsSLo ./bendsql.tar.gz https://github.com/databendcloud/bendsql/releases/download/v0.3.0/bendsql-linux-amd64.tar.gz
+          curl -fsSLo ./bendsql.tar.gz https://github.com/databendcloud/bendsql/releases/download/v0.3.2/bendsql-linux-amd64.tar.gz
           tar -xvzf ./bendsql.tar.gz
           chmod +x ./linux-amd64/bendsql
           sudo cp ./linux-amd64/bendsql /usr/local/bin/bendsql
           bendsql version
-          bendsql connect
       - name: Run Benchmark
         working-directory: scripts/ci/clickbench
         env:
