@@ -253,6 +253,7 @@ impl SchemaApiTestSuite {
         suite
             .table_drop_out_of_retention_time_history(&b.build().await)
             .await?;
+        suite.drop_table_by_id(&b.build().await).await?;
         suite.get_table_by_id(&b.build().await).await?;
         suite.get_table_copied_file(&b.build().await).await?;
         suite.truncate_table(&b.build().await).await?;
@@ -3081,6 +3082,143 @@ impl SchemaApiTestSuite {
             ]);
         }
 
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn drop_table_by_id<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+        let tbl_name = "tb2";
+
+        let tbl_name_ident = TableNameIdent {
+            tenant: tenant.to_string(),
+            db_name: db_name.to_string(),
+            table_name: tbl_name.to_string(),
+        };
+
+        let schema = || {
+            Arc::new(TableSchema::new(vec![TableField::new(
+                "number",
+                TableDataType::Number(NumberDataType::UInt64),
+            )]))
+        };
+
+        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: options(),
+            created_on,
+            ..TableMeta::default()
+        };
+
+        info!("--- prepare db");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            let res = mt.create_database(plan).await?;
+            info!("create database res: {:?}", res);
+
+            assert_eq!(1, res.db_id, "first database id is 1");
+        }
+
+        info!("--- create and get table");
+        {
+            let created_on = Utc::now();
+
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: table_meta(created_on),
+            };
+
+            let _tb_ident_2 = {
+                let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
+                let res = mt.create_table(req.clone()).await?;
+                let cur_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
+                assert!(old_db.ident.seq < cur_db.ident.seq);
+                assert!(res.table_id >= 1, "table id >= 1");
+                let tb_id = res.table_id;
+
+                let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
+                let seq = got.ident.seq;
+
+                let ident = TableIdent::new(tb_id, seq);
+
+                let want = TableInfo {
+                    ident,
+                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    name: tbl_name.into(),
+                    meta: table_meta(created_on),
+                    tenant: tenant.to_string(),
+                    ..Default::default()
+                };
+                assert_meta_eq_without_updated!(want, got.as_ref().clone(), "get created table");
+                ident
+            };
+        }
+
+        info!("--- drop_table_by_id ");
+        {
+            let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+
+            info!("--- drop_table_by_id ");
+            {
+                // Get table count.
+                info!("--- check table count of tenant1");
+                let tb_count = mt.count_tables(Self::req_count_table(tenant)).await?;
+                let mut expected_tb_count = tb_count.count;
+
+                // Check drop succeed and db_ident moves forward.
+                let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
+                let got = mt.drop_table_by_id(table.ident.table_id).await;
+                assert!(got.is_ok());
+                let cur_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
+                assert!(old_db.ident.seq < cur_db.ident.seq);
+
+                // Check table count.
+                info!("--- check table count of tenant1");
+                let tb_count = mt.count_tables(Self::req_count_table(tenant)).await?;
+                expected_tb_count -= 1;
+                assert_eq!(expected_tb_count, tb_count.count);
+
+                let res = mt
+                    .get_table_history(ListTableReq::new(tenant, db_name))
+                    .await?;
+                calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
+                    name: tbl_name.to_string(),
+                    desc: tbl_name_ident.to_string(),
+                    drop_on_cnt: 1,
+                    non_drop_on_cnt: 0,
+                }]);
+            }
+
+            info!("--- drop_table_by_id again with same table_id");
+            {
+                let got = mt.drop_table_by_id(table.ident.table_id).await;
+                assert!(got.is_err());
+                assert_eq!(
+                    ErrorCode::UnknownTableId("").code(),
+                    ErrorCode::from(got.unwrap_err()).code()
+                );
+            }
+        }
         Ok(())
     }
 
