@@ -1,0 +1,24 @@
+statement ok
+DROP FILE FORMAT IF EXISTS test_format
+
+statement error 2507
+DROP FILE FORMAT test_format
+
+statement ok
+CREATE FILE FORMAT test_format type=csv compression=AUTO record_delimiter=NONE escape='\\'
+
+statement ok
+CREATE FILE FORMAT if not exists test_format type=csv
+
+statement error 2509
+CREATE FILE FORMAT test_format type=csv
+
+statement ok
+DROP FILE FORMAT test_format
+
+statement error 2507
+DROP FILE FORMAT test_format
+
+statement ok
+show FILE FORMATS
+
