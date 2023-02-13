@@ -5,7 +5,8 @@ set -e
 BENCHMARK_ID=${BENCHMARK_ID:-$(date +%s)}
 
 echo "Checking script dependencies..."
-nc --version
+# OpenBSD netcat do not have a version arg
+# nc --version
 bc --version
 jq --version
 bendsql version
