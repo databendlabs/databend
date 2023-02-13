@@ -4,6 +4,32 @@ set -e
 
 BENCHMARK_ID=${BENCHMARK_ID:-$(date +%s)}
 
+function wait_for_port() {
+    # Wait for a port to be open
+    # Usage: wait_for_port 8080 10
+    # Args:
+    #     $1: port
+    #     $2: timeout in seconds
+    local port=$1
+    local timeout=$2
+    local start_time
+    start_time=$(date +%s)
+    local end_time
+    end_time=$((start_time + timeout))
+    while true; do
+        if nc -z localhost "$port"; then
+            echo "OK: ${port} is listening"
+            return 0
+        fi
+        if [[ $(date +%s) -gt $end_time ]]; then
+            echo "Wait for port ${port} time out!"
+            return 2
+        fi
+        echo "Waiting for port ${port} up..."
+        sleep 1
+    done
+}
+
 killall databend-query || true
 killall databend-meta || true
 sleep 1
@@ -16,7 +42,7 @@ done
 echo 'Start databend-meta...'
 nohup databend-meta --single &
 echo "Waiting on databend-meta 10 seconds..."
-python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
+wait_for_port 9191 10
 echo 'Start databend-query...'
 nohup databend-query \
     --meta-endpoints 127.0.0.1:9191 \
@@ -28,7 +54,7 @@ nohup databend-query \
     --cluster-id "${BENCHMARK_ID}" \
     --storage-allow-insecure &
 echo "Waiting on databend-query 10 seconds..."
-python3 scripts/ci/wait_tcp.py --timeout 5 --port 3307
+wait_for_port 8000 10
 
 # Connect to databend-query
 bendsql connect
@@ -37,7 +63,7 @@ bendsql connect
 bendsql query <create.sql
 
 load_start=$(date +%s)
-bendsql query <load_from_repo.sql
+bendsql query <load.sql
 load_end=$(date +%s)
 load_time=$(echo "$load_end - $load_start" | bc -l)
 
