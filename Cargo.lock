@@ -379,9 +379,9 @@ dependencies = [
 
 [[package]]
 name = "atomic-waker"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "065374052e7df7ee4047b1160cca5e1467a12351a40b3da123c870ba0b8eda2a"
+checksum = "debc29dde2e69f9e47506b525f639ed42300fc014a3e007832592448fa8e4599"
 
 [[package]]
 name = "atty"
@@ -462,18 +462,6 @@ dependencies = [
  "getrandom 0.2.8",
  "instant",
  "pin-project-lite",
- "rand 0.8.5",
- "tokio",
-]
-
-[[package]]
-name = "backon"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f34fac4d7cdaefa2deded0eda2d5d59dbfd43370ff3f856209e72340ae84c294"
-dependencies = [
- "futures",
- "pin-project",
  "rand 0.8.5",
  "tokio",
 ]
@@ -1962,7 +1950,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "backon 0.2.0",
+ "backon",
  "base64 0.13.1",
  "bytes",
  "common-auth",
@@ -1987,7 +1975,7 @@ dependencies = [
  "async-recursion",
  "async-stream",
  "async-trait-fn",
- "backon 0.2.0",
+ "backon",
  "bumpalo",
  "byteorder",
  "bytes",
@@ -2066,7 +2054,7 @@ dependencies = [
  "anyhow",
  "async-stream",
  "async-trait",
- "backon 0.2.0",
+ "backon",
  "bytes",
  "common-arrow",
  "common-auth",
@@ -2108,7 +2096,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait-fn",
  "backoff",
- "backon 0.2.0",
+ "backon",
  "chrono",
  "common-arrow",
  "common-base",
@@ -2206,7 +2194,7 @@ name = "common-storages-information-schema"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
- "backon 0.2.0",
+ "backon",
  "chrono",
  "common-ast",
  "common-base",
@@ -2244,7 +2232,7 @@ name = "common-storages-memory"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
- "backon 0.2.0",
+ "backon",
  "chrono",
  "common-base",
  "common-building",
@@ -2282,7 +2270,7 @@ name = "common-storages-null"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
- "backon 0.2.0",
+ "backon",
  "chrono",
  "common-base",
  "common-building",
@@ -2346,7 +2334,7 @@ name = "common-storages-random"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
- "backon 0.2.0",
+ "backon",
  "chrono",
  "common-base",
  "common-building",
@@ -2398,7 +2386,7 @@ name = "common-storages-stage"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
- "backon 0.2.0",
+ "backon",
  "chrono",
  "common-base",
  "common-building",
@@ -2437,7 +2425,7 @@ name = "common-storages-system"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
- "backon 0.2.0",
+ "backon",
  "chrono",
  "common-base",
  "common-building",
@@ -3006,7 +2994,7 @@ dependencies = [
  "anyhow",
  "async-entry",
  "async-trait",
- "backon 0.2.0",
+ "backon",
  "clap 3.2.23",
  "common-arrow",
  "common-base",
@@ -3080,7 +3068,7 @@ dependencies = [
  "async-recursion",
  "async-stream",
  "async-trait-fn",
- "backon 0.2.0",
+ "backon",
  "base64 0.13.1",
  "bincode 1.3.3",
  "bstr 1.1.0",
@@ -4091,9 +4079,9 @@ dependencies = [
 
 [[package]]
 name = "glob"
-version = "0.3.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
+checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
 
 [[package]]
 name = "globiter"
@@ -5691,7 +5679,7 @@ dependencies = [
  "async-compat",
  "async-compression-issue-150-workaround",
  "async-trait",
- "backon 0.2.0",
+ "backon",
  "base64 0.21.0",
  "bytes",
  "flagset",
@@ -6905,7 +6893,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e0154ced5e44389686689a3c96c49ca5a70ad9c708e0989982adae2e0378bbf"
 dependencies = [
  "anyhow",
- "backon 0.4.0",
+ "backon",
  "base64 0.21.0",
  "bytes",
  "dirs",
@@ -8300,9 +8288,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.24.2"
+version = "1.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "597a12a59981d9e3c38d216785b0c37399f6e415e8d0712047620f189371b0bb"
+checksum = "c8e00990ebabbe4c14c08aca901caed183ecd5c09562a12c824bb53d3c3fd3af"
 dependencies = [
  "autocfg",
  "bytes",
