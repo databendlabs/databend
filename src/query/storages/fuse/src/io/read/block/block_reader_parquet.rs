@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
 use common_exception::Result;
 use common_expression::DataBlock;
 use storages_common_table_meta::meta::BlockMeta;
@@ -29,12 +27,7 @@ impl BlockReader {
         settings: &ReadSettings,
         meta: &BlockMeta,
     ) -> Result<DataBlock> {
-        //  Build columns meta.
-        let columns_meta = meta
-            .col_metas
-            .iter()
-            .map(|(column_id, meta)| (*column_id, meta.clone()))
-            .collect::<HashMap<_, _>>();
+        let columns_meta = &meta.col_metas;
 
         // Get the merged IO read result.
         let fetched = self
