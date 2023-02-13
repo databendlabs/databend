@@ -101,3 +101,7 @@ jobs:
         with:
           name: benchmark-results
           path: scripts/ci/clickbench/result.json
+      - name: Clean test data
+        if: always()
+        run: |
+          echo 'drop table hits all;' | bendsql query
