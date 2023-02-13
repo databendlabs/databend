@@ -16,9 +16,9 @@ use std::ops::Range;
 
 use common_base::rangemap::RangeMerger;
 use common_catalog::plan::PartInfoPtr;
-use common_catalog::table::ColumnId;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ColumnId;
 use opendal::Object;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::TableDataCacheKey;

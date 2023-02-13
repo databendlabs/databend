@@ -16,9 +16,9 @@ use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
 
-use common_catalog::table::ColumnId;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ColumnId;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::TableDataCache;
 use storages_common_cache::TableDataCacheKey;

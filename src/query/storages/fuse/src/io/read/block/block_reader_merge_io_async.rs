@@ -18,9 +18,9 @@ use std::time::Instant;
 
 use common_base::rangemap::RangeMerger;
 use common_base::runtime::UnlimitedFuture;
-use common_catalog::table::ColumnId;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ColumnId;
 use futures::future::try_join_all;
 use opendal::Object;
 use storages_common_cache::CacheAccessor;

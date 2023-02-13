@@ -26,9 +26,9 @@ use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
 use common_catalog::plan::PartInfoPtr;
-use common_catalog::table::ColumnId;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_storage::ColumnNode;
 use storages_common_cache::CacheAccessor;
@@ -243,7 +243,7 @@ impl BlockReader {
         column: &ColumnNode,
         is_nested_column: bool,
     ) -> Result<Option<DeserializedArray<'a>>> {
-        let indices = &column.leaf_ids;
+        let indices = &column.leaf_indices;
         let column_chunks = deserialization_context.column_chunks;
         let compression = deserialization_context.compression;
         let uncompressed_buffer = deserialization_context.uncompressed_buffer;
@@ -257,14 +257,14 @@ impl BlockReader {
         let mut field_uncompressed_size = 0;
 
         let mut column_id = 0;
-        for (i, leaf_column_id) in indices.iter().enumerate() {
+        for (i, leaf_index) in indices.iter().enumerate() {
             column_id = column.leaf_column_ids[i];
             if let Some(column_meta) = deserialization_context.column_metas.get(&column_id) {
                 if let Some(chunk) = column_chunks.get(&column_id) {
                     match chunk {
                         DataItem::RawData(data) => {
                             let column_descriptor =
-                                &self.parquet_schema_descriptor.columns()[*leaf_column_id];
+                                &self.parquet_schema_descriptor.columns()[*leaf_index];
                             field_column_metas.push(column_meta);
                             field_column_data.push(*data);
                             field_column_descriptors.push(column_descriptor);
