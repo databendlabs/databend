@@ -27,26 +27,27 @@ If we execute the full query pipeline every time, the cost may be every expensiv
 
 ## Detail design
 
+### Lifecyle of query result cache
+
+Each result cache has a time-to-live (TTL). Each access to the result cache will refresh the TTL .When the TTL is expired, the result cache will not be used any more.
+
+Besides TTL, when the underlying data is changed (we can infer this by snapshot ids, segment ids and partition locations), the result cache will also be invalidated.
+
 ### Result cache storage
 
 Databend uses key-value pairs to record query result caches. For every query, Databend will construct a key to represent the query, and store ralated information in the value.
 
 Databend will not store the query result directly in the key-value storage. Instead, Databend only stores the location of the result cache file in the value. The actual result cache will be stored in the storage layer (local fs, s3, ...).
 
-#### Key structure
+#### Key
 
-A query result cache key contains such information:
+Query result cache is indexed by its abstract syntax tree (AST). Databend serializes the AST to a string and use hashes it as the key.
 
-- `ast`: the AST of the query.
-- `locations`: the locations of partitions used in the query.
-
-Databend will use the information to construct the key. The algorithm is like:
+The key generation is like:
 
 ```rust
-let ast_str = serialize(ast);
-let part_str = join(sort(locations), ",");
-let raw_key = join([ast_str, part_str], ",");
-let key = "_cache" + hash256(raw_key);
+let ast_str = ast.to_string();
+let key = format!("_cache/{}/{}", tenant, hash(ast_str.as_bytes()));
 ```
 
 #### Value structure
@@ -61,6 +62,14 @@ pub struct ResultCacheValue {
     pub query_time: DateTime<Utc>,
     /// Time-to-live of this query.
     pub ttl: usize,
+    /// The snapshot ids of the underlying data.
+    pub snapshot_ids: Vec<String>,
+    /// The segment ids of the underlying data.
+    pub segment_ids: Vec<String>,
+    /// The partition locations of the underlying data.
+    pub partition_locations: Vec<String>,
+    /// The size of the result cache (bytes).
+    pub result_size: usize,
     /// The location of the result cache file.
     pub location: String,
 }
@@ -76,8 +85,7 @@ Databend will cache every query result is query result cache is enabled. If the 
 
 ### Related configurations
 
-- `enable_write_result_cache`: whether to cache the query results (default: true).
-- `enable_read_result_cache`: whether to find query result from cache (default: true).
+- `enable_query_result_cache`: whether to enable query result cache (default: false).
 - `max_result_cache_bytes`: the maximum size of the result cache for one query (default: 1048576 bytes, 1MB).
 - `result_cache_ttl`: the time-to-live of the result cache (default: 300 seconds).
 
@@ -93,7 +101,19 @@ pub struct WriteResultCacheTransform {
 }
 ```
 
-When constructing the query pipeline, Databend will add `WriteResultCacheTransform` to the end of the pipeline.
+When constructing the query pipeline, Databend will add `WriteResultCacheTransform` to the end of the pipeline:
+
+```rust
+impl Interpreter for SelectInterpreterV2 {
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
+        let build_res = self.build_pipeline().await?;
+        if self.ctx.get_settings().get_query_result_cache().enable_query_result_cache {
+            build_res.main_pipeline.add_transform(WriteResultCacheTransform::try_create)?;
+        }
+        Ok(build_res)
+    }
+}
+```
 
 The process of `WriteResultCacheTransform` is like:
 
@@ -106,24 +126,27 @@ The process of `WriteResultCacheTransform` is like:
 
 ### Read result cache
 
-Before constructing the query pipeline, Databend will check if the query result cache is available. If the result cache is available, Databend will construct `ResultCacheSource` to read `DataBlock` from the result cache file.
+Before constructing the select interpreter, Databend will check if the query result cache is available.
 
-The query execution process with query result cache is like:
+Databend will validate the `ResultCacheValue` by the cache key (AST) from `databend-meta` first. The validation is level by level:
 
-```rust
-impl Interpreter for SelectInterpreterV2 {
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        if self.ctx.get_settings().get_query_result_cache().enable_read_result_cache {
-            return self.read_from_result_cache().await;
-        }
-        let build_res = self.build_pipeline().await?;
-        if self.ctx.get_settings().get_query_result_cache().enable_write_result_cache {
-            build_res.main_pipeline.add_transform(WriteResultCacheTransform::try_create)?;
-        }
-        Ok(build_res)
-    }
-}
 ```
+1. `snapshot_ids` not changed: valid.
+      │
+      │ if invalid
+      ▼
+2. `segment_ids` not changed: valid.
+      │
+      │ if invalid
+      ▼
+3. `partition_locations` not changed: valid.
+      │
+      │ if invalid
+      ▼
+4. Invalid.
+```
+
+If the result cache is available and valid, Databend will get the query result from the result cache file; otherwise, Databend will continue to build and execute the original query pipeline.
 
 ### System table `system.query_cache`
 
@@ -134,4 +157,5 @@ The table contains such information:
 - `sql`: the cached SQL.
 - `query_time`: the last query time.
 - `expired_time`: the expired time of the result cache.
+- `result_size`: the size of the result cache (bytes).
 - `location`: the location of the result cache file.
