@@ -6,7 +6,7 @@
     sed '/^[ \t]*const data = \[$/q' index.html
 
     FIRST=1
-    find ./results/ -name result.json | while read -r file; do
+    find ./results/ -name '*.json' | while read -r file; do
         [[ $file =~ ^(hardware|versions)/ ]] && continue
 
         [ "${FIRST}" = "0" ] && echo -n ','

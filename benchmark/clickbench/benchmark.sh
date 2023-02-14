@@ -77,8 +77,10 @@ load_end=$(date +%s)
 load_time=$(echo "$load_end - $load_start" | bc -l)
 echo "Data loaded in ${load_time}s."
 
+data_size=$(echo "select bytes_compressed from fuse_snapshot('default' ,'hits');" | bendsql query -f unaligned -t)
+
 echo '{}' >result.json
-jq ".load_time = ${load_time} | .result = []" <result.json >result.json.tmp && mv result.json.tmp result.json
+jq ".load_time = ${load_time} | .data_size = ${data_size} | .result = []" <result.json >result.json.tmp && mv result.json.tmp result.json
 
 echo "Running queries..."
 ./run.sh

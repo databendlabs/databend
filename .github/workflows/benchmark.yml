@@ -85,13 +85,11 @@ jobs:
               BENCHMARK_SYSTEM="Databend(PR#${{ github.event.number }})"
               BENCHMARK_TYPE="PR"
               jq ".extra.pr = \"${{ github.event.number }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
-              echo "S3_RESULT_PATH=PR-${{ github.event.number }}" >> $GITHUB_ENV
               ;;
             push)
               BENCHMARK_SYSTEM="Databend(Release@${{ github.ref_name }})"
               BENCHMARK_TYPE="Release"
               jq ".extra.release = \"${{ github.ref_name }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
-              echo "S3_RESULT_PATH=Release-${{ github.ref_name }}" >> $GITHUB_ENV
               ;;
             *)
               echo "Unspported event"
@@ -108,14 +106,19 @@ jobs:
         with:
           name: benchmark-results
           path: benchmark/clickbench/result.json
-      - name: Upload results to s3
+      - name: Upload nightly results to repo.databend.rs
+        if: github.event_name == 'push'
         working-directory: benchmark/clickbench
         run: |
-          aws s3 cp result.json s3://databend-ci/benchmark/clickbench/${S3_RESULT_PATH}/result.json
+          RESULT_PATH="$(date -u +%Y)/$(date -u +%m)/$(date -u +%Y-%m-%d)/${{ github.ref_name }}.json"
+          aws s3 cp result.json s3://repo.databend.rs/benchmark/clickbench/${RESULT_PATH}
       - name: Generate report
+        if: github.event_name == 'pull_request'
         working-directory: benchmark/clickbench
         run: |
-          aws s3 cp s3://databend-ci/benchmark/clickbench/ ./results/ --recursive
+          aws s3 cp "s3://repo.databend.rs/benchmark/clickbench/$(date -u +%Y)/$(date -u +%m)/" ./results/ --recursive
+          mkdir -p "results/PR-${{ github.event.number }}"
+          mv result.json "results/PR-${{ github.event.number }}/${{ github.sha }}.json"
           ./update-results.sh
       - name: Upload clickbench report
         uses: actions/upload-artifact@v3
