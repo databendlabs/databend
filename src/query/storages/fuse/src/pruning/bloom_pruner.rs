@@ -130,12 +130,15 @@ impl BloomPrunerCreator {
         column_ids: Vec<ColumnId>,
     ) -> Result<bool> {
         let version = index_location.1;
-        let mut index_columns = Vec::with_capacity(self.index_fields.len());
-        for field in self.index_fields.iter() {
-            if column_ids.contains(&field.column_id()) {
-                index_columns.push(BloomIndex::build_filter_column_name(version, field)?);
-            }
-        }
+        let index_columns = self.index_fields.iter().try_fold(
+            Vec::with_capacity(self.index_fields.len()),
+            |mut acc, field| {
+                if column_ids.contains(&field.column_id()) {
+                    acc.push(BloomIndex::build_filter_column_name(version, field)?);
+                }
+                Ok::<_, ErrorCode>(acc)
+            },
+        )?;
         // load the relevant index columns
         let maybe_filter = index_location
             .read_block_filter(self.dal.clone(), &index_columns, index_length)
