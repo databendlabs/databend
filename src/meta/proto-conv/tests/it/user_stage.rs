@@ -78,6 +78,7 @@ fn test_user_stage_fs_v22() -> anyhow::Result<()> {
             escape: "\\".to_string(),
             row_tag: "row".to_string(),
             quote: "\'\'".to_string(),
+            name: None,
         },
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
@@ -125,6 +126,7 @@ fn test_user_stage_fs_v21() -> anyhow::Result<()> {
             escape: "\\".to_string(),
             row_tag: "row".to_string(),
             quote: "".to_string(),
+            name: None,
         },
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
@@ -171,6 +173,7 @@ fn test_user_stage_fs_v20() -> anyhow::Result<()> {
             escape: "\\".to_string(),
             row_tag: "row".to_string(),
             quote: "".to_string(),
+            name: None,
         },
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
@@ -218,6 +221,7 @@ fn test_user_stage_fs_v16() -> anyhow::Result<()> {
             compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
+            name: None,
         },
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
@@ -277,6 +281,7 @@ fn test_user_stage_s3_v16() -> anyhow::Result<()> {
             compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
+            name: None,
         },
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
@@ -330,6 +335,7 @@ fn test_user_stage_gcs_v16() -> anyhow::Result<()> {
             compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
+            name: None,
         },
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
@@ -386,6 +392,7 @@ fn test_user_stage_oss_v16() -> anyhow::Result<()> {
             compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
+            name: None,
         },
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
@@ -444,6 +451,7 @@ fn test_user_stage_oss_v13() -> anyhow::Result<()> {
             compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
+            name: None,
         },
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
@@ -502,6 +510,7 @@ fn test_user_stage_s3_v11() -> anyhow::Result<()> {
             compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
+            name: None,
         },
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
@@ -558,6 +567,7 @@ fn test_user_stage_s3_v8() -> anyhow::Result<()> {
             compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
+            name: None,
         },
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
@@ -605,6 +615,7 @@ fn test_user_stage_fs_v6() -> anyhow::Result<()> {
             compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
+            name: None,
         },
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
@@ -662,6 +673,7 @@ fn test_user_stage_s3_v6() -> anyhow::Result<()> {
             compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
+            name: None,
         },
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
@@ -715,6 +727,7 @@ fn test_user_stage_gcs_v6() -> anyhow::Result<()> {
             compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
+            name: None,
         },
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
@@ -761,6 +774,7 @@ fn test_user_stage_fs_v4() -> anyhow::Result<()> {
             compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
+            name: None,
         },
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
@@ -818,6 +832,7 @@ fn test_user_stage_s3_v4() -> anyhow::Result<()> {
             compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
+            name: None,
         },
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
@@ -870,6 +885,7 @@ fn test_user_stage_gcs_v4() -> anyhow::Result<()> {
             compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
+            name: None,
         },
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
@@ -924,6 +940,7 @@ fn test_user_stage_s3_v1() -> anyhow::Result<()> {
             compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
+            name: None,
         },
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
@@ -973,6 +990,7 @@ fn test_internal_stage_v17() -> anyhow::Result<()> {
             compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
+            name: None,
         },
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
@@ -1021,6 +1039,7 @@ fn test_user_stage_v19() -> anyhow::Result<()> {
             compression: mt::principal::StageFileCompression::Bz2,
             row_tag: "".to_string(),
             quote: "".to_string(),
+            name: None,
         },
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),

@@ -52,6 +52,7 @@ SHOW GRANTS FOR 'test-grant'@'localhost'
 GRANT ALL ON 'default'.'default'.* TO 'test-grant'@'localhost'
 GRANT SELECT ON 'default'.'db01'.* TO 'test-grant'@'localhost'
 GRANT SELECT ON 'default'.'db01'.'tb1' TO 'test-grant'@'localhost'
+GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant'@'localhost'
 
 statement ok
 REVOKE SELECT ON db01.* FROM 'test-grant'@'localhost'
@@ -61,6 +62,7 @@ SHOW GRANTS FOR 'test-grant'@'localhost'
 ----
 GRANT ALL ON 'default'.'default'.* TO 'test-grant'@'localhost'
 GRANT SELECT ON 'default'.'db01'.'tb1' TO 'test-grant'@'localhost'
+GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant'@'localhost'
 
 statement ok
 REVOKE ALL PRIVILEGES ON * FROM 'test-grant'@'localhost'
@@ -69,6 +71,7 @@ query T
 SHOW GRANTS FOR 'test-grant'@'localhost'
 ----
 GRANT SELECT ON 'default'.'db01'.'tb1' TO 'test-grant'@'localhost'
+GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant'@'localhost'
 
 statement ok
 CREATE ROLE 'test-grant-role'
@@ -83,6 +86,7 @@ query T
 SHOW GRANTS FOR ROLE 'test-grant-role'
 ----
 GRANT SELECT ON 'default'.'default'.* TO 'test-grant-role'
+GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant-role'
 
 statement ok
 DROP ROLE 'test-grant-role'

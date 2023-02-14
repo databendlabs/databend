@@ -87,6 +87,11 @@ impl Plan {
             Plan::DropStage(s) => Ok(format!("{:?}", s)),
             Plan::RemoveStage(s) => Ok(format!("{:?}", s)),
 
+            // FileFormat
+            Plan::CreateFileFormat(create_file_format) => Ok(format!("{:?}", create_file_format)),
+            Plan::DropFileFormat(drop_file_format) => Ok(format!("{:?}", drop_file_format)),
+            Plan::ShowFileFormats(show_file_formats) => Ok(format!("{:?}", show_file_formats)),
+
             // Account
             Plan::GrantRole(grant_role) => Ok(format!("{:?}", grant_role)),
             Plan::GrantPriv(grant_priv) => Ok(format!("{:?}", grant_priv)),

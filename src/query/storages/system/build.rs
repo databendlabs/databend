@@ -16,4 +16,5 @@
 
 fn main() {
     common_building::setup();
+    common_building::setup_commit_authors();
 }

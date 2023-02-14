@@ -17,3 +17,4 @@
 mod binary_read;
 mod binary_write;
 mod cursor_ext;
+mod escape;

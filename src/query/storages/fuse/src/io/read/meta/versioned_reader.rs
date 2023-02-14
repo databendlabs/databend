@@ -71,12 +71,12 @@ impl VersionedReader<SegmentInfo> for (SegmentInfoVersion, TableSchemaRef) {
             SegmentInfoVersion::V2(v) => load_by_version(reader, v).await?,
             SegmentInfoVersion::V1(v) => {
                 let data = load_by_version(reader, v).await?;
-                let (_, fields) = schema.leaf_fields();
+                let fields = schema.leaf_fields();
                 SegmentInfo::from_v1(data, &fields)
             }
             SegmentInfoVersion::V0(v) => {
                 let data = load_by_version(reader, v).await?;
-                let (_, fields) = schema.leaf_fields();
+                let fields = schema.leaf_fields();
                 SegmentInfo::from_v0(data, &fields)
             }
         };
