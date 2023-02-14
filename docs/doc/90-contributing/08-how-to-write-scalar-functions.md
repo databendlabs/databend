@@ -23,16 +23,12 @@ Scalar functions (sometimes referred to as User-Defined Functions / UDFs) return
 └─────┘                    └──────┘
 ```
 
-
 ### Knowledge before writing the eval function
 
 #### Logical datatypes and physical datatypes.
 
 Logical datatypes are the datatypes that we use in Databend, and physical datatypes are the datatypes that we use in the execution/compute engine.
-Such as `Date32`, it's a logical data type, but its physical is `Int32`, so its column is represented by `Int32Column`.
-
-We can get logical datatype by `data_type` function of `DataField` , and the physical datatype by `data_type` function in `ColumnRef`.
-`ColumnsWithField` has `data_type` function which returns the logical datatype.
+Such as `Date`, it's a logical data type, but its physical is `Int32`, so its column is represented by `Buffer<i32>`.
 
 #### Arrow's memory layout
 
@@ -42,7 +38,6 @@ For example a primitive array of int32s:
 
 [1, null, 2, 4, 8]
 Would look like this:
-
 
 ```text
 * Length: 5, Null count: 1
@@ -65,52 +60,35 @@ This is very common optimization and widely used in arrow's compute system.
 
 ### Special column
 
--  Constant column
+- Constant column
 
-    Sometimes column is constant in the block, such as: `SELECT 3 from table`, the column 3 is always 3, so we can use a constant column to represent it. This is useful to save the memory space during computation.
+  Sometimes column is constant in the block, such as: `SELECT 3 from table`, the column 3 is always 3, so we can use a constant column to represent it. This is useful to save the memory space during computation.
 
-    So databend's DataColumn is represented by:
-
-    ```rust
-    #[derive(Clone)]
-    pub struct ConstColumn {
-        length: usize,
-        column: ColumnRef,
-    }
-    ```
 - Nullable column
 
-    By default, columns are not nullable. If we want a nullable column, we can use this to represent it.
+  By default, columns are not nullable. If we want a nullable column, we can use this to represent it.
 
-    ```rust
-    #[derive(Clone)]
-    pub struct NullableColumn {
-        validity: Bitmap,
-        column: ColumnRef,
-    }
-    ```
+## Writing function guidelines
 
-### Writing function guidelines
-
-## ScalarFunction trait introduction
+### ScalarFunction trait introduction
 
 All scalar functions implement `Function` trait, and we register them into a global static `FunctionFactory`, the factory is just an index map and the key is the name of the scalar function.
 
 :::tip
-    Function name in Databend is case-insensitive.
+Function name in Databend is case-insensitive.
 :::
 
-``` rust
-
+```rust
 pub trait Function: fmt::Display + Sync + Send + DynClone {
     ...
 }
 ```
 
- *Let's take function `sqrt` as an example*
+_Let's take function `sqrt` as an example_
 
 - Declare the function named `SqrtFunction`
-``` rust
+
+```rust
 #[derive(Clone)]
 pub struct SqrtFunction {
     display_name: String,
@@ -174,18 +152,16 @@ impl Function for SqrtFunction {
 }
 ```
 
-By defaults, we enable `passthrough_constant`, that means: `sqrt(constant_column)`  will be converted into `Consntat(sqrt(column), rows)` in `FunctionAdaptor`.
+By defaults, we enable `passthrough_constant`, that means: `sqrt(constant_column)` will be converted into `Consntat(sqrt(column), rows)` in `FunctionAdaptor`.
 
-And we have enabled `passthrough_nullable`, that means: `sqrt(nullable_column)`  will be converted into `Nullable(sqrt(no_nullable_column), null_bitmaps)` in `FunctionAdaptor`.
+And we have enabled `passthrough_nullable`, that means: `sqrt(nullable_column)` will be converted into `Nullable(sqrt(no_nullable_column), null_bitmaps)` in `FunctionAdaptor`.
 
 So inside the `eval` function, we really don't need to care about constant or nullable cases. It's pretty simple and efficient.
-
 
 The macro `with_match_primitive_type_id` will match the primitive type id, and cast the column into corresponding type, so we allowed `sqrt(i8)`, `sqrt(i16)` ... types.
 
 The `scalar_unary_op` is a helper function to implement the scalar function for unary operator.
 This is very commonly used and there is `scalar_binary_op` too. See more in [binary](https://github.com/datafuselabs/databend/blob/e7edeea2e3ae5fb1f8408903df10b1b641b57652/common/functions/src/scalars/expressions/binary.rs), [unary](https://github.com/datafuselabs/databend/blob/e7edeea2e3ae5fb1f8408903df10b1b641b57652/common/functions/src/scalars/expressions/unary.rs)
-
 
 ## Register the function into the factory
 
@@ -193,8 +169,8 @@ This is very commonly used and there is `scalar_binary_op` too. See more in [bin
 factory.register("sqrt", SqrtFunction::desc());
 ```
 
+### Testing
 
-## Testing
 To be a good engineer, don't forget to test your codes, please add unit tests and stateless tests after you finish the new scalar functions.
 
 - [Unit tests](https://github.com/datafuselabs/databend/blob/034e1cd95c1376341b9421c08f8eb38b40fc5dda/common/functions/tests/it/scalars/maths/sqrt.rs)
@@ -216,10 +192,11 @@ ERROR 1105 (HY000): Code: 1007, displayText = Expected a numeric type, but got S
 
 All is done!
 
+### Refer to other examples
 
-## Refer to other examples
 As you see, adding a new scalar function in Databend is not as hard as you think.
 Before you start to add one, please refer to other scalar function examples, such as `sign`, `expr`, `tan`, `atan`
 
 ## Summary
+
 We welcome all community users to contribute more powerful functions to Databend. If you find any problems, feel free to [open an issue](https://github.com/datafuselabs/databend/issues) in GitHub, we will use our best efforts to help you.
