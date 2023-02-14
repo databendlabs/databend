@@ -56,12 +56,12 @@ runs:
       if: steps.info.outputs.src == 's3'
       shell: bash
       run: |
-        aws s3 cp \
+        aws s3 sync \
           s3://databend-ci/${{ inputs.profile }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ \
-          ${{ steps.info.outputs.path }}/ --recursive --exclude "*" --include "databend-*" --no-progress
-        aws s3 cp \
+          ${{ steps.info.outputs.path }}/ --exclude "*" --include "databend-*" --no-progress
+        aws s3 sync \
           s3://databend-ci/${{ inputs.profile }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ \
-          ${{ steps.info.outputs.path }}/ --recursive --exclude "*" --include "open-sharing" --no-progress || true
+          ${{ steps.info.outputs.path }}/ --exclude "*" --include "open-sharing" --no-progress || true
 
     - name: make artifacts excutable
       shell: bash
