@@ -84,10 +84,12 @@ jobs:
             pull_request)
               BENCHMARK_SYSTEM="Databend(PR#${{ github.event.number }})"
               BENCHMARK_TYPE="PR"
+              jq ".extra.pr = \"${{ github.event.number }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
               ;;
             push)
               BENCHMARK_SYSTEM="Databend(Release@${{ github.ref_name }})"
               BENCHMARK_TYPE="Release"
+              jq ".extra.release = \"${{ github.ref_name }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
               ;;
           esac
           jq ".system = \"${BENCHMARK_SYSTEM}\"" <result.json >result.json.tmp && mv result.json.tmp result.json

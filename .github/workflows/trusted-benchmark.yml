@@ -1,12 +1,11 @@
-name: Perf Commentator (trusted)
+name: Benchmark Commentator (trusted)
 
 on:
   workflow_run:
-    workflows: ["Dev Perf"]
+    workflows: ["Benchmark"]
     types:
       - completed
 
-# TODO: compare with baseline
 jobs:
   comment_on_pr:
     runs-on: [self-hosted, X64, Linux, dev]
@@ -46,11 +45,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh run download ${{ github.event.workflow_run.id }} --dir benchmark/results --name benchmark-results
-          while read line; do
-            echo "$line" >> $GITHUB_ENV
-          done <benchmark/results/metadata.info
+          echo "RELEASE_TAG=$(jq -r '.extra.release' benchmark/results/result.json)" >> $GITHUB_ENV
       - name: Upload results to s3
         shell: bash
         run: |
-          today="$(date +%Y-%m-%d)"
-          aws s3 cp benchmark/results/ s3://databend-ci/perf/results/$today/ --recursive
+          aws s3 cp benchmark/results/result.json s3://databend-ci/perf/results/${RELEASE_TAG}/result.json
