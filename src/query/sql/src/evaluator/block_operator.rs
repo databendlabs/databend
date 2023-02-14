@@ -29,7 +29,7 @@ use common_pipeline_transforms::processors::transforms::Transform;
 use common_pipeline_transforms::processors::transforms::Transformer;
 
 /// `BlockOperator` takes a `DataBlock` as input and produces a `DataBlock` as output.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum BlockOperator {
     /// Evaluate expression and append result column to the end.
     Map { expr: Expr },

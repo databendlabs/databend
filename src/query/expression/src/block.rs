@@ -440,10 +440,6 @@ impl DataBlock {
             columns.push(column);
         }
 
-        while data_block_columns_idx < data_block.num_columns() {
-            columns.push(data_block_columns[data_block_columns_idx].clone());
-            data_block_columns_idx += 1;
-        }
         Ok(DataBlock::new(columns, num_rows))
     }
 }
