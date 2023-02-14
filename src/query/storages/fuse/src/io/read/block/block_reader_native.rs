@@ -187,11 +187,6 @@ impl BlockReader {
         if need_to_fill_data {
             let data_block_column_ids: HashSet<ColumnId> =
                 part.columns_meta.keys().cloned().collect();
-            let mut num_rows = 0;
-            for part in parts {
-                let part = FusePartInfo::from_part(part)?;
-                num_rows += part.nums_rows;
-            }
 
             let default_vals = self.default_vals.clone();
 
@@ -200,7 +195,6 @@ impl BlockReader {
                 &data_block,
                 &data_block_column_ids,
                 &default_vals,
-                num_rows,
             )?)
         } else {
             Ok(data_block)
