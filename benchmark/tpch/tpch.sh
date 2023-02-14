@@ -5,9 +5,9 @@ sh ./gen_data.sh $1
 
 if [[ $2 == native ]]; then
   echo "native"
-  sh ./create_table_native.sh
+  sh ./prepare_native_table.sh
 else
-  echo "parquet"
-  sh ./create_table.sh
+  echo "fuse"
+  sh ./prepare_fuse_table.sh
 fi
 

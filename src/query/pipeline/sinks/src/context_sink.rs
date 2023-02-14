@@ -18,7 +18,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
 
 use crate::Sink;
 use crate::Sinker;
@@ -28,7 +28,7 @@ pub struct ContextSink {
 }
 
 impl ContextSink {
-    pub fn create(input: Arc<InputPort>, ctx: Arc<dyn TableContext>) -> ProcessorPtr {
+    pub fn create(input: Arc<InputPort>, ctx: Arc<dyn TableContext>) -> Box<dyn Processor> {
         Sinker::create(input, ContextSink { ctx })
     }
 }

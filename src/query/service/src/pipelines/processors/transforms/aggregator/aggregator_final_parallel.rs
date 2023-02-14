@@ -305,10 +305,11 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
         }
 
         let value_size = estimated_key_size(&self.hash_table);
+        let keys_len = self.hash_table.len();
 
         let mut group_columns_builder =
             self.method
-                .group_columns_builder(self.hash_table.len(), value_size, &self.params);
+                .group_columns_builder(keys_len, value_size, &self.params);
 
         if !HAS_AGG {
             for group_entity in self.hash_table.iter() {
@@ -332,11 +333,11 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                 values
             };
 
-            let mut places: Vec<StateAddr> = self
-                .hash_table
-                .iter()
-                .map(|group_entity| Into::<StateAddr>::into(*group_entity.get()))
-                .collect();
+            let mut places = Vec::with_capacity(keys_len);
+            for group_entity in self.hash_table.iter() {
+                places.push(StateAddr::new(*group_entity.get()));
+                group_columns_builder.append_value(group_entity.key());
+            }
 
             for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
                 let builder = aggregates_column_builder[idx].borrow_mut();
@@ -349,10 +350,6 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                     }
                 }
                 aggregate_function.batch_merge_result(&places, builder)?;
-            }
-
-            for group_entity in self.hash_table.iter() {
-                group_columns_builder.append_value(group_entity.key());
             }
 
             // Build final state block.

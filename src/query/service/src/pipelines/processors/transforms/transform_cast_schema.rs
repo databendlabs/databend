@@ -68,11 +68,15 @@ where Self: Transform
                 }
             })
             .collect();
-        Ok(Transformer::create(input_port, output_port, Self {
-            func_ctx,
-            insert_schema,
-            exprs,
-        }))
+        Ok(ProcessorPtr::create(Transformer::create(
+            input_port,
+            output_port,
+            Self {
+                func_ctx,
+                insert_schema,
+                exprs,
+            },
+        )))
     }
 }
 

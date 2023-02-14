@@ -24,6 +24,7 @@ use common_base::runtime::Thread;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_pipeline_core::processors::Processor;
 use common_pipeline_sinks::Sink;
 use common_pipeline_sinks::Sinker;
 use parking_lot::Condvar;
@@ -103,7 +104,7 @@ impl PipelinePullingExecutor {
             ));
         }
 
-        pipeline.add_sink(|input| Ok(PullingSink::create(tx.clone(), input)))
+        pipeline.add_sink(|input| Ok(ProcessorPtr::create(PullingSink::create(tx.clone(), input))))
     }
 
     pub fn try_create(
@@ -215,7 +216,7 @@ struct PullingSink {
 }
 
 impl PullingSink {
-    pub fn create(tx: SyncSender<DataBlock>, input: Arc<InputPort>) -> ProcessorPtr {
+    pub fn create(tx: SyncSender<DataBlock>, input: Arc<InputPort>) -> Box<dyn Processor> {
         Sinker::create(input, PullingSink { sender: Some(tx) })
     }
 }

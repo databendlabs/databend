@@ -79,10 +79,14 @@ where Self: Transform
             operators: ops,
         };
 
-        Ok(Transformer::create(input, output, Self {
-            expression_transform,
-            input_len: input_schema.num_fields(),
-        }))
+        Ok(ProcessorPtr::create(Transformer::create(
+            input,
+            output,
+            Self {
+                expression_transform,
+                input_len: input_schema.num_fields(),
+            },
+        )))
     }
 }
 
