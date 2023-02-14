@@ -1,4 +1,3 @@
-#![feature(cursor_remaining)]
 // Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,9 +11,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#![allow(clippy::uninlined_format_args)]
 
-mod binary_read;
-mod binary_write;
-mod cursor_ext;
-mod escape;
+use common_exception::Result;
+use common_io::escape_string;
+
+#[test]
+fn test_escape() -> Result<()> {
+    assert_eq!(escape_string("\t"), r#"\t"#);
+    // '0x20' is space
+    assert_eq!(escape_string("\x00_\x1F_ "), r#"\x00_\x1F_ "#);
+
+    assert_eq!(escape_string("\\"), r#"\\"#);
+
+    assert_eq!(escape_string("\'"), r#"\'"#);
+
+    assert_eq!(escape_string("\""), "\\\"");
+    Ok(())
+}

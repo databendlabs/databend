@@ -59,6 +59,7 @@ fn test_decode_v25_user_stage() -> anyhow::Result<()> {
             escape: "\\".to_string(),
             row_tag: "row".to_string(),
             quote: "\'\'".to_string(),
+            name: None,
         },
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::AbortNum(2),

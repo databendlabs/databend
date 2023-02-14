@@ -15,6 +15,7 @@
 #![allow(clippy::uninlined_format_args)]
 
 mod cluster;
+mod file_format;
 mod quota;
 mod role;
 mod serde;
@@ -25,6 +26,8 @@ mod user;
 
 pub use cluster::ClusterApi;
 pub use cluster::ClusterMgr;
+pub use file_format::FileFormatApi;
+pub use file_format::FileFormatMgr;
 pub use quota::QuotaApi;
 pub use quota::QuotaMgr;
 pub use role::RoleApi;

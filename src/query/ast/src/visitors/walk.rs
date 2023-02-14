@@ -404,6 +404,15 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::RemoveStage { location, pattern } => {
             visitor.visit_remove_stage(location, pattern)
         }
+        Statement::CreateFileFormat {
+            if_not_exists,
+            name,
+            file_format_options,
+        } => visitor.visit_create_file_format(*if_not_exists, name, file_format_options),
+        Statement::DropFileFormat { if_exists, name } => {
+            visitor.visit_drop_file_format(*if_exists, name)
+        }
+        Statement::ShowFileFormats => visitor.visit_show_file_formats(),
         Statement::DescribeStage { stage_name } => visitor.visit_describe_stage(stage_name),
         Statement::Call(stmt) => visitor.visit_call(stmt),
         Statement::Presign(stmt) => visitor.visit_presign(stmt),

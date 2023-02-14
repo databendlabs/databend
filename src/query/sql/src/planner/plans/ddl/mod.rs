@@ -14,6 +14,7 @@
 mod account;
 mod catalog;
 mod database;
+mod file_format;
 mod stage;
 mod table;
 mod udf;
@@ -22,6 +23,7 @@ mod view;
 pub use account::*;
 pub use catalog::*;
 pub use database::*;
+pub use file_format::*;
 pub use stage::*;
 pub use table::*;
 pub use udf::*;
