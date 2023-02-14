@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
-mod meta_manager;
-mod read;
-mod write;
+mod reader;
 
-pub use read::ResultCacheReader;
-pub use write::TransformWriteResultCache;
+pub use reader::ResultCacheReader;

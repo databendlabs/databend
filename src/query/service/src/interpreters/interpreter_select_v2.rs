@@ -17,8 +17,9 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_sql::MetadataRef;
-use common_storages_result_cache::gen_result_cache_meta_key;
+use common_storages_result_cache::ResultCacheReader;
 use common_storages_result_cache::TransformWriteResultCache;
+use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -83,30 +84,28 @@ impl Interpreter for SelectInterpreterV2 {
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
     #[tracing::instrument(level = "debug", name = "select_interpreter_v2_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let mut build_res = self.build_pipeline().await?;
+        if self.ctx.get_settings().get_enable_query_result_cache()? {
+            let kv_store = UserApiProvider::instance().get_meta_store_client();
+            // 1. Try to get result from cache.
+            let cache_reader = ResultCacheReader::create(self.ctx.clone(), kv_store.clone());
+            if let Some(block) = cache_reader.try_read_cached_result().await? {
+                // 2. If found, return the result directly.
+                return PipelineBuildResult::from_blocks(vec![block]);
+            }
 
-        let settings = self.ctx.get_settings();
-        if settings.get_enable_query_result_cache()? {
-            let max_bytes = settings.get_max_result_cache_bytes()?;
-            let ttl = settings.get_result_cache_ttl()?;
-            let tenant = self.ctx.get_tenant();
-            let sql = self.ctx.get_query_str();
-            let key = gen_result_cache_meta_key(&tenant, &sql);
-            let part_sha = self.ctx.get_partitions_sha().unwrap();
-
+            // 3. If not found result in cache, build the pipeline and add a transform to write the result to cache.
+            let mut build_res = self.build_pipeline().await?;
             build_res.main_pipeline.add_transform(|input, output| {
-                Ok(TransformWriteResultCache::create(
+                TransformWriteResultCache::try_create(
+                    self.ctx.clone(),
                     input,
                     output,
-                    sql.clone(),
-                    key.clone(),
-                    part_sha.clone(),
-                    ttl,
-                    max_bytes,
-                ))
+                    kv_store.clone(),
+                )
             })?;
+            Ok(build_res)
+        } else {
+            Ok(self.build_pipeline().await?)
         }
-
-        Ok(build_res)
     }
 }

@@ -20,8 +20,8 @@ use common_meta_store::MetaStore;
 use common_meta_types::KVMeta;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
+use common_meta_types::SeqV;
 use common_meta_types::UpsertKV;
-use common_users::UserApiProvider;
 
 use crate::common::ResultCacheValue;
 
@@ -32,19 +32,21 @@ pub(super) struct ResultCacheMetaManager {
 }
 
 impl ResultCacheMetaManager {
-    pub fn create(key: String, ttl: u64) -> Self {
-        let inner = UserApiProvider::instance().get_meta_store_client();
+    pub fn create(inner: Arc<MetaStore>, key: String, ttl: u64) -> Self {
         Self { key, ttl, inner }
     }
 
-    pub async fn set(&self, value: ResultCacheValue, expire_at: u64) -> Result<()> {
+    pub async fn set(&self, value: ResultCacheValue, seq: MatchSeq, expire_at: u64) -> Result<()> {
         let value = serde_json::to_vec(&value)?;
+        self.set_binary(value, seq, expire_at).await
+    }
 
+    async fn set_binary(&self, value: Vec<u8>, seq: MatchSeq, expire_at: u64) -> Result<()> {
         let _ = self
             .inner
             .upsert_kv(UpsertKV {
                 key: self.key.clone(),
-                seq: MatchSeq::GE(0),
+                seq,
                 value: Operation::Update(value),
                 value_meta: Some(KVMeta {
                     expire_at: Some(expire_at),
@@ -52,6 +54,23 @@ impl ResultCacheMetaManager {
             })
             .await?;
         Ok(())
+    }
+
+    pub async fn get(&self) -> Result<Option<ResultCacheValue>> {
+        let raw = self.inner.get_kv(&self.key).await?;
+        match raw {
+            None => Ok(None),
+            Some(SeqV { seq, data, .. }) => {
+                let value = serde_json::from_slice(&data)?;
+
+                // refresh TTL
+                let now = SeqV::<()>::now_ms();
+                self.set_binary(data, MatchSeq::Exact(seq), now + self.ttl)
+                    .await?;
+
+                Ok(Some(value))
+            }
+        }
     }
 
     pub fn get_ttl(&self) -> u64 {

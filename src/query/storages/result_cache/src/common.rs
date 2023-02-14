@@ -19,7 +19,7 @@ use uuid::Uuid;
 const RESULT_CACHE_PREFIX: &str = "_result_cache";
 
 #[inline(always)]
-pub fn gen_result_cache_meta_key(tenant: &str, key: &str) -> String {
+pub(crate) fn gen_result_cache_meta_key(tenant: &str, key: &str) -> String {
     let key = Sha256::digest(key);
     format!("{RESULT_CACHE_PREFIX}/{tenant}/{key:?}")
 }

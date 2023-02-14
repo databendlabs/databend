@@ -14,7 +14,10 @@
 
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_meta_store::MetaStore;
+use common_meta_types::MatchSeq;
 use common_meta_types::SeqV;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
@@ -23,7 +26,8 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_storage::DataOperator;
 
-use super::cache_writer::ResultCacheWriter;
+use super::writer::ResultCacheWriter;
+use crate::common::gen_result_cache_meta_key;
 use crate::common::ResultCacheValue;
 use crate::meta_manager::ResultCacheMetaManager;
 
@@ -76,7 +80,7 @@ impl Processor for TransformWriteResultCache {
             num_rows: self.cache_writer.num_rows(),
             location,
         };
-        self.meta_mgr.set(value, expire_at).await?;
+        self.meta_mgr.set(value, MatchSeq::GE(0), expire_at).await?;
 
         // 3. Finish
         self.called_on_finish = true;
@@ -86,27 +90,32 @@ impl Processor for TransformWriteResultCache {
 }
 
 impl TransformWriteResultCache {
-    pub fn create(
+    pub fn try_create(
+        ctx: Arc<dyn TableContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        sql: String,
-        key: String,
-        partitions_sha: String,
-        ttl: u64,
-        max_bytes: usize,
-    ) -> ProcessorPtr {
+        kv_store: Arc<MetaStore>,
+    ) -> Result<ProcessorPtr> {
+        let settings = ctx.get_settings();
+        let max_bytes = settings.get_max_result_cache_bytes()?;
+        let ttl = settings.get_result_cache_ttl()?;
+        let tenant = ctx.get_tenant();
+        let sql = ctx.get_query_str();
+        let key = gen_result_cache_meta_key(&tenant, &sql);
+        let partitions_sha = ctx.get_partitions_sha().unwrap();
+
         let operator = DataOperator::instance().operator();
         let cache_writer = ResultCacheWriter::create(operator, max_bytes);
 
-        ProcessorPtr::create(Box::new(TransformWriteResultCache {
+        Ok(ProcessorPtr::create(Box::new(TransformWriteResultCache {
             input,
             output,
             called_on_finish: false,
             sql,
             partitions_sha,
-            meta_mgr: ResultCacheMetaManager::create(key, ttl),
+            meta_mgr: ResultCacheMetaManager::create(kv_store, key, ttl),
             cache_writer,
-        }))
+        })))
     }
 
     fn pull_data(&mut self) -> Result<Event> {

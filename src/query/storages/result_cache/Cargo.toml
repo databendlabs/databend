@@ -9,6 +9,7 @@ doctest = false
 test = false
 
 [dependencies]
+common-catalog = { path = "../../catalog" }
 common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
 common-io = { path = "../../../common/io" }
