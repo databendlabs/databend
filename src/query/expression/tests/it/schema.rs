@@ -82,6 +82,15 @@ fn test_project_schema_from_tuple() -> Result<()> {
                 assert_eq!(expected_column_id_field[i].0, leaf_field.column_id());
                 assert_eq!(expected_column_id_field[i].1, leaf_field.name());
             }
+
+            // verify leaf column ids of projected schema are as expected
+            assert_eq!(
+                leaf_fields
+                    .into_iter()
+                    .flat_map(|f| f.leaf_column_ids())
+                    .collect::<Vec<_>>(),
+                project_schema.to_leaf_column_ids()
+            );
         }
     };
 
@@ -168,6 +177,16 @@ fn test_schema_from_struct() -> Result<()> {
     let flat_column_ids = schema.to_leaf_column_ids();
 
     let leaf_fields = schema.leaf_fields();
+
+    // verify leaf column ids are as expected
+    assert_eq!(
+        leaf_fields
+            .iter()
+            .flat_map(|f| f.leaf_column_ids())
+            .collect::<Vec<_>>(),
+        schema.to_leaf_column_ids()
+    );
+
     let expected_fields = vec![
         ("u64", TableDataType::Number(NumberDataType::UInt64)),
         ("0", TableDataType::Number(NumberDataType::UInt64)),
