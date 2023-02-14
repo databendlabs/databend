@@ -1,0 +1,46 @@
+statement ok
+USE default
+
+statement ok
+DROP TABLE IF EXISTS `05_0030_t`
+
+statement ok
+CREATE TABLE `05_0030_t`(a int)
+
+statement ok
+INSERT INTO TABLE `05_0030_t` values(1),(2);
+
+statement ok
+ALTER TABLE `05_0030_t` ADD COLUMN b float default 10.0
+
+query IF
+SELECT * FROM `05_0030_t` order by a 
+----
+1 10.0
+2 10.0
+
+statement ok
+update `05_0030_t` set a=3 where a=1
+
+query IF
+SELECT * FROM `05_0030_t` order by a 
+----
+2 10.0
+3 10.0
+
+statement ok
+update `05_0030_t` set b=11 where a=2
+
+query IF
+SELECT * FROM `05_0030_t` order by a 
+----
+2 11.0
+3 10.0
+
+statement ok
+delete from `05_0030_t` where a=2;
+
+query IF
+SELECT * FROM `05_0030_t` order by a 
+----
+3 10.0
