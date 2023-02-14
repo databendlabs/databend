@@ -33,7 +33,7 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_storage::DataOperator;
 use futures::StreamExt;
-use iceberg_rs::model::table::TableMetadataV2;
+use iceberg_rs::model::table::TableMetadata;
 use opendal::Operator;
 
 use crate::converters::meta_iceberg_to_databend;
@@ -51,7 +51,7 @@ pub struct IcebergTable {
     /// root of the table
     tbl_root: DataOperator,
     /// table metadata
-    manifests: TableMetadataV2,
+    manifests: TableMetadata,
     /// table information
     info: TableInfo,
 }
@@ -76,7 +76,7 @@ impl IcebergTable {
                 e
             ))
         })?;
-        let metadata: TableMetadataV2 =
+        let metadata: TableMetadata =
             serde_json::de::from_slice(meta_json.as_slice()).map_err(|e| {
                 ErrorCode::ReadTableDataError(format!(
                     "invalid metadata in {}: {:?}",

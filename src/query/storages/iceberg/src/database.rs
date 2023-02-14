@@ -131,7 +131,7 @@ impl Database for IcebergDatabase {
                 if entry.mode().await? != ObjectMode::DIR {
                     continue;
                 }
-                let tbl_name = entry.name();
+                let tbl_name = entry.name().trim_end_matches('/');
                 let table = self.get_table(tbl_name).await?;
                 tables.push(table);
             }

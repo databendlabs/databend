@@ -26,15 +26,16 @@ use iceberg_rs::model::schema::AllType;
 use iceberg_rs::model::schema::List as IcebergList;
 use iceberg_rs::model::schema::SchemaV2;
 use iceberg_rs::model::schema::StructField;
-use iceberg_rs::model::table::TableMetadataV2;
+use iceberg_rs::model::table::TableMetadata;
 use itertools::Itertools;
 
 /// generate TableMeta from Iceberg table meta
 pub(crate) fn meta_iceberg_to_databend(
     catalog: &str,
     storage_params: &StorageParams,
-    meta: &TableMetadataV2,
+    meta: &TableMetadata,
 ) -> TableMeta {
+    let meta = meta.clone().to_latest();
     let schema = match meta.schemas.last() {
         Some(scm) => schema_iceberg_to_databend(scm),
         // empty schema
@@ -156,7 +157,7 @@ fn primitive_iceberg_to_databend(prim: &AllType) -> TableDataType {
 mod convert_test {
     use common_meta_app::storage::StorageFsConfig;
     use common_meta_app::storage::StorageParams;
-    use iceberg_rs::model::table::TableMetadataV2;
+    use iceberg_rs::model::table::TableMetadata;
 
     use super::meta_iceberg_to_databend;
 
@@ -213,13 +214,13 @@ mod convert_test {
     }
 "#;
 
-    fn gen_iceberg_meta() -> TableMetadataV2 {
+    fn gen_iceberg_meta() -> TableMetadata {
         serde_json::de::from_str(METADATA_FILE).unwrap()
     }
 
     #[test]
     fn test_parse_metadata() {
-        let metadata: TableMetadataV2 = gen_iceberg_meta();
+        let metadata = gen_iceberg_meta();
         let mock_sp = StorageParams::Fs(StorageFsConfig {
             root: "/".to_string(),
         });
