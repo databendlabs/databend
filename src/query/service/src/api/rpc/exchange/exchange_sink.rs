@@ -17,6 +17,8 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::pipe::Pipe;
+use common_pipeline_core::pipe::PipeItem;
+use common_pipeline_core::processors::port::InputPort;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_sink_writer::create_writer_items;
@@ -60,12 +62,18 @@ impl ExchangeSink {
                 })?;
 
                 assert_eq!(flight_exchange.len(), 1);
-                pipeline.add_sink(|input| {
-                    Ok(ExchangeWriterSink::create(
-                        input,
-                        flight_exchange[0].clone(),
-                    ))
-                })
+                let mut items = Vec::with_capacity(flight_exchange.len());
+                for flight_exchange in flight_exchange {
+                    let input = InputPort::create();
+                    items.push(PipeItem::create(
+                        ExchangeWriterSink::create(input.clone(), flight_exchange),
+                        vec![input],
+                        vec![],
+                    ));
+                }
+
+                pipeline.add_pipe(Pipe::create(1, 0, items));
+                Ok(())
             }
             ExchangeParams::ShuffleExchange(params) => {
                 exchange_shuffle(params, pipeline)?;

@@ -25,13 +25,14 @@ use common_pipeline_sinks::AsyncSinker;
 
 use crate::api::rpc::exchange::serde::exchange_serializer::ExchangeSerializeMeta;
 use crate::api::rpc::flight_client::FlightExchange;
+use crate::api::rpc::flight_client::FlightExchangeRef;
 
 pub struct ExchangeWriterSink {
-    exchange: FlightExchange,
+    exchange: FlightExchangeRef,
 }
 
 impl ExchangeWriterSink {
-    pub fn create(input: Arc<InputPort>, flight_exchange: FlightExchange) -> ProcessorPtr {
+    pub fn create(input: Arc<InputPort>, flight_exchange: FlightExchangeRef) -> ProcessorPtr {
         AsyncSinker::create(input, ExchangeWriterSink {
             exchange: flight_exchange,
         })
@@ -42,8 +43,13 @@ impl ExchangeWriterSink {
 impl AsyncSink for ExchangeWriterSink {
     const NAME: &'static str = "ExchangeWriterSink";
 
+    async fn on_start(&mut self) -> Result<()> {
+        self.exchange.close_input().await;
+        Ok(())
+    }
+
     async fn on_finish(&mut self) -> Result<()> {
-        self.exchange.close_output();
+        self.exchange.close_output().await;
         Ok(())
     }
 
@@ -72,7 +78,7 @@ impl AsyncSink for ExchangeWriterSink {
     }
 }
 
-pub fn create_writer_item(exchange: FlightExchange) -> PipeItem {
+pub fn create_writer_item(exchange: FlightExchangeRef) -> PipeItem {
     let input = InputPort::create();
     PipeItem::create(
         ExchangeWriterSink::create(input.clone(), exchange),
@@ -81,6 +87,6 @@ pub fn create_writer_item(exchange: FlightExchange) -> PipeItem {
     )
 }
 
-pub fn create_writer_items(exchanges: Vec<FlightExchange>) -> Vec<PipeItem> {
+pub fn create_writer_items(exchanges: Vec<FlightExchangeRef>) -> Vec<PipeItem> {
     exchanges.into_iter().map(create_writer_item).collect()
 }

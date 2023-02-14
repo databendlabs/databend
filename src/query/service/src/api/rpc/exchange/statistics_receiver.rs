@@ -80,6 +80,8 @@ impl StatisticsReceiver {
                             if !shutdown_flag.load(Ordering::Relaxed) {
                                 match Self::fetch(&ctx, &flight_exchange, recv).await {
                                     Ok(true) => {
+                                        flight_exchange.close_input().await;
+                                        flight_exchange.close_output().await;
                                         return Ok(());
                                     }
                                     Ok(false) => {
@@ -87,6 +89,8 @@ impl StatisticsReceiver {
                                     }
                                     Err(cause) => {
                                         ctx.get_current_session().force_kill_query(cause.clone());
+                                        flight_exchange.close_input().await;
+                                        flight_exchange.close_output().await;
                                         return Err(cause);
                                     }
                                 };
@@ -100,6 +104,8 @@ impl StatisticsReceiver {
                             notified = middle;
                             match Self::recv_data(&ctx, res) {
                                 Ok(true) => {
+                                    flight_exchange.close_input().await;
+                                    flight_exchange.close_output().await;
                                     return Ok(());
                                 }
                                 Ok(false) => {
@@ -107,6 +113,8 @@ impl StatisticsReceiver {
                                 }
                                 Err(cause) => {
                                     ctx.get_current_session().force_kill_query(cause.clone());
+                                    flight_exchange.close_input().await;
+                                    flight_exchange.close_output().await;
                                     return Err(cause);
                                 }
                             };
@@ -116,9 +124,13 @@ impl StatisticsReceiver {
 
                 if let Err(cause) = Self::fetch(&ctx, &flight_exchange, recv).await {
                     ctx.get_current_session().force_kill_query(cause.clone());
+                    flight_exchange.close_input().await;
+                    flight_exchange.close_output().await;
                     return Err(cause);
                 }
 
+                flight_exchange.close_input().await;
+                flight_exchange.close_output().await;
                 Ok(())
             }));
         }

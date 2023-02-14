@@ -84,6 +84,8 @@ impl StatisticsSender {
                             );
                         }
 
+                        flight_exchange.close_input().await;
+                        flight_exchange.close_output().await;
                         return;
                     }
                     Either::Left((Ok(Some(command)), right)) => {
@@ -93,6 +95,8 @@ impl StatisticsSender {
                         if let Err(_cause) = Self::on_command(&ctx, command, &flight_exchange).await
                         {
                             ctx.get_exchange_manager().shutdown_query(&query_id);
+                            flight_exchange.close_input().await;
+                            flight_exchange.close_output().await;
                             return;
                         }
                     }
@@ -104,6 +108,9 @@ impl StatisticsSender {
                     tracing::warn!("Statistics send has error, cause: {:?}.", error);
                 }
             }
+
+            flight_exchange.close_input().await;
+            flight_exchange.close_output().await;
         });
     }
 
