@@ -42,7 +42,7 @@ pub struct FusePartInfo {
     pub sort_min_max: Option<(Scalar, Scalar)>,
     /// page range in the file
     pub range: Option<Range<usize>>,
-    pub delete_mark: Option<(String, ColumnMeta)>,
+    pub delete_mark: Option<String>,
 }
 
 #[typetag::serde(name = "fuse")]
@@ -75,7 +75,7 @@ impl FusePartInfo {
         compression: Compression,
         sort_min_max: Option<(Scalar, Scalar)>,
         range: Option<Range<usize>>,
-        delete_mark: Option<(String, ColumnMeta)>,
+        delete_mark: Option<String>,
     ) -> Arc<Box<dyn PartInfo>> {
         Arc::new(Box::new(FusePartInfo {
             location,

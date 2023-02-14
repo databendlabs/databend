@@ -90,35 +90,6 @@ impl BlockReader {
         res
     }
 
-    pub async fn async_read_native_mark_data(
-        &self,
-        part: PartInfoPtr,
-    ) -> Result<Option<NativeReader<Reader>>> {
-        let part = FusePartInfo::from_part(&part)?;
-        let res = if let Some((location, meta)) = &part.delete_mark {
-            let o = self.operator.object(location);
-            let (offset, length) = meta.offset_length();
-            let mut meta = meta.as_native().unwrap().clone();
-
-            if let Some(range) = &part.range {
-                meta = meta.slice(range.start, range.end);
-            }
-
-            let reader = o.range_read(offset..offset + length).await?;
-
-            let reader: Reader = Box::new(std::io::Cursor::new(reader));
-            Some(NativeReader::new(
-                reader,
-                DataType::Boolean,
-                meta.pages,
-                vec![],
-            ))
-        } else {
-            None
-        };
-        Ok(res)
-    }
-
     pub async fn read_native_columns_data(
         o: Object,
         index: FieldIndex,
@@ -166,34 +137,6 @@ impl BlockReader {
         }
 
         Ok(results)
-    }
-
-    pub fn sync_read_native_mark_data(
-        &self,
-        part: PartInfoPtr,
-    ) -> Result<Option<NativeReader<Reader>>> {
-        let part = FusePartInfo::from_part(&part)?;
-        let res = if let Some((location, meta)) = &part.delete_mark {
-            let o = self.operator.object(location);
-            let (offset, length) = meta.offset_length();
-            let mut meta = meta.as_native().unwrap().clone();
-
-            if let Some(range) = &part.range {
-                meta = meta.slice(range.start, range.end);
-            }
-
-            let reader = o.blocking_range_reader(offset..offset + length)?;
-            let reader: Reader = Box::new(BufReader::new(reader));
-            Some(NativeReader::new(
-                reader,
-                DataType::Boolean,
-                meta.pages,
-                vec![],
-            ))
-        } else {
-            None
-        };
-        Ok(res)
     }
 
     pub fn sync_read_native_column(
