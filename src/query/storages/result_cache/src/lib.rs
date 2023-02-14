@@ -20,5 +20,7 @@ mod read;
 mod write;
 
 pub use common::gen_result_cache_key;
+pub use common::gen_result_cache_meta_key;
 pub use read::ResultCacheReader;
+pub use write::TransformWriteResultCache;
 pub use write::WriteResultCacheSink;

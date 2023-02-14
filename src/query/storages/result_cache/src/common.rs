@@ -28,7 +28,7 @@ pub fn gen_result_cache_key(raw: &str) -> String {
 }
 
 #[inline(always)]
-pub(crate) fn gen_result_cache_meta_key(tenant: &str, key: &str) -> String {
+pub fn gen_result_cache_meta_key(tenant: &str, key: &str) -> String {
     format!("{RESULT_CACHE_PREFIX}/{tenant}/{key}")
 }
 
@@ -38,7 +38,7 @@ pub(crate) fn gen_result_cache_dir(key: &str) -> String {
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
-pub(crate) struct ResultCacheValue {
+pub struct ResultCacheValue {
     /// The original query SQL.
     pub sql: String,
     /// The query time.

@@ -2241,6 +2241,7 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-io",
+ "common-meta-app",
  "common-meta-kvapi",
  "common-meta-store",
  "common-meta-types",
