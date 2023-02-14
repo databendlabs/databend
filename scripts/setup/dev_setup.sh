@@ -138,7 +138,7 @@ function install_protobuf {
 		install_pkg protobuf "$PACKAGE_MANAGER"
 		;;
 	*)
-		arch=`uname -m`
+		arch=$(uname -m)
 		PB_REL="https://github.com/protocolbuffers/protobuf/releases"
 		curl -LO $PB_REL/download/v3.15.8/protoc-3.15.8-linux-${arch}.zip
 		unzip protoc-3.15.8-linux-${arch}.zip -d protoc-3.15.8

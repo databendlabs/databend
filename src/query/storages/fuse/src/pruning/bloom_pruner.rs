@@ -127,13 +127,15 @@ impl BloomPrunerCreator {
         &self,
         index_location: &Location,
         index_length: u64,
-        column_ids: Vec<ColumnId>,
+        column_ids_of_indexed_block: Vec<ColumnId>,
     ) -> Result<bool> {
         let version = index_location.1;
+
+        // filter out columns that no longer exist in the indexed block
         let index_columns = self.index_fields.iter().try_fold(
             Vec::with_capacity(self.index_fields.len()),
             |mut acc, field| {
-                if column_ids.contains(&field.column_id()) {
+                if column_ids_of_indexed_block.contains(&field.column_id()) {
                     acc.push(BloomIndex::build_filter_column_name(version, field)?);
                 }
                 Ok::<_, ErrorCode>(acc)
