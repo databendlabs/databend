@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-. "$CURDIR"/../../tests/shell_env.sh
+. "$CURDIR"/shell_env.sh
 
 
 for t in customer lineitem nation orders partsupp part region supplier; do
