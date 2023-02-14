@@ -95,7 +95,7 @@ Filter
 ├── filters: [eq(bloom_test_t.c2 (#1), to_int32(0))]
 ├── estimated rows: 0.00
 └── TableScan
-    ├── table: default.db_09_0009_01.bloom_test_t
+    ├── table: default.default.bloom_test_t
     ├── read rows: 6
     ├── read bytes: 86
     ├── partitions total: 3
@@ -111,7 +111,7 @@ Filter
 ├── filters: [eq(bloom_test_t.c2 (#1), to_int32(3))]
 ├── estimated rows: 1.14
 └── TableScan
-    ├── table: default.db_09_0009_01.bloom_test_t
+    ├── table: default.default.bloom_test_t
     ├── read rows: 6
     ├── read bytes: 86
     ├── partitions total: 3
