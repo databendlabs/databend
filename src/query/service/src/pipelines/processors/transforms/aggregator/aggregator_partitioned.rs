@@ -39,6 +39,8 @@ use crate::pipelines::processors::transforms::aggregator::SingleStateAggregator;
 use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
+use crate::pipelines::processors::transforms::group_by::FINAL_BUCKETS_LG2;
+use crate::pipelines::processors::transforms::group_by::PARTIAL_BUCKETS_LG2;
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::processors::AggregatorParams;
 
@@ -75,7 +77,8 @@ where
 {
     const SUPPORT_TWO_LEVEL: bool = Method::SUPPORT_TWO_LEVEL;
 
-    type PartitionedAggregator = PartialAggregator<HAS_AGG, PartitionedHashMethod<Method>>;
+    type PartitionedAggregator =
+        PartialAggregator<HAS_AGG, PartitionedHashMethod<PARTIAL_BUCKETS_LG2, Method>>;
 
     fn get_state_cardinality(&self) -> usize {
         self.hash_table.len()
@@ -85,7 +88,7 @@ where
     fn convert_partitioned(mut self) -> Result<PartitionedAggregator<Self>> {
         let instant = Instant::now();
         let method = self.method.clone();
-        let two_level_method = PartitionedHashMethod::create(method);
+        let two_level_method = PartitionedHashMethod::<PARTIAL_BUCKETS_LG2, _>::create(method);
         let mut two_level_hashtable = two_level_method.create_hash_table()?;
 
         unsafe {
@@ -108,7 +111,7 @@ where
 
         self.states_dropped = true;
         Ok(PartitionedAggregator::<Self> {
-            inner: PartialAggregator::<HAS_AGG, PartitionedHashMethod<Method>> {
+            inner: PartialAggregator::<HAS_AGG, PartitionedHashMethod<PARTIAL_BUCKETS_LG2, Method>> {
                 area: self.area.take(),
                 area_holder: None,
                 params: self.params.clone(),
@@ -257,7 +260,8 @@ where
     Method::HashKey: FastHash,
 {
     const SUPPORT_TWO_LEVEL: bool = false;
-    type PartitionedAggregator = ParallelFinalAggregator<HAS_AGG, PartitionedHashMethod<Method>>;
+    type PartitionedAggregator =
+        ParallelFinalAggregator<HAS_AGG, PartitionedHashMethod<FINAL_BUCKETS_LG2, Method>>;
 }
 
 // Example: PartitionedAggregator<PartialAggregator<HAS_AGG, Method>> ->

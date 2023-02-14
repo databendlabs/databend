@@ -40,7 +40,8 @@ use primitive_types::U512;
 
 use super::aggregator_keys_builder::LargeFixedKeysColumnBuilder;
 use super::aggregator_keys_iter::LargeFixedKeysColumnIter;
-use super::BUCKETS_LG2;
+
+
 use crate::pipelines::processors::transforms::group_by::aggregator_groups_builder::FixedKeysGroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::aggregator_groups_builder::GroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::aggregator_groups_builder::SerializedKeysGroupColumnsBuilder;
@@ -475,17 +476,19 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
 }
 
 #[derive(Clone)]
-pub struct PartitionedHashMethod<Method: HashMethod + Send> {
+pub struct PartitionedHashMethod<const BUCKETS_LG2: u32, Method: HashMethod + Send> {
     pub(crate) method: Method,
 }
 
-impl<Method: HashMethod + Send> PartitionedHashMethod<Method> {
-    pub fn create(method: Method) -> PartitionedHashMethod<Method> {
-        PartitionedHashMethod::<Method> { method }
+impl<const BUCKETS_LG2: u32, Method: HashMethod + Send> PartitionedHashMethod<BUCKETS_LG2, Method> {
+    pub fn create(method: Method) -> PartitionedHashMethod<BUCKETS_LG2, Method> {
+        PartitionedHashMethod::<BUCKETS_LG2, Method> { method }
     }
 }
 
-impl<Method: HashMethod + Send> HashMethod for PartitionedHashMethod<Method> {
+impl<const BUCKETS_LG2: u32, Method: HashMethod + Send> HashMethod
+    for PartitionedHashMethod<BUCKETS_LG2, Method>
+{
     type HashKey = Method::HashKey;
     type HashKeyIter<'a> = Method::HashKeyIter<'a> where Self: 'a;
 
@@ -506,7 +509,9 @@ impl<Method: HashMethod + Send> HashMethod for PartitionedHashMethod<Method> {
     }
 }
 
-impl<Method> PolymorphicKeysHelper<PartitionedHashMethod<Method>> for PartitionedHashMethod<Method>
+impl<const BUCKETS_LG2: u32, Method>
+    PolymorphicKeysHelper<PartitionedHashMethod<BUCKETS_LG2, Method>>
+    for PartitionedHashMethod<BUCKETS_LG2, Method>
 where
     Self: HashMethod<HashKey = Method::HashKey>,
     Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
@@ -528,7 +533,7 @@ where
         Ok(PartitionedHashMap::<_, BUCKETS_LG2>::create(tables))
     }
 
-    type ColumnBuilder<'a> = Method::ColumnBuilder<'a> where Self: 'a, PartitionedHashMethod<Method>: 'a;
+    type ColumnBuilder<'a> = Method::ColumnBuilder<'a> where Self: 'a, PartitionedHashMethod<BUCKETS_LG2, Method>: 'a;
 
     fn keys_column_builder(
         &self,
@@ -544,7 +549,7 @@ where
         self.method.keys_iter_from_column(column)
     }
 
-    type GroupColumnsBuilder<'a> = Method::GroupColumnsBuilder<'a> where Self: 'a, PartitionedHashMethod<Method>: 'a;
+    type GroupColumnsBuilder<'a> = Method::GroupColumnsBuilder<'a> where Self: 'a, PartitionedHashMethod<BUCKETS_LG2, Method>: 'a;
 
     fn group_columns_builder(
         &self,

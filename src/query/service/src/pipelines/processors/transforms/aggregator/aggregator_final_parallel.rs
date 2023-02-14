@@ -26,9 +26,11 @@ use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
 use common_expression::HashMethod;
 use common_functions::aggregates::StateAddr;
+use common_hashtable::FastHash;
 use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
+use common_hashtable::PartitionedHashMap;
 use tracing::info;
 
 use super::estimated_key_size;
@@ -38,7 +40,9 @@ use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
+use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
+use crate::pipelines::processors::transforms::group_by::FINAL_BUCKETS_LG2;
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
@@ -72,7 +76,9 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 }
 
 impl<Method, const HAS_AGG: bool> Aggregator for ParallelFinalAggregator<HAS_AGG, Method>
-where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
+where
+    Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static,
+    Method::HashKey: FastHash,
 {
     const NAME: &'static str = "GroupByFinalTransform";
 
@@ -144,12 +150,14 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 }
 
 pub struct BucketAggregator<const HAS_AGG: bool, Method>
-where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
+where
+    Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static,
+    Method::HashKey: FastHash,
 {
     area: Area,
     method: Method,
     params: Arc<AggregatorParams>,
-    hash_table: Method::HashTable,
+    hash_table: PartitionedHashMap<Method::HashTable, FINAL_BUCKETS_LG2>,
     state_holders: Vec<Option<ArenaHolder>>,
 
     pub(crate) reach_limit: bool,
@@ -158,11 +166,15 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 }
 
 impl<const HAS_AGG: bool, Method> BucketAggregator<HAS_AGG, Method>
-where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
+where
+    Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static,
+    Method::HashKey: FastHash,
 {
     pub fn create(method: Method, params: Arc<AggregatorParams>) -> Result<Self> {
         let mut area = Area::create();
-        let hash_table = method.create_hash_table()?;
+        let partitioned_method =
+            PartitionedHashMethod::<FINAL_BUCKETS_LG2, Method>::create(method.clone());
+        let hash_table = partitioned_method.create_hash_table()?;
         let temp_place = match params.aggregate_functions.is_empty() {
             true => StateAddr::new(0),
             false => params.alloc_layout(&mut area),
@@ -447,7 +459,9 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 }
 
 impl<const HAS_AGG: bool, Method> Drop for BucketAggregator<HAS_AGG, Method>
-where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
+where
+    Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static,
+    Method::HashKey: FastHash,
 {
     fn drop(&mut self) {
         self.drop_states();

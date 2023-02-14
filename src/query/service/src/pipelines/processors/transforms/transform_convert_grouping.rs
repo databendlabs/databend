@@ -24,6 +24,8 @@ use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_expression::HashMethod;
 use common_expression::HashMethodKind;
+use common_hashtable::hash2bucket;
+use common_hashtable::FastHash;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
@@ -38,7 +40,9 @@ use serde::Serialize;
 use serde::Serializer;
 
 use super::aggregator::AggregateHashStateInfo;
-use super::group_by::BUCKETS_LG2;
+
+
+use super::group_by::PARTIAL_BUCKETS_LG2;
 use crate::pipelines::processors::transforms::aggregator::AggregateInfo;
 use crate::pipelines::processors::transforms::aggregator::BucketAggregator;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
@@ -274,10 +278,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
 
         for key_item in keys_iter.iter() {
             let hash = self.method.get_hash(key_item);
-            indices.push((hash as usize >> (64u32 - BUCKETS_LG2)) as u16);
+            indices.push(hash2bucket::<PARTIAL_BUCKETS_LG2>(hash as usize) as u16);
         }
 
-        DataBlock::scatter(&data_block, &indices, 1 << BUCKETS_LG2)
+        DataBlock::scatter(&data_block, &indices, 1 << PARTIAL_BUCKETS_LG2)
     }
 }
 
@@ -400,11 +404,15 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
     }
 }
 
-fn build_convert_grouping<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>(
+fn build_convert_grouping<Method>(
     method: Method,
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
-) -> Result<()> {
+) -> Result<()>
+where
+    Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static,
+    Method::HashKey: FastHash,
+{
     let input_nums = pipeline.output_len();
     let transform = TransformConvertGrouping::create(method.clone(), params.clone(), input_nums)?;
 
@@ -449,8 +457,10 @@ struct MergeBucketTransform<Method: HashMethod + PolymorphicKeysHelper<Method> +
     output_blocks: Vec<DataBlock>,
 }
 
-impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>
-    MergeBucketTransform<Method>
+impl<Method> MergeBucketTransform<Method>
+where
+    Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static,
+    Method::HashKey: FastHash,
 {
     pub fn try_create(
         input: Arc<InputPort>,
@@ -470,8 +480,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>
 }
 
 #[async_trait::async_trait]
-impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Processor
-    for MergeBucketTransform<Method>
+impl<Method> Processor for MergeBucketTransform<Method>
+where
+    Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static,
+    Method::HashKey: FastHash,
 {
     fn name(&self) -> String {
         String::from("MergeBucketTransform")

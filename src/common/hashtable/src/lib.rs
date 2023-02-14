@@ -95,3 +95,4 @@ pub type LookupHashMapIterMut<'a, K, const CAPACITY: usize, V> =
     LookupTableIterMut<'a, CAPACITY, K, V>;
 
 pub use keys_ref::KeysRef;
+pub use partitioned_hashtable::hash2bucket;
