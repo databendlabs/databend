@@ -72,25 +72,30 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y jq netcat bc
       - name: Run Benchmark
-        working-directory: scripts/ci/clickbench
+        working-directory: benchmark/clickbench
         env:
           BENCHMARK_ID: ${{ github.run_id }}
         run: |
           ./benchmark.sh
       - name: Prepare Metadata
-        working-directory: scripts/ci/clickbench
+        working-directory: benchmark/clickbench
         run: |
           case ${{ github.event_name }} in
             pull_request)
               BENCHMARK_SYSTEM="Databend(PR#${{ github.event.number }})"
               BENCHMARK_TYPE="PR"
               jq ".extra.pr = \"${{ github.event.number }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+              echo "S3_RESULT_PATH=PR-${{ github.event.number }}" >> $GITHUB_ENV
               ;;
             push)
               BENCHMARK_SYSTEM="Databend(Release@${{ github.ref_name }})"
               BENCHMARK_TYPE="Release"
               jq ".extra.release = \"${{ github.ref_name }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+              echo "S3_RESULT_PATH=Release-${{ github.ref_name }}" >> $GITHUB_ENV
               ;;
+            *)
+              echo "Unspported event"
+              exit 1
           esac
           jq ".system = \"${BENCHMARK_SYSTEM}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
           jq ".date = \"$(date -u +%Y-%m-%d)\"" <result.json >result.json.tmp && mv result.json.tmp result.json
@@ -102,7 +107,21 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: benchmark-results
-          path: scripts/ci/clickbench/result.json
+          path: benchmark/clickbench/result.json
+      - name: Upload results to s3
+        working-directory: benchmark/clickbench
+        run: |
+          aws s3 cp result.json s3://databend-ci/benchmark/clickbench/${S3_RESULT_PATH}/result.json
+      - name: Generate report
+        working-directory: benchmark/clickbench
+        run: |
+          aws s3 cp s3://databend-ci/benchmark/clickbench/ ./results/ --recursive
+          ./update-results.sh
+      - name: Upload clickbench report
+        uses: actions/upload-artifact@v3
+        with:
+          name: clickbench-report
+          path: benchmark/clickbench/results/index.html
       - name: Clean test data
         if: always()
         run: |
