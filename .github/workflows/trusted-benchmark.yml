@@ -8,7 +8,8 @@ on:
 
 permissions:
   id-token: write
-  contents: write
+  pull-requests: write
+  contents: read
 
 jobs:
   comment_on_pr:

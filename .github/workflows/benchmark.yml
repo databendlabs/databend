@@ -114,7 +114,7 @@ jobs:
         if: github.event_name == 'pull_request'
         working-directory: benchmark/clickbench
         run: |
-          aws s3 cp "s3://repo.databend.rs/benchmark/clickbench/release/$(date -u +%Y)/$(date -u +%m)/" ./results/ --recursive
+          aws s3 sync "s3://repo.databend.rs/benchmark/clickbench/release/$(date -u +%Y)/$(date -u +%m)/" ./results/ --recursive
           mkdir -p "results/PR-${{ github.event.number }}"
           mv result.json "results/PR-${{ github.event.number }}/${{ github.sha }}.json"
           ./update-results.sh
