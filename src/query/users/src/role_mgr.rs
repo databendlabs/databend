@@ -78,8 +78,8 @@ impl UserApiProvider {
     // Ensure the builtin roles inside a tenant. Currently we have two builtin roles:
     // 1. ACCOUNT_ADMIN, which has the equivalent privileges of `GRANT ALL ON *.* TO ROLE account_admin`,
     //    it also contains all roles. ACCOUNT_ADMIN can access the data objects which owned by any role.
-    // 2. PUBLIC, which have no any privilege by default, but every role contains the PUBLIC role.
-    //    The data objects which owned by PUBLIC can be accessed by any role.
+    // 2. PUBLIC, on the other side only includes the public accessible privileges, but every role
+    //    contains the PUBLIC role. The data objects which owned by PUBLIC can be accessed by any role.
     pub async fn ensure_builtin_roles(&self, tenant: &str) -> Result<u64> {
         let mut account_admin = RoleInfo::new(BUILTIN_ROLE_ACCOUNT_ADMIN);
         account_admin.grants.grant_privileges(
