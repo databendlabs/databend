@@ -23,6 +23,7 @@ use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::constants::NAN_BYTES_SNAKE;
+use common_io::escape_string;
 
 use crate::principal::UserIdentity;
 use crate::storage::StorageParams;
@@ -295,22 +296,38 @@ impl FileFormatOptions {
 
 impl Display for FileFormatOptions {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "TYPE = {}", self.format.to_string())?;
+        write!(f, "TYPE = {}", self.format.to_string().to_uppercase())?;
         match self.format {
             StageFileFormatType::Csv => {
-                write!(f, " FIELD_DELIMITER = {}", self.field_delimiter)?;
-                write!(f, " RECORD_DELIMITER = {}", self.record_delimiter)?;
-                write!(f, " QUOTE = {}", self.quote)?;
-                write!(f, " ESCAPE = {}", self.escape)?;
-                write!(f, " SKIP_HEADER = {}", self.skip_header)?;
-                write!(f, " NAN_DISPLAY = {}", self.nan_display)?;
+                write!(
+                    f,
+                    " FIELD_DELIMITER = '{}'",
+                    escape_string(&self.field_delimiter)
+                )?;
+                write!(
+                    f,
+                    " RECORD_DELIMITER = '{}'",
+                    escape_string(&self.record_delimiter)
+                )?;
+                write!(f, " QUOTE = '{}'", escape_string(&self.quote))?;
+                write!(f, " ESCAPE = '{}'", escape_string(&self.escape))?;
+                write!(f, " SKIP_HEADER = {}", &self.skip_header)?;
+                write!(f, " NAN_DISPLAY = '{}'", escape_string(&self.nan_display))?;
             }
             StageFileFormatType::Tsv => {
-                write!(f, " FIELD_DELIMITER = {}", self.format.to_string())?;
-                write!(f, " RECORD_DELIMITER = {}", self.record_delimiter)?;
+                write!(
+                    f,
+                    " FIELD_DELIMITER = '{}'",
+                    escape_string(&self.field_delimiter)
+                )?;
+                write!(
+                    f,
+                    " RECORD_DELIMITER = '{}'",
+                    escape_string(&self.record_delimiter)
+                )?;
             }
             StageFileFormatType::Xml => {
-                write!(f, " ROW_TAG= {}", self.row_tag)?;
+                write!(f, " ROW_TAG = {}", escape_string(&self.row_tag))?;
             }
             _ => {}
         }
