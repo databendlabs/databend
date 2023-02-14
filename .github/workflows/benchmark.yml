@@ -106,12 +106,6 @@ jobs:
         with:
           name: benchmark-results
           path: benchmark/clickbench/result.json
-      - name: Upload nightly results to repo.databend.rs
-        if: github.event_name == 'push'
-        working-directory: benchmark/clickbench
-        run: |
-          RESULT_PATH="$(date -u +%Y)/$(date -u +%m)/$(date -u +%Y-%m-%d)/${{ github.ref_name }}.json"
-          aws s3 cp result.json s3://repo.databend.rs/benchmark/clickbench/release/${RESULT_PATH}
       - name: Generate report
         if: github.event_name == 'pull_request'
         working-directory: benchmark/clickbench
@@ -120,11 +114,6 @@ jobs:
           mkdir -p "results/PR-${{ github.event.number }}"
           mv result.json "results/PR-${{ github.event.number }}/${{ github.sha }}.json"
           ./update-results.sh
-      - name: Upload PR clickbench report to repo.databend.rs
-        if: github.event_name == 'pull_request'
-        working-directory: benchmark/clickbench
-        run: |
-          aws s3 cp ./results/index.html s3://repo.databend.rs/benchmark/clickbench/pr/${{ github.event.number }}/${{ github.run_id }}.html
       - name: Upload clickbench report
         uses: actions/upload-artifact@v3
         with:
