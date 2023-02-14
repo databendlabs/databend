@@ -17,6 +17,6 @@ CONNECTION=(
 );
 EOF
 
-echo "SHOW DATABASES FROM iceberg_ctl;" | $MYSQL_CLIENT_CONNECT | awk '{print $2}'
+echo "SHOW DATABASES IN iceberg_ctl;" | $MYSQL_CLIENT_CONNECT | awk '{print $2}'
 
-echo "SHOW TABLES FROM iceberg_ctl.iceberg_db;" | $MYSQL_CLIENT_CONNECT | awk '{print $2}'
+echo "SHOW TABLES IN iceberg_ctl.iceberg_db;" | $MYSQL_CLIENT_CONNECT | awk '{print $2}'
