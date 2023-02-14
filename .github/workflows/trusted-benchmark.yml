@@ -6,6 +6,10 @@ on:
     types:
       - completed
 
+permissions:
+  id-token: write
+  contents: write
+
 jobs:
   comment_on_pr:
     runs-on: [self-hosted, X64, Linux, dev]
@@ -21,6 +25,12 @@ jobs:
           gh run download ${{ github.event.workflow_run.id }} --dir benchmark/results --name benchmark-results
           gh run download ${{ github.event.workflow_run.id }} --dir benchmark/results --name clickbench-report
           echo "PR_NUMBER=$(jq -r '.extra.pr' benchmark/results/result.json)" >> $GITHUB_ENV
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: ${{ secrets.REPO_ROLE_ARN }}
+          role-duration-seconds: 900
+          aws-region: us-east-2
       - name: Upload PR clickbench report to repo.databend.rs
         working-directory: benchmark/results
         run: |
@@ -49,6 +59,12 @@ jobs:
         run: |
           gh run download ${{ github.event.workflow_run.id }} --dir benchmark/results --name benchmark-results
           echo "RELEASE_TAG=$(jq -r '.extra.release' benchmark/results/result.json)" >> $GITHUB_ENV
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: ${{ secrets.REPO_ROLE_ARN }}
+          role-duration-seconds: 900
+          aws-region: us-east-2
       - name: Upload nightly results to repo.databend.rs
         working-directory: benchmark/results
         run: |
