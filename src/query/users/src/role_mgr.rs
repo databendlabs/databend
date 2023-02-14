@@ -20,6 +20,7 @@ use common_management::RoleApi;
 use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserPrivilegeSet;
+use common_meta_app::principal::UserPrivilegeType;
 use common_meta_types::MatchSeq;
 
 use crate::role_util::find_all_related_roles;
@@ -95,7 +96,7 @@ impl UserApiProvider {
                 "system".to_string(),
                 "one".to_string(),
             ),
-            UserPrivilegeSet::available_privileges_on_global(),
+            UserPrivilegeType::Select.into(),
         );
         self.add_role(tenant, public, true).await
     }
