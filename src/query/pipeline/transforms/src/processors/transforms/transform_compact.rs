@@ -22,7 +22,6 @@ use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
 pub type Aborting = Arc<Box<dyn Fn() -> bool + Send + Sync + 'static>>;
@@ -57,7 +56,7 @@ impl<T: Compactor + Send + 'static> TransformCompact<T> {
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
         compactor: T,
-    ) -> Result<ProcessorPtr> {
+    ) -> Result<Box<dyn Processor>> {
         let state = ProcessorState::Consume(ConsumeState {
             input_port,
             output_port,
@@ -65,7 +64,7 @@ impl<T: Compactor + Send + 'static> TransformCompact<T> {
             output_data_blocks: VecDeque::new(),
         });
 
-        Ok(ProcessorPtr::create(Box::new(Self { state, compactor })))
+        Ok(Box::new(Self { state, compactor }))
     }
 
     #[inline(always)]

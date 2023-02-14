@@ -92,7 +92,7 @@ impl FileFormatOptionsExt {
 
     pub fn check(&mut self) -> Result<()> {
         let checker = get_format_option_checker(&self.stage.format)?;
-        checker.check_options(self)
+        checker.check_options_ext(self)
     }
 
     pub fn get_quote_char(&self) -> u8 {

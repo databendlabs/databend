@@ -191,6 +191,7 @@ struct ReplaceReadSource {
 impl PhysicalPlanReplacer for ReplaceReadSource {
     fn replace_table_scan(&mut self, plan: &TableScan) -> Result<PhysicalPlan> {
         Ok(PhysicalPlan::TableScan(TableScan {
+            plan_id: plan.plan_id,
             source: Box::new(self.source.clone()),
             name_mapping: plan.name_mapping.clone(),
             table_index: plan.table_index,

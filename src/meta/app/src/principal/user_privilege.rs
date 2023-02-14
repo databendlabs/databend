@@ -212,3 +212,11 @@ impl From<Vec<UserPrivilegeType>> for UserPrivilegeSet {
         result
     }
 }
+
+impl From<UserPrivilegeType> for UserPrivilegeSet {
+    fn from(value: UserPrivilegeType) -> Self {
+        let mut privileges = UserPrivilegeSet::empty();
+        privileges.set_privilege(value);
+        privileges
+    }
+}

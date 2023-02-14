@@ -25,7 +25,6 @@ use super::hash_join::ProbeState;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
-use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::transforms::hash_join::HashJoinState;
 use crate::pipelines::processors::Processor;
 use crate::sessions::QueryContext;
@@ -81,9 +80,9 @@ impl TransformHashJoinProbe {
         output_port: Arc<OutputPort>,
         join_state: Arc<dyn HashJoinState>,
         _output_schema: DataSchemaRef,
-    ) -> Result<ProcessorPtr> {
+    ) -> Result<Box<dyn Processor>> {
         let default_block_size = ctx.get_settings().get_max_block_size()?;
-        Ok(ProcessorPtr::create(Box::new(TransformHashJoinProbe {
+        Ok(Box::new(TransformHashJoinProbe {
             input_data: None,
             output_data_blocks: VecDeque::new(),
             input_port,
@@ -91,7 +90,7 @@ impl TransformHashJoinProbe {
             step: HashJoinStep::Build,
             join_state,
             probe_state: ProbeState::with_capacity(default_block_size as usize),
-        })))
+        }))
     }
 
     fn probe(&mut self, block: &DataBlock) -> Result<()> {

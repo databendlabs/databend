@@ -16,6 +16,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::constants::NAN_BYTES_LOWER;
 use common_io::constants::NAN_BYTES_SNAKE;
+use common_meta_app::principal::FileFormatOptions;
 use common_meta_app::principal::StageFileFormatType;
 
 use crate::FileFormatOptionsExt;
@@ -37,16 +38,21 @@ pub fn get_format_option_checker(
     }
 }
 
-pub trait FormatOptionChecker {
+pub trait FormatOptionChecker: Send {
     fn name(&self) -> String;
 
-    fn check_options(&self, options: &mut FileFormatOptionsExt) -> Result<()> {
-        self.check_escape(&mut options.stage.escape)?;
-        self.check_quote(&mut options.stage.quote)?;
-        self.check_row_tag(&mut options.stage.row_tag)?;
-        self.check_record_delimiter(&mut options.stage.record_delimiter)?;
-        self.check_field_delimiter(&mut options.stage.field_delimiter)?;
-        self.check_nan_display(&mut options.stage.nan_display)?;
+    fn check_options(&self, options: &mut FileFormatOptions) -> Result<()> {
+        self.check_escape(&mut options.escape)?;
+        self.check_quote(&mut options.quote)?;
+        self.check_row_tag(&mut options.row_tag)?;
+        self.check_record_delimiter(&mut options.record_delimiter)?;
+        self.check_field_delimiter(&mut options.field_delimiter)?;
+        self.check_nan_display(&mut options.nan_display)?;
+        Ok(())
+    }
+
+    fn check_options_ext(&self, options: &mut FileFormatOptionsExt) -> Result<()> {
+        self.check_options(&mut options.stage)?;
         Ok(())
     }
 

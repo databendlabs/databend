@@ -57,6 +57,7 @@ impl AccessChecker for PrivilegeAccess {
                 }
             }
             Plan::Explain { .. } => {}
+            Plan::ExplainAnalyze { .. } => {}
             Plan::Copy(_) => {}
             Plan::Call(_) => {}
             // Catalog
@@ -282,6 +283,9 @@ impl AccessChecker for PrivilegeAccess {
             Plan::CreateStage(_) => {}
             Plan::DropStage(_) => {}
             Plan::RemoveStage(_) => {}
+            Plan::CreateFileFormat(_) => {}
+            Plan::DropFileFormat(_) => {}
+            Plan::ShowFileFormats(_) => {}
             Plan::Presign(_) => {}
             Plan::SetVariable(_) => {}
             Plan::UnSetVariable(_) => {}
