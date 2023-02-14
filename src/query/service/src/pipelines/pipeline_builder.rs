@@ -455,7 +455,7 @@ impl PipelineBuilder {
             )
         })?;
 
-        // Concat merge in single thread
+        // Concat merge in single thread 
         try_add_multi_sort_merge(
             &mut self.main_pipeline,
             input_schema,

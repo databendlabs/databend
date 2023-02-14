@@ -461,6 +461,9 @@ where
     state: MergeBucketTransformState<Method>,
 }
 
+/// The state of the MergeBucketTransform.
+/// The BucketAggregator is partiton by bucket(16 buckets in final stage), this state keeps the `BucketAggregator`
+/// We will iteartor call `BucketAggregator::iter_result_block` to get the result block by bucket
 enum MergeBucketTransformState<Method>
 where
     Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static,
