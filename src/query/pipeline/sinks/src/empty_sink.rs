@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
 
 use super::Sink;
 use super::Sinker;
@@ -25,7 +25,7 @@ use super::Sinker;
 pub struct EmptySink;
 
 impl EmptySink {
-    pub fn create(input: Arc<InputPort>) -> ProcessorPtr {
+    pub fn create(input: Arc<InputPort>) -> Box<dyn Processor> {
         Sinker::create(input, EmptySink {})
     }
 }

@@ -92,7 +92,7 @@ impl Table for NullTable {
         _: AppendMode,
         _: bool,
     ) -> Result<()> {
-        pipeline.add_sink(|input| Ok(EmptySink::create(input)))?;
+        pipeline.add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;
         Ok(())
     }
 }

@@ -98,6 +98,11 @@ impl InterpreterFactory {
                 plan.clone(),
                 ExplainKind::Syntax(formatted_sql.clone()),
             )?)),
+            Plan::ExplainAnalyze { plan } => Ok(Arc::new(ExplainInterpreter::try_create(
+                ctx,
+                *plan.clone(),
+                ExplainKind::AnalyzePlan,
+            )?)),
 
             Plan::Call(plan) => Ok(Arc::new(CallInterpreter::try_create(ctx, *plan.clone())?)),
 

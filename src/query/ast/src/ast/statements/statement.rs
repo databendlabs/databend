@@ -34,6 +34,9 @@ pub enum Statement {
         kind: ExplainKind,
         query: Box<Statement>,
     },
+    ExplainAnalyze {
+        query: Box<Statement>,
+    },
 
     Copy(CopyStmt),
     Call(CallStmt),
@@ -206,9 +209,13 @@ impl Display for Statement {
                     ExplainKind::Fragments => write!(f, " FRAGMENTS")?,
                     ExplainKind::Raw => write!(f, " RAW")?,
                     ExplainKind::Plan => (),
+                    ExplainKind::AnalyzePlan => write!(f, " ANALYZE")?,
                     ExplainKind::Memo(_) => write!(f, "MEMO")?,
                 }
                 write!(f, " {query}")?;
+            }
+            Statement::ExplainAnalyze { query } => {
+                write!(f, "EXPLAIN ANALYZE {query}")?;
             }
             Statement::Query(query) => write!(f, "{query}")?,
             Statement::Insert(insert) => write!(f, "{insert}")?,

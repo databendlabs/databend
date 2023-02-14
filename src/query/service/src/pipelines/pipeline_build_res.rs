@@ -18,11 +18,16 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_sources::OneBlockSource;
+use common_profile::ProfSpanSetRef;
 
 pub struct PipelineBuildResult {
     pub main_pipeline: Pipeline,
     // Containing some sub queries pipelines, must be complete pipeline
     pub sources_pipelines: Vec<Pipeline>,
+
+    /// Set of profiling spans for the query.
+    /// Will be empty if profiling is disabled.
+    pub prof_span_set: ProfSpanSetRef,
 }
 
 impl PipelineBuildResult {
@@ -30,6 +35,7 @@ impl PipelineBuildResult {
         PipelineBuildResult {
             main_pipeline: Pipeline::create(),
             sources_pipelines: vec![],
+            prof_span_set: ProfSpanSetRef::default(),
         }
     }
 
@@ -47,6 +53,7 @@ impl PipelineBuildResult {
         Ok(PipelineBuildResult {
             main_pipeline,
             sources_pipelines: vec![],
+            prof_span_set: ProfSpanSetRef::default(),
         })
     }
 

@@ -57,6 +57,7 @@ impl AccessChecker for PrivilegeAccess {
                 }
             }
             Plan::Explain { .. } => {}
+            Plan::ExplainAnalyze { .. } => {}
             Plan::Copy(_) => {}
             Plan::Call(_) => {}
             // Catalog

@@ -106,6 +106,11 @@ impl<'a> Binder {
                 }
             }
 
+            Statement::ExplainAnalyze { query } => {
+                let plan = self.bind_statement(bind_context, query).await?;
+                Plan::ExplainAnalyze { plan: Box::new(plan) }
+            }
+
             Statement::ShowFunctions { limit } => {
                 self.bind_show_functions(bind_context, limit).await?
             }

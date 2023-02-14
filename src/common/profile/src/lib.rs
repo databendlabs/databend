@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,19 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ExplainKind {
-    Ast(String),
-    Syntax(String),
-    // The display string will be filled by optimizer, as we
-    // don't want to expose `Memo` to other crates.
-    Memo(String),
-    Graph,
-    Pipeline,
-    Fragments,
-    Raw,
-    Plan,
-
-    // Explain analyze plan
-    AnalyzePlan,
-}
+mod span;
+pub use span::*;
