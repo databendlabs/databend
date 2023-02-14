@@ -112,6 +112,9 @@ pub enum Plan {
     ExplainSyntax {
         formatted_sql: String,
     },
+    ExplainAnalyze {
+        plan: Box<Plan>,
+    },
 
     // Copy
     Copy(Box<CopyPlanV2>),
@@ -233,6 +236,7 @@ impl Display for Plan {
             Plan::Query { .. } => write!(f, "Query"),
             Plan::Copy(_) => write!(f, "Copy"),
             Plan::Explain { .. } => write!(f, "Explain"),
+            Plan::ExplainAnalyze { .. } => write!(f, "ExplainAnalyze"),
             Plan::ShowCreateCatalog(_) => write!(f, "ShowCreateCatalog"),
             Plan::CreateCatalog(_) => write!(f, "CreateCatalog"),
             Plan::DropCatalog(_) => write!(f, "DropCatalog"),
@@ -315,6 +319,9 @@ impl Plan {
                 ..
             } => bind_context.output_schema(),
             Plan::Explain { .. } | Plan::ExplainAst { .. } | Plan::ExplainSyntax { .. } => {
+                DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String)])
+            }
+            Plan::ExplainAnalyze { .. } => {
                 DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String)])
             }
             Plan::Copy(_) => Arc::new(DataSchema::empty()),

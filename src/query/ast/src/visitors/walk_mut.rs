@@ -72,7 +72,7 @@ pub fn walk_expr_mut<V: VisitorMut>(visitor: &mut V, expr: &mut Expr) {
             span,
             substr_expr,
             str_expr,
-        } => visitor.visit_positon(*span, substr_expr, str_expr),
+        } => visitor.visit_position(*span, substr_expr, str_expr),
         Expr::Substring {
             span,
             expr,
@@ -117,6 +117,12 @@ pub fn walk_expr_mut<V: VisitorMut>(visitor: &mut V, expr: &mut Expr) {
             accessor,
         } => visitor.visit_map_access(*span, expr, accessor),
         Expr::Array { span, exprs } => visitor.visit_array(*span, exprs),
+        Expr::ArraySort {
+            span,
+            expr,
+            asc,
+            null_first,
+        } => visitor.visit_array_sort(*span, expr, *asc, *null_first),
         Expr::Interval { span, expr, unit } => visitor.visit_interval(*span, expr, unit),
         Expr::DateAdd {
             span,
@@ -293,6 +299,7 @@ pub fn walk_cte_mut<V: VisitorMut>(visitor: &mut V, cte: &mut CTE) {
 pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statement) {
     match statement {
         Statement::Explain { kind, query } => visitor.visit_explain(kind, &mut *query),
+        Statement::ExplainAnalyze { query } => visitor.visit_statement(&mut *query),
         Statement::Query(query) => visitor.visit_query(&mut *query),
         Statement::Insert(insert) => visitor.visit_insert(insert),
         Statement::Delete {

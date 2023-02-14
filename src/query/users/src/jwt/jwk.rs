@@ -109,6 +109,9 @@ impl JwkKeyStore {
             last_refreshed_at: RwLock::new(None),
         }
     }
+    pub fn url(&self) -> String {
+        self.url.clone()
+    }
 }
 
 impl JwkKeyStore {

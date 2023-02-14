@@ -42,7 +42,9 @@ pub fn register(registry: &mut FunctionRegistry) {
         if args_type.is_empty() {
             return None;
         }
-        Some(Arc::new(Function {
+        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
+
+        let f = Function {
             signature: FunctionSignature {
                 name: "concat".to_string(),
                 args_type: vec![DataType::String; args_type.len()],
@@ -57,7 +59,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }))
             }),
             eval: Box::new(concat_fn),
-        }))
+        };
+
+        if has_null {
+            Some(Arc::new(f.wrap_nullable()))
+        } else {
+            Some(Arc::new(f))
+        }
     });
 
     // nullable concat
@@ -239,7 +247,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         if args_type.is_empty() {
             return None;
         }
-        Some(Arc::new(Function {
+        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
+        let f = Function {
             signature: FunctionSignature {
                 name: "char".to_string(),
                 args_type: vec![DataType::Number(NumberDataType::UInt8); args_type.len()],
@@ -248,7 +257,13 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
             calc_domain: Box::new(|_| FunctionDomain::Full),
             eval: Box::new(char_fn),
-        }))
+        };
+
+        if has_null {
+            Some(Arc::new(f.wrap_nullable()))
+        } else {
+            Some(Arc::new(f))
+        }
     });
 
     // nullable char
@@ -275,6 +290,8 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
     registry.register_function_factory("regexp_instr", |_, args_type| {
+        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
+
         let args_type = match args_type.len() {
             2 => vec![DataType::String; 2],
             3 => vec![
@@ -306,7 +323,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             _ => return None,
         };
 
-        Some(Arc::new(Function {
+        let f = Function {
             signature: FunctionSignature {
                 name: "regexp_instr".to_string(),
                 args_type,
@@ -315,63 +332,24 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
             calc_domain: Box::new(|_| FunctionDomain::MayThrow),
             eval: Box::new(regexp_instr_fn),
-        }))
-    });
-
-    // nullable regexp_instr
-    registry.register_function_factory("regexp_instr", |_, args_type| {
-        let args_type = match args_type.len() {
-            2 => vec![DataType::Nullable(Box::new(DataType::String)); 2],
-            3 => vec![
-                DataType::Nullable(Box::new(DataType::String)),
-                DataType::Nullable(Box::new(DataType::String)),
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-            ],
-            4 => vec![
-                DataType::Nullable(Box::new(DataType::String)),
-                DataType::Nullable(Box::new(DataType::String)),
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-            ],
-            5 => vec![
-                DataType::Nullable(Box::new(DataType::String)),
-                DataType::Nullable(Box::new(DataType::String)),
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-            ],
-            6 => vec![
-                DataType::Nullable(Box::new(DataType::String)),
-                DataType::Nullable(Box::new(DataType::String)),
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-                DataType::Nullable(Box::new(DataType::String)),
-            ],
-            _ => return None,
         };
-
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "regexp_instr".to_string(),
-                args_type,
-                return_type: DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-                property: FunctionProperty::default(),
-            },
-            calc_domain: Box::new(|_| FunctionDomain::MayThrow),
-            eval: Box::new(wrap_nullable(regexp_instr_fn)),
-        }))
+        if has_null {
+            Some(Arc::new(f.wrap_nullable()))
+        } else {
+            Some(Arc::new(f))
+        }
     });
 
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
     registry.register_function_factory("regexp_like", |_, args_type| {
+        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
         let args_type = match args_type.len() {
             2 => vec![DataType::String; 2],
             3 => vec![DataType::String; 3],
             _ => return None,
         };
 
-        Some(Arc::new(Function {
+        let f = Function {
             signature: FunctionSignature {
                 name: "regexp_like".to_string(),
                 args_type,
@@ -380,31 +358,19 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
             calc_domain: Box::new(|_| FunctionDomain::MayThrow),
             eval: Box::new(regexp_like_fn),
-        }))
-    });
-
-    // nullable regexp_replace
-    registry.register_function_factory("regexp_like", |_, args_type| {
-        let args_type = match args_type.len() {
-            2 => vec![DataType::Nullable(Box::new(DataType::String)); 2],
-            3 => vec![DataType::Nullable(Box::new(DataType::String)); 3],
-            _ => return None,
         };
 
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "regexp_like".to_string(),
-                args_type,
-                return_type: DataType::Nullable(Box::new(DataType::Boolean)),
-                property: FunctionProperty::default(),
-            },
-            calc_domain: Box::new(|_| FunctionDomain::MayThrow),
-            eval: Box::new(wrap_nullable(regexp_like_fn)),
-        }))
+        if has_null {
+            Some(Arc::new(f.wrap_nullable()))
+        } else {
+            Some(Arc::new(f))
+        }
     });
 
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-replace
     registry.register_function_factory("regexp_replace", |_, args_type| {
+        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
+
         let args_type = match args_type.len() {
             3 => vec![DataType::String; 3],
             4 => vec![
@@ -431,7 +397,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             _ => return None,
         };
 
-        Some(Arc::new(Function {
+        let f = Function {
             signature: FunctionSignature {
                 name: "regexp_replace".to_string(),
                 args_type,
@@ -440,51 +406,18 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
             calc_domain: Box::new(|_| FunctionDomain::MayThrow),
             eval: Box::new(regexp_replace_fn),
-        }))
-    });
-
-    // nullable regexp_replace
-    registry.register_function_factory("regexp_replace", |_, args_type| {
-        let args_type = match args_type.len() {
-            3 => vec![DataType::Nullable(Box::new(DataType::String)); 3],
-            4 => vec![
-                DataType::Nullable(Box::new(DataType::String)),
-                DataType::Nullable(Box::new(DataType::String)),
-                DataType::Nullable(Box::new(DataType::String)),
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-            ],
-            5 => vec![
-                DataType::Nullable(Box::new(DataType::String)),
-                DataType::Nullable(Box::new(DataType::String)),
-                DataType::Nullable(Box::new(DataType::String)),
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-            ],
-            6 => vec![
-                DataType::Nullable(Box::new(DataType::String)),
-                DataType::Nullable(Box::new(DataType::String)),
-                DataType::Nullable(Box::new(DataType::String)),
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-                DataType::Nullable(Box::new(DataType::String)),
-            ],
-            _ => return None,
         };
 
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "regexp_replace".to_string(),
-                args_type,
-                return_type: DataType::Nullable(Box::new(DataType::String)),
-                property: FunctionProperty::default(),
-            },
-            calc_domain: Box::new(|_| FunctionDomain::MayThrow),
-            eval: Box::new(wrap_nullable(regexp_replace_fn)),
-        }))
+        if has_null {
+            Some(Arc::new(f.wrap_nullable()))
+        } else {
+            Some(Arc::new(f))
+        }
     });
 
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-substr
     registry.register_function_factory("regexp_substr", |_, args_type| {
+        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
         let args_type = match args_type.len() {
             2 => vec![DataType::String; 2],
             3 => vec![
@@ -508,7 +441,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             _ => return None,
         };
 
-        Some(Arc::new(Function {
+        let f = Function {
             signature: FunctionSignature {
                 name: "regexp_substr".to_string(),
                 args_type,
@@ -517,44 +450,13 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
             calc_domain: Box::new(|_| FunctionDomain::MayThrow),
             eval: Box::new(regexp_substr_fn),
-        }))
-    });
-
-    // nullable regexp_substr
-    registry.register_function_factory("regexp_substr", |_, args_type| {
-        let args_type = match args_type.len() {
-            2 => vec![DataType::Nullable(Box::new(DataType::String)); 2],
-            3 => vec![
-                DataType::Nullable(Box::new(DataType::String)),
-                DataType::Nullable(Box::new(DataType::String)),
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-            ],
-            4 => vec![
-                DataType::Nullable(Box::new(DataType::String)),
-                DataType::Nullable(Box::new(DataType::String)),
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-            ],
-            5 => vec![
-                DataType::Nullable(Box::new(DataType::String)),
-                DataType::Nullable(Box::new(DataType::String)),
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-                DataType::Nullable(Box::new(DataType::String)),
-            ],
-            _ => return None,
         };
 
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "regexp_substr".to_string(),
-                args_type,
-                return_type: DataType::Nullable(Box::new(DataType::String)),
-                property: FunctionProperty::default(),
-            },
-            calc_domain: Box::new(|_| FunctionDomain::MayThrow),
-            eval: Box::new(wrap_nullable(regexp_substr_fn)),
-        }))
+        if has_null {
+            Some(Arc::new(f.wrap_nullable()))
+        } else {
+            Some(Arc::new(f))
+        }
     });
 }
 
@@ -1127,7 +1029,7 @@ pub mod regexp {
     pub fn regexp_instr(s: &[u8], re: &Regex, pos: i64, occur: i64, ro: i64) -> u64 {
         let pos = (pos - 1) as usize; // set the index start from 0
 
-        // the 'pos' postion is the character index,
+        // the 'pos' position is the character index,
         // so we should iterate the character to find the byte index.
         let mut pos = match s.char_indices().nth(pos) {
             Some((start, _, _)) => start,
@@ -1168,7 +1070,7 @@ pub mod regexp {
     ) {
         let pos = (pos - 1) as usize; // set the index start from 0
 
-        // the 'pos' postion is the character index,
+        // the 'pos' position is the character index,
         // so we should iterate the character to find the byte index.
         let mut pos = match s.char_indices().nth(pos) {
             Some((start, _, _)) => start,
@@ -1200,7 +1102,7 @@ pub mod regexp {
         let occur = if occur < 1 { 1 } else { occur };
         let pos = if pos < 1 { 0 } else { (pos - 1) as usize };
 
-        // the 'pos' postion is the character index,
+        // the 'pos' position is the character index,
         // so we should iterate the character to find the byte index.
         let mut pos = match s.char_indices().nth(pos) {
             Some((start, _, _)) => start,
@@ -1228,7 +1130,7 @@ pub mod regexp {
 
             i += 1;
             if let Some(m) = m {
-                // set the start postion of 'find_at' function to the position following the matched substring
+                // set the start position of 'find_at' function to the position following the matched substring
                 *pos = m.end();
             }
         };

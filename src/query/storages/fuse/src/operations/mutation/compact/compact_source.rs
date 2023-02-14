@@ -171,12 +171,12 @@ impl CompactTaskBuilder {
 
         let tasks = if !thresholds.check_for_compact(self.total_rows, self.total_size) {
             // blocks > 2N
-            let trival_task = CompactTask::Trival(block.clone());
+            let trivial_task = CompactTask::Trivial(block.clone());
             if !self.blocks.is_empty() {
                 let compact_task = Self::create_task(std::mem::take(&mut self.blocks));
-                vec![compact_task, trival_task]
+                vec![compact_task, trivial_task]
             } else {
-                vec![trival_task]
+                vec![trivial_task]
             }
         } else {
             // N <= blocks < 2N
@@ -198,7 +198,7 @@ impl CompactTaskBuilder {
     fn create_task(blocks: Vec<Arc<BlockMeta>>) -> CompactTask {
         match blocks.len() {
             0 => panic!("the blocks is empty"),
-            1 => CompactTask::Trival(blocks[0].clone()),
+            1 => CompactTask::Trivial(blocks[0].clone()),
             _ => CompactTask::Normal(blocks),
         }
     }

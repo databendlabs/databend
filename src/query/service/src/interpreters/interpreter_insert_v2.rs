@@ -52,8 +52,8 @@ use common_formats::parse_timezone;
 use common_formats::FastFieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
-use common_meta_types::FileFormatOptions;
-use common_meta_types::UserStageInfo;
+use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
@@ -416,7 +416,7 @@ impl Interpreter for InsertInterpreterV2 {
                             bind_context,
                             ..
                         } => {
-                            let builder1 =
+                            let mut builder1 =
                                 PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone());
                             (builder1.build(s_expr).await?, bind_context.columns.clone())
                         }
@@ -459,7 +459,8 @@ impl Interpreter for InsertInterpreterV2 {
                     };
 
                     let mut build_res =
-                        build_query_pipeline(&self.ctx, &[], &insert_select_plan, false).await?;
+                        build_query_pipeline(&self.ctx, &[], &insert_select_plan, false, false)
+                            .await?;
 
                     let ctx = self.ctx.clone();
                     let overwrite = self.plan.overwrite;

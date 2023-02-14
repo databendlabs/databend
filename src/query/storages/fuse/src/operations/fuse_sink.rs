@@ -22,7 +22,9 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
+use common_expression::FieldIndex;
 use common_expression::TableSchemaRef;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
@@ -32,7 +34,6 @@ use storages_common_blocks::blocks_to_parquet;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
 use storages_common_index::*;
-use storages_common_table_meta::meta::ColumnId;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
@@ -61,7 +62,7 @@ pub struct BloomIndexState {
     pub(crate) data: Vec<u8>,
     pub(crate) size: u64,
     pub(crate) location: Location,
-    pub(crate) column_distinct_count: HashMap<usize, usize>,
+    pub(crate) column_distinct_count: HashMap<FieldIndex, usize>,
 }
 
 impl BloomIndexState {

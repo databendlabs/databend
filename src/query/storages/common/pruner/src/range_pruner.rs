@@ -22,7 +22,7 @@ use storages_common_index::RangeIndex;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 
 pub trait RangePruner {
-    // returns ture, if target should NOT be pruned (false positive allowed)
+    // returns true, if target should NOT be pruned (false positive allowed)
     fn should_keep(&self, input: &StatisticsOfColumns) -> bool;
 }
 
@@ -48,7 +48,7 @@ impl RangePruner for RangeIndex {
             Ok(r) => r,
             Err(e) => {
                 // swallow exceptions intentionally, corrupted index should not prevent execution
-                tracing::warn!("failed to range filter, returning ture. {}", e);
+                tracing::warn!("failed to range filter, returning true. {}", e);
                 true
             }
         }

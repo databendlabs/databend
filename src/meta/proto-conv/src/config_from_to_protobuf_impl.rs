@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_types::StorageFsConfig;
-use common_meta_types::StorageGcsConfig;
-use common_meta_types::StorageOssConfig;
-use common_meta_types::StorageS3Config;
+use common_meta_app::storage::StorageFsConfig;
+use common_meta_app::storage::StorageGcsConfig;
+use common_meta_app::storage::StorageOssConfig;
+use common_meta_app::storage::StorageS3Config;
 use common_protos::pb;
 
 use crate::reader_check_msg;

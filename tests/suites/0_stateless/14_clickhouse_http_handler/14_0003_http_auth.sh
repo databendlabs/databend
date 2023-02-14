@@ -7,6 +7,8 @@ curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}"
 
 curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" -d "create user user1 identified by 'abc123'"
 
+curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" -d "grant select on *.* to 'user1'"
+
 curl -s -u user1:abc123 -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" -d 'select 1 FORMAT CSV'
 
 curl -s -H 'X-ClickHouse-User: user1' -H 'X-ClickHouse-Key: abc123' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" -d 'select 1 FORMAT CSV'

@@ -21,12 +21,7 @@ use std::convert::TryFrom;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_meta_types as mt;
-use common_meta_types::StorageFsConfig;
-use common_meta_types::StorageGcsConfig;
-use common_meta_types::StorageOssConfig;
-use common_meta_types::StorageParams;
-use common_meta_types::StorageS3Config;
+use common_meta_app as mt;
 use common_protos::pb;
 use enumflags2::BitFlags;
 use num::FromPrimitive;
@@ -37,7 +32,7 @@ use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
 
-impl FromToProto for mt::AuthInfo {
+impl FromToProto for mt::principal::AuthInfo {
     type PB = pb::AuthInfo;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
@@ -47,12 +42,16 @@ impl FromToProto for mt::AuthInfo {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         match p.info {
-            Some(pb::auth_info::Info::None(pb::auth_info::None {})) => Ok(mt::AuthInfo::None),
-            Some(pb::auth_info::Info::Jwt(pb::auth_info::Jwt {})) => Ok(mt::AuthInfo::JWT),
+            Some(pb::auth_info::Info::None(pb::auth_info::None {})) => {
+                Ok(mt::principal::AuthInfo::None)
+            }
+            Some(pb::auth_info::Info::Jwt(pb::auth_info::Jwt {})) => {
+                Ok(mt::principal::AuthInfo::JWT)
+            }
             Some(pb::auth_info::Info::Password(pb::auth_info::Password {
                 hash_value,
                 hash_method,
-            })) => Ok(mt::AuthInfo::Password {
+            })) => Ok(mt::principal::AuthInfo::Password {
                 hash_value,
                 hash_method: FromPrimitive::from_i32(hash_method).ok_or_else(|| Incompatible {
                     reason: format!("invalid PasswordHashMethod: {}", hash_method),
@@ -66,9 +65,11 @@ impl FromToProto for mt::AuthInfo {
 
     fn to_pb(&self) -> Result<pb::AuthInfo, Incompatible> {
         let info = match self {
-            mt::AuthInfo::None => Some(pb::auth_info::Info::None(pb::auth_info::None {})),
-            mt::AuthInfo::JWT => Some(pb::auth_info::Info::Jwt(pb::auth_info::Jwt {})),
-            mt::AuthInfo::Password {
+            mt::principal::AuthInfo::None => {
+                Some(pb::auth_info::Info::None(pb::auth_info::None {}))
+            }
+            mt::principal::AuthInfo::JWT => Some(pb::auth_info::Info::Jwt(pb::auth_info::Jwt {})),
+            mt::principal::AuthInfo::Password {
                 hash_value,
                 hash_method,
             } => Some(pb::auth_info::Info::Password(pb::auth_info::Password {
@@ -84,7 +85,7 @@ impl FromToProto for mt::AuthInfo {
     }
 }
 
-impl FromToProto for mt::UserOption {
+impl FromToProto for mt::principal::UserOption {
     type PB = pb::UserOption;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
@@ -94,9 +95,9 @@ impl FromToProto for mt::UserOption {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         // ignore unknown flags
-        let flags = BitFlags::<mt::UserOptionFlag, u64>::from_bits_truncate(p.flags);
+        let flags = BitFlags::<mt::principal::UserOptionFlag, u64>::from_bits_truncate(p.flags);
 
-        Ok(mt::UserOption::default()
+        Ok(mt::principal::UserOption::default()
             .with_flags(flags)
             .with_default_role(p.default_role))
     }
@@ -111,7 +112,7 @@ impl FromToProto for mt::UserOption {
     }
 }
 
-impl FromToProto for mt::UserQuota {
+impl FromToProto for mt::principal::UserQuota {
     type PB = pb::UserQuota;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
@@ -138,7 +139,7 @@ impl FromToProto for mt::UserQuota {
     }
 }
 
-impl FromToProto for mt::GrantObject {
+impl FromToProto for mt::principal::GrantObject {
     type PB = pb::GrantObject;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
@@ -149,17 +150,17 @@ impl FromToProto for mt::GrantObject {
 
         match p.object {
             Some(pb::grant_object::Object::Global(pb::grant_object::GrantGlobalObject {})) => {
-                Ok(mt::GrantObject::Global)
+                Ok(mt::principal::GrantObject::Global)
             }
             Some(pb::grant_object::Object::Database(pb::grant_object::GrantDatabaseObject {
                 catalog,
                 db,
-            })) => Ok(mt::GrantObject::Database(catalog, db)),
+            })) => Ok(mt::principal::GrantObject::Database(catalog, db)),
             Some(pb::grant_object::Object::Table(pb::grant_object::GrantTableObject {
                 catalog,
                 db,
                 table,
-            })) => Ok(mt::GrantObject::Table(catalog, db, table)),
+            })) => Ok(mt::principal::GrantObject::Table(catalog, db, table)),
             _ => Err(Incompatible {
                 reason: "GrantObject cannot be None".to_string(),
             }),
@@ -168,22 +169,22 @@ impl FromToProto for mt::GrantObject {
 
     fn to_pb(&self) -> Result<pb::GrantObject, Incompatible> {
         let object = match self {
-            mt::GrantObject::Global => Some(pb::grant_object::Object::Global(
+            mt::principal::GrantObject::Global => Some(pb::grant_object::Object::Global(
                 pb::grant_object::GrantGlobalObject {},
             )),
-            mt::GrantObject::Database(catalog, db) => Some(pb::grant_object::Object::Database(
-                pb::grant_object::GrantDatabaseObject {
+            mt::principal::GrantObject::Database(catalog, db) => Some(
+                pb::grant_object::Object::Database(pb::grant_object::GrantDatabaseObject {
                     catalog: catalog.clone(),
                     db: db.clone(),
-                },
-            )),
-            mt::GrantObject::Table(catalog, db, table) => Some(pb::grant_object::Object::Table(
-                pb::grant_object::GrantTableObject {
+                }),
+            ),
+            mt::principal::GrantObject::Table(catalog, db, table) => Some(
+                pb::grant_object::Object::Table(pb::grant_object::GrantTableObject {
                     catalog: catalog.clone(),
                     db: db.clone(),
                     table: table.clone(),
-                },
-            )),
+                }),
+            ),
         };
         Ok(pb::GrantObject {
             ver: VER,
@@ -193,7 +194,7 @@ impl FromToProto for mt::GrantObject {
     }
 }
 
-impl FromToProto for mt::GrantEntry {
+impl FromToProto for mt::principal::GrantEntry {
     type PB = pb::GrantEntry;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
@@ -202,10 +203,10 @@ impl FromToProto for mt::GrantEntry {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let privileges = BitFlags::<mt::UserPrivilegeType, u64>::from_bits(p.privileges);
+        let privileges = BitFlags::<mt::principal::UserPrivilegeType, u64>::from_bits(p.privileges);
         match privileges {
-            Ok(privileges) => Ok(mt::GrantEntry::new(
-                mt::GrantObject::from_pb(p.object.ok_or_else(|| Incompatible {
+            Ok(privileges) => Ok(mt::principal::GrantEntry::new(
+                mt::principal::GrantObject::from_pb(p.object.ok_or_else(|| Incompatible {
                     reason: "GrantEntry.object can not be None".to_string(),
                 })?)?,
                 privileges,
@@ -226,7 +227,7 @@ impl FromToProto for mt::GrantEntry {
     }
 }
 
-impl FromToProto for mt::UserGrantSet {
+impl FromToProto for mt::principal::UserGrantSet {
     type PB = pb::UserGrantSet;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
@@ -237,13 +238,13 @@ impl FromToProto for mt::UserGrantSet {
 
         let mut entries = Vec::new();
         for entry in p.entries.iter() {
-            entries.push(mt::GrantEntry::from_pb(entry.clone())?);
+            entries.push(mt::principal::GrantEntry::from_pb(entry.clone())?);
         }
         let mut roles = HashSet::new();
         for role in p.roles.iter() {
             roles.insert(role.0.clone());
         }
-        Ok(mt::UserGrantSet::new(entries, roles))
+        Ok(mt::principal::UserGrantSet::new(entries, roles))
     }
 
     fn to_pb(&self) -> Result<pb::UserGrantSet, Incompatible> {
@@ -266,7 +267,7 @@ impl FromToProto for mt::UserGrantSet {
     }
 }
 
-impl FromToProto for mt::UserInfo {
+impl FromToProto for mt::principal::UserInfo {
     type PB = pb::UserInfo;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
@@ -275,19 +276,23 @@ impl FromToProto for mt::UserInfo {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        Ok(mt::UserInfo {
+        Ok(mt::principal::UserInfo {
             name: p.name.clone(),
             hostname: p.hostname.clone(),
-            auth_info: mt::AuthInfo::from_pb(p.auth_info.ok_or_else(|| Incompatible {
-                reason: "UserInfo.auth_info cannot be None".to_string(),
+            auth_info: mt::principal::AuthInfo::from_pb(p.auth_info.ok_or_else(|| {
+                Incompatible {
+                    reason: "UserInfo.auth_info cannot be None".to_string(),
+                }
             })?)?,
-            grants: mt::UserGrantSet::from_pb(p.grants.ok_or_else(|| Incompatible {
-                reason: "UserInfo.grants cannot be None".to_string(),
+            grants: mt::principal::UserGrantSet::from_pb(p.grants.ok_or_else(|| {
+                Incompatible {
+                    reason: "UserInfo.grants cannot be None".to_string(),
+                }
             })?)?,
-            quota: mt::UserQuota::from_pb(p.quota.ok_or_else(|| Incompatible {
+            quota: mt::principal::UserQuota::from_pb(p.quota.ok_or_else(|| Incompatible {
                 reason: "UserInfo.quota cannot be None".to_string(),
             })?)?,
-            option: mt::UserOption::from_pb(p.option.ok_or_else(|| Incompatible {
+            option: mt::principal::UserOption::from_pb(p.option.ok_or_else(|| Incompatible {
                 reason: "UserInfo.option cannot be None".to_string(),
             })?)?,
         })
@@ -299,15 +304,15 @@ impl FromToProto for mt::UserInfo {
             min_reader_ver: MIN_READER_VER,
             name: self.name.clone(),
             hostname: self.hostname.clone(),
-            auth_info: Some(mt::AuthInfo::to_pb(&self.auth_info)?),
-            grants: Some(mt::UserGrantSet::to_pb(&self.grants)?),
-            quota: Some(mt::UserQuota::to_pb(&self.quota)?),
-            option: Some(mt::UserOption::to_pb(&self.option)?),
+            auth_info: Some(mt::principal::AuthInfo::to_pb(&self.auth_info)?),
+            grants: Some(mt::principal::UserGrantSet::to_pb(&self.grants)?),
+            quota: Some(mt::principal::UserQuota::to_pb(&self.quota)?),
+            option: Some(mt::principal::UserOption::to_pb(&self.option)?),
         })
     }
 }
 
-impl FromToProto for mt::UserIdentity {
+impl FromToProto for mt::principal::UserIdentity {
     type PB = pb::UserIdentity;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
@@ -316,7 +321,7 @@ impl FromToProto for mt::UserIdentity {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        Ok(mt::UserIdentity {
+        Ok(mt::principal::UserIdentity {
             username: p.username.clone(),
             hostname: p.hostname,
         })
@@ -332,7 +337,7 @@ impl FromToProto for mt::UserIdentity {
     }
 }
 
-impl FromToProto for mt::StageFileFormatType {
+impl FromToProto for mt::principal::StageFileFormatType {
     type PB = pb::user_stage_info::StageFileFormatType;
     fn get_pb_ver(_p: &Self::PB) -> u64 {
         0
@@ -340,39 +345,67 @@ impl FromToProto for mt::StageFileFormatType {
     fn from_pb(p: pb::user_stage_info::StageFileFormatType) -> Result<Self, Incompatible>
     where Self: Sized {
         match p {
-            pb::user_stage_info::StageFileFormatType::Csv => Ok(mt::StageFileFormatType::Csv),
-            pb::user_stage_info::StageFileFormatType::Tsv => Ok(mt::StageFileFormatType::Tsv),
-            pb::user_stage_info::StageFileFormatType::Json => Ok(mt::StageFileFormatType::Json),
-            pb::user_stage_info::StageFileFormatType::NdJson => Ok(mt::StageFileFormatType::NdJson),
-            pb::user_stage_info::StageFileFormatType::Avro => Ok(mt::StageFileFormatType::Avro),
-            pb::user_stage_info::StageFileFormatType::Orc => Ok(mt::StageFileFormatType::Orc),
-            pb::user_stage_info::StageFileFormatType::Parquet => {
-                Ok(mt::StageFileFormatType::Parquet)
+            pb::user_stage_info::StageFileFormatType::Csv => {
+                Ok(mt::principal::StageFileFormatType::Csv)
             }
-            pb::user_stage_info::StageFileFormatType::Xml => Ok(mt::StageFileFormatType::Xml),
+            pb::user_stage_info::StageFileFormatType::Tsv => {
+                Ok(mt::principal::StageFileFormatType::Tsv)
+            }
+            pb::user_stage_info::StageFileFormatType::Json => {
+                Ok(mt::principal::StageFileFormatType::Json)
+            }
+            pb::user_stage_info::StageFileFormatType::NdJson => {
+                Ok(mt::principal::StageFileFormatType::NdJson)
+            }
+            pb::user_stage_info::StageFileFormatType::Avro => {
+                Ok(mt::principal::StageFileFormatType::Avro)
+            }
+            pb::user_stage_info::StageFileFormatType::Orc => {
+                Ok(mt::principal::StageFileFormatType::Orc)
+            }
+            pb::user_stage_info::StageFileFormatType::Parquet => {
+                Ok(mt::principal::StageFileFormatType::Parquet)
+            }
+            pb::user_stage_info::StageFileFormatType::Xml => {
+                Ok(mt::principal::StageFileFormatType::Xml)
+            }
         }
     }
 
     fn to_pb(&self) -> Result<pb::user_stage_info::StageFileFormatType, Incompatible> {
         match *self {
-            mt::StageFileFormatType::Csv => Ok(pb::user_stage_info::StageFileFormatType::Csv),
-            mt::StageFileFormatType::Tsv => Ok(pb::user_stage_info::StageFileFormatType::Tsv),
-            mt::StageFileFormatType::Json => Ok(pb::user_stage_info::StageFileFormatType::Json),
-            mt::StageFileFormatType::NdJson => Ok(pb::user_stage_info::StageFileFormatType::NdJson),
-            mt::StageFileFormatType::Avro => Ok(pb::user_stage_info::StageFileFormatType::Avro),
-            mt::StageFileFormatType::Orc => Ok(pb::user_stage_info::StageFileFormatType::Orc),
-            mt::StageFileFormatType::Parquet => {
+            mt::principal::StageFileFormatType::Csv => {
+                Ok(pb::user_stage_info::StageFileFormatType::Csv)
+            }
+            mt::principal::StageFileFormatType::Tsv => {
+                Ok(pb::user_stage_info::StageFileFormatType::Tsv)
+            }
+            mt::principal::StageFileFormatType::Json => {
+                Ok(pb::user_stage_info::StageFileFormatType::Json)
+            }
+            mt::principal::StageFileFormatType::NdJson => {
+                Ok(pb::user_stage_info::StageFileFormatType::NdJson)
+            }
+            mt::principal::StageFileFormatType::Avro => {
+                Ok(pb::user_stage_info::StageFileFormatType::Avro)
+            }
+            mt::principal::StageFileFormatType::Orc => {
+                Ok(pb::user_stage_info::StageFileFormatType::Orc)
+            }
+            mt::principal::StageFileFormatType::Parquet => {
                 Ok(pb::user_stage_info::StageFileFormatType::Parquet)
             }
-            mt::StageFileFormatType::Xml => Ok(pb::user_stage_info::StageFileFormatType::Xml),
-            mt::StageFileFormatType::None => Err(Incompatible {
+            mt::principal::StageFileFormatType::Xml => {
+                Ok(pb::user_stage_info::StageFileFormatType::Xml)
+            }
+            mt::principal::StageFileFormatType::None => Err(Incompatible {
                 reason: "StageFileFormatType::None cannot be converted to protobuf".to_string(),
             }),
         }
     }
 }
 
-impl FromToProto for mt::StageFileCompression {
+impl FromToProto for mt::principal::StageFileCompression {
     type PB = pb::user_stage_info::StageFileCompression;
     fn get_pb_ver(_p: &Self::PB) -> u64 {
         0
@@ -380,54 +413,82 @@ impl FromToProto for mt::StageFileCompression {
     fn from_pb(p: pb::user_stage_info::StageFileCompression) -> Result<Self, Incompatible>
     where Self: Sized {
         match p {
-            pb::user_stage_info::StageFileCompression::Auto => Ok(mt::StageFileCompression::Auto),
-            pb::user_stage_info::StageFileCompression::Gzip => Ok(mt::StageFileCompression::Gzip),
-            pb::user_stage_info::StageFileCompression::Bz2 => Ok(mt::StageFileCompression::Bz2),
-            pb::user_stage_info::StageFileCompression::Brotli => {
-                Ok(mt::StageFileCompression::Brotli)
+            pb::user_stage_info::StageFileCompression::Auto => {
+                Ok(mt::principal::StageFileCompression::Auto)
             }
-            pb::user_stage_info::StageFileCompression::Zstd => Ok(mt::StageFileCompression::Zstd),
+            pb::user_stage_info::StageFileCompression::Gzip => {
+                Ok(mt::principal::StageFileCompression::Gzip)
+            }
+            pb::user_stage_info::StageFileCompression::Bz2 => {
+                Ok(mt::principal::StageFileCompression::Bz2)
+            }
+            pb::user_stage_info::StageFileCompression::Brotli => {
+                Ok(mt::principal::StageFileCompression::Brotli)
+            }
+            pb::user_stage_info::StageFileCompression::Zstd => {
+                Ok(mt::principal::StageFileCompression::Zstd)
+            }
             pb::user_stage_info::StageFileCompression::Deflate => {
-                Ok(mt::StageFileCompression::Deflate)
+                Ok(mt::principal::StageFileCompression::Deflate)
             }
             pb::user_stage_info::StageFileCompression::RawDeflate => {
-                Ok(mt::StageFileCompression::RawDeflate)
+                Ok(mt::principal::StageFileCompression::RawDeflate)
             }
-            pb::user_stage_info::StageFileCompression::Lzo => Ok(mt::StageFileCompression::Lzo),
+            pb::user_stage_info::StageFileCompression::Lzo => {
+                Ok(mt::principal::StageFileCompression::Lzo)
+            }
             pb::user_stage_info::StageFileCompression::Snappy => {
-                Ok(mt::StageFileCompression::Snappy)
+                Ok(mt::principal::StageFileCompression::Snappy)
             }
-            pb::user_stage_info::StageFileCompression::None => Ok(mt::StageFileCompression::None),
-            pb::user_stage_info::StageFileCompression::Xz => Ok(mt::StageFileCompression::Xz),
+            pb::user_stage_info::StageFileCompression::None => {
+                Ok(mt::principal::StageFileCompression::None)
+            }
+            pb::user_stage_info::StageFileCompression::Xz => {
+                Ok(mt::principal::StageFileCompression::Xz)
+            }
         }
     }
 
     fn to_pb(&self) -> Result<pb::user_stage_info::StageFileCompression, Incompatible> {
         match *self {
-            mt::StageFileCompression::Auto => Ok(pb::user_stage_info::StageFileCompression::Auto),
-            mt::StageFileCompression::Gzip => Ok(pb::user_stage_info::StageFileCompression::Gzip),
-            mt::StageFileCompression::Bz2 => Ok(pb::user_stage_info::StageFileCompression::Bz2),
-            mt::StageFileCompression::Brotli => {
+            mt::principal::StageFileCompression::Auto => {
+                Ok(pb::user_stage_info::StageFileCompression::Auto)
+            }
+            mt::principal::StageFileCompression::Gzip => {
+                Ok(pb::user_stage_info::StageFileCompression::Gzip)
+            }
+            mt::principal::StageFileCompression::Bz2 => {
+                Ok(pb::user_stage_info::StageFileCompression::Bz2)
+            }
+            mt::principal::StageFileCompression::Brotli => {
                 Ok(pb::user_stage_info::StageFileCompression::Brotli)
             }
-            mt::StageFileCompression::Zstd => Ok(pb::user_stage_info::StageFileCompression::Zstd),
-            mt::StageFileCompression::Deflate => {
+            mt::principal::StageFileCompression::Zstd => {
+                Ok(pb::user_stage_info::StageFileCompression::Zstd)
+            }
+            mt::principal::StageFileCompression::Deflate => {
                 Ok(pb::user_stage_info::StageFileCompression::Deflate)
             }
-            mt::StageFileCompression::RawDeflate => {
+            mt::principal::StageFileCompression::RawDeflate => {
                 Ok(pb::user_stage_info::StageFileCompression::RawDeflate)
             }
-            mt::StageFileCompression::Lzo => Ok(pb::user_stage_info::StageFileCompression::Lzo),
-            mt::StageFileCompression::Snappy => {
+            mt::principal::StageFileCompression::Lzo => {
+                Ok(pb::user_stage_info::StageFileCompression::Lzo)
+            }
+            mt::principal::StageFileCompression::Snappy => {
                 Ok(pb::user_stage_info::StageFileCompression::Snappy)
             }
-            mt::StageFileCompression::None => Ok(pb::user_stage_info::StageFileCompression::None),
-            mt::StageFileCompression::Xz => Ok(pb::user_stage_info::StageFileCompression::Xz),
+            mt::principal::StageFileCompression::None => {
+                Ok(pb::user_stage_info::StageFileCompression::None)
+            }
+            mt::principal::StageFileCompression::Xz => {
+                Ok(pb::user_stage_info::StageFileCompression::Xz)
+            }
         }
     }
 }
 
-impl FromToProto for mt::StageType {
+impl FromToProto for mt::principal::StageType {
     type PB = pb::user_stage_info::StageType;
     fn get_pb_ver(_p: &Self::PB) -> u64 {
         0
@@ -435,24 +496,28 @@ impl FromToProto for mt::StageType {
     fn from_pb(p: pb::user_stage_info::StageType) -> Result<Self, Incompatible>
     where Self: Sized {
         match p {
-            pb::user_stage_info::StageType::LegacyInternal => Ok(mt::StageType::LegacyInternal),
-            pb::user_stage_info::StageType::External => Ok(mt::StageType::External),
-            pb::user_stage_info::StageType::Internal => Ok(mt::StageType::Internal),
-            pb::user_stage_info::StageType::User => Ok(mt::StageType::User),
+            pb::user_stage_info::StageType::LegacyInternal => {
+                Ok(mt::principal::StageType::LegacyInternal)
+            }
+            pb::user_stage_info::StageType::External => Ok(mt::principal::StageType::External),
+            pb::user_stage_info::StageType::Internal => Ok(mt::principal::StageType::Internal),
+            pb::user_stage_info::StageType::User => Ok(mt::principal::StageType::User),
         }
     }
 
     fn to_pb(&self) -> Result<pb::user_stage_info::StageType, Incompatible> {
         match *self {
-            mt::StageType::LegacyInternal => Ok(pb::user_stage_info::StageType::LegacyInternal),
-            mt::StageType::External => Ok(pb::user_stage_info::StageType::External),
-            mt::StageType::Internal => Ok(pb::user_stage_info::StageType::Internal),
-            mt::StageType::User => Ok(pb::user_stage_info::StageType::User),
+            mt::principal::StageType::LegacyInternal => {
+                Ok(pb::user_stage_info::StageType::LegacyInternal)
+            }
+            mt::principal::StageType::External => Ok(pb::user_stage_info::StageType::External),
+            mt::principal::StageType::Internal => Ok(pb::user_stage_info::StageType::Internal),
+            mt::principal::StageType::User => Ok(pb::user_stage_info::StageType::User),
         }
     }
 }
 
-impl FromToProto for StorageParams {
+impl FromToProto for mt::storage::StorageParams {
     type PB = pb::user_stage_info::StageStorage;
     fn get_pb_ver(_p: &Self::PB) -> u64 {
         0
@@ -460,18 +525,18 @@ impl FromToProto for StorageParams {
     fn from_pb(p: pb::user_stage_info::StageStorage) -> Result<Self, Incompatible>
     where Self: Sized {
         match p.storage {
-            Some(pb::user_stage_info::stage_storage::Storage::S3(s)) => {
-                Ok(StorageParams::S3(StorageS3Config::from_pb(s)?))
-            }
-            Some(pb::user_stage_info::stage_storage::Storage::Fs(s)) => {
-                Ok(StorageParams::Fs(StorageFsConfig::from_pb(s)?))
-            }
-            Some(pb::user_stage_info::stage_storage::Storage::Gcs(s)) => {
-                Ok(StorageParams::Gcs(StorageGcsConfig::from_pb(s)?))
-            }
-            Some(pb::user_stage_info::stage_storage::Storage::Oss(s)) => {
-                Ok(StorageParams::Oss(StorageOssConfig::from_pb(s)?))
-            }
+            Some(pb::user_stage_info::stage_storage::Storage::S3(s)) => Ok(
+                mt::storage::StorageParams::S3(mt::storage::StorageS3Config::from_pb(s)?),
+            ),
+            Some(pb::user_stage_info::stage_storage::Storage::Fs(s)) => Ok(
+                mt::storage::StorageParams::Fs(mt::storage::StorageFsConfig::from_pb(s)?),
+            ),
+            Some(pb::user_stage_info::stage_storage::Storage::Gcs(s)) => Ok(
+                mt::storage::StorageParams::Gcs(mt::storage::StorageGcsConfig::from_pb(s)?),
+            ),
+            Some(pb::user_stage_info::stage_storage::Storage::Oss(s)) => Ok(
+                mt::storage::StorageParams::Oss(mt::storage::StorageOssConfig::from_pb(s)?),
+            ),
             None => Err(Incompatible {
                 reason: "StageStorage.storage cannot be None".to_string(),
             }),
@@ -480,45 +545,49 @@ impl FromToProto for StorageParams {
 
     fn to_pb(&self) -> Result<pb::user_stage_info::StageStorage, Incompatible> {
         match self {
-            StorageParams::S3(v) => Ok(pb::user_stage_info::StageStorage {
+            mt::storage::StorageParams::S3(v) => Ok(pb::user_stage_info::StageStorage {
                 storage: Some(pb::user_stage_info::stage_storage::Storage::S3(v.to_pb()?)),
             }),
-            StorageParams::Fs(v) => Ok(pb::user_stage_info::StageStorage {
+            mt::storage::StorageParams::Fs(v) => Ok(pb::user_stage_info::StageStorage {
                 storage: Some(pb::user_stage_info::stage_storage::Storage::Fs(v.to_pb()?)),
             }),
-            StorageParams::Gcs(v) => Ok(pb::user_stage_info::StageStorage {
+            mt::storage::StorageParams::Gcs(v) => Ok(pb::user_stage_info::StageStorage {
                 storage: Some(pb::user_stage_info::stage_storage::Storage::Gcs(v.to_pb()?)),
             }),
-            StorageParams::Oss(v) => Ok(pb::user_stage_info::StageStorage {
+            mt::storage::StorageParams::Oss(v) => Ok(pb::user_stage_info::StageStorage {
                 storage: Some(pb::user_stage_info::stage_storage::Storage::Oss(v.to_pb()?)),
             }),
-            _ => todo!("other stage storage are not supported"),
+            others => Err(Incompatible {
+                reason: format!("stage type: {} not supported", others),
+            }),
         }
     }
 }
 
-impl FromToProto for mt::StageParams {
+impl FromToProto for mt::principal::StageParams {
     type PB = pb::user_stage_info::StageParams;
     fn get_pb_ver(_p: &Self::PB) -> u64 {
         0
     }
     fn from_pb(p: pb::user_stage_info::StageParams) -> Result<Self, Incompatible>
     where Self: Sized {
-        Ok(mt::StageParams {
-            storage: StorageParams::from_pb(p.storage.ok_or_else(|| Incompatible {
-                reason: "pb::user_stage_info::StageParams.storage cannot be None".to_string(),
+        Ok(mt::principal::StageParams {
+            storage: mt::storage::StorageParams::from_pb(p.storage.ok_or_else(|| {
+                Incompatible {
+                    reason: "pb::user_stage_info::StageParams.storage cannot be None".to_string(),
+                }
             })?)?,
         })
     }
 
     fn to_pb(&self) -> Result<pb::user_stage_info::StageParams, Incompatible> {
         Ok(pb::user_stage_info::StageParams {
-            storage: Some(StorageParams::to_pb(&self.storage)?),
+            storage: Some(mt::storage::StorageParams::to_pb(&self.storage)?),
         })
     }
 }
 
-impl FromToProto for mt::FileFormatOptions {
+impl FromToProto for mt::principal::FileFormatOptions {
     type PB = pb::user_stage_info::FileFormatOptions;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
@@ -527,13 +596,13 @@ impl FromToProto for mt::FileFormatOptions {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let format = mt::StageFileFormatType::from_pb(
+        let format = mt::principal::StageFileFormatType::from_pb(
             FromPrimitive::from_i32(p.format).ok_or_else(|| Incompatible {
                 reason: format!("invalid StageFileFormatType: {}", p.format),
             })?,
         )?;
 
-        let compression = mt::StageFileCompression::from_pb(
+        let compression = mt::principal::StageFileCompression::from_pb(
             FromPrimitive::from_i32(p.compression).ok_or_else(|| Incompatible {
                 reason: format!("invalid StageFileCompression: {}", p.compression),
             })?,
@@ -545,7 +614,7 @@ impl FromToProto for mt::FileFormatOptions {
             p.nan_display
         };
 
-        Ok(mt::FileFormatOptions {
+        Ok(mt::principal::FileFormatOptions {
             format,
             skip_header: p.skip_header,
             field_delimiter: p.field_delimiter.clone(),
@@ -559,8 +628,8 @@ impl FromToProto for mt::FileFormatOptions {
     }
 
     fn to_pb(&self) -> Result<pb::user_stage_info::FileFormatOptions, Incompatible> {
-        let format = mt::StageFileFormatType::to_pb(&self.format)? as i32;
-        let compression = mt::StageFileCompression::to_pb(&self.compression)? as i32;
+        let format = mt::principal::StageFileFormatType::to_pb(&self.format)? as i32;
+        let compression = mt::principal::StageFileCompression::to_pb(&self.compression)? as i32;
         Ok(pb::user_stage_info::FileFormatOptions {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
@@ -577,7 +646,7 @@ impl FromToProto for mt::FileFormatOptions {
     }
 }
 
-impl FromToProto for mt::OnErrorMode {
+impl FromToProto for mt::principal::OnErrorMode {
     type PB = pb::user_stage_info::OnErrorMode;
     fn get_pb_ver(_p: &Self::PB) -> u64 {
         0
@@ -587,19 +656,19 @@ impl FromToProto for mt::OnErrorMode {
         match p.mode {
             Some(pb::user_stage_info::on_error_mode::Mode::None(_))
             | Some(pb::user_stage_info::on_error_mode::Mode::AbortStatement(_)) => {
-                Ok(mt::OnErrorMode::AbortNum(1))
+                Ok(mt::principal::OnErrorMode::AbortNum(1))
             }
             Some(pb::user_stage_info::on_error_mode::Mode::Continue(_)) => {
-                Ok(mt::OnErrorMode::Continue)
+                Ok(mt::principal::OnErrorMode::Continue)
             }
             Some(pb::user_stage_info::on_error_mode::Mode::SkipFile(_)) => {
-                Ok(mt::OnErrorMode::SkipFileNum(1))
+                Ok(mt::principal::OnErrorMode::SkipFileNum(1))
             }
             Some(pb::user_stage_info::on_error_mode::Mode::SkipFileNum(n)) => {
-                Ok(mt::OnErrorMode::SkipFileNum(n))
+                Ok(mt::principal::OnErrorMode::SkipFileNum(n))
             }
             Some(pb::user_stage_info::on_error_mode::Mode::AbortNum(n)) => {
-                Ok(mt::OnErrorMode::AbortNum(n))
+                Ok(mt::principal::OnErrorMode::AbortNum(n))
             }
             None => Err(Incompatible {
                 reason: "OnErrorMode.mode cannot be None".to_string(),
@@ -609,31 +678,32 @@ impl FromToProto for mt::OnErrorMode {
 
     fn to_pb(&self) -> Result<pb::user_stage_info::OnErrorMode, Incompatible> {
         match self {
-            mt::OnErrorMode::Continue => Ok(pb::user_stage_info::OnErrorMode {
+            mt::principal::OnErrorMode::Continue => Ok(pb::user_stage_info::OnErrorMode {
                 mode: Some(pb::user_stage_info::on_error_mode::Mode::Continue(
                     pb::Empty {},
                 )),
             }),
-            mt::OnErrorMode::SkipFileNum(n) => Ok(pb::user_stage_info::OnErrorMode {
+            mt::principal::OnErrorMode::SkipFileNum(n) => Ok(pb::user_stage_info::OnErrorMode {
                 mode: Some(pb::user_stage_info::on_error_mode::Mode::SkipFileNum(*n)),
             }),
-            mt::OnErrorMode::AbortNum(n) => Ok(pb::user_stage_info::OnErrorMode {
+            mt::principal::OnErrorMode::AbortNum(n) => Ok(pb::user_stage_info::OnErrorMode {
                 mode: Some(pb::user_stage_info::on_error_mode::Mode::AbortNum(*n)),
             }),
         }
     }
 }
 
-impl FromToProto for mt::CopyOptions {
+impl FromToProto for mt::principal::CopyOptions {
     type PB = pb::user_stage_info::CopyOptions;
     fn get_pb_ver(_p: &Self::PB) -> u64 {
         0
     }
     fn from_pb(p: pb::user_stage_info::CopyOptions) -> Result<Self, Incompatible>
     where Self: Sized {
-        let on_error = mt::OnErrorMode::from_pb(p.on_error.ok_or_else(|| Incompatible {
-            reason: "CopyOptions.on_error cannot be None".to_string(),
-        })?)?;
+        let on_error =
+            mt::principal::OnErrorMode::from_pb(p.on_error.ok_or_else(|| Incompatible {
+                reason: "CopyOptions.on_error cannot be None".to_string(),
+            })?)?;
         let size_limit = usize::try_from(p.size_limit).map_err(|err| Incompatible {
             reason: format!("CopyOptions.size_limit cannot be convert to usize: {}", err),
         })?;
@@ -647,7 +717,7 @@ impl FromToProto for mt::CopyOptions {
                 err
             ),
         })?;
-        Ok(mt::CopyOptions {
+        Ok(mt::principal::CopyOptions {
             on_error,
             size_limit,
             split_size,
@@ -658,7 +728,7 @@ impl FromToProto for mt::CopyOptions {
     }
 
     fn to_pb(&self) -> Result<pb::user_stage_info::CopyOptions, Incompatible> {
-        let on_error = mt::OnErrorMode::to_pb(&self.on_error)?;
+        let on_error = mt::principal::OnErrorMode::to_pb(&self.on_error)?;
         let size_limit = u64::try_from(self.size_limit).map_err(|err| Incompatible {
             reason: format!("CopyOptions.size_limit cannot be convert to u64: {}", err),
         })?;
@@ -682,7 +752,7 @@ impl FromToProto for mt::CopyOptions {
     }
 }
 
-impl FromToProto for mt::UserStageInfo {
+impl FromToProto for mt::principal::UserStageInfo {
     type PB = pb::UserStageInfo;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
@@ -690,32 +760,32 @@ impl FromToProto for mt::UserStageInfo {
     fn from_pb(p: pb::UserStageInfo) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
-        Ok(mt::UserStageInfo {
+        Ok(mt::principal::UserStageInfo {
             stage_name: p.stage_name.clone(),
-            stage_type: mt::StageType::from_pb(FromPrimitive::from_i32(p.stage_type).ok_or_else(
-                || Incompatible {
+            stage_type: mt::principal::StageType::from_pb(
+                FromPrimitive::from_i32(p.stage_type).ok_or_else(|| Incompatible {
                     reason: format!("invalid StageType: {}", p.stage_type),
+                })?,
+            )?,
+            stage_params: mt::principal::StageParams::from_pb(p.stage_params.ok_or_else(
+                || Incompatible {
+                    reason: "UserStageInfo.stage_params cannot be None".to_string(),
                 },
             )?)?,
-            stage_params: mt::StageParams::from_pb(p.stage_params.ok_or_else(|| {
-                Incompatible {
-                    reason: "UserStageInfo.stage_params cannot be None".to_string(),
-                }
-            })?)?,
-            file_format_options: mt::FileFormatOptions::from_pb(
+            file_format_options: mt::principal::FileFormatOptions::from_pb(
                 p.file_format_options.ok_or_else(|| Incompatible {
                     reason: "UserStageInfo.file_format_options cannot be None".to_string(),
                 })?,
             )?,
-            copy_options: mt::CopyOptions::from_pb(p.copy_options.ok_or_else(|| {
-                Incompatible {
+            copy_options: mt::principal::CopyOptions::from_pb(p.copy_options.ok_or_else(
+                || Incompatible {
                     reason: "UserStageInfo.copy_options cannot be None".to_string(),
-                }
-            })?)?,
+                },
+            )?)?,
             comment: p.comment,
             number_of_files: p.number_of_files,
             creator: match p.creator {
-                Some(c) => Some(mt::UserIdentity::from_pb(c)?),
+                Some(c) => Some(mt::principal::UserIdentity::from_pb(c)?),
                 None => None,
             },
         })
@@ -726,21 +796,23 @@ impl FromToProto for mt::UserStageInfo {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             stage_name: self.stage_name.clone(),
-            stage_type: mt::StageType::to_pb(&self.stage_type)? as i32,
-            stage_params: Some(mt::StageParams::to_pb(&self.stage_params)?),
-            file_format_options: Some(mt::FileFormatOptions::to_pb(&self.file_format_options)?),
-            copy_options: Some(mt::CopyOptions::to_pb(&self.copy_options)?),
+            stage_type: mt::principal::StageType::to_pb(&self.stage_type)? as i32,
+            stage_params: Some(mt::principal::StageParams::to_pb(&self.stage_params)?),
+            file_format_options: Some(mt::principal::FileFormatOptions::to_pb(
+                &self.file_format_options,
+            )?),
+            copy_options: Some(mt::principal::CopyOptions::to_pb(&self.copy_options)?),
             comment: self.comment.clone(),
             number_of_files: self.number_of_files,
             creator: match &self.creator {
-                Some(c) => Some(mt::UserIdentity::to_pb(c)?),
+                Some(c) => Some(mt::principal::UserIdentity::to_pb(c)?),
                 None => None,
             },
         })
     }
 }
 
-impl FromToProto for mt::StageFile {
+impl FromToProto for mt::principal::StageFile {
     type PB = pb::StageFile;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
@@ -748,13 +820,13 @@ impl FromToProto for mt::StageFile {
     fn from_pb(p: pb::StageFile) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
-        Ok(mt::StageFile {
+        Ok(mt::principal::StageFile {
             path: p.path.clone(),
             size: p.size,
             md5: p.md5.clone(),
             last_modified: DateTime::<Utc>::from_pb(p.last_modified)?,
             creator: match p.creator {
-                Some(c) => Some(mt::UserIdentity::from_pb(c)?),
+                Some(c) => Some(mt::principal::UserIdentity::from_pb(c)?),
                 None => None,
             },
             etag: p.etag.clone(),
@@ -770,7 +842,7 @@ impl FromToProto for mt::StageFile {
             md5: self.md5.clone(),
             last_modified: self.last_modified.to_pb()?,
             creator: match &self.creator {
-                Some(c) => Some(mt::UserIdentity::to_pb(c)?),
+                Some(c) => Some(mt::principal::UserIdentity::to_pb(c)?),
                 None => None,
             },
             etag: self.etag.clone(),

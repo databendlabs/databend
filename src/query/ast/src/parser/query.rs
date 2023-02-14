@@ -241,9 +241,9 @@ pub enum TableFunctionParam {
 }
 
 pub fn table_function_param(i: Input) -> IResult<TableFunctionParam> {
-    let named = map(rule! { Ident ~ "=>" ~ #expr  }, |(name, _, value)| {
+    let named = map(rule! { #ident ~ "=>" ~ #expr  }, |(name, _, value)| {
         TableFunctionParam::Named {
-            name: name.text().to_string(),
+            name: name.to_string(),
             value,
         }
     });
@@ -292,7 +292,7 @@ pub enum TableReferenceElement {
 pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceElement>> {
     let aliased_table = map(
         rule! {
-            #peroid_separated_idents_1_to_3 ~ (AT ~ #travel_point)? ~ #table_alias?
+            #period_separated_idents_1_to_3 ~ (AT ~ #travel_point)? ~ #table_alias?
         },
         |((catalog, database, table), travel_point_opt, alias)| TableReferenceElement::Table {
             catalog,

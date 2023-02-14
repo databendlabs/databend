@@ -312,10 +312,10 @@ impl JoinHashTable {
     pub(crate) fn fill_null_for_left_join(
         &self,
         bm: &mut MutableBitmap,
-        probe_indexs: &[u32],
+        probe_indexes: &[u32],
         row_state: &mut [u32],
     ) {
-        for (index, row) in probe_indexs.iter().enumerate() {
+        for (index, row) in probe_indexes.iter().enumerate() {
             let row = *row as usize;
             if row_state[row] == 0 {
                 bm.set(index, true);

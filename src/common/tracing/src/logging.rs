@@ -213,7 +213,7 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<WorkerGuard> {
     let subscriber = subscriber.with(console_subscriber::spawn());
 
     // Enable log compatible layer to convert log record to tracing span.
-    // We will ignore any errors that returned by this fucntions.
+    // We will ignore any errors that returned by this functions.
     let _ = LogTracer::init();
 
     // Ignore errors returned by set_global_default.

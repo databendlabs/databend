@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::GrantObject;
-use common_meta_types::UserPrivilegeType;
+use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::UserPrivilegeType;
 
 use crate::interpreters::access::AccessChecker;
 use crate::sessions::QueryContext;
@@ -38,8 +38,26 @@ impl AccessChecker for PrivilegeAccess {
         let session = self.ctx.get_current_session();
 
         match plan {
-            Plan::Query { .. } => {}
+            Plan::Query { metadata, .. } => {
+                let metadata = metadata.read().clone();
+                for table in metadata.tables() {
+                    if table.is_source_of_view() {
+                        continue;
+                    }
+                    session
+                        .validate_privilege(
+                            &GrantObject::Table(
+                                table.catalog().to_string(),
+                                table.database().to_string(),
+                                table.name().to_string(),
+                            ),
+                            UserPrivilegeType::Select,
+                        )
+                        .await?
+                }
+            }
             Plan::Explain { .. } => {}
+            Plan::ExplainAnalyze { .. } => {}
             Plan::Copy(_) => {}
             Plan::Call(_) => {}
             // Catalog

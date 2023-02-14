@@ -75,7 +75,7 @@ impl FuseTable {
             self.meta_location_generator().clone(),
         );
 
-        // Find the instant which matches ths given `time_point`.
+        // Find the instant which matches the given `time_point`.
         let mut instant = None;
         while let Some(snapshot) = snapshot_stream.try_next().await? {
             if pred(snapshot.as_ref()) {

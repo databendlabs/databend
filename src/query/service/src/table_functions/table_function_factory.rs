@@ -19,6 +19,7 @@ use common_catalog::table_args::TableArgs;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::MetaId;
+use common_storages_fuse::table_functions::InferSchemaTable;
 use parking_lot::RwLock;
 
 use crate::catalogs::SYS_TBL_FUC_ID_END;
@@ -140,6 +141,11 @@ impl TableFunctionFactory {
         creators.insert(
             "async_crash_me".to_string(),
             (next_id(), Arc::new(AsyncCrashMeTable::create)),
+        );
+
+        creators.insert(
+            "infer_schema".to_string(),
+            (next_id(), Arc::new(InferSchemaTable::create)),
         );
 
         creators.insert(

@@ -1647,6 +1647,109 @@ Substring {
 
 
 ---------- Input ----------
+array_sort([2])
+---------- Output ---------
+ARRAY_SORT([2]) , 'ASC' , 'NULLS FIRST')
+---------- AST ------------
+ArraySort {
+    span: Some(
+        0..15,
+    ),
+    expr: Array {
+        span: Some(
+            11..14,
+        ),
+        exprs: [
+            Literal {
+                span: Some(
+                    12..13,
+                ),
+                lit: Integer(
+                    2,
+                ),
+            },
+        ],
+    },
+    asc: true,
+    null_first: true,
+}
+
+
+---------- Input ----------
+array_sort([2,0.1], 'ASC')
+---------- Output ---------
+ARRAY_SORT([2, 0.1]) , 'ASC' , 'NULLS FIRST')
+---------- AST ------------
+ArraySort {
+    span: Some(
+        0..26,
+    ),
+    expr: Array {
+        span: Some(
+            11..18,
+        ),
+        exprs: [
+            Literal {
+                span: Some(
+                    12..13,
+                ),
+                lit: Integer(
+                    2,
+                ),
+            },
+            Literal {
+                span: Some(
+                    14..17,
+                ),
+                lit: Float(
+                    0.1,
+                ),
+            },
+        ],
+    },
+    asc: true,
+    null_first: true,
+}
+
+
+---------- Input ----------
+array_sort([3,2], 'DESC', 'NULLS FIRST')
+---------- Output ---------
+ARRAY_SORT([3, 2]) , 'DESC' , 'NULLS FIRST')
+---------- AST ------------
+ArraySort {
+    span: Some(
+        0..40,
+    ),
+    expr: Array {
+        span: Some(
+            11..16,
+        ),
+        exprs: [
+            Literal {
+                span: Some(
+                    12..13,
+                ),
+                lit: Integer(
+                    3,
+                ),
+            },
+            Literal {
+                span: Some(
+                    14..15,
+                ),
+                lit: Integer(
+                    2,
+                ),
+            },
+        ],
+    },
+    asc: false,
+    null_first: true,
+}
+
+
+---------- Input ----------
 col1::UInt8
 ---------- Output ---------
 col1::UInt8

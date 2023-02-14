@@ -199,7 +199,7 @@ where
     /// The accumulated rows for the next output data block.
     ///
     /// Data format: (input_index, block_index, row_index)
-    in_progess_rows: Vec<(usize, usize, usize)>,
+    in_progress_rows: Vec<(usize, usize, usize)>,
     /// Heap that yields [`Cursor`] in increasing order.
     heap: BinaryHeap<Reverse<Cursor<R>>>,
     /// If the input port is finished.
@@ -238,7 +238,7 @@ where
             limit,
             blocks: vec![VecDeque::with_capacity(2); input_size],
             heap: BinaryHeap::with_capacity(input_size),
-            in_progess_rows: vec![],
+            in_progress_rows: vec![],
             cursor_finished: vec![true; input_size],
             input_finished: vec![false; input_size],
             row_converter,
@@ -276,10 +276,10 @@ where
         let input_index = cursor.input_index;
         let block_index = self.blocks[input_index].len() - 1;
         while !cursor.is_finished() {
-            self.in_progess_rows
+            self.in_progress_rows
                 .push((input_index, block_index, cursor.advance()));
             if let Some(limit) = self.limit {
-                if self.in_progess_rows.len() == limit {
+                if self.in_progress_rows.len() == limit {
                     return true;
                 }
             }
@@ -292,7 +292,7 @@ where
     fn drain_heap(&mut self) {
         let nums_active_inputs = self.nums_active_inputs();
         let mut need_output = false;
-        // Need to pop data to in_progess_rows.
+        // Need to pop data to in_progress_rows.
         // Use `>=` because some of the input ports may be finished, but the data is still in the heap.
         while self.heap.len() >= nums_active_inputs && !need_output {
             match self.heap.pop() {
@@ -311,13 +311,13 @@ where
                             let block_index = self.blocks[input_index].len() - 1;
                             while !cursor.is_finished() && cursor.le(next_cursor) {
                                 // If the cursor is smaller than the next cursor, don't need to push the cursor back to the heap.
-                                self.in_progess_rows.push((
+                                self.in_progress_rows.push((
                                     input_index,
                                     block_index,
                                     cursor.advance(),
                                 ));
                                 if let Some(limit) = self.limit {
-                                    if self.in_progess_rows.len() == limit {
+                                    if self.in_progress_rows.len() == limit {
                                         need_output = true;
                                         break;
                                     }
@@ -332,7 +332,7 @@ where
                         }
                     }
                     // Reach the block size, need to output.
-                    if self.in_progess_rows.len() >= self.block_size {
+                    if self.in_progress_rows.len() >= self.block_size {
                         need_output = true;
                         break;
                     }
@@ -347,7 +347,7 @@ where
                     // `self.in_progress_rows` cannot be empty.
                     // If reach here, it means that all inputs are finished but `self.heap` is not empty before the while loop.
                     // Therefore, when reach here, data in `self.heap` is all drained into `self.in_progress_rows`.
-                    debug_assert!(!self.in_progess_rows.is_empty());
+                    debug_assert!(!self.in_progress_rows.is_empty());
                     self.state = ProcessorState::Output;
                     break;
                 }
@@ -358,9 +358,9 @@ where
         }
     }
 
-    /// Drain `self.in_progess_rows` to build a output data block.
+    /// Drain `self.in_progress_rows` to build a output data block.
     fn build_block(&mut self) -> Result<DataBlock> {
-        let num_rows = self.in_progess_rows.len();
+        let num_rows = self.in_progress_rows.len();
         debug_assert!(num_rows > 0);
 
         let mut blocks_num_pre_sum = Vec::with_capacity(self.blocks.len());
@@ -371,12 +371,12 @@ where
         }
 
         // Compute the indices of the output block.
-        let first_row = &self.in_progess_rows[0];
+        let first_row = &self.in_progress_rows[0];
         let mut index = blocks_num_pre_sum[first_row.0] + first_row.1;
         let mut start_row_index = first_row.2;
         let mut end_row_index = start_row_index + 1;
         let mut indices = Vec::new();
-        for row in self.in_progess_rows.iter().skip(1) {
+        for row in self.in_progress_rows.iter().skip(1) {
             let next_index = blocks_num_pre_sum[row.0] + row.1;
             if next_index == index {
                 // Within a same block.
@@ -411,7 +411,7 @@ where
             .collect::<Vec<_>>();
 
         // Clear no need data.
-        self.in_progess_rows.clear();
+        self.in_progress_rows.clear();
         // A cursor pointing to a new block is created onlyh if the previous block is finished.
         // This means that all blocks except the last one for each input port are drained into the output block.
         // Therefore, the previous blocks can be cleared.
@@ -493,8 +493,8 @@ where
                         self.state = ProcessorState::Preserve(vec![]);
                         return Ok(Event::Sync);
                     }
-                    if !self.in_progess_rows.is_empty() {
-                        // The in_progess_rows is not drained yet. Need to drain data into output.
+                    if !self.in_progress_rows.is_empty() {
+                        // The in_progress_rows is not drained yet. Need to drain data into output.
                         self.state = ProcessorState::Output;
                         return Ok(Event::Sync);
                     }

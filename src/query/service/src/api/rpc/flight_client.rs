@@ -55,7 +55,7 @@ impl FlightClient {
     }
 
     pub async fn request_server_exchange(&mut self, query_id: &str) -> Result<FlightExchange> {
-        let (tx, rx) = async_channel::unbounded();
+        let (tx, rx) = async_channel::bounded(8);
         Ok(FlightExchange::from_client(
             tx,
             self.exchange_streaming(
@@ -74,7 +74,7 @@ impl FlightClient {
         source: &str,
         fragment_id: usize,
     ) -> Result<FlightExchange> {
-        let (tx, rx) = async_channel::unbounded();
+        let (tx, rx) = async_channel::bounded(8);
         Ok(FlightExchange::from_client(
             tx,
             self.exchange_streaming(

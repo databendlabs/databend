@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use common_exception::Span;
-use common_meta_types::PrincipalIdentity;
-use common_meta_types::UserIdentity;
+use common_meta_app::principal::PrincipalIdentity;
+use common_meta_app::principal::UserIdentity;
 
 use super::walk_mut::walk_cte_mut;
 use super::walk_mut::walk_expr_mut;
@@ -157,7 +157,7 @@ pub trait VisitorMut: Sized {
         walk_expr_mut(self, expr);
     }
 
-    fn visit_positon(&mut self, _span: Span, substr_expr: &mut Expr, str_expr: &mut Expr) {
+    fn visit_position(&mut self, _span: Span, substr_expr: &mut Expr, str_expr: &mut Expr) {
         walk_expr_mut(self, substr_expr);
         walk_expr_mut(self, str_expr);
     }
@@ -259,6 +259,10 @@ pub trait VisitorMut: Sized {
         for elem in elements.iter_mut() {
             walk_expr_mut(self, elem);
         }
+    }
+
+    fn visit_array_sort(&mut self, _span: Span, expr: &mut Expr, _asc: bool, _null_first: bool) {
+        walk_expr_mut(self, expr);
     }
 
     fn visit_interval(&mut self, _span: Span, expr: &mut Expr, _unit: &mut IntervalKind) {

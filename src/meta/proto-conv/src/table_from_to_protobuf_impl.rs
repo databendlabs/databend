@@ -21,7 +21,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_expression as ex;
 use common_meta_app::schema as mt;
-use common_meta_types::StorageParams;
+use common_meta_app::storage::StorageParams;
 use common_protos::pb;
 
 use crate::reader_check_msg;

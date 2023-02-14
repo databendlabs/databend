@@ -24,7 +24,7 @@ use common_expression::Scalar;
 use common_expression::Value;
 use common_jsonb::Value as JsonbValue;
 use common_storages_stage::StageTable;
-use opendal::OpWrite;
+use opendal::ops::OpWrite;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

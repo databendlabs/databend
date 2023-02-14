@@ -13,16 +13,16 @@
 // limitations under the License.
 
 use common_meta_kvapi::kvapi;
+use common_meta_kvapi::kvapi::GetKVReply;
+use common_meta_kvapi::kvapi::MGetKVReply;
+use common_meta_kvapi::kvapi::UpsertKVReply;
+use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::Cmd;
-use common_meta_types::GetKVReply;
 use common_meta_types::KVAppError;
-use common_meta_types::MGetKVReply;
 use common_meta_types::SeqV;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKV;
-use common_meta_types::UpsertKVReply;
-use common_meta_types::UpsertKVReq;
 use tracing::debug;
 
 use crate::applied_state::AppliedState;

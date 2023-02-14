@@ -28,10 +28,10 @@ use common_exception::Result;
 use common_expression::infer_table_schema;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
+use common_meta_app::principal::UserStageInfo;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
-use common_meta_types::UserStageInfo;
 use common_pipeline_transforms::processors::transforms::TransformLimit;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_storages_fuse::io::Files;
@@ -386,7 +386,7 @@ impl CopyInterpreterV2 {
                 }
 
                 return GlobalIORuntime::instance().block_on(async move {
-                    // 1. Commit datas.
+                    // 1. Commit data.
                     let operations = ctx.consume_precommit_blocks();
                     info!(
                         "copy: try to commit operations:{}, elapsed:{}",

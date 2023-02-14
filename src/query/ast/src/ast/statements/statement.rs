@@ -15,8 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_meta_types::PrincipalIdentity;
-use common_meta_types::UserIdentity;
+use common_meta_app::principal::PrincipalIdentity;
+use common_meta_app::principal::UserIdentity;
 
 use super::*;
 use crate::ast::write_comma_separated_list;
@@ -32,6 +32,9 @@ pub enum Statement {
     Query(Box<Query>),
     Explain {
         kind: ExplainKind,
+        query: Box<Statement>,
+    },
+    ExplainAnalyze {
         query: Box<Statement>,
     },
 
@@ -206,9 +209,13 @@ impl Display for Statement {
                     ExplainKind::Fragments => write!(f, " FRAGMENTS")?,
                     ExplainKind::Raw => write!(f, " RAW")?,
                     ExplainKind::Plan => (),
+                    ExplainKind::AnalyzePlan => write!(f, " ANALYZE")?,
                     ExplainKind::Memo(_) => write!(f, "MEMO")?,
                 }
                 write!(f, " {query}")?;
+            }
+            Statement::ExplainAnalyze { query } => {
+                write!(f, "EXPLAIN ANALYZE {query}")?;
             }
             Statement::Query(query) => write!(f, "{query}")?,
             Statement::Insert(insert) => write!(f, "{insert}")?,

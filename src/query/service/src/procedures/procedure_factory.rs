@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::UserOptionFlag;
+use common_meta_app::principal::UserOptionFlag;
 use once_cell::sync::Lazy;
 
 use crate::procedures::admins::AdminProcedure;

@@ -53,8 +53,10 @@ use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::BaseTableColumn;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
+use crate::DerivedColumn;
 use crate::IndexType;
 use crate::MetadataRef;
 
@@ -309,18 +311,21 @@ impl SubqueryRewriter {
                     &mut left_conditions,
                     &mut right_conditions,
                 )?;
-                let index = subquery.output_column;
-                let column_name = format!("subquery_{}", index);
-                let right_condition = ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    column: ColumnBinding {
-                        database_name: None,
-                        table_name: None,
-                        column_name,
-                        index,
-                        data_type: subquery.data_type.clone(),
-                        visibility: Visibility::Visible,
-                    },
-                });
+                let output_column = subquery.output_column.clone();
+                let column_name = format!("subquery_{}", output_column.index);
+                let right_condition = wrap_cast(
+                    &ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        column: ColumnBinding {
+                            database_name: None,
+                            table_name: None,
+                            column_name,
+                            index: output_column.index,
+                            data_type: output_column.data_type,
+                            visibility: Visibility::Visible,
+                        },
+                    }),
+                    &subquery.data_type,
+                );
                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
                 let op = subquery.compare_op.as_ref().unwrap().clone();
                 // Make <child_expr op right_condition> as non_equi_conditions even if op is equal operator.
@@ -381,14 +386,14 @@ impl SubqueryRewriter {
             for correlated_column in correlated_columns.iter() {
                 let column_entry = metadata.column(*correlated_column).clone();
                 let (name, data_type) = match &column_entry {
-                    ColumnEntry::BaseTableColumn {
+                    ColumnEntry::BaseTableColumn(BaseTableColumn {
                         column_name,
                         data_type,
                         ..
-                    } => (column_name, DataType::from(data_type)),
-                    ColumnEntry::DerivedColumn {
+                    }) => (column_name, DataType::from(data_type)),
+                    ColumnEntry::DerivedColumn(DerivedColumn {
                         alias, data_type, ..
-                    } => (alias, data_type.clone()),
+                    }) => (alias, data_type.clone()),
                 };
                 self.derived_columns.insert(
                     *correlated_column,
@@ -451,8 +456,12 @@ impl SubqueryRewriter {
                 for derived_column in self.derived_columns.values() {
                     let column_entry = metadata.column(*derived_column);
                     let data_type = match column_entry {
-                        ColumnEntry::BaseTableColumn { data_type, .. } => DataType::from(data_type),
-                        ColumnEntry::DerivedColumn { data_type, .. } => data_type.clone(),
+                        ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) => {
+                            DataType::from(data_type)
+                        }
+                        ColumnEntry::DerivedColumn(DerivedColumn { data_type, .. }) => {
+                            data_type.clone()
+                        }
                     };
                     let column_binding = ColumnBinding {
                         database_name: None,
@@ -561,10 +570,12 @@ impl SubqueryRewriter {
                         let metadata = self.metadata.read();
                         let column_entry = metadata.column(*derived_column);
                         let data_type = match column_entry {
-                            ColumnEntry::BaseTableColumn { data_type, .. } => {
+                            ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) => {
                                 DataType::from(data_type)
                             }
-                            ColumnEntry::DerivedColumn { data_type, .. } => data_type.clone(),
+                            ColumnEntry::DerivedColumn(DerivedColumn { data_type, .. }) => {
+                                data_type.clone()
+                            }
                         };
                         ColumnBinding {
                             database_name: None,
@@ -775,8 +786,10 @@ impl SubqueryRewriter {
             let metadata = self.metadata.read();
             let column_entry = metadata.column(*correlated_column);
             let data_type = match column_entry {
-                ColumnEntry::BaseTableColumn { data_type, .. } => DataType::from(data_type),
-                ColumnEntry::DerivedColumn { data_type, .. } => data_type.clone(),
+                ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) => {
+                    DataType::from(data_type)
+                }
+                ColumnEntry::DerivedColumn(DerivedColumn { data_type, .. }) => data_type.clone(),
             };
             let right_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
                 column: ColumnBinding {

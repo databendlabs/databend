@@ -18,6 +18,7 @@ use common_exception::Result;
 use common_expression::ConstantFolder;
 use common_expression::FunctionContext;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_profile::ProfSpanSetRef;
 use itertools::Itertools;
 
 use super::AggregateFinal;
@@ -40,31 +41,47 @@ use crate::executor::ExchangeSource;
 use crate::executor::FragmentKind;
 use crate::planner::MetadataRef;
 use crate::planner::DUMMY_TABLE_INDEX;
+use crate::BaseTableColumn;
 use crate::ColumnEntry;
+use crate::DerivedColumn;
 
 impl PhysicalPlan {
-    pub fn format(&self, metadata: MetadataRef) -> Result<FormatTreeNode<String>> {
-        to_format_tree(self, &metadata)
+    pub fn format(
+        &self,
+        metadata: MetadataRef,
+        prof_span_set: ProfSpanSetRef,
+    ) -> Result<FormatTreeNode<String>> {
+        to_format_tree(self, &metadata, &prof_span_set)
     }
 }
 
-fn to_format_tree(plan: &PhysicalPlan, metadata: &MetadataRef) -> Result<FormatTreeNode<String>> {
+fn to_format_tree(
+    plan: &PhysicalPlan,
+    metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
+) -> Result<FormatTreeNode<String>> {
     match plan {
         PhysicalPlan::TableScan(plan) => table_scan_to_format_tree(plan, metadata),
-        PhysicalPlan::Filter(plan) => filter_to_format_tree(plan, metadata),
-        PhysicalPlan::Project(plan) => project_to_format_tree(plan, metadata),
-        PhysicalPlan::EvalScalar(plan) => eval_scalar_to_format_tree(plan, metadata),
-        PhysicalPlan::AggregatePartial(plan) => aggregate_partial_to_format_tree(plan, metadata),
-        PhysicalPlan::AggregateFinal(plan) => aggregate_final_to_format_tree(plan, metadata),
-        PhysicalPlan::Sort(plan) => sort_to_format_tree(plan, metadata),
-        PhysicalPlan::Limit(plan) => limit_to_format_tree(plan, metadata),
-        PhysicalPlan::HashJoin(plan) => hash_join_to_format_tree(plan, metadata),
-        PhysicalPlan::Exchange(plan) => exchange_to_format_tree(plan, metadata),
-        PhysicalPlan::UnionAll(plan) => union_all_to_format_tree(plan, metadata),
+        PhysicalPlan::Filter(plan) => filter_to_format_tree(plan, metadata, prof_span_set),
+        PhysicalPlan::Project(plan) => project_to_format_tree(plan, metadata, prof_span_set),
+        PhysicalPlan::EvalScalar(plan) => eval_scalar_to_format_tree(plan, metadata, prof_span_set),
+        PhysicalPlan::AggregatePartial(plan) => {
+            aggregate_partial_to_format_tree(plan, metadata, prof_span_set)
+        }
+        PhysicalPlan::AggregateFinal(plan) => {
+            aggregate_final_to_format_tree(plan, metadata, prof_span_set)
+        }
+        PhysicalPlan::Sort(plan) => sort_to_format_tree(plan, metadata, prof_span_set),
+        PhysicalPlan::Limit(plan) => limit_to_format_tree(plan, metadata, prof_span_set),
+        PhysicalPlan::HashJoin(plan) => hash_join_to_format_tree(plan, metadata, prof_span_set),
+        PhysicalPlan::Exchange(plan) => exchange_to_format_tree(plan, metadata, prof_span_set),
+        PhysicalPlan::UnionAll(plan) => union_all_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::ExchangeSource(plan) => exchange_source_to_format_tree(plan),
-        PhysicalPlan::ExchangeSink(plan) => exchange_sink_to_format_tree(plan, metadata),
+        PhysicalPlan::ExchangeSink(plan) => {
+            exchange_sink_to_format_tree(plan, metadata, prof_span_set)
+        }
         PhysicalPlan::DistributedInsertSelect(plan) => {
-            distributed_insert_to_format_tree(plan.as_ref(), metadata)
+            distributed_insert_to_format_tree(plan.as_ref(), metadata, prof_span_set)
         }
     }
 }
@@ -137,7 +154,11 @@ fn table_scan_to_format_tree(
     ))
 }
 
-fn filter_to_format_tree(plan: &Filter, metadata: &MetadataRef) -> Result<FormatTreeNode<String>> {
+fn filter_to_format_tree(
+    plan: &Filter,
+    metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
+) -> Result<FormatTreeNode<String>> {
     let filter = plan
         .predicates
         .iter()
@@ -150,7 +171,14 @@ fn filter_to_format_tree(plan: &Filter, metadata: &MetadataRef) -> Result<Format
         children.extend(items);
     }
 
-    children.push(to_format_tree(&plan.input, metadata)?);
+    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
+        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
+        children.push(FormatTreeNode::new(format!(
+            "total process time: {process_time}ms"
+        )));
+    }
+
+    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
 
     Ok(FormatTreeNode::with_children(
         "Filter".to_string(),
@@ -161,6 +189,7 @@ fn filter_to_format_tree(plan: &Filter, metadata: &MetadataRef) -> Result<Format
 fn project_to_format_tree(
     plan: &Project,
     metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
 ) -> Result<FormatTreeNode<String>> {
     let columns = plan
         .columns
@@ -170,8 +199,9 @@ fn project_to_format_tree(
             format!(
                 "{} (#{})",
                 match metadata.read().column(*column) {
-                    ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
-                    ColumnEntry::DerivedColumn { alias, .. } => alias,
+                    ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) =>
+                        column_name,
+                    ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
                 },
                 column
             )
@@ -185,7 +215,14 @@ fn project_to_format_tree(
         children.extend(items);
     }
 
-    children.push(to_format_tree(&plan.input, metadata)?);
+    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
+        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
+        children.push(FormatTreeNode::new(format!(
+            "total process time: {process_time}ms"
+        )));
+    }
+
+    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
 
     Ok(FormatTreeNode::with_children(
         "Project".to_string(),
@@ -196,6 +233,7 @@ fn project_to_format_tree(
 fn eval_scalar_to_format_tree(
     plan: &EvalScalar,
     metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
 ) -> Result<FormatTreeNode<String>> {
     let scalars = plan
         .exprs
@@ -210,7 +248,14 @@ fn eval_scalar_to_format_tree(
         children.extend(items);
     }
 
-    children.push(to_format_tree(&plan.input, metadata)?);
+    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
+        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
+        children.push(FormatTreeNode::new(format!(
+            "total process time: {process_time}ms"
+        )));
+    }
+
+    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
 
     Ok(FormatTreeNode::with_children(
         "EvalScalar".to_string(),
@@ -227,8 +272,10 @@ pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata
             .map(|&index| {
                 let column = metadata.read().column(index).clone();
                 match column {
-                    ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
-                    ColumnEntry::DerivedColumn { alias, .. } => alias,
+                    ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => {
+                        column_name
+                    }
+                    ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
                 }
             })
             .collect::<Vec<_>>()
@@ -239,6 +286,7 @@ pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata
 fn aggregate_partial_to_format_tree(
     plan: &AggregatePartial,
     metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
 ) -> Result<FormatTreeNode<String>> {
     let group_by = plan
         .group_by
@@ -246,8 +294,8 @@ fn aggregate_partial_to_format_tree(
         .map(|column| {
             let column = metadata.read().column(*column).clone();
             let name = match column {
-                ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
-                ColumnEntry::DerivedColumn { alias, .. } => alias,
+                ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => column_name,
+                ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
             };
             Ok(name)
         })
@@ -270,7 +318,14 @@ fn aggregate_partial_to_format_tree(
         children.extend(items);
     }
 
-    children.push(to_format_tree(&plan.input, metadata)?);
+    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
+        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
+        children.push(FormatTreeNode::new(format!(
+            "total process time: {process_time}ms"
+        )));
+    }
+
+    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
 
     Ok(FormatTreeNode::with_children(
         "AggregatePartial".to_string(),
@@ -281,6 +336,7 @@ fn aggregate_partial_to_format_tree(
 fn aggregate_final_to_format_tree(
     plan: &AggregateFinal,
     metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
 ) -> Result<FormatTreeNode<String>> {
     let group_by = plan
         .group_by
@@ -288,8 +344,8 @@ fn aggregate_final_to_format_tree(
         .map(|column| {
             let column = metadata.read().column(*column).clone();
             let name = match column {
-                ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
-                ColumnEntry::DerivedColumn { alias, .. } => alias,
+                ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => column_name,
+                ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
             };
             Ok(name)
         })
@@ -318,7 +374,14 @@ fn aggregate_final_to_format_tree(
         children.extend(items);
     }
 
-    children.push(to_format_tree(&plan.input, metadata)?);
+    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
+        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
+        children.push(FormatTreeNode::new(format!(
+            "total process time: {process_time}ms"
+        )));
+    }
+
+    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
 
     Ok(FormatTreeNode::with_children(
         "AggregateFinal".to_string(),
@@ -326,7 +389,11 @@ fn aggregate_final_to_format_tree(
     ))
 }
 
-fn sort_to_format_tree(plan: &Sort, metadata: &MetadataRef) -> Result<FormatTreeNode<String>> {
+fn sort_to_format_tree(
+    plan: &Sort,
+    metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
+) -> Result<FormatTreeNode<String>> {
     let sort_keys = plan
         .order_by
         .iter()
@@ -336,8 +403,9 @@ fn sort_to_format_tree(plan: &Sort, metadata: &MetadataRef) -> Result<FormatTree
             Ok(format!(
                 "{} {} {}",
                 match column {
-                    ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
-                    ColumnEntry::DerivedColumn { alias, .. } => alias,
+                    ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) =>
+                        column_name,
+                    ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
                 },
                 if sort_key.asc { "ASC" } else { "DESC" },
                 if sort_key.nulls_first {
@@ -357,12 +425,23 @@ fn sort_to_format_tree(plan: &Sort, metadata: &MetadataRef) -> Result<FormatTree
         children.extend(items);
     }
 
-    children.push(to_format_tree(&plan.input, metadata)?);
+    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
+        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
+        children.push(FormatTreeNode::new(format!(
+            "total process time: {process_time}ms"
+        )));
+    }
+
+    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
 
     Ok(FormatTreeNode::with_children("Sort".to_string(), children))
 }
 
-fn limit_to_format_tree(plan: &Limit, metadata: &MetadataRef) -> Result<FormatTreeNode<String>> {
+fn limit_to_format_tree(
+    plan: &Limit,
+    metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
+) -> Result<FormatTreeNode<String>> {
     let mut children = vec![
         FormatTreeNode::new(format!(
             "limit: {}",
@@ -377,7 +456,14 @@ fn limit_to_format_tree(plan: &Limit, metadata: &MetadataRef) -> Result<FormatTr
         children.extend(items);
     }
 
-    children.push(to_format_tree(&plan.input, metadata)?);
+    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
+        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
+        children.push(FormatTreeNode::new(format!(
+            "total process time: {process_time}ms"
+        )));
+    }
+
+    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
 
     Ok(FormatTreeNode::with_children("Limit".to_string(), children))
 }
@@ -385,6 +471,7 @@ fn limit_to_format_tree(plan: &Limit, metadata: &MetadataRef) -> Result<FormatTr
 fn hash_join_to_format_tree(
     plan: &HashJoin,
     metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
 ) -> Result<FormatTreeNode<String>> {
     let build_keys = plan
         .build_keys
@@ -405,8 +492,8 @@ fn hash_join_to_format_tree(
         .collect::<Vec<_>>()
         .join(", ");
 
-    let mut build_child = to_format_tree(&plan.build, metadata)?;
-    let mut probe_child = to_format_tree(&plan.probe, metadata)?;
+    let mut build_child = to_format_tree(&plan.build, metadata, prof_span_set)?;
+    let mut probe_child = to_format_tree(&plan.probe, metadata, prof_span_set)?;
 
     build_child.payload = format!("{}(Build)", build_child.payload);
     probe_child.payload = format!("{}(Probe)", probe_child.payload);
@@ -423,6 +510,13 @@ fn hash_join_to_format_tree(
         children.extend(items);
     }
 
+    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
+        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
+        children.push(FormatTreeNode::new(format!(
+            "total process time: {process_time}ms"
+        )));
+    }
+
     children.push(build_child);
     children.push(probe_child);
 
@@ -435,6 +529,7 @@ fn hash_join_to_format_tree(
 fn exchange_to_format_tree(
     plan: &Exchange,
     metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
 ) -> Result<FormatTreeNode<String>> {
     Ok(FormatTreeNode::with_children("Exchange".to_string(), vec![
         FormatTreeNode::new(format!("exchange type: {}", match plan.kind {
@@ -450,13 +545,14 @@ fn exchange_to_format_tree(
             FragmentKind::Expansive => "Broadcast".to_string(),
             FragmentKind::Merge => "Merge".to_string(),
         })),
-        to_format_tree(&plan.input, metadata)?,
+        to_format_tree(&plan.input, metadata, prof_span_set)?,
     ]))
 }
 
 fn union_all_to_format_tree(
     plan: &UnionAll,
     metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
 ) -> Result<FormatTreeNode<String>> {
     let mut children = vec![];
 
@@ -465,9 +561,16 @@ fn union_all_to_format_tree(
         children.extend(items);
     }
 
+    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
+        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
+        children.push(FormatTreeNode::new(format!(
+            "total process time: {process_time}ms"
+        )));
+    }
+
     children.extend(vec![
-        to_format_tree(&plan.left, metadata)?,
-        to_format_tree(&plan.right, metadata)?,
+        to_format_tree(&plan.left, metadata, prof_span_set)?,
+        to_format_tree(&plan.right, metadata, prof_span_set)?,
     ]);
 
     Ok(FormatTreeNode::with_children(
@@ -523,6 +626,7 @@ fn exchange_source_to_format_tree(plan: &ExchangeSource) -> Result<FormatTreeNod
 fn exchange_sink_to_format_tree(
     plan: &ExchangeSink,
     metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
 ) -> Result<FormatTreeNode<String>> {
     let mut children = vec![];
 
@@ -531,7 +635,7 @@ fn exchange_sink_to_format_tree(
         plan.destination_fragment_id
     )));
 
-    children.push(to_format_tree(&plan.input, metadata)?);
+    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
 
     Ok(FormatTreeNode::with_children(
         "ExchangeSink".to_string(),
@@ -542,8 +646,9 @@ fn exchange_sink_to_format_tree(
 fn distributed_insert_to_format_tree(
     plan: &DistributedInsertSelect,
     metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
 ) -> Result<FormatTreeNode<String>> {
-    let children = vec![to_format_tree(&plan.input, metadata)?];
+    let children = vec![to_format_tree(&plan.input, metadata, prof_span_set)?];
 
     Ok(FormatTreeNode::with_children(
         "DistributedInsertSelect".to_string(),

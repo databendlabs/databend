@@ -21,7 +21,7 @@ use common_expression::FromOptData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_formats::FileFormatOptionsExt;
-use common_meta_types::FileFormatOptions;
+use common_meta_app::principal::FileFormatOptions;
 use common_settings::Settings;
 use pretty_assertions::assert_eq;
 

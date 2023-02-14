@@ -24,6 +24,16 @@ use crate::runtime::ThreadTracker;
 #[derive(Debug, Clone, Copy, Default)]
 pub struct StdAllocator;
 
+impl StdAllocator {
+    pub fn name() -> String {
+        "std".to_string()
+    }
+
+    pub fn conf() -> String {
+        "".to_string()
+    }
+}
+
 unsafe impl Allocator for StdAllocator {
     #[inline(always)]
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {

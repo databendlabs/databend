@@ -17,10 +17,10 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::BlockThresholds;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
 use storages_common_table_meta::meta;
 use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::ColumnId;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::StatisticsOfColumns;

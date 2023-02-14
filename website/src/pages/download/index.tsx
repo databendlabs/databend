@@ -95,7 +95,7 @@ const Releases: FC = (): ReactElement=> {
     if(data && data?.length > 0){
       const releaseData = data[0];
       const { assets, tag_name } = releaseData || {};
-      const reslut = assets
+      const result = assets
       ?.filter((item)=> {
         item.tagName = tag_name;
         if (item?.name?.includes('-apple-')) {
@@ -119,7 +119,7 @@ const Releases: FC = (): ReactElement=> {
       ?.sort((a, b)=> {
         return a.sort - b.sort;
       })
-      setReleaseData(reslut);
+      setReleaseData(result);
     }
   }
   return (

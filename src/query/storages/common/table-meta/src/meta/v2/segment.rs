@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_arrow::native::ColumnMeta as NativeColumnMeta;
+use common_expression::ColumnId;
 use common_expression::TableField;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -24,7 +25,6 @@ use serde::Serialize;
 use crate::meta::statistics::ClusterStatistics;
 use crate::meta::statistics::ColumnStatistics;
 use crate::meta::statistics::FormatVersion;
-use crate::meta::ColumnId;
 use crate::meta::Compression;
 use crate::meta::Location;
 use crate::meta::Statistics;

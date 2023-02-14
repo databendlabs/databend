@@ -21,6 +21,7 @@ use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::*;
 use common_meta_kvapi::kvapi;
+use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::errors::app_error::AppError;
 use common_meta_types::errors::app_error::ShareHasNoGrantedDatabase;
 use common_meta_types::errors::app_error::UnknownDatabase;
@@ -43,7 +44,6 @@ use common_meta_types::TxnOp;
 use common_meta_types::TxnOpResponse;
 use common_meta_types::TxnPutRequest;
 use common_meta_types::TxnRequest;
-use common_meta_types::UpsertKVReq;
 use common_proto_conv::FromToProto;
 use enumflags2::BitFlags;
 use tracing::debug;
@@ -178,7 +178,7 @@ pub async fn fetch_id<T: kvapi::Key>(
     let res = kv_api
         .upsert_kv(UpsertKVReq {
             key: generator.to_string_key(),
-            seq: MatchSeq::Any,
+            seq: MatchSeq::GE(0),
             value: Operation::Update(b"".to_vec()),
             value_meta: None,
         })

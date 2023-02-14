@@ -24,7 +24,7 @@ use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_meta_types::UserDefinedFunction;
+use common_meta_app::principal::UserDefinedFunction;
 
 use crate::planner::udf_validator::UDFValidator;
 use crate::plans::AlterUDFPlan;
@@ -104,6 +104,11 @@ impl<'a> Binder {
                     ExplainKind::Syntax(formatted_sql) => Plan::ExplainSyntax { formatted_sql: formatted_sql.clone() },
                     _ => Plan::Explain { kind: kind.clone(), plan: Box::new(self.bind_statement(bind_context, query).await?) },
                 }
+            }
+
+            Statement::ExplainAnalyze { query } => {
+                let plan = self.bind_statement(bind_context, query).await?;
+                Plan::ExplainAnalyze { plan: Box::new(plan) }
             }
 
             Statement::ShowFunctions { limit } => {

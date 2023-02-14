@@ -26,6 +26,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
+use common_expression::FieldIndex;
 use common_storage::ColumnNodes;
 use opendal::Operator;
 
@@ -63,8 +64,8 @@ impl DataReader {
     }
 }
 
-pub type IndexedChunk = (usize, Vec<u8>);
-pub type IndexedReaders = HashMap<usize, DataReader>;
+pub type IndexedChunk = (FieldIndex, Vec<u8>);
+pub type IndexedReaders = HashMap<FieldIndex, DataReader>;
 
 /// The reader to parquet files with a projected schema.
 ///
@@ -85,7 +86,7 @@ pub struct ParquetReader {
     /// select a, a.b, a.c from t;
     /// select a, b, a from t;
     /// ```
-    columns_to_read: HashSet<usize>,
+    columns_to_read: HashSet<FieldIndex>,
     /// The schema of the [`common_expression::DataBlock`] this reader produces.
     ///
     /// ```
@@ -101,7 +102,7 @@ pub struct ParquetReader {
     /// [`ColumnNodes`] corresponding to the `projected_arrow_schema`.
     pub(crate) projected_column_nodes: ColumnNodes,
     /// [`ColumnDescriptor`]s corresponding to the `projected_arrow_schema`.
-    pub(crate) projected_column_descriptors: HashMap<usize, ColumnDescriptor>,
+    pub(crate) projected_column_descriptors: HashMap<FieldIndex, ColumnDescriptor>,
 }
 
 impl ParquetReader {
@@ -138,8 +139,8 @@ impl ParquetReader {
     ) -> Result<(
         ArrowSchema,
         ColumnNodes,
-        HashMap<usize, ColumnDescriptor>,
-        HashSet<usize>,
+        HashMap<FieldIndex, ColumnDescriptor>,
+        HashSet<FieldIndex>,
     )> {
         // Full schema and column leaves.
 
@@ -161,10 +162,14 @@ impl ParquetReader {
         let column_nodes = &projected_column_nodes.column_nodes;
         // Project column descriptors and collect columns to read
         let mut projected_column_descriptors = HashMap::with_capacity(column_nodes.len());
-        let mut columns_to_read =
-            HashSet::with_capacity(column_nodes.iter().map(|leaf| leaf.leaf_ids.len()).sum());
+        let mut columns_to_read = HashSet::with_capacity(
+            column_nodes
+                .iter()
+                .map(|leaf| leaf.leaf_indices.len())
+                .sum(),
+        );
         for column_node in column_nodes {
-            for index in &column_node.leaf_ids {
+            for index in &column_node.leaf_indices {
                 columns_to_read.insert(*index);
                 projected_column_descriptors
                     .insert(*index, schema_descriptors.columns()[*index].clone());

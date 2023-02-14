@@ -16,10 +16,10 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::principal::UserGrantSet;
+use common_meta_app::principal::UserInfo;
+use common_meta_app::principal::UserQuota;
 use common_meta_types::MatchSeq;
-use common_meta_types::UserGrantSet;
-use common_meta_types::UserInfo;
-use common_meta_types::UserQuota;
 use common_sql::plans::CreateUserPlan;
 use common_users::UserApiProvider;
 

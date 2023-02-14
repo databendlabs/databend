@@ -142,6 +142,11 @@ docker run --net=host  datafuselabs/databend
 - [How to Load Data from Amazon S3](https://databend.rs/doc/load-data/s3)
 - [How to Load Data from Databend Stages](https://databend.rs/doc/load-data/stage)
 
+
+## Unloading Data from Databend
+
+- [How to Unload Data from Databend](https://databend.rs/doc/unload-data/)
+
 ### Managing Users
 
 - [How to Create a User](https://databend.rs/doc/sql-commands/ddl/user/user-create-user)
@@ -189,7 +194,6 @@ docker run --net=host  datafuselabs/databend
 
 ### Performance
 
-- [How to Benchmark Databend](https://databend.rs/doc/use-cases/analyze-ontime-with-databend-on-ec2-and-s3)
 - [How to Benchmark Databend using TPC-H](https://databend.rs/blog/2022/08/08/benchmark-tpc-h)
 
 
@@ -215,6 +219,8 @@ For general help in using Databend, please refer to the official documentation. 
 - [I'm feeling lucky](https://link.databend.rs/i-m-feeling-lucky) (Pick up a good first issue now!)
 
 ## Roadmap
+
+- [Roadmap v1.0](https://github.com/datafuselabs/databend/issues/9604)
 - [Roadmap v0.9](https://github.com/datafuselabs/databend/issues/7052)
 - [Roadmap 2023](https://github.com/datafuselabs/databend/issues/9448)
 

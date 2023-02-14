@@ -59,7 +59,9 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::Scan;
 use crate::ColumnBinding;
+use crate::BaseTableColumn;
 use crate::ColumnEntry;
+use crate::DerivedColumn;
 use crate::IndexType;
 use crate::Metadata;
 use crate::MetadataRef;
@@ -70,11 +72,22 @@ use crate::DUMMY_TABLE_INDEX;
 pub struct PhysicalPlanBuilder {
     metadata: MetadataRef,
     ctx: Arc<dyn TableContext>,
+    next_plan_id: u32,
 }
 
 impl PhysicalPlanBuilder {
     pub fn new(metadata: MetadataRef, ctx: Arc<dyn TableContext>) -> Self {
-        Self { metadata, ctx }
+        Self {
+            metadata,
+            ctx,
+            next_plan_id: 0,
+        }
+    }
+
+    fn next_plan_id(&mut self) -> u32 {
+        let id = self.next_plan_id;
+        self.next_plan_id += 1;
+        id
     }
 
     fn build_projection(
@@ -88,8 +101,10 @@ impl PhysicalPlanBuilder {
                 .iter()
                 .map(|index| {
                     let name = match metadata.column(*index) {
-                        ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
-                        ColumnEntry::DerivedColumn { alias, .. } => alias,
+                        ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => {
+                            column_name
+                        }
+                        ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
                     };
                     schema.index_of(name).unwrap()
                 })
@@ -102,18 +117,18 @@ impl PhysicalPlanBuilder {
                 .map(|index| {
                     let column = metadata.column(*index);
                     match column {
-                        ColumnEntry::BaseTableColumn {
+                        ColumnEntry::BaseTableColumn(BaseTableColumn {
                             column_name,
                             path_indices,
                             ..
-                        } => match path_indices {
+                        }) => match path_indices {
                             Some(path_indices) => (column.index(), path_indices.to_vec()),
                             None => {
                                 let idx = schema.index_of(column_name).unwrap();
                                 (column.index(), vec![idx])
                             }
                         },
-                        ColumnEntry::DerivedColumn { alias, .. } => {
+                        ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => {
                             let idx = schema.index_of(alias).unwrap();
                             (column.index(), vec![idx])
                         }
@@ -126,7 +141,7 @@ impl PhysicalPlanBuilder {
     }
 
     #[async_recursion::async_recursion]
-    pub async fn build(&self, s_expr: &SExpr) -> Result<PhysicalPlan> {
+    pub async fn build(&mut self, s_expr: &SExpr) -> Result<PhysicalPlan> {
         // Build stat info
         let stat_info = self.build_plan_stat_info(s_expr)?;
 
@@ -137,15 +152,19 @@ impl PhysicalPlanBuilder {
                 let metadata = self.metadata.read().clone();
                 for index in scan.columns.iter() {
                     let column = metadata.column(*index);
-                    if let ColumnEntry::BaseTableColumn { path_indices, .. } = column {
+                    if let ColumnEntry::BaseTableColumn(BaseTableColumn { path_indices, .. }) =
+                        column
+                    {
                         if path_indices.is_some() {
                             has_inner_column = true;
                         }
                     }
 
                     let name = match column {
-                        ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
-                        ColumnEntry::DerivedColumn { alias, .. } => alias,
+                        ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => {
+                            column_name
+                        }
+                        ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
                     };
                     if let Some(prewhere) = &scan.prewhere {
                         // if there is a prewhere optimization,
@@ -178,6 +197,7 @@ impl PhysicalPlanBuilder {
                     .await?;
 
                 Ok(PhysicalPlan::TableScan(TableScan {
+                    plan_id: self.next_plan_id(),
                     name_mapping,
                     source: Box::new(source),
                     table_index: scan.table_index,
@@ -195,6 +215,7 @@ impl PhysicalPlanBuilder {
                     .read_plan_with_catalog(self.ctx.clone(), CATALOG_DEFAULT.to_string(), None)
                     .await?;
                 Ok(PhysicalPlan::TableScan(TableScan {
+                    plan_id: self.next_plan_id(),
                     name_mapping: BTreeMap::from([("dummy".to_string(), DUMMY_COLUMN_INDEX)]),
                     source: Box::new(source),
                     table_index: DUMMY_TABLE_INDEX,
@@ -218,6 +239,7 @@ impl PhysicalPlanBuilder {
                         .collect::<Vec<_>>(),
                 );
                 Ok(PhysicalPlan::HashJoin(HashJoin {
+                    plan_id: self.next_plan_id(),
                     build: Box::new(build_side),
                     probe: Box::new(probe_side),
                     join_type: join.join_type.clone(),
@@ -268,6 +290,7 @@ impl PhysicalPlanBuilder {
                 let input = Box::new(self.build(s_expr.child(0)?).await?);
                 let input_schema = input.output_schema()?;
                 Ok(PhysicalPlan::EvalScalar(EvalScalar {
+                    plan_id: self.next_plan_id(),
                     input,
                     exprs: eval_scalar
                         .items
@@ -293,6 +316,7 @@ impl PhysicalPlanBuilder {
                 let input = Box::new(self.build(s_expr.child(0)?).await?);
                 let input_schema = input.output_schema()?;
                 Ok(PhysicalPlan::Filter(Filter {
+                    plan_id: self.next_plan_id(),
                     input,
                     predicates: filter
                         .predicates
@@ -357,6 +381,7 @@ impl PhysicalPlanBuilder {
                         match input {
                             PhysicalPlan::Exchange(PhysicalExchange { input, kind, .. }) => {
                                 let aggregate_partial = AggregatePartial {
+                                    plan_id: self.next_plan_id(),
                                     input,
                                     agg_funcs,
                                     group_by: group_items,
@@ -388,6 +413,7 @@ impl PhysicalPlanBuilder {
                                 })
                             }
                             _ => PhysicalPlan::AggregatePartial(AggregatePartial {
+                                plan_id: self.next_plan_id(),
                                 agg_funcs,
                                 group_by: group_items,
                                 input: Box::new(input),
@@ -456,6 +482,7 @@ impl PhysicalPlanBuilder {
                                 let before_group_by_schema = partial.input.output_schema()?;
                                 let limit = agg.limit;
                                 PhysicalPlan::AggregateFinal(AggregateFinal {
+                                    plan_id: self.next_plan_id(),
                                     input: Box::new(input),
                                     group_by: group_items,
                                     agg_funcs,
@@ -474,6 +501,7 @@ impl PhysicalPlanBuilder {
                                 let limit = agg.limit;
 
                                 PhysicalPlan::AggregateFinal(AggregateFinal {
+                                    plan_id: self.next_plan_id(),
                                     input: Box::new(input),
                                     group_by: group_items,
                                     agg_funcs,
@@ -500,6 +528,7 @@ impl PhysicalPlanBuilder {
                 Ok(result)
             }
             RelOperator::Sort(sort) => Ok(PhysicalPlan::Sort(Sort {
+                plan_id: self.next_plan_id(),
                 input: Box::new(self.build(s_expr.child(0)?).await?),
                 order_by: sort
                     .items
@@ -515,6 +544,7 @@ impl PhysicalPlanBuilder {
                 stat_info: Some(stat_info),
             })),
             RelOperator::Limit(limit) => Ok(PhysicalPlan::Limit(Limit {
+                plan_id: self.next_plan_id(),
                 input: Box::new(self.build(s_expr.child(0)?).await?),
                 limit: limit.limit,
                 offset: limit.offset,
@@ -562,6 +592,7 @@ impl PhysicalPlanBuilder {
                     .map(|(left, _)| Ok(left_schema.field_with_name(left)?.clone()))
                     .collect::<Result<Vec<_>>>()?;
                 Ok(PhysicalPlan::UnionAll(UnionAll {
+                    plan_id: self.next_plan_id(),
                     left: Box::new(left),
                     right: Box::new(self.build(s_expr.child(1)?).await?),
                     pairs,
@@ -714,14 +745,14 @@ impl PhysicalPlanBuilder {
                         let metadata = self.metadata.read();
                         let column = metadata.column(item.index);
                         let (name, data_type) = match column {
-                            ColumnEntry::BaseTableColumn {
+                            ColumnEntry::BaseTableColumn(BaseTableColumn {
                                 column_name,
                                 data_type,
                                 ..
-                            } => (column_name.clone(), DataType::from(data_type)),
-                            ColumnEntry::DerivedColumn {
+                            }) => (column_name.clone(), DataType::from(data_type)),
+                            ColumnEntry::DerivedColumn(DerivedColumn {
                                 alias, data_type, ..
-                            } => (alias.clone(), data_type.clone()),
+                            }) => (alias.clone(), data_type.clone()),
                         };
 
                         // sort item is already a column

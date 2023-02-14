@@ -30,7 +30,7 @@ A regular expression pattern string, enclosed in single quotes, filters files to
 
 ## Examples
 
-This command removes all the files with a name matching the patten *'ontime.*'* from the stage named *playground*: 
+This command removes all the files with a name matching the pattern *'ontime.*'* from the stage named *playground*:
 
 ```sql
 REMOVE @playground PATTERN = 'ontime.*'

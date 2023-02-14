@@ -52,8 +52,8 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
 
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
-        let calalog = self.ctx.get_catalog(&self.plan.catalog)?;
-        let db = calalog
+        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+        let db = catalog
             .get_database(tenant.as_str(), &self.plan.database)
             .await?;
         let name = db.name();

@@ -18,6 +18,7 @@ use common_base::base::escape_for_key;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_kvapi::kvapi;
+use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::IntoSeqV;
 use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
@@ -25,7 +26,6 @@ use common_meta_types::MatchSeqExt;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::TenantQuota;
-use common_meta_types::UpsertKVReq;
 
 use super::quota_api::QuotaApi;
 

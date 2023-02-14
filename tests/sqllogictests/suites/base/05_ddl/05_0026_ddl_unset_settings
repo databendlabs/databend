@@ -3,8 +3,8 @@ query TTTT
 SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone', 'wait_for_async_insert_timeout')
 ----
 sql_dialect PostgreSQL PostgreSQL SESSION
-timezone                       UTC         UTC         SESSION
-wait_for_async_insert_timeout  100         100         SESSION
+timezone UTC UTC SESSION
+wait_for_async_insert_timeout 100 100 SESSION
 
 skipif clickhouse
 statement ok

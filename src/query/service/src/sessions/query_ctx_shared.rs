@@ -27,8 +27,8 @@ use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_meta_types::RoleInfo;
-use common_meta_types::UserInfo;
+use common_meta_app::principal::RoleInfo;
+use common_meta_app::principal::UserInfo;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
@@ -314,9 +314,9 @@ impl QueryContextShared {
     pub fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
         let mut blocks = self.precommit_blocks.write();
 
-        let mut swaped_precommit_blocks = vec![];
-        std::mem::swap(&mut *blocks, &mut swaped_precommit_blocks);
-        swaped_precommit_blocks
+        let mut swapped_precommit_blocks = vec![];
+        std::mem::swap(&mut *blocks, &mut swapped_precommit_blocks);
+        swapped_precommit_blocks
     }
 
     pub fn get_stage_attachment(&self) -> Option<StageAttachment> {

@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 # cargo can't build fuzz targets with afl
-# split `fuzz` into seperate workspace can help resolve this.
+# split `fuzz` into separate workspace can help resolve this.
 # add an empty `[workspace]` table to the package's manifest.
 [workspace]
 

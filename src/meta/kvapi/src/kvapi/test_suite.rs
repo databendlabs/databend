@@ -37,12 +37,12 @@ use common_meta_types::TxnPutRequest;
 use common_meta_types::TxnPutResponse;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
-use common_meta_types::UpsertKVReq;
 use common_meta_types::With;
 use tracing::debug;
 use tracing::info;
 
 use crate::kvapi;
+use crate::kvapi::UpsertKVReq;
 
 pub struct TestSuite {}
 

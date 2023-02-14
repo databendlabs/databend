@@ -159,6 +159,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                 DataType::Map(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::Tuple(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::Variant => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
+                DataType::Decimal(_) => Ok(ColumnType::MYSQL_TYPE_DECIMAL),
                 _ => Err(ErrorCode::Unimplemented(format!(
                     "Unsupported column type:{:?}",
                     field.data_type()

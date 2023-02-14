@@ -17,6 +17,7 @@ use common_exception::Result;
 use crate::optimizer::rule::RuleFactory;
 use crate::optimizer::rule::RuleID;
 use crate::optimizer::rule::RulePtr;
+use crate::MetadataRef;
 
 #[allow(dead_code)]
 // Ordered list of rules, may contain duplicated rules.
@@ -25,11 +26,11 @@ pub struct RuleList {
 }
 
 impl RuleList {
-    pub fn create(ids: Vec<RuleID>) -> Result<Self> {
+    pub fn create(ids: Vec<RuleID>, metadata: Option<MetadataRef>) -> Result<Self> {
         let factory = RuleFactory::create();
         let mut rules = vec![];
         for id in ids {
-            rules.push(factory.create_rule(id)?);
+            rules.push(factory.create_rule(id, metadata.clone())?);
         }
         Ok(RuleList { rules })
     }

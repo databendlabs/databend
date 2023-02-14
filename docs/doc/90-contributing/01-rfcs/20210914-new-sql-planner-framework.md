@@ -94,10 +94,10 @@ In summary, this RFC will:
 
 In current implementation, a SQL query will be processed as follows:
 
-1. `PlanParser` will parse the SQL text into AST(Abstrct Syntax Tree)
+1. `PlanParser` will parse the SQL text into AST(Abstract Syntax Tree)
 2. `PlanParser` will also build a canonical plan tree represented with `PlanNode` from the AST
 3. After building plan tree, `Optimizer` will do some canonical optimization to the plan, and produce the final `PlanNode`
-4. `Intepreter` will take the `PlanNode` as input and interpret it as an executable `Pipeline` consists of `Processor`s
+4. `Interpreter` will take the `PlanNode` as input and interpret it as an executable `Pipeline` consists of `Processor`s
 5. Executor will execute the `Pipeline` with specific runtime
 
 In our new framework, `PlanParser` will be refactored into two components:
