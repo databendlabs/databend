@@ -17,6 +17,8 @@ use std::sync::Arc;
 use common_base::base::GlobalInstance;
 use common_exception::Result;
 use common_grpc::RpcClientConf;
+use common_management::FileFormatApi;
+use common_management::FileFormatMgr;
 use common_management::QuotaApi;
 use common_management::QuotaMgr;
 use common_management::RoleApi;
@@ -92,6 +94,13 @@ impl UserApiProvider {
 
     pub fn get_stage_api_client(&self, tenant: &str) -> Result<Arc<dyn StageApi>> {
         Ok(Arc::new(StageMgr::create(self.client.clone(), tenant)?))
+    }
+
+    pub fn get_file_format_api_client(&self, tenant: &str) -> Result<Arc<dyn FileFormatApi>> {
+        Ok(Arc::new(FileFormatMgr::create(
+            self.client.clone(),
+            tenant,
+        )?))
     }
 
     pub fn get_udf_api_client(&self, tenant: &str) -> Result<Arc<dyn UdfApi>> {

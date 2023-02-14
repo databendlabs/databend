@@ -1,5 +1,4 @@
-#![feature(cursor_remaining)]
-// Copyright 2021 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,9 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#![allow(clippy::uninlined_format_args)]
 
-mod binary_read;
-mod binary_write;
-mod cursor_ext;
-mod escape;
+mod file_format_api;
+mod file_format_mgr;
+
+pub use file_format_api::FileFormatApi;
+pub use file_format_mgr::FileFormatMgr;

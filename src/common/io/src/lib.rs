@@ -31,8 +31,11 @@ mod binary_read;
 mod binary_write;
 
 pub mod cursor_ext;
+mod escape;
 mod file_split;
 mod format_settings;
 mod position;
 mod serialization;
 mod stat_buffer;
+
+pub use escape::escape_string;
