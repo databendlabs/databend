@@ -31,7 +31,7 @@ If we execute the full query pipeline every time, the cost may be every expensiv
 
 Each result cache has a time-to-live (TTL). Each access to the result cache will refresh the TTL .When the TTL is expired, the result cache will not be used any more.
 
-Besides TTL, when the underlying data is changed (we can infer this by snapshot ids, segment ids and partition locations), the result cache will also be invalidated.
+Besides TTL, when the underlying data is changed (we can infer this by snapshot ids, segment ids or partition locations), the result cache will also be invalidated.
 
 ### Result cache storage
 
@@ -62,16 +62,13 @@ pub struct ResultCacheValue {
     pub query_time: DateTime<Utc>,
     /// Time-to-live of this query.
     pub ttl: usize,
-    /// The snapshot ids of the underlying data.
-    pub snapshot_ids: Vec<String>,
-    /// The segment ids of the underlying data.
-    pub segment_ids: Vec<String>,
-    /// The partition locations of the underlying data.
-    pub partition_locations: Vec<String>,
     /// The size of the result cache (bytes).
     pub result_size: usize,
     /// The location of the result cache file.
     pub location: String,
+
+    // May be other information
+    // ...
 }
 ```
 
@@ -88,34 +85,35 @@ Databend will cache every query result is query result cache is enabled. If the 
 - `enable_query_result_cache`: whether to enable query result cache (default: false).
 - `max_result_cache_bytes`: the maximum size of the result cache for one query (default: 1048576 bytes, 1MB).
 - `result_cache_ttl`: the time-to-live of the result cache (default: 300 seconds).
+- `tolerate_inconsistent_result_cache`: whether to tolerate inconsistent query result cache (default: false). If the underlying data is changed, the result cache will be invalidated. If this configuration is set to true, Databend will still use the result cache even if the underlying data is changed.
 
 ### Write result cache
 
-`WriteResultCacheTransform` is used to handle query result cache writing:
+`TransformWriteResultCache` is used to handle query result cache writing:
 
 ```rust
-pub struct WriteResultCacheTransform {
+pub struct TransformWriteResultCache {
     ctx: Arc<QueryContext>,
     cache_key: String,
     cache_writer: ResultCacheWriter,
 }
 ```
 
-When constructing the query pipeline, Databend will add `WriteResultCacheTransform` to the end of the pipeline:
+When constructing the query pipeline, Databend will add `TransformWriteResultCache` to the end of the pipeline:
 
 ```rust
 impl Interpreter for SelectInterpreterV2 {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let build_res = self.build_pipeline().await?;
         if self.ctx.get_settings().get_query_result_cache().enable_query_result_cache {
-            build_res.main_pipeline.add_transform(WriteResultCacheTransform::try_create)?;
+            build_res.main_pipeline.add_transform(TransformWriteResultCache::try_create)?;
         }
         Ok(build_res)
     }
 }
 ```
 
-The process of `WriteResultCacheTransform` is like:
+The process of `TransformWriteResultCache` is like:
 
 1. If upstream is finished, use `cache_writer` to generate  and write the result to a cache file. Go to 6.
 2. Read a `DataBlock` from the input port.
@@ -128,25 +126,7 @@ The process of `WriteResultCacheTransform` is like:
 
 Before constructing the select interpreter, Databend will check if the query result cache is available.
 
-Databend will validate the `ResultCacheValue` by the cache key (AST) from `databend-meta` first. The validation is level by level:
-
-```
-1. `snapshot_ids` not changed: valid.
-      │
-      │ if invalid
-      ▼
-2. `segment_ids` not changed: valid.
-      │
-      │ if invalid
-      ▼
-3. `partition_locations` not changed: valid.
-      │
-      │ if invalid
-      ▼
-4. Invalid.
-```
-
-If the result cache is available and valid, Databend will get the query result from the result cache file; otherwise, Databend will continue to build and execute the original query pipeline.
+Databend will validate the `ResultCacheValue` by the cache key (AST) from `databend-meta` first. If the result cache is available and valid, Databend will get the query result from the result cache file; otherwise, Databend will continue to build and execute the original query pipeline.
 
 ### System table `system.query_cache`
 
@@ -159,3 +139,7 @@ The table contains such information:
 - `expired_time`: the expired time of the result cache.
 - `result_size`: the size of the result cache (bytes).
 - `location`: the location of the result cache file.
+
+### Non-deterministic functions
+
+Some functions are non-deterministic, such as `now()`, `rand()`, `uuid()`, etc. If these functions are used in the query, the result will not be cached.
