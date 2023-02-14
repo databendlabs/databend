@@ -20,17 +20,13 @@ jobs:
         run: |
           gh run download ${{ github.event.workflow_run.id }} --dir benchmark/results --name benchmark-results
           echo "PR_NUMBER=$(jq -r '.extra.pr' benchmark/results/result.json)" >> $GITHUB_ENV
-      # - name: Upload results to s3
-      #   shell: bash
-      #   run: |
-      #     aws s3 cp benchmark/results/result.json s3://databend-ci/perf/results/PR_${PR_NUMBER}/result.json
-      # - name: Comment on PR
-      #   uses: everpcpc/comment-on-pr-action@v1
-      #   with:
-      #     number: ${{ env.BENCHMARK_PR_NUMBER }}
-      #     token: ${{ github.token }}
-      #     identifier: benchmark
-      #     body: |
-      #       ![platform](https://img.shields.io/static/v1?label=AWS%20EC2&message=${{ env.BENCHMARK_INSTANCE_TYPE }}&color=orange&logo=amazonec2)
-      #     files: benchmark/results/hits.md
-      #     file-titles: "Hits"
+      - name: Comment on PR
+        uses: everpcpc/comment-on-pr-action@v1
+        with:
+          number: ${{ env.BENCHMARK_PR_NUMBER }}
+          token: ${{ github.token }}
+          identifier: benchmark
+          body: |
+            ## Benchmark Results:
+            ![platform](https://img.shields.io/static/v1?label=AWS%20EC2&message=c5.4xlarge&color=orange&logo=amazonec2)
+            Please check result from [Workflow Artifacts](https://github.com/datafuselabs/databend/actions/runs/${{ github.event.workflow_run.id }})

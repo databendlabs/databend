@@ -56,8 +56,8 @@ nohup databend-query \
     --storage-type s3 \
     --storage-s3-region us-east-2 \
     --storage-s3-bucket databend-ci \
-    --storage-s3-root "perf/data/${BENCHMARK_ID}" \
-    --tenant-id perf \
+    --storage-s3-root "benchmark/data/${BENCHMARK_ID}" \
+    --tenant-id benchmark \
     --cluster-id "${BENCHMARK_ID}" \
     --storage-allow-insecure &
 echo "Waiting on databend-query 10 seconds..."

@@ -3,10 +3,10 @@
 # from: https://github.com/ClickHouse/ClickBench/blob/main/generate-results.sh
 
 (
-    sed '/^const data = \[$/q' index.html
+    sed '/^[ \t]*const data = \[$/q' index.html
 
     FIRST=1
-    ls -1 ./results/*/result.json | while read file; do
+    find ./results/ -name result.json | while read -r file; do
         [[ $file =~ ^(hardware|versions)/ ]] && continue
 
         [ "${FIRST}" = "0" ] && echo -n ','
@@ -15,6 +15,6 @@
     done
 
     echo ']; // end of data'
-    sed '0,/^\]; \/\/ end of data$/d' index.html
+    sed '0,/^[ \t]*\]; \/\/ end of data$/d' index.html
 
 ) >results/index.html
