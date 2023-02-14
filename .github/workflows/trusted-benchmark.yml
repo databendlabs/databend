@@ -1,0 +1,72 @@
+name: Benchmark Commentator (trusted)
+
+on:
+  workflow_run:
+    workflows: ["Benchmark"]
+    types:
+      - completed
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  comment_on_pr:
+    runs-on: [self-hosted, X64, Linux, dev]
+    if: >
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Download benchmark results
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download ${{ github.event.workflow_run.id }} --dir benchmark/results --name benchmark-results
+          gh run download ${{ github.event.workflow_run.id }} --dir benchmark/results --name clickbench-report
+          echo "PR_NUMBER=$(jq -r '.extra.pr' benchmark/results/result.json)" >> $GITHUB_ENV
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: ${{ secrets.REPO_ROLE_ARN }}
+          role-duration-seconds: 900
+          aws-region: us-east-2
+      - name: Upload PR clickbench report to repo.databend.rs
+        working-directory: benchmark/results
+        run: |
+          aws s3 cp result.json s3://repo.databend.rs/benchmark/clickbench/pr/${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}.json
+          aws s3 cp index.html s3://repo.databend.rs/benchmark/clickbench/pr/${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}.html
+      - name: Comment on PR
+        uses: everpcpc/comment-on-pr-action@v1
+        with:
+          number: ${{ env.PR_NUMBER }}
+          token: ${{ github.token }}
+          identifier: benchmark
+          body: |
+            ![platform](https://img.shields.io/static/v1?label=AWS%20EC2&message=c5.4xlarge&color=orange&logo=amazonec2)
+            **Benchmark Results**: https://repo.databend.rs/benchmark/clickbench/pr/${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}.html
+
+  archive_for_release:
+    runs-on: [self-hosted, X64, Linux, dev]
+    if: >
+      github.event.workflow_run.event == 'workflow_dispatch' &&
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Download benchmark results
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download ${{ github.event.workflow_run.id }} --dir benchmark/results --name benchmark-results
+          echo "RELEASE_TAG=$(jq -r '.extra.release' benchmark/results/result.json)" >> $GITHUB_ENV
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: ${{ secrets.REPO_ROLE_ARN }}
+          role-duration-seconds: 900
+          aws-region: us-east-2
+      - name: Upload nightly results to repo.databend.rs
+        working-directory: benchmark/results
+        run: |
+          RESULT_PATH="$(date -u +%Y)/$(date -u +%m)/$(date -u +%Y-%m-%d)/${{ env.RELEASE_TAG }}.json"
+          aws s3 cp result.json s3://repo.databend.rs/benchmark/clickbench/release/${RESULT_PATH}

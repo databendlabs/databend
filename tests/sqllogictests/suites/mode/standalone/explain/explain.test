@@ -32,13 +32,13 @@ explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a an
 ----
 Filter
 ├── filters: [or(gt(t1.a (#0), to_uint64(3)), and(gt(t2.a (#2), to_uint64(5)), gt(t1.a (#0), to_uint64(1))))]
-├── estimated rows: 0.19
+├── estimated rows: 0.14
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [t1.a (#0)]
     ├── probe keys: [t2.a (#2)]
     ├── filters: []
-    ├── estimated rows: 0.56
+    ├── estimated rows: 0.43
     ├── Filter(Build)
     │   ├── filters: [or(gt(t1.a (#0), to_uint64(3)), gt(t1.a (#0), to_uint64(1)))]
     │   ├── estimated rows: 0.56
@@ -51,15 +51,18 @@ Filter
     │       ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
     │       ├── push downs: [filters: [or(gt(t1.a (#0), 3), gt(t1.a (#0), 1))], limit: NONE]
     │       └── estimated rows: 1.00
-    └── TableScan(Probe)
-        ├── table: default.default.t2
-        ├── read rows: 5
-        ├── read bytes: 108
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 5.00
+    └── Filter(Probe)
+        ├── filters: [or(gt(t2.a (#2), to_uint64(3)), gt(t2.a (#2), to_uint64(1)))]
+        ├── estimated rows: 3.12
+        └── TableScan
+            ├── table: default.default.t2
+            ├── read rows: 5
+            ├── read bytes: 108
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+            ├── push downs: [filters: [or(gt(t2.a (#2), 3), gt(t2.a (#2), 1))], limit: NONE]
+            └── estimated rows: 5.00
 
 query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a)

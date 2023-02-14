@@ -1,0 +1,129 @@
+name: Benchmark
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+    branches:
+      - main
+    paths-ignore:
+      - "docs/**"
+      - "website/**"
+      - "**.md"
+      - "docker/**"
+      - ".devcontainer/**"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The tag to run benchmark
+        required: true
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+env:
+  BUILD_PROFILE: release
+  RUNNER_PROVIDER: aws
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  build_release:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'ci-benchmark')
+    timeout-minutes: 30
+    runs-on: [self-hosted, X64, Linux, perf]
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+      - uses: ./.github/actions/build_linux
+        with:
+          target: x86_64-unknown-linux-gnu
+          profile: release
+
+  clickbench:
+    needs: build_release
+    timeout-minutes: 30
+    runs-on: [self-hosted, X64, Linux, perf]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Download artifact
+        uses: ./.github/actions/artifact_download
+        with:
+          profile: release
+          sha: ${{ github.sha }}
+          target: x86_64-unknown-linux-gnu
+      - name: Setup Databend Binary
+        run: |
+          sudo cp ./target/release/databend-query /usr/local/bin/databend-query
+          sudo cp ./target/release/databend-meta /usr/local/bin/databend-meta
+          databend-query --version
+          databend-meta --version
+      - name: Setup BendSQL
+        run: |
+          curl -fsSLo ./bendsql.tar.gz https://github.com/databendcloud/bendsql/releases/download/v0.3.2/bendsql-linux-amd64.tar.gz
+          tar -xvzf ./bendsql.tar.gz
+          chmod +x ./linux-amd64/bendsql
+          sudo cp ./linux-amd64/bendsql /usr/local/bin/bendsql
+          bendsql version
+      - name: Install script dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y jq netcat bc
+      - name: Run Benchmark
+        working-directory: benchmark/clickbench
+        env:
+          BENCHMARK_ID: ${{ github.run_id }}
+        run: |
+          ./benchmark.sh
+      - name: Prepare Metadata
+        working-directory: benchmark/clickbench
+        run: |
+          case ${{ github.event_name }} in
+            pull_request)
+              BENCHMARK_SYSTEM="Databend(PR#${{ github.event.number }})"
+              BENCHMARK_TYPE="PR"
+              jq ".extra.pr = \"${{ github.event.number }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+              ;;
+            workflow_dispatch)
+              BENCHMARK_SYSTEM="Databend(Release@${{ github.event.inputs.tag }})"
+              BENCHMARK_TYPE="Release"
+              jq ".extra.release = \"${{ github.event.inputs.tag }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+              ;;
+            *)
+              echo "Unspported event"
+              exit 1
+          esac
+          jq ".system = \"${BENCHMARK_SYSTEM}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+          jq ".date = \"$(date -u +%Y-%m-%d)\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+          jq ".machine = \"c5.4xlarge\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+          jq ".cluster_size = 1" <result.json >result.json.tmp && mv result.json.tmp result.json
+          jq ".comment = \"commit:${{ github.sha }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+          jq ".tags = [\"Rust\", \"${BENCHMARK_TYPE}\"]" <result.json >result.json.tmp && mv result.json.tmp result.json
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark-results
+          path: benchmark/clickbench/result.json
+      - name: Generate report
+        if: github.event_name == 'pull_request'
+        working-directory: benchmark/clickbench
+        run: |
+          aws s3 cp "s3://repo.databend.rs/benchmark/clickbench/release/$(date -u +%Y)/$(date -u +%m)/" ./results/ --recursive
+          mkdir -p "results/PR-${{ github.event.number }}"
+          mv result.json "results/PR-${{ github.event.number }}/${{ github.sha }}.json"
+          ./update-results.sh
+      - name: Upload clickbench report
+        uses: actions/upload-artifact@v3
+        with:
+          name: clickbench-report
+          path: benchmark/clickbench/results/index.html
+      - name: Clean test data
+        if: always()
+        run: |
+          echo 'drop table hits all;' | bendsql query

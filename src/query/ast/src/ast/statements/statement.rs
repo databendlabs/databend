@@ -15,6 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use common_meta_app::principal::FileFormatOptions;
 use common_meta_app::principal::PrincipalIdentity;
 use common_meta_app::principal::UserIdentity;
 
@@ -32,6 +33,9 @@ pub enum Statement {
     Query(Box<Query>),
     Explain {
         kind: ExplainKind,
+        query: Box<Statement>,
+    },
+    ExplainAnalyze {
         query: Box<Statement>,
     },
 
@@ -173,6 +177,17 @@ pub enum Statement {
         pattern: String,
     },
 
+    // UserDefinedFileFormat
+    CreateFileFormat {
+        if_not_exists: bool,
+        name: String,
+        file_format_options: FileFormatOptions,
+    },
+    DropFileFormat {
+        if_exists: bool,
+        name: String,
+    },
+    ShowFileFormats,
     Presign(PresignStmt),
 
     // share
@@ -206,9 +221,13 @@ impl Display for Statement {
                     ExplainKind::Fragments => write!(f, " FRAGMENTS")?,
                     ExplainKind::Raw => write!(f, " RAW")?,
                     ExplainKind::Plan => (),
+                    ExplainKind::AnalyzePlan => write!(f, " ANALYZE")?,
                     ExplainKind::Memo(_) => write!(f, "MEMO")?,
                 }
                 write!(f, " {query}")?;
+            }
+            Statement::ExplainAnalyze { query } => {
+                write!(f, "EXPLAIN ANALYZE {query}")?;
             }
             Statement::Query(query) => write!(f, "{query}")?,
             Statement::Insert(insert) => write!(f, "{insert}")?,
@@ -406,6 +425,26 @@ impl Display for Statement {
                 }
             }
             Statement::DescribeStage { stage_name } => write!(f, "DESC STAGE {stage_name}")?,
+            Statement::CreateFileFormat {
+                if_not_exists,
+                name,
+                file_format_options,
+            } => {
+                write!(f, "CREATE FILE_FORMAT")?;
+                if *if_not_exists {
+                    write!(f, " IF NOT EXISTS")?;
+                }
+                write!(f, " {name}")?;
+                write!(f, " {file_format_options}")?;
+            }
+            Statement::DropFileFormat { if_exists, name } => {
+                write!(f, "DROP FILE_FORMAT")?;
+                if *if_exists {
+                    write!(f, " IF EXISTS")?;
+                }
+                write!(f, " {name}")?;
+            }
+            Statement::ShowFileFormats => write!(f, "SHOW FILE FORMATS")?,
             Statement::Call(stmt) => write!(f, "{stmt}")?,
             Statement::Presign(stmt) => write!(f, "{stmt}")?,
             Statement::CreateShare(stmt) => write!(f, "{stmt}")?,

@@ -19,6 +19,7 @@ use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::RuleID;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::SExpr;
+use crate::plans::ComparisonOp;
 use crate::plans::Filter;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
@@ -66,6 +67,28 @@ impl Rule for RuleEliminateFilter {
             .into_iter()
             .unique()
             .collect::<Vec<ScalarExpr>>();
+        // Delete identically equal predicate
+        // After constant fold is ready, we can delete the following code
+        let predicates = predicates
+            .into_iter()
+            .filter(|predicate| match predicate {
+                ScalarExpr::ComparisonExpr(comparison_expr) => {
+                    let left_column = match &*comparison_expr.left {
+                        ScalarExpr::BoundColumnRef(left_col) => left_col,
+                        _ => return true,
+                    };
+                    let right_column = match &*comparison_expr.right {
+                        ScalarExpr::BoundColumnRef(right_col) => right_col,
+                        _ => return true,
+                    };
+                    !(comparison_expr.op == ComparisonOp::Equal
+                        && left_column.column.index == right_column.column.index
+                        && !left_column.column.data_type.is_nullable())
+                }
+                _ => true,
+            })
+            .collect::<Vec<ScalarExpr>>();
+
         if predicates.is_empty() {
             state.add_result(s_expr.child(0)?.clone());
         } else if origin_predicates.len() != predicates.len() {

@@ -76,6 +76,14 @@ jobs:
           gh release create ${{ steps.generated-tag.outputs.tag }} --generate-notes -p
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Trigger benchmark
+        continue-on-error: true
+        run: |
+          echo "Trigger benchmark for ${{ steps.generated-tag.outputs.tag }}"
+          gh workflow run benchmark.yml -f tag=${{ steps.generated-tag.outputs.tag }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 
   publish_macos:
     name: macos assets

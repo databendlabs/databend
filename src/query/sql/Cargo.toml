@@ -31,6 +31,7 @@ common-meta-app = { path = "../../meta/app" }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
 common-metrics = { path = "../../common/metrics" }
+common-profile = { path = "../../common/profile" }
 
 common-pipeline-core = { path = "../pipeline/core" }
 common-pipeline-sources = { path = "../pipeline/sources" }

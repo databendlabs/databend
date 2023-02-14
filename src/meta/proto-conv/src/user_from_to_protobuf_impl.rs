@@ -624,6 +624,7 @@ impl FromToProto for mt::principal::FileFormatOptions {
             compression,
             row_tag: p.row_tag,
             quote: p.quote,
+            name: None,
         })
     }
 
@@ -642,6 +643,47 @@ impl FromToProto for mt::principal::FileFormatOptions {
             row_tag: self.row_tag.clone(),
             escape: self.escape.clone(),
             quote: self.quote.clone(),
+        })
+    }
+}
+
+impl FromToProto for mt::principal::UserDefinedFileFormat {
+    type PB = pb::user_stage_info::UserDefinedFileFormat;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+    fn from_pb(p: pb::user_stage_info::UserDefinedFileFormat) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        let file_format_options =
+            mt::principal::FileFormatOptions::from_pb(p.file_format_options.ok_or_else(|| {
+                Incompatible {
+                    reason: "UserStageInfo.file_format_options cannot be None".to_string(),
+                }
+            })?)?;
+        let creator =
+            mt::principal::UserIdentity::from_pb(p.creator.ok_or_else(|| Incompatible {
+                reason: "UserStageInfo.file_format_options cannot be None".to_string(),
+            })?)?;
+
+        Ok(mt::principal::UserDefinedFileFormat {
+            name: p.name,
+            file_format_options,
+            creator,
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::user_stage_info::UserDefinedFileFormat, Incompatible> {
+        let file_format_options =
+            mt::principal::FileFormatOptions::to_pb(&self.file_format_options)?;
+        let creator = mt::principal::UserIdentity::to_pb(&self.creator)?;
+        Ok(pb::user_stage_info::UserDefinedFileFormat {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            name: self.name.clone(),
+            file_format_options: Some(file_format_options),
+            creator: Some(creator),
         })
     }
 }

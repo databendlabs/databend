@@ -59,11 +59,15 @@ impl TransformExchangeDeserializer {
             is_little_endian: true,
         };
 
-        Transformer::create(input, output, TransformExchangeDeserializer {
-            ipc_schema,
-            arrow_schema,
-            schema: schema.clone(),
-        })
+        ProcessorPtr::create(Transformer::create(
+            input,
+            output,
+            TransformExchangeDeserializer {
+                ipc_schema,
+                arrow_schema,
+                schema: schema.clone(),
+            },
+        ))
     }
 
     fn recv_data(&self, fragment_data: FragmentData) -> Result<DataBlock> {

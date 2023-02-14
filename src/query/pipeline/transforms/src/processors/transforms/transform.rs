@@ -20,7 +20,6 @@ use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
 // TODO: maybe we also need async transform for `SELECT sleep(1)`?
@@ -55,8 +54,8 @@ pub struct Transformer<T: Transform + 'static> {
 }
 
 impl<T: Transform + 'static> Transformer<T> {
-    pub fn create(input: Arc<InputPort>, output: Arc<OutputPort>, inner: T) -> ProcessorPtr {
-        ProcessorPtr::create(Box::new(Transformer {
+    pub fn create(input: Arc<InputPort>, output: Arc<OutputPort>, inner: T) -> Box<dyn Processor> {
+        Box::new(Self {
             input,
             output,
             transform: inner,
@@ -64,7 +63,7 @@ impl<T: Transform + 'static> Transformer<T> {
             output_data: None,
             called_on_start: false,
             called_on_finish: false,
-        }))
+        })
     }
 }
 

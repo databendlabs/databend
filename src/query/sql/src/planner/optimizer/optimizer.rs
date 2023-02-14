@@ -110,6 +110,9 @@ pub fn optimize(
                 plan: Box::new(optimize(ctx, opt_ctx, *plan)?),
             }),
         },
+        Plan::ExplainAnalyze { plan } => Ok(Plan::ExplainAnalyze {
+            plan: Box::new(optimize(ctx, opt_ctx, *plan)?),
+        }),
         Plan::Copy(v) => {
             Ok(Plan::Copy(Box::new(match *v {
                 CopyPlanV2::IntoStage {

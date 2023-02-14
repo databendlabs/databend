@@ -20,6 +20,7 @@ use crate::optimizer::rule::rewrite::filter_join::convert_mark_to_semi_join;
 use crate::optimizer::rule::rewrite::filter_join::convert_outer_to_inner_join;
 use crate::optimizer::rule::rewrite::filter_join::remove_nullable;
 use crate::optimizer::rule::rewrite::filter_join::rewrite_predicates;
+use crate::optimizer::rule::rewrite::filter_join::try_derive_predicates;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;
@@ -205,32 +206,8 @@ pub fn try_push_down_filter_join(
         return Ok((false, s_expr.clone()));
     }
 
-    let mut left_child = join_expr.child(0)?.clone();
-    let mut right_child = join_expr.child(1)?.clone();
-
-    if !left_push_down.is_empty() {
-        left_child = SExpr::create_unary(
-            Filter {
-                predicates: left_push_down,
-                is_having: false,
-            }
-            .into(),
-            left_child,
-        );
-    }
-
-    if !right_push_down.is_empty() {
-        right_child = SExpr::create_unary(
-            Filter {
-                predicates: right_push_down,
-                is_having: false,
-            }
-            .into(),
-            right_child,
-        );
-    }
-
-    let mut result = SExpr::create_binary(join.into(), left_child, right_child);
+    // try to derive new predicate and push down filter
+    let mut result = try_derive_predicates(s_expr, join, left_push_down, right_push_down)?;
 
     if !original_predicates.is_empty() {
         result = SExpr::create_unary(

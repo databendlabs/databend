@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::pipe::Pipe;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_sink_writer::create_writer_items;
@@ -61,10 +62,10 @@ impl ExchangeSink {
 
                 assert_eq!(flight_exchange.len(), 1);
                 pipeline.add_sink(|input| {
-                    Ok(ExchangeWriterSink::create(
+                    Ok(ProcessorPtr::create(ExchangeWriterSink::create(
                         input,
                         flight_exchange[0].clone(),
-                    ))
+                    )))
                 })
             }
             ExchangeParams::ShuffleExchange(params) => {

@@ -25,6 +25,7 @@ use common_exception::Result;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::SortColumnDescription;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
 use common_pipeline_transforms::processors::transforms::BlockCompactor;
 use common_pipeline_transforms::processors::transforms::SortMergeCompactor;
@@ -165,20 +166,20 @@ impl FuseTable {
             .collect();
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformSortPartial::try_create(
+            Ok(ProcessorPtr::create(TransformSortPartial::try_create(
                 transform_input_port,
                 transform_output_port,
                 None,
                 sort_descs.clone(),
-            )
+            )?))
         })?;
         let block_size = ctx.get_settings().get_max_block_size()? as usize;
         pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformSortMerge::try_create(
+            Ok(ProcessorPtr::create(TransformSortMerge::try_create(
                 transform_input_port,
                 transform_output_port,
                 SortMergeCompactor::new(block_size, None, sort_descs.clone()),
-            )
+            )?))
         })?;
 
         // construct output fields
@@ -193,11 +194,11 @@ impl FuseTable {
         )?;
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformCompact::try_create(
+            Ok(ProcessorPtr::create(TransformCompact::try_create(
                 transform_input_port,
                 transform_output_port,
                 BlockCompactor::new(block_compact_thresholds, true),
-            )
+            )?))
         })?;
 
         pipeline.add_sink(|input| {
