@@ -34,7 +34,9 @@ impl ScatterTransform {
         output: Arc<OutputPort>,
         scatter: Arc<Box<dyn FlightScatter>>,
     ) -> ProcessorPtr {
-        Transformer::create(input, output, ScatterTransform { scatter })
+        ProcessorPtr::create(Transformer::create(input, output, ScatterTransform {
+            scatter,
+        }))
     }
 }
 

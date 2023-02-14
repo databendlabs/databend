@@ -24,7 +24,7 @@ use common_expression::FunctionContext;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_pipeline_transforms::processors::transforms::Transformer;
 
@@ -85,7 +85,7 @@ impl CompoundBlockOperator {
         output_port: Arc<OutputPort>,
         ctx: FunctionContext,
         operators: Vec<BlockOperator>,
-    ) -> ProcessorPtr {
+    ) -> Box<dyn Processor> {
         Transformer::<Self>::create(input_port, output_port, Self { operators, ctx })
     }
 

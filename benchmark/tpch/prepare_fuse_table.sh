@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-. "$CURDIR"/../../tests/shell_env.sh
+. "$CURDIR"/shell_env.sh
 
 
 for t in customer lineitem nation orders partsupp part region supplier; do
@@ -102,50 +102,10 @@ echo "CREATE TABLE IF NOT EXISTS lineitem
     l_comment      STRING not null
 )" | $MYSQL_CLIENT_CONNECT
 
-# copy data to s3 bucket
-
-# create external stage
-echo"
-create stage tpch_data url='s3://...'
-  connection = (
-        ENDPOINT_URL = 'https://s3.amazonaws.com'
-        ACCESS_KEY_ID = '...'
-        SECRET_ACCESS_KEY = '...'
-        ENABLE_VIRTUAL_HOST_STYLE = 'false'
-  );
-" | $MYSQL_CLIENT_CONNECT
-
-echo "list @tpch_data;" |  $MYSQL_CLIENT_CONNECT
-
-# copy data to table
-echo"
-copy into orders from @tpch_data files=('orders.tbl') file_format=(type='CSV' field_delimiter='|' record_delimiter='\n' compression=auto);
-" | $MYSQL_CLIENT_CONNECT
-
-echo"
-copy into nation from @tpch_data files=('nation.tbl') file_format=(type='CSV' field_delimiter='|' record_delimiter='\n' compression=auto);
-" | $MYSQL_CLIENT_CONNECT
-
-echo"
-copy into lineitem from @tpch_data files=('lineitem.tbl') file_format=(type='CSV' field_delimiter='|' record_delimiter='\n' compression=auto);
-" | $MYSQL_CLIENT_CONNECT
-
-echo"
-copy into customer from @tpch_data files=('customer.tbl') file_format=(type='CSV' field_delimiter='|' record_delimiter='\n' compression=auto);
-" | $MYSQL_CLIENT_CONNECT
-
-echo"
-copy into partsupp from @tpch_data files=('partsupp.tbl') file_format=(type='CSV' field_delimiter='|' record_delimiter='\n' compression=auto);
-" | $MYSQL_CLIENT_CONNECT
-
-echo"
-copy into supplier from @tpch_data files=('supplier.tbl') file_format=(type='CSV' field_delimiter='|' record_delimiter='\n' compression=auto);
-" | $MYSQL_CLIENT_CONNECT
-
-echo"
-copy into part from @tpch_data files=('part.tbl') file_format=(type='CSV' field_delimiter='|' record_delimiter='\n' compression=auto);
-" | $MYSQL_CLIENT_CONNECT
-
-echo"
-copy into region from @tpch_data files=('region.tbl') file_format=(type='CSV' field_delimiter='|' record_delimiter='\n' compression=auto);
-" | $MYSQL_CLIENT_CONNECT
+# insert data to tables
+for t in customer lineitem nation orders partsupp part region supplier
+do
+    echo "$t"
+    insert_sql="insert into $t file_format = (type = CSV skip_header = 0 field_delimiter = '|' record_delimiter = '\n')"
+    curl -s -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" -H "insert_sql: ${insert_sql}" -F 'upload=@"./data/'$t'.tbl"' > /dev/null 2>&1
+done

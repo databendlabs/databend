@@ -15,6 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use common_profile::ProfSpanSetRef;
 use common_sql::MetadataRef;
 
 use crate::api::DataExchange;
@@ -81,7 +82,7 @@ impl<'a> Display for QueryFragmentActionsWrap<'a> {
             match &fragment_action.payload {
                 FragmentPayload::Plan(node) => {
                     let plan_display_string = node
-                        .format(self.metadata.clone())
+                        .format(self.metadata.clone(), ProfSpanSetRef::default())
                         .and_then(|node| node.format_pretty_with_prefix("    "))
                         .unwrap();
                     write!(f, "{}", plan_display_string)?;

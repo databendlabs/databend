@@ -1,27 +1,36 @@
 ## Databend TPCH-Benchmark
 
-### TPCH Benchmark
 
-#### On local fs
+### Preparing the Table and Data
 
-Generate tpch dataset and create tpch tables, then insert data to it
+To prepare the table and data for the TPC-H Benchmark, run the following command in your shell:
 
-The first argument means scale_factor: scale of the database population. scale 1.0 represents ~1 GB of data.
-
-The second argument means storage format, default is parquet.
 ```shell
-./tpch.sh 0.1 native
+./tpch.sh 1
 ```
+The scale factor is set to 1, which consists of the base row size (several million elements).
 
-Generate `databend-sqllogictests`, then run the following command to benchmark
+More information about the scale factor:
+
+| SF (Gigabytes) | Size                                                                    |
+|----------------|-------------------------------------------------------------------------|
+| 1              | Consists of the base row size (several million elements).               |
+| 10             | Consists of the base row size x 10.                                     |
+| 100            | Consists of the base row size x 100 (several hundred million elements). |
+| 1000           | Consists of the base row size x 1000 (several billion elements).        |
+
+
+
+### Benchmark
+
+To run the TPC-H Benchmark, first generate `databend-sqllogictests` binary.
+
+Then, execute the following command in your shell:
+
 ```shell
 databend-sqllogictests --handlers mysql --run_dir tpch --tpch
 ```
 
-#### On S3
-Because it involves importing data on s3 and configuring s3, there is no direct script, but you can refer to `create_table_s3.sh`
+### More
 
-After completing the above steps in `create_table_s3.sh`, generate `databend-sqllogictests`, then run the following command to benchmark
-```shell
-databend-sqllogictests --handlers mysql --run_dir tpch --tpch
-```
+[Benchmarking Databend using TPC-H](https://databend.rs/blog/2022/08/08/benchmark-tpc-h)
