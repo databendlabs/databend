@@ -27,7 +27,11 @@ Databend supports SQL data types in several categories:
 | TIMESTAMP |              | 8 bytes      |  0001-01-01 00:00:00        | 9999-12-31 23:59:59.999999 UTC  | YYYY-MM-DD hh:mm:ss[.fraction], up to microseconds (6 digits) precision
 | VARCHAR   |  STRING      | variable     |                             |                                 | 
 
+## Nested Data Type
 
+| Name    |    Aliases   | Values       | Description
+|---------|--------------|-------------------------|----------------
+| TUPLE   |              | ('2023-02-14 08:00:00','Valentine's Day') | Collection of ordered,immmutable, which requires the type of each element to be declared before being used.
 
 ## Semi-structured Data Types
 
@@ -37,4 +41,3 @@ Databend supports three Semi-structured types: ARRAY, OBJECT and VARIANT.
 |---------|--------------|-------------------------|----------------
 | ARRAY   |              | [1,2,3]                 | Zero-based indexed list, each value can have difference data type.
 | VARIANT |  JSON        | [1,{"a":1,"b":{"c":2}}] | Collection of elements of different data types., including ARRAY and OBJECT.
-| TUPLE   |              | ('2023-02-14 08:00:00','Valentine's Day') | Collection of ordered,immmutable, which requires the type of each element to be declared before being used.
