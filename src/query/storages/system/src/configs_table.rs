@@ -85,6 +85,17 @@ impl SyncSystemTable for ConfigsTable {
             meta_config_value,
         );
 
+        let cache_config = config.cache;
+        let cache_config_value = serde_json::to_value(cache_config)?;
+        ConfigsTable::extract_config(
+            &mut names,
+            &mut values,
+            &mut groups,
+            &mut descs,
+            "cache".to_string(),
+            cache_config_value,
+        );
+
         // Clone storage config to avoid change it's value.
         //
         // TODO(xuanwo):

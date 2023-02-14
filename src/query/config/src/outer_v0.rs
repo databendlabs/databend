@@ -21,6 +21,7 @@ use std::str::FromStr;
 
 use clap::Args;
 use clap::Parser;
+use clap::ValueEnum;
 use common_base::base::mask_string;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -50,6 +51,7 @@ use serfig::collectors::from_file;
 use serfig::collectors::from_self;
 use serfig::parsers::Toml;
 
+use super::inner;
 use super::inner::CatalogConfig as InnerCatalogConfig;
 use super::inner::CatalogHiveConfig as InnerCatalogHiveConfig;
 use super::inner::Config as InnerConfig;
@@ -110,6 +112,10 @@ pub struct Config {
     // Local query config.
     #[clap(flatten)]
     pub local: LocalConfig,
+
+    // cache configs
+    #[clap(flatten)]
+    pub cache: CacheConfig,
 
     /// external catalog config.
     ///
@@ -195,6 +201,7 @@ impl From<InnerConfig> for Config {
                 .into_iter()
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
+            cache: Default::default(), // TODO
         }
     }
 }
@@ -226,6 +233,7 @@ impl TryInto<InnerConfig> for Config {
             storage: self.storage.try_into()?,
             local: self.local.try_into()?,
             catalogs,
+            cache: self.cache.try_into()?,
         })
     }
 }
@@ -291,7 +299,7 @@ pub struct StorageConfig {
     pub oss: OssStorageConfig,
 
     #[clap(skip)]
-    pub cache: CacheConfig,
+    pub cache: StorageCacheConfig,
 }
 
 impl Default for StorageConfig {
@@ -490,7 +498,7 @@ impl From<InnerCatalogHiveConfig> for HiveCatalogConfig {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct CacheConfig {
+pub struct StorageCacheConfig {
     #[serde(rename = "type")]
     pub cache_type: String,
 
@@ -507,13 +515,13 @@ pub struct CacheConfig {
     pub redis: RedisStorageConfig,
 }
 
-impl Default for CacheConfig {
+impl Default for StorageCacheConfig {
     fn default() -> Self {
         InnerCacheConfig::default().into()
     }
 }
 
-impl From<InnerCacheConfig> for CacheConfig {
+impl From<InnerCacheConfig> for StorageCacheConfig {
     fn from(inner: InnerCacheConfig) -> Self {
         let mut cfg = Self {
             cache_num_cpus: inner.num_cpus,
@@ -546,7 +554,7 @@ impl From<InnerCacheConfig> for CacheConfig {
     }
 }
 
-impl TryInto<InnerCacheConfig> for CacheConfig {
+impl TryInto<InnerCacheConfig> for StorageCacheConfig {
     type Error = ErrorCode;
     fn try_into(self) -> Result<InnerCacheConfig> {
         Ok(InnerCacheConfig {
@@ -1883,6 +1891,124 @@ impl TryInto<InnerLocalConfig> for LocalConfig {
         Ok(InnerLocalConfig {
             sql: self.sql,
             table: self.table,
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args, Default)]
+#[serde(default, deny_unknown_fields)]
+pub struct CacheConfig {
+    /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
+    #[clap(long = "cache-enable-table-meta-caches", default_value = "true")]
+    pub enable_table_meta_caches: bool,
+
+    /// Max number of cached table snapshot
+    #[clap(long = "cache-table-meta-snapshot-count", default_value = "256")]
+    pub table_meta_snapshot_count: u64,
+
+    /// Max number of cached table segment
+    #[clap(long = "cache-table-meta-segment-count", default_value = "10240")]
+    pub table_meta_segment_count: u64,
+
+    /// Enable bloom index cache. Default is enabled. Set it to false to disable all the bloom index caches
+    #[clap(long = "cache-enable-table-bloom-index-caches", default_value = "true")]
+    pub enable_table_index_bloom: bool,
+
+    /// Max number of cached bloom index meta objects. Set it to 0 to disable it.
+    #[clap(long = "cache-table-bloom-index-meta-count", default_value = "3000")]
+    pub table_bloom_index_meta_count: u64,
+
+    /// Max number of cached bloom index filters. Set it to 0 to disable it.
+    // One bloom index filter per column of data block being indexed will be generated if necessary.
+    //
+    // For example, a table of 1024 columns, with 800 data blocks, a query that triggers a full
+    // table filter on 2 columns, might populate 2 * 800 bloom index filter cache items (at most)
+    #[clap(
+        long = "cache-table-bloom-index-filter-count",
+        default_value = "1048576"
+    )]
+    pub table_bloom_index_filter_count: u64,
+
+    /// Type of data cache storage
+    #[clap(long = "cache-data-cache-storage", value_enum, default_value_t)]
+    pub data_cache_storage: ExternalStorageType,
+
+    /// Storage that hold the raw data caches
+    #[clap(flatten)]
+    #[serde(alias = "disk")]
+    pub disk_cache_config: DiskCacheConfig,
+
+    /// Max size of in memory table column object cache. By default it is 0 (disabled)
+    ///
+    /// CAUTION: The cache items are deserialized table column objects, may take a lot of memory.
+    ///
+    /// Only if query nodes have plenty of un-utilized memory, the working set can be fitted into,
+    /// and the access pattern will benefit from caching, consider enabled this cache.
+    #[clap(long = "cache-table-data-deserialized-data-bytes", default_value = "0")]
+    pub table_data_deserialized_data_bytes: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+pub enum ExternalStorageType {
+    #[serde(alias = "none")]
+    None,
+    #[serde(alias = "disk")]
+    Disk,
+    // Redis,
+}
+
+impl Default for ExternalStorageType {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args, Default)]
+#[serde(default, deny_unknown_fields)]
+pub struct DiskCacheConfig {
+    /// Max bytes of cached raw table data. Default 20GB, set it to 0 to disable it.
+    #[clap(long = "cache-disk-max-bytes", default_value = "21474836480")]
+    pub max_bytes: u64,
+
+    /// Table disk cache root path
+    #[clap(long = "cache-disk-path", default_value = "./.databend/_cache")]
+    pub path: String,
+}
+
+impl TryFrom<CacheConfig> for inner::TheCache {
+    type Error = ErrorCode;
+
+    fn try_from(value: CacheConfig) -> std::result::Result<Self, Self::Error> {
+        Ok(Self {
+            enable_table_meta_caches: value.enable_table_meta_caches,
+            table_meta_snapshot_count: value.table_meta_snapshot_count,
+            table_meta_segment_count: value.table_meta_segment_count,
+            enable_table_index_bloom: value.enable_table_index_bloom,
+            table_bloom_index_meta_count: value.table_bloom_index_meta_count,
+            table_bloom_index_filter_count: value.table_bloom_index_filter_count,
+            data_cache_storage: value.data_cache_storage.try_into()?,
+            disk_cache_config: value.disk_cache_config.try_into()?,
+            table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
+        })
+    }
+}
+
+impl TryFrom<DiskCacheConfig> for inner::DiskCacheConfig {
+    type Error = ErrorCode;
+    fn try_from(value: DiskCacheConfig) -> std::result::Result<Self, Self::Error> {
+        Ok(Self {
+            max_size: value.max_bytes,
+            path: value.path,
+        })
+    }
+}
+
+impl TryFrom<ExternalStorageType> for inner::TableDataExternalCache {
+    type Error = ErrorCode;
+    fn try_from(value: ExternalStorageType) -> std::result::Result<Self, Self::Error> {
+        Ok(match value {
+            ExternalStorageType::None => inner::TableDataExternalCache::None,
+            ExternalStorageType::Disk => inner::TableDataExternalCache::Disk,
         })
     }
 }

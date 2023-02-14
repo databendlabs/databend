@@ -109,3 +109,27 @@ data_path = "./.databend/stateless_test_data"
 # endpoint_url = "<your-endpoint>"
 # access_key_id = "<your-key-id>"
 # access_key_secret = "<your-account-key>"
+
+
+[cache]
+
+# in-memory cache of ....
+table_meta_enabled = true
+table_meta_snapshot_item = 1024
+table_meta_segment_item = 1024
+
+table_index_bloom_enabled = true
+table_index_bloom_meta = 1024
+table_index_bloom_filter = 1024
+
+table_data_enabled = true
+table_data_bytes = 1024
+table_deserialized_data = 1024
+
+[cache.disk]
+path = "_cache"
+
+[cache.redis]
+path = "_cache"
+endpoint = "..."
+

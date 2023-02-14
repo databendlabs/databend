@@ -58,6 +58,9 @@ pub struct Config {
     // - Later, catalog information SHOULD be kept in KV Service
     // - currently only supports HIVE (via hive meta store)
     pub catalogs: HashMap<String, CatalogConfig>,
+
+    // Cache Config
+    pub cache: TheCache,
 }
 
 impl Config {
@@ -440,6 +443,92 @@ impl Default for LocalConfig {
         Self {
             sql: "SELECT 1".to_string(),
             table: "".to_string(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TheCache {
+    /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
+    pub enable_table_meta_caches: bool,
+
+    /// Max number of cached table snapshot
+    pub table_meta_snapshot_count: u64,
+
+    /// Max number of cached table segment
+    pub table_meta_segment_count: u64,
+
+    /// Enable bloom index cache. Default is enabled. Set it to false to disable all the bloom index caches
+    pub enable_table_index_bloom: bool,
+
+    /// Max number of cached bloom index meta objects. Set it to 0 to disable it.
+    pub table_bloom_index_meta_count: u64,
+
+    /// Max number of cached bloom index filters. Set it to 0 to disable it.
+    // One bloom index filter per column of data block being indexed will be generated if necessary.
+    //
+    // For example, a table of 1024 columns, with 800 data blocks, a query that triggers a full
+    // table filter on 2 columns, might populate 2 * 800 bloom index filter cache items (at most)
+    pub table_bloom_index_filter_count: u64,
+
+    /// Max number of cached bloom index filters. Set it to 0 to disable it.
+    pub data_cache_storage: TableDataExternalCache,
+
+    /// Storage that hold the raw data caches
+    pub disk_cache_config: DiskCacheConfig,
+
+    /// Max size of in memory table column object cache. By default it is 0 (disabled)
+    ///
+    /// CAUTION: The cache items are deserialized table column objects, may take a lot of memory.
+    ///
+    /// Only if query nodes have plenty of un-utilized memory, the working set can be fitted into,
+    /// and the access pattern will benefit from caching, consider enabled this cache.
+    pub table_data_deserialized_data_bytes: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TableDataExternalCache {
+    None,
+    Disk,
+    // Redis,
+}
+
+impl Default for TableDataExternalCache {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DiskCacheConfig {
+    /// Max bytes of cached raw table data. Default 20GB, set it to 0 to disable it.
+    pub max_size: u64,
+
+    /// Table disk cache root path
+    pub path: String,
+}
+
+impl Default for DiskCacheConfig {
+    fn default() -> Self {
+        Self {
+            max_size: 21474836480,
+            path: "./.databend/_cache".to_owned(),
+        }
+    }
+}
+
+impl Default for TheCache {
+    fn default() -> Self {
+        Self {
+            enable_table_meta_caches: true,
+            table_meta_snapshot_count: 256,
+            table_meta_segment_count: 10240,
+            enable_table_index_bloom: true,
+            table_bloom_index_meta_count: 3000,
+            table_bloom_index_filter_count: 1048576,
+            data_cache_storage: Default::default(),
+            disk_cache_config: Default::default(),
+            table_data_deserialized_data_bytes: 0,
         }
     }
 }
