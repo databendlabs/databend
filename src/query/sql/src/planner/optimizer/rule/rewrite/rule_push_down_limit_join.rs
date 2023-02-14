@@ -34,9 +34,9 @@ use crate::plans::RelOperator;
 ///               |
 ///        Left Outer Join
 ///             /     \
-///           Limit   Limit
-///           /         \
-///          *           *
+///           Limit    *
+///           /
+///          *
 pub struct RulePushDownLimitOuterJoin {
     id: RuleID,
     pattern: SExpr,
@@ -85,12 +85,17 @@ impl Rule for RulePushDownLimitOuterJoin {
             let child = s_expr.child(0)?;
             let join: Join = child.plan().clone().try_into()?;
             match join.join_type {
-                JoinType::Left | JoinType::Full => {
+                JoinType::Left => {
                     let mut result = s_expr.replace_children(vec![child.replace_children(vec![
-                        SExpr::create_unary(
-                            RelOperator::Limit(limit.clone()),
-                            child.child(0)?.clone(),
-                        ),
+                        SExpr::create_unary(RelOperator::Limit(limit), child.child(0)?.clone()),
+                        child.child(1)?.clone(),
+                    ])]);
+                    result.set_applied_rule(&self.id);
+                    state.add_result(result)
+                }
+                JoinType::Right => {
+                    let mut result = s_expr.replace_children(vec![child.replace_children(vec![
+                        child.child(0)?.clone(),
                         SExpr::create_unary(RelOperator::Limit(limit), child.child(1)?.clone()),
                     ])]);
                     result.set_applied_rule(&self.id);
