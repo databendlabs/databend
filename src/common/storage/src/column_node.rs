@@ -20,6 +20,8 @@ use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ColumnId;
+use common_expression::FieldIndex;
 use common_expression::TableSchema;
 
 #[derive(Debug, Clone)]
@@ -59,7 +61,7 @@ impl ColumnNodes {
                 let mut child_leaf_ids = Vec::with_capacity(inner_fields.len());
                 for inner_field in inner_fields {
                     let child_column_node = Self::traverse_fields_dfs(inner_field, leaf_id);
-                    child_leaf_ids.extend(child_column_node.leaf_ids.clone());
+                    child_leaf_ids.extend(child_column_node.leaf_indices.clone());
                     child_column_nodes.push(child_column_node);
                 }
                 ColumnNode::new(field.clone(), child_leaf_ids, Some(child_column_nodes))
@@ -70,7 +72,7 @@ impl ColumnNodes {
                 let mut child_column_nodes = Vec::with_capacity(1);
                 let mut child_leaf_ids = Vec::with_capacity(1);
                 let child_column_node = Self::traverse_fields_dfs(inner_field, leaf_id);
-                child_leaf_ids.extend(child_column_node.leaf_ids.clone());
+                child_leaf_ids.extend(child_column_node.leaf_indices.clone());
                 child_column_nodes.push(child_column_node);
                 ColumnNode::new(field.clone(), child_leaf_ids, Some(child_column_nodes))
             }
@@ -105,27 +107,31 @@ impl ColumnNodes {
 #[derive(Debug, Clone)]
 pub struct ColumnNode {
     pub field: ArrowField,
-    // `leaf_ids` is the indices of all the leaf columns in DFS order,
+    // `leaf_indices` is the indices of all the leaf columns in DFS order,
     // through which we can find the meta information of the leaf columns.
-    pub leaf_ids: Vec<usize>,
+    pub leaf_indices: Vec<FieldIndex>,
     // Optional children column for nested types.
     pub children: Option<Vec<ColumnNode>>,
-    pub leaf_column_ids: Vec<u32>,
+    pub leaf_column_ids: Vec<ColumnId>,
 }
 
 impl ColumnNode {
-    pub fn new(field: ArrowField, leaf_ids: Vec<usize>, children: Option<Vec<ColumnNode>>) -> Self {
+    pub fn new(
+        field: ArrowField,
+        leaf_indices: Vec<usize>,
+        children: Option<Vec<ColumnNode>>,
+    ) -> Self {
         Self {
             field,
-            leaf_ids,
+            leaf_indices,
             children,
             leaf_column_ids: vec![],
         }
     }
 
     pub fn build_leaf_column_ids(&mut self, leaf_column_ids: &Vec<u32>) {
-        let mut node_leaf_column_ids = Vec::with_capacity(self.leaf_ids.len());
-        for index in &self.leaf_ids {
+        let mut node_leaf_column_ids = Vec::with_capacity(self.leaf_indices.len());
+        for index in &self.leaf_indices {
             node_leaf_column_ids.push(leaf_column_ids[*index]);
         }
         self.leaf_column_ids = node_leaf_column_ids;

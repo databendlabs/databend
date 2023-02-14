@@ -15,8 +15,7 @@
 use std::collections::HashMap;
 
 use common_datavalues as dv;
-
-use crate::meta::ColumnId;
+use common_expression::ColumnId;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {

@@ -54,13 +54,14 @@ impl SelectInterpreterV2 {
     }
 
     pub async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
-        let builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone());
+        let mut builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone());
         let physical_plan = builder.build(&self.s_expr).await?;
         build_query_pipeline(
             &self.ctx,
             &self.bind_context.columns,
             &physical_plan,
             self.ignore_result,
+            false,
         )
         .await
     }

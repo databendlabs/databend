@@ -104,10 +104,14 @@ impl TransformExchangeSerializer {
     ) -> ProcessorPtr {
         let arrow_schema = schema.to_arrow();
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
-        Transformer::create(input, output, TransformExchangeSerializer {
-            ipc_fields,
-            options: WriteOptions { compression: None },
-        })
+        ProcessorPtr::create(Transformer::create(
+            input,
+            output,
+            TransformExchangeSerializer {
+                ipc_fields,
+                options: WriteOptions { compression: None },
+            },
+        ))
     }
 }
 

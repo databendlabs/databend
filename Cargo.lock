@@ -1896,6 +1896,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-profile"
+version = "0.1.0"
+
+[[package]]
 name = "common-proto-conv"
 version = "0.1.0"
 dependencies = [
@@ -2003,6 +2007,7 @@ dependencies = [
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-pipeline-transforms",
+ "common-profile",
  "common-settings",
  "common-storage",
  "common-storages-parquet",
@@ -2492,6 +2497,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
+ "wiremock",
 ]
 
 [[package]]
@@ -3079,6 +3085,7 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
+ "common-profile",
  "common-settings",
  "common-sql",
  "common-storage",
@@ -5260,9 +5267,9 @@ dependencies = [
 
 [[package]]
 name = "moka"
-version = "0.9.6"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b49a05f67020456541f4f29cbaa812016a266a86ec76f96d3873d459c68fe5e"
+checksum = "2b6446f16d504e3d575df79cabb11bfbe9f24b17e9562d964a815db7b28ae3ec"
 dependencies = [
  "async-io",
  "async-lock",
@@ -5630,9 +5637,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.27.0"
+version = "0.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e889a1a8bb1ae339055c6a7b5b4c6cccbb89bac626a7fff58b6e739604df7250"
+checksum = "39f2018ea448841041cf00a01f6c145b5017753958dbb563c2bf8921ce4b3e49"
 dependencies = [
  "anyhow",
  "async-compat",
