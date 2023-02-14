@@ -124,13 +124,8 @@ impl BlockReader {
         index: FieldIndex,
         meta: &ColumnMeta,
         range: &Option<Range<usize>>,
-<<<<<<< HEAD
         data_type: DataType,
-    ) -> Result<(usize, NativeReader<Reader>)> {
-=======
-        data_type: common_arrow::arrow::datatypes::DataType,
     ) -> Result<(FieldIndex, NativeReader<Reader>)> {
->>>>>>> upstream/main
         let (offset, length) = meta.offset_length();
         let mut meta = meta.as_native().unwrap().clone();
 
