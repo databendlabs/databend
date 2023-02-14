@@ -18,17 +18,17 @@ fn hex_safe(n: u8) -> char {
 }
 
 pub fn escape_string(s: &str) -> String {
-    let mut chars = s.chars().peekable();
+    let chars = s.chars().peekable();
     let mut s = String::new();
 
-    while let Some(c) = chars.next() {
+    for c in chars {
         match c {
-            '\t' => s.extend("\\t".chars()),
-            '\r' => s.extend("\\r".chars()),
-            '\n' => s.extend("\\n".chars()),
-            '\'' => s.extend("\\\'".chars()),
-            '"' => s.extend("\\\"".chars()),
-            '\\' => s.extend("\\\\".chars()),
+            '\t' => s.push_str("\\t"),
+            '\r' => s.push_str("\\r"),
+            '\n' => s.push_str("\\n"),
+            '\'' => s.push_str("\\\'"),
+            '"' => s.push_str("\\\""),
+            '\\' => s.push_str("\\\\"),
             '\x00'..='\x1F' => {
                 s.push('\\');
                 s.push('x');
