@@ -123,7 +123,7 @@ where
             let method = self.method.clone();
             let params = self.params.clone();
             let mut bucket_aggregator = BucketAggregator::<HAS_AGG, _>::create(method, params)?;
-            generate_blocks = bucket_aggregator.merge_blocks(data_blocks)?;
+            generate_blocks = bucket_aggregator.merge_and_result_blocks(data_blocks)?;
         } else if self.buckets_blocks.len() > 1 {
             info!("Merge to final state using a parallel algorithm.");
 
@@ -135,7 +135,8 @@ where
                 let params = self.params.clone();
                 let mut bucket_aggregator = BucketAggregator::<HAS_AGG, _>::create(method, params)?;
                 join_handles.push(
-                    thread_pool.execute(move || bucket_aggregator.merge_blocks(bucket_blocks)),
+                    thread_pool
+                        .execute(move || bucket_aggregator.merge_and_result_blocks(bucket_blocks)),
                 );
             }
 
@@ -159,6 +160,7 @@ where
     params: Arc<AggregatorParams>,
     hash_table: PartitionedHashMap<Method::HashTable, FINAL_BUCKETS_LG2, false>,
     state_holders: Vec<Option<ArenaHolder>>,
+    bucket_index: usize,
 
     pub(crate) reach_limit: bool,
     // used for deserialization only if has agg, so we can reuse it during the loop
@@ -189,6 +191,7 @@ where
             reach_limit: false,
             state_holders: Vec::with_capacity(16),
             temp_place,
+            bucket_index: 0,
         })
     }
 
@@ -244,11 +247,10 @@ where
         Ok(())
     }
 
-    pub fn merge_blocks(&mut self, blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+    pub fn merge_blocks(&mut self, blocks: Vec<DataBlock>) -> Result<()> {
         if blocks.is_empty() {
-            return Ok(vec![]);
+            return Ok(());
         }
-
         for mut data_block in blocks {
             if let Some(mut meta) = data_block.take_meta() {
                 if let Some(info) = meta.as_mut_any().downcast_mut::<AggregateHashStateInfo>() {
@@ -316,24 +318,45 @@ where
                 }
             }
         }
+        Ok(())
+    }
 
-        let mut results = Vec::with_capacity(16);
-        for table in self.hash_table.iter_tables_mut() {
+    pub fn merge_and_result_blocks(&mut self, blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+        self.merge_blocks(blocks)?;
+
+        let mut results = Vec::with_capacity(1 << FINAL_BUCKETS_LG2);
+        for (idx, table) in self.hash_table.iter_tables_mut().enumerate() {
             let keys_len = table.len();
             if keys_len > 0 {
-                let result = Self::result_bucket_block(
-                    self.method.clone(),
-                    self.params.clone(),
-                    table,
-                    keys_len,
-                )?;
+                let result =
+                    Self::result_bucket(self.method.clone(), self.params.clone(), table, keys_len)?;
                 results.push(result);
             }
+            self.bucket_index = idx + 1;
         }
         Ok(results)
     }
 
-    fn result_bucket_block(
+    pub fn iter_result_block(&mut self) -> Result<Vec<DataBlock>> {
+        for (idx, table) in self
+            .hash_table
+            .iter_tables_mut()
+            .enumerate()
+            .skip(self.bucket_index)
+        {
+            let keys_len = table.len();
+            if keys_len > 0 {
+                let result =
+                    Self::result_bucket(self.method.clone(), self.params.clone(), table, keys_len)?;
+                self.bucket_index = idx + 1;
+                return Ok(vec![result]);
+            }
+            self.bucket_index = idx + 1;
+        }
+        Ok(vec![])
+    }
+
+    fn result_bucket(
         method: Method,
         params: Arc<AggregatorParams>,
         table: &mut Method::HashTable,
