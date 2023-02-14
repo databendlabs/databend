@@ -593,7 +593,7 @@ impl TableSchema {
         )))
     }
 
-    // return leaf fields and column ids
+    // return leaf fields with column id
     pub fn leaf_fields(&self) -> Vec<TableField> {
         fn collect_in_field(
             field: &TableField,

@@ -168,6 +168,15 @@ fn test_schema_from_simple_type() -> Result<()> {
         assert_eq!(field.column_id(), leaf_column_ids[i]);
     }
 
+    // verify leaf column ids are as expected
+    assert_eq!(
+        leaf_fields
+            .iter()
+            .flat_map(|f| f.leaf_column_ids())
+            .collect::<Vec<_>>(),
+        schema.to_leaf_column_ids()
+    );
+
     Ok(())
 }
 
