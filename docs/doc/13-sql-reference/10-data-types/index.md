@@ -37,3 +37,4 @@ Databend supports three Semi-structured types: ARRAY, OBJECT and VARIANT.
 |---------|--------------|-------------------------|----------------
 | ARRAY   |              | [1,2,3]                 | Zero-based indexed list, each value can have difference data type.
 | VARIANT |  JSON        | [1,{"a":1,"b":{"c":2}}] | Collection of elements of different data types., including ARRAY and OBJECT.
+| TUPLE   |              | ('2023-02-14 08:00:00','Valentine's Day') | Collection of ordered,immmutable. Like an immutable variant, which requires the type of each element to be declared before being used.
