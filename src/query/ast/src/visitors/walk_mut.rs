@@ -299,6 +299,7 @@ pub fn walk_cte_mut<V: VisitorMut>(visitor: &mut V, cte: &mut CTE) {
 pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statement) {
     match statement {
         Statement::Explain { kind, query } => visitor.visit_explain(kind, &mut *query),
+        Statement::ExplainAnalyze { query } => visitor.visit_statement(&mut *query),
         Statement::Query(query) => visitor.visit_query(&mut *query),
         Statement::Insert(insert) => visitor.visit_insert(insert),
         Statement::Delete {

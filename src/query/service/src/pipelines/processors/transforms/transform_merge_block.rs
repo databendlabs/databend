@@ -27,7 +27,6 @@ use common_io::prelude::FormatSettings;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
 pub struct TransformMergeBlock {
@@ -53,8 +52,8 @@ impl TransformMergeBlock {
         right_schema: DataSchemaRef,
         pairs: Vec<(String, String)>,
         receiver: Receiver<DataBlock>,
-    ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Box::new(TransformMergeBlock {
+    ) -> Result<Box<dyn Processor>> {
+        Ok(Box::new(TransformMergeBlock {
             finished: false,
             input,
             output,
@@ -65,7 +64,7 @@ impl TransformMergeBlock {
             pairs,
             receiver,
             receiver_result: None,
-        })))
+        }))
     }
 
     fn project_block(&self, block: DataBlock, is_left: bool) -> Result<DataBlock> {

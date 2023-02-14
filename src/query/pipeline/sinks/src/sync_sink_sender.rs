@@ -18,7 +18,7 @@ use common_base::base::tokio::sync::mpsc::Sender;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
 
 use crate::Sink;
 use crate::Sinker;
@@ -28,7 +28,7 @@ pub struct SyncSenderSink {
 }
 
 impl SyncSenderSink {
-    pub fn create(sender: Sender<Result<DataBlock>>, input: Arc<InputPort>) -> ProcessorPtr {
+    pub fn create(sender: Sender<Result<DataBlock>>, input: Arc<InputPort>) -> Box<dyn Processor> {
         Sinker::create(input, SyncSenderSink { sender })
     }
 }

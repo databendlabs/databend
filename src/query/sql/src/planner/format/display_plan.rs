@@ -28,6 +28,7 @@ impl Plan {
             }
             Plan::ExplainAst { .. } => Ok("ExplainAst".to_string()),
             Plan::ExplainSyntax { .. } => Ok("ExplainSyntax".to_string()),
+            Plan::ExplainAnalyze { .. } => Ok("ExplainAnalyze".to_string()),
 
             Plan::Copy(plan) => Ok(format!("{:?}", plan)),
 

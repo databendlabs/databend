@@ -82,6 +82,14 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+    let explain_analyze = map(
+        rule! {
+            EXPLAIN ~ ANALYZE ~ #statement
+        },
+        |(_, _, statement)| Statement::ExplainAnalyze {
+            query: Box::new(statement.stmt),
+        },
+    );
     let insert = map(
         rule! {
             INSERT ~ ( INTO | OVERWRITE ) ~ TABLE?
@@ -993,6 +1001,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
+            | #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
             | #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #delete : "`DELETE FROM <table> [WHERE ...]`"
             | #update : "`UPDATE <table> SET <column> = <expr> [, <column> = <expr> , ... ] [WHERE ...]`"

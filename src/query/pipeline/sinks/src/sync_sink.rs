@@ -19,7 +19,6 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
 pub trait Sink: Send {
@@ -47,14 +46,14 @@ pub struct Sinker<T: Sink + 'static> {
 }
 
 impl<T: Sink + 'static> Sinker<T> {
-    pub fn create(input: Arc<InputPort>, inner: T) -> ProcessorPtr {
-        ProcessorPtr::create(Box::new(Sinker {
+    pub fn create(input: Arc<InputPort>, inner: T) -> Box<dyn Processor> {
+        Box::new(Sinker {
             inner,
             input,
             input_data: None,
             called_on_start: false,
             called_on_finish: false,
-        }))
+        })
     }
 }
 
