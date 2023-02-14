@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_app::principal::RoleInfo;
-use common_sql::plans::CreateRolePlan;
-use common_users::RoleCacheManager;
+use common_formats::get_format_option_checker;
+use common_meta_app::principal::UserDefinedFileFormat;
+use common_sql::plans::CreateFileFormatPlan;
 use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
@@ -26,34 +26,41 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
 #[derive(Debug)]
-pub struct CreateRoleInterpreter {
+pub struct CreateFileFormatInterpreter {
     ctx: Arc<QueryContext>,
-    plan: CreateRolePlan,
+    plan: CreateFileFormatPlan,
 }
 
-impl CreateRoleInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateRolePlan) -> Result<Self> {
-        Ok(CreateRoleInterpreter { ctx, plan })
+impl CreateFileFormatInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateFileFormatPlan) -> Result<Self> {
+        Ok(Self { ctx, plan })
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for CreateRoleInterpreter {
+impl Interpreter for CreateFileFormatInterpreter {
     fn name(&self) -> &str {
-        "CreateRoleInterpreter"
+        "CreateFileFormatInterpreter"
     }
 
-    #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        // TODO: add privilege check about CREATE ROLE
         let plan = self.plan.clone();
-        let tenant = self.ctx.get_tenant();
         let user_mgr = UserApiProvider::instance();
-        user_mgr.ensure_builtin_roles(&tenant).await?;
-        user_mgr
-            .add_role(&tenant, RoleInfo::new(&plan.role_name), plan.if_not_exists)
+        let mut options = plan.file_format_options.clone();
+        let checker = get_format_option_checker(&options.format)?;
+        checker.check_options(&mut options)?;
+        let user_defined_file_format = UserDefinedFileFormat::new(
+            &plan.name,
+            options,
+            self.ctx.get_current_user()?.identity(),
+        );
+
+        let tenant = self.ctx.get_tenant();
+        let _create_file_format = user_mgr
+            .add_file_format(&tenant, user_defined_file_format, plan.if_not_exists)
             .await?;
-        RoleCacheManager::instance().force_reload(&tenant).await?;
+
         Ok(PipelineBuildResult::create())
     }
 }

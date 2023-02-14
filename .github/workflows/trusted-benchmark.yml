@@ -8,7 +8,8 @@ on:
 
 permissions:
   id-token: write
-  contents: write
+  pull-requests: write
+  contents: read
 
 jobs:
   comment_on_pr:
@@ -49,7 +50,7 @@ jobs:
   archive_for_release:
     runs-on: [self-hosted, X64, Linux, dev]
     if: >
-      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.event == 'workflow_dispatch' &&
       github.event.workflow_run.conclusion == 'success'
     steps:
       - uses: actions/checkout@v3

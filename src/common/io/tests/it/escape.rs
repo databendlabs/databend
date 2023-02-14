@@ -12,9 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
+use common_exception::Result;
+use common_io::escape_string;
 
-fn main() {
-    common_building::setup();
-    common_building::setup_commit_authors();
+#[test]
+fn test_escape() -> Result<()> {
+    assert_eq!(escape_string("\t"), r#"\t"#);
+    // '0x20' is space
+    assert_eq!(escape_string("\x00_\x1F_ "), r#"\x00_\x1F_ "#);
+
+    assert_eq!(escape_string("\\"), r#"\\"#);
+
+    assert_eq!(escape_string("\'"), r#"\'"#);
+
+    assert_eq!(escape_string("\""), "\\\"");
+    Ok(())
 }
