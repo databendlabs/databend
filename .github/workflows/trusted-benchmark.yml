@@ -23,10 +23,9 @@ jobs:
       - name: Comment on PR
         uses: everpcpc/comment-on-pr-action@v1
         with:
-          number: ${{ env.BENCHMARK_PR_NUMBER }}
+          number: ${{ env.PR_NUMBER }}
           token: ${{ github.token }}
           identifier: benchmark
           body: |
-            ## Benchmark Results:
             ![platform](https://img.shields.io/static/v1?label=AWS%20EC2&message=c5.4xlarge&color=orange&logo=amazonec2)
-            Please check result from [Workflow Artifacts](https://github.com/datafuselabs/databend/actions/runs/${{ github.event.workflow_run.id }})
+            **Benchmark Results**: https://repo.databend.rs/benchmark/clickbench/pr/${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}.html
