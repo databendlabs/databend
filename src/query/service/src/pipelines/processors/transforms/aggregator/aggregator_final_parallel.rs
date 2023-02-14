@@ -372,6 +372,7 @@ where
 
             let columns = group_columns_builder.finish()?;
 
+            Self::drop_bucket_states(params, table);
             Ok(DataBlock::new_from_columns(columns))
         } else {
             let aggregate_functions = &params.aggregate_functions;
@@ -414,6 +415,8 @@ where
 
             let group_columns = group_columns_builder.finish()?;
             columns.extend_from_slice(&group_columns);
+
+            Self::drop_bucket_states(params, table);
             Ok(DataBlock::new_from_columns(columns))
         }
     }
@@ -462,10 +465,12 @@ where
         places
     }
 
-    fn drop_states(&mut self) {
-        let aggregator_params = self.params.as_ref();
-        let aggregate_functions = &aggregator_params.aggregate_functions;
-        let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
+    fn drop_bucket_states(params: Arc<AggregatorParams>, table: &mut Method::HashTable) {
+        if table.len() == 0 {
+            return;
+        }
+        let aggregate_functions = &params.aggregate_functions;
+        let offsets_aggregate_states = &params.offsets_aggregate_states;
 
         let functions = aggregate_functions
             .iter()
@@ -480,7 +485,7 @@ where
             .collect::<Vec<_>>();
 
         if !state_offsets.is_empty() {
-            for group_entity in self.hash_table.iter() {
+            for group_entity in table.iter() {
                 let place = Into::<StateAddr>::into(*group_entity.get());
 
                 for (function, state_offset) in functions.iter().zip(state_offsets.iter()) {
@@ -488,8 +493,30 @@ where
                 }
             }
         }
+        table.clear();
+    }
 
+    fn drop_states(&mut self) {
+        for table in self.hash_table.iter_tables_mut() {
+            Self::drop_bucket_states(self.params.clone(), table);
+        }
+
+        // drop temp_place
         if HAS_AGG {
+            let aggregate_functions = &self.params.aggregate_functions;
+            let offsets_aggregate_states = &self.params.offsets_aggregate_states;
+            let state_offsets = offsets_aggregate_states
+                .iter()
+                .enumerate()
+                .filter(|(idx, _)| aggregate_functions[*idx].need_manual_drop_state())
+                .map(|(_, s)| *s)
+                .collect::<Vec<_>>();
+
+            let functions = aggregate_functions
+                .iter()
+                .filter(|p| p.need_manual_drop_state())
+                .collect::<Vec<_>>();
+
             for (state_offset, function) in state_offsets.iter().zip(functions.iter()) {
                 let place = self.temp_place.next(*state_offset);
                 unsafe { function.drop_state(place) }
