@@ -5,13 +5,19 @@ statement error 2507
 DROP FILE FORMAT test_format
 
 statement ok
-CREATE FILE FORMAT test_format type=csv compression=AUTO record_delimiter=NONE escape='\\'
+CREATE FILE FORMAT test_format TYPE=CSV  FIELD_DELIMITER='\t' ESCAPE='\\'
 
 statement ok
-CREATE FILE FORMAT if not exists test_format type=csv
+CREATE FILE FORMAT if not exists test_format TYPE=CSV
 
 statement error 2509
-CREATE FILE FORMAT test_format type=csv
+CREATE FILE FORMAT test_format TYPE=CSV
+
+skipif clickhouse
+query TT
+show FILE FORMATS;
+----
+test_format TYPE = CSV FIELD_DELIMITER = '\t' RECORD_DELIMITER = '\n' QUOTE = '\"' ESCAPE = '\\' SKIP_HEADER = 0 NAN_DISPLAY = 'NaN'
 
 statement ok
 DROP FILE FORMAT test_format
@@ -21,4 +27,3 @@ DROP FILE FORMAT test_format
 
 statement ok
 show FILE FORMATS
-
