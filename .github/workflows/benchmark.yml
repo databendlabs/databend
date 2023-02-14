@@ -15,9 +15,12 @@ on:
       - "**.md"
       - "docker/**"
       - ".devcontainer/**"
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The tag to run benchmark
+        required: true
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
@@ -30,12 +33,13 @@ env:
 
 jobs:
   build_release:
-    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'ci-benchmark')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'ci-benchmark')
     timeout-minutes: 30
     runs-on: [self-hosted, X64, Linux, perf]
     steps:
       - uses: actions/checkout@v3
         with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
           fetch-depth: 0
       - uses: ./.github/actions/build_linux
         with:
@@ -86,10 +90,10 @@ jobs:
               BENCHMARK_TYPE="PR"
               jq ".extra.pr = \"${{ github.event.number }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
               ;;
-            push)
-              BENCHMARK_SYSTEM="Databend(Release@${{ github.ref_name }})"
+            workflow_dispatch)
+              BENCHMARK_SYSTEM="Databend(Release@${{ github.event.inputs.tag }})"
               BENCHMARK_TYPE="Release"
-              jq ".extra.release = \"${{ github.ref_name }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+              jq ".extra.release = \"${{ github.event.inputs.tag }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
               ;;
             *)
               echo "Unspported event"
