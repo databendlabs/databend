@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod common;
+mod meta_manager;
 mod write;
 
 pub use common::gen_result_cache_meta_key;

@@ -15,12 +15,6 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_kvapi::kvapi;
-use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::KVAppError;
-use common_meta_types::KVMeta;
-use common_meta_types::MatchSeq;
-use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
@@ -28,10 +22,10 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_storage::DataOperator;
-use common_users::UserApiProvider;
 
 use super::cache_writer::ResultCacheWriter;
 use crate::common::ResultCacheValue;
+use crate::meta_manager::ResultCacheMetaManager;
 
 pub struct TransformWriteResultCache {
     input: Arc<InputPort>,
@@ -39,10 +33,9 @@ pub struct TransformWriteResultCache {
     called_on_finish: bool,
 
     sql: String,
-    key: String,
-    ttl: u64,
+    partitions_sha: String,
 
-    kvapi: Arc<dyn kvapi::KVApi<Error = KVAppError>>,
+    meta_mgr: ResultCacheMetaManager,
     cache_writer: ResultCacheWriter,
 }
 
@@ -71,27 +64,19 @@ impl Processor for TransformWriteResultCache {
 
         // 2. Set result calue key-value pair to meta.
         let now = SeqV::<()>::now_ms();
-        let expire_at = now + self.ttl;
+        let ttl = self.meta_mgr.get_ttl();
+        let expire_at = now + ttl;
+
         let value = ResultCacheValue {
             sql: self.sql.clone(),
             query_time: now,
-            ttl: self.ttl,
+            ttl,
+            partitions_sha: self.partitions_sha.clone(),
             result_size: self.cache_writer.current_bytes(),
             num_rows: self.cache_writer.num_rows(),
             location,
         };
-        let value = serde_json::to_vec(&value)?;
-        let _ = self
-            .kvapi
-            .upsert_kv(UpsertKVReq {
-                key: self.key.clone(),
-                seq: MatchSeq::GE(0),
-                value: Operation::Update(value),
-                value_meta: Some(KVMeta {
-                    expire_at: Some(expire_at),
-                }),
-            })
-            .await?;
+        self.meta_mgr.set(value, expire_at).await?;
 
         // 3. Finish
         self.called_on_finish = true;
@@ -106,10 +91,10 @@ impl TransformWriteResultCache {
         output: Arc<OutputPort>,
         sql: String,
         key: String,
+        partitions_sha: String,
         ttl: u64,
         max_bytes: usize,
     ) -> ProcessorPtr {
-        let kvapi = UserApiProvider::instance().get_meta_store_client();
         let operator = DataOperator::instance().operator();
         let cache_writer = ResultCacheWriter::create(operator, max_bytes);
 
@@ -118,9 +103,8 @@ impl TransformWriteResultCache {
             output,
             called_on_finish: false,
             sql,
-            key,
-            ttl,
-            kvapi,
+            partitions_sha,
+            meta_mgr: ResultCacheMetaManager::create(key, ttl),
             cache_writer,
         }))
     }

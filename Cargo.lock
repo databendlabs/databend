@@ -1326,6 +1326,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "sha2",
  "typetag",
 ]
 
@@ -2391,6 +2392,7 @@ dependencies = [
  "common-expression",
  "common-io",
  "common-meta-kvapi",
+ "common-meta-store",
  "common-meta-types",
  "common-pipeline-core",
  "common-storage",

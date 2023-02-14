@@ -92,6 +92,7 @@ impl Interpreter for SelectInterpreterV2 {
             let tenant = self.ctx.get_tenant();
             let sql = self.ctx.get_query_str();
             let key = gen_result_cache_meta_key(&tenant, &sql);
+            let part_sha = self.ctx.get_partitions_sha().unwrap();
 
             build_res.main_pipeline.add_transform(|input, output| {
                 Ok(TransformWriteResultCache::create(
@@ -99,6 +100,7 @@ impl Interpreter for SelectInterpreterV2 {
                     output,
                     sql.clone(),
                     key.clone(),
+                    part_sha.clone(),
                     ttl,
                     max_bytes,
                 ))

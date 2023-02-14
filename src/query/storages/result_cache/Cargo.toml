@@ -13,6 +13,7 @@ common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
 common-io = { path = "../../../common/io" }
 common-meta-kvapi = { path = "../../../meta/kvapi" }
+common-meta-store = { path = "../../../meta/store" }
 common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../../pipeline/core" }
 common-storage = { path = "../../../common/storage" }

@@ -21,6 +21,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
+use sha2::Digest;
 
 #[typetag::serde(tag = "type")]
 pub trait PartInfo: Send + Sync {
@@ -138,6 +139,12 @@ impl Partitions {
             }
         }
         Ok(executor_part)
+    }
+
+    pub fn compute_sha256(&self) -> Result<String> {
+        let buf = serde_json::to_vec(&self.partitions)?;
+        let sha = sha2::Sha256::digest(buf);
+        Ok(format!("{sha:?}"))
     }
 }
 

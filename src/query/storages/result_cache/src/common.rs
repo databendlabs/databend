@@ -41,6 +41,8 @@ pub(crate) struct ResultCacheValue {
     pub result_size: usize,
     /// The number of rows in the result cache.
     pub num_rows: usize,
+    /// The sha256 of the partitions.
+    pub partitions_sha: String,
     /// The location of the result cache file.
     pub location: String,
 }
