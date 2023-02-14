@@ -156,7 +156,8 @@ The code below connects to Databend using the Root user. Please note that the ro
 for t in customer lineitem nation orders partsupp part region supplier
 do
     echo "$t"
-    curl -XPUT 'http://root:@127.0.0.1:8000/v1/streaming_load' -H "insert_sql: insert into tpch.'$t' file_format = (type = CSV field_delimiter = '|' record_delimiter = '\n')"d -F 'upload=@"./'$t'.tbl"'
+    insert_sql="insert into tpch.$t file_format = (type = CSV skip_header = 0 field_delimiter = '|' record_delimiter = '\n')"
+    curl -s -u root: -XPUT "http://localhost:8000/v1/streaming_load" -H "insert_sql: ${insert_sql}" -F 'upload=@"./'$t'.tbl"' > /dev/null 2>&1
 done
 ```
 

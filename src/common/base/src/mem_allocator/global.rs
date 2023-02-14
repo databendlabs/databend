@@ -22,8 +22,19 @@ use std::ptr::NonNull;
 use crate::mem_allocator::DefaultAllocator;
 
 /// Global allocator, default is JeAllocator.
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GlobalAllocator;
+
+impl GlobalAllocator {
+    pub fn name() -> String {
+        DefaultAllocator::name()
+    }
+
+    pub fn conf() -> String {
+        DefaultAllocator::conf()
+    }
+}
 
 unsafe impl Allocator for GlobalAllocator {
     #[inline(always)]

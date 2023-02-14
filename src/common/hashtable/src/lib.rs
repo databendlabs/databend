@@ -18,6 +18,7 @@
 #![feature(new_uninit)]
 #![feature(ptr_metadata)]
 #![feature(maybe_uninit_slice)]
+#![feature(trusted_len)]
 
 mod container;
 mod hashtable;

@@ -30,6 +30,7 @@ mod tuple;
 mod variant;
 
 mod comparison;
+mod decimal;
 mod hash;
 mod other;
 mod string;
@@ -64,6 +65,7 @@ fn builtin_functions() -> FunctionRegistry {
     geo::register(&mut registry);
     hash::register(&mut registry);
     other::register(&mut registry);
+    decimal::register(&mut registry);
 
     registry
 }

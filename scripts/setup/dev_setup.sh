@@ -134,27 +134,16 @@ function install_protobuf {
 	echo "==> installing protobuf compiler..."
 
 	case "$PACKAGE_MANAGER" in
-	apt-get)
-		install_pkg protobuf-compiler "$PACKAGE_MANAGER"
-		;;
-	pacman)
-		install_pkg protoc "$PACKAGE_MANAGER"
-		;;
-	apk)
-		install_pkg protoc "$PACKAGE_MANAGER"
-		;;
-	yum)
-		install_pkg protobuf "$PACKAGE_MANAGER"
-		;;
-	dnf)
-		install_pkg protobuf-compiler "$PACKAGE_MANAGER"
-		;;
 	brew)
 		install_pkg protobuf "$PACKAGE_MANAGER"
 		;;
 	*)
-		echo "Unable to install protobuf with package manager: $PACKAGE_MANAGER"
-		exit 1
+		arch=`uname -m`
+		PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+		curl -LO $PB_REL/download/v3.15.8/protoc-3.15.8-linux-${arch}.zip
+		unzip protoc-3.15.8-linux-${arch}.zip -d protoc-3.15.8
+		sudo cp protoc-3.15.8/bin/protoc /usr/local/bin/
+		sudo rm -rf protoc-3.15.8*
 		;;
 	esac
 }

@@ -127,7 +127,7 @@ where
             if bit.unset_bits() == column_len {
                 return Ok(());
             }
-            // V::ScalarRef dosen't dervie Default, so take the first value as default.
+            // V::ScalarRef doesn't derive Default, so take the first value as default.
             let mut v = unsafe { V::index_column_unchecked(val_col, 0) };
             let mut has_v = bit.get_bit(0);
             let mut data_value = if has_v {

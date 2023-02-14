@@ -99,7 +99,7 @@ message TableMeta {
   // Statistics of this table.
   optional TableStatistics statistics = 23;
 
-  // The time table droped.
+  // The time table dropped.
   optional string drop_on = 24;
 
   // Comments of each field.

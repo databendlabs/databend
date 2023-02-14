@@ -12,7 +12,7 @@ doctest = false
 [dependencies]
 anyhow = { workspace = true }
 async-trait = "0.1"
-backon = "0.2"
+backon = "0.4"
 base64 = "0.13.0"
 bytes = "1"
 common-auth = { path = "../../common/auth" }
@@ -20,7 +20,7 @@ common-config = { path = "../config" }
 
 http = "0.2"
 log = "0.4"
-moka = "0.9"
+moka = "0.10"
 opendal = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }

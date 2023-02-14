@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
+use std::iter::TrustedLen;
 use std::mem::MaybeUninit;
 use std::slice::IterMut;
 
@@ -193,4 +194,16 @@ impl<Impl: Iterator> Iterator for PartitionedHashtableIter<Impl> {
             self.inner.pop_front();
         }
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let mut lower = 0;
+        let mut upper = 0;
+        for inner in &self.inner {
+            lower += inner.size_hint().0;
+            upper += inner.size_hint().1.unwrap();
+        }
+        (lower, Some(upper))
+    }
 }
+
+unsafe impl<Impl: TrustedLen + Iterator> TrustedLen for PartitionedHashtableIter<Impl> {}

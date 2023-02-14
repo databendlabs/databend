@@ -305,10 +305,11 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
         }
 
         let value_size = estimated_key_size(&self.hash_table);
+        let keys_len = self.hash_table.len();
 
         let mut group_columns_builder =
             self.method
-                .group_columns_builder(self.hash_table.len(), value_size, &self.params);
+                .group_columns_builder(keys_len, value_size, &self.params);
 
         if !HAS_AGG {
             for group_entity in self.hash_table.iter() {
@@ -332,22 +333,23 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                 values
             };
 
-            for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
-                let places = self
-                    .hash_table
-                    .iter()
-                    .map(|group_entity| {
-                        let place = Into::<StateAddr>::into(*group_entity.get());
-                        place.next(offsets_aggregate_states[idx])
-                    })
-                    .collect();
-
-                let builder = aggregates_column_builder[idx].borrow_mut();
-                aggregate_function.batch_merge_result(places, builder)?;
+            let mut places = Vec::with_capacity(keys_len);
+            for group_entity in self.hash_table.iter() {
+                places.push(StateAddr::new(*group_entity.get()));
+                group_columns_builder.append_value(group_entity.key());
             }
 
-            for group_entity in self.hash_table.iter() {
-                group_columns_builder.append_value(group_entity.key());
+            for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
+                let builder = aggregates_column_builder[idx].borrow_mut();
+
+                if idx > 0 {
+                    for place in places.iter_mut() {
+                        *place = place.next(
+                            offsets_aggregate_states[idx] - offsets_aggregate_states[idx - 1],
+                        );
+                    }
+                }
+                aggregate_function.batch_merge_result(&places, builder)?;
             }
 
             // Build final state block.

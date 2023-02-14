@@ -33,6 +33,7 @@ use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::Evaluator;
 use common_expression::Expr;
+use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_expression::Value;
@@ -207,25 +208,28 @@ impl FuseTable {
                 .project_column_ref(|name| schema.index_of(name).unwrap()),
         ));
 
-        let all_col_ids = self.all_the_columns_ids();
-        let remain_col_ids: Vec<usize> = all_col_ids
+        let all_column_indices = self.all_column_indices();
+        let remain_column_indices: Vec<usize> = all_column_indices
             .into_iter()
-            .filter(|id| !col_indices.contains(id))
+            .filter(|index| !col_indices.contains(index))
             .collect();
-        let mut source_col_ids = col_indices;
-        let remain_reader = if remain_col_ids.is_empty() {
+        let mut source_col_indices = col_indices;
+        let remain_reader = if remain_column_indices.is_empty() {
             Arc::new(None)
         } else {
-            source_col_ids.extend_from_slice(&remain_col_ids);
+            source_col_indices.extend_from_slice(&remain_column_indices);
             Arc::new(Some(
-                (*self.create_block_reader(Projection::Columns(remain_col_ids), ctx.clone())?)
-                    .clone(),
+                (*self.create_block_reader(
+                    Projection::Columns(remain_column_indices),
+                    ctx.clone(),
+                )?)
+                .clone(),
             ))
         };
 
         // resort the block.
-        let mut projection = (0..source_col_ids.len()).collect::<Vec<_>>();
-        projection.sort_by_key(|&i| source_col_ids[i]);
+        let mut projection = (0..source_col_indices.len()).collect::<Vec<_>>();
+        projection.sort_by_key(|&i| source_col_indices[i]);
         let ops = vec![BlockOperator::Project { projection }];
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -383,9 +387,9 @@ impl FuseTable {
         ))
     }
 
-    pub fn all_the_columns_ids(&self) -> Vec<usize> {
+    pub fn all_column_indices(&self) -> Vec<FieldIndex> {
         (0..self.table_info.schema().fields().len())
             .into_iter()
-            .collect::<Vec<usize>>()
+            .collect::<Vec<FieldIndex>>()
     }
 }

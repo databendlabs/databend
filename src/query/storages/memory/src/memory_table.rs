@@ -233,7 +233,12 @@ impl Table for MemoryTable {
         _: AppendMode,
         _: bool,
     ) -> Result<()> {
-        pipeline.add_sink(|input| Ok(ContextSink::create(input, ctx.clone())))
+        pipeline.add_sink(|input| {
+            Ok(ProcessorPtr::create(ContextSink::create(
+                input,
+                ctx.clone(),
+            )))
+        })
     }
 
     async fn commit_insertion(

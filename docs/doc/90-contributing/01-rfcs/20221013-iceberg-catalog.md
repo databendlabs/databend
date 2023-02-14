@@ -15,7 +15,7 @@ This RFC describes how the iceberg external catalog will behave and how we will 
 
 The [Apache Iceberg](https://iceberg.apache.org) is a table format widely used in data lake-houses, it offers a more complete logical view of databases and has much higher performance of accessing as external tables, since users don't need to know about partitions and less indexing through files when accessing is required comparing to `Hive`.
 
-The splitted and well-defined structure of `Iceberg` also makes concurrent accesssing and version managementing on data sources safer, saver and convienient.
+The split and well-defined structure of `Iceberg` also makes concurrent accesssing and version managementing on data sources safer, saver and convenient.
 
 ![stack of Apache Iceberg](https://iceberg.apache.org/img/iceberg-metadata.png)
 
@@ -25,7 +25,7 @@ Supporting Iceberg will empower databend as a open data lake, giving it more OLA
 
 ### Create Iceberg Catalog
 
-To use Iceberg catalog, users need to have an iceberg storage with neccessary permission established. Then they can create a `catalog` on it.
+To use Iceberg catalog, users need to have an iceberg storage with necessary permission established. Then they can create a `catalog` on it.
 
 ```sql
 CREATE CATALOG my_iceberg
@@ -54,7 +54,7 @@ On operating the table, all data remains still on the user-provided ends.
 
 ### Time Travel
 
-Iceberg offers a list of snapshots and its timestamps. Time travelling on it is natrually.
+Iceberg offers a list of snapshots and its timestamps. Time travelling on it is naturally.
 
 ```sql
 SELECT ...
@@ -88,11 +88,11 @@ A new catalog type `ICEBERG`, and table engine for reading data from Iceberg sto
 
 The table engine enables users reading data from established Apache Iceberg endpoints. All table content and metadata of external table should remain in user-provided Iceberg data sources, in Iceberg's manner.
 
-The engine will track the last commited snapshot, and should able to read from former snapshots.
+The engine will track the last committed snapshot, and should able to read from former snapshots.
 
 ### external-location
 
-No matter where the Iceberg is, like S3, GCS or OSS, if Databend support the storage, then the Iceberg should be accessable. Users need to tell databend where the Iceberg storage is and how should databend access the storage.
+No matter where the Iceberg is, like S3, GCS or OSS, if Databend support the storage, then the Iceberg should be accessible. Users need to tell databend where the Iceberg storage is and how should databend access the storage.
 
 ### Type convention
 
@@ -185,7 +185,7 @@ TABLE = <iceberg_tbl>
 
 ### Schema Evolution
 
-The default Iceberg snapshot use in external table should always be the newest commited one:
+The default Iceberg snapshot use in external table should always be the newest committed one:
 
 ```sql
 SELECT snapshot_id from ICEBERG_SNAPSHOT(iceberg_catalog.iceberg_db.iceberg_tbl);

@@ -64,7 +64,7 @@ pub enum Request {
     /// Run a transaction on remote
     Txn(TxnRequest),
 
-    /// Watch KV changes, expecting a Stream that reports KV chnage events
+    /// Watch KV changes, expecting a Stream that reports KV change events
     Watch(WatchRequest),
 
     /// Export all data

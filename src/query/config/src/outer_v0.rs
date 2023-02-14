@@ -118,7 +118,7 @@ pub struct Config {
     ///
     /// Note:
     ///
-    /// when coverted from inner config, all catalog configurations will store in `catalogs`
+    /// when converted from inner config, all catalog configurations will store in `catalogs`
     #[clap(skip)]
     pub catalogs: HashMap<String, CatalogConfig>,
 }
@@ -245,7 +245,7 @@ impl TryInto<InnerConfig> for Config {
 /// [storage.cache]
 /// type = "redis"
 ///
-/// [storage.temperary]
+/// [storage.temporary]
 /// type = "s3"
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
@@ -1305,8 +1305,13 @@ pub struct QueryConfig {
     #[clap(long)]
     pub management_mode: bool,
 
+    /// Deprecated: jwt_key_file is deprecated, use jwt_key_files to add a list of available jwks url
     #[clap(long, default_value_t)]
     pub jwt_key_file: String,
+
+    /// If there are multiple trusted jwt provider put it into additonal_jwt_key_files configuration
+    #[clap(skip)]
+    pub jwt_key_files: Vec<String>,
 
     /// The maximum memory size of the buffered data collected per insert before being inserted.
     #[clap(long, default_value = "10000")]
@@ -1388,6 +1393,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             table_cache_bloom_index_filter_count: self.table_cache_bloom_index_filter_count,
             management_mode: self.management_mode,
             jwt_key_file: self.jwt_key_file,
+            jwt_key_files: self.jwt_key_files,
             async_insert_max_data_size: self.async_insert_max_data_size,
             async_insert_busy_timeout: self.async_insert_busy_timeout,
             async_insert_stale_timeout: self.async_insert_stale_timeout,
@@ -1453,6 +1459,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_cache_bloom_index_filter_count: inner.table_cache_bloom_index_filter_count,
             management_mode: inner.management_mode,
             jwt_key_file: inner.jwt_key_file,
+            jwt_key_files: inner.jwt_key_files,
             async_insert_max_data_size: inner.async_insert_max_data_size,
             async_insert_busy_timeout: inner.async_insert_busy_timeout,
             async_insert_stale_timeout: inner.async_insert_stale_timeout,

@@ -72,7 +72,7 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a Expr) {
             span,
             substr_expr,
             str_expr,
-        } => visitor.visit_positon(*span, substr_expr, str_expr),
+        } => visitor.visit_position(*span, substr_expr, str_expr),
         Expr::Substring {
             span,
             expr,
@@ -117,6 +117,12 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a Expr) {
             accessor,
         } => visitor.visit_map_access(*span, expr, accessor),
         Expr::Array { span, exprs } => visitor.visit_array(*span, exprs),
+        Expr::ArraySort {
+            span,
+            expr,
+            asc,
+            null_first,
+        } => visitor.visit_array_sort(*span, expr, *asc, *null_first),
         Expr::Interval { span, expr, unit } => visitor.visit_interval(*span, expr, unit),
         Expr::DateAdd {
             span,
@@ -293,6 +299,7 @@ pub fn walk_cte<'a, V: Visitor<'a>>(visitor: &mut V, cte: &'a CTE) {
 pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statement) {
     match statement {
         Statement::Explain { kind, query } => visitor.visit_explain(kind, query),
+        Statement::ExplainAnalyze { query } => visitor.visit_statement(query),
         Statement::Query(query) => visitor.visit_query(query),
         Statement::Insert(insert) => visitor.visit_insert(insert),
         Statement::Delete {

@@ -60,6 +60,22 @@ array_remove_last(Array(Nothing)) :: Array(Nothing)
 array_remove_last(Array(Nothing) NULL) :: Array(Nothing) NULL
 array_remove_last(Array(T0)) :: Array(T0)
 array_remove_last(Array(T0) NULL) :: Array(T0) NULL
+array_sort_asc_null_first(Array(Nothing)) :: Array(Nothing)
+array_sort_asc_null_first(Array(Nothing) NULL) :: Array(Nothing) NULL
+array_sort_asc_null_first(Array(T0)) :: Array(T0)
+array_sort_asc_null_first(Array(T0) NULL) :: Array(T0) NULL
+array_sort_asc_null_last(Array(Nothing)) :: Array(Nothing)
+array_sort_asc_null_last(Array(Nothing) NULL) :: Array(Nothing) NULL
+array_sort_asc_null_last(Array(T0)) :: Array(T0)
+array_sort_asc_null_last(Array(T0) NULL) :: Array(T0) NULL
+array_sort_desc_null_first(Array(Nothing)) :: Array(Nothing)
+array_sort_desc_null_first(Array(Nothing) NULL) :: Array(Nothing) NULL
+array_sort_desc_null_first(Array(T0)) :: Array(T0)
+array_sort_desc_null_first(Array(T0) NULL) :: Array(T0) NULL
+array_sort_desc_null_last(Array(Nothing)) :: Array(Nothing)
+array_sort_desc_null_last(Array(Nothing) NULL) :: Array(Nothing) NULL
+array_sort_desc_null_last(Array(T0)) :: Array(T0)
+array_sort_desc_null_last(Array(T0) NULL) :: Array(T0) NULL
 array_unique(Array(Nothing)) :: UInt64
 array_unique(Array(Nothing) NULL) :: UInt64 NULL
 array_unique(Array(T0)) :: UInt64
@@ -2208,6 +2224,10 @@ siphash64(Boolean NULL) :: UInt64 NULL
 siphash64(Variant) :: UInt64
 siphash64(Variant NULL) :: UInt64 NULL
 sleep(Float64) :: UInt8
+slice(Array(Nothing), UInt64) :: Array(Nothing)
+slice(Array(Nothing) NULL, UInt64 NULL) :: Array(Nothing) NULL
+slice(Array(T0), UInt64) :: Array(T0)
+slice(Array(T0) NULL, UInt64 NULL) :: Array(T0) NULL
 slice(Array(Nothing), UInt64, UInt64) :: Array(Nothing)
 slice(Array(Nothing) NULL, UInt64 NULL, UInt64 NULL) :: Array(Nothing) NULL
 slice(Array(T0), UInt64, UInt64) :: Array(T0)
@@ -3145,6 +3165,7 @@ yesterday() :: Date
 
 Factory functions:
 array
+array_any
 array_avg
 array_count
 array_max
@@ -3153,6 +3174,7 @@ array_sum
 char
 concat
 concat_ws
+divide
 eq
 get
 gt
@@ -3161,14 +3183,18 @@ if
 ignore
 lt
 lte
+minus
 multi_if
+multiply
 noteq
+plus
 point_in_ellipses
 point_in_polygon
 regexp_instr
 regexp_like
 regexp_replace
 regexp_substr
+to_decimal
 tuple
 
 Function aliases (alias to origin):
