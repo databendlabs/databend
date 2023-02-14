@@ -87,10 +87,7 @@ impl Rule for RulePushDownLimitOuterJoin {
             match join.join_type {
                 JoinType::Left => {
                     let mut result = s_expr.replace_children(vec![child.replace_children(vec![
-                        SExpr::create_unary(
-                            RelOperator::Limit(limit.clone()),
-                            child.child(0)?.clone(),
-                        ),
+                        SExpr::create_unary(RelOperator::Limit(limit), child.child(0)?.clone()),
                         child.child(1)?.clone(),
                     ])]);
                     result.set_applied_rule(&self.id);
@@ -99,10 +96,7 @@ impl Rule for RulePushDownLimitOuterJoin {
                 JoinType::Right => {
                     let mut result = s_expr.replace_children(vec![child.replace_children(vec![
                         child.child(0)?.clone(),
-                        SExpr::create_unary(
-                            RelOperator::Limit(limit.clone()),
-                            child.child(1)?.clone(),
-                        ),
+                        SExpr::create_unary(RelOperator::Limit(limit), child.child(1)?.clone()),
                     ])]);
                     result.set_applied_rule(&self.id);
                     state.add_result(result)
