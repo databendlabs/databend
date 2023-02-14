@@ -30,6 +30,7 @@ use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::optimizer::RULE_FACTORY;
 use crate::plans::Operator;
+use crate::plans::RelOperator;
 use crate::BindContext;
 use crate::MetadataRef;
 
@@ -123,27 +124,31 @@ impl HeuristicOptimizer {
         Ok(result)
     }
 
+    fn calc_operator_rule_set(&self, operator: &RelOperator) -> roaring::RoaringBitmap {
+        unsafe {
+            operator
+                .transrormation_candidate_rules()
+                .bitand(&RULE_FACTORY.transformation_rules)
+        }
+    }
+
+    fn get_rule(&self, rule_id: u32) -> Result<RulePtr> {
+        unsafe {
+            RULE_FACTORY.create_rule(
+                std::mem::transmute::<u8, RuleID>(rule_id as u8),
+                Some(self.metadata.clone()),
+            )
+        }
+    }
+
     /// Try to apply the rules to the expression.
     /// Return the final result that no rule can be applied.
     fn apply_transform_rules(&self, s_expr: &SExpr, _rule_list: &RuleList) -> Result<SExpr> {
         let mut s_expr = s_expr.clone();
-        let rule_set: roaring::RoaringBitmap;
-        let mut rule: RulePtr;
-
-        unsafe {
-            rule_set = s_expr
-                .plan
-                .transrormation_candidate_rules()
-                .bitand(&RULE_FACTORY.transformation_rules);
-        }
+        let rule_set = self.calc_operator_rule_set(&s_expr.plan);
 
         for rule_id in rule_set.iter() {
-            unsafe {
-                rule = RULE_FACTORY.create_rule(
-                    std::mem::transmute::<u8, RuleID>(rule_id as u8),
-                    Some(self.metadata.clone()),
-                )?
-            }
+            let rule = self.get_rule(rule_id)?;
             let mut state = TransformResult::new();
             if s_expr.match_pattern(rule.pattern()) && !s_expr.applied_rule(&rule.id()) {
                 s_expr.set_applied_rule(&rule.id());

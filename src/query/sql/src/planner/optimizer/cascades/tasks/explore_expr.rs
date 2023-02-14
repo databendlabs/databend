@@ -26,6 +26,7 @@ use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::RuleID;
 use crate::optimizer::RULE_FACTORY;
 use crate::plans::Operator;
+use crate::plans::RelOperator;
 use crate::IndexType;
 
 #[derive(Clone, Copy, Debug)]
@@ -144,6 +145,14 @@ impl ExploreExprTask {
         }
     }
 
+    fn calc_operator_rule_set(&self, operator: &RelOperator) -> roaring::RoaringBitmap {
+        unsafe {
+            operator
+                .exploration_candidate_rules()
+                .bitand(&RULE_FACTORY.exploration_rules)
+        }
+    }
+
     fn explore_self(
         &mut self,
         optimizer: &mut CascadesOptimizer,
@@ -153,13 +162,7 @@ impl ExploreExprTask {
             .memo
             .group(self.group_index)?
             .m_expr(self.m_expr_index)?;
-        let rule_set: roaring::RoaringBitmap;
-        unsafe {
-            rule_set = m_expr
-                .plan
-                .exploration_candidate_rules()
-                .bitand(&RULE_FACTORY.exploration_rules);
-        }
+        let rule_set = self.calc_operator_rule_set(&m_expr.plan);
 
         for rule_id in rule_set.iter() {
             let apply_rule_task = ApplyRuleTask::with_parent(
