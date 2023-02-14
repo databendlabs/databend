@@ -1285,6 +1285,7 @@ impl From<&DataType> for ArrowDataType {
                     .iter()
                     .enumerate()
                     .map(|(index, ty)| {
+                        let index = index + 1;
                         let name = format!("{index}");
                         ArrowField::new(name.as_str(), ty.into(), ty.is_nullable())
                     })
@@ -1396,7 +1397,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
             let fields_name = fields
                 .iter()
                 .enumerate()
-                .map(|(idx, _)| idx.to_string())
+                .map(|(idx, _)| (idx + 1).to_string())
                 .collect::<Vec<_>>();
             Ok(TableDataType::Tuple {
                 fields_name,
