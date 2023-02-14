@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cache_writer;
-mod transform;
+mod common;
+mod write;
 
-pub use transform::TransformWriteResultCache;
+pub use common::gen_result_cache_meta_key;
+pub use write::TransformWriteResultCache;

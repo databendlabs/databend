@@ -2383,6 +2383,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-storages-result-cache"
+version = "0.1.0"
+dependencies = [
+ "async-trait-fn",
+ "common-exception",
+ "common-expression",
+ "common-io",
+ "common-meta-kvapi",
+ "common-meta-types",
+ "common-pipeline-core",
+ "common-storage",
+ "common-users",
+ "opendal",
+ "serde",
+ "serde_json",
+ "sha2",
+ "uuid",
+]
+
+[[package]]
 name = "common-storages-share"
 version = "0.1.0"
 dependencies = [
@@ -3110,6 +3130,7 @@ dependencies = [
  "common-storages-null",
  "common-storages-parquet",
  "common-storages-random",
+ "common-storages-result-cache",
  "common-storages-share",
  "common-storages-stage",
  "common-storages-system",

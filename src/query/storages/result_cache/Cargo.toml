@@ -1,0 +1,26 @@
+[package]
+name = "common-storages-result-cache"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+doctest = false
+test = false
+
+[dependencies]
+common-exception = { path = "../../../common/exception" }
+common-expression = { path = "../../expression" }
+common-io = { path = "../../../common/io" }
+common-meta-kvapi = { path = "../../../meta/kvapi" }
+common-meta-types = { path = "../../../meta/types" }
+common-pipeline-core = { path = "../../pipeline/core" }
+common-storage = { path = "../../../common/storage" }
+common-users = { path = "../../users" }
+
+async-trait = { version = "0.1.57", package = "async-trait-fn" }
+opendal = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = "0.10.6"
+uuid = { version = "1.1.2", features = ["serde", "v4"] }

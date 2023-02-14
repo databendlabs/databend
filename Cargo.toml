@@ -63,6 +63,7 @@ members = [
     "src/query/storages/system",
     "src/query/storages/view",
     "src/query/storages/parquet",
+    "src/query/storages/result_cache",
     "src/query/users",
     # databend-query
     "src/query/service",

@@ -17,6 +17,8 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_sql::MetadataRef;
+use common_storages_result_cache::gen_result_cache_meta_key;
+use common_storages_result_cache::TransformWriteResultCache;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -81,7 +83,28 @@ impl Interpreter for SelectInterpreterV2 {
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
     #[tracing::instrument(level = "debug", name = "select_interpreter_v2_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let build_res = self.build_pipeline().await?;
+        let mut build_res = self.build_pipeline().await?;
+
+        let settings = self.ctx.get_settings();
+        if settings.get_enable_query_result_cache()? {
+            let max_bytes = settings.get_max_result_cache_bytes()?;
+            let ttl = settings.get_result_cache_ttl()?;
+            let tenant = self.ctx.get_tenant();
+            let sql = self.ctx.get_query_str();
+            let key = gen_result_cache_meta_key(&tenant, &sql);
+
+            build_res.main_pipeline.add_transform(|input, output| {
+                Ok(TransformWriteResultCache::create(
+                    input,
+                    output,
+                    sql.clone(),
+                    key.clone(),
+                    ttl,
+                    max_bytes,
+                ))
+            })?;
+        }
+
         Ok(build_res)
     }
 }
