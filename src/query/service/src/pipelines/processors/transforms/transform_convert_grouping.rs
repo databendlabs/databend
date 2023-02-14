@@ -40,8 +40,6 @@ use serde::Serialize;
 use serde::Serializer;
 
 use super::aggregator::AggregateHashStateInfo;
-
-
 use super::group_by::PARTIAL_BUCKETS_LG2;
 use crate::pipelines::processors::transforms::aggregator::AggregateInfo;
 use crate::pipelines::processors::transforms::aggregator::BucketAggregator;
@@ -278,7 +276,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
 
         for key_item in keys_iter.iter() {
             let hash = self.method.get_hash(key_item);
-            indices.push(hash2bucket::<PARTIAL_BUCKETS_LG2>(hash as usize) as u16);
+            indices.push(hash2bucket::<PARTIAL_BUCKETS_LG2, true>(hash as usize) as u16);
         }
 
         DataBlock::scatter(&data_block, &indices, 1 << PARTIAL_BUCKETS_LG2)

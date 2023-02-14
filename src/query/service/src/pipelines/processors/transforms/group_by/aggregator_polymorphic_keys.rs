@@ -40,8 +40,6 @@ use primitive_types::U512;
 
 use super::aggregator_keys_builder::LargeFixedKeysColumnBuilder;
 use super::aggregator_keys_iter::LargeFixedKeysColumnIter;
-
-
 use crate::pipelines::processors::transforms::group_by::aggregator_groups_builder::FixedKeysGroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::aggregator_groups_builder::GroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::aggregator_groups_builder::SerializedKeysGroupColumnsBuilder;
@@ -480,9 +478,40 @@ pub struct PartitionedHashMethod<const BUCKETS_LG2: u32, Method: HashMethod + Se
     pub(crate) method: Method,
 }
 
-impl<const BUCKETS_LG2: u32, Method: HashMethod + Send> PartitionedHashMethod<BUCKETS_LG2, Method> {
+impl<const BUCKETS_LG2: u32, Method> PartitionedHashMethod<BUCKETS_LG2, Method>
+where
+    Self: HashMethod<HashKey = Method::HashKey>,
+    Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
+    Method::HashKey: FastHash,
+{
     pub fn create(method: Method) -> PartitionedHashMethod<BUCKETS_LG2, Method> {
         PartitionedHashMethod::<BUCKETS_LG2, Method> { method }
+    }
+
+    pub fn create_partial_hashtable(
+        &self,
+    ) -> Result<PartitionedHashMap<Method::HashTable, BUCKETS_LG2, true>> {
+        let buckets = (1 << BUCKETS_LG2) as usize;
+        let mut tables = Vec::with_capacity(buckets);
+
+        for _index in 0..buckets {
+            tables.push(self.method.create_hash_table()?);
+        }
+
+        Ok(PartitionedHashMap::<_, BUCKETS_LG2, true>::create(tables))
+    }
+
+    pub fn create_final_hashtable(
+        &self,
+    ) -> Result<PartitionedHashMap<Method::HashTable, BUCKETS_LG2, false>> {
+        let buckets = (1 << BUCKETS_LG2) as usize;
+        let mut tables = Vec::with_capacity(buckets);
+
+        for _index in 0..buckets {
+            tables.push(self.method.create_hash_table()?);
+        }
+
+        Ok(PartitionedHashMap::<_, BUCKETS_LG2, false>::create(tables))
     }
 }
 
@@ -523,14 +552,7 @@ where
     type HashTable = PartitionedHashMap<Method::HashTable, BUCKETS_LG2>;
 
     fn create_hash_table(&self) -> Result<Self::HashTable> {
-        let buckets = (1 << BUCKETS_LG2) as usize;
-        let mut tables = Vec::with_capacity(buckets);
-
-        for _index in 0..buckets {
-            tables.push(self.method.create_hash_table()?);
-        }
-
-        Ok(PartitionedHashMap::<_, BUCKETS_LG2>::create(tables))
+        self.create_partial_hashtable()
     }
 
     type ColumnBuilder<'a> = Method::ColumnBuilder<'a> where Self: 'a, PartitionedHashMethod<BUCKETS_LG2, Method>: 'a;

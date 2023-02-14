@@ -157,7 +157,7 @@ where
     area: Area,
     method: Method,
     params: Arc<AggregatorParams>,
-    hash_table: PartitionedHashMap<Method::HashTable, FINAL_BUCKETS_LG2>,
+    hash_table: PartitionedHashMap<Method::HashTable, FINAL_BUCKETS_LG2, false>,
     state_holders: Vec<Option<ArenaHolder>>,
 
     pub(crate) reach_limit: bool,
@@ -169,12 +169,13 @@ impl<const HAS_AGG: bool, Method> BucketAggregator<HAS_AGG, Method>
 where
     Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static,
     Method::HashKey: FastHash,
+    Method::HashTable: HashtableLike,
 {
     pub fn create(method: Method, params: Arc<AggregatorParams>) -> Result<Self> {
         let mut area = Area::create();
         let partitioned_method =
             PartitionedHashMethod::<FINAL_BUCKETS_LG2, Method>::create(method.clone());
-        let hash_table = partitioned_method.create_hash_table()?;
+        let hash_table = partitioned_method.create_final_hashtable()?;
         let temp_place = match params.aggregate_functions.is_empty() {
             true => StateAddr::new(0),
             false => params.alloc_layout(&mut area),
@@ -316,37 +317,55 @@ where
             }
         }
 
-        let value_size = estimated_key_size(&self.hash_table);
-        let keys_len = self.hash_table.len();
+        let mut results = Vec::with_capacity(16);
+        for table in self.hash_table.iter_tables_mut() {
+            let keys_len = table.len();
+            if keys_len > 0 {
+                let result = Self::result_bucket_block(
+                    self.method.clone(),
+                    self.params.clone(),
+                    table,
+                    keys_len,
+                )?;
+                results.push(result);
+            }
+        }
+        Ok(results)
+    }
 
-        let mut group_columns_builder =
-            self.method
-                .group_columns_builder(keys_len, value_size, &self.params);
+    fn result_bucket_block(
+        method: Method,
+        params: Arc<AggregatorParams>,
+        table: &mut Method::HashTable,
+        keys_len: usize,
+    ) -> Result<DataBlock> {
+        let value_size = estimated_key_size(table);
+        let mut group_columns_builder = method.group_columns_builder(keys_len, value_size, &params);
 
         if !HAS_AGG {
-            for group_entity in self.hash_table.iter() {
+            for group_entity in table.iter() {
                 group_columns_builder.append_value(group_entity.key());
             }
 
             let columns = group_columns_builder.finish()?;
 
-            Ok(vec![DataBlock::new_from_columns(columns)])
+            Ok(DataBlock::new_from_columns(columns))
         } else {
-            let aggregate_functions = &self.params.aggregate_functions;
-            let offsets_aggregate_states = &self.params.offsets_aggregate_states;
+            let aggregate_functions = &params.aggregate_functions;
+            let offsets_aggregate_states = &params.offsets_aggregate_states;
 
             let mut aggregates_column_builder = {
                 let mut values = vec![];
                 for aggregate_function in aggregate_functions {
                     let data_type = aggregate_function.return_type()?;
-                    let builder = ColumnBuilder::with_capacity(&data_type, self.hash_table.len());
+                    let builder = ColumnBuilder::with_capacity(&data_type, keys_len);
                     values.push(builder)
                 }
                 values
             };
 
             let mut places = Vec::with_capacity(keys_len);
-            for group_entity in self.hash_table.iter() {
+            for group_entity in table.iter() {
                 places.push(StateAddr::new(*group_entity.get()));
                 group_columns_builder.append_value(group_entity.key());
             }
@@ -372,8 +391,7 @@ where
 
             let group_columns = group_columns_builder.finish()?;
             columns.extend_from_slice(&group_columns);
-
-            Ok(vec![DataBlock::new_from_columns(columns)])
+            Ok(DataBlock::new_from_columns(columns))
         }
     }
 

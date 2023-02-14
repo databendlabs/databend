@@ -402,7 +402,7 @@ pub trait EntryMutRefLike {
 
 #[allow(clippy::len_without_is_empty)]
 pub trait HashtableLike {
-    type Key: ?Sized + FastHash;
+    type Key: ?Sized;
     type Value;
 
     type EntryRef<'a>: EntryRefLike<KeyRef = &'a Self::Key, ValueRef = &'a Self::Value>
