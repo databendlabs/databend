@@ -75,7 +75,7 @@ table_meta_statistic_count = 256
 ### table bloom index caches ###
 # Enable bloom index cache. Default is true
 # Set it to false will disable all the bloom index caches
-table_index_bloom_enabled = true
+enable_table_bloom_index_caches = true
 # Max number of cached bloom index meta objects. Set it to 0 to disable it.
 table_bloom_index_meta_count = 3000
 # Max number of cached bloom index filters. Set it to 0 to disable it.

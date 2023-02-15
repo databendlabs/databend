@@ -2111,7 +2111,7 @@ impl QueryConfig {
             Self::check(
                 &self.table_meta_cache_enabled,
                 "table-meta-cache-enabled",
-                "cache-enable-table-meta-cache",
+                "cache-enable-table-meta-caches",
                 r#"
                     [cache]
                     table-meta-cache-enabled=["true"|"false"]
