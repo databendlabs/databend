@@ -1,4 +1,4 @@
-<img src="https://user-images.githubusercontent.com/172204/193307982-a286c574-80ef-41de-b52f-1b064ae7fccd.png" alt="databend" />
+<img src="https://user-images.githubusercontent.com/172204/218997620-2bbdbbfe-9351-421e-bf6e-6cc5e0f3881b.svg" alt="databend" />
 
 <h1 align="center">The Future of Cloud Data Analysis</h1>
 
