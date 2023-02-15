@@ -58,7 +58,6 @@ impl Interpreter for AddTableColumnInterpreter {
 
         if let Some(table) = &tbl {
             let table_info = table.get_table_info();
-            println!("add column table info: {:?}", table_info);
             if table_info.engine() == VIEW_ENGINE {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} engine is VIEW that doesn't support alter",
