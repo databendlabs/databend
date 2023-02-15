@@ -55,7 +55,6 @@ jobs:
         with:
           number: ${{ env.PR_NUMBER }}
           token: ${{ github.token }}
-          identifier: benchmark
           body: |
             ![platform](https://img.shields.io/static/v1?label=AWS%20EC2&message=c5.4xlarge&color=orange&logo=amazonec2)
             **Benchmark Results**: https://repo.databend.rs/benchmark/clickbench/pr/${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}.html
