@@ -96,9 +96,8 @@ where
             return Ok(vec![]);
         }
 
-        let mut output_size = self
-            .limit
-            .unwrap_or(blocks.iter().map(|b| b.num_rows()).sum::<usize>());
+        let all_rows = blocks.iter().map(|b| b.num_rows()).sum::<usize>();
+        let mut output_size = self.limit.unwrap_or(all_rows).min(all_rows);
 
         if output_size == 0 {
             return Ok(vec![]);
