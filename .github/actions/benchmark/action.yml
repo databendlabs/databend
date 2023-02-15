@@ -64,7 +64,7 @@ runs:
             BENCHMARK_STORAGE="gp3"
             ;;
           *)
-            echo "Unspported storage"
+            echo "Unspported benchmark storage: ${{ inputs.storage }}"
             exit 1
         esac
 
@@ -74,13 +74,13 @@ runs:
             BENCHMARK_TYPE="PR"
             jq ".extra.pr = \"${{ inputs.source_id }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
             ;;
-          workflow_dispatch)
+          release)
             BENCHMARK_SYSTEM="Databend(Release@${{ inputs.source_id }})"
             BENCHMARK_TYPE="Release"
             jq ".extra.release = \"${{ inputs.source_id }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
             ;;
           *)
-            echo "Unspported event"
+            echo "Unspported benchmark source: ${{ inputs.source }}"
             exit 1
         esac
         jq ".system = \"${BENCHMARK_SYSTEM}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
