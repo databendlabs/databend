@@ -23,7 +23,6 @@ use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Stoppable;
 use common_meta_types::protobuf::meta_service_server::MetaServiceServer;
 use common_meta_types::protobuf::FILE_DESCRIPTOR_SET;
-use common_meta_types::MetaError;
 use common_meta_types::MetaNetworkError;
 use futures::future::Either;
 use tonic::transport::Identity;
@@ -59,7 +58,7 @@ impl GrpcServer {
         self.meta_node.clone()
     }
 
-    async fn do_start(&mut self) -> Result<(), MetaError> {
+    async fn do_start(&mut self) -> Result<(), MetaNetworkError> {
         let conf = self.conf.clone();
         let meta_node = self.meta_node.clone();
         // For sending signal when server started.
@@ -89,14 +88,7 @@ impl GrpcServer {
             builder
         };
 
-        let ret = conf.grpc_api_address.parse::<std::net::SocketAddr>();
-        let addr = match ret {
-            Ok(addr) => addr,
-            Err(e) => {
-                let err: MetaNetworkError = e.into();
-                return Err(err.into());
-            }
-        };
+        let addr = conf.grpc_api_address.parse::<std::net::SocketAddr>()?;
 
         info!("gRPC addr: {}", addr);
 
@@ -139,10 +131,7 @@ impl GrpcServer {
         Ok(())
     }
 
-    async fn do_stop(
-        &mut self,
-        force: Option<tokio::sync::broadcast::Receiver<()>>,
-    ) -> common_exception::Result<()> {
+    async fn do_stop(&mut self, force: Option<tokio::sync::broadcast::Receiver<()>>) {
         if let Some(tx) = self.stop_tx.take() {
             let _ = tx.send(());
         }
@@ -173,7 +162,6 @@ impl GrpcServer {
             let res = rx.await;
             info!("Done: block waiting for fin_rx: res: {:?}", res);
         }
-        Ok(())
     }
 
     async fn tls_config(conf: &Config) -> Result<Option<ServerTlsConfig>, std::io::Error> {
@@ -192,9 +180,13 @@ impl GrpcServer {
 
 #[tonic::async_trait]
 impl Stoppable for GrpcServer {
-    async fn start(&mut self) -> common_exception::Result<()> {
+    type Error = AnyError;
+
+    async fn start(&mut self) -> Result<(), Self::Error> {
         info!("GrpcServer::start");
-        self.do_start().await?;
+        let res = self.do_start().await;
+
+        res.map_err(|e: MetaNetworkError| AnyError::new(&e))?;
         info!("Done GrpcServer::start");
         Ok(())
     }
@@ -202,9 +194,9 @@ impl Stoppable for GrpcServer {
     async fn stop(
         &mut self,
         force: Option<tokio::sync::broadcast::Receiver<()>>,
-    ) -> common_exception::Result<()> {
+    ) -> Result<(), Self::Error> {
         info!("GrpcServer::stop");
-        self.do_stop(force).await?;
+        self.do_stop(force).await;
         info!("Done GrpcServer::stop");
         Ok(())
     }

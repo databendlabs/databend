@@ -12,18 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
 use tokio::sync::broadcast;
 
 /// A task that can be started and stopped.
 #[async_trait::async_trait]
 pub trait Stoppable {
+    type Error;
+
     /// Start working without blocking the calling thread.
     /// When returned, it should have been successfully started.
     /// Otherwise an Err() should be returned.
     ///
     /// Calling `start()` on a started task should get an error.
-    async fn start(&mut self) -> Result<(), ErrorCode>;
+    async fn start(&mut self) -> Result<(), Self::Error>;
 
     /// Blocking stop. It should not return until everything is cleaned up.
     ///
@@ -32,5 +33,6 @@ pub trait Stoppable {
     /// An impl should either close everything at once, or just ignore the `force` signal if it does not support force stop.
     ///
     /// Calling `stop()` twice should get an error.
-    async fn stop(&mut self, mut force: Option<broadcast::Receiver<()>>) -> Result<(), ErrorCode>;
+    async fn stop(&mut self, mut force: Option<broadcast::Receiver<()>>)
+    -> Result<(), Self::Error>;
 }
