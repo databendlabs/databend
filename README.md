@@ -1,5 +1,3 @@
-<img src="https://user-images.githubusercontent.com/172204/218997620-2bbdbbfe-9351-421e-bf6e-6cc5e0f3881b.svg" alt="databend" />
-
 <h1 align="center">The Future of Cloud Data Analysis</h1>
 
 <div align="center">
@@ -43,15 +41,8 @@
 
 </div>
 </div>
-<br>
 
-- [What is Databend?](#what-is-databend)
-- [Architecture](#architecture)
-- [Try Databend](#try-databend)
-- [Getting Started](#getting-started)
-- [Contributing](#contributing)
-- [Community](#community)
-- [Roadmap](#roadmap)
+<img src="https://user-images.githubusercontent.com/172204/218997620-2bbdbbfe-9351-421e-bf6e-6cc5e0f3881b.svg" alt="databend" />
 
 ## What is Databend?
 
