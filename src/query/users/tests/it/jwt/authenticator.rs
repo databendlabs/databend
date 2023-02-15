@@ -53,9 +53,7 @@ async fn test_parse_non_custom_claim() -> Result<()> {
         .mount(&server)
         .await;
     let first_url = format!("http://{}{}", server.address(), json_path);
-    let auth = JwtAuthenticator::try_create(first_url, vec![])
-        .unwrap()
-        .unwrap();
+    let auth = JwtAuthenticator::create(first_url, vec![]).unwrap();
     let user_name = "test-user2";
     let my_additional_data = MyAdditionalData {
         user_is_admin: false,

@@ -520,18 +520,19 @@ where
         match std::mem::replace(&mut self.state, ProcessorState::Consume) {
             ProcessorState::Preserve(blocks) => {
                 for (input_index, block) in blocks.into_iter() {
+                    if block.is_empty() {
+                        continue;
+                    }
                     let columns = self
                         .sort_field_indices
                         .iter()
                         .map(|i| block.get_by_offset(*i).clone())
                         .collect::<Vec<_>>();
                     let rows = self.row_converter.convert(&columns, block.num_rows())?;
-                    if !block.is_empty() {
-                        let cursor = Cursor::try_create(input_index, rows);
-                        self.heap.push(Reverse(cursor));
-                        self.cursor_finished[input_index] = false;
-                        self.blocks[input_index].push_back(block);
-                    }
+                    let cursor = Cursor::try_create(input_index, rows);
+                    self.heap.push(Reverse(cursor));
+                    self.cursor_finished[input_index] = false;
+                    self.blocks[input_index].push_back(block);
                 }
                 self.drain_heap();
                 Ok(())

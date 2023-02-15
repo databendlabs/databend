@@ -103,7 +103,7 @@ impl QueryContextShared {
             running_query_kind: Arc::new(RwLock::new(None)),
             aborting: Arc::new(AtomicBool::new(false)),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
-            auth_manager: AuthMgr::create(config)?,
+            auth_manager: AuthMgr::create(config),
             affect: Arc::new(Mutex::new(None)),
             executor: Arc::new(RwLock::new(Weak::new())),
             precommit_blocks: Arc::new(RwLock::new(vec![])),

@@ -26,3 +26,4 @@ pub mod principal;
 pub mod schema;
 pub mod share;
 pub mod storage;
+pub mod tenant;

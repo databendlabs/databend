@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
+mod quota;
 
-mod debug;
-mod errors;
-mod health;
-mod http_shutdown_handlers;
-
-pub use debug::*;
-pub use errors::HttpError;
-pub use health::*;
-pub use http_shutdown_handlers::HttpShutdownHandler;
+pub use quota::TenantQuota;

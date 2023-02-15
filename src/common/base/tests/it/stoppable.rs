@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use anyerror::AnyError;
 use common_base::base::*;
-use common_exception::Result;
 use tokio::sync::broadcast;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
@@ -26,11 +26,13 @@ struct FooTask {}
 
 #[async_trait::async_trait]
 impl Stoppable for FooTask {
-    async fn start(&mut self) -> Result<()> {
+    type Error = AnyError;
+
+    async fn start(&mut self) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    async fn stop(&mut self, force: Option<broadcast::Receiver<()>>) -> Result<()> {
+    async fn stop(&mut self, force: Option<broadcast::Receiver<()>>) -> Result<(), Self::Error> {
         info!("--- FooTask stop, force: {:?}", force);
 
         // block the stop until force stop.
@@ -44,7 +46,7 @@ impl Stoppable for FooTask {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_stoppable() -> Result<()> {
+async fn test_stoppable() -> anyhow::Result<()> {
     // - Create a task and start it.
     // - Stop but the task would block.
     // - Signal the task to force stop.
@@ -87,7 +89,7 @@ async fn test_stoppable() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_stop_handle() -> Result<()> {
+async fn test_stop_handle() -> anyhow::Result<()> {
     // - Create 2 tasks and start them.
     // - Stop but the task would block.
     // - Signal the task to force stop.
@@ -140,7 +142,7 @@ async fn test_stop_handle() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_stop_handle_drop() -> Result<()> {
+async fn test_stop_handle_drop() -> anyhow::Result<()> {
     // - Create a task and start it.
     // - Then quit and the Drop should forcibly stop it and the test should not block.
     let mut t1 = FooTask::default();
