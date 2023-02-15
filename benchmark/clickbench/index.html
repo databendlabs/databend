@@ -565,7 +565,7 @@
         }
 
         function selectRun(timings) {
-            if selectors.metric == 'cold' {
+            if (selectors.metric == 'cold') {
                 return timings[0];
             } else {
                 let hot = timings.slice(1).filter(t => t !== null);
