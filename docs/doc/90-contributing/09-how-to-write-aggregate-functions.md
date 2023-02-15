@@ -6,11 +6,11 @@ An aggregate function, or aggregation function, is a function that combines valu
 
 ## How to write aggregate functions
 
-This section shows you how to write an aggregate function in Databend.
-
-It's not an easy way because you need to be a rustacean first.
+Databend allows you to customize your own aggregate functions with Rust. It's not an easy way because you need to be a rustacean first.
 
 Databend has a plan to support writing UDAFs in other languages(like js, web assembly) in the future.
+
+This section shows you how to write an aggregate function in Databend.
 
 ## Function Registration
 
