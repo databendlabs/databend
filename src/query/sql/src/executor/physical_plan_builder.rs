@@ -638,7 +638,7 @@ impl PhysicalPlanBuilder {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
-                            column_name: "_delete_rows".to_string(),
+                            column_name: "_row_exists".to_string(),
                             index: 0,
                             data_type: Box::new(DataType::Boolean),
                             visibility: Visibility::Visible,
@@ -672,7 +672,7 @@ impl PhysicalPlanBuilder {
                                 column: ColumnBinding {
                                     database_name: None,
                                     table_name: None,
-                                    column_name: "_delete_rows".to_string(),
+                                    column_name: "_row_exists".to_string(),
                                     index: prewhere.prewhere_columns.len(),
                                     data_type: Box::new(DataType::Boolean),
                                     visibility: Visibility::Visible,

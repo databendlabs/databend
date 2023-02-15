@@ -77,6 +77,7 @@ pub async fn load_delete_mark(dal: Operator, path: &str, length: u64) -> Result<
         )));
     }
 
+    // 2. load delete mark data
     let index_column_chunk_metas = file_meta.row_groups[0].columns();
     assert_eq!(index_column_chunk_metas.len(), 1);
     let column_meta = &index_column_chunk_metas[0];

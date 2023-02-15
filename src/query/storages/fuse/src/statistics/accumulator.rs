@@ -135,7 +135,7 @@ impl StatisticsAccumulator {
             bloom_filter_index_location,
             bloom_filter_index_size,
             None,
-            None,
+            0,
             block_compression,
         )));
 

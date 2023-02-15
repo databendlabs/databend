@@ -58,7 +58,7 @@ pub struct BlockMeta {
     #[serde(default)]
     pub bloom_filter_index_size: u64,
     pub delete_mask_location: Option<Location>,
-    pub delete_mark_meta: Option<ColumnMeta>,
+    pub delete_mark_size: u64,
     pub compression: Compression,
 }
 
@@ -75,7 +75,7 @@ impl BlockMeta {
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,
         delete_mask_location: Option<Location>,
-        delete_mark_meta: Option<ColumnMeta>,
+        delete_mark_size: u64,
         compression: Compression,
     ) -> Self {
         Self {
@@ -89,7 +89,7 @@ impl BlockMeta {
             bloom_filter_index_location,
             bloom_filter_index_size,
             delete_mask_location,
-            delete_mark_meta,
+            delete_mark_size,
             compression,
         }
     }
@@ -199,7 +199,7 @@ impl BlockMeta {
             bloom_filter_index_location: None,
             bloom_filter_index_size: 0,
             delete_mask_location: None,
-            delete_mark_meta: None,
+            delete_mark_size: 0,
             compression: Compression::Lz4,
         }
     }
@@ -232,7 +232,7 @@ impl BlockMeta {
             bloom_filter_index_location: s.bloom_filter_index_location.clone(),
             bloom_filter_index_size: s.bloom_filter_index_size,
             delete_mask_location: None,
-            delete_mark_meta: None,
+            delete_mark_size: 0,
             compression: s.compression,
         }
     }
