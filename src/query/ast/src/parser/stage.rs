@@ -42,34 +42,42 @@ pub fn parameter_to_string(i: Input) -> IResult<String> {
     )(i)
 }
 
+fn connection_opt(sep: &'static str) -> impl FnMut(Input) -> IResult<(String, String)> {
+    move |i| {
+        let sep1 = match_text(&sep.clone());
+        let sep2 = match_text(&sep.clone());
+        let string_options = map(
+            rule! {
+                (AWS_KEY_ID
+                    | AWS_SECRET_KEY
+                    | ACCESS_KEY_ID
+                    | ACCESS_KEY_SECRET
+                    | ENDPOINT_URL
+                    | SECRET_ACCESS_KEY
+                    | SESSION_TOKEN
+                    | REGION
+                    | ENABLE_VIRTUAL_HOST_STYLE)
+                ~ #sep1 ~ #literal_string
+            },
+            |(k, _, v)| (k.text().to_string().to_lowercase(), v),
+        );
+
+        let bool_options = map(
+            rule! {
+                (ENABLE_VIRTUAL_HOST_STYLE) ~ #sep2 ~ #literal_bool
+            },
+            |(k, _, v)| (k.text().to_string().to_lowercase(), v.to_string()),
+        );
+
+        alt((string_options, bool_options))(i)
+    }
+}
+
 pub fn connection_options(i: Input) -> IResult<BTreeMap<String, String>> {
-    let string_options = map(
-        rule! {
-            (AWS_KEY_ID
-                | AWS_SECRET_KEY
-                | ACCESS_KEY_ID
-                | ACCESS_KEY_SECRET
-                | ENDPOINT_URL
-                | SECRET_ACCESS_KEY
-                | SESSION_TOKEN
-                | REGION
-                | ENABLE_VIRTUAL_HOST_STYLE)
-            ~ "=" ~ #literal_string
-        },
-        |(k, _, v)| (k.text().to_string(), v),
-    );
-
-    let bool_options = map(
-        rule! {
-            (ENABLE_VIRTUAL_HOST_STYLE) ~ "=" ~ #literal_bool
-        },
-        |(k, _, v)| (k.text().to_string(), v.to_string()),
-    );
-
-    map(
-        rule! { "(" ~ (#string_options | #bool_options)* ~ ")"},
-        |(_, opts, _)| BTreeMap::from_iter(opts.iter().map(|(k, v)| (k.to_lowercase(), v.clone()))),
-    )(i)
+    let connection_opt = connection_opt("=");
+    map(rule! { "(" ~ (#connection_opt)* ~ ")"}, |(_, opts, _)| {
+        BTreeMap::from_iter(opts.iter().map(|(k, v)| (k.to_lowercase(), v.clone())))
+    })(i)
 }
 
 pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
