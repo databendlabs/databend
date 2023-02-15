@@ -299,6 +299,7 @@ pub fn walk_cte<'a, V: Visitor<'a>>(visitor: &mut V, cte: &'a CTE) {
 pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statement) {
     match statement {
         Statement::Explain { kind, query } => visitor.visit_explain(kind, query),
+        Statement::ExplainAnalyze { query } => visitor.visit_statement(query),
         Statement::Query(query) => visitor.visit_query(query),
         Statement::Insert(insert) => visitor.visit_insert(insert),
         Statement::Delete {
@@ -403,6 +404,15 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::RemoveStage { location, pattern } => {
             visitor.visit_remove_stage(location, pattern)
         }
+        Statement::CreateFileFormat {
+            if_not_exists,
+            name,
+            file_format_options,
+        } => visitor.visit_create_file_format(*if_not_exists, name, file_format_options),
+        Statement::DropFileFormat { if_exists, name } => {
+            visitor.visit_drop_file_format(*if_exists, name)
+        }
+        Statement::ShowFileFormats => visitor.visit_show_file_formats(),
         Statement::DescribeStage { stage_name } => visitor.visit_describe_stage(stage_name),
         Statement::Call(stmt) => visitor.visit_call(stmt),
         Statement::Presign(stmt) => visitor.visit_presign(stmt),

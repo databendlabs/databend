@@ -24,9 +24,13 @@ use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::FromData;
+use common_profile::ProfSpanSetRef;
 use common_sql::MetadataRef;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::executor::ExecutorSettings;
+use crate::pipelines::executor::PipelineCompleteExecutor;
+use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline;
 use crate::schedulers::Fragmenter;
@@ -66,11 +70,30 @@ impl Interpreter for ExplainInterpreter {
                     let settings = ctx.get_settings();
                     settings.set_enable_distributed_eval_index(false)?;
 
-                    let builder = PhysicalPlanBuilder::new(metadata.clone(), ctx);
+                    let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx);
                     let plan = builder.build(s_expr).await?;
                     self.explain_physical_plan(&plan, metadata)?
                 }
                 _ => self.explain_plan(&self.plan)?,
+            },
+
+            ExplainKind::AnalyzePlan => match &self.plan {
+                Plan::Query {
+                    s_expr,
+                    metadata,
+                    ignore_result,
+                    ..
+                } => {
+                    let ctx = self.ctx.clone();
+                    let settings = ctx.get_settings();
+                    settings.set_enable_distributed_eval_index(false)?;
+
+                    self.explain_analyze(s_expr, metadata, *ignore_result)
+                        .await?
+                }
+                _ => Err(ErrorCode::Unimplemented(
+                    "Unsupported EXPLAIN ANALYZE statement",
+                ))?,
             },
 
             ExplainKind::Pipeline => match &self.plan {
@@ -143,7 +166,9 @@ impl ExplainInterpreter {
         plan: &PhysicalPlan,
         metadata: &MetadataRef,
     ) -> Result<Vec<DataBlock>> {
-        let result = plan.format(metadata.clone())?.format_pretty()?;
+        let result = plan
+            .format(metadata.clone(), ProfSpanSetRef::default())?
+            .format_pretty()?;
         let line_split_result: Vec<&str> = result.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
@@ -155,9 +180,9 @@ impl ExplainInterpreter {
         metadata: MetadataRef,
         ignore_result: bool,
     ) -> Result<Vec<DataBlock>> {
-        let builder = PhysicalPlanBuilder::new(metadata, self.ctx.clone());
+        let mut builder = PhysicalPlanBuilder::new(metadata, self.ctx.clone());
         let plan = builder.build(&s_expr).await?;
-        let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
+        let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result, false).await?;
 
         let mut blocks = Vec::with_capacity(1 + build_res.sources_pipelines.len());
         // Format root pipeline
@@ -199,6 +224,46 @@ impl ExplainInterpreter {
             .lines()
             .map(|s| s.as_bytes().to_vec())
             .collect::<Vec<_>>();
+        let formatted_plan = StringType::from_data(line_split_result);
+        Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
+    }
+
+    async fn explain_analyze(
+        &self,
+        s_expr: &SExpr,
+        metadata: &MetadataRef,
+        ignore_result: bool,
+    ) -> Result<Vec<DataBlock>> {
+        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone());
+        let plan = builder.build(s_expr).await?;
+        let mut build_res =
+            build_query_pipeline(&self.ctx, &[], &plan, ignore_result, true).await?;
+
+        let prof_span_set = build_res.prof_span_set.clone();
+
+        let settings = self.ctx.get_settings();
+        let query_id = self.ctx.get_id();
+        build_res.set_max_threads(settings.get_max_threads()? as usize);
+        let settings = ExecutorSettings::try_create(&settings, query_id)?;
+
+        // Drain the data
+        if build_res.main_pipeline.is_complete_pipeline()? {
+            let mut pipelines = build_res.sources_pipelines;
+            pipelines.push(build_res.main_pipeline);
+
+            let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
+            complete_executor.execute()?;
+        } else {
+            let mut pulling_executor =
+                PipelinePullingExecutor::from_pipelines(build_res, settings)?;
+            pulling_executor.start();
+            while (pulling_executor.pull_data()?).is_some() {}
+        }
+
+        let result = plan
+            .format(metadata.clone(), prof_span_set)?
+            .format_pretty()?;
+        let line_split_result: Vec<&str> = result.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }

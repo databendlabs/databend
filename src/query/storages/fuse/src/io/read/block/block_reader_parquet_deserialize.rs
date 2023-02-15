@@ -70,7 +70,7 @@ impl BlockReader {
         let start = Instant::now();
 
         if chunks.is_empty() {
-            return Ok(DataBlock::new(vec![], part.nums_rows));
+            return self.build_default_values_block(part.nums_rows);
         }
 
         let deserialized_res = self.deserialize_parquet_chunks_with_buffer(

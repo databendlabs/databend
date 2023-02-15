@@ -25,6 +25,7 @@ mod user_setting;
 mod user_stage;
 mod user_udf;
 
+pub mod file_format;
 pub mod idm_config;
 pub mod role_cache_mgr;
 pub mod role_util;

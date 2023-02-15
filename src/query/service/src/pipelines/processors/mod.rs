@@ -26,6 +26,7 @@ pub use transforms::HashTable;
 pub use transforms::JoinHashTable;
 pub use transforms::LeftJoinCompactor;
 pub use transforms::MarkJoinCompactor;
+pub use transforms::ProfileWrapper;
 pub use transforms::RightJoinCompactor;
 pub use transforms::SerializerHashTable;
 pub use transforms::SinkBuildHashTable;

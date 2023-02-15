@@ -50,7 +50,7 @@ runs:
       if: steps.info.outputs.src == 's3'
       shell: bash
       run: |
-        for line in $(ls ./target/${{ inputs.target }}/${{ inputs.profile }}/databend-*); do
-          aws s3 cp $line s3://databend-ci/${{ inputs.profile }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ --no-progress
-        done
+        aws s3 sync ./target/${{ inputs.target }}/${{ inputs.profile }}/ \
+          s3://databend-ci/${{ inputs.profile }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ \
+          --exclude "*" --include "databend-*" --no-progress
         aws s3 cp ./target/${{ inputs.target }}/${{ inputs.profile }}/open-sharing s3://databend-ci/${{ inputs.profile }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ --no-progress || true

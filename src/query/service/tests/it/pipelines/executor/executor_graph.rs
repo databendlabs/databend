@@ -22,6 +22,7 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_sinks::SyncSenderSink;
 use common_pipeline_sources::SyncReceiverSource;
 use databend_query::pipelines::executor::RunningGraph;
@@ -244,7 +245,7 @@ fn create_sink_pipe(size: usize) -> Result<(Vec<Receiver<Result<DataBlock>>>, Pi
         let (tx, rx) = channel(1);
         rxs.push(rx);
         items.push(PipeItem::create(
-            SyncSenderSink::create(tx, input.clone()),
+            ProcessorPtr::create(SyncSenderSink::create(tx, input.clone())),
             vec![input],
             vec![],
         ));

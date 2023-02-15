@@ -17,3 +17,11 @@ SET ROLE 'test-role-not-exists'
 
 statement ok
 DROP ROLE IF EXISTS 'test-s'
+
+onlyif mysql
+statement ok
+SET ROLE 'public'
+
+onlyif mysql
+statement ok
+SELECT 1
