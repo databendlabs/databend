@@ -201,7 +201,7 @@ impl From<InnerConfig> for Config {
                 .into_iter()
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
-            cache: Default::default(), // TODO
+            cache: inner.cache.into(),
         }
     }
 }
@@ -1931,7 +1931,7 @@ pub struct CacheConfig {
 
     /// Type of data cache storage
     #[clap(long = "cache-data-cache-storage", value_enum, default_value_t)]
-    pub data_cache_storage: ExternalStorageType,
+    pub data_cache_storage: ExternalCacheStorageType,
 
     /// Storage that hold the raw data caches
     #[clap(flatten)]
@@ -1949,7 +1949,7 @@ pub struct CacheConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
-pub enum ExternalStorageType {
+pub enum ExternalCacheStorageType {
     #[serde(alias = "none")]
     None,
     #[serde(alias = "disk")]
@@ -1957,7 +1957,7 @@ pub enum ExternalStorageType {
     // Redis,
 }
 
-impl Default for ExternalStorageType {
+impl Default for ExternalCacheStorageType {
     fn default() -> Self {
         Self::None
     }
@@ -1975,7 +1975,7 @@ pub struct DiskCacheConfig {
     pub path: String,
 }
 
-impl TryFrom<CacheConfig> for inner::TheCache {
+impl TryFrom<CacheConfig> for inner::CacheConfig {
     type Error = ErrorCode;
 
     fn try_from(value: CacheConfig) -> std::result::Result<Self, Self::Error> {
@@ -1993,22 +1993,56 @@ impl TryFrom<CacheConfig> for inner::TheCache {
     }
 }
 
+impl From<inner::CacheConfig> for CacheConfig {
+    fn from(value: inner::CacheConfig) -> Self {
+        Self {
+            enable_table_meta_caches: value.enable_table_meta_caches,
+            table_meta_snapshot_count: value.table_meta_snapshot_count,
+            table_meta_segment_count: value.table_meta_segment_count,
+            enable_table_index_bloom: value.enable_table_index_bloom,
+            table_bloom_index_meta_count: value.table_bloom_index_meta_count,
+            table_bloom_index_filter_count: value.table_bloom_index_filter_count,
+            data_cache_storage: value.data_cache_storage.into(),
+            disk_cache_config: value.disk_cache_config.into(),
+            table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
+        }
+    }
+}
+
 impl TryFrom<DiskCacheConfig> for inner::DiskCacheConfig {
     type Error = ErrorCode;
     fn try_from(value: DiskCacheConfig) -> std::result::Result<Self, Self::Error> {
         Ok(Self {
-            max_size: value.max_bytes,
+            max_bytes: value.max_bytes,
             path: value.path,
         })
     }
 }
 
-impl TryFrom<ExternalStorageType> for inner::TableDataExternalCache {
+impl From<inner::DiskCacheConfig> for DiskCacheConfig {
+    fn from(value: inner::DiskCacheConfig) -> Self {
+        Self {
+            max_bytes: value.max_bytes,
+            path: value.path,
+        }
+    }
+}
+
+impl TryFrom<ExternalCacheStorageType> for inner::ExternalCacheStorageType {
     type Error = ErrorCode;
-    fn try_from(value: ExternalStorageType) -> std::result::Result<Self, Self::Error> {
+    fn try_from(value: ExternalCacheStorageType) -> std::result::Result<Self, Self::Error> {
         Ok(match value {
-            ExternalStorageType::None => inner::TableDataExternalCache::None,
-            ExternalStorageType::Disk => inner::TableDataExternalCache::Disk,
+            ExternalCacheStorageType::None => inner::ExternalCacheStorageType::None,
+            ExternalCacheStorageType::Disk => inner::ExternalCacheStorageType::Disk,
         })
+    }
+}
+
+impl From<inner::ExternalCacheStorageType> for ExternalCacheStorageType {
+    fn from(value: inner::ExternalCacheStorageType) -> Self {
+        match value {
+            inner::ExternalCacheStorageType::None => ExternalCacheStorageType::None,
+            inner::ExternalCacheStorageType::Disk => ExternalCacheStorageType::Disk,
+        }
     }
 }

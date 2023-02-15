@@ -60,7 +60,7 @@ pub struct Config {
     pub catalogs: HashMap<String, CatalogConfig>,
 
     // Cache Config
-    pub cache: TheCache,
+    pub cache: CacheConfig,
 }
 
 impl Config {
@@ -448,7 +448,7 @@ impl Default for LocalConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TheCache {
+pub struct CacheConfig {
     /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
     pub enable_table_meta_caches: bool,
 
@@ -472,7 +472,7 @@ pub struct TheCache {
     pub table_bloom_index_filter_count: u64,
 
     /// Max number of cached bloom index filters. Set it to 0 to disable it.
-    pub data_cache_storage: TableDataExternalCache,
+    pub data_cache_storage: ExternalCacheStorageType,
 
     /// Storage that hold the raw data caches
     pub disk_cache_config: DiskCacheConfig,
@@ -487,13 +487,13 @@ pub struct TheCache {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TableDataExternalCache {
+pub enum ExternalCacheStorageType {
     None,
     Disk,
     // Redis,
 }
 
-impl Default for TableDataExternalCache {
+impl Default for ExternalCacheStorageType {
     fn default() -> Self {
         Self::None
     }
@@ -502,7 +502,7 @@ impl Default for TableDataExternalCache {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DiskCacheConfig {
     /// Max bytes of cached raw table data. Default 20GB, set it to 0 to disable it.
-    pub max_size: u64,
+    pub max_bytes: u64,
 
     /// Table disk cache root path
     pub path: String,
@@ -511,13 +511,13 @@ pub struct DiskCacheConfig {
 impl Default for DiskCacheConfig {
     fn default() -> Self {
         Self {
-            max_size: 21474836480,
+            max_bytes: 21474836480,
             path: "./.databend/_cache".to_owned(),
         }
     }
 }
 
-impl Default for TheCache {
+impl Default for CacheConfig {
     fn default() -> Self {
         Self {
             enable_table_meta_caches: true,
