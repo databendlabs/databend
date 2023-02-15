@@ -48,9 +48,7 @@ use crate::optimizer::rule::RulePtr;
 use crate::MetadataRef;
 
 // read only, so thread safe
-pub static mut RULE_FACTORY: Lazy<RuleFactory> = Lazy::new(|| {
-    RuleFactory::create()
-});
+pub static mut RULE_FACTORY: Lazy<RuleFactory> = Lazy::new(|| RuleFactory::create());
 
 pub struct RuleFactory {
     pub rule_set: RuleSet,
