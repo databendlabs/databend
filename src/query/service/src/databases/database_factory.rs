@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_config::Config;
+use common_config::Setting;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::DatabaseInfo;
@@ -45,7 +45,7 @@ pub struct DatabaseFactory {
 }
 
 impl DatabaseFactory {
-    pub fn create(_: Config) -> Self {
+    pub fn create(_: Setting) -> Self {
         let creators: DashMap<String, Arc<dyn DatabaseCreator>> = DashMap::new();
         creators.insert(
             DefaultDatabase::NAME.to_string(),

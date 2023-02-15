@@ -25,7 +25,7 @@ use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_config::GlobalConfig;
+use common_config::GlobalSetting;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -77,9 +77,9 @@ impl TracingTable {
     fn log_files() -> Result<VecDeque<String>> {
         debug!(
             "list log files from {:?}",
-            std::fs::canonicalize(GlobalConfig::instance().log.file.dir.as_str())
+            std::fs::canonicalize(GlobalSetting::instance().log.file.dir.as_str())
         );
-        WalkDir::new(GlobalConfig::instance().log.file.dir.as_str())
+        WalkDir::new(GlobalSetting::instance().log.file.dir.as_str())
             // NOTE:(everpcpc) ignore log files in subdir with different format
             .max_depth(1)
             .sort_by_key(|file| file.file_name().to_owned())

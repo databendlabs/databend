@@ -21,8 +21,8 @@ use std::collections::BTreeMap;
 use anyhow::Result;
 use common_ast::ast::UriLocation;
 use common_base::base::GlobalInstance;
-use common_config::Config;
-use common_config::GlobalConfig;
+use common_config::GlobalSetting;
+use common_config::Setting;
 use common_meta_app::storage::StorageFsConfig;
 // use common_storage::StorageFtpConfig;
 use common_meta_app::storage::StorageGcsConfig;
@@ -44,7 +44,7 @@ fn test_parse_uri_location() -> Result<()> {
     };
 
     GlobalInstance::init_testing(&thread_name);
-    GlobalConfig::init(Config::default())?;
+    GlobalSetting::init(Setting::default())?;
 
     let cases = vec![
         (

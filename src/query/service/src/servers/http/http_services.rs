@@ -15,8 +15,8 @@
 use std::net::SocketAddr;
 use std::path::Path;
 
-use common_config::Config;
-use common_config::GlobalConfig;
+use common_config::GlobalSetting;
+use common_config::Setting;
 use common_exception::Result;
 use common_http::HttpShutdownHandler;
 use poem::get;
@@ -80,7 +80,7 @@ impl HttpHandler {
         }))
     }
 
-    async fn build_router(&self, config: &Config, sock: SocketAddr) -> Result<impl Endpoint> {
+    async fn build_router(&self, config: &Setting, sock: SocketAddr) -> Result<impl Endpoint> {
         let ep = match self.kind {
             HttpHandlerKind::Query => Route::new()
                 .at(
@@ -105,7 +105,7 @@ impl HttpHandler {
             .boxed())
     }
 
-    fn build_tls(config: &Config) -> Result<RustlsConfig> {
+    fn build_tls(config: &Setting) -> Result<RustlsConfig> {
         let certificate = RustlsCertificate::new()
             .cert(std::fs::read(
                 config.query.http_handler_tls_server_cert.as_str(),
@@ -125,7 +125,7 @@ impl HttpHandler {
     async fn start_with_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
         info!("Http Handler TLS enabled");
 
-        let config = GlobalConfig::instance();
+        let config = GlobalSetting::instance();
 
         let tls_config = Self::build_tls(config.as_ref())?;
         let router = self.build_router(config.as_ref(), listening).await?;
@@ -136,7 +136,7 @@ impl HttpHandler {
 
     async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
         let router = self
-            .build_router(GlobalConfig::instance().as_ref(), listening)
+            .build_router(GlobalSetting::instance().as_ref(), listening)
             .await?;
         self.shutdown_handler
             .start_service(listening, None, router, None)
@@ -151,7 +151,7 @@ impl Server for HttpHandler {
     }
 
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-        let config = GlobalConfig::instance();
+        let config = GlobalSetting::instance();
         match config.query.http_handler_tls_server_key.is_empty()
             || config.query.http_handler_tls_server_cert.is_empty()
         {

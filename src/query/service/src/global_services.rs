@@ -15,8 +15,8 @@
 use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::catalog::CatalogManager;
-use common_config::Config;
-use common_config::GlobalConfig;
+use common_config::GlobalSetting;
+use common_config::Setting;
 use common_exception::Result;
 use common_storage::CacheOperator;
 use common_storage::DataOperator;
@@ -35,14 +35,14 @@ use crate::sessions::SessionManager;
 pub struct GlobalServices;
 
 impl GlobalServices {
-    pub async fn init(config: Config) -> Result<()> {
+    pub async fn init(config: Setting) -> Result<()> {
         GlobalInstance::init_production();
         GlobalServices::init_with(config).await
     }
 
-    pub async fn init_with(config: Config) -> Result<()> {
+    pub async fn init_with(config: Setting) -> Result<()> {
         // The order of initialization is very important
-        GlobalConfig::init(config.clone())?;
+        GlobalSetting::init(config.clone())?;
 
         let app_name_shuffle = format!("{}-{}", config.query.tenant_id, config.query.cluster_id);
 
@@ -61,7 +61,7 @@ impl GlobalServices {
             config.query.tenant_id.clone(),
         )?;
 
-        CacheManager::init(&config.query)?;
+        CacheManager::init(&config.cache, &config.query.tenant_id)?;
         CatalogManager::init(&config).await?;
         HttpQueryManager::init(&config).await?;
         DataExchangeManager::init()?;

@@ -15,30 +15,34 @@
 #![allow(clippy::uninlined_format_args)]
 #![feature(no_sanitize)]
 
+mod config;
 /// Config mods provide config support.
 ///
 /// We are providing two config types:
 ///
-/// - [`inner::Config`] which will be exposed as [`crate::Config`] will be used in all business logic.
-/// - [`outer_v0::Config`] is the outer config for [`inner::Config`] which will be exposed to end-users.
-/// - [`global::GlobalConfig`] is a global config singleton of [`crate::Config`].
+/// - [`config::Config`] represents the options from command line , configuration files or environment vars.
+/// - [`setting::Setting`] "internal representation" of application settings .
+/// - [`global::GlobalSetting`] A global singleton of [`crate::Setting`].
 ///
-/// It's safe to refactor [`inner::Config`] in anyway, as long as it satisfied the following traits
+/// It's safe to refactor [`setting::Setting`] in anyway, as long as it satisfied the following traits
 ///
-/// - `TryInto<inner::Config> for outer_v0::Config`
-/// - `From<inner::Config> for outer_v0::Config`
+/// - `TryInto<setting::Setting> for config::Config`
+/// - `From<setting::Setting> for config::Config`
 mod global;
-mod inner;
-mod outer_v0;
+mod setting;
 mod version;
 
-pub use global::GlobalConfig;
-pub use inner::CatalogConfig;
-pub use inner::CatalogHiveConfig;
-pub use inner::Config;
-pub use inner::QueryConfig;
-pub use inner::ThriftProtocol;
-pub use outer_v0::Config as OuterConfig;
-pub use outer_v0::StorageConfig;
+pub use config::Config;
+pub use config::ExternalCacheStorageTypeConfig;
+pub use config::QueryConfig;
+pub use config::StorageConfig;
+pub use global::GlobalSetting;
+pub use setting::CacheSetting;
+pub use setting::CatalogHiveSetting;
+pub use setting::CatalogSetting;
+pub use setting::ExternalCacheStorageTypeSetting;
+pub use setting::QuerySetting;
+pub use setting::Setting;
+pub use setting::ThriftProtocol;
 pub use version::DATABEND_COMMIT_VERSION;
 pub use version::QUERY_SEMVER;

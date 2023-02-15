@@ -19,7 +19,8 @@ use std::sync::Arc;
 use common_base::base::GlobalInstance;
 use common_cache::CountableMeter;
 use common_cache::DefaultHashBuilder;
-use common_config::QueryConfig;
+use common_config::CacheSetting;
+use common_config::ExternalCacheStorageTypeSetting;
 use common_exception::Result;
 use storages_common_cache::InMemoryCacheBuilder;
 use storages_common_cache::InMemoryItemCacheHolder;
@@ -53,30 +54,33 @@ pub struct CacheManager {
 
 impl CacheManager {
     /// Initialize the caches according to the relevant configurations.
-    pub fn init(config: &QueryConfig) -> Result<()> {
+    pub fn init(config: &CacheSetting, tenant_id: impl Into<String>) -> Result<()> {
         // setup table data cache
-        let table_data_cache = if config.table_data_cache_enabled {
-            let real_disk_cache_root = PathBuf::from(&config.table_disk_cache_root)
-                .join(&config.tenant_id)
-                .join("v1");
-            Self::new_block_data_cache(
-                &real_disk_cache_root,
-                config.table_data_cache_population_queue_size,
-                config.table_disk_cache_max_size,
-            )?
-        } else {
-            None
+        let table_data_cache = {
+            match config.data_cache_storage {
+                ExternalCacheStorageTypeSetting::None => None,
+                ExternalCacheStorageTypeSetting::Disk => {
+                    let real_disk_cache_root = PathBuf::from(&config.disk_cache_config.path)
+                        .join(tenant_id.into())
+                        .join("v1");
+                    Self::new_block_data_cache(
+                        &real_disk_cache_root,
+                        config.table_data_cache_population_queue_size,
+                        config.disk_cache_config.max_bytes,
+                    )?
+                }
+            }
         };
 
         // setup in-memory table column cache
         let table_column_array_cache = Self::new_in_memory_cache(
-            config.table_data_cache_in_memory_max_size,
+            config.table_data_deserialized_data_bytes,
             ColumnArrayMeter,
             "table_data_column_array",
         );
 
         // setup in-memory table meta cache
-        if !config.table_meta_cache_enabled {
+        if !config.enable_table_meta_caches {
             GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache: None,
                 segment_info_cache: None,
@@ -89,17 +93,15 @@ impl CacheManager {
             }));
         } else {
             let table_snapshot_cache =
-                Self::new_item_cache(config.table_cache_snapshot_count, "table_snapshot");
+                Self::new_item_cache(config.table_meta_snapshot_count, "table_snapshot");
             let table_statistic_cache =
-                Self::new_item_cache(config.table_cache_statistic_count, "table_statistics");
+                Self::new_item_cache(config.table_meta_statistic_count, "table_statistics");
             let segment_info_cache =
-                Self::new_item_cache(config.table_cache_segment_count, "segment_info");
-            let bloom_index_filter_cache = Self::new_item_cache(
-                config.table_cache_bloom_index_filter_count,
-                "bloom_index_filter",
-            );
+                Self::new_item_cache(config.table_meta_segment_count, "segment_info");
+            let bloom_index_filter_cache =
+                Self::new_item_cache(config.table_bloom_index_filter_count, "bloom_index_filter");
             let bloom_index_meta_cache = Self::new_item_cache(
-                config.table_cache_bloom_index_meta_count,
+                config.table_bloom_index_meta_count,
                 "bloom_index_file_meta_data",
             );
             let file_meta_data_cache =

@@ -14,17 +14,17 @@
 
 use std::collections::HashMap;
 
-use common_config::Config;
+use common_config::Setting;
 use common_meta_app::principal::AuthInfo;
 use common_users::idm_config::IDMConfig;
 
 pub struct ConfigBuilder {
-    conf: Config,
+    conf: Setting,
 }
 
 impl ConfigBuilder {
     pub fn create() -> ConfigBuilder {
-        let mut conf = Config::default();
+        let mut conf = Setting::default();
         conf.query.tenant_id = "test".to_string();
         conf.log = common_tracing::Config::new_testing();
 
@@ -128,11 +128,11 @@ impl ConfigBuilder {
         self
     }
 
-    pub fn build(self) -> Config {
+    pub fn build(self) -> Setting {
         self.conf
     }
 
-    pub fn config(&self) -> Config {
+    pub fn config(&self) -> Setting {
         self.conf.clone()
     }
 }

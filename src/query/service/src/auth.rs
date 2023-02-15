@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-pub use common_config::Config;
+pub use common_config::Setting;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::AuthInfo;
@@ -41,7 +41,7 @@ pub enum Credential {
 }
 
 impl AuthMgr {
-    pub fn create(cfg: &Config) -> Result<Arc<AuthMgr>> {
+    pub fn create(cfg: &Setting) -> Result<Arc<AuthMgr>> {
         Ok(Arc::new(AuthMgr {
             jwt_auth: JwtAuthenticator::try_create(
                 cfg.query.jwt_key_file.clone(),

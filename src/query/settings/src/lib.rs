@@ -25,8 +25,8 @@ use std::sync::Arc;
 use common_ast::Dialect;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
-use common_config::Config;
-use common_config::GlobalConfig;
+use common_config::GlobalSetting;
+use common_config::Setting;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::UserSetting;
@@ -80,7 +80,7 @@ impl Settings {
         user_api: Arc<UserApiProvider>,
         tenant: String,
     ) -> Result<Arc<Settings>> {
-        let config = GlobalConfig::instance();
+        let config = GlobalSetting::instance();
         let settings = Self::default_settings(&tenant, config)?;
 
         let ret = {
@@ -107,7 +107,7 @@ impl Settings {
         Ok(ret)
     }
 
-    pub fn default_settings(tenant: &str, conf: Arc<Config>) -> Result<Arc<Settings>> {
+    pub fn default_settings(tenant: &str, conf: Arc<Setting>) -> Result<Arc<Settings>> {
         let memory_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
         let mut num_cpus = num_cpus::get() as u64;
         if conf.query.num_cpus != 0 {
@@ -484,7 +484,7 @@ impl Settings {
 
     // Only used for testings
     pub fn default_test_settings() -> Result<Arc<Settings>> {
-        Self::default_settings("default", Arc::new(Config::default()))
+        Self::default_settings("default", Arc::new(Setting::default()))
     }
 
     // Get max_block_size.

@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_config::GlobalConfig;
+use common_config::GlobalSetting;
 use poem::web::Json;
 use poem::IntoResponse;
 
 #[poem::handler]
 pub async fn config_handler() -> poem::Result<impl IntoResponse> {
-    Ok(Json(GlobalConfig::instance().as_ref().clone().into_outer()))
+    Ok(Json(
+        GlobalSetting::instance().as_ref().clone().into_config(),
+    ))
 }

@@ -16,7 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_catalog::table_args::TableArgs;
-use common_config::Config;
+use common_config::Setting;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CountTablesReply;
@@ -87,7 +87,7 @@ impl DatabaseCatalog {
         }
     }
 
-    pub async fn try_create_with_config(conf: Config) -> Result<DatabaseCatalog> {
+    pub async fn try_create_with_config(conf: Setting) -> Result<DatabaseCatalog> {
         let immutable_catalog = ImmutableCatalog::try_create_with_config(&conf).await?;
         let mutable_catalog = MutableCatalog::try_create_with_config(conf).await?;
         let table_function_factory = TableFunctionFactory::create();

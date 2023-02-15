@@ -19,7 +19,7 @@ use std::sync::Arc;
 use common_ast::ast::Engine;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::table::AppendMode;
-use common_config::GlobalConfig;
+use common_config::GlobalSetting;
 use common_exception::Result;
 use common_expression::block_debug::assert_blocks_sorted_eq_with_name;
 use common_expression::infer_table_schema;
@@ -426,7 +426,7 @@ pub async fn check_data_dir(
     check_last_snapshot: Option<()>,
     check_table_statistic_file: Option<()>,
 ) -> Result<()> {
-    let data_path = match &GlobalConfig::instance().storage.params {
+    let data_path = match &GlobalSetting::instance().storage.params {
         StorageParams::Fs(v) => v.root.clone(),
         _ => panic!("storage type is not fs"),
     };

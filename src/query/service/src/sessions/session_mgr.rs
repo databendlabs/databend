@@ -24,8 +24,8 @@ use std::time::Duration;
 use common_base::base::tokio;
 use common_base::base::GlobalInstance;
 use common_base::base::SignalStream;
-use common_config::Config;
-use common_config::GlobalConfig;
+use common_config::GlobalSetting;
+use common_config::Setting;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metrics::label_counter;
@@ -59,13 +59,13 @@ pub struct SessionManager {
 }
 
 impl SessionManager {
-    pub fn init(conf: &Config) -> Result<()> {
+    pub fn init(conf: &Setting) -> Result<()> {
         GlobalInstance::set(Self::create(conf));
 
         Ok(())
     }
 
-    pub fn create(conf: &Config) -> Arc<SessionManager> {
+    pub fn create(conf: &Setting) -> Arc<SessionManager> {
         let max_sessions = conf.query.max_active_sessions as usize;
         Arc::new(SessionManager {
             max_sessions,
@@ -82,7 +82,7 @@ impl SessionManager {
 
     pub async fn create_session(&self, typ: SessionType) -> Result<Arc<Session>> {
         // TODO: maybe deadlock
-        let config = GlobalConfig::instance();
+        let config = GlobalSetting::instance();
         {
             let sessions = self.active_sessions.read();
             self.validate_max_active_sessions(sessions.len(), "active sessions")?;
@@ -149,7 +149,7 @@ impl SessionManager {
     }
 
     pub fn destroy_session(&self, session_id: &String) {
-        let config = GlobalConfig::instance();
+        let config = GlobalSetting::instance();
         label_counter(
             METRIC_SESSION_CLOSE_NUMBERS,
             &config.query.tenant_id,

@@ -51,18 +51,21 @@ use serfig::collectors::from_file;
 use serfig::collectors::from_self;
 use serfig::parsers::Toml;
 
-use super::inner;
-use super::inner::CatalogConfig as InnerCatalogConfig;
-use super::inner::CatalogHiveConfig as InnerCatalogHiveConfig;
-use super::inner::Config as InnerConfig;
-use super::inner::LocalConfig as InnerLocalConfig;
-use super::inner::MetaConfig as InnerMetaConfig;
-use super::inner::QueryConfig as InnerQueryConfig;
+use super::setting;
+use super::setting::CatalogHiveSetting as InnerCatalogHiveConfig;
+use super::setting::CatalogSetting as InnerCatalogConfig;
+use super::setting::LocalConfig as InnerLocalConfig;
+use super::setting::MetaConfig as InnerMetaConfig;
+use super::setting::QuerySetting as InnerQueryConfig;
+use super::setting::Setting as InnerConfig;
+use crate::Setting;
 use crate::DATABEND_COMMIT_VERSION;
+
+// FIXME: too much boilerplate here
 
 const CATALOG_HIVE: &str = "hive";
 
-/// Outer config for `query`.
+/// Config for `query`.
 ///
 /// We will use this config to handle
 ///
@@ -131,7 +134,7 @@ pub struct Config {
 
 impl Default for Config {
     fn default() -> Self {
-        InnerConfig::default().into_outer()
+        InnerConfig::default().into_config()
     }
 }
 
@@ -181,60 +184,6 @@ impl Config {
         }
 
         Ok(builder.build()?)
-    }
-}
-
-impl From<InnerConfig> for Config {
-    fn from(inner: InnerConfig) -> Self {
-        Self {
-            cmd: inner.cmd,
-            config_file: inner.config_file,
-            query: inner.query.into(),
-            log: inner.log.into(),
-            meta: inner.meta.into(),
-            storage: inner.storage.into(),
-            catalog: HiveCatalogConfig::default(),
-            local: inner.local.into(),
-
-            catalogs: inner
-                .catalogs
-                .into_iter()
-                .map(|(k, v)| (k, v.into()))
-                .collect(),
-            cache: inner.cache.into(),
-        }
-    }
-}
-
-impl TryInto<InnerConfig> for Config {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> Result<InnerConfig> {
-        let mut catalogs = HashMap::new();
-        for (k, v) in self.catalogs.into_iter() {
-            let catalog = v.try_into()?;
-            catalogs.insert(k, catalog);
-        }
-        if !self.catalog.meta_store_address.is_empty() || !self.catalog.protocol.is_empty() {
-            tracing::warn!(
-                "`catalog` is planned to be deprecated, please add catalog in `catalogs` instead"
-            );
-            let hive = self.catalog.try_into()?;
-            let catalog = InnerCatalogConfig::Hive(hive);
-            catalogs.insert(CATALOG_HIVE.to_string(), catalog);
-        }
-
-        Ok(InnerConfig {
-            cmd: self.cmd,
-            config_file: self.config_file,
-            query: self.query.try_into()?,
-            log: self.log.try_into()?,
-            meta: self.meta.try_into()?,
-            storage: self.storage.try_into()?,
-            local: self.local.try_into()?,
-            catalogs,
-            cache: self.cache.try_into()?,
-        })
     }
 }
 
@@ -1265,71 +1214,6 @@ pub struct QueryConfig {
     #[clap(long, default_value = "10000")]
     pub max_query_log_size: usize,
 
-    /// Table Meta Cached enabled
-    #[clap(long, default_value = "true")]
-    pub table_meta_cache_enabled: bool,
-
-    /// Max number of cached table block meta
-    #[clap(long, default_value = "102400")]
-    pub table_cache_block_meta_count: u64,
-
-    /// Table memory cache size (mb)
-    #[clap(long, default_value = "256")]
-    pub table_memory_cache_mb_size: u64,
-
-    /// Table disk cache folder root
-    #[clap(long, default_value = "_cache")]
-    pub table_disk_cache_root: String,
-
-    /// Table disk cache size (bytes), default values is 20GB
-    #[clap(long, default_value = "21474836480")]
-    pub table_disk_cache_max_size: u64,
-
-    /// Max number of cached table snapshot
-    #[clap(long, default_value = "256")]
-    pub table_cache_snapshot_count: u64,
-
-    /// Max number of cached table snapshot statistics
-    #[clap(long, default_value = "256")]
-    pub table_cache_statistic_count: u64,
-
-    /// Max number of cached table segment
-    #[clap(long, default_value = "10240")]
-    pub table_cache_segment_count: u64,
-
-    /// Max number of cached bloom index meta objects
-    #[clap(long, default_value = "3000")]
-    pub table_cache_bloom_index_meta_count: u64,
-
-    /// Max number of cached bloom index filters, default value is 1024 * 1024 items.
-    /// One bloom index filter per column of data block being indexed will be generated if necessary.
-    ///
-    /// For example, a table of 1024 columns, with 800 data blocks, a query that triggers a full
-    /// table filter on 2 columns, might populate 2 * 800 bloom index filter cache items (at most)
-    #[clap(long, default_value = "1048576")]
-    pub table_cache_bloom_index_filter_count: u64,
-
-    /// Max size of in memory table column object cache
-    ///
-    /// The cache items are deserialized table column objects, may take a lot of memory.
-    ///
-    /// Default value is 0, which disable this cache. If query nodes have plenty of un-utilized
-    /// memory, the working set can be fitted into, and the access pattern will benefit from
-    /// caching, consider enabled this cache.
-    #[clap(long, default_value = "0")]
-    pub table_data_cache_in_memory_max_size: u64,
-
-    /// Indicates if table data cached is enabled, default false
-    #[clap(long)]
-    pub table_data_cache_enabled: bool,
-
-    /// Max number of items that could be pending in the table data cache population queue
-    /// default value 65536 items.
-    /// Increase this value if it takes too much times to fully populate the disk cache.
-    /// Decrease this value if it takes too much memory to queue the items being cached.
-    #[clap(long, default_value = "65536")]
-    pub table_data_cache_population_queue_size: u32,
-
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
     #[clap(long)]
     pub management_mode: bool,
@@ -1368,6 +1252,53 @@ pub struct QueryConfig {
 
     #[clap(long)]
     pub internal_enable_sandbox_tenant: bool,
+
+    // ----- the following options/args are all deprecated               ----
+    // ----- and turned into Option<T>, to help user migrate the configs ----
+    /// OBSOLETED: Table disk cache size (mb).
+    #[clap(long)]
+    pub table_disk_cache_mb_size: Option<u64>,
+
+    /// OBSOLETED: Table Meta Cached enabled
+    #[clap(long)]
+    pub table_meta_cache_enabled: Option<bool>,
+
+    /// OBSOLETED: Max number of cached table block meta
+    #[clap(long)]
+    pub table_cache_block_meta_count: Option<u64>,
+
+    /// OBSOLETED: Table memory cache size (mb)
+    #[clap(long)]
+    pub table_memory_cache_mb_size: Option<u64>,
+
+    /// OBSOLETED: Table disk cache folder root
+    #[clap(long)]
+    pub table_disk_cache_root: Option<String>,
+
+    /// OBSOLETED: Max number of cached table snapshot
+    #[clap(long)]
+    pub table_cache_snapshot_count: Option<u64>,
+
+    /// OBSOLETED: Max number of cached table snapshot statistics
+    #[clap(long)]
+    pub table_cache_statistic_count: Option<u64>,
+
+    /// OBSOLETED: Max number of cached table segment
+    #[clap(long)]
+    pub table_cache_segment_count: Option<u64>,
+
+    /// OBSOLETED: Max number of cached bloom index meta objects
+    #[clap(long)]
+    pub table_cache_bloom_index_meta_count: Option<u64>,
+
+    /// OBSOLETED:
+    /// Max number of cached bloom index filters, default value is 1024 * 1024 items.
+    /// One bloom index filter per column of data block being indexed will be generated if necessary.
+    ///
+    /// For example, a table of 1024 columns, with 800 data blocks, a query that triggers a full
+    /// table filter on 2 columns, might populate 2 * 800 bloom index filter cache items (at most)
+    #[clap(long)]
+    pub table_cache_bloom_index_filter_count: Option<u64>,
 }
 
 impl Default for QueryConfig {
@@ -1380,6 +1311,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerQueryConfig> {
+        self.check_obsoleted()?;
         Ok(InnerQueryConfig {
             tenant_id: self.tenant_id,
             cluster_id: self.cluster_id,
@@ -1410,19 +1342,6 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             table_engine_memory_enabled: self.table_engine_memory_enabled,
             wait_timeout_mills: self.wait_timeout_mills,
             max_query_log_size: self.max_query_log_size,
-            table_meta_cache_enabled: self.table_meta_cache_enabled,
-            table_cache_block_meta_count: self.table_cache_block_meta_count,
-            table_memory_cache_mb_size: self.table_memory_cache_mb_size,
-            table_cache_snapshot_count: self.table_cache_snapshot_count,
-            table_cache_statistic_count: self.table_cache_statistic_count,
-            table_cache_segment_count: self.table_cache_segment_count,
-            table_cache_bloom_index_meta_count: self.table_cache_bloom_index_meta_count,
-            table_cache_bloom_index_filter_count: self.table_cache_bloom_index_filter_count,
-            table_data_cache_in_memory_max_size: self.table_data_cache_in_memory_max_size,
-            table_data_cache_enabled: self.table_data_cache_enabled,
-            table_data_cache_population_queue_size: self.table_data_cache_population_queue_size,
-            table_disk_cache_root: self.table_disk_cache_root,
-            table_disk_cache_max_size: self.table_disk_cache_max_size,
             management_mode: self.management_mode,
             jwt_key_file: self.jwt_key_file,
             jwt_key_files: self.jwt_key_files,
@@ -1479,19 +1398,6 @@ impl From<InnerQueryConfig> for QueryConfig {
             database_engine_github_enabled: true,
             wait_timeout_mills: inner.wait_timeout_mills,
             max_query_log_size: inner.max_query_log_size,
-            table_meta_cache_enabled: inner.table_meta_cache_enabled,
-            table_cache_block_meta_count: inner.table_cache_block_meta_count,
-            table_memory_cache_mb_size: inner.table_memory_cache_mb_size,
-            table_disk_cache_root: inner.table_disk_cache_root,
-            table_disk_cache_max_size: inner.table_disk_cache_max_size,
-            table_cache_snapshot_count: inner.table_cache_snapshot_count,
-            table_cache_statistic_count: inner.table_cache_statistic_count,
-            table_cache_segment_count: inner.table_cache_segment_count,
-            table_cache_bloom_index_meta_count: inner.table_cache_bloom_index_meta_count,
-            table_cache_bloom_index_filter_count: inner.table_cache_bloom_index_filter_count,
-            table_data_cache_in_memory_max_size: inner.table_data_cache_in_memory_max_size,
-            table_data_cache_enabled: inner.table_data_cache_enabled,
-            table_data_cache_population_queue_size: inner.table_data_cache_population_queue_size,
             management_mode: inner.management_mode,
             jwt_key_file: inner.jwt_key_file,
             jwt_key_files: inner.jwt_key_files,
@@ -1503,6 +1409,17 @@ impl From<InnerQueryConfig> for QueryConfig {
             share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,
             quota: inner.tenant_quota,
             internal_enable_sandbox_tenant: inner.internal_enable_sandbox_tenant,
+            // obsoleted config entries
+            table_disk_cache_mb_size: None,
+            table_meta_cache_enabled: None,
+            table_cache_block_meta_count: None,
+            table_memory_cache_mb_size: None,
+            table_disk_cache_root: None,
+            table_cache_snapshot_count: None,
+            table_cache_statistic_count: None,
+            table_cache_segment_count: None,
+            table_cache_bloom_index_meta_count: None,
+            table_cache_bloom_index_filter_count: None,
         }
     }
 }
@@ -1900,6 +1817,7 @@ impl TryInto<InnerLocalConfig> for LocalConfig {
 pub struct CacheConfig {
     /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
     #[clap(long = "cache-enable-table-meta-caches", default_value = "true")]
+    #[serde(default = "bool_true")]
     pub enable_table_meta_caches: bool,
 
     /// Max number of cached table snapshot
@@ -1910,8 +1828,13 @@ pub struct CacheConfig {
     #[clap(long = "cache-table-meta-segment-count", default_value = "10240")]
     pub table_meta_segment_count: u64,
 
+    /// Max number of cached table statistic meta
+    #[clap(long = "cache-table-meta-statistic-count", default_value = "256")]
+    pub table_meta_statistic_count: u64,
+
     /// Enable bloom index cache. Default is enabled. Set it to false to disable all the bloom index caches
     #[clap(long = "cache-enable-table-bloom-index-caches", default_value = "true")]
+    #[serde(default = "bool_true")]
     pub enable_table_index_bloom: bool,
 
     /// Max number of cached bloom index meta objects. Set it to 0 to disable it.
@@ -1931,16 +1854,33 @@ pub struct CacheConfig {
 
     /// Type of data cache storage
     #[clap(long = "cache-data-cache-storage", value_enum, default_value_t)]
-    pub data_cache_storage: ExternalCacheStorageType,
+    pub data_cache_storage: ExternalCacheStorageTypeConfig,
 
-    /// Storage that hold the raw data caches
+    /// Max size of external cache population queue length
+    ///
+    /// the items being queued reference table column raw data, which are
+    /// un-deserialized and usually compressed (depends on table compression options).
+    ///
+    /// - please monitor the 'table_data_cache_population_pending_count' metric
+    ///   if it is too high, and takes too much memory, please consider decrease this value
+    ///
+    /// - please monitor the 'population_overflow_count' metric
+    ///   if it keeps increasing, and disk cache hits rate is not as expected. please consider
+    ///   increase this value.
+    #[clap(
+        long = "cache-data-cache-population-queue-size",
+        default_value = "65536"
+    )]
+    pub table_data_cache_population_queue_size: u32,
+
+    /// Storage that hold the data caches
     #[clap(flatten)]
-    #[serde(alias = "disk")]
+    #[serde(rename = "disk")]
     pub disk_cache_config: DiskCacheConfig,
 
     /// Max size of in memory table column object cache. By default it is 0 (disabled)
     ///
-    /// CAUTION: The cache items are deserialized table column objects, may take a lot of memory.
+    /// CAUTION: The cached items are deserialized table column objects, may take a lot of memory.
     ///
     /// Only if query nodes have plenty of un-utilized memory, the working set can be fitted into,
     /// and the access pattern will benefit from caching, consider enabled this cache.
@@ -1948,16 +1888,20 @@ pub struct CacheConfig {
     pub table_data_deserialized_data_bytes: u64,
 }
 
+#[inline]
+fn bool_true() -> bool {
+    true
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
-pub enum ExternalCacheStorageType {
-    #[serde(alias = "none")]
+#[serde(rename_all = "lowercase")]
+pub enum ExternalCacheStorageTypeConfig {
     None,
-    #[serde(alias = "disk")]
     Disk,
     // Redis,
 }
 
-impl Default for ExternalCacheStorageType {
+impl Default for ExternalCacheStorageTypeConfig {
     fn default() -> Self {
         Self::None
     }
@@ -1975,74 +1919,307 @@ pub struct DiskCacheConfig {
     pub path: String,
 }
 
-impl TryFrom<CacheConfig> for inner::CacheConfig {
-    type Error = ErrorCode;
+mod cache_config_converters {
+    use super::*;
 
-    fn try_from(value: CacheConfig) -> std::result::Result<Self, Self::Error> {
-        Ok(Self {
-            enable_table_meta_caches: value.enable_table_meta_caches,
-            table_meta_snapshot_count: value.table_meta_snapshot_count,
-            table_meta_segment_count: value.table_meta_segment_count,
-            enable_table_index_bloom: value.enable_table_index_bloom,
-            table_bloom_index_meta_count: value.table_bloom_index_meta_count,
-            table_bloom_index_filter_count: value.table_bloom_index_filter_count,
-            data_cache_storage: value.data_cache_storage.try_into()?,
-            disk_cache_config: value.disk_cache_config.try_into()?,
-            table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
-        })
+    impl From<Setting> for Config {
+        fn from(inner: Setting) -> Self {
+            Self {
+                cmd: inner.cmd,
+                config_file: inner.config_file,
+                query: inner.query.into(),
+                log: inner.log.into(),
+                meta: inner.meta.into(),
+                storage: inner.storage.into(),
+                catalog: HiveCatalogConfig::default(),
+                local: inner.local.into(),
+
+                catalogs: inner
+                    .catalogs
+                    .into_iter()
+                    .map(|(k, v)| (k, v.into()))
+                    .collect(),
+                cache: inner.cache.into(),
+            }
+        }
     }
-}
 
-impl From<inner::CacheConfig> for CacheConfig {
-    fn from(value: inner::CacheConfig) -> Self {
-        Self {
-            enable_table_meta_caches: value.enable_table_meta_caches,
-            table_meta_snapshot_count: value.table_meta_snapshot_count,
-            table_meta_segment_count: value.table_meta_segment_count,
-            enable_table_index_bloom: value.enable_table_index_bloom,
-            table_bloom_index_meta_count: value.table_bloom_index_meta_count,
-            table_bloom_index_filter_count: value.table_bloom_index_filter_count,
-            data_cache_storage: value.data_cache_storage.into(),
-            disk_cache_config: value.disk_cache_config.into(),
-            table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
+    impl TryInto<Setting> for Config {
+        type Error = ErrorCode;
+
+        fn try_into(self) -> Result<InnerConfig> {
+            let mut catalogs = HashMap::new();
+            for (k, v) in self.catalogs.into_iter() {
+                let catalog = v.try_into()?;
+                catalogs.insert(k, catalog);
+            }
+            if !self.catalog.meta_store_address.is_empty() || !self.catalog.protocol.is_empty() {
+                tracing::warn!(
+                    "`catalog` is planned to be deprecated, please add catalog in `catalogs` instead"
+                );
+                let hive = self.catalog.try_into()?;
+                let catalog = InnerCatalogConfig::Hive(hive);
+                catalogs.insert(CATALOG_HIVE.to_string(), catalog);
+            }
+
+            Ok(InnerConfig {
+                cmd: self.cmd,
+                config_file: self.config_file,
+                query: self.query.try_into()?,
+                log: self.log.try_into()?,
+                meta: self.meta.try_into()?,
+                storage: self.storage.try_into()?,
+                local: self.local.try_into()?,
+                catalogs,
+                cache: self.cache.try_into()?,
+            })
+        }
+    }
+
+    impl TryFrom<CacheConfig> for setting::CacheSetting {
+        type Error = ErrorCode;
+
+        fn try_from(value: CacheConfig) -> std::result::Result<Self, Self::Error> {
+            Ok(Self {
+                enable_table_meta_caches: value.enable_table_meta_caches,
+                table_meta_snapshot_count: value.table_meta_snapshot_count,
+                table_meta_segment_count: value.table_meta_segment_count,
+                table_meta_statistic_count: value.table_meta_statistic_count,
+                enable_table_index_bloom: value.enable_table_index_bloom,
+                table_bloom_index_meta_count: value.table_bloom_index_meta_count,
+                table_bloom_index_filter_count: value.table_bloom_index_filter_count,
+                data_cache_storage: value.data_cache_storage.try_into()?,
+                table_data_cache_population_queue_size: value
+                    .table_data_cache_population_queue_size,
+                disk_cache_config: value.disk_cache_config.try_into()?,
+                table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
+            })
+        }
+    }
+
+    impl From<setting::CacheSetting> for CacheConfig {
+        fn from(value: setting::CacheSetting) -> Self {
+            Self {
+                enable_table_meta_caches: value.enable_table_meta_caches,
+                table_meta_snapshot_count: value.table_meta_snapshot_count,
+                table_meta_segment_count: value.table_meta_segment_count,
+                table_meta_statistic_count: value.table_meta_statistic_count,
+                enable_table_index_bloom: value.enable_table_index_bloom,
+                table_bloom_index_meta_count: value.table_bloom_index_meta_count,
+                table_bloom_index_filter_count: value.table_bloom_index_filter_count,
+                data_cache_storage: value.data_cache_storage.into(),
+                table_data_cache_population_queue_size: value
+                    .table_data_cache_population_queue_size,
+                disk_cache_config: value.disk_cache_config.into(),
+                table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
+            }
+        }
+    }
+
+    impl TryFrom<DiskCacheConfig> for setting::DiskCacheConfig {
+        type Error = ErrorCode;
+        fn try_from(value: DiskCacheConfig) -> std::result::Result<Self, Self::Error> {
+            Ok(Self {
+                max_bytes: value.max_bytes,
+                path: value.path,
+            })
+        }
+    }
+
+    impl From<setting::DiskCacheConfig> for DiskCacheConfig {
+        fn from(value: setting::DiskCacheConfig) -> Self {
+            Self {
+                max_bytes: value.max_bytes,
+                path: value.path,
+            }
+        }
+    }
+
+    impl TryFrom<ExternalCacheStorageTypeConfig> for setting::ExternalCacheStorageTypeSetting {
+        type Error = ErrorCode;
+        fn try_from(
+            value: ExternalCacheStorageTypeConfig,
+        ) -> std::result::Result<Self, Self::Error> {
+            Ok(match value {
+                ExternalCacheStorageTypeConfig::None => {
+                    setting::ExternalCacheStorageTypeSetting::None
+                }
+                ExternalCacheStorageTypeConfig::Disk => {
+                    setting::ExternalCacheStorageTypeSetting::Disk
+                }
+            })
+        }
+    }
+
+    impl From<setting::ExternalCacheStorageTypeSetting> for ExternalCacheStorageTypeConfig {
+        fn from(value: setting::ExternalCacheStorageTypeSetting) -> Self {
+            match value {
+                setting::ExternalCacheStorageTypeSetting::None => {
+                    ExternalCacheStorageTypeConfig::None
+                }
+                setting::ExternalCacheStorageTypeSetting::Disk => {
+                    ExternalCacheStorageTypeConfig::Disk
+                }
+            }
         }
     }
 }
 
-impl TryFrom<DiskCacheConfig> for inner::DiskCacheConfig {
-    type Error = ErrorCode;
-    fn try_from(value: DiskCacheConfig) -> std::result::Result<Self, Self::Error> {
-        Ok(Self {
-            max_bytes: value.max_bytes,
-            path: value.path,
+// Obsoleted configuration entries checking
+//
+// The following code should be removed from the release after the next release.
+// Just give user errors without any detail explanation and migration suggestions.
+impl QueryConfig {
+    fn check<T>(
+        target: &Option<T>,
+        cli_arg_name: &str,
+        alternative_cli_arg: &str,
+        alternative_toml_config: &str,
+        alternative_env_var: &str,
+    ) -> Option<String> {
+        target.as_ref().map(|_| {
+            format!(
+                "
+ --------------------------------------------------------------
+ *** {cli_arg_name} *** is obsoleted : 
+ --------------------------------------------------------------
+   alternative command-line options : {alternative_cli_arg}
+   alternative environment variable : {alternative_env_var}
+            alternative toml config : {alternative_toml_config}
+ --------------------------------------------------------------
+"
+            )
         })
     }
-}
-
-impl From<inner::DiskCacheConfig> for DiskCacheConfig {
-    fn from(value: inner::DiskCacheConfig) -> Self {
-        Self {
-            max_bytes: value.max_bytes,
-            path: value.path,
+    fn check_obsoleted(&self) -> Result<()> {
+        let check_results = vec![
+            Self::check(
+                &self.table_disk_cache_mb_size,
+                "table-disk-cache-mb-size",
+                "cache-disk-max-bytes",
+                r#"
+                    [cache]
+                    ...
+                    data_cache_storage = "disk"
+                    ...
+                    [cache.disk]
+                    max_bytes = [MAX_BYTES]  
+                    ...
+                  "#,
+                "CACHE_DISK_MAX_BYTES",
+            ),
+            Self::check(
+                &self.table_meta_cache_enabled,
+                "table-meta-cache-enabled",
+                "cache-enable-table-meta-cache",
+                r#"
+                    [cache]
+                    table-meta-cache-enabled=["true"|"false"]
+                  "#,
+                "CACHE_ENABLE_TABLE_META_CACHE",
+            ),
+            Self::check(
+                &self.table_cache_block_meta_count,
+                "table-cache-block-meta-count",
+                "N/A",
+                "N/A",
+                "N/A",
+            ),
+            Self::check(
+                &self.table_memory_cache_mb_size,
+                "table-memory-cache-mb-size",
+                "N/A",
+                "N/A",
+                "N/A",
+            ),
+            Self::check(
+                &self.table_disk_cache_root,
+                "table-disk-cache-root",
+                "cache-disk-path",
+                r#"
+                    [cache]
+                    ...
+                    data_cache_storage = "disk"
+                    ...
+                    [cache.disk]
+                    max_bytes = [MAX_BYTES]  
+                    path = [PATH]
+                    ...
+                    "#,
+                "CACHE_DISK_PATH",
+            ),
+            Self::check(
+                &self.table_cache_snapshot_count,
+                "table-cache-snapshot-count",
+                "cache-table-meta-snapshot-count",
+                r#"
+                    [cache]
+                    table_meta_snapshot_count = [COUNT]
+                    "#,
+                "CACHE_TABLE_META_SNAPSHOT_COUNT",
+            ),
+            Self::check(
+                &self.table_cache_statistic_count,
+                "table-cache-statistic-count",
+                "cache-table-meta-statistic-count",
+                r#"
+                    [cache]
+                    table_meta_statistic_count = [COUNT]
+                    "#,
+                "CACHE_TABLE_META_STATISTIC_COUNT",
+            ),
+            Self::check(
+                &self.table_cache_segment_count,
+                "table-cache-segment-count",
+                "cache-table-meta-segment-count",
+                r#"
+                    [cache]
+                    table_meta_segment_count = [COUNT]
+                    "#,
+                "CACHE_TABLE_META_SEGMENT_COUNT",
+            ),
+            Self::check(
+                &self.table_cache_bloom_index_meta_count,
+                "table-cache-bloom-index-meta-count",
+                "cache-table-bloom-index-meta-count",
+                r#"
+                    [cache]
+                    table_bloom_index_meta_count = [COUNT]
+                    "#,
+                "CACHE_TABLE_BLOOM_INDEX_META_COUNT",
+            ),
+            Self::check(
+                &self.table_cache_bloom_index_filter_count,
+                "table-cache-bloom-index-filter-count",
+                "cache-table-bloom-index-filter-count",
+                r#"
+                    [cache]
+                    table_bloom_index_filter_count = [COUNT]
+                    "#,
+                "CACHE_TABLE_BLOOM_INDEX_FILTER_COUNT",
+            ),
+        ];
+        let messages = check_results.into_iter().flatten().collect::<Vec<_>>();
+        if !messages.is_empty() {
+            let errors = messages.join("\n");
+            Err(ErrorCode::InvalidConfig(format!("\n{errors}")))
+        } else {
+            Ok(())
         }
     }
-}
 
-impl TryFrom<ExternalCacheStorageType> for inner::ExternalCacheStorageType {
-    type Error = ErrorCode;
-    fn try_from(value: ExternalCacheStorageType) -> std::result::Result<Self, Self::Error> {
-        Ok(match value {
-            ExternalCacheStorageType::None => inner::ExternalCacheStorageType::None,
-            ExternalCacheStorageType::Disk => inner::ExternalCacheStorageType::Disk,
-        })
-    }
-}
-
-impl From<inner::ExternalCacheStorageType> for ExternalCacheStorageType {
-    fn from(value: inner::ExternalCacheStorageType) -> Self {
-        match value {
-            inner::ExternalCacheStorageType::None => ExternalCacheStorageType::None,
-            inner::ExternalCacheStorageType::Disk => ExternalCacheStorageType::Disk,
-        }
+    pub const fn obsoleted_option_keys() -> &'static [&'static str; 10] {
+        &[
+            "table_disk_cache_mb_size",
+            "table_meta_cache_enabled",
+            "table_cache_block_meta_count",
+            "table_memory_cache_mb_size",
+            "table_disk_cache_root",
+            "table_cache_snapshot_count",
+            "table_cache_statistic_count",
+            "table_cache_segment_count",
+            "table_cache_bloom_index_meta_count",
+            "table_cache_bloom_index_filter_count",
+        ]
     }
 }

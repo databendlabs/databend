@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_config::GlobalConfig;
+use common_config::GlobalSetting;
 use common_exception::Result;
 use common_settings::ScopeLevel::Global;
 use common_sql::plans::UnSettingPlan;
@@ -58,14 +58,14 @@ impl Interpreter for UnSettingInterpreter {
                     }
                     let default_val = {
                         if setting == "max_memory_usage" {
-                            let conf = GlobalConfig::instance();
+                            let conf = GlobalSetting::instance();
                             if conf.query.max_server_memory_usage == 0 {
                                 settings.check_and_get_default_value(setting)?.to_string()
                             } else {
                                 conf.query.max_server_memory_usage.to_string()
                             }
                         } else if setting == "max_threads" {
-                            let conf = GlobalConfig::instance();
+                            let conf = GlobalSetting::instance();
                             if conf.query.num_cpus == 0 {
                                 settings.check_and_get_default_value(setting)?.to_string()
                             } else {
