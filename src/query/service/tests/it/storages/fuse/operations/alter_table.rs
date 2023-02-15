@@ -126,8 +126,9 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
         .await?;
 
     // check column ids
-    let expected_column_ids = vec![0, 1];
-    check_segment_column_ids(&fixture, expected_column_ids).await?;
+    // the table contains two fields: id int32, t tuple(int, int)
+    let expected_leaf_column_ids = vec![0, 1, 2];
+    check_segment_column_ids(&fixture, expected_leaf_column_ids).await?;
 
     // drop a column
     let drop_table_column_plan = DropTableColumnPlan {
