@@ -7,7 +7,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | "cache"   | "data_cache_storage"                     | "none"                           | ""       |
 | "cache"   | "disk.max_bytes"                         | "21474836480"                    | ""       |
 | "cache"   | "disk.path"                              | "./.databend/_cache"             | ""       |
-| "cache"   | "enable_table_index_bloom"               | "true"                           | ""       |
+| "cache"   | "enable_table_bloom_index_caches"        | "true"                           | ""       |
 | "cache"   | "enable_table_meta_caches"               | "true"                           | ""       |
 | "cache"   | "table_bloom_index_filter_count"         | "1048576"                        | ""       |
 | "cache"   | "table_bloom_index_meta_count"           | "3000"                           | ""       |
