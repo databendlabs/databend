@@ -19,6 +19,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyerror::AnyError;
 use common_base::base::tokio;
 use common_base::base::StopHandle;
 use common_base::base::Stoppable;
@@ -103,8 +104,8 @@ async fn main() -> anyhow::Result<()> {
 
     let meta_node = MetaNode::start(&conf).await?;
 
-    let mut stop_handler = StopHandle::create();
-    let stop_tx = StopHandle::install_termination_handle();
+    let mut stop_handler = StopHandle::<AnyError>::create();
+    let stop_tx = StopHandle::<AnyError>::install_termination_handle();
 
     // HTTP API service.
     {

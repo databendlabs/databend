@@ -20,6 +20,7 @@ use common_management::RoleApi;
 use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserPrivilegeSet;
+use common_meta_app::principal::UserPrivilegeType;
 use common_meta_types::MatchSeq;
 
 use crate::role_util::find_all_related_roles;
@@ -78,17 +79,26 @@ impl UserApiProvider {
     // Ensure the builtin roles inside a tenant. Currently we have two builtin roles:
     // 1. ACCOUNT_ADMIN, which has the equivalent privileges of `GRANT ALL ON *.* TO ROLE account_admin`,
     //    it also contains all roles. ACCOUNT_ADMIN can access the data objects which owned by any role.
-    // 2. PUBLIC, which have no any privilege by default, but every role contains the PUBLIC role.
-    //    The data objects which owned by PUBLIC can be accessed by any role.
+    // 2. PUBLIC, on the other side only includes the public accessible privileges, but every role
+    //    contains the PUBLIC role. The data objects which owned by PUBLIC can be accessed by any role.
     pub async fn ensure_builtin_roles(&self, tenant: &str) -> Result<u64> {
-        let mut role_info = RoleInfo::new(BUILTIN_ROLE_ACCOUNT_ADMIN);
-        role_info.grants.grant_privileges(
+        let mut account_admin = RoleInfo::new(BUILTIN_ROLE_ACCOUNT_ADMIN);
+        account_admin.grants.grant_privileges(
             &GrantObject::Global,
             UserPrivilegeSet::available_privileges_on_global(),
         );
-        self.add_role(tenant, role_info, true).await?;
-        let role_info = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
-        self.add_role(tenant, role_info, true).await
+        self.add_role(tenant, account_admin, true).await?;
+
+        let mut public = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
+        public.grants.grant_privileges(
+            &GrantObject::Table(
+                "default".to_string(),
+                "system".to_string(),
+                "one".to_string(),
+            ),
+            UserPrivilegeType::Select.into(),
+        );
+        self.add_role(tenant, public, true).await
     }
 
     pub async fn grant_privileges_to_role(

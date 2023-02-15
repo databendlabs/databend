@@ -25,7 +25,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::RpcClientConf;
 use common_grpc::RpcClientTlsConfig;
-use common_meta_types::TenantQuota;
+use common_meta_app::tenant::TenantQuota;
 use common_storage::StorageConfig;
 use common_tracing::Config as LogConfig;
 use common_users::idm_config::IDMConfig;

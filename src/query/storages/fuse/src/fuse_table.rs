@@ -36,6 +36,7 @@ use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::ColumnId;
 use common_expression::DataBlock;
+use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
@@ -558,8 +559,8 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
-        col_indices: Vec<usize>,
-        update_list: Vec<(usize, RemoteExpr<String>)>,
+        col_indices: Vec<FieldIndex>,
+        update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         self.do_update(ctx, filter, col_indices, update_list, pipeline)

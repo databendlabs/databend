@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Span;
+use common_meta_app::principal::FileFormatOptions;
 use common_meta_app::principal::PrincipalIdentity;
 use common_meta_app::principal::UserIdentity;
 
@@ -462,6 +463,18 @@ pub trait VisitorMut: Sized {
     fn visit_remove_stage(&mut self, _location: &mut String, _pattern: &mut String) {}
 
     fn visit_list_stage(&mut self, _location: &mut String, _pattern: &mut String) {}
+
+    fn visit_create_file_format(
+        &mut self,
+        _if_not_exists: bool,
+        _name: &mut String,
+        _file_format_options: &mut FileFormatOptions,
+    ) {
+    }
+
+    fn visit_drop_file_format(&mut self, _if_exists: bool, _name: &mut String) {}
+
+    fn visit_show_file_formats(&mut self) {}
 
     fn visit_presign(&mut self, _presign: &mut PresignStmt) {}
 

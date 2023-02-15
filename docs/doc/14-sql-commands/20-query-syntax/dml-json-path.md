@@ -2,7 +2,7 @@
 title: JSON PATH
 ---
 
-Databend supports [Semi-structured data type](../../13-sql-reference/10-data-types/40-data-type-semi-structured-types.md) and allow retrieving the inner elements by JSON path operators:
+Databend supports [Semi-structured data type](../../13-sql-reference/10-data-types/42-data-type-semi-structured-types.md) and allow retrieving the inner elements by JSON path operators:
 
 ## Syntax
 

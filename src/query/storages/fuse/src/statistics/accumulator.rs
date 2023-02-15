@@ -91,13 +91,13 @@ impl StatisticsAccumulator {
     }
 
     pub fn summary(&self) -> Result<StatisticsOfColumns> {
-        super::reduce_block_statistics(&self.blocks_statistics, None)
+        super::reduce_block_statistics(&self.blocks_statistics, None, None)
     }
 
     fn add(
         &mut self,
         file_size: u64,
-        column_meta: HashMap<u32, ColumnMeta>,
+        column_meta: HashMap<ColumnId, ColumnMeta>,
         block_statistics: BlockStatistics,
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,

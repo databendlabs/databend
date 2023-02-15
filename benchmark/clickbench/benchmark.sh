@@ -3,6 +3,7 @@
 set -e
 
 BENCHMARK_ID=${BENCHMARK_ID:-$(date +%s)}
+BENCHMARK_STORAGE=${BENCHMARK_STORAGE:-fs}
 
 echo "Checking script dependencies..."
 # OpenBSD netcat do not have a version arg
@@ -51,15 +52,34 @@ nohup databend-meta --single &
 echo "Waiting on databend-meta 10 seconds..."
 wait_for_port 9191 10
 echo 'Start databend-query...'
-nohup databend-query \
-    --meta-endpoints 127.0.0.1:9191 \
-    --storage-type s3 \
-    --storage-s3-region us-east-2 \
-    --storage-s3-bucket databend-ci \
-    --storage-s3-root "benchmark/data/${BENCHMARK_ID}" \
-    --tenant-id benchmark \
-    --cluster-id "${BENCHMARK_ID}" \
-    --storage-allow-insecure &
+
+case $BENCHMARK_STORAGE in
+fs)
+    nohup databend-query \
+        --meta-endpoints "127.0.0.1:9191" \
+        --storage-type fs \
+        --storage-fs-data-path "benchmark/data/${BENCHMARK_ID}" \
+        --tenant-id benchmark \
+        --cluster-id "${BENCHMARK_ID}" \
+        --storage-allow-insecure &
+    ;;
+s3)
+    nohup databend-query \
+        --meta-endpoints "127.0.0.1:9191" \
+        --storage-type s3 \
+        --storage-s3-region us-east-2 \
+        --storage-s3-bucket databend-ci \
+        --storage-s3-root "benchmark/data/${BENCHMARK_ID}" \
+        --tenant-id benchmark \
+        --cluster-id "${BENCHMARK_ID}" \
+        --storage-allow-insecure &
+    ;;
+*)
+    echo "Unknown storage type: $BENCHMARK_STORAGE"
+    exit 1
+    ;;
+esac
+
 echo "Waiting on databend-query 10 seconds..."
 wait_for_port 8000 10
 
@@ -67,8 +87,20 @@ wait_for_port 8000 10
 bendsql connect
 
 # Load the data
-echo "Creating table for hits..."
-bendsql query <create.sql
+case $BENCHMARK_STORAGE in
+fs)
+    echo "Creating table for hits with native storage format..."
+    bendsql query <create_local.sql
+    ;;
+s3)
+    echo "Creating table for hits..."
+    bendsql query <create.sql
+    ;;
+*)
+    echo "Unknown storage type: $BENCHMARK_STORAGE"
+    exit 1
+    ;;
+esac
 
 echo "Loading data..."
 load_start=$(date +%s)

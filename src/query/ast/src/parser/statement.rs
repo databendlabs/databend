@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use common_meta_app::principal::AuthType;
+use common_meta_app::principal::FileFormatOptions;
 use common_meta_app::principal::PrincipalIdentity;
 use common_meta_app::principal::UserIdentity;
 use common_meta_app::principal::UserPrivilegeType;
@@ -784,7 +785,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             CREATE ~ STAGE ~ ( IF ~ NOT ~ EXISTS )?
             ~ ( #stage_name )
             ~ ( URL ~ "=" ~ #uri_location)?
-            ~ ( FILE_FORMAT ~ "=" ~ #format_options)?
+            ~ ( #file_format_clause )?
             ~ ( ON_ERROR ~ "=" ~ #ident)?
             ~ ( SIZE_LIMIT ~ "=" ~ #literal_u64)?
             ~ ( VALIDATION_MODE ~ "=" ~ #ident)?
@@ -806,9 +807,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 if_not_exists: opt_if_not_exists.is_some(),
                 stage_name: stage.to_string(),
                 location: url_opt.map(|v| v.2),
-                file_format_options: file_format_opt
-                    .map(|(_, _, file_format_opt)| file_format_opt)
-                    .unwrap_or_default(),
+                file_format_options: file_format_opt.unwrap_or_default(),
                 on_error: on_error_opt.map(|v| v.2.to_string()).unwrap_or_default(),
                 size_limit: size_limit_opt.map(|v| v.2 as usize).unwrap_or_default(),
                 validation_mode: validation_mode_opt
@@ -997,6 +996,34 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         |(_, _)| Statement::ShowShares(ShowSharesStmt {}),
     );
 
+    let create_file_format = map_res(
+        rule! {
+            CREATE ~ FILE ~ FORMAT ~ ( IF ~ NOT ~ EXISTS )?
+            ~ #ident ~ #format_options
+        },
+        |(_, _, _, opt_if_not_exists, name, file_format_options)| {
+            let file_format_options = FileFormatOptions::from_map(&file_format_options)
+                .map_err(|_| ErrorKind::Other("invalid statement"))?;
+            Ok(Statement::CreateFileFormat {
+                if_not_exists: opt_if_not_exists.is_some(),
+                name: name.to_string(),
+                file_format_options,
+            })
+        },
+    );
+
+    let drop_file_format = map(
+        rule! {
+            DROP ~ FILE ~ FORMAT ~ ( IF ~  EXISTS )? ~ #ident
+        },
+        |(_, _, _, opt_if_exists, name)| Statement::DropFileFormat {
+            if_exists: opt_if_exists.is_some(),
+            name: name.to_string(),
+        },
+    );
+
+    let show_file_formats = value(Statement::ShowFileFormats, rule! { SHOW ~ FILE ~ FORMATS });
+
     let statement_body = alt((
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
@@ -1068,6 +1095,11 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #remove_stage: "`REMOVE @<stage_name> [pattern = '<pattern>']`"
             | #drop_stage: "`DROP STAGE <stage_name>`"
         ),
+        rule!(
+            #create_file_format: "`CREATE FILE FORMAT [ IF NOT EXISTS ] <format_name> formatTypeOptions`"
+            | #show_file_formats: "`SHOW FILE FORMATS`"
+            | #drop_file_format: "`DROP FILE FORMAT  [ IF EXISTS ] <format_name>`"
+        ),
         rule! (
             #copy_into: "`COPY
                 INTO { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> }
@@ -1136,9 +1168,9 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
     );
     let streaming_v2 = map(
         rule! {
-            FILE_FORMAT ~ "=" ~ #format_options ~ #rest_str
+           #file_format_clause ~ #rest_str
         },
-        |(_, _, options, (_, start))| InsertSource::StreamingV2 {
+        |(options, (_, start))| InsertSource::StreamingV2 {
             settings: options,
             start,
         },
@@ -1741,10 +1773,9 @@ pub fn copy_option(i: Input) -> IResult<CopyOption> {
             rule! { PATTERN ~ "=" ~ #literal_string },
             |(_, _, pattern)| CopyOption::Pattern(pattern),
         ),
-        map(
-            rule! { FILE_FORMAT ~ "=" ~ #format_options },
-            |(_, _, options)| CopyOption::FileFormat(options),
-        ),
+        map(rule! { #file_format_clause }, |options| {
+            CopyOption::FileFormat(options)
+        }),
         map(
             rule! { VALIDATION_MODE ~ "=" ~ #literal_string },
             |(_, _, validation_mode)| CopyOption::ValidationMode(validation_mode),

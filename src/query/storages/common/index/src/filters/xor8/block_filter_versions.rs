@@ -23,18 +23,22 @@ use crate::filters::BlockFilter;
 
 pub struct V0BloomBlock {}
 pub struct V2BloomBlock {}
+pub struct V3BloomBlock {}
 
 // deprecated, the classic bloom filter
 impl Versioned<0> for V0BloomBlock {}
 // deprecated, first version of xor8 bloom filter
 impl Versioned<2> for V2BloomBlock {}
+// deprecated, second version of xor8 bloom filter
+impl Versioned<3> for V3BloomBlock {}
 // current version of block filter, based on xor bloom filter and new expression framework
-impl Versioned<3> for BlockFilter {}
+impl Versioned<4> for BlockFilter {}
 
 pub enum BlockBloomFilterIndexVersion {
     V0(PhantomData<V0BloomBlock>),
     V2(PhantomData<V2BloomBlock>),
-    V3(PhantomData<BlockFilter>),
+    V3(PhantomData<V3BloomBlock>),
+    V4(PhantomData<BlockFilter>),
 }
 
 impl TryFrom<u64> for BlockBloomFilterIndexVersion {
@@ -51,8 +55,11 @@ impl TryFrom<u64> for BlockBloomFilterIndexVersion {
             3 => Ok(BlockBloomFilterIndexVersion::V3(testify_version::<_, 3>(
                 PhantomData,
             ))),
+            4 => Ok(BlockBloomFilterIndexVersion::V4(testify_version::<_, 4>(
+                PhantomData,
+            ))),
             _ => Err(ErrorCode::Internal(format!(
-                "unknown block bloom filer index version {value}, versions supported: 1"
+                "unknown block bloom filer index version {value}, versions supported: 2, 3, 4"
             ))),
         }
     }

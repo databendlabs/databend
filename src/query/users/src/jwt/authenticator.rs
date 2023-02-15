@@ -78,16 +78,16 @@ impl CustomClaims {
 }
 
 impl JwtAuthenticator {
-    pub fn try_create(jwt_key_file: String, jwt_key_files: Vec<String>) -> Result<Option<Self>> {
+    pub fn create(jwt_key_file: String, jwt_key_files: Vec<String>) -> Option<Self> {
         if jwt_key_file.is_empty() && jwt_key_files.is_empty() {
-            return Ok(None);
+            return None;
         }
         // init a vec of key store
         let mut key_stores = vec![jwk::JwkKeyStore::new(jwt_key_file)];
         for u in jwt_key_files {
             key_stores.push(jwk::JwkKeyStore::new(u))
         }
-        Ok(Some(JwtAuthenticator { key_stores }))
+        Some(JwtAuthenticator { key_stores })
     }
 
     // parse jwt claims from single source, if custom claim is not matching on desired, claim parsed would be empty

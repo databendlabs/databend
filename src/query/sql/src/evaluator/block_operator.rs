@@ -19,6 +19,7 @@ use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::Expr;
+use common_expression::FieldIndex;
 use common_expression::FunctionContext;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::InputPort;
@@ -37,7 +38,7 @@ pub enum BlockOperator {
     Filter { expr: Expr },
 
     /// Reorganize the input `DataBlock` with `projection`.
-    Project { projection: Vec<usize> },
+    Project { projection: Vec<FieldIndex> },
     // Remap { indices: Vec<(IndexType, IndexType)> },
 }
 
@@ -63,8 +64,8 @@ impl BlockOperator {
 
             BlockOperator::Project { projection } => {
                 let mut result = DataBlock::new(vec![], input.num_rows());
-                for id in projection {
-                    result.add_column(input.get_by_offset(*id).clone());
+                for index in projection {
+                    result.add_column(input.get_by_offset(*index).clone());
                 }
                 Ok(result)
             }

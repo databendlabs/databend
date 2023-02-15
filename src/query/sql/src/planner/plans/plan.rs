@@ -45,6 +45,7 @@ use crate::plans::AnalyzeTablePlan;
 use crate::plans::CallPlan;
 use crate::plans::CreateCatalogPlan;
 use crate::plans::CreateDatabasePlan;
+use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::CreateStagePlan;
 use crate::plans::CreateTablePlanV2;
@@ -55,6 +56,7 @@ use crate::plans::DeletePlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropCatalogPlan;
 use crate::plans::DropDatabasePlan;
+use crate::plans::DropFileFormatPlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropStagePlan;
 use crate::plans::DropTableClusterKeyPlan;
@@ -80,6 +82,7 @@ use crate::plans::SettingPlan;
 use crate::plans::ShowCreateCatalogPlan;
 use crate::plans::ShowCreateDatabasePlan;
 use crate::plans::ShowCreateTablePlan;
+use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowGrantsPlan;
 use crate::plans::ShowRolesPlan;
 use crate::plans::TruncateTablePlan;
@@ -184,6 +187,11 @@ pub enum Plan {
     RevokeRole(Box<RevokeRolePlan>),
     SetRole(Box<SetRolePlan>),
 
+    // FileFormat
+    CreateFileFormat(Box<CreateFileFormatPlan>),
+    DropFileFormat(Box<DropFileFormatPlan>),
+    ShowFileFormats(Box<ShowFileFormatsPlan>),
+
     // Stages
     ListStage(Box<ListPlan>),
     CreateStage(Box<CreateStagePlan>),
@@ -272,6 +280,9 @@ impl Display for Plan {
             Plan::ListStage(_) => write!(f, "ListStage"),
             Plan::CreateStage(_) => write!(f, "CreateStage"),
             Plan::DropStage(_) => write!(f, "DropStage"),
+            Plan::CreateFileFormat(_) => write!(f, "CreateFileFormat"),
+            Plan::DropFileFormat(_) => write!(f, "DropFileFormat"),
+            Plan::ShowFileFormats(_) => write!(f, "ShowFileFormats"),
             Plan::RemoveStage(_) => write!(f, "RemoveStage"),
             Plan::GrantRole(_) => write!(f, "GrantRole"),
             Plan::GrantPriv(_) => write!(f, "GrantPriv"),
@@ -365,6 +376,9 @@ impl Plan {
             Plan::CreateStage(plan) => plan.schema(),
             Plan::DropStage(plan) => plan.schema(),
             Plan::RemoveStage(plan) => plan.schema(),
+            Plan::CreateFileFormat(plan) => plan.schema(),
+            Plan::DropFileFormat(plan) => plan.schema(),
+            Plan::ShowFileFormats(plan) => plan.schema(),
             Plan::RevokePriv(_) => Arc::new(DataSchema::empty()),
             Plan::RevokeRole(_) => Arc::new(DataSchema::empty()),
             Plan::CreateUDF(_) => Arc::new(DataSchema::empty()),

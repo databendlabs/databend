@@ -501,7 +501,7 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
 }
 
 #[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
-async fn test_watch_stream_count() -> common_exception::Result<()> {
+async fn test_watch_stream_count() -> anyhow::Result<()> {
     // When the client drops the stream, databend-meta should reclaim the resources.
 
     let (tc, addr) = crate::tests::start_metasrv().await?;
