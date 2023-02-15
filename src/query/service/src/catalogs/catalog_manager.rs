@@ -18,8 +18,8 @@ use common_base::base::GlobalInstance;
 use common_catalog::catalog::Catalog;
 pub use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
-use common_config::CatalogSetting;
-use common_config::Setting;
+use common_config::CatalogConfig;
+use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CatalogType;
@@ -33,13 +33,13 @@ use crate::catalogs::DatabaseCatalog;
 
 #[async_trait::async_trait]
 pub trait CatalogManagerHelper {
-    async fn init(conf: &Setting) -> Result<()>;
+    async fn init(conf: &InnerConfig) -> Result<()>;
 
-    async fn try_create(conf: &Setting) -> Result<Arc<CatalogManager>>;
+    async fn try_create(conf: &InnerConfig) -> Result<Arc<CatalogManager>>;
 
-    async fn register_build_in_catalogs(&self, conf: &Setting) -> Result<()>;
+    async fn register_build_in_catalogs(&self, conf: &InnerConfig) -> Result<()>;
 
-    fn register_external_catalogs(&self, conf: &Setting) -> Result<()>;
+    fn register_external_catalogs(&self, conf: &InnerConfig) -> Result<()>;
 
     fn create_user_defined_catalog(&self, req: CreateCatalogReq) -> Result<()>;
 
@@ -48,13 +48,13 @@ pub trait CatalogManagerHelper {
 
 #[async_trait::async_trait]
 impl CatalogManagerHelper for CatalogManager {
-    async fn init(conf: &Setting) -> Result<()> {
+    async fn init(conf: &InnerConfig) -> Result<()> {
         GlobalInstance::set(Self::try_create(conf).await?);
 
         Ok(())
     }
 
-    async fn try_create(conf: &Setting) -> Result<Arc<CatalogManager>> {
+    async fn try_create(conf: &InnerConfig) -> Result<Arc<CatalogManager>> {
         let catalog_manager = CatalogManager {
             catalogs: DashMap::new(),
         };
@@ -69,7 +69,7 @@ impl CatalogManagerHelper for CatalogManager {
         Ok(Arc::new(catalog_manager))
     }
 
-    async fn register_build_in_catalogs(&self, conf: &Setting) -> Result<()> {
+    async fn register_build_in_catalogs(&self, conf: &InnerConfig) -> Result<()> {
         let default_catalog: Arc<dyn Catalog> =
             Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
         self.catalogs
@@ -77,14 +77,14 @@ impl CatalogManagerHelper for CatalogManager {
         Ok(())
     }
 
-    fn register_external_catalogs(&self, conf: &Setting) -> Result<()> {
+    fn register_external_catalogs(&self, conf: &InnerConfig) -> Result<()> {
         // currently, if the `hive` feature is not enabled
         // the loop will quit after the first iteration.
         // this is expected.
         #[allow(clippy::never_loop)]
         for (name, ctl) in conf.catalogs.iter() {
             match ctl {
-                CatalogSetting::Hive(ctl) => {
+                CatalogConfig::Hive(ctl) => {
                     // register hive catalog
                     #[cfg(not(feature = "hive"))]
                     {

@@ -36,12 +36,12 @@ use super::config::Config;
 ///
 /// All function should implement based on this Config.
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
-pub struct Setting {
+pub struct InnerConfig {
     pub cmd: String,
     pub config_file: String,
 
     // Query engine config.
-    pub query: QuerySetting,
+    pub query: QueryConfig,
 
     pub log: LogConfig,
 
@@ -57,14 +57,14 @@ pub struct Setting {
     // external catalog config.
     // - Later, catalog information SHOULD be kept in KV Service
     // - currently only supports HIVE (via hive meta store)
-    pub catalogs: HashMap<String, CatalogSetting>,
+    pub catalogs: HashMap<String, CatalogConfig>,
 
     // Cache Config
-    pub cache: CacheSetting,
+    pub cache: CacheConfig,
 }
 
-impl Setting {
-    /// As requires by [RFC: Config Backward Compatibility](https://github.com/datafuselabs/databend/pull/5324), we will load user's config via wrapper [`ConfigV0`] and then convert from [`ConfigV0`] to [`Setting`].
+impl InnerConfig {
+    /// As requires by [RFC: Config Backward Compatibility](https://github.com/datafuselabs/databend/pull/5324), we will load user's config via wrapper [`ConfigV0`] and then convert from [`ConfigV0`] to [`InnerConfig`].
     ///
     /// In the future, we could have `ConfigV1` and `ConfigV2`.
     pub fn load() -> Result<Self> {
@@ -99,7 +99,7 @@ impl Setting {
         !self.query.rpc_tls_server_key.is_empty() && !self.query.rpc_tls_server_cert.is_empty()
     }
 
-    /// Transform Setting into the Config.
+    /// Transform inner::Config into the Config.
     ///
     /// This function should only be used for end-users.
     ///
@@ -114,7 +114,7 @@ impl Setting {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct QuerySetting {
+pub struct QueryConfig {
     /// Tenant id for get the information from the MetaSrv.
     pub tenant_id: String,
     /// ID for construct the cluster.
@@ -164,7 +164,7 @@ pub struct QuerySetting {
     pub internal_enable_sandbox_tenant: bool,
 }
 
-impl Default for QuerySetting {
+impl Default for QueryConfig {
     fn default() -> Self {
         Self {
             tenant_id: "admin".to_string(),
@@ -211,7 +211,7 @@ impl Default for QuerySetting {
     }
 }
 
-impl QuerySetting {
+impl QueryConfig {
     pub fn to_rpc_client_tls_config(&self) -> RpcClientTlsConfig {
         RpcClientTlsConfig {
             rpc_tls_server_root_ca_cert: self.rpc_tls_query_server_root_ca_cert.clone(),
@@ -333,8 +333,8 @@ impl Debug for MetaConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum CatalogSetting {
-    Hive(CatalogHiveSetting),
+pub enum CatalogConfig {
+    Hive(CatalogHiveConfig),
 }
 
 // TODO: add compat protocol support
@@ -364,12 +364,12 @@ impl Display for ThriftProtocol {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CatalogHiveSetting {
+pub struct CatalogHiveConfig {
     pub address: String,
     pub protocol: ThriftProtocol,
 }
 
-impl Default for CatalogHiveSetting {
+impl Default for CatalogHiveConfig {
     fn default() -> Self {
         Self {
             address: "127.0.0.1:9083".to_string(),
@@ -395,7 +395,7 @@ impl Default for LocalConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CacheSetting {
+pub struct CacheConfig {
     /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
     pub enable_table_meta_caches: bool,
 
@@ -421,7 +421,7 @@ pub struct CacheSetting {
     // table filter on 2 columns, might populate 2 * 800 bloom index filter cache items (at most)
     pub table_bloom_index_filter_count: u64,
 
-    pub data_cache_storage: ExternalCacheStorageTypeSetting,
+    pub data_cache_storage: CacheStorageTypeConfig,
 
     /// Max size of external cache population queue length
     ///
@@ -449,13 +449,13 @@ pub struct CacheSetting {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ExternalCacheStorageTypeSetting {
+pub enum CacheStorageTypeConfig {
     None,
     Disk,
     // Redis,
 }
 
-impl Default for ExternalCacheStorageTypeSetting {
+impl Default for CacheStorageTypeConfig {
     fn default() -> Self {
         Self::None
     }
@@ -479,7 +479,7 @@ impl Default for DiskCacheConfig {
     }
 }
 
-impl Default for CacheSetting {
+impl Default for CacheConfig {
     fn default() -> Self {
         Self {
             enable_table_meta_caches: true,

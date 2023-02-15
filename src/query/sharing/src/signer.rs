@@ -22,7 +22,7 @@ use anyhow::anyhow;
 use anyhow::Result;
 use bytes::Bytes;
 use common_auth::RefreshableToken;
-use common_config::GlobalSetting;
+use common_config::GlobalConfig;
 use http::header::AUTHORIZATION;
 use http::header::CONTENT_LENGTH;
 use http::Method;
@@ -152,7 +152,7 @@ impl SharedSigner {
             .collect();
         let bs = Bytes::from(serde_json::to_vec(&reqs)?);
         let auth = self.token.to_header().await?;
-        let requester = GlobalSetting::instance().as_ref().query.tenant_id.clone();
+        let requester = GlobalConfig::instance().as_ref().query.tenant_id.clone();
         let req = Request::builder()
             .method(Method::POST)
             .uri(&self.endpoint)

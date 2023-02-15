@@ -18,7 +18,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
 
-use common_config::GlobalSetting;
+use common_config::GlobalConfig;
 use common_exception::Result;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
@@ -129,7 +129,7 @@ impl SessionContext {
     }
 
     pub fn get_current_tenant(&self) -> String {
-        let conf = GlobalSetting::instance();
+        let conf = GlobalConfig::instance();
 
         if conf.query.internal_enable_sandbox_tenant {
             let sandbox_tenant = self.settings.get_sandbox_tenant().unwrap_or_default();

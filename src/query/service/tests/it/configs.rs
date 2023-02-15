@@ -17,10 +17,10 @@ use std::env::temp_dir;
 use std::fs;
 use std::io::Write;
 
-use common_config::CatalogHiveSetting;
-use common_config::CatalogSetting;
-use common_config::ExternalCacheStorageTypeConfig;
-use common_config::Setting;
+use common_config::CacheStorageTypeConfig;
+use common_config::CatalogConfig;
+use common_config::CatalogHiveConfig;
+use common_config::InnerConfig;
 use common_config::ThriftProtocol;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -84,7 +84,7 @@ fn test_env_config_s3() -> Result<()> {
             ("CONFIG_FILE", None),
         ],
         || {
-            let configured = Setting::load_for_test()
+            let configured = InnerConfig::load_for_test()
                 .expect("must success")
                 .into_config();
 
@@ -202,7 +202,7 @@ fn test_env_config_fs() -> Result<()> {
             ("CONFIG_FILE", None),
         ],
         || {
-            let configured = Setting::load_for_test()
+            let configured = InnerConfig::load_for_test()
                 .expect("must success")
                 .into_config();
 
@@ -320,7 +320,7 @@ fn test_env_config_gcs() -> Result<()> {
             ("CONFIG_FILE", None),
         ],
         || {
-            let configured = Setting::load_for_test()
+            let configured = InnerConfig::load_for_test()
                 .expect("must success")
                 .into_config();
 
@@ -447,7 +447,7 @@ fn test_env_config_oss() -> Result<()> {
             ("CONFIG_FILE", None),
         ],
         || {
-            let configured = Setting::load_for_test()
+            let configured = InnerConfig::load_for_test()
                 .expect("must success")
                 .into_config();
 
@@ -659,7 +659,7 @@ path = "_cache"
             ("STORAGE_TYPE", None),
         ],
         || {
-            let cfg = Setting::load_for_test()
+            let cfg = InnerConfig::load_for_test()
                 .expect("config load success")
                 .into_config();
 
@@ -670,7 +670,7 @@ path = "_cache"
             let cache_config = &cfg.cache;
             assert_eq!(
                 cache_config.data_cache_storage,
-                ExternalCacheStorageTypeConfig::Disk
+                CacheStorageTypeConfig::Disk
             );
             assert_eq!(cache_config.disk_cache_config.path, "_cache");
 
@@ -691,7 +691,7 @@ path = "_cache"
             assert!(inner.is_ok(), "casting must success");
             let cfg = inner.unwrap();
             match cfg {
-                CatalogSetting::Hive(cfg) => {
+                CatalogConfig::Hive(cfg) => {
                     assert_eq!("127.0.0.1:9083", cfg.address, "address incorrect");
                     assert_eq!("binary", cfg.protocol.to_string(), "protocol incorrect");
                 }
@@ -726,11 +726,11 @@ protocol = "binary"
     temp_env::with_vars(
         vec![("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref()))],
         || {
-            let cfg = Setting::load_for_test().expect("config load success");
+            let cfg = InnerConfig::load_for_test().expect("config load success");
 
             assert_eq!(
                 cfg.catalogs["hive"],
-                CatalogSetting::Hive(CatalogHiveSetting {
+                CatalogConfig::Hive(CatalogHiveConfig {
                     address: "1.1.1.1:10000".to_string(),
                     protocol: ThriftProtocol::Binary,
                 })
@@ -766,11 +766,11 @@ protocol = "binary"
     temp_env::with_vars(
         vec![("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref()))],
         || {
-            let cfg = Setting::load_for_test().expect("config load success");
+            let cfg = InnerConfig::load_for_test().expect("config load success");
 
             assert_eq!(
                 cfg.catalogs["my_hive"],
-                CatalogSetting::Hive(CatalogHiveSetting {
+                CatalogConfig::Hive(CatalogHiveConfig {
                     address: "1.1.1.1:12000".to_string(),
                     protocol: ThriftProtocol::Binary,
                 })
@@ -801,7 +801,7 @@ fn test_env_config_obsoleted() -> Result<()> {
 
     for env_var in obsoleted {
         temp_env::with_vars(vec![env_var], || {
-            let r = Setting::load_for_test();
+            let r = InnerConfig::load_for_test();
             assert!(r.is_err(), "expecting `Err`, but got `Ok`");
             assert_eq!(r.unwrap_err().code(), ErrorCode::INVALID_CONFIG)
         });

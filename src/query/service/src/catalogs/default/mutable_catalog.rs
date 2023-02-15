@@ -15,7 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_config::Setting;
+use common_config::InnerConfig;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
 use common_meta_app::schema::CountTablesReply;
@@ -91,7 +91,7 @@ impl MutableCatalog {
     ///
     /// MetaEmbedded
     /// ```
-    pub async fn try_create_with_config(conf: Setting) -> Result<Self> {
+    pub async fn try_create_with_config(conf: InnerConfig) -> Result<Self> {
         let meta = {
             let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
 

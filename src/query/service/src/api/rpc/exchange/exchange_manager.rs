@@ -23,7 +23,7 @@ use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::Thread;
 use common_base::runtime::TrySpawn;
-use common_config::GlobalSetting;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
@@ -119,7 +119,7 @@ impl DataExchangeManager {
     }
 
     pub async fn create_client(address: &str) -> Result<FlightClient> {
-        let config = GlobalSetting::instance();
+        let config = GlobalConfig::instance();
         let address = address.to_string();
 
         GlobalIORuntime::instance()
@@ -237,7 +237,7 @@ impl DataExchangeManager {
         let settings = ctx.get_settings();
         let timeout = settings.get_flight_client_timeout()?;
         let root_actions = actions.get_root_actions()?;
-        let conf = GlobalSetting::instance();
+        let conf = GlobalConfig::instance();
 
         // Initialize channels between cluster nodes
         actions

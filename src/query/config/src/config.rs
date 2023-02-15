@@ -51,14 +51,13 @@ use serfig::collectors::from_file;
 use serfig::collectors::from_self;
 use serfig::parsers::Toml;
 
-use super::setting;
-use super::setting::CatalogHiveSetting as InnerCatalogHiveConfig;
-use super::setting::CatalogSetting as InnerCatalogConfig;
-use super::setting::LocalConfig as InnerLocalConfig;
-use super::setting::MetaConfig as InnerMetaConfig;
-use super::setting::QuerySetting as InnerQueryConfig;
-use super::setting::Setting as InnerConfig;
-use crate::Setting;
+use super::inner;
+use super::inner::CatalogConfig as InnerCatalogConfig;
+use super::inner::CatalogHiveConfig as InnerCatalogHiveConfig;
+use super::inner::InnerConfig;
+use super::inner::LocalConfig as InnerLocalConfig;
+use super::inner::MetaConfig as InnerMetaConfig;
+use super::inner::QueryConfig as InnerQueryConfig;
 use crate::DATABEND_COMMIT_VERSION;
 
 // FIXME: too much boilerplate here
@@ -1854,7 +1853,7 @@ pub struct CacheConfig {
 
     /// Type of data cache storage
     #[clap(long = "cache-data-cache-storage", value_enum, default_value_t)]
-    pub data_cache_storage: ExternalCacheStorageTypeConfig,
+    pub data_cache_storage: CacheStorageTypeConfig,
 
     /// Max size of external cache population queue length
     ///
@@ -1895,13 +1894,13 @@ fn bool_true() -> bool {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "lowercase")]
-pub enum ExternalCacheStorageTypeConfig {
+pub enum CacheStorageTypeConfig {
     None,
     Disk,
     // Redis,
 }
 
-impl Default for ExternalCacheStorageTypeConfig {
+impl Default for CacheStorageTypeConfig {
     fn default() -> Self {
         Self::None
     }
@@ -1922,8 +1921,8 @@ pub struct DiskCacheConfig {
 mod cache_config_converters {
     use super::*;
 
-    impl From<Setting> for Config {
-        fn from(inner: Setting) -> Self {
+    impl From<InnerConfig> for Config {
+        fn from(inner: InnerConfig) -> Self {
             Self {
                 cmd: inner.cmd,
                 config_file: inner.config_file,
@@ -1944,7 +1943,7 @@ mod cache_config_converters {
         }
     }
 
-    impl TryInto<Setting> for Config {
+    impl TryInto<InnerConfig> for Config {
         type Error = ErrorCode;
 
         fn try_into(self) -> Result<InnerConfig> {
@@ -1976,7 +1975,7 @@ mod cache_config_converters {
         }
     }
 
-    impl TryFrom<CacheConfig> for setting::CacheSetting {
+    impl TryFrom<CacheConfig> for inner::CacheConfig {
         type Error = ErrorCode;
 
         fn try_from(value: CacheConfig) -> std::result::Result<Self, Self::Error> {
@@ -1997,8 +1996,8 @@ mod cache_config_converters {
         }
     }
 
-    impl From<setting::CacheSetting> for CacheConfig {
-        fn from(value: setting::CacheSetting) -> Self {
+    impl From<inner::CacheConfig> for CacheConfig {
+        fn from(value: inner::CacheConfig) -> Self {
             Self {
                 enable_table_meta_caches: value.enable_table_meta_caches,
                 table_meta_snapshot_count: value.table_meta_snapshot_count,
@@ -2016,7 +2015,7 @@ mod cache_config_converters {
         }
     }
 
-    impl TryFrom<DiskCacheConfig> for setting::DiskCacheConfig {
+    impl TryFrom<DiskCacheConfig> for inner::DiskCacheConfig {
         type Error = ErrorCode;
         fn try_from(value: DiskCacheConfig) -> std::result::Result<Self, Self::Error> {
             Ok(Self {
@@ -2026,8 +2025,8 @@ mod cache_config_converters {
         }
     }
 
-    impl From<setting::DiskCacheConfig> for DiskCacheConfig {
-        fn from(value: setting::DiskCacheConfig) -> Self {
+    impl From<inner::DiskCacheConfig> for DiskCacheConfig {
+        fn from(value: inner::DiskCacheConfig) -> Self {
             Self {
                 max_bytes: value.max_bytes,
                 path: value.path,
@@ -2035,31 +2034,21 @@ mod cache_config_converters {
         }
     }
 
-    impl TryFrom<ExternalCacheStorageTypeConfig> for setting::ExternalCacheStorageTypeSetting {
+    impl TryFrom<CacheStorageTypeConfig> for inner::CacheStorageTypeConfig {
         type Error = ErrorCode;
-        fn try_from(
-            value: ExternalCacheStorageTypeConfig,
-        ) -> std::result::Result<Self, Self::Error> {
+        fn try_from(value: CacheStorageTypeConfig) -> std::result::Result<Self, Self::Error> {
             Ok(match value {
-                ExternalCacheStorageTypeConfig::None => {
-                    setting::ExternalCacheStorageTypeSetting::None
-                }
-                ExternalCacheStorageTypeConfig::Disk => {
-                    setting::ExternalCacheStorageTypeSetting::Disk
-                }
+                CacheStorageTypeConfig::None => inner::CacheStorageTypeConfig::None,
+                CacheStorageTypeConfig::Disk => inner::CacheStorageTypeConfig::Disk,
             })
         }
     }
 
-    impl From<setting::ExternalCacheStorageTypeSetting> for ExternalCacheStorageTypeConfig {
-        fn from(value: setting::ExternalCacheStorageTypeSetting) -> Self {
+    impl From<inner::CacheStorageTypeConfig> for CacheStorageTypeConfig {
+        fn from(value: inner::CacheStorageTypeConfig) -> Self {
             match value {
-                setting::ExternalCacheStorageTypeSetting::None => {
-                    ExternalCacheStorageTypeConfig::None
-                }
-                setting::ExternalCacheStorageTypeSetting::Disk => {
-                    ExternalCacheStorageTypeConfig::Disk
-                }
+                inner::CacheStorageTypeConfig::None => CacheStorageTypeConfig::None,
+                inner::CacheStorageTypeConfig::Disk => CacheStorageTypeConfig::Disk,
             }
         }
     }

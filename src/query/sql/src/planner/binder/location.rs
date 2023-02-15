@@ -18,7 +18,7 @@ use std::io::Result;
 
 use anyhow::anyhow;
 use common_ast::ast::UriLocation;
-use common_config::GlobalSetting;
+use common_config::GlobalConfig;
 use common_meta_app::storage::StorageAzblobConfig;
 use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageGcsConfig;
@@ -164,7 +164,7 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
         root,
         // Disable credential load by default.
         // TODO(xuanwo): we should support AssumeRole.
-        disable_credential_loader: !GlobalSetting::instance().storage.allow_insecure,
+        disable_credential_loader: !GlobalConfig::instance().storage.allow_insecure,
         enable_virtual_host_style,
         role_arn,
         external_id,

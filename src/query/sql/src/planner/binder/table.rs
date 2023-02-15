@@ -37,7 +37,7 @@ use common_catalog::table::ColumnStatistics;
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table_function::TableFunction;
-use common_config::GlobalSetting;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -298,7 +298,7 @@ impl Binder {
                     FileLocation::Uri(mut l) => {
                         let (storage_params, path) = parse_uri_location(&mut l)?;
                         if !storage_params.is_secure()
-                            && !GlobalSetting::instance().storage.allow_insecure
+                            && !GlobalConfig::instance().storage.allow_insecure
                         {
                             return Err(ErrorCode::StorageInsecure(
                                 "copy from insecure storage is not allowed",

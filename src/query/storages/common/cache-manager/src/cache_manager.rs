@@ -19,8 +19,8 @@ use std::sync::Arc;
 use common_base::base::GlobalInstance;
 use common_cache::CountableMeter;
 use common_cache::DefaultHashBuilder;
-use common_config::CacheSetting;
-use common_config::ExternalCacheStorageTypeSetting;
+use common_config::CacheConfig;
+use common_config::CacheStorageTypeInnerConfig;
 use common_exception::Result;
 use storages_common_cache::InMemoryCacheBuilder;
 use storages_common_cache::InMemoryItemCacheHolder;
@@ -54,12 +54,12 @@ pub struct CacheManager {
 
 impl CacheManager {
     /// Initialize the caches according to the relevant configurations.
-    pub fn init(config: &CacheSetting, tenant_id: impl Into<String>) -> Result<()> {
+    pub fn init(config: &CacheConfig, tenant_id: impl Into<String>) -> Result<()> {
         // setup table data cache
         let table_data_cache = {
             match config.data_cache_storage {
-                ExternalCacheStorageTypeSetting::None => None,
-                ExternalCacheStorageTypeSetting::Disk => {
+                CacheStorageTypeInnerConfig::None => None,
+                CacheStorageTypeInnerConfig::Disk => {
                     let real_disk_cache_root = PathBuf::from(&config.disk_cache_config.path)
                         .join(tenant_id.into())
                         .join("v1");

@@ -15,8 +15,8 @@
 use std::net::SocketAddr;
 use std::path::Path;
 
-use common_config::GlobalSetting;
-use common_config::Setting;
+use common_config::GlobalConfig;
+use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_http::HttpError;
 use common_http::HttpShutdownHandler;
@@ -82,7 +82,7 @@ impl HttpHandler {
         })
     }
 
-    async fn build_router(&self, config: &Setting, sock: SocketAddr) -> impl Endpoint {
+    async fn build_router(&self, config: &InnerConfig, sock: SocketAddr) -> impl Endpoint {
         let ep = match self.kind {
             HttpHandlerKind::Query => Route::new()
                 .at(
@@ -107,7 +107,7 @@ impl HttpHandler {
             .boxed()
     }
 
-    fn build_tls(config: &Setting) -> Result<RustlsConfig, std::io::Error> {
+    fn build_tls(config: &InnerConfig) -> Result<RustlsConfig, std::io::Error> {
         let certificate = RustlsCertificate::new()
             .cert(std::fs::read(
                 config.query.http_handler_tls_server_cert.as_str(),
@@ -127,7 +127,7 @@ impl HttpHandler {
     async fn start_with_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr, HttpError> {
         info!("Http Handler TLS enabled");
 
-        let config = GlobalSetting::instance();
+        let config = GlobalConfig::instance();
 
         let tls_config = Self::build_tls(config.as_ref())
             .map_err(|e: std::io::Error| HttpError::TlsConfigError(AnyError::new(&e)))?;
@@ -140,7 +140,7 @@ impl HttpHandler {
 
     async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr, HttpError> {
         let router = self
-            .build_router(GlobalSetting::instance().as_ref(), listening)
+            .build_router(GlobalConfig::instance().as_ref(), listening)
             .await;
         self.shutdown_handler
             .start_service(listening, None, router, None)
@@ -155,7 +155,7 @@ impl Server for HttpHandler {
     }
 
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr, ErrorCode> {
-        let config = GlobalSetting::instance();
+        let config = GlobalConfig::instance();
 
         let res = match config.query.http_handler_tls_server_key.is_empty()
             || config.query.http_handler_tls_server_cert.is_empty()

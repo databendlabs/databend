@@ -15,7 +15,7 @@
 use std::net::SocketAddr;
 use std::path::Path;
 
-use common_config::Setting;
+use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_http::health_handler;
 use common_http::home::debug_home_handler;
@@ -36,12 +36,12 @@ use tracing::warn;
 use crate::servers::Server;
 
 pub struct HttpService {
-    config: Setting,
+    config: InnerConfig,
     shutdown_handler: HttpShutdownHandler,
 }
 
 impl HttpService {
-    pub fn create(config: &Setting) -> Box<HttpService> {
+    pub fn create(config: &InnerConfig) -> Box<HttpService> {
         Box::new(HttpService {
             config: config.clone(),
             shutdown_handler: HttpShutdownHandler::create("http api".to_string()),
@@ -92,7 +92,7 @@ impl HttpService {
         route
     }
 
-    fn build_tls(config: &Setting) -> Result<RustlsConfig, std::io::Error> {
+    fn build_tls(config: &InnerConfig) -> Result<RustlsConfig, std::io::Error> {
         let certificate = RustlsCertificate::new()
             .cert(std::fs::read(config.query.api_tls_server_cert.as_str())?)
             .key(std::fs::read(config.query.api_tls_server_key.as_str())?);

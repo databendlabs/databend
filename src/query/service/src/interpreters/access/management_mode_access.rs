@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_config::GlobalSetting;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -32,7 +32,7 @@ impl AccessChecker for ManagementModeAccess {
     // Check what we can do if in management mode.
     async fn check(&self, plan: &Plan) -> Result<()> {
         // Allows for management-mode.
-        if GlobalSetting::instance().query.management_mode {
+        if GlobalConfig::instance().query.management_mode {
             let ok = match plan {
                 Plan::Query {rewrite_kind, .. } => {
                     use common_sql::plans::RewriteKind;

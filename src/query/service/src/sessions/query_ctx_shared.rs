@@ -23,7 +23,7 @@ use std::time::SystemTime;
 use common_base::base::Progress;
 use common_base::runtime::Runtime;
 use common_catalog::table_context::StageAttachment;
-use common_config::Setting;
+use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -84,7 +84,7 @@ pub struct QueryContextShared {
 
 impl QueryContextShared {
     pub fn try_create(
-        config: &Setting,
+        config: &InnerConfig,
         session: Arc<Session>,
         cluster_cache: Arc<Cluster>,
     ) -> Result<Arc<QueryContextShared>> {
