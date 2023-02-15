@@ -177,43 +177,13 @@ pub fn uri_location(i: Input) -> IResult<UriLocation> {
                 "".to_string()
             };
             // fs location is not a valid url, let's check it in advance.
-            if let Some(path) = location.strip_prefix("fs://") {
-                return Ok(UriLocation::new(
-                    "fs".to_string(),
-                    "".to_string(),
-                    path.to_string(),
-                    part_prefix,
-                    BTreeMap::default(),
-                ));
-            }
-
-            let parsed =
-                Url::parse(&location).map_err(|_| ErrorKind::Other("invalid uri location"))?;
 
             // TODO: We will use `CONNECTION` to replace `CREDENTIALS`.
             let mut conns = connection_opt.map(|v| v.2).unwrap_or_default();
             conns.extend(credentials_opt.map(|v| v.2).unwrap_or_default());
 
-            let protocol = parsed.scheme().to_string();
-
-            let name = parsed
-                .host_str()
-                .map(|hostname| {
-                    if let Some(port) = parsed.port() {
-                        format!("{}:{}", hostname, port)
-                    } else {
-                        hostname.to_string()
-                    }
-                })
-                .ok_or(ErrorKind::Other("invalid uri location"))?;
-
-            let path = if parsed.path().is_empty() {
-                "/".to_string()
-            } else {
-                parsed.path().to_string()
-            };
-
-            Ok(UriLocation::new(protocol, name, path, part_prefix, conns))
+            UriLocation::from_uri(location, part_prefix, conns)
+                .map_err(|_| ErrorKind::Other("invalid uri"))
         },
     )(i)
 }
