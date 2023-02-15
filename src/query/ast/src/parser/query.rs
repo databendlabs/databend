@@ -23,7 +23,6 @@ use pratt::Precedence;
 
 use super::stage::select_stage_option;
 use super::stage::stage_location;
-use super::stage::uri_location;
 use crate::ast::*;
 use crate::input::Input;
 use crate::input::WithSpan;
@@ -361,7 +360,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     let uri_location = |i| {
         map_res(
             rule! {
-                #uri_location
+                #literal_string
             },
             |v| Ok(FileLocation::Uri(v)),
         )(i)

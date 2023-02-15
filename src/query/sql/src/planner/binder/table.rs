@@ -27,6 +27,7 @@ use common_ast::ast::Statement;
 use common_ast::ast::TableAlias;
 use common_ast::ast::TableReference;
 use common_ast::ast::TimeTravelPoint;
+use common_ast::ast::UriLocation;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
@@ -295,8 +296,10 @@ impl Binder {
                     FileLocation::Stage(location) => {
                         parse_stage_location_v2(&self.ctx, &location.name, &location.path).await?
                     }
-                    FileLocation::Uri(mut l) => {
-                        let (storage_params, path) = parse_uri_location(&mut l)?;
+                    FileLocation::Uri(uri) => {
+                        let mut location =
+                            UriLocation::from_uri(uri, "".to_string(), options.connection.clone())?;
+                        let (storage_params, path) = parse_uri_location(&mut location)?;
                         if !storage_params.is_secure()
                             && !GlobalConfig::instance().storage.allow_insecure
                         {

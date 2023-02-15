@@ -341,7 +341,7 @@ impl Display for StageLocation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FileLocation {
     Stage(StageLocation),
-    Uri(UriLocation),
+    Uri(String),
 }
 
 impl Display for FileLocation {
