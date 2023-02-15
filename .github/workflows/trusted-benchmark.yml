@@ -26,26 +26,29 @@ jobs:
         run: |
           gh run download ${{ github.event.workflow_run.id }} --dir ./results/ --name benchmark-results-s3
           gh run download ${{ github.event.workflow_run.id }} --dir ./results/ --name benchmark-results-fs
-          mkdir -p "./results/PR-${{ env.PR_NUMBER }}"
-          cp ./results/result-fs.json "./results/PR-${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}-fs.json"
-          cp ./results/result-s3.json "./results/PR-${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}-s3.json"
           echo "PR_NUMBER=$(jq -r '.extra.pr' ./results/result-fs.json)" >> $GITHUB_ENV
-      - name: Generate report
-        working-directory: benchmark/clickbench
-        run: |
-          aws s3 sync "s3://repo.databend.rs/benchmark/clickbench/release/$(date -u +%Y)/$(date -u +%m)/" ./results/
-          ./update-results.sh
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
           role-to-assume: ${{ secrets.REPO_ROLE_ARN }}
           role-duration-seconds: 900
           aws-region: us-east-2
-      - name: Upload PR clickbench report to repo.databend.rs
+      - name: Upload PR clickbench result to repo.databend.rs
         working-directory: benchmark/clickbench
         run: |
           aws s3 cp ./results/result-fs.json s3://repo.databend.rs/benchmark/clickbench/pr/${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}-fs.json
           aws s3 cp ./results/result-s3.json s3://repo.databend.rs/benchmark/clickbench/pr/${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}-s3.json
+      - name: Generate report
+        working-directory: benchmark/clickbench
+        run: |
+          aws s3 sync "s3://repo.databend.rs/benchmark/clickbench/release/$(date -u +%Y)/$(date -u +%m)/" ./results/
+          mkdir -p "./results/PR-${{ env.PR_NUMBER }}"
+          mv ./results/result-fs.json "./results/PR-${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}-fs.json"
+          mv ./results/result-s3.json "./results/PR-${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}-s3.json"
+          ./update-results.sh
+      - name: Upload PR clickbench report to repo.databend.rs
+        working-directory: benchmark/clickbench
+        run: |
           aws s3 cp ./results/index.html s3://repo.databend.rs/benchmark/clickbench/pr/${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}.html
       - name: Comment on PR
         uses: everpcpc/comment-on-pr-action@v1
