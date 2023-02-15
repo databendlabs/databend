@@ -92,9 +92,12 @@ impl PushDownInfo {
                     return None;
                 }
 
-                let (leaf_column_ids, leaf_fields) = schema.leaf_fields();
-                let index = leaf_fields.iter().position(|p| p == field).unwrap();
-                let column_id = leaf_column_ids[index];
+                let leaf_fields = schema.leaf_fields();
+                let column_id = leaf_fields
+                    .iter()
+                    .find(|&p| p == field)
+                    .unwrap()
+                    .column_id();
 
                 let top_k = TopK {
                     limit: self.limit.unwrap(),

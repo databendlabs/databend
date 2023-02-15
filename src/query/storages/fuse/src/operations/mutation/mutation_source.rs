@@ -173,7 +173,7 @@ impl Processor for MutationSource {
                 let chunks = read_res
                     .columns_chunks()?
                     .into_iter()
-                    .map(|(column_idx, column_chunk)| (column_idx, column_chunk))
+                    .map(|(column_index, column_chunk)| (column_index, column_chunk))
                     .collect::<Vec<_>>();
                 let mut data_block = self
                     .block_reader
@@ -280,7 +280,7 @@ impl Processor for MutationSource {
                     let chunks = chunks
                         .columns_chunks()?
                         .into_iter()
-                        .map(|(column_idx, column_chunk)| (column_idx, column_chunk))
+                        .map(|(column_index, column_chunk)| (column_index, column_chunk))
                         .collect::<Vec<_>>();
 
                     let remain_block = remain_reader.deserialize_parquet_chunks(part, chunks)?;
