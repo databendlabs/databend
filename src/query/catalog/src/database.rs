@@ -36,6 +36,7 @@ use common_meta_app::schema::UpsertTableCopiedFileReply;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
+use common_meta_types::MetaId;
 use dyn_clone::DynClone;
 
 use crate::table::Table;
@@ -112,6 +113,13 @@ pub trait Database: DynClone + Sync + Send {
     async fn drop_table(&self, _req: DropTableReq) -> Result<DropTableReply> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement drop_table in {} Database",
+            self.name()
+        )))
+    }
+
+    async fn drop_table_by_id(&self, _tb_id: MetaId) -> Result<DropTableReply> {
+        Err(ErrorCode::Unimplemented(format!(
+            "UnImplement drop_table_by_id in {} Database",
             self.name()
         )))
     }

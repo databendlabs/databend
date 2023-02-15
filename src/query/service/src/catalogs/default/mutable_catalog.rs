@@ -256,6 +256,11 @@ impl Catalog for MutableCatalog {
         db.drop_table(req).await
     }
 
+    async fn drop_table_by_id(&self, tb_id: MetaId) -> Result<DropTableReply> {
+        let res = self.ctx.meta.drop_table_by_id(tb_id).await?;
+        Ok(res)
+    }
+
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
         let db = self
             .get_database(&req.name_ident.tenant, &req.name_ident.db_name)

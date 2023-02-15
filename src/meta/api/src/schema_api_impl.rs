@@ -1867,6 +1867,13 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             let (_, db_id, db_meta_seq, db_meta) =
                 get_db_or_err(self, &tenant_dbname, "drop_table_by_id").await?;
 
+            // cannot operate on shared database
+            if let Some(from_share) = db_meta.from_share {
+                return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
+                    ShareHasNoGrantedPrivilege::new(&from_share.tenant, &from_share.share_name),
+                )));
+            }
+
             debug!(
                 ident = display(&tbid),
                 name = display(&tenant_dbname_tbname),

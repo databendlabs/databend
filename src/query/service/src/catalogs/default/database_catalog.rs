@@ -342,6 +342,11 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog.drop_table(req).await
     }
 
+    async fn drop_table_by_id(&self, tb_id: MetaId) -> Result<DropTableReply> {
+        let res = self.mutable_catalog.drop_table_by_id(tb_id).await?;
+        Ok(res)
+    }
+
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
         if req.tenant().is_empty() {
             return Err(ErrorCode::TenantIsEmpty(

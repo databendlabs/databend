@@ -174,6 +174,12 @@ impl Catalog for ImmutableCatalog {
         ))
     }
 
+    async fn drop_table_by_id(&self, _tb_id: MetaId) -> Result<DropTableReply> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot drop table by id in system database",
+        ))
+    }
+
     async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
         Err(ErrorCode::Unimplemented(
             "Cannot undrop table in system database",

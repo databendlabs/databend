@@ -52,19 +52,18 @@ impl Interpreter for DropTableInterpreter {
             .await
             .ok();
 
-        if let Some(table) = &tbl {
-            if table.get_table_info().engine() == VIEW_ENGINE {
+        if let Some(tbl) = tbl {
+            if tbl.get_table_info().engine() == VIEW_ENGINE {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} engine is VIEW that doesn't support drop, use `DROP VIEW {}.{}` instead",
                     &self.plan.database, &self.plan.table, &self.plan.database, &self.plan.table
                 )));
             }
-        };
+            let catalog = self.ctx.get_catalog(catalog_name)?;
+            catalog
+                .drop_table_by_id(tbl.get_table_info().ident.table_id)
+                .await?;
 
-        let catalog = self.ctx.get_catalog(catalog_name)?;
-        catalog.drop_table(self.plan.clone().into()).await?;
-
-        if let Some(tbl) = tbl {
             // if `plan.all`, truncate, then purge the historical data
             if self.plan.all {
                 let purge = true;
@@ -73,6 +72,11 @@ impl Interpreter for DropTableInterpreter {
                 let latest = tbl.as_ref().refresh(self.ctx.as_ref()).await?;
                 latest.truncate(self.ctx.clone(), purge).await?
             }
+        } else {
+            return Err(ErrorCode::TableInfoError(format!(
+                "Miss to find table {}.{} meta.",
+                &self.plan.database, &self.plan.table
+            )));
         }
 
         Ok(PipelineBuildResult::create())
