@@ -20,6 +20,7 @@ use std::sync::Arc;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::decimal::Decimal;
 use common_expression::types::number::Int8Type;
 use common_expression::types::number::Number;
 use common_expression::types::ArgType;
@@ -43,16 +44,32 @@ use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
 
-struct AggregateSumState<T> {
+trait SumState: Default {
+    fn add(&mut self, other: Self, precision: u8) -> Result<()>;
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()>;
+    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
+    fn accumulate(
+        &mut self,
+        column: &Column,
+        validity: Option<&Bitmap>,
+        precision: u8,
+    ) -> Result<()>;
+    fn merge(&mut self, other: &Self, precision: u8) -> Result<()>;
+    fn merge_result(&mut self) -> Result<ValueType>;
+}
+
+#[derive(Default)]
+struct NumberSumState<T> {
     pub value: T,
 }
 
-impl<T> AggregateSumState<T>
-where T: std::ops::AddAssign + Serialize + DeserializeOwned + Copy + Clone + std::fmt::Debug
+impl<T> SumState for NumberSumState<T>
+where T: Number + std::ops::AddAssign + Serialize + DeserializeOwned + Copy + Clone + std::fmt::Debug
 {
     #[inline(always)]
-    fn add(&mut self, other: T) {
+    fn add(&mut self, other: T, precision: u8) -> Result<()> {
         self.value += other;
+        Ok(())
     }
 
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
@@ -63,37 +80,121 @@ where T: std::ops::AddAssign + Serialize + DeserializeOwned + Copy + Clone + std
         self.value = deserialize_from_slice(reader)?;
         Ok(())
     }
+
+    fn accumulate(
+        &mut self,
+        column: &Column,
+        validity: Option<&Bitmap>,
+        _precision: u8,
+    ) -> Result<()> {
+        let value = sum_primitive(column, validity)?;
+        self.value += value;
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+struct DecimalSumState<T: Decimal> {
+    pub value: T,
+}
+
+impl<T> DecimalSumState<T>
+where T: Decimal
+        + std::ops::AddAssign
+        + Serialize
+        + DeserializeOwned
+        + Copy
+        + Clone
+        + std::fmt::Debug
+{
+    #[inline]
+    pub fn check_over_flow(&self, precision: u8) -> Result<()> {
+        if self.value > T::max_for_precision(self.precision) {
+            return Err(ErrorCode::Overflow(format!(
+                "Decimal overflow: {} > {}",
+                self.value,
+                T::max_for_precision(self.precision)
+            )));
+        }
+        Ok(())
+    }
+}
+
+impl<T> SumState for DecimalSumState<T>
+where T: Decimal
+        + std::ops::AddAssign
+        + Serialize
+        + DeserializeOwned
+        + Copy
+        + Clone
+        + std::fmt::Debug
+{
+    #[inline(always)]
+    fn add(&mut self, other: T, precision: u8) -> Result<()> {
+        self.value += other;
+        self.check_over_flow(precision)
+    }
+
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
+        serialize_into_buf(writer, &self.value)
+    }
+
+    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
+        self.value = deserialize_from_slice(reader)?;
+        Ok(())
+    }
+
+    fn accumulate(
+        &mut self,
+        column: &Column,
+        validity: Option<&Bitmap>,
+        precision: u8,
+    ) -> Result<()> {
+        let buffer = T::try_downcast_column(column, validity).unwrap().0;
+        match validity {
+            Some(validity) => {
+                for (i, v) in validity.iter().enumerate() {
+                    if v {
+                        self.value += buffer[i];
+                    }
+                }
+            }
+            None => {
+                for v in buffer.iter() {
+                    self.value += *v;
+                }
+            }
+        }
+        self.check_over_flow(precision)
+    }
 }
 
 #[derive(Clone)]
-pub struct AggregateSumFunction<T, SumT> {
+pub struct AggregateSumFunction<SumT> {
     display_name: String,
     _arguments: Vec<DataType>,
-    t: PhantomData<T>,
+    precision: u8,
     sum_t: PhantomData<SumT>,
+    return_type: DataType,
 }
 
-impl<T, SumT> AggregateFunction for AggregateSumFunction<T, SumT>
-where
-    T: Number + AsPrimitive<SumT>,
-    SumT: Number + Serialize + DeserializeOwned + std::ops::AddAssign,
+impl<SumT> AggregateFunction for AggregateSumFunction<SumT>
+where SumT: SumState
 {
     fn name(&self) -> &str {
         "AggregateSumFunction"
     }
 
     fn return_type(&self) -> Result<DataType> {
-        Ok(NumberType::<SumT>::data_type())
+        Ok(self.return_type)
     }
 
     fn init_state(&self, place: StateAddr) {
-        place.write(|| AggregateSumState::<SumT> {
-            value: SumT::default(),
-        });
+        place.write(|| SumT::default());
     }
 
     fn state_layout(&self) -> Layout {
-        Layout::new::<AggregateSumState<SumT>>()
+        Layout::new::<SumT>()
     }
 
     fn accumulate(
@@ -103,10 +204,8 @@ where
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
-        let state = place.get::<AggregateSumState<SumT>>();
-        let value = sum_primitive::<T, SumT>(&columns[0], validity)?;
-        state.add(value);
-        Ok(())
+        let state = place.get::<SumT>();
+        state.accumulate(value, validity, self.precision)
     }
 
     // null bits can be ignored above the level of the aggregate function
@@ -120,7 +219,7 @@ where
         let darray = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
         darray.iter().zip(places.iter()).for_each(|(c, place)| {
             let place = place.next(offset);
-            let state = place.get::<AggregateSumState<SumT>>();
+            let state = place.get::<SumT>();
             state.add(c.as_());
         });
 
@@ -128,59 +227,55 @@ where
     }
 
     fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
-        let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
-        let state = place.get::<AggregateSumState<SumT>>();
-        let v = column[row].as_();
-        state.add(v);
+        let state = place.get::<SumT>();
+        state.add(&columns[0], row);
         Ok(())
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<AggregateSumState<SumT>>();
+        let state = place.get::<SumT>();
         state.serialize(writer)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<AggregateSumState<SumT>>();
+        let state = place.get::<SumT>();
         state.deserialize(reader)
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<AggregateSumState<SumT>>();
-        let state = place.get::<AggregateSumState<SumT>>();
-        state.add(rhs.value);
-        Ok(())
+        let rhs = rhs.get::<SumT>();
+        let state = place.get::<SumT>();
+        state.merge(rhs)
     }
 
     #[allow(unused_mut)]
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
-        let state = place.get::<AggregateSumState<SumT>>();
-        let builder = NumberType::<SumT>::try_downcast_builder(builder).unwrap();
-        builder.push(state.value);
-        Ok(())
+        let state = place.get::<SumT>();
+        state.merge_result(builder)
     }
 }
 
-impl<T, SumT> fmt::Display for AggregateSumFunction<T, SumT> {
+impl<SumT> fmt::Display for AggregateSumFunction<SumT> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
     }
 }
 
-impl<T, SumT> AggregateSumFunction<T, SumT>
-where
-    T: Number + AsPrimitive<SumT>,
-    SumT: Number + Serialize + DeserializeOwned + std::ops::AddAssign,
+impl<SumT> AggregateSumFunction<SumT>
+where SumT: SumState
 {
     pub fn try_create(
         display_name: &str,
         arguments: Vec<DataType>,
+        precision: u8,
+        return_type: DataType,
     ) -> Result<AggregateFunctionRef> {
         Ok(Arc::new(Self {
             display_name: display_name.to_owned(),
             _arguments: arguments,
-            t: PhantomData,
             sum_t: PhantomData,
+            precision,
+            return_type,
         }))
     }
 }
@@ -217,7 +312,7 @@ pub fn aggregate_sum_function_desc() -> AggregateFunctionDescription {
 }
 
 #[inline]
-pub fn sum_primitive<T, SumT>(column: &Column, validity: Option<&Bitmap>) -> Result<SumT>
+pub fn sum_primitive<SumT>(column: &Column, validity: Option<&Bitmap>) -> Result<SumT>
 where
     T: Number + AsPrimitive<SumT>,
     SumT: Number + std::ops::AddAssign,

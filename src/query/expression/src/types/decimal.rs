@@ -65,7 +65,7 @@ pub struct DecimalSize {
     pub scale: u8,
 }
 
-pub trait Decimal: Sized {
+pub trait Decimal: Sized + Default {
     fn one() -> Self;
     // 10**scale
     fn e(n: u32) -> Self;
