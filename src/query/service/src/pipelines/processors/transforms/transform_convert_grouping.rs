@@ -481,6 +481,32 @@ where
     }
 }
 
+macro_rules! process_bucket_merge {
+    ($self: expr, $blocks: expr, $bucket: tt) => {
+        match $self.params.aggregate_functions.is_empty() {
+            true => {
+                let mut bucket_merger = BucketAggregator::<false, _, $bucket>::create(
+                    $self.method.clone(),
+                    $self.params.clone(),
+                )?;
+
+                $self
+                    .output_blocks
+                    .extend(bucket_merger.merge_and_result_blocks($blocks)?);
+            }
+            false => {
+                let mut bucket_merger = BucketAggregator::<true, _, $bucket>::create(
+                    $self.method.clone(),
+                    $self.params.clone(),
+                )?;
+                $self
+                    .output_blocks
+                    .extend(bucket_merger.merge_and_result_blocks($blocks)?);
+            }
+        }
+    };
+}
+
 #[async_trait::async_trait]
 impl<Method> Processor for MergeBucketTransform<Method>
 where
@@ -540,25 +566,18 @@ where
                 }
             }
 
-            match self.params.aggregate_functions.is_empty() {
-                true => {
-                    let mut bucket_merger = BucketAggregator::<false, _>::create(
-                        self.method.clone(),
-                        self.params.clone(),
-                    )?;
+            let max_cardinality = blocks.iter().map(|b| b.num_rows()).max().unwrap_or(0);
 
-                    self.output_blocks
-                        .extend(bucket_merger.merge_and_result_blocks(blocks)?);
-                }
-                false => {
-                    let mut bucket_merger = BucketAggregator::<true, _>::create(
-                        self.method.clone(),
-                        self.params.clone(),
-                    )?;
-                    self.output_blocks
-                        .extend(bucket_merger.merge_and_result_blocks(blocks)?);
-                }
-            };
+            match max_cardinality / 10000 {
+                0..=2 => process_bucket_merge!(self, blocks, 1),
+                3..=4 => process_bucket_merge!(self, blocks, 2),
+                5..=8 => process_bucket_merge!(self, blocks, 3),
+                9..=16 => process_bucket_merge!(self, blocks, 4),
+                17..=32 => process_bucket_merge!(self, blocks, 5),
+                33..=64 => process_bucket_merge!(self, blocks, 6),
+                65..=128 => process_bucket_merge!(self, blocks, 7),
+                _ => process_bucket_merge!(self, blocks, 8),
+            }
         }
 
         Ok(())

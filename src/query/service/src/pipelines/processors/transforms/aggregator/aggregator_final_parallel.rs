@@ -42,7 +42,6 @@ use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
-use crate::pipelines::processors::transforms::group_by::FINAL_BUCKETS_LG2;
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
@@ -150,7 +149,7 @@ where
     }
 }
 
-pub struct BucketAggregator<const HAS_AGG: bool, Method>
+pub struct BucketAggregator<const HAS_AGG: bool, Method, const BUCKETS_LG2: u32 = 16>
 where
     Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static,
     Method::HashKey: FastHash,
@@ -158,7 +157,7 @@ where
     area: Area,
     method: Method,
     params: Arc<AggregatorParams>,
-    hash_table: PartitionedHashMap<Method::HashTable, FINAL_BUCKETS_LG2, false>,
+    hash_table: PartitionedHashMap<Method::HashTable, BUCKETS_LG2, false>,
     state_holders: Vec<Option<ArenaHolder>>,
     bucket_index: usize,
 
@@ -167,7 +166,8 @@ where
     temp_place: StateAddr,
 }
 
-impl<const HAS_AGG: bool, Method> BucketAggregator<HAS_AGG, Method>
+impl<const HAS_AGG: bool, Method, const BUCKETS_LG2: u32>
+    BucketAggregator<HAS_AGG, Method, BUCKETS_LG2>
 where
     Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static,
     Method::HashKey: FastHash,
@@ -176,7 +176,7 @@ where
     pub fn create(method: Method, params: Arc<AggregatorParams>) -> Result<Self> {
         let mut area = Area::create();
         let partitioned_method =
-            PartitionedHashMethod::<FINAL_BUCKETS_LG2, Method>::create(method.clone());
+            PartitionedHashMethod::<BUCKETS_LG2, Method>::create(method.clone());
         let hash_table = partitioned_method.create_final_hashtable()?;
         let temp_place = match params.aggregate_functions.is_empty() {
             true => StateAddr::new(0),
@@ -324,7 +324,7 @@ where
     pub fn merge_and_result_blocks(&mut self, blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
         self.merge_blocks(blocks)?;
 
-        let mut results = Vec::with_capacity(1 << FINAL_BUCKETS_LG2);
+        let mut results = Vec::with_capacity(1 << BUCKETS_LG2);
         for (idx, table) in self.hash_table.iter_tables_mut().enumerate() {
             let keys_len = table.len();
             if keys_len > 0 {
@@ -507,7 +507,8 @@ where
     }
 }
 
-impl<const HAS_AGG: bool, Method> Drop for BucketAggregator<HAS_AGG, Method>
+impl<const HAS_AGG: bool, Method, const BUCKETS_LG2: u32> Drop
+    for BucketAggregator<HAS_AGG, Method, BUCKETS_LG2>
 where
     Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static,
     Method::HashKey: FastHash,
