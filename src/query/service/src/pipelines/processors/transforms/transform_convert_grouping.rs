@@ -457,21 +457,6 @@ where
 
     input_block: Option<DataBlock>,
     output_blocks: Vec<DataBlock>,
-
-    state: MergeBucketTransformState<Method>,
-}
-
-/// The state of the MergeBucketTransform.
-/// The BucketAggregator is partiton by bucket(16 buckets in final stage), this state keeps the `BucketAggregator`
-/// We will iteartor call `BucketAggregator::iter_result_block` to get the result block by bucket
-enum MergeBucketTransformState<Method>
-where
-    Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static,
-    Method::HashKey: FastHash,
-{
-    NeedData,
-    GroupNoAgg(BucketAggregator<false, Method>),
-    GroupAgg(BucketAggregator<true, Method>),
 }
 
 impl<Method> MergeBucketTransform<Method>
@@ -492,7 +477,6 @@ where
             params,
             input_block: None,
             output_blocks: vec![],
-            state: MergeBucketTransformState::NeedData,
         })))
     }
 }
@@ -529,8 +513,7 @@ where
             return Ok(Event::NeedConsume);
         }
 
-        if !matches!(self.state, MergeBucketTransformState::NeedData) || self.input_block.is_some()
-        {
+        if self.input_block.is_some() {
             return Ok(Event::Sync);
         }
 
@@ -549,28 +532,6 @@ where
     }
 
     fn process(&mut self) -> Result<()> {
-        match &mut self.state {
-            MergeBucketTransformState::GroupNoAgg(bucket_merger) => {
-                let results = bucket_merger.iter_result_block()?;
-                if results.is_empty() {
-                    self.state = MergeBucketTransformState::NeedData;
-                } else {
-                    self.output_blocks.extend(results);
-                }
-                return Ok(());
-            }
-            MergeBucketTransformState::GroupAgg(bucket_merger) => {
-                let results = bucket_merger.iter_result_block()?;
-                if results.is_empty() {
-                    self.state = MergeBucketTransformState::NeedData;
-                } else {
-                    self.output_blocks.extend(results);
-                }
-                return Ok(());
-            }
-            _ => {}
-        }
-
         if let Some(mut data_block) = self.input_block.take() {
             let mut blocks = vec![];
             if let Some(mut meta) = data_block.take_meta() {
@@ -586,22 +547,16 @@ where
                         self.params.clone(),
                     )?;
 
-                    bucket_merger.merge_blocks(blocks)?;
                     self.output_blocks
-                        .extend(bucket_merger.iter_result_block()?);
-
-                    self.state = MergeBucketTransformState::GroupNoAgg(bucket_merger);
+                        .extend(bucket_merger.merge_and_result_blocks(blocks)?);
                 }
                 false => {
                     let mut bucket_merger = BucketAggregator::<true, _>::create(
                         self.method.clone(),
                         self.params.clone(),
                     )?;
-                    bucket_merger.merge_blocks(blocks)?;
                     self.output_blocks
-                        .extend(bucket_merger.iter_result_block()?);
-
-                    self.state = MergeBucketTransformState::GroupAgg(bucket_merger);
+                        .extend(bucket_merger.merge_and_result_blocks(blocks)?);
                 }
             };
         }

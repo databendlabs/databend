@@ -337,25 +337,6 @@ where
         Ok(results)
     }
 
-    pub fn iter_result_block(&mut self) -> Result<Vec<DataBlock>> {
-        for (idx, table) in self
-            .hash_table
-            .iter_tables_mut()
-            .enumerate()
-            .skip(self.bucket_index)
-        {
-            let keys_len = table.len();
-            if keys_len > 0 {
-                let result =
-                    Self::result_bucket(self.method.clone(), self.params.clone(), table, keys_len)?;
-                self.bucket_index = idx + 1;
-                return Ok(vec![result]);
-            }
-            self.bucket_index = idx + 1;
-        }
-        Ok(vec![])
-    }
-
     fn result_bucket(
         method: Method,
         params: Arc<AggregatorParams>,
