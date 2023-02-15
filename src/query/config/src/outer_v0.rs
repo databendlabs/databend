@@ -36,7 +36,7 @@ use common_meta_app::storage::StorageOssConfig as InnerStorageOssConfig;
 use common_meta_app::storage::StorageParams;
 use common_meta_app::storage::StorageRedisConfig as InnerStorageRedisConfig;
 use common_meta_app::storage::StorageS3Config as InnerStorageS3Config;
-use common_meta_types::TenantQuota;
+use common_meta_app::tenant::TenantQuota;
 use common_storage::CacheConfig as InnerCacheConfig;
 use common_storage::StorageConfig as InnerStorageConfig;
 use common_tracing::Config as InnerLogConfig;

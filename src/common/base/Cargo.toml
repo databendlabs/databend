@@ -52,5 +52,6 @@ tracing = "0.1.36"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
 
 [dev-dependencies]
+anyerror = { workspace = true }
 anyhow = { workspace = true }
 rand = "0.8.3"
