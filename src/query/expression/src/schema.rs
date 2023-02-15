@@ -15,6 +15,7 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
@@ -382,6 +383,10 @@ impl TableSchema {
         self.fields.remove(i);
 
         Ok(())
+    }
+
+    pub fn to_column_id_set(&self) -> HashSet<ColumnId> {
+        HashSet::from_iter(self.to_column_ids().iter().cloned())
     }
 
     pub fn to_column_ids(&self) -> Vec<ColumnId> {
