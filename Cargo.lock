@@ -2135,6 +2135,7 @@ dependencies = [
  "opendal",
  "serde",
  "serde_json",
+ "siphasher",
  "storages-common-blocks",
  "storages-common-cache",
  "storages-common-cache-manager",

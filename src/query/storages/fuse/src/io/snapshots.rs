@@ -60,7 +60,7 @@ pub enum ListSnapshotLiteOption<'a> {
     // do not case about the segments
     NeedNotSegments,
     // need segment, and exclude the locations if Some(Hashset<Location>) is provided
-    NeedSegmentsWithExclusion(Option<&'a HashSet<Location>>),
+    NeedSegmentsWithExclusion(Option<&'a HashSet<&'a Location>>),
 }
 
 impl SnapshotsIO {
@@ -104,6 +104,50 @@ impl SnapshotsIO {
                     Self::read_snapshot(location, self.format_version, self.operator.clone())
                         .instrument(tracing::debug_span!("read_snapshot")),
                 )
+            } else {
+                None
+            }
+        });
+
+        // 1.2 build the runtime.
+        let semaphore = Semaphore::new(max_io_requests);
+        let snapshot_runtime = Arc::new(Runtime::with_worker_threads(
+            max_runtime_threads,
+            Some("fuse-req-snapshots-worker".to_owned()),
+        )?);
+
+        // 1.3 spawn all the tasks to the runtime.
+        let join_handlers = snapshot_runtime.try_spawn_batch(semaphore, tasks).await?;
+
+        // 1.4 get all the result.
+        future::try_join_all(join_handlers)
+            .await
+            .map_err(|e| ErrorCode::StorageOther(format!("read snapshots failure, {}", e)))
+    }
+
+    // TODO oops, another duplication
+    pub async fn read_snapshots_stream<T>(
+        &self,
+        snapshot_files: &[String],
+    ) -> Result<Vec<Result<T>>>
+    where
+        T: From<Arc<TableSnapshot>> + Send + 'static,
+    {
+        let ctx = self.ctx.clone();
+        let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+
+        // 1.1 combine all the tasks.
+        let mut iter = snapshot_files.iter();
+        let tasks = std::iter::from_fn(move || {
+            if let Some(location) = iter.next() {
+                let location = location.clone();
+                let format_version = self.format_version;
+                let operator = self.operator.clone();
+                Some(async move {
+                    let r = Self::read_snapshot(location, format_version, operator).await;
+                    r.map(|v: Arc<TableSnapshot>| T::from(v))
+                })
             } else {
                 None
             }
@@ -256,7 +300,8 @@ impl SnapshotsIO {
         })
     }
 
-    fn chain_snapshots(
+    // TODO return a structure
+    pub fn chain_snapshots(
         snapshot_lites: Vec<TableSnapshotLite>,
         root_snapshot: &TableSnapshot,
     ) -> (Vec<TableSnapshotLite>, Vec<TableSnapshotLite>) {
@@ -329,7 +374,7 @@ impl SnapshotsIO {
     }
 
     // _ss/xx/yy.json -> _ss/xx/
-    fn get_s3_prefix_from_file(file_path: &str) -> Option<String> {
+    pub fn get_s3_prefix_from_file(file_path: &str) -> Option<String> {
         if let Some(path) = Path::new(&file_path).parent() {
             let mut prefix = path.to_str().unwrap_or("").to_string();
 

@@ -74,9 +74,9 @@ impl FuseTable {
         let mut locations_referenced_by_root = Default::default();
         let (root_snapshot_id, root_snapshot_ts, root_ts_location_opt) =
             if let Some(ref root_snapshot) = snapshot_opt {
-                let segments = root_snapshot.segments.clone();
+                let segments = &root_snapshot.segments;
                 locations_referenced_by_root =
-                    self.get_block_locations(ctx.clone(), &segments).await?;
+                    self.get_block_locations(ctx.clone(), segments).await?;
                 segments_referenced_by_root = HashSet::from_iter(segments);
                 (
                     root_snapshot.snapshot_id,
@@ -217,22 +217,24 @@ impl FuseTable {
 
             let start = Instant::now();
             let segment_locations = Vec::from_iter(segments_to_be_purged);
-            for chunk in segment_locations.chunks(chunk_size) {
-                let locations = self.get_block_locations(ctx.clone(), chunk).await?;
+            for segment_locations_chunk in segment_locations.chunks(chunk_size) {
+                let locations = self
+                    .get_block_locations(ctx.clone(), segment_locations_chunk)
+                    .await?;
 
                 // 1. Try to purge block file chunks.
                 {
-                    let mut block_locations_to_be_pruged = HashSet::new();
+                    let mut block_locations_to_be_pureged = HashSet::new();
                     for loc in &locations.block_location {
                         if keep_last_snapshot
                             && locations_referenced_by_root.block_location.contains(loc)
                         {
                             continue;
                         }
-                        block_locations_to_be_pruged.insert(loc.to_string());
+                        block_locations_to_be_pureged.insert(loc.to_string());
                     }
-                    status_block_to_be_purged_count += block_locations_to_be_pruged.len();
-                    self.try_purge_location_files(ctx.clone(), block_locations_to_be_pruged)
+                    status_block_to_be_purged_count += block_locations_to_be_pureged.len();
+                    self.try_purge_location_files(ctx.clone(), block_locations_to_be_pureged)
                         .await?;
                 }
 
@@ -258,7 +260,7 @@ impl FuseTable {
                 // 3. Try to purge segment file chunks.
                 {
                     let segment_locations_to_be_purged = HashSet::from_iter(
-                        chunk
+                        segment_locations_chunk
                             .iter()
                             .map(|loc| loc.0.clone())
                             .collect::<Vec<String>>(),
@@ -272,7 +274,7 @@ impl FuseTable {
 
                 // Refresh status.
                 {
-                    status_segment_to_be_purged_count += chunk.len();
+                    status_segment_to_be_purged_count += segment_locations_chunk.len();
                     let status = format!(
                         "gc: scan snapshot:{} takes:{} sec. block files purged:{}, bloom files purged:{}, segment files purged:{}, take:{} sec",
                         status_snapshot_scan_count,
