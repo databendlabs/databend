@@ -21,6 +21,7 @@ runs:
         target: x86_64-unknown-linux-gnu
 
     - name: Setup Databend Binary
+      shell: bash
       run: |
         sudo cp ./target/release/databend-query /usr/local/bin/databend-query
         sudo cp ./target/release/databend-meta /usr/local/bin/databend-meta
@@ -28,6 +29,7 @@ runs:
         databend-meta --version
 
     - name: Setup BendSQL
+      shell: bash
       run: |
         curl -fsSLo ./bendsql.tar.gz https://github.com/databendcloud/bendsql/releases/download/v0.3.2/bendsql-linux-amd64.tar.gz
         tar -xvzf ./bendsql.tar.gz
@@ -36,6 +38,7 @@ runs:
         bendsql version
 
     - name: Install script dependencies
+      shell: bash
       run: |
         sudo apt-get update -y
         sudo apt-get install -y jq netcat bc
@@ -45,11 +48,13 @@ runs:
       env:
         BENCHMARK_ID: ${{ github.run_id }}
         BENCHMARK_STORAGE: ${{ inputs.storage }}
+      shell: bash
       run: |
         ./benchmark.sh
 
     - name: Prepare Metadata
       working-directory: benchmark/clickbench
+      shell: bash
       run: |
         case ${{ inputs.storage }} in
           s3)
@@ -94,5 +99,6 @@ runs:
 
     - name: Clean test data
       if: always()
+      shell: bash
       run: |
         echo 'drop table hits all;' | bendsql query
