@@ -41,3 +41,16 @@ drop table t
 
 statement error 1001
 select * from numbers(10) order by sum(number)
+
+
+## decimal types
+
+query I
+select sum(number::Decimal(19, 1)) as c, sum(number::Decimal(66, 1)) as c from numbers(10000);
+----
+49995000.0 49995000.0
+
+query T
+select typeof(sum(number::Decimal(19, 1))), typeof(sum(number::Decimal(66, 1)))  from numbers(1000);
+----
+DECIMAL(38, 1) NULL DECIMAL(76, 1) NULL
