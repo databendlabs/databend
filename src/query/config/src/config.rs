@@ -2103,7 +2103,7 @@ impl QueryConfig {
                 "cache-enable-table-meta-caches",
                 r#"
                     [cache]
-                    table-meta-cache-enabled=["true"|"false"]
+                    table-meta-cache-enabled=[true|false]
                   "#,
                 "CACHE_ENABLE_TABLE_META_CACHE",
             ),
