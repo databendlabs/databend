@@ -28,6 +28,7 @@ use serde::Serialize;
 use super::SimpleDomain;
 use crate::utils::arrow::buffer_into_mut;
 use crate::Column;
+use crate::ColumnBuilder;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
 pub enum DecimalDataType {
@@ -65,10 +66,14 @@ pub struct DecimalSize {
     pub scale: u8,
 }
 
-pub trait Decimal: Sized + Default {
+pub trait Decimal:
+    Sized + Default + Send + Sync + 'static + std::fmt::Display + std::fmt::Debug
+{
     fn one() -> Self;
     // 10**scale
     fn e(n: u32) -> Self;
+
+    fn max_of_max_precision() -> Self;
 
     fn min_for_precision(precision: u8) -> Self;
     fn max_for_precision(precision: u8) -> Self;
@@ -76,6 +81,7 @@ pub trait Decimal: Sized + Default {
     fn from_float(value: f64) -> Self;
 
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)>;
+    fn try_downcast_builder<'a>(builder: &'a mut ColumnBuilder) -> Option<&'a mut Vec<Self>>;
 
     fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn;
 
@@ -90,6 +96,10 @@ impl Decimal for i128 {
     }
     fn e(n: u32) -> Self {
         10_i128.pow(n)
+    }
+
+    fn max_of_max_precision() -> Self {
+        Self::max_for_precision(MAX_DECIMAL128_PRECISION)
     }
 
     fn min_for_precision(to_precision: u8) -> Self {
@@ -117,6 +127,13 @@ impl Decimal for i128 {
             DecimalColumn::Decimal256(_, _) => None,
         }
     }
+
+    fn try_downcast_builder<'a>(builder: &'a mut ColumnBuilder) -> Option<&'a mut Vec<Self>> {
+        match builder {
+            ColumnBuilder::Decimal(DecimalColumnBuilder::Decimal128(s, _)) => Some(s),
+            _ => None,
+        }
+    }
 }
 
 impl Decimal for i256 {
@@ -126,6 +143,10 @@ impl Decimal for i256 {
 
     fn e(n: u32) -> Self {
         (i256::ONE * 10).pow(n)
+    }
+
+    fn max_of_max_precision() -> Self {
+        Self::max_for_precision(MAX_DECIMAL256_PRECISION)
     }
 
     fn min_for_precision(to_precision: u8) -> Self {
@@ -149,14 +170,21 @@ impl Decimal for i256 {
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)> {
         let column = column.as_decimal()?;
         match column {
-            DecimalColumn::Decimal128(_, _) => None,
             DecimalColumn::Decimal256(c, size) => Some((c.clone(), *size)),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_builder<'a>(builder: &'a mut ColumnBuilder) -> Option<&'a mut Vec<Self>> {
+        match builder {
+            ColumnBuilder::Decimal(DecimalColumnBuilder::Decimal256(s, _)) => Some(s),
+            _ => None,
         }
     }
 }
 
-static MAX_DECIMAL128_PRECISION: u8 = 38;
-static MAX_DECIMAL256_PRECISION: u8 = 76;
+pub static MAX_DECIMAL128_PRECISION: u8 = 38;
+pub static MAX_DECIMAL256_PRECISION: u8 = 76;
 
 impl DecimalDataType {
     pub fn from_size(size: DecimalSize) -> Result<DecimalDataType> {
