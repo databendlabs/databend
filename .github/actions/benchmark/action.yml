@@ -89,13 +89,13 @@ runs:
         jq ".cluster_size = 1" <result.json >result.json.tmp && mv result.json.tmp result.json
         jq ".comment = \"commit:${{ github.sha }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
         jq ".tags = [\"Rust\", \"${BENCHMARK_TYPE}\", \"${BENCHMARK_STORAGE}\"]" <result.json >result.json.tmp && mv result.json.tmp result.json
-        mv result.json result-${{ inputs.source }}.json
+        mv result.json result-${{ inputs.storage }}.json
 
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
-        name: benchmark-results-${{ inputs.source }}
-        path: benchmark/clickbench/result-${{ inputs.source }}.json
+        name: benchmark-results-${{ inputs.storage }}
+        path: benchmark/clickbench/result-${{ inputs.storage }}.json
 
     - name: Clean test data
       if: always()
