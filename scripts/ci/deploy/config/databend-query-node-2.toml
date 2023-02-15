@@ -58,7 +58,7 @@ type = "fs"
 [storage.fs]
 data_path = "./.databend/stateless_test_data"
 
-]
+[cache]
 
 ### table meta caches ###
 # Enable table meta cache. Default is true.
