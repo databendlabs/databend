@@ -1834,7 +1834,7 @@ pub struct CacheConfig {
     /// Enable bloom index cache. Default is enabled. Set it to false to disable all the bloom index caches
     #[clap(long = "cache-enable-table-bloom-index-caches", default_value = "true")]
     #[serde(default = "bool_true")]
-    pub enable_table_index_bloom: bool,
+    pub enable_table_bloom_index_caches: bool,
 
     /// Max number of cached bloom index meta objects. Set it to 0 to disable it.
     #[clap(long = "cache-table-bloom-index-meta-count", default_value = "3000")]
@@ -1984,7 +1984,7 @@ mod cache_config_converters {
                 table_meta_snapshot_count: value.table_meta_snapshot_count,
                 table_meta_segment_count: value.table_meta_segment_count,
                 table_meta_statistic_count: value.table_meta_statistic_count,
-                enable_table_index_bloom: value.enable_table_index_bloom,
+                enable_table_index_bloom: value.enable_table_bloom_index_caches,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
                 data_cache_storage: value.data_cache_storage.try_into()?,
@@ -2003,7 +2003,7 @@ mod cache_config_converters {
                 table_meta_snapshot_count: value.table_meta_snapshot_count,
                 table_meta_segment_count: value.table_meta_segment_count,
                 table_meta_statistic_count: value.table_meta_statistic_count,
-                enable_table_index_bloom: value.enable_table_index_bloom,
+                enable_table_bloom_index_caches: value.enable_table_index_bloom,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
                 data_cache_storage: value.data_cache_storage.into(),
