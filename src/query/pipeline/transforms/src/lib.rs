@@ -13,5 +13,7 @@
 // limitations under the License.
 
 #![deny(unused_crate_dependencies)]
+#![feature(core_intrinsics)]
+#![feature(int_roundings)]
 
 pub mod processors;

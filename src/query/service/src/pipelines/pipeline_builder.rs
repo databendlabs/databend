@@ -32,6 +32,7 @@ use common_pipeline_sinks::EmptySink;
 use common_pipeline_sinks::Sinker;
 use common_pipeline_sinks::UnionReceiveSink;
 use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
+use common_pipeline_transforms::processors::transforms::try_create_transform_sort_merge;
 use common_profile::ProfSpanSetRef;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
@@ -70,13 +71,11 @@ use crate::pipelines::processors::LeftJoinCompactor;
 use crate::pipelines::processors::MarkJoinCompactor;
 use crate::pipelines::processors::RightJoinCompactor;
 use crate::pipelines::processors::SinkBuildHashTable;
-use crate::pipelines::processors::SortMergeCompactor;
 use crate::pipelines::processors::TransformAggregator;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::processors::TransformHashJoinProbe;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::processors::TransformResortAddOn;
-use crate::pipelines::processors::TransformSortMerge;
 use crate::pipelines::processors::TransformSortPartial;
 use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
@@ -524,10 +523,13 @@ impl PipelineBuilder {
 
         // Merge
         self.main_pipeline.add_transform(|input, output| {
-            let transform = TransformSortMerge::try_create(
+            let transform = try_create_transform_sort_merge(
                 input,
                 output,
-                SortMergeCompactor::new(block_size, sort.limit, sort_desc.clone()),
+                input_schema.clone(),
+                block_size,
+                sort.limit,
+                sort_desc.clone(),
             )?;
 
             if self.enable_profiling {
