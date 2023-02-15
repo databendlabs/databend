@@ -72,11 +72,6 @@ impl Interpreter for DropTableInterpreter {
                 let latest = tbl.as_ref().refresh(self.ctx.as_ref()).await?;
                 latest.truncate(self.ctx.clone(), purge).await?
             }
-        } else {
-            return Err(ErrorCode::TableInfoError(format!(
-                "Miss to find table {}.{} meta.",
-                &self.plan.database, &self.plan.table
-            )));
         }
 
         Ok(PipelineBuildResult::create())
