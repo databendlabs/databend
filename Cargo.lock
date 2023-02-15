@@ -1252,6 +1252,7 @@ dependencies = [
 name = "common-base"
 version = "0.1.0"
 dependencies = [
+ "anyerror",
  "anyhow",
  "async-channel",
  "async-trait",
@@ -1535,6 +1536,7 @@ dependencies = [
 name = "common-http"
 version = "0.1.0"
 dependencies = [
+ "anyerror",
  "common-base",
  "common-exception",
  "futures",
@@ -1542,6 +1544,7 @@ dependencies = [
  "pretty_assertions",
  "serde",
  "tempfile",
+ "thiserror",
  "tracing",
 ]
 
@@ -2932,6 +2935,7 @@ checksum = "23d8666cb01533c39dde32bcbab8e227b4ed6679b2c925eba05feabea39508fb"
 name = "databend-binaries"
 version = "0.1.0"
 dependencies = [
+ "anyerror",
  "anyhow",
  "clap 3.2.23",
  "comfy-table",

@@ -565,7 +565,16 @@
         }
 
         function selectRun(timings) {
-            return selectors.metric == 'cold' ? timings[0] : (timings[1] !== null && timings[2] !== null ? Math.min(timings[1], timings[2]) : null)
+            if (selectors.metric == 'cold') {
+                return timings[0];
+            } else {
+                let hot = timings.slice(1).filter(t => t !== null);
+                if (hot.length > 0) {
+                    return Math.min(...hot);
+                } else {
+                    return null;
+                }
+            }
         }
 
         function addNote(text) {

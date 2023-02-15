@@ -48,9 +48,11 @@ impl Interpreter for AddTableColumnInterpreter {
         let catalog_name = self.plan.catalog.as_str();
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
+
         let tbl = self
             .ctx
-            .get_table(catalog_name, db_name, tbl_name)
+            .get_catalog(catalog_name)?
+            .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await
             .ok();
 

@@ -33,7 +33,6 @@ mod raft_types;
 mod seq_errors;
 mod seq_num;
 mod seq_value;
-mod tenant_quota;
 mod with;
 
 mod proto_display;
@@ -131,5 +130,4 @@ pub use seq_num::SeqNum;
 pub use seq_value::IntoSeqV;
 pub use seq_value::KVMeta;
 pub use seq_value::SeqV;
-pub use tenant_quota::TenantQuota;
 pub use with::With;

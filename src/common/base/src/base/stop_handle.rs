@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::error::Error;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -29,13 +30,13 @@ use super::Stoppable;
 /// If a second ctrl-c is pressed, it sends a `()` through the `force` channel to notify tasks to shutdown at once.
 ///
 /// Once `StopHandle` is dropped, it triggers a force stop on every tasks in it.
-pub struct StopHandle {
+pub struct StopHandle<E: Error + Send + 'static> {
     stopping: Arc<AtomicBool>,
-    pub(crate) stoppable_tasks: Vec<Box<dyn Stoppable + Send>>,
+    pub(crate) stoppable_tasks: Vec<Box<dyn Stoppable<Error = E> + Send>>,
 }
 
-impl StopHandle {
-    pub fn create() -> StopHandle {
+impl<E: Error + Send + 'static> StopHandle<E> {
+    pub fn create() -> Self {
         StopHandle {
             stopping: Arc::new(AtomicBool::new(false)),
             stoppable_tasks: vec![],
@@ -119,12 +120,12 @@ impl StopHandle {
         tx
     }
 
-    pub fn push(&mut self, s: Box<dyn Stoppable + Send>) {
+    pub fn push(&mut self, s: Box<dyn Stoppable<Error = E> + Send>) {
         self.stoppable_tasks.push(s);
     }
 }
 
-impl Drop for StopHandle {
+impl<E: Error + Send + 'static> Drop for StopHandle<E> {
     fn drop(&mut self) {
         let (tx, _rx) = broadcast::channel::<()>(16);
 

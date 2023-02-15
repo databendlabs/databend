@@ -145,7 +145,7 @@ async fn main_entrypoint() -> Result<()> {
         let hostname = conf.query.clickhouse_http_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.clickhouse_http_handler_port);
 
-        let mut srv = HttpHandler::create(HttpHandlerKind::Clickhouse)?;
+        let mut srv = HttpHandler::create(HttpHandlerKind::Clickhouse);
         let listening = srv.start(listening.parse()?).await?;
         shutdown_handle.add_service(srv);
 
@@ -161,7 +161,7 @@ async fn main_entrypoint() -> Result<()> {
         let hostname = conf.query.http_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.http_handler_port);
 
-        let mut srv = HttpHandler::create(HttpHandlerKind::Query)?;
+        let mut srv = HttpHandler::create(HttpHandlerKind::Query);
         let listening = srv.start(listening.parse()?).await?;
         shutdown_handle.add_service(srv);
 
@@ -175,7 +175,7 @@ async fn main_entrypoint() -> Result<()> {
     // Metric API service.
     {
         let address = conf.query.metric_api_address.clone();
-        let mut srv = MetricService::create()?;
+        let mut srv = MetricService::create();
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
         info!("Listening for Metric API: {}/metrics", listening);
@@ -184,7 +184,7 @@ async fn main_entrypoint() -> Result<()> {
     // Admin HTTP API service.
     {
         let address = conf.query.admin_api_address.clone();
-        let mut srv = HttpService::create(&conf)?;
+        let mut srv = HttpService::create(&conf);
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
         info!("Listening for Admin HTTP API: {}", listening);

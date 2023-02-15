@@ -1,4 +1,5 @@
-<img src="https://user-images.githubusercontent.com/172204/193307982-a286c574-80ef-41de-b52f-1b064ae7fccd.png" alt="databend" />
+<h1 align="center">The Future of Cloud Data Analysis</h1>
+
 <div align="center">
 
 <h4 align="center">
@@ -40,15 +41,8 @@
 
 </div>
 </div>
-<br>
 
-- [What is Databend?](#what-is-databend)
-- [Architecture](#architecture)
-- [Try Databend](#try-databend)
-- [Getting Started](#getting-started)
-- [Contributing](#contributing)
-- [Community](#community)
-- [Roadmap](#roadmap)
+<img src="https://user-images.githubusercontent.com/172204/218997620-2bbdbbfe-9351-421e-bf6e-6cc5e0f3881b.svg" alt="databend" />
 
 ## What is Databend?
 
@@ -79,7 +73,7 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 
 - __Support for Semi-Structured Data__
 
-  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON, and Parquet, which are located in the cloud or your local file system; Databend also supports semi-structured data types: [ARRAY, MAP, JSON](https://databend.rs/doc/sql-reference/data-types/data-type-semi-structured-types), which is easy to import and operate on semi-structured.
+  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON, and Parquet, which are located in the cloud or your local file system; Databend also supports semi-structured data types: [ARRAY, TUPLE, MAP, JSON](https://databend.rs/doc/sql-reference/data-types/data-type-semi-structured-types), which is easy to import and operate on semi-structured.
 
 
 - __MySQL/ClickHouse Compatible__
