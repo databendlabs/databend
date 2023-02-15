@@ -70,12 +70,12 @@ runs:
 
         case ${{ inputs.source }} in
           pr)
-            BENCHMARK_SYSTEM="Databend(PR#${{ inputs.source_id }})"
+            BENCHMARK_SYSTEM="Databend(PR#${{ inputs.source_id }},${BENCHMARK_STORAGE})"
             BENCHMARK_TYPE="PR"
             jq ".extra.pr = \"${{ inputs.source_id }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
             ;;
           release)
-            BENCHMARK_SYSTEM="Databend(Release@${{ inputs.source_id }})"
+            BENCHMARK_SYSTEM="Databend(Release@${{ inputs.source_id }},${BENCHMARK_STORAGE})"
             BENCHMARK_TYPE="Release"
             jq ".extra.release = \"${{ inputs.source_id }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
             ;;
