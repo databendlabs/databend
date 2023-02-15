@@ -126,7 +126,7 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
         .await?;
 
     // check column ids
-    // the table contains two fields: id int32, t tuple(int, int)
+    // the table contains two fields: id int32, t tuple(int32, int32)
     let expected_leaf_column_ids = vec![0, 1, 2];
     check_segment_column_ids(&fixture, expected_leaf_column_ids).await?;
 
