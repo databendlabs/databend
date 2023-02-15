@@ -161,19 +161,6 @@ impl HeuristicOptimizer {
                 }
             }
         }
-        // for rule in rule_list.iter() {
-        //     let mut state = TransformResult::new();
-        //     if s_expr.match_pattern(rule.pattern()) && !s_expr.applied_rule(&rule.id()) {
-        //         s_expr.set_applied_rule(&rule.id());
-        //         rule.apply(&s_expr, &mut state)?;
-        //         if !state.results().is_empty() {
-        //             // Recursive optimize the result
-        //             let result = &state.results()[0];
-        //             let optimized_result = self.optimize_expression(result)?;
-        //             return Ok(optimized_result);
-        //         }
-        //     }
-        // }
         Ok(s_expr.clone())
     }
 }

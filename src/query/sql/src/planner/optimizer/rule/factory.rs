@@ -49,9 +49,7 @@ use crate::MetadataRef;
 
 // read only, so thread safe
 pub static mut RULE_FACTORY: Lazy<RuleFactory> = Lazy::new(|| {
-    let mut factory = RuleFactory::create();
-    factory.init_rules();
-    factory
+    RuleFactory::create()
 });
 
 pub struct RuleFactory {
@@ -71,20 +69,6 @@ impl RuleFactory {
             exploration_rules: (RuleID::CommuteJoin as u32..RuleID::ExchangeJoin as u32)
                 .collect::<RoaringBitmap>(),
         }
-    }
-
-    pub fn init_rules(&mut self) {
-        // for id in RuleID::iter() {
-        //     self.rule_set.insert(self.create_rule(id).unwrap())
-        // }
-
-        // for rule in self.rule_set.iter() {
-        //     if rule.transformation() {
-        //         self.transformation_rules.insert(rule.id() as u32);
-        //     } else {
-        //         self.exploration_rules.insert(rule.id() as u32);
-        //     }
-        // }
     }
 
     pub fn get_rule(&self, id: &RuleID) -> Option<&RulePtr> {

@@ -174,16 +174,6 @@ impl ExploreExprTask {
             scheduler.add_task(Task::ApplyRule(apply_rule_task));
         }
 
-        // for rule in optimizer.explore_rules.iter() {
-        //     let apply_rule_task = ApplyRuleTask::with_parent(
-        //         rule.id(),
-        //         m_expr.group_index,
-        //         m_expr.index,
-        //         &self.ref_count,
-        //     );
-        //     scheduler.add_task(Task::ApplyRule(apply_rule_task));
-        // }
-
         if let Some(parent) = &self.parent {
             parent.dec();
         }
