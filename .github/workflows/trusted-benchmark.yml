@@ -23,9 +23,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run download ${{ github.event.workflow_run.id }} --dir benchmark/results --name benchmark-results
-          gh run download ${{ github.event.workflow_run.id }} --dir benchmark/results --name clickbench-report
-          echo "PR_NUMBER=$(jq -r '.extra.pr' benchmark/results/result.json)" >> $GITHUB_ENV
+          gh run download ${{ github.event.workflow_run.id }} --dir benchmark/results --name benchmark-results-s3
+          gh run download ${{ github.event.workflow_run.id }} --dir benchmark/results --name benchmark-results-fs
+          echo "PR_NUMBER=$(jq -r '.extra.pr' benchmark/results/result-fs.json)" >> $GITHUB_ENV
+      - name: Generate report
+        working-directory: benchmark/clickbench
+        run: |
+          aws s3 sync "s3://repo.databend.rs/benchmark/clickbench/release/$(date -u +%Y)/$(date -u +%m)/" ./results/
+          mkdir -p "results/PR-${{ env.PR_NUMBER }}"
+          cp result-fs.json "results/PR-${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}-fs.json"
+          cp result-s3.json "results/PR-${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}-s3.json"
+          ./update-results.sh
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -35,7 +43,8 @@ jobs:
       - name: Upload PR clickbench report to repo.databend.rs
         working-directory: benchmark/results
         run: |
-          aws s3 cp result.json s3://repo.databend.rs/benchmark/clickbench/pr/${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}.json
+          aws s3 cp result-fs.json s3://repo.databend.rs/benchmark/clickbench/pr/${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}-fs.json
+          aws s3 cp result-s3.json s3://repo.databend.rs/benchmark/clickbench/pr/${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}-s3.json
           aws s3 cp index.html s3://repo.databend.rs/benchmark/clickbench/pr/${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}.html
       - name: Comment on PR
         uses: everpcpc/comment-on-pr-action@v1
@@ -58,8 +67,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run download ${{ github.event.workflow_run.id }} --dir benchmark/results --name benchmark-results
-          echo "RELEASE_TAG=$(jq -r '.extra.release' benchmark/results/result.json)" >> $GITHUB_ENV
+          gh run download ${{ github.event.workflow_run.id }} --dir benchmark/results --name benchmark-results-fs
+          gh run download ${{ github.event.workflow_run.id }} --dir benchmark/results --name benchmark-results-s3
+          echo "RELEASE_TAG=$(jq -r '.extra.release' benchmark/results/result-fs.json)" >> $GITHUB_ENV
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -69,5 +79,6 @@ jobs:
       - name: Upload nightly results to repo.databend.rs
         working-directory: benchmark/results
         run: |
-          RESULT_PATH="$(date -u +%Y)/$(date -u +%m)/$(date -u +%Y-%m-%d)/${{ env.RELEASE_TAG }}.json"
-          aws s3 cp result.json s3://repo.databend.rs/benchmark/clickbench/release/${RESULT_PATH}
+          RESULT_PEFIX="$(date -u +%Y)/$(date -u +%m)/$(date -u +%Y-%m-%d)/${{ env.RELEASE_TAG }}"
+          aws s3 cp result-fs.json "s3://repo.databend.rs/benchmark/clickbench/release/${RESULT_PEFIX}-fs.json"
+          aws s3 cp result-s3.json "s3://repo.databend.rs/benchmark/clickbench/release/${RESULT_PEFIX}-s3.json"
