@@ -20,12 +20,15 @@ use std::sync::Arc;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::decimal::*;
 use common_expression::types::number::*;
 use common_expression::types::*;
+use common_expression::with_decimal_mapped_type;
 use common_expression::with_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
+use ethnum::i256;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_scalar_state::need_manual_drop_state;
@@ -176,11 +179,13 @@ where
 
 pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
     display_name: &str,
-    _params: Vec<Scalar>,
+    params: Vec<Scalar>,
     argument_types: Vec<DataType>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_unary_arguments(display_name, argument_types.len())?;
     let mut data_type = argument_types[0].clone();
+    println!("the data_type is {:?}", data_type.clone());
+    println!("the params is {:?}", params.clone());
     let need_drop = need_manual_drop_state(&data_type);
 
     // null use dummy func, it's already covered in `AggregateNullResultFunction`
@@ -204,6 +209,21 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                         NumberDataType::NUM => {
                             type State = ScalarState<NumberType<NUM>, CMP>;
                             AggregateMinMaxAnyFunction::<NumberType<NUM>, CMP, State>::try_create(
+                                display_name,
+                                data_type,
+                                need_drop,
+                            )
+                        }
+                    })
+                }
+                DataType::Decimal(decimal_type) => {
+                    let scale = decimal_type.scale();
+                    let precision = decimal_type.precision();
+                    let size = DecimalSize { scale, precision };
+                    with_decimal_mapped_type!(|DECIMAL| match decimal_type {
+                        DecimalDataType::DECIMAL(size) => {
+                            type State = ScalarState<DecimalType<DECIMAL>, CMP>;
+                            AggregateMinMaxAnyFunction::<DecimalType<DECIMAL>, CMP, State>::try_create(
                                 display_name,
                                 data_type,
                                 need_drop,
