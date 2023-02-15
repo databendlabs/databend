@@ -1,5 +1,5 @@
 ---
-title: How to Write Scalar Functions
+title: How to Write a Scalar Function
 ---
 
 ## What's scalar functions
@@ -234,7 +234,7 @@ registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanTy
 
 ## Testing
 
-To be a good engineer, don't forget to test your codes, please add unit tests and stateless tests after you finish the new scalar functions.
+As a good developer, you always test your code, don't you? Please add unit tests and logic tests after you complete the new scalar functions.
 
 ### Unit Test
 
