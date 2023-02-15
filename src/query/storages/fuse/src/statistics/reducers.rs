@@ -14,6 +14,7 @@
 
 use std::borrow::Borrow;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use common_exception::Result;
 use common_expression::BlockThresholds;
@@ -31,18 +32,29 @@ use crate::statistics::column_statistic::get_traverse_columns_dfs;
 pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     stats_of_columns: &[T],
     data_block: Option<&DataBlock>,
+    column_id_set: Option<&HashSet<ColumnId>>,
 ) -> Result<StatisticsOfColumns> {
     // Combine statistics of a column into `Vec`, that is:
     // from : `&[HashMap<ColumnId, ColumnStatistics>]`
     // to   : `HashMap<ColumnId, Vec<&ColumnStatistics>)>`
     let col_to_stats_lit = stats_of_columns.iter().fold(HashMap::new(), |acc, item| {
-        item.borrow().iter().fold(
-            acc,
-            |mut acc: HashMap<ColumnId, Vec<&ColumnStatistics>>, (col_id, col_stats)| {
-                acc.entry(*col_id).or_default().push(col_stats);
-                acc
-            },
-        )
+        item.borrow()
+            .iter()
+            // ignore dropped column statistics by column id
+            .filter(|(col_id, _col_stats)| {
+                if let Some(column_id_set) = &column_id_set {
+                    column_id_set.contains(col_id)
+                } else {
+                    true
+                }
+            })
+            .fold(
+                acc,
+                |mut acc: HashMap<ColumnId, Vec<&ColumnStatistics>>, (col_id, col_stats)| {
+                    acc.entry(*col_id).or_default().push(col_stats);
+                    acc
+                },
+            )
     });
 
     let leaves = if let Some(data_block) = data_block {
@@ -125,7 +137,7 @@ pub fn merge_statistics(l: &Statistics, r: &Statistics) -> Result<Statistics> {
         uncompressed_byte_size: l.uncompressed_byte_size + r.uncompressed_byte_size,
         compressed_byte_size: l.compressed_byte_size + r.compressed_byte_size,
         index_size: l.index_size + r.index_size,
-        col_stats: reduce_block_statistics(&[&l.col_stats, &r.col_stats], None)?,
+        col_stats: reduce_block_statistics(&[&l.col_stats, &r.col_stats], None, None)?,
     };
     Ok(s)
 }
@@ -136,7 +148,7 @@ pub fn merge_statistics_mut(l: &mut Statistics, r: &Statistics) -> Result<()> {
     l.uncompressed_byte_size += r.uncompressed_byte_size;
     l.compressed_byte_size += r.compressed_byte_size;
     l.index_size += r.index_size;
-    l.col_stats = reduce_block_statistics(&[&l.col_stats, &r.col_stats], None)?;
+    l.col_stats = reduce_block_statistics(&[&l.col_stats, &r.col_stats], None, None)?;
     Ok(())
 }
 
@@ -175,7 +187,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         .iter()
         .map(|v| &v.borrow().col_stats)
         .collect::<Vec<_>>();
-    let merged_col_stats = reduce_block_statistics(&stats, None)?;
+    let merged_col_stats = reduce_block_statistics(&stats, None, None)?;
 
     Ok(Statistics {
         row_count,

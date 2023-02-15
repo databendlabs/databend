@@ -38,7 +38,7 @@ SELECT * FROM t_table;
 
 ## Get by index
 
-The elements of a Databend tuple can be accessed by their indices, which start from 1. 
+The elements of a Databend tuple can be accessed by their indices, **which start from 1**. 
 
 ### Example
 

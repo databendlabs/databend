@@ -40,5 +40,4 @@ pub use transforms::TransformDummy;
 pub use transforms::TransformHashJoinProbe;
 pub use transforms::TransformLimit;
 pub use transforms::TransformResortAddOn;
-pub use transforms::TransformSortMerge;
 pub use transforms::TransformSortPartial;

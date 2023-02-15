@@ -15,13 +15,15 @@
 use std::time::Duration;
 
 use common_base::base::tokio;
-use common_exception::ErrorCode;
 use common_grpc::RpcClientTlsConfig;
 use common_meta_api::SchemaApi;
 use common_meta_client::MetaGrpcClient;
 use common_meta_kvapi::kvapi::KVApi;
+use common_meta_types::KVAppError;
+use common_meta_types::MetaClientError;
+use common_meta_types::MetaError;
+use common_meta_types::MetaNetworkError;
 use databend_meta::init_meta_ut;
-use pretty_assertions::assert_eq;
 
 use crate::tests::service::MetaSrvTestContext;
 use crate::tests::start_metasrv_with_context;
@@ -94,11 +96,18 @@ async fn test_tls_client_config_failure() -> anyhow::Result<()> {
     .unwrap();
 
     let c = r.get_kv("foo").await;
-    assert!(c.is_err());
+    assert!(c.is_err(), "expect error: {:?}", c);
 
-    if let Err(e) = c {
-        let e = ErrorCode::from(e);
-        assert_eq!(e.code(), ErrorCode::TLSConfigurationFailure("").code());
+    let e = c.unwrap_err();
+
+    if let KVAppError::MetaError(MetaError::ClientError(MetaClientError::NetworkError(
+        MetaNetworkError::TLSConfigError(any_err),
+    ))) = e
+    {
+        let _ = any_err;
+    } else {
+        unreachable!("expect tls error but: {:?}", e);
     }
+
     Ok(())
 }
