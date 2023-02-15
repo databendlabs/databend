@@ -14,6 +14,7 @@
 
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
+use std::intrinsics::unlikely;
 use std::marker::PhantomData;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -21,6 +22,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::compute::sort::row::RowConverter as ArrowRowConverter;
 use common_arrow::arrow::compute::sort::row::Rows as ArrowRows;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::DateType;
@@ -97,7 +99,7 @@ where
         }
 
         let all_rows = blocks.iter().map(|b| b.num_rows()).sum::<usize>();
-        let mut output_size = self.limit.unwrap_or(all_rows).min(all_rows);
+        let output_size = self.limit.unwrap_or(all_rows).min(all_rows);
 
         if output_size == 0 {
             return Ok(vec![]);
@@ -127,7 +129,8 @@ where
         }
 
         // 2. Drain the heap till the limit is reached.
-        while output_size > 0 {
+        let mut row = 0;
+        while row < output_size {
             match heap.pop() {
                 Some(Reverse(mut cursor)) => {
                     let block_idx = cursor.input_index;
@@ -135,7 +138,7 @@ where
                         // If there is no other block in the heap, we can drain the whole block.
                         while output_size > 0 && !cursor.is_finished() {
                             output_indices.push((block_idx, cursor.advance()));
-                            output_size -= 1;
+                            row += 1;
                         }
                     } else {
                         let next_cursor = &heap.peek().unwrap().0;
@@ -144,14 +147,14 @@ where
                         if cursor.last().le(&next_cursor.current()) {
                             while output_size > 0 && !cursor.is_finished() {
                                 output_indices.push((block_idx, cursor.advance()));
-                                output_size -= 1;
+                                row += 1;
                             }
                         } else {
                             while output_size > 0 && !cursor.is_finished() && cursor.le(next_cursor)
                             {
                                 // If the cursor is smaller than the next cursor, don't need to push the cursor back to the heap.
                                 output_indices.push((block_idx, cursor.advance()));
-                                output_size -= 1;
+                                row += 1;
                             }
                             if output_size > 0 && !cursor.is_finished() {
                                 heap.push(Reverse(cursor));
@@ -163,10 +166,21 @@ where
                     unreachable!("heap is empty, but we haven't reached the limit yet");
                 }
             }
+            if unlikely(row % self.block_size == 0 && self.aborting.load(Ordering::Relaxed)) {
+                return Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed.",
+                ));
+            }
         }
 
         // 3. Build final blocks from `output_indices`.
         for i in 0..output_block_num {
+            if unlikely(self.aborting.load(Ordering::Relaxed)) {
+                return Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed.",
+                ));
+            }
+
             let start = i * self.block_size;
             let end = (start + self.block_size).min(output_indices.len());
             // Convert indices to merge slice.
