@@ -81,7 +81,6 @@ impl ExchangeTransform {
                 for (destination_id, exchange) in params.destination_ids.iter().zip(exchanges) {
                     if destination_id != &params.executor_id {
                         nodes_source += 1;
-                        exchange.close_output();
                         items.push(create_reader_item(exchange));
                     }
                 }

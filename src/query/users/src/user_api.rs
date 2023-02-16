@@ -32,18 +32,18 @@ use common_management::UdfMgr;
 use common_management::UserApi;
 use common_management::UserMgr;
 use common_meta_app::principal::AuthInfo;
+use common_meta_app::tenant::TenantQuota;
 use common_meta_kvapi::kvapi;
 use common_meta_store::MetaStore;
 use common_meta_store::MetaStoreProvider;
-use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
-use common_meta_types::TenantQuota;
+use common_meta_types::MetaError;
 
 use crate::idm_config::IDMConfig;
 
 pub struct UserApiProvider {
     meta: MetaStore,
-    client: Arc<dyn kvapi::KVApi<Error = KVAppError>>,
+    client: Arc<dyn kvapi::KVApi<Error = MetaError>>,
     idm_config: IDMConfig,
 }
 

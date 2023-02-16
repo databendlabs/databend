@@ -70,14 +70,12 @@ runs:
 
         case ${{ inputs.source }} in
           pr)
-            BENCHMARK_SYSTEM="Databend(PR#${{ inputs.source_id }},${BENCHMARK_STORAGE})"
+            BENCHMARK_SYSTEM="Databend(PR#${{ inputs.source_id }})"
             BENCHMARK_TYPE="PR"
-            jq ".extra.pr = \"${{ inputs.source_id }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
             ;;
           release)
-            BENCHMARK_SYSTEM="Databend(Release@${{ inputs.source_id }},${BENCHMARK_STORAGE})"
+            BENCHMARK_SYSTEM="Databend(Release@${{ inputs.source_id }})"
             BENCHMARK_TYPE="Release"
-            jq ".extra.release = \"${{ inputs.source_id }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
             ;;
           *)
             echo "Unspported benchmark source: ${{ inputs.source }}"
@@ -85,10 +83,11 @@ runs:
         esac
         jq ".system = \"${BENCHMARK_SYSTEM}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
         jq ".date = \"$(date -u +%Y-%m-%d)\"" <result.json >result.json.tmp && mv result.json.tmp result.json
-        jq ".machine = \"c5.4xlarge\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+        jq ".machine = \"c5.4xlarge,${BENCHMARK_STORAGE}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
         jq ".cluster_size = 1" <result.json >result.json.tmp && mv result.json.tmp result.json
         jq ".comment = \"commit:${{ github.sha }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
-        jq ".tags = [\"Rust\", \"${BENCHMARK_TYPE}\", \"${BENCHMARK_STORAGE}\"]" <result.json >result.json.tmp && mv result.json.tmp result.json
+        jq ".tags = [\"${BENCHMARK_TYPE}\", \"${BENCHMARK_STORAGE}\"]" <result.json >result.json.tmp && mv result.json.tmp result.json
+        jq ".extra.${{ inputs.source }} = \"${{ inputs.source_id }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
         mv result.json result-${{ inputs.storage }}.json
 
     - name: Upload artifact

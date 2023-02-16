@@ -13,11 +13,8 @@
 // limitations under the License.
 
 use common_exception::ErrorCode;
-use common_exception::Result;
-use serde::Deserialize;
-use serde::Serialize;
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 #[serde(default)]
 pub struct TenantQuota {
     // The max databases can be created in the tenant.
@@ -39,7 +36,7 @@ pub struct TenantQuota {
 impl TryFrom<Vec<u8>> for TenantQuota {
     type Error = ErrorCode;
 
-    fn try_from(value: Vec<u8>) -> Result<Self> {
+    fn try_from(value: Vec<u8>) -> common_exception::Result<Self> {
         match serde_json::from_slice(&value) {
             Ok(quota) => Ok(quota),
             Err(err) => Err(ErrorCode::IllegalTenantQuotaFormat(format!(

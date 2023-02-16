@@ -32,9 +32,9 @@ Using `Nullable` will almost always have a negative impact on performance. If th
 
 Check whether the value is `NULL` or `NOT NULL`.
 
-[IS NULL](../../15-sql-functions/11-conditional-functions/isnull.md)
+[IS NULL](../../15-sql-functions/11-conditional-functions/index.md#L12)
 
-[IS NOT NULL](../../15-sql-functions/11-conditional-functions/isnotnull.md)
+[IS NOT NULL](../../15-sql-functions/11-conditional-functions/index.md#L11)
 
 ### Example
 

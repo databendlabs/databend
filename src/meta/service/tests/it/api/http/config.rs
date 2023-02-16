@@ -26,7 +26,7 @@ use poem::Route;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_config() -> common_exception::Result<()> {
+async fn test_config() -> anyhow::Result<()> {
     let conf = Config::default();
     let cluster_router = Route::new()
         .at("/v1/config", get(config_handler))

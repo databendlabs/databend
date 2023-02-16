@@ -256,6 +256,21 @@ impl FileFormatOptions {
         Ok(file_format_options)
     }
 
+    pub fn default_by_type(format_type: StageFileFormatType) -> Self {
+        let mut options = Self::default();
+        match &format_type {
+            StageFileFormatType::Csv => {
+                options.quote = "\"".to_string();
+            }
+            StageFileFormatType::Tsv => {
+                options.field_delimiter = "\t".to_string();
+                options.escape = "\\".to_string();
+            }
+            _ => {}
+        }
+        options
+    }
+
     pub fn apply(&mut self, opts: &BTreeMap<String, String>, ignore_unknown: bool) -> Result<()> {
         if opts.is_empty() {
             return Ok(());

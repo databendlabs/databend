@@ -15,11 +15,10 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
+use anyerror::AnyError;
 use common_base::base::tokio::sync::broadcast;
 use common_base::base::tokio::sync::oneshot;
 use common_base::base::tokio::task::JoinHandle;
-use common_exception::ErrorCode;
-use common_exception::Result;
 use futures::future::Either;
 use futures::FutureExt;
 use poem::listener::Acceptor;
@@ -31,6 +30,8 @@ use poem::listener::TcpListener;
 use poem::Endpoint;
 use tracing::error;
 use tracing::info;
+
+use crate::HttpError;
 
 pub struct HttpShutdownHandler {
     service_name: String,
@@ -53,14 +54,14 @@ impl HttpShutdownHandler {
         tls_config: Option<RustlsConfig>,
         ep: impl Endpoint + 'static,
         graceful_shutdown_timeout: Option<Duration>,
-    ) -> Result<SocketAddr> {
+    ) -> Result<SocketAddr, HttpError> {
         assert!(self.join_handle.is_none());
         assert!(self.abort_handle.is_none());
 
         let mut acceptor = TcpListener::bind(listening)
             .into_acceptor()
             .await
-            .map_err(|err| ErrorCode::CannotListenerPort(format!("{}:{}", err, listening)))?
+            .map_err(|err| HttpError::listen_error(listening, err))?
             .boxed();
 
         let addr = acceptor
@@ -70,14 +71,11 @@ impl HttpShutdownHandler {
             .expect("socket addr");
 
         if let Some(tls_config) = tls_config {
-            acceptor = acceptor
-                .rustls(tls_config.into_stream().map_err(|err| {
-                    ErrorCode::TLSConfigurationFailure(format!(
-                        "Cannot build TLS config for http service, cause {}",
-                        err
-                    ))
-                })?)
-                .boxed();
+            let conf_stream = tls_config
+                .into_stream()
+                .map_err(|err| HttpError::TlsConfigError(AnyError::new(&err)))?;
+
+            acceptor = acceptor.rustls(conf_stream).boxed();
         }
 
         let (tx, rx) = oneshot::channel();
@@ -112,7 +110,7 @@ impl HttpShutdownHandler {
     }
 
     /// Stop service gracefully. If `force` is ready, force shutdown the service.
-    pub async fn stop(&mut self, force: Option<broadcast::Receiver<()>>) -> Result<()> {
+    pub async fn stop(&mut self, force: Option<broadcast::Receiver<()>>) {
         let join_handle = self.send_stop_signal();
 
         if let Some(mut force) = force {
@@ -141,7 +139,6 @@ impl HttpShutdownHandler {
                 self.service_name, res
             );
         }
-        Ok(())
     }
 
     pub async fn shutdown(&mut self, graceful: bool) {

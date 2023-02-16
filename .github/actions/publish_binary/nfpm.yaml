@@ -1,5 +1,5 @@
 name: "${name}"
-arch: "amd64"
+arch: "${arch}"
 platform: "linux"
 version: "${version}"
 section: "database"
@@ -11,6 +11,8 @@ description: |
 vendor: "Datafuse Labs"
 homepage: "https://databend.rs"
 license: "Apache-2.0"
+depends:
+  - libc6 (>= 2.31)
 contents:
   # Binaries
   - src: ${path}/bin/databend-query

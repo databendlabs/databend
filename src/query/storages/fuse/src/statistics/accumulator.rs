@@ -97,7 +97,7 @@ impl StatisticsAccumulator {
     fn add(
         &mut self,
         file_size: u64,
-        column_meta: HashMap<u32, ColumnMeta>,
+        column_meta: HashMap<ColumnId, ColumnMeta>,
         block_statistics: BlockStatistics,
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,

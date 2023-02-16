@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-pub use common_config::Config;
+pub use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::AuthInfo;
@@ -41,13 +41,13 @@ pub enum Credential {
 }
 
 impl AuthMgr {
-    pub fn create(cfg: &Config) -> Result<Arc<AuthMgr>> {
-        Ok(Arc::new(AuthMgr {
-            jwt_auth: JwtAuthenticator::try_create(
+    pub fn create(cfg: &InnerConfig) -> Arc<AuthMgr> {
+        Arc::new(AuthMgr {
+            jwt_auth: JwtAuthenticator::create(
                 cfg.query.jwt_key_file.clone(),
                 cfg.query.jwt_key_files.clone(),
-            )?,
-        }))
+            ),
+        })
     }
 
     pub async fn auth(&self, session: Arc<Session>, credential: &Credential) -> Result<()> {

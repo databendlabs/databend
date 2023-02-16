@@ -31,3 +31,8 @@ runs:
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
       run: bash ./scripts/ci/ci-run-sqllogic-tests-management-mode.sh ${{ inputs.dirs }}
+    - name: Upload failure
+      if: failure() || cancelled()
+      uses: ./.github/actions/artifact_failure
+      with:
+        name: test-sqllogic-management-${{ inputs.handlers }}-${{ inputs.dirs }}

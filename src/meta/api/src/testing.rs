@@ -25,7 +25,7 @@ use common_proto_conv::FromToProto;
 
 /// Get existing value by key. Panic if key is absent.
 pub(crate) async fn get_kv_data<T>(
-    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     key: &impl kvapi::Key,
 ) -> Result<T, KVAppError>
 where

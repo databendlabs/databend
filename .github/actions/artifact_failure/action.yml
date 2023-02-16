@@ -7,15 +7,11 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: kill tasks
-      shell: bash
-      run: |
-        killall -9 databend-query || true
-        killall -9 databend-meta || true
     - name: pack failure artifacts
       shell: bash
       run: |
-        tar --exclude='target' \
+        tar --warning=no-file-changed \
+            --exclude='target' \
             --exclude='website' \
             --exclude='docs' \
             --exclude='docker' \

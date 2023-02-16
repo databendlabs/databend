@@ -20,7 +20,7 @@ use common_arrow::arrow_format::flight::service::flight_service_server::FlightSe
 use common_base::base::tokio;
 use common_base::base::tokio::net::TcpListener;
 use common_base::base::tokio::sync::Notify;
-use common_config::Config;
+use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use tokio_stream::wrappers::TcpListenerStream;
@@ -33,12 +33,12 @@ use crate::api::rpc::DatabendQueryFlightService;
 use crate::servers::Server as DatabendQueryServer;
 
 pub struct RpcService {
-    pub config: Config,
+    pub config: InnerConfig,
     pub abort_notify: Arc<Notify>,
 }
 
 impl RpcService {
-    pub fn create(config: Config) -> Result<Box<dyn DatabendQueryServer>> {
+    pub fn create(config: InnerConfig) -> Result<Box<dyn DatabendQueryServer>> {
         Ok(Box::new(Self {
             config,
             abort_notify: Arc::new(Notify::new()),
@@ -60,7 +60,7 @@ impl RpcService {
         }
     }
 
-    async fn server_tls_config(conf: &Config) -> Result<ServerTlsConfig> {
+    async fn server_tls_config(conf: &InnerConfig) -> Result<ServerTlsConfig> {
         let cert = tokio::fs::read(conf.query.rpc_tls_server_cert.as_str()).await?;
         let key = tokio::fs::read(conf.query.rpc_tls_server_key.as_str()).await?;
         let server_identity = Identity::from_pem(cert, key);

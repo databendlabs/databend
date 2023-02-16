@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt::Debug;
+use std::marker::PhantomData;
 use std::ops::Range;
 
 use common_arrow::arrow::buffer::Buffer;
@@ -26,9 +27,124 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::SimpleDomain;
+use crate::types::ValueType;
 use crate::utils::arrow::buffer_into_mut;
 use crate::Column;
 use crate::ColumnBuilder;
+use crate::Domain;
+use crate::Scalar;
+use crate::ScalarRef;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DecimalType<T: Decimal>(PhantomData<T>);
+
+impl<Num: Decimal> ValueType for DecimalType<Num> {
+    type Scalar = Num;
+    type ScalarRef<'a> = Num;
+    type Column = Buffer<Num>;
+    type Domain = SimpleDomain<Num>;
+    type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, Num>>;
+    type ColumnBuilder = Vec<Num>;
+
+    fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {
+        long
+    }
+
+    fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
+        scalar
+    }
+
+    fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a> {
+        *scalar
+    }
+
+    fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
+        Num::try_downcast_scalar(scalar.as_decimal()?)
+    }
+
+    fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column> {
+        let down_col = Num::try_downcast_column(col);
+        if let Some(col) = down_col {
+            Some(col.0)
+        } else {
+            None
+        }
+    }
+
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+        Num::try_downcast_domain(domain.as_decimal()?)
+    }
+
+    fn try_downcast_builder<'a>(
+        builder: &'a mut ColumnBuilder,
+    ) -> Option<&'a mut Self::ColumnBuilder> {
+        Num::try_downcast_builder(builder)
+    }
+
+    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+        Num::upcast_scalar(scalar)
+    }
+
+    fn upcast_column(col: Self::Column) -> Column {
+        Num::upcast_column(col)
+    }
+
+    fn upcast_domain(domain: Self::Domain) -> Domain {
+        Num::upcast_domain(domain)
+    }
+
+    fn column_len<'a>(col: &'a Self::Column) -> usize {
+        col.len()
+    }
+
+    fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>> {
+        col.get(index).cloned()
+    }
+
+    unsafe fn index_column_unchecked<'a>(
+        col: &'a Self::Column,
+        index: usize,
+    ) -> Self::ScalarRef<'a> {
+        *col.get_unchecked(index)
+    }
+
+    fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
+        col.clone().slice(range.start, range.end - range.start)
+    }
+
+    fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a> {
+        col.iter().cloned()
+    }
+
+    fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
+        buffer_into_mut(col)
+    }
+
+    fn builder_len(builder: &Self::ColumnBuilder) -> usize {
+        builder.len()
+    }
+
+    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
+        builder.push(item)
+    }
+
+    fn push_default(builder: &mut Self::ColumnBuilder) {
+        builder.push(Num::default())
+    }
+
+    fn append_column(builder: &mut Self::ColumnBuilder, other: &Self::Column) {
+        builder.extend_from_slice(other);
+    }
+
+    fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
+        builder.into()
+    }
+
+    fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
+        assert_eq!(builder.len(), 1);
+        builder[0]
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
 pub enum DecimalDataType {
@@ -67,7 +183,19 @@ pub struct DecimalSize {
 }
 
 pub trait Decimal:
-    Sized + Default + Send + Sync + 'static + std::fmt::Display + std::fmt::Debug
+    Sized
+    + Default
+    + Debug
+    + std::fmt::Display
+    + Copy
+    + Clone
+    + PartialEq
+    + Eq
+    + PartialOrd
+    + Ord
+    + Sync
+    + Send
+    + 'static
 {
     fn one() -> Self;
     // 10**scale
@@ -82,6 +210,12 @@ pub trait Decimal:
 
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)>;
     fn try_downcast_builder<'a>(builder: &'a mut ColumnBuilder) -> Option<&'a mut Vec<Self>>;
+
+    fn try_downcast_scalar(scalar: &DecimalScalar) -> Option<Self>;
+    fn try_downcast_domain(domain: &DecimalDomain) -> Option<SimpleDomain<Self>>;
+    fn upcast_scalar(scalar: Self) -> Scalar;
+    fn upcast_column(col: Buffer<Self>) -> Column;
+    fn upcast_domain(domain: SimpleDomain<Self>) -> Domain;
 
     fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn;
 
@@ -112,10 +246,6 @@ impl Decimal for i128 {
         9_i128.saturating_pow(1 + to_precision as u32)
     }
 
-    fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn {
-        DecimalColumn::Decimal128(value, size)
-    }
-
     fn from_float(value: f64) -> Self {
         value.to_i128().unwrap()
     }
@@ -133,6 +263,46 @@ impl Decimal for i128 {
             ColumnBuilder::Decimal(DecimalColumnBuilder::Decimal128(s, _)) => Some(s),
             _ => None,
         }
+    }
+
+    fn try_downcast_scalar<'a>(scalar: &DecimalScalar) -> Option<Self> {
+        match scalar {
+            DecimalScalar::Decimal128(val, _) => Some(*val),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_domain(domain: &DecimalDomain) -> Option<SimpleDomain<Self>> {
+        match domain {
+            DecimalDomain::Decimal128(val, _) => Some(*val),
+            _ => None,
+        }
+    }
+
+    // will mock DecimalSize need modify when use it
+    fn upcast_scalar(scalar: Self) -> Scalar {
+        Scalar::Decimal(DecimalScalar::Decimal128(scalar, DecimalSize {
+            precision: MAX_DECIMAL128_PRECISION,
+            scale: 0,
+        }))
+    }
+
+    fn upcast_column(col: Buffer<Self>) -> Column {
+        Column::Decimal(DecimalColumn::Decimal128(col, DecimalSize {
+            precision: MAX_DECIMAL128_PRECISION,
+            scale: 0,
+        }))
+    }
+
+    fn upcast_domain(domain: SimpleDomain<Self>) -> Domain {
+        Domain::Decimal(DecimalDomain::Decimal128(domain, DecimalSize {
+            precision: MAX_DECIMAL128_PRECISION,
+            scale: 0,
+        }))
+    }
+
+    fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn {
+        DecimalColumn::Decimal128(value, size)
     }
 }
 
@@ -163,10 +333,6 @@ impl Decimal for i256 {
         i256::from(value.to_i128().unwrap())
     }
 
-    fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn {
-        DecimalColumn::Decimal256(value, size)
-    }
-
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)> {
         let column = column.as_decimal()?;
         match column {
@@ -180,6 +346,45 @@ impl Decimal for i256 {
             ColumnBuilder::Decimal(DecimalColumnBuilder::Decimal256(s, _)) => Some(s),
             _ => None,
         }
+    }
+
+    fn try_downcast_scalar<'a>(scalar: &DecimalScalar) -> Option<Self> {
+        match scalar {
+            DecimalScalar::Decimal256(val, _) => Some(*val),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_domain(domain: &DecimalDomain) -> Option<SimpleDomain<Self>> {
+        match domain {
+            DecimalDomain::Decimal256(val, _) => Some(*val),
+            _ => None,
+        }
+    }
+
+    fn upcast_scalar(scalar: Self) -> Scalar {
+        Scalar::Decimal(DecimalScalar::Decimal256(scalar, DecimalSize {
+            precision: MAX_DECIMAL256_PRECISION,
+            scale: 0,
+        }))
+    }
+
+    fn upcast_column(col: Buffer<Self>) -> Column {
+        Column::Decimal(DecimalColumn::Decimal256(col, DecimalSize {
+            precision: MAX_DECIMAL256_PRECISION,
+            scale: 0,
+        }))
+    }
+
+    fn upcast_domain(domain: SimpleDomain<Self>) -> Domain {
+        Domain::Decimal(DecimalDomain::Decimal256(domain, DecimalSize {
+            precision: MAX_DECIMAL256_PRECISION,
+            scale: 0,
+        }))
+    }
+
+    fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn {
+        DecimalColumn::Decimal256(value, size)
     }
 }
 

@@ -15,7 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_config::Config;
+use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CountTablesReply;
@@ -70,7 +70,7 @@ pub struct ImmutableCatalog {
 }
 
 impl ImmutableCatalog {
-    pub async fn try_create_with_config(conf: &Config) -> Result<Self> {
+    pub async fn try_create_with_config(conf: &InnerConfig) -> Result<Self> {
         // The global db meta.
         let mut sys_db_meta = InMemoryMetas::create(SYS_DB_ID_BEGIN, SYS_TBL_ID_BEGIN);
         sys_db_meta.init_db("system");

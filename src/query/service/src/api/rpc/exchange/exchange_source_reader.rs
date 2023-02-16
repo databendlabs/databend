@@ -26,24 +26,26 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
 
 use crate::api::rpc::exchange::serde::exchange_deserializer::ExchangeDeserializeMeta;
-use crate::api::rpc::flight_client::FlightExchange;
+use crate::api::rpc::flight_client::FlightExchangeRef;
 use crate::api::DataPacket;
 use crate::pipelines::processors::TransformDummy;
 
 pub struct ExchangeSourceReader {
     finished: bool,
+    initialized: bool,
     output: Arc<OutputPort>,
     output_data: Option<DataPacket>,
-    flight_exchange: FlightExchange,
+    flight_exchange: FlightExchangeRef,
 }
 
 impl ExchangeSourceReader {
-    pub fn create(output: Arc<OutputPort>, flight_exchange: FlightExchange) -> ProcessorPtr {
+    pub fn create(output: Arc<OutputPort>, flight_exchange: FlightExchangeRef) -> ProcessorPtr {
         ProcessorPtr::create(Box::new(ExchangeSourceReader {
             output,
             flight_exchange,
             finished: false,
             output_data: None,
+            initialized: false,
         }))
     }
 }
@@ -61,12 +63,14 @@ impl Processor for ExchangeSourceReader {
     fn event(&mut self) -> common_exception::Result<Event> {
         if self.finished {
             self.output.finish();
-            // self.flight_exchange.close_input()
             return Ok(Event::Finished);
         }
 
         if self.output.is_finished() {
-            // self.flight_exchange.close_input()
+            if !self.finished {
+                return Ok(Event::Async);
+            }
+
             return Ok(Event::Finished);
         }
 
@@ -84,19 +88,28 @@ impl Processor for ExchangeSourceReader {
     }
 
     async fn async_process(&mut self) -> common_exception::Result<()> {
-        if let Some(output_data) = self.flight_exchange.recv().await? {
-            if !matches!(output_data, DataPacket::ClosingClient) {
+        if !self.initialized {
+            self.initialized = true;
+            self.flight_exchange.close_output().await;
+        }
+
+        if self.output_data.is_none() {
+            if let Some(output_data) = self.flight_exchange.recv().await? {
                 self.output_data = Some(output_data);
                 return Ok(());
             }
         }
 
-        self.finished = true;
+        if !self.finished {
+            self.finished = true;
+            self.flight_exchange.close_input().await;
+        }
+
         Ok(())
     }
 }
 
-pub fn via_reader(prefix_size: usize, exchanges: Vec<FlightExchange>, pipeline: &mut Pipeline) {
+pub fn via_reader(prefix_size: usize, exchanges: Vec<FlightExchangeRef>, pipeline: &mut Pipeline) {
     let mut items = Vec::with_capacity(prefix_size + exchanges.len());
 
     for _index in 0..prefix_size {
@@ -122,7 +135,7 @@ pub fn via_reader(prefix_size: usize, exchanges: Vec<FlightExchange>, pipeline: 
     pipeline.add_pipe(Pipe::create(prefix_size, items.len(), items));
 }
 
-pub fn create_reader_item(exchange: FlightExchange) -> PipeItem {
+pub fn create_reader_item(exchange: FlightExchangeRef) -> PipeItem {
     let output = OutputPort::create();
     PipeItem::create(
         ExchangeSourceReader::create(output.clone(), exchange),
