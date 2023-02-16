@@ -110,9 +110,7 @@ impl BlockReader {
             return self.build_default_values_block(num_rows);
         }
 
-        let fields = self
-            .projection
-            .project_column_nodes_nested_aware(&self.column_nodes)?;
+        let fields = self.projection.project_column_nodes(&self.column_nodes)?;
         let mut need_default_vals = Vec::with_capacity(fields.len());
         let mut need_to_fill_default_val = false;
         let mut deserialized_column_arrays = Vec::with_capacity(self.projection.len());
@@ -123,8 +121,8 @@ impl BlockReader {
             compression,
             uncompressed_buffer: &uncompressed_buffer,
         };
-        for (column, is_nested_field) in &fields {
-            match self.deserialize_field(&field_deserialization_ctx, column, *is_nested_field)? {
+        for column in &fields {
+            match self.deserialize_field(&field_deserialization_ctx, column)? {
                 None => {
                     need_to_fill_default_val = true;
                     need_default_vals.push(true);
@@ -241,7 +239,6 @@ impl BlockReader {
         &self,
         deserialization_context: &'a FieldDeserializationContext,
         column: &ColumnNode,
-        is_nested_column: bool,
     ) -> Result<Option<DeserializedArray<'a>>> {
         let indices = &column.leaf_indices;
         let column_chunks = deserialization_context.column_chunks;
@@ -249,7 +246,7 @@ impl BlockReader {
         let uncompressed_buffer = deserialization_context.uncompressed_buffer;
         // column passed in may be a compound field (with sub leaves),
         // or a leaf column of compound field
-        let is_nested = is_nested_column || indices.len() > 1;
+        let is_nested = column.has_children();
         let estimated_cap = indices.len();
         let mut field_column_metas = Vec::with_capacity(estimated_cap);
         let mut field_column_data = Vec::with_capacity(estimated_cap);
