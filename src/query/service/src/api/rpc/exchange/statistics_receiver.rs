@@ -145,6 +145,7 @@ impl StatisticsReceiver {
             .send(DataPacket::FetchProgressAndPrecommit)
             .await
         {
+            // The query is done(in remote).
             return match error.code() == ErrorCode::ABORTED_QUERY {
                 true => Ok(true),
                 false => Err(error),
