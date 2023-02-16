@@ -797,6 +797,7 @@ fn test_env_config_obsoleted() -> Result<()> {
         ("QUERY_TABLE_CACHE_SEGMENT_COUNT", Some("1")),
         ("QUERY_TABLE_CACHE_BLOOM_INDEX_META_COUNT", Some("1")),
         ("QUERY_TABLE_CACHE_BLOOM_INDEX_FILTER_COUNT", Some("1")),
+        ("QUERY_TABLE_CACHE_BLOOM_INDEX_DATA_BYTES", Some("1")),
     ];
 
     for env_var in obsoleted {
