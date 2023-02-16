@@ -183,7 +183,7 @@ impl Processor for SerializeDataTransform {
                     .as_ref()
                     .map(|i| i.column_distinct_count.clone());
                 let col_stats =
-                    gen_columns_statistics(&block, column_distinct_count, Some(&self.schema))?;
+                    gen_columns_statistics(&block, column_distinct_count, &self.schema)?;
 
                 // serialize data block.
                 let mut block_data = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);

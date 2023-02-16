@@ -678,7 +678,7 @@ impl CompactSegmentTestFixture {
             let mut stats_acc = StatisticsAccumulator::default();
             for block in blocks {
                 let block = block?;
-                let col_stats = gen_columns_statistics(&block, None, Some(&schema))?;
+                let col_stats = gen_columns_statistics(&block, None, &schema)?;
 
                 let mut block_statistics =
                     BlockStatistics::from(&block, "".to_owned(), None, None, &schema)?;
