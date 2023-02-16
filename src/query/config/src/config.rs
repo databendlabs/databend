@@ -1298,6 +1298,11 @@ pub struct QueryConfig {
     /// table filter on 2 columns, might populate 2 * 800 bloom index filter cache items (at most)
     #[clap(long)]
     pub table_cache_bloom_index_filter_count: Option<u64>,
+
+    /// OBSOLETED: (cache of raw bloom filter data is no longer supported)
+    /// Max bytes of cached bloom filter bytes.
+    #[clap(long)]
+    table_cache_bloom_index_data_bytes: Option<u64>,
 }
 
 impl Default for QueryConfig {
@@ -1419,6 +1424,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_cache_segment_count: None,
             table_cache_bloom_index_meta_count: None,
             table_cache_bloom_index_filter_count: None,
+            table_cache_bloom_index_data_bytes: None,
         }
     }
 }
@@ -2187,6 +2193,13 @@ impl QueryConfig {
                     "#,
                 "CACHE_TABLE_BLOOM_INDEX_FILTER_COUNT",
             ),
+            Self::check(
+                &self.table_cache_bloom_index_data_bytes,
+                "table-cache-bloom-index-data-bytes",
+                "N/A",
+                "N/A",
+                "N/A",
+            ),
         ];
         let messages = check_results.into_iter().flatten().collect::<Vec<_>>();
         if !messages.is_empty() {
@@ -2197,7 +2210,7 @@ impl QueryConfig {
         }
     }
 
-    pub const fn obsoleted_option_keys() -> &'static [&'static str; 10] {
+    pub const fn obsoleted_option_keys() -> &'static [&'static str; 11] {
         &[
             "table_disk_cache_mb_size",
             "table_meta_cache_enabled",
@@ -2209,6 +2222,7 @@ impl QueryConfig {
             "table_cache_segment_count",
             "table_cache_bloom_index_meta_count",
             "table_cache_bloom_index_filter_count",
+            "table_cache_bloom_index_data_bytes",
         ]
     }
 }
