@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::future::Future;
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -41,8 +42,9 @@ use common_expression::date_helper::TzFactory;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
+use common_meta_app::principal::FileFormatOptions;
 use common_meta_app::principal::RoleInfo;
-use common_meta_app::principal::UserDefinedFileFormat;
+use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::TableInfo;
 use common_settings::Settings;
@@ -387,10 +389,19 @@ impl TableContext for QueryContext {
         self.shared.consume_precommit_blocks()
     }
 
-    async fn get_file_format(&self, name: &str) -> Result<UserDefinedFileFormat> {
-        let user_mgr = UserApiProvider::instance();
-        let tenant = self.get_tenant();
-        user_mgr.get_file_format(&tenant, name).await
+    async fn get_file_format(&self, name: &str) -> Result<FileFormatOptions> {
+        let opt = match StageFileFormatType::from_str(name) {
+            Ok(typ) => FileFormatOptions::default_by_type(typ),
+            Err(_) => {
+                let user_mgr = UserApiProvider::instance();
+                let tenant = self.get_tenant();
+                user_mgr
+                    .get_file_format(&tenant, name)
+                    .await?
+                    .file_format_options
+            }
+        };
+        Ok(opt)
     }
 
     /// Fetch a Table by db and table name.

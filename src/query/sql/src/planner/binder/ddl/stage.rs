@@ -135,7 +135,7 @@ impl Binder {
         options: &BTreeMap<String, String>,
     ) -> Result<FileFormatOptions> {
         let opt = if let Some(name) = options.get("format_name") {
-            self.ctx.get_file_format(name).await?.file_format_options
+            self.ctx.get_file_format(name).await?
         } else {
             FileFormatOptions::from_map(options)?
         };
