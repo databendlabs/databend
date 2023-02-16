@@ -101,7 +101,6 @@ impl Processor for ExchangeSourceReader {
         }
 
         if !self.finished {
-            // println!("finished reader");
             self.finished = true;
             self.flight_exchange.close_input().await;
         }

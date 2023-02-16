@@ -17,8 +17,6 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::pipe::Pipe;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
@@ -41,7 +39,7 @@ impl ExchangeSink {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let exchange_manager = ctx.get_exchange_manager();
-        let flight_exchange = exchange_manager.get_flight_exchanges(params)?;
+        let mut flight_exchanges = exchange_manager.get_flight_exchanges(params)?;
 
         match params {
             ExchangeParams::MergeExchange(params) => {
@@ -62,33 +60,25 @@ impl ExchangeSink {
                     ))
                 })?;
 
-                assert_eq!(flight_exchange.len(), 1);
-                let mut items = Vec::with_capacity(flight_exchange.len());
-                for flight_exchange in flight_exchange {
-                    let input = InputPort::create();
-                    items.push(PipeItem::create(
-                        ProcessorPtr::create(ExchangeWriterSink::create(
-                            input.clone(),
-                            flight_exchange,
-                        )),
-                        vec![input],
-                        vec![],
-                    ));
-                }
-
-                pipeline.add_pipe(Pipe::create(1, 0, items));
-                Ok(())
+                assert_eq!(flight_exchanges.len(), 1);
+                let flight_exchange = flight_exchanges.remove(0);
+                pipeline.add_sink(|input| {
+                    Ok(ProcessorPtr::create(ExchangeWriterSink::create(
+                        input,
+                        flight_exchange.clone(),
+                    )))
+                })
             }
             ExchangeParams::ShuffleExchange(params) => {
                 exchange_shuffle(params, pipeline)?;
 
                 // exchange serialize transform
-                let len = flight_exchange.len();
+                let len = flight_exchanges.len();
                 let items = create_serializer_items(len, &params.schema);
                 pipeline.add_pipe(Pipe::create(len, len, items));
 
                 // exchange writer sink
-                let items = create_writer_items(flight_exchange);
+                let items = create_writer_items(flight_exchanges);
                 pipeline.add_pipe(Pipe::create(len, 0, items));
                 Ok(())
             }

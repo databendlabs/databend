@@ -333,18 +333,14 @@ pub struct FlightExchangeRef {
 
 impl Drop for FlightExchangeRef {
     fn drop(&mut self) {
-        if !matches!(self.inner, FlightExchange::Dummy) {
-            assert!(
-                self.is_closed_request.load(Ordering::Relaxed),
-                "Call close_input at least once before destroying the exchange."
-            );
-        }
-
-        if !matches!(self.inner, FlightExchange::Dummy) {
-            assert!(
-                self.is_closed_response.load(Ordering::Relaxed),
-                "Call close_output at least once before destroying the exchange."
-            );
+        // Blocking is ok, because the channel may not be closed when has error in query execution.
+        if !(self.is_closed_request.load(Ordering::Relaxed)
+            && self.is_closed_response.load(Ordering::Relaxed))
+        {
+            futures::executor::block_on(async move {
+                self.close_input().await;
+                self.close_output().await;
+            });
         }
     }
 }
