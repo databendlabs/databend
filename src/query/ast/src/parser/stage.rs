@@ -97,6 +97,7 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
     let string_options = map(
         rule! {
             (TYPE
+                | FORMAT_NAME
                 | COMPRESSION
                 | RECORD_DELIMITER
                 | FIELD_DELIMITER

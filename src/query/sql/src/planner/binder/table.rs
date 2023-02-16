@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::default::Default;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use chrono::TimeZone;
@@ -312,12 +311,11 @@ impl Binder {
                     }
                 };
 
-                let file_format = match &options.file_format {
-                    Some(f) => StageFileFormatType::from_str(f)?,
-                    None => user_stage_info.file_format_options.format.clone(),
+                let file_format_options = match &options.file_format {
+                    Some(f) => self.ctx.get_file_format(f).await?,
+                    None => user_stage_info.file_format_options.clone(),
                 };
-
-                if matches!(file_format, StageFileFormatType::Parquet) {
+                if matches!(file_format_options.format, StageFileFormatType::Parquet) {
                     let files_info = StageFilesInfo {
                         path,
                         pattern: options.pattern.clone(),
