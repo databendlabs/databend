@@ -24,27 +24,40 @@ use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 
+use crate::statistics::ColumnStatisticsLite;
+
 pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     stats_of_columns: &[T],
-    distinct_values_of_cols: Option<&HashMap<ColumnId, u64>>,
+    col_stats_lites: Option<&HashMap<ColumnId, ColumnStatisticsLite>>,
 ) -> Result<StatisticsOfColumns> {
     // Combine statistics of a column into `Vec`, that is:
     // from : `&[HashMap<ColumnId, ColumnStatistics>]`
     // to   : `HashMap<ColumnId, Vec<&ColumnStatistics>)>`
     let col_to_stats_lit = stats_of_columns.iter().fold(HashMap::new(), |acc, item| {
-        item.borrow().iter().fold(
-            acc,
-            |mut acc: HashMap<ColumnId, Vec<&ColumnStatistics>>, (col_id, col_stats)| {
-                acc.entry(*col_id).or_default().push(col_stats);
-                acc
-            },
-        )
+        item.borrow()
+            .iter()
+            // ignore dropped column statistics by column id
+            .filter(|(col_id, _col_stats)| {
+                if let Some(col_stats_lite) = col_stats_lites {
+                    col_stats_lite.contains_key(col_id)
+                } else {
+                    true
+                }
+            })
+            .fold(
+                acc,
+                |mut acc: HashMap<ColumnId, Vec<&ColumnStatistics>>, (col_id, col_stats)| {
+                    acc.entry(*col_id).or_default().push(col_stats);
+                    acc
+                },
+            )
     });
 
     // Reduce the `Vec<&ColumnStatistics` into ColumnStatistics`, i.e.:
     // from : `HashMap<ColumnId, Vec<&ColumnStatistics>)>`
     // to   : `type BlockStatistics = HashMap<ColumnId, ColumnStatistics>`
-    let len = stats_of_columns.len();
+    let len = col_to_stats_lit.len();
+    let stats_len = stats_of_columns.len();
     col_to_stats_lit
         .iter()
         .try_fold(HashMap::with_capacity(len), |mut acc, (id, stats)| {
@@ -52,6 +65,7 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
             let mut max_stats = Vec::with_capacity(stats.len());
             let mut null_count = 0;
             let mut in_memory_size = 0;
+            let mut distinct_of_values = None;
 
             for col_stats in stats {
                 min_stats.push(col_stats.min.clone());
@@ -59,6 +73,19 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
 
                 null_count += col_stats.null_count;
                 in_memory_size += col_stats.in_memory_size;
+            }
+
+            if let Some(stats) = col_stats_lites {
+                if let Some(stat) = stats.get(id) {
+                    // fill the default value for min max.
+                    if stats.len() < stats_len {
+                        min_stats.push(stat.default_val.clone());
+                        max_stats.push(stat.default_val.clone());
+                    }
+                    null_count = stat.null_count;
+                    in_memory_size = stat.in_memory_size;
+                    distinct_of_values = Some(stat.distinct_of_values);
+                };
             }
 
             // TODO:
@@ -80,8 +107,6 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
                 .max_by(|&x, &y| x.cmp(y))
                 .cloned()
                 .unwrap_or(Scalar::Null);
-
-            let distinct_of_values = distinct_values_of_cols.and_then(|map| map.get(id).cloned());
 
             acc.insert(*id, ColumnStatistics {
                 min,

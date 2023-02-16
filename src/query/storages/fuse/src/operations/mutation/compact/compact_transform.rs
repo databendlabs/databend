@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
@@ -25,10 +24,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
-use common_expression::ColumnId;
 use common_expression::DataBlock;
-use common_expression::FieldIndex;
-use common_expression::Scalar;
 use common_expression::TableSchemaRef;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use opendal::Operator;
@@ -36,7 +32,6 @@ use storages_common_blocks::blocks_to_parquet;
 use storages_common_cache_manager::CacheManager;
 use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 use storages_common_table_meta::table::TableCompression;
@@ -58,7 +53,7 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
-use crate::statistics::gen_distinct_of_values;
+use crate::statistics::gen_col_stats_lite;
 use crate::statistics::reduce_block_statistics;
 use crate::statistics::reducers::reduce_block_metas;
 
@@ -96,8 +91,6 @@ pub struct CompactTransform {
     location_gen: TableMetaLocationGenerator,
     dal: Operator,
     schema: TableSchemaRef,
-    col_default_vals: HashMap<ColumnId, (FieldIndex, Scalar)>,
-    column_ids: HashMap<FieldIndex, ColumnId>,
 
     // Limit the memory size of the block read.
     max_memory: u64,
@@ -121,7 +114,6 @@ impl CompactTransform {
         location_gen: TableMetaLocationGenerator,
         dal: Operator,
         schema: TableSchemaRef,
-        col_default_vals: HashMap<ColumnId, (FieldIndex, Scalar)>,
         thresholds: BlockThresholds,
         write_settings: WriteSettings,
     ) -> Result<ProcessorPtr> {
@@ -130,12 +122,6 @@ impl CompactTransform {
         let max_threads = settings.get_max_threads()?;
         let max_memory = max_memory_usage / max_threads;
         let max_io_requests = settings.get_max_storage_io_requests()? as usize;
-        let column_ids = col_default_vals
-            .iter()
-            .fold(HashMap::new(), |mut acc, (k, (i, _))| {
-                acc.insert(*i, *k);
-                acc
-            });
         Ok(ProcessorPtr::create(Box::new(CompactTransform {
             ctx,
             state: State::Consume,
@@ -147,8 +133,6 @@ impl CompactTransform {
             location_gen,
             dal,
             schema,
-            col_default_vals,
-            column_ids,
             max_memory,
             max_io_requests,
             compact_tasks: VecDeque::new(),
@@ -242,11 +226,13 @@ impl Processor for CompactTransform {
                     let compact_blocks: Vec<_> = blocks.drain(0..block_num).collect();
                     let new_block = DataBlock::concat(&compact_blocks)?;
 
-                    let distinct_values_of_cols =
-                        gen_distinct_of_values(&new_block, &self.column_ids)?;
+                    let col_stats_lites = gen_col_stats_lite(
+                        &new_block,
+                        self.block_reader.schema().fields(),
+                        &self.block_reader.default_vals,
+                    )?;
                     // generate block statistics.
-                    let col_stats =
-                        reduce_block_statistics(&stats, Some(&distinct_values_of_cols))?;
+                    let col_stats = reduce_block_statistics(&stats, Some(&col_stats_lites))?;
                     let row_count = new_block.num_rows() as u64;
                     let block_size = new_block.memory_size() as u64;
                     let (block_location, block_id) = self.location_gen.gen_block_location();
@@ -385,23 +371,7 @@ impl Processor for CompactTransform {
                         };
                         self.scan_progress.incr(&progress_values);
 
-                        let col_stats = self.col_default_vals.iter().fold(
-                            HashMap::new(),
-                            |mut acc, (id, (_, val))| {
-                                let stats =
-                                    meta.col_stats.get(id).cloned().unwrap_or(ColumnStatistics {
-                                        min: val.clone(),
-                                        max: val.clone(),
-                                        null_count: 0,
-                                        in_memory_size: val.as_ref().memory_size() as u64
-                                            * meta.row_count,
-                                        distinct_of_values: Some(1),
-                                    });
-                                acc.insert(*id, stats);
-                                acc
-                            },
-                        );
-                        meta_stats.push(col_stats);
+                        meta_stats.push(meta.col_stats.clone());
                         let settings = ReadSettings::from_ctx(&self.ctx)?;
 
                         // read block in parallel.
