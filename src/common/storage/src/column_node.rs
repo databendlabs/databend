@@ -150,6 +150,10 @@ impl ColumnNode {
         }
     }
 
+    pub fn has_children(&self) -> bool {
+        self.children.is_some()
+    }
+
     pub fn build_leaf_column_ids(&mut self, leaf_column_ids: &Vec<u32>) {
         let mut node_leaf_column_ids = Vec::with_capacity(self.leaf_indices.len());
         for index in &self.leaf_indices {
