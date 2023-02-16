@@ -37,12 +37,8 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
         item.borrow()
             .iter()
             // ignore dropped column statistics by column id
-            .filter(|(col_id, _col_stats)| {
-                if let Some(col_stats_lite) = col_stats_lites {
-                    col_stats_lite.contains_key(col_id)
-                } else {
-                    true
-                }
+            .filter(|(col_id, _)| {
+                col_stats_lites.map_or(true, |col_stats_lite| col_stats_lite.contains_key(col_id))
             })
             .fold(
                 acc,
