@@ -813,7 +813,11 @@ fn test_env_config_obsoleted() -> Result<()> {
 }
 
 #[test]
-fn test_env_config_and_defaults() -> Result<()> {
+fn test_env_cache_config_and_defaults() -> Result<()> {
+    // test if one of the cache config option is overridden by environment variable
+    // default values of other cache config options are correct
+    //
+    // @see issue https://github.com/datafuselabs/databend/issues/10088
     temp_env::with_vars(
         vec![("CACHE_ENABLE_TABLE_META_CACHE", Some("true"))],
         || {
