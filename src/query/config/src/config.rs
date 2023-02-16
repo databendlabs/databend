@@ -1817,7 +1817,7 @@ impl TryInto<InnerLocalConfig> for LocalConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default, deny_unknown_fields)]
 pub struct CacheConfig {
     /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
@@ -1891,6 +1891,13 @@ pub struct CacheConfig {
     /// and the access pattern will benefit from caching, consider enabled this cache.
     #[clap(long = "cache-table-data-deserialized-data-bytes", default_value = "0")]
     pub table_data_deserialized_data_bytes: u64,
+}
+
+impl Default for CacheConfig {
+    fn default() -> Self {
+        // Here we should (have to) convert self from the default value of  inner::CacheConfig :(
+        super::inner::CacheConfig::default().into()
+    }
 }
 
 #[inline]
