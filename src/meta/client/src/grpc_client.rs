@@ -37,7 +37,6 @@ use common_grpc::ConnectionFactory;
 use common_grpc::GrpcConnectionError;
 use common_grpc::RpcClientConf;
 use common_grpc::RpcClientTlsConfig;
-use common_meta_kvapi::kvapi::KVApi;
 use common_meta_types::anyerror::AnyError;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::ClientInfo;
