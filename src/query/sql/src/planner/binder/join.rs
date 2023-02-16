@@ -455,7 +455,7 @@ impl<'a> JoinConditionResolver<'a> {
 
         let mut added = if let Some((left, right)) = split_equivalent_predicate_expr(predicate) {
             let mut scalar_binder = ScalarBinder::new(
-                &self.join_context,
+                self.join_context,
                 self.ctx.clone(),
                 self.name_resolution_ctx,
                 self.metadata.clone(),
@@ -471,7 +471,7 @@ impl<'a> JoinConditionResolver<'a> {
             added = self.add_other_conditions(predicate).await?;
             if !added {
                 let mut scalar_binder = ScalarBinder::new(
-                    &self.join_context,
+                    self.join_context,
                     self.ctx.clone(),
                     self.name_resolution_ctx,
                     self.metadata.clone(),
