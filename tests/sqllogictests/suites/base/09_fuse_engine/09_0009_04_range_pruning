@@ -1,0 +1,42 @@
+# for issue which addressed in PR #10070 (https://github.com/datafuselabs/databend/pull/10070)
+statement ok
+DROP DATABASE IF EXISTS db_09_0009_04
+
+statement ok
+CREATE DATABASE db_09_0009_04
+
+statement ok
+USE db_09_0009_04
+
+statement ok
+create table range_test_t(a int)
+
+statement ok
+insert into range_test_t values(1),(2)
+
+statement ok
+alter table range_test_t add column b int default 0
+
+statement ok
+insert into range_test_t values(3,3),(4,4)
+
+query II
+select * from range_test_t where b=0 order by a
+----
+1 0
+2 0
+
+statement ok
+optimize table range_test_t compact
+
+query II
+select * from range_test_t where b=0 order by a
+----
+1 0
+2 0
+
+statement ok
+drop table range_test_t
+
+statement ok
+DROP DATABASE db_09_0009_04
