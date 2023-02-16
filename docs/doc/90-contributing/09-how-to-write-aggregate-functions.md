@@ -4,8 +4,6 @@ title: How to Write an Aggregate Function
 
 An aggregate function, or aggregation function, is a function that combines values from multiple rows to form a single summary value. Common aggregate functions include sum, count, avg, and others.
 
-## How to write aggregate functions
-
 Databend allows you to customize your own aggregate functions with Rust. It's not an easy way because you need to be a rustacean first.
 
 Databend has a plan to support writing UDAFs in other languages(like js, web assembly) in the future.
