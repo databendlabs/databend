@@ -30,6 +30,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 
 use crate::binder::join::JoinConditions;
 use crate::binder::scalar_common::split_conjunctions;
@@ -299,6 +300,7 @@ impl Binder {
                     let data_type = common_super_type(
                         *left_col.data_type.clone(),
                         *right_col.data_type.clone(),
+                        &BUILTIN_FUNCTIONS.default_cast_rules,
                     )
                     .expect("SetOperation's types cannot be matched");
                     coercion_types.push(data_type);

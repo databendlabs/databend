@@ -28,7 +28,7 @@ use crate::function::FunctionSignature;
 use crate::types::number::NumberDataType;
 use crate::types::number::NumberScalar;
 use crate::types::DataType;
-use crate::AutoCastSignature;
+use crate::AutoCastRules;
 use crate::ColumnIndex;
 use crate::Scalar;
 
@@ -209,14 +209,11 @@ pub fn check_function<Index: ColumnIndex>(
         );
     }
 
-    let additional_rules = fn_registry
-        .get_casting_rules(name)
-        .cloned()
-        .unwrap_or_default();
+    let auto_cast_rules = fn_registry.get_auto_cast_rules(name);
 
     let mut fail_resaons = Vec::with_capacity(candidates.len());
     for (id, func) in &candidates {
-        match try_check_function(args, &func.signature, &additional_rules, fn_registry) {
+        match try_check_function(args, &func.signature, auto_cast_rules, fn_registry) {
             Ok((checked_args, return_type, generics)) => {
                 return Ok(Expr::FunctionCall {
                     span,
@@ -286,14 +283,15 @@ impl Substitution {
         subst
     }
 
-    pub fn merge(mut self, other: Self) -> Result<Self> {
+    pub fn merge(mut self, other: Self, auto_cast_rules: AutoCastRules) -> Result<Self> {
         for (idx, ty2) in other.0 {
             if let Some(ty1) = self.0.remove(&idx) {
-                let common_ty = common_super_type(ty2.clone(), ty1.clone()).ok_or_else(|| {
-                    ErrorCode::from_string_no_backtrace(format!(
-                        "unable to find a common super type for `{ty1}` and `{ty2}`"
-                    ))
-                })?;
+                let common_ty = common_super_type(ty2.clone(), ty1.clone(), auto_cast_rules)
+                    .ok_or_else(|| {
+                        ErrorCode::from_string_no_backtrace(format!(
+                            "unable to find a common super type for `{ty1}` and `{ty2}`"
+                        ))
+                    })?;
                 self.0.insert(idx, common_ty);
             } else {
                 self.0.insert(idx, ty2);
@@ -326,7 +324,7 @@ impl Substitution {
 pub fn try_check_function<Index: ColumnIndex>(
     args: &[Expr<Index>],
     sig: &FunctionSignature,
-    additional_rules: &AutoCastSignature,
+    auto_cast_rules: AutoCastRules,
     fn_registry: &FunctionRegistry,
 ) -> Result<(Vec<Expr<Index>>, DataType, Vec<DataType>)> {
     assert_eq!(args.len(), sig.args_type.len());
@@ -335,12 +333,12 @@ pub fn try_check_function<Index: ColumnIndex>(
         .iter()
         .map(Expr::data_type)
         .zip(&sig.args_type)
-        .map(|(src_ty, dest_ty)| unify(src_ty, dest_ty, additional_rules))
+        .map(|(src_ty, dest_ty)| unify(src_ty, dest_ty, auto_cast_rules))
         .collect::<Result<Vec<_>>>()?;
 
     let subst = substs
         .into_iter()
-        .try_reduce(|subst1, subst2| subst1.merge(subst2))?
+        .try_reduce(|subst1, subst2| subst1.merge(subst2, auto_cast_rules))?
         .unwrap_or_else(Substitution::empty);
 
     let checked_args = args
@@ -377,7 +375,7 @@ pub fn try_check_function<Index: ColumnIndex>(
 pub fn unify(
     src_ty: &DataType,
     dest_ty: &DataType,
-    additional_rules: &AutoCastSignature,
+    auto_cast_rules: AutoCastRules,
 ) -> Result<Substitution> {
     match (src_ty, dest_ty) {
         (DataType::Generic(_), _) => unreachable!("source type must not contain generic type"),
@@ -385,11 +383,11 @@ pub fn unify(
         (DataType::Null, DataType::Nullable(_)) => Ok(Substitution::empty()),
         (DataType::EmptyArray, DataType::Array(_)) => Ok(Substitution::empty()),
         (DataType::Nullable(src_ty), DataType::Nullable(dest_ty)) => {
-            unify(src_ty, dest_ty, additional_rules)
+            unify(src_ty, dest_ty, auto_cast_rules)
         }
-        (src_ty, DataType::Nullable(dest_ty)) => unify(src_ty, dest_ty, additional_rules),
+        (src_ty, DataType::Nullable(dest_ty)) => unify(src_ty, dest_ty, auto_cast_rules),
         (DataType::Array(src_ty), DataType::Array(dest_ty)) => {
-            unify(src_ty, dest_ty, additional_rules)
+            unify(src_ty, dest_ty, auto_cast_rules)
         }
         (DataType::Tuple(src_tys), DataType::Tuple(dest_tys))
             if src_tys.len() == dest_tys.len() =>
@@ -397,20 +395,15 @@ pub fn unify(
             let substs = src_tys
                 .iter()
                 .zip(dest_tys)
-                .map(|(src_ty, dest_ty)| unify(src_ty, dest_ty, additional_rules))
+                .map(|(src_ty, dest_ty)| unify(src_ty, dest_ty, auto_cast_rules))
                 .collect::<Result<Vec<_>>>()?;
             let subst = substs
                 .into_iter()
-                .try_reduce(|subst1, subst2| subst1.merge(subst2))?
+                .try_reduce(|subst1, subst2| subst1.merge(subst2, auto_cast_rules))?
                 .unwrap_or_else(Substitution::empty);
             Ok(subst)
         }
-        (src_ty, dest_ty) if can_auto_cast_to(src_ty, dest_ty) => Ok(Substitution::empty()),
-        (src_ty, dest_ty)
-            if additional_rules
-                .iter()
-                .any(|(src, dest)| src == src_ty && dest == dest_ty) =>
-        {
+        (src_ty, dest_ty) if can_auto_cast_to(src_ty, dest_ty, auto_cast_rules) => {
             Ok(Substitution::empty())
         }
         _ => Err(ErrorCode::from_string_no_backtrace(format!(
@@ -420,69 +413,92 @@ pub fn unify(
     }
 }
 
-pub fn can_auto_cast_to(src_ty: &DataType, dest_ty: &DataType) -> bool {
+pub fn can_auto_cast_to(
+    src_ty: &DataType,
+    dest_ty: &DataType,
+    auto_cast_rules: AutoCastRules,
+) -> bool {
     match (src_ty, dest_ty) {
         (src_ty, dest_ty) if src_ty == dest_ty => true,
+        (src_ty, dest_ty)
+            if auto_cast_rules
+                .iter()
+                .any(|(src, dest)| src == src_ty && dest == dest_ty) =>
+        {
+            true
+        }
         (DataType::Null, DataType::Nullable(_)) => true,
         (DataType::EmptyArray, DataType::Array(_)) => true,
         (DataType::Nullable(src_ty), DataType::Nullable(dest_ty)) => {
-            can_auto_cast_to(src_ty, dest_ty)
+            can_auto_cast_to(src_ty, dest_ty, auto_cast_rules)
         }
-        (src_ty, DataType::Nullable(dest_ty)) => can_auto_cast_to(src_ty, dest_ty),
-        (DataType::Array(src_ty), DataType::Array(dest_ty)) => can_auto_cast_to(src_ty, dest_ty),
-        (DataType::Number(src_num_ty), DataType::Number(dest_num_ty)) => {
-            // all integer types can cast to int64
-            (*dest_num_ty == NumberDataType::Int64 && !src_num_ty.is_float())
-            // all numeric types can cast to float64
-            || *dest_num_ty == NumberDataType::Float64
-            || src_num_ty.can_lossless_cast_to(*dest_num_ty)
+        (src_ty, DataType::Nullable(dest_ty)) => can_auto_cast_to(src_ty, dest_ty, auto_cast_rules),
+        (DataType::Array(src_ty), DataType::Array(dest_ty)) => {
+            can_auto_cast_to(src_ty, dest_ty, auto_cast_rules)
         }
-
+        (DataType::Tuple(src_tys), DataType::Tuple(dest_tys))
+            if src_tys.len() == dest_tys.len() =>
+        {
+            src_tys
+                .iter()
+                .zip(dest_tys)
+                .all(|(src_ty, dest_ty)| can_auto_cast_to(src_ty, dest_ty, auto_cast_rules))
+        }
         (DataType::Number(_) | DataType::Decimal(_), DataType::Decimal(_)) => true,
-
-        // Note: comment these because : select 'str' -1 will auto transform into: `minus(CAST('str' AS Date), CAST(1 AS Int64))`
-        // (DataType::String, DataType::Date) => true,
-        // (DataType::String, DataType::Timestamp) => true,
-
-        // Note: integer can't auto cast to boolean, because 1 = 2 will auto transform into: `true = true` if the register order is not correct
-        // (DataType::Number(_), DataType::Boolean) => true,
-
-        // Note: Variant is not super type any more, because '1' > 3 will auto transform into: `gt(CAST("1" AS Variant), CAST(3 AS Variant))`
-        // (_, DataType::Variant) => true,
         _ => false,
     }
 }
 
-pub fn common_super_type(ty1: DataType, ty2: DataType) -> Option<DataType> {
+pub fn common_super_type(
+    ty1: DataType,
+    ty2: DataType,
+    auto_cast_rules: AutoCastRules,
+) -> Option<DataType> {
     match (ty1, ty2) {
-        (ty1, ty2) if ty1 == ty2 => Some(ty1),
+        (ty1, ty2) if can_auto_cast_to(&ty1, &ty2, auto_cast_rules) => Some(ty2),
+        (ty1, ty2) if can_auto_cast_to(&ty2, &ty1, auto_cast_rules) => Some(ty1),
         (DataType::Null, ty @ DataType::Nullable(_))
         | (ty @ DataType::Nullable(_), DataType::Null) => Some(ty),
         (DataType::Null, ty) | (ty, DataType::Null) => Some(DataType::Nullable(Box::new(ty))),
         (DataType::Nullable(box ty1), DataType::Nullable(box ty2))
         | (DataType::Nullable(box ty1), ty2)
-        | (ty1, DataType::Nullable(box ty2)) => {
-            Some(DataType::Nullable(Box::new(common_super_type(ty1, ty2)?)))
-        }
+        | (ty1, DataType::Nullable(box ty2)) => Some(DataType::Nullable(Box::new(
+            common_super_type(ty1, ty2, auto_cast_rules)?,
+        ))),
         (DataType::EmptyArray, ty @ DataType::Array(_))
         | (ty @ DataType::Array(_), DataType::EmptyArray) => Some(ty),
-        (DataType::Array(box ty1), DataType::Array(box ty2)) => {
-            Some(DataType::Array(Box::new(common_super_type(ty1, ty2)?)))
+        (DataType::Array(box ty1), DataType::Array(box ty2)) => Some(DataType::Array(Box::new(
+            common_super_type(ty1, ty2, auto_cast_rules)?,
+        ))),
+        (DataType::Tuple(tys1), DataType::Tuple(tys2)) if tys1.len() == tys2.len() => {
+            let tys = tys1
+                .into_iter()
+                .zip(tys2)
+                .map(|(ty1, ty2)| common_super_type(ty1, ty2, auto_cast_rules))
+                .collect::<Option<Vec<_>>>()?;
+            Some(DataType::Tuple(tys))
         }
-        (DataType::Number(num1), DataType::Number(num2)) => {
-            Some(DataType::Number(num1.super_type(num2)))
+        // todo!("decimal")
+        // (
+        //     DataType::Number(_) | DataType::Decimal(_),
+        //     DataType::Number(_) | DataType::Decimal(_),
+        // ) =>  DataType::Decimal(?),
+        (ty1, ty2) => {
+            let ty1_can_cast_to = auto_cast_rules
+                .iter()
+                .filter(|(src, _)| *src == ty1)
+                .map(|(_, dest)| dest)
+                .collect::<Vec<_>>();
+            let ty2_can_cast_to = auto_cast_rules
+                .iter()
+                .filter(|(src, _)| *src == ty2)
+                .map(|(_, dest)| dest)
+                .collect::<Vec<_>>();
+            ty1_can_cast_to
+                .into_iter()
+                .find(|ty| ty2_can_cast_to.contains(ty))
+                .cloned()
         }
-
-        (DataType::String, DataType::Timestamp) | (DataType::Timestamp, DataType::String) => {
-            Some(DataType::Timestamp)
-        }
-        (DataType::String, DataType::Date) | (DataType::Date, DataType::String) => {
-            Some(DataType::Date)
-        }
-        (DataType::Date, DataType::Timestamp) | (DataType::Timestamp, DataType::Date) => {
-            Some(DataType::Timestamp)
-        }
-        _ => Some(DataType::Variant),
     }
 }
 

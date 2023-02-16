@@ -47,7 +47,7 @@ pub struct FunctionSignature {
     pub property: FunctionProperty,
 }
 
-pub type AutoCastSignature = Vec<(DataType, DataType)>;
+pub type AutoCastRules<'a> = &'a [(DataType, DataType)];
 
 #[derive(Clone, Copy, Default)]
 pub struct FunctionContext {
@@ -179,12 +179,14 @@ pub struct FunctionRegistry {
     /// Aliases map from alias function name to original function name.
     pub aliases: HashMap<String, String>,
 
-    /// fn name to cast signatures
-    pub auto_cast_signatures: HashMap<String, AutoCastSignature>,
+    /// Default cast rules for all functions.
+    pub default_cast_rules: Vec<(DataType, DataType)>,
+    /// Extra cast rules for specific functions, including the default cast rules.
+    pub additional_cast_rules: HashMap<String, Vec<(DataType, DataType)>>,
 }
 
 impl FunctionRegistry {
-    pub fn new() -> Self {
+    pub fn empty() -> Self {
         Self::default()
     }
 
@@ -217,10 +219,6 @@ impl FunctionRegistry {
                 factory(params, args_type)
             }
         }
-    }
-
-    pub fn get_casting_rules(&self, func_name: &str) -> Option<&AutoCastSignature> {
-        self.auto_cast_signatures.get(func_name)
     }
 
     pub fn search_candidates<Index: ColumnIndex>(
@@ -273,6 +271,12 @@ impl FunctionRegistry {
         candidates
     }
 
+    pub fn get_auto_cast_rules(&self, func_name: &str) -> &[(DataType, DataType)] {
+        self.additional_cast_rules
+            .get(func_name)
+            .unwrap_or(&self.default_cast_rules)
+    }
+
     pub fn register_function_factory(
         &mut self,
         name: &str,
@@ -290,11 +294,19 @@ impl FunctionRegistry {
         }
     }
 
-    pub fn register_auto_cast_signatures(&mut self, fn_name: &str, signatures: AutoCastSignature) {
-        self.auto_cast_signatures
+    pub fn register_default_cast_rules(&mut self, default_cast_rules: Vec<(DataType, DataType)>) {
+        self.default_cast_rules.extend(default_cast_rules);
+    }
+
+    pub fn register_additional_cast_rules(
+        &mut self,
+        fn_name: &str,
+        additional_cast_rules: Vec<(DataType, DataType)>,
+    ) {
+        self.additional_cast_rules
             .entry(fn_name.to_string())
-            .or_insert_with(Vec::new)
-            .extend(signatures);
+            .or_insert_with(|| self.default_cast_rules.clone())
+            .extend(additional_cast_rules);
     }
 }
 

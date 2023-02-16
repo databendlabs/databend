@@ -258,8 +258,8 @@ fn register_number_hash(registry: &mut FunctionRegistry) {
 }
 
 fn register_date_hash(registry: &mut FunctionRegistry) {
-    register_simple_domain_type_hash!(registry, TimestampType);
     register_simple_domain_type_hash!(registry, DateType);
+    register_simple_domain_type_hash!(registry, TimestampType);
 }
 
 fn register_string_hash(registry: &mut FunctionRegistry) {

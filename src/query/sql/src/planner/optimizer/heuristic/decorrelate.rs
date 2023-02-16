@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
@@ -170,8 +171,12 @@ impl SubqueryRewriter {
                         right_conditions.push(right.clone());
                         continue;
                     }
-                    let join_type = common_super_type(left.data_type(), right.data_type())
-                        .ok_or_else(|| ErrorCode::Internal("Cannot find common type"))?;
+                    let join_type = common_super_type(
+                        left.data_type(),
+                        right.data_type(),
+                        &BUILTIN_FUNCTIONS.default_cast_rules,
+                    )
+                    .ok_or_else(|| ErrorCode::Internal("Cannot find common type"))?;
                     let left = wrap_cast(left, &join_type);
                     let right = wrap_cast(right, &join_type);
                     left_conditions.push(left);
