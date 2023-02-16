@@ -17,6 +17,7 @@ use std::env::temp_dir;
 use std::fs;
 use std::io::Write;
 
+use common_config::CacheConfig;
 use common_config::CacheStorageTypeConfig;
 use common_config::CatalogConfig;
 use common_config::CatalogHiveConfig;
@@ -808,5 +809,29 @@ fn test_env_config_obsoleted() -> Result<()> {
         });
     }
 
+    Ok(())
+}
+
+#[test]
+fn test_env_config_and_defaults() -> Result<()> {
+    temp_env::with_vars(
+        vec![("CACHE_ENABLE_TABLE_META_CACHE", Some("true"))],
+        || {
+            let configured = InnerConfig::load_for_test()
+                .expect("must success")
+                .into_config();
+
+            let default = CacheConfig::default();
+            assert!(configured.cache.enable_table_meta_cache);
+            assert_eq!(
+                default.table_meta_segment_count,
+                configured.cache.table_meta_segment_count
+            );
+            assert_eq!(
+                default.table_meta_snapshot_count,
+                configured.cache.table_meta_snapshot_count
+            );
+        },
+    );
     Ok(())
 }
