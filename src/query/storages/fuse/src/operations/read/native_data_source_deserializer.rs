@@ -20,8 +20,9 @@ use std::sync::Arc;
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::native::read::deserialize::column_iter_to_arrays;
+use common_arrow::native::read::column_iter_to_arrays;
 use common_arrow::native::read::reader::NativeReader;
+use common_arrow::native::read::ArrayIter;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
@@ -82,6 +83,9 @@ pub struct NativeDeserializeDataTransform {
     read_columns: Vec<usize>,
     top_k: Option<(TopK, TopKSorter, usize)>,
     topn_finish: bool,
+    array_iters: BTreeMap<usize, ArrayIter<'static>>,
+    // the page numbers of each array_iter can skip.
+    array_skips: BTreeMap<usize, usize>,
 }
 
 impl NativeDeserializeDataTransform {
@@ -171,6 +175,8 @@ impl NativeDeserializeDataTransform {
                 top_k,
                 topn_finish: false,
                 read_columns: vec![],
+                array_iters: BTreeMap::new(),
+                array_skips: BTreeMap::new(),
             },
         )))
     }
@@ -223,48 +229,29 @@ impl NativeDeserializeDataTransform {
         }
     }
 
-    // read all arrays from NativeReader, skip filtered pages by bitmap
-    fn read_arrays(
+    fn build_array_iter(
         column_node: &ColumnNode,
         leaves: Vec<ColumnDescriptor>,
         readers: Vec<NativeReader<Box<dyn NativeReaderExt>>>,
-        skip_bitmap: Option<Bitmap>,
-    ) -> Result<BTreeMap<usize, Box<dyn Array>>> {
+    ) -> Result<ArrayIter<'static>> {
         let field = column_node.field.clone();
         let is_nested = column_node.is_nested;
-        let skipped_readers = match skip_bitmap {
-            Some(ref skip_bitmap) => readers
-                .into_iter()
-                .map(|mut reader| {
-                    reader.set_skip_pages(skip_bitmap.clone());
-                    reader
-                })
-                .collect::<Vec<_>>(),
-            None => readers,
-        };
+        match column_iter_to_arrays(readers, leaves, field, is_nested) {
+            Ok(array_iter) => Ok(array_iter),
+            Err(err) => Err(err.into()),
+        }
+    }
 
-        let mut array_iter = match column_iter_to_arrays(skipped_readers, leaves, field, is_nested)
-        {
-            Ok(array_iter) => array_iter,
-            Err(err) => return Err(err.into()),
-        };
-
-        let mut arrays = BTreeMap::new();
-        if let Some(skip_bitmap) = skip_bitmap {
-            for (i, is_skip) in skip_bitmap.iter().enumerate() {
-                if is_skip {
-                    continue;
-                } else {
-                    let array = array_iter.next().unwrap();
-                    arrays.insert(i, array?);
-                }
+    fn skip_chunks_page(read_columns: &[usize], chunks: &mut DataChunks) -> Result<()> {
+        for (index, readers) in chunks.iter_mut() {
+            if read_columns.contains(&index) {
+                continue;
             }
-        } else {
-            for (i, array) in array_iter.enumerate() {
-                arrays.insert(i, array?);
+            for reader in readers {
+                reader.skip_page()?;
             }
         }
-        Ok(arrays)
+        Ok(())
     }
 }
 
@@ -340,54 +327,67 @@ impl Processor for NativeDeserializeDataTransform {
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(mut chunks) = self.chunks.pop_front() {
-            let part = self.parts.pop_front().unwrap();
-            let part = FusePartInfo::from_part(&part)?;
+        if let Some(chunks) = self.chunks.front_mut() {
             // this means it's empty projection
-            if chunks.is_empty() {
+            if chunks.is_empty() && self.array_iters.is_empty() {
+                let _ = self.chunks.pop_front();
+                let part = self.parts.pop_front().unwrap();
+                let part = FusePartInfo::from_part(&part)?;
                 let num_rows = part.nums_rows;
                 let data_block = self.block_reader.build_default_values_block(num_rows)?;
                 self.add_block(data_block)?;
                 return Ok(());
             }
 
-            // init skip pages bitmap
-            let meta = part.columns_meta.values().last().unwrap();
-            let mut native_meta = meta.as_native().unwrap().clone();
-            if let Some(range) = &part.range {
-                native_meta = native_meta.slice(range.start, range.end);
-            }
-            let pages_num = native_meta.pages.len();
-            let mut skip_pages = MutableBitmap::from_len_zeroed(pages_num);
-
             let mut arrays = Vec::with_capacity(chunks.len());
             self.read_columns.clear();
+
             // Step 1: Check TOP_K, if prewhere_columns contains not only TOP_K, we can check if TOP_K column can satisfy the heap.
             if self.prewhere_columns.len() > 1 {
                 if let Some((top_k, sorter, index)) = self.top_k.as_mut() {
-                    let column_node = &self.block_reader.project_column_nodes[*index];
-                    let leaves = self.column_leaves.get(*index).unwrap().clone();
-                    let readers = chunks.remove(index).unwrap();
-                    let curr_arrays = Self::read_arrays(column_node, leaves, readers, None)?;
-                    if curr_arrays.is_empty() {
-                        // No data anymore
-                        self.check_topn();
-                        // check finished
-                        return Ok(());
-                    }
-                    let data_type = top_k.order_by.data_type().into();
-                    for (i, curr_array) in curr_arrays.iter() {
-                        let col = Column::from_arrow(curr_array.as_ref(), &data_type);
-                        if sorter.never_match_any(&col) {
-                            self.skipped_page += 1;
-                            skip_pages.set(*i, true);
+                    let mut array_iter = match self.array_iters.remove(index) {
+                        Some(array_iter) => array_iter,
+                        None => {
+                            let column_node = &self.block_reader.project_column_nodes[*index];
+                            let leaves = self.column_leaves.get(*index).unwrap().clone();
+                            let readers = chunks.remove(index).unwrap();
+                            self.array_skips.insert(*index, 0);
+                            Self::build_array_iter(column_node, leaves, readers)?
+                        }
+                    };
+                    match array_iter.next() {
+                        Some(array) => {
+                            let array = array?;
+                            self.read_columns.push(*index);
+
+                            let data_type = top_k.order_by.data_type().into();
+                            let col = Column::from_arrow(array.as_ref(), &data_type);
+
+                            arrays.push((*index, array));
+                            self.array_iters.insert(*index, array_iter);
+
+                            if sorter.never_match_any(&col) {
+                                self.skipped_page += 1;
+                                for (_, skip_num) in self.array_skips.iter_mut() {
+                                    if self.read_columns.contains(i) {
+                                        continue;
+                                    }
+                                    *skip_num += 1;
+                                }
+                                return Self::skip_chunks_page(&self.read_columns, chunks);
+                            }
+                        }
+                        None => {
+                            // No data anymore
+                            let _ = self.chunks.pop_front();
+                            let _ = self.parts.pop_front().unwrap();
+
+                            self.check_topn();
+                            self.array_iters.clear();
+                            self.array_skips.clear();
+                            return Ok(());
                         }
                     }
-                    if skip_pages.unset_bits() == 0 {
-                        return Ok(());
-                    }
-                    self.read_columns.push(*index);
-                    arrays.push((*index, curr_arrays));
                 }
             }
 
@@ -396,37 +396,42 @@ impl Processor for NativeDeserializeDataTransform {
                 if self.read_columns.contains(index) {
                     continue;
                 }
-                let column_node = &self.block_reader.project_column_nodes[*index];
-                let leaves = self.column_leaves.get(*index).unwrap().clone();
-                let readers = chunks.remove(index).unwrap();
-                let skip_bitmap = if skip_pages.unset_bits() < skip_pages.len() {
-                    Some(Bitmap::from(skip_pages.clone()))
-                } else {
-                    None
+                let mut array_iter = match self.array_iters.remove(index) {
+                    Some(array_iter) => array_iter,
+                    None => {
+                        let column_node = &self.block_reader.project_column_nodes[*index];
+                        let leaves = self.column_leaves.get(*index).unwrap().clone();
+                        let readers = chunks.remove(index).unwrap();
+
+                        self.array_skips.insert(*index, 0);
+                        Self::build_array_iter(column_node, leaves, readers)?
+                    }
                 };
-                let curr_arrays = Self::read_arrays(column_node, leaves, readers, skip_bitmap)?;
-                if curr_arrays.is_empty() {
-                    // No data anymore
-                    self.check_topn();
-                    // check finished
-                    return Ok(());
+
+                let skip_pages = self.array_skips.get(index).unwrap_or_else(|| &0);
+                match array_iter.nth(*skip_pages) {
+                    Some(array) => {
+                        self.read_columns.push(*index);
+                        arrays.push((*index, array?));
+                        self.array_iters.insert(*index, array_iter);
+                        self.array_skips.insert(*index, 0);
+                    }
+                    None => {
+                        // No data anymore
+                        let _ = self.chunks.pop_front();
+                        let _ = self.parts.pop_front().unwrap();
+
+                        self.check_topn();
+                        self.array_iters.clear();
+                        self.array_skips.clear();
+                        return Ok(());
+                    }
                 }
-                self.read_columns.push(*index);
-                arrays.push((*index, curr_arrays));
             }
 
-            let mut filters = BTreeMap::new();
-            if let Some(filter) = self.prewhere_filter.as_ref() {
-                for i in 0..skip_pages.len() {
-                    let is_skip = skip_pages.get(i);
-                    if is_skip {
-                        continue;
-                    }
-                    let mut sub_arrays = Vec::with_capacity(arrays.len());
-                    for (index, curr_arrays) in &arrays {
-                        sub_arrays.push((*index, curr_arrays.get(&i).unwrap().clone()));
-                    }
-                    let prewhere_block = self.block_reader.build_block(sub_arrays)?;
+            let filter = match self.prewhere_filter.as_ref() {
+                Some(filter) => {
+                    let prewhere_block = self.block_reader.build_block(arrays.clone())?;
                     let evaluator =
                         Evaluator::new(&prewhere_block, self.func_ctx, &BUILTIN_FUNCTIONS);
                     let result = evaluator
@@ -437,80 +442,86 @@ impl Processor for NativeDeserializeDataTransform {
                     // Step 3: Apply the filter, if it's all filtered, we can skip the remain columns.
                     if FilterHelpers::is_all_unset(&filter) {
                         self.skipped_page += 1;
-                        skip_pages.set(i, true);
-                    } else {
-                        // Step 4: Apply the filter to topk and update the bitmap, this will filter more results
-                        let filter = if let Some((_, sorter, index)) = &mut self.top_k {
-                            let index_prewhere = self
-                                .prewhere_columns
-                                .iter()
-                                .position(|x| x == index)
-                                .unwrap();
-                            let top_k_column = prewhere_block
-                                .get_by_offset(index_prewhere)
-                                .value
-                                .as_column()
-                                .unwrap();
-
-                            let mut bitmap =
-                                FilterHelpers::filter_to_bitmap(filter, prewhere_block.num_rows());
-                            sorter.push_column(top_k_column, &mut bitmap);
-                            Value::Column(bitmap.into())
-                        } else {
-                            filter
-                        };
-                        if FilterHelpers::is_all_unset(&filter) {
-                            self.skipped_page += 1;
-                            skip_pages.set(i, true);
-                        } else {
-                            filters.insert(i, filter);
+                        for (i, skip_num) in self.array_skips.iter_mut() {
+                            if self.read_columns.contains(i) {
+                                continue;
+                            }
+                            *skip_num += 1;
                         }
+                        return Self::skip_chunks_page(&self.read_columns, chunks);
                     }
-                }
-                if skip_pages.unset_bits() == 0 {
-                    return Ok(());
-                }
-            }
 
-            // Step 5: Read remain columns and build block
+                    // Step 4: Apply the filter to topk and update the bitmap, this will filter more results
+                    let filter = if let Some((_, sorter, index)) = &mut self.top_k {
+                        let index_prewhere = self
+                            .prewhere_columns
+                            .iter()
+                            .position(|x| x == index)
+                            .unwrap();
+                        let top_k_column = prewhere_block
+                            .get_by_offset(index_prewhere)
+                            .value
+                            .as_column()
+                            .unwrap();
+
+                        let mut bitmap =
+                            FilterHelpers::filter_to_bitmap(filter, prewhere_block.num_rows());
+                        sorter.push_column(top_k_column, &mut bitmap);
+                        Value::Column(bitmap.into())
+                    } else {
+                        filter
+                    };
+
+                    if FilterHelpers::is_all_unset(&filter) {
+                        self.skipped_page += 1;
+                        for (i, skip_num) in self.array_skips.iter_mut() {
+                            if self.read_columns.contains(i) {
+                                continue;
+                            }
+                            *skip_num += 1;
+                        }
+                        return Self::skip_chunks_page(&self.read_columns, chunks);
+                    }
+                    Some(filter)
+                }
+                None => None,
+            };
+
             for index in self.remain_columns.iter() {
-                let column_node = &self.block_reader.project_column_nodes[*index];
-                let leaves = self.column_leaves.get(*index).unwrap().clone();
-                let readers = chunks.remove(index).unwrap();
-                let skip_bitmap = if skip_pages.unset_bits() < skip_pages.len() {
-                    Some(Bitmap::from(skip_pages.clone()))
-                } else {
-                    None
+                let mut array_iter = match self.array_iters.remove(index) {
+                    Some(array_iter) => array_iter,
+                    None => {
+                        let column_node = &self.block_reader.project_column_nodes[*index];
+                        let leaves = self.column_leaves.get(*index).unwrap().clone();
+                        let readers = chunks.remove(index).unwrap();
+
+                        self.array_skips.insert(*index, 0);
+                        Self::build_array_iter(column_node, leaves, readers)?
+                    }
                 };
-                let curr_arrays = Self::read_arrays(column_node, leaves, readers, skip_bitmap)?;
-                arrays.push((*index, curr_arrays));
-            }
-            let mut blocks = Vec::with_capacity(skip_pages.len() - skip_pages.unset_bits());
-            for (i, is_skip) in skip_pages.iter().enumerate() {
-                if is_skip {
-                    continue;
-                }
-                let mut sub_arrays = Vec::with_capacity(arrays.len());
-                for (index, curr_arrays) in &arrays {
-                    sub_arrays.push((*index, curr_arrays.get(&i).unwrap().clone()));
-                }
-                let block = self.block_reader.build_block(sub_arrays)?;
-                let mut block = block.resort(&self.src_schema, &self.output_schema)?;
-                if let Some(filter) = filters.remove(&i) {
-                    block = block.filter_boolean_value(filter)?;
-                }
-                blocks.push(block);
+
+                let skip_pages = self.array_skips.get(index).unwrap_or_else(|| &0);
+                let array = array_iter.nth(*skip_pages).unwrap();
+                arrays.push((*index, array?));
+                self.array_iters.insert(*index, array_iter);
+                self.array_skips.insert(*index, 0);
             }
 
-            let data_block = DataBlock::concat(&blocks)?;
+            let block = if let Some(filter) = filter {
+                let block = self.block_reader.build_block(arrays)?;
+                let block = block.resort(&self.src_schema, &self.output_schema)?;
+                block.filter_boolean_value(filter)?
+            } else {
+                self.block_reader.build_block(arrays)?
+            };
 
-            // Step 6: fill missing field default value if need
-            let data_block = self
+            // Step 5: fill missing field default value if need
+            let block = self
                 .block_reader
-                .fill_missing_native_column_values(data_block, part)?;
+                .fill_missing_native_column_values(block, &self.parts)?;
 
-            // Step 7: Add the block to output data
-            self.add_block(data_block)?;
+            // Step 6: Add the block to output data
+            self.add_block(block)?;
         }
 
         Ok(())

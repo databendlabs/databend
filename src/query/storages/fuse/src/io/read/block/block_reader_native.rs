@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::io::BufReader;
 use std::ops::Range;
 use std::time::Instant;
@@ -179,9 +180,10 @@ impl BlockReader {
     pub fn fill_missing_native_column_values(
         &self,
         data_block: DataBlock,
-        part: &FusePartInfo,
+        parts: &VecDeque<PartInfoPtr>,
     ) -> Result<DataBlock> {
-        // let part = FusePartInfo::from_part(&parts[0])?;
+        let part = FusePartInfo::from_part(&parts[0])?;
+        let column_nodes = self.projection.project_column_nodes(&self.column_nodes)?;
         let mut need_to_fill_data = false;
 
         let columns_meta = &part.columns_meta;
