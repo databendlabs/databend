@@ -1815,9 +1815,9 @@ impl TryInto<InnerLocalConfig> for LocalConfig {
 #[serde(default, deny_unknown_fields)]
 pub struct CacheConfig {
     /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
-    #[clap(long = "cache-enable-table-meta-caches", default_value = "true")]
+    #[clap(long = "cache-enable-table-meta-cache", default_value = "true")]
     #[serde(default = "bool_true")]
-    pub enable_table_meta_caches: bool,
+    pub enable_table_meta_cache: bool,
 
     /// Max number of cached table snapshot
     #[clap(long = "cache-table-meta-snapshot-count", default_value = "256")]
@@ -1832,9 +1832,9 @@ pub struct CacheConfig {
     pub table_meta_statistic_count: u64,
 
     /// Enable bloom index cache. Default is enabled. Set it to false to disable all the bloom index caches
-    #[clap(long = "cache-enable-table-bloom-index-caches", default_value = "true")]
+    #[clap(long = "cache-enable-table-bloom-index-cache", default_value = "true")]
     #[serde(default = "bool_true")]
-    pub enable_table_bloom_index_caches: bool,
+    pub enable_table_bloom_index_cache: bool,
 
     /// Max number of cached bloom index meta objects. Set it to 0 to disable it.
     #[clap(long = "cache-table-bloom-index-meta-count", default_value = "3000")]
@@ -1980,11 +1980,11 @@ mod cache_config_converters {
 
         fn try_from(value: CacheConfig) -> std::result::Result<Self, Self::Error> {
             Ok(Self {
-                enable_table_meta_caches: value.enable_table_meta_caches,
+                enable_table_meta_cache: value.enable_table_meta_cache,
                 table_meta_snapshot_count: value.table_meta_snapshot_count,
                 table_meta_segment_count: value.table_meta_segment_count,
                 table_meta_statistic_count: value.table_meta_statistic_count,
-                enable_table_index_bloom: value.enable_table_bloom_index_caches,
+                enable_table_index_bloom: value.enable_table_bloom_index_cache,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
                 data_cache_storage: value.data_cache_storage.try_into()?,
@@ -1999,11 +1999,11 @@ mod cache_config_converters {
     impl From<inner::CacheConfig> for CacheConfig {
         fn from(value: inner::CacheConfig) -> Self {
             Self {
-                enable_table_meta_caches: value.enable_table_meta_caches,
+                enable_table_meta_cache: value.enable_table_meta_cache,
                 table_meta_snapshot_count: value.table_meta_snapshot_count,
                 table_meta_segment_count: value.table_meta_segment_count,
                 table_meta_statistic_count: value.table_meta_statistic_count,
-                enable_table_bloom_index_caches: value.enable_table_index_bloom,
+                enable_table_bloom_index_cache: value.enable_table_index_bloom,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
                 data_cache_storage: value.data_cache_storage.into(),
@@ -2100,10 +2100,10 @@ impl QueryConfig {
             Self::check(
                 &self.table_meta_cache_enabled,
                 "table-meta-cache-enabled",
-                "cache-enable-table-meta-caches",
+                "cache-enable-table-meta-cache",
                 r#"
                     [cache]
-                    table-meta-cache-enabled=[true|false]
+                    enable_table_meta_cache=[true|false]
                   "#,
                 "CACHE_ENABLE_TABLE_META_CACHE",
             ),
