@@ -15,12 +15,13 @@
 pub mod abort_operation;
 pub mod base_mutator;
 mod compact;
-mod parquet_delete_transform;
 pub mod mutation_meta;
 mod mutation_part;
 pub mod mutation_sink;
 mod mutation_source;
 mod mutation_transform;
+#[allow(unused)]
+mod parquet_delete_transform;
 pub mod recluster_mutator;
 mod serialize_data_transform;
 

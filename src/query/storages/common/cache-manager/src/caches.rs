@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::bitmap::Bitmap;
 use std::borrow::Borrow;
 use std::sync::Arc;
 
+use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::parquet::metadata::FileMetaData;
 use common_cache::DefaultHashBuilder;
 use common_cache::Meter;

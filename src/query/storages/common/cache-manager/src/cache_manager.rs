@@ -36,9 +36,9 @@ use crate::caches::FileMetaDataCache;
 use crate::caches::SegmentInfoCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
+use crate::ColumnArrayMeter;
 use crate::DeleteMarkDataCache;
 use crate::DeleteMarkMetaCache;
-use crate::ColumnArrayMeter;
 
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
 
@@ -106,15 +106,13 @@ impl CacheManager {
                 Self::new_item_cache(config.table_meta_segment_count, "segment_info");
             let bloom_index_filter_cache =
                 Self::new_item_cache(config.table_bloom_index_filter_count, "bloom_index_filter");
-            let bloom_index_meta_cache = Self::new_item_cache(
-                config.table_bloom_index_meta_count,
-                "bloom_index_meta",
-            );
-             // todo(zhyass): Add table_cache_delete_mark_meta_count
-             let delete_mark_meta_cache =
-                Self::new_item_cache(config.table_cache_bloom_index_meta_count, "delete_mark_meta");
+            let bloom_index_meta_cache =
+                Self::new_item_cache(config.table_bloom_index_meta_count, "bloom_index_meta");
+            // todo(zhyass): Add table_cache_delete_mark_meta_count
+            let delete_mark_meta_cache =
+                Self::new_item_cache(config.table_bloom_index_meta_count, "delete_mark_meta");
             let delete_mark_data_cache =
-                Self::new_item_cache(config.table_cache_bloom_index_filter_count, "delete_mark_data");
+                Self::new_item_cache(config.table_bloom_index_filter_count, "delete_mark_data");
             let file_meta_data_cache =
                 Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS, "parquet_file_meta");
             GlobalInstance::set(Arc::new(Self {

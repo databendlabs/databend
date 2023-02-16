@@ -14,14 +14,21 @@
 
 // read -> 然后read bitmap，filter之后，获取最新的，合并之后，更新mark。
 
-use std::{sync::Arc, any::Any};
+use std::any::Any;
+use std::sync::Arc;
 
 use common_catalog::plan::PartInfoPtr;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_pipeline_core::processors::{port::{InputPort, OutputPort}, Processor, processor::Event};
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::Processor;
 
-use crate::{MergeIOReadResult, io::{BlockReader, UncompressedBuffer}, operations::read::DataSourceMeta};
+use crate::io::BlockReader;
+use crate::io::UncompressedBuffer;
+use crate::operations::read::DataSourceMeta;
+use crate::MergeIOReadResult;
 
 pub struct ParquetDeleteTransform {
     block_reader: Arc<BlockReader>,

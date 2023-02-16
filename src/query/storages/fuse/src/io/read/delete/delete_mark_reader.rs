@@ -105,8 +105,7 @@ async fn load_delete_mark_data<'a>(
             column_descriptor: col_chunk_meta.descriptor().clone(),
         };
 
-        let cached_reader =
-            CachedReader::new(Bitmap::cache(), "delete_mark_data_cache".to_owned(), loader);
+        let cached_reader = CachedReader::new(Bitmap::cache(), loader);
 
         let param = LoadParams {
             location,
