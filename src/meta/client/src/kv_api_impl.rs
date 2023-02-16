@@ -21,7 +21,7 @@ use common_meta_kvapi::kvapi::MGetKVReply;
 use common_meta_kvapi::kvapi::MGetKVReq;
 use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::KVAppError;
+use common_meta_types::MetaError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 
@@ -29,14 +29,14 @@ use crate::ClientHandle;
 
 #[tonic::async_trait]
 impl kvapi::KVApi for ClientHandle {
-    type Error = KVAppError;
+    type Error = MetaError;
 
-    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, KVAppError> {
+    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, Self::Error> {
         let reply = self.request(act).await?;
         Ok(reply)
     }
 
-    async fn get_kv(&self, key: &str) -> Result<GetKVReply, KVAppError> {
+    async fn get_kv(&self, key: &str) -> Result<GetKVReply, Self::Error> {
         let reply = self
             .request(GetKVReq {
                 key: key.to_string(),
@@ -45,13 +45,13 @@ impl kvapi::KVApi for ClientHandle {
         Ok(reply)
     }
 
-    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, KVAppError> {
+    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, Self::Error> {
         let keys = keys.to_vec();
         let reply = self.request(MGetKVReq { keys }).await?;
         Ok(reply)
     }
 
-    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, KVAppError> {
+    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, Self::Error> {
         let reply = self
             .request(ListKVReq {
                 prefix: prefix.to_string(),
@@ -60,7 +60,7 @@ impl kvapi::KVApi for ClientHandle {
         Ok(reply)
     }
 
-    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, KVAppError> {
+    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {
         let reply = self.request(txn).await?;
         Ok(reply)
     }

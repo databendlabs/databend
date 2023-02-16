@@ -20,7 +20,7 @@ use common_meta_kvapi::kvapi::MGetKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 pub use common_meta_sled_store::init_temp_sled_db;
-use common_meta_types::KVAppError;
+use common_meta_types::MetaError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 
@@ -28,28 +28,28 @@ use crate::MetaEmbedded;
 
 #[async_trait]
 impl kvapi::KVApi for MetaEmbedded {
-    type Error = KVAppError;
-    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, KVAppError> {
+    type Error = MetaError;
+    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, Self::Error> {
         let sm = self.inner.lock().await;
         sm.upsert_kv(act).await
     }
 
-    async fn get_kv(&self, key: &str) -> Result<GetKVReply, KVAppError> {
+    async fn get_kv(&self, key: &str) -> Result<GetKVReply, Self::Error> {
         let sm = self.inner.lock().await;
         sm.get_kv(key).await
     }
 
-    async fn mget_kv(&self, key: &[String]) -> Result<MGetKVReply, KVAppError> {
+    async fn mget_kv(&self, key: &[String]) -> Result<MGetKVReply, Self::Error> {
         let sm = self.inner.lock().await;
         sm.mget_kv(key).await
     }
 
-    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, KVAppError> {
+    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, Self::Error> {
         let sm = self.inner.lock().await;
         sm.prefix_list_kv(prefix).await
     }
 
-    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, KVAppError> {
+    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {
         let sm = self.inner.lock().await;
         sm.transaction(txn).await
     }

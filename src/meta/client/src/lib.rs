@@ -19,6 +19,8 @@ mod grpc_client;
 mod kv_api_impl;
 mod message;
 
+pub use common_meta_api::reply::reply_to_api_result;
+pub use common_meta_api::reply::reply_to_meta_result;
 pub use grpc_action::MetaGrpcReq;
 pub use grpc_action::RequestFor;
 pub use grpc_client::ClientHandle;

@@ -76,6 +76,7 @@ use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::GCDroppedDataReq;
 use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
+use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use tracing::debug;
 use tracing::info;
@@ -175,7 +176,7 @@ fn calc_and_compare_drop_on_table_result(result: Vec<Arc<TableInfo>>, expected: 
 }
 
 async fn upsert_test_data(
-    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     key: &impl kvapi::Key,
     value: Vec<u8>,
 ) -> Result<u64, KVAppError> {
@@ -193,7 +194,7 @@ async fn upsert_test_data(
 }
 
 async fn delete_test_data(
-    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     key: &impl kvapi::Key,
 ) -> Result<(), KVAppError> {
     let _res = kv_api
@@ -213,7 +214,7 @@ impl SchemaApiTestSuite {
     pub async fn test_single_node<B, MT>(b: B) -> anyhow::Result<()>
     where
         B: kvapi::ApiBuilder<MT>,
-        MT: ShareApi + kvapi::AsKVApi<Error = KVAppError> + SchemaApi,
+        MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi,
     {
         let suite = SchemaApiTestSuite {};
 
@@ -321,7 +322,7 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn database_and_table_rename<MT: SchemaApi + kvapi::AsKVApi<Error = KVAppError>>(
+    async fn database_and_table_rename<MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>>(
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -637,7 +638,7 @@ impl SchemaApiTestSuite {
 
     #[tracing::instrument(level = "debug", skip_all)]
     async fn database_create_from_share_and_drop<
-        MT: ShareApi + kvapi::AsKVApi<Error = KVAppError> + SchemaApi,
+        MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi,
     >(
         &self,
         mt: &MT,
@@ -2238,7 +2239,7 @@ impl SchemaApiTestSuite {
 
     #[tracing::instrument(level = "debug", skip_all)]
     async fn database_drop_out_of_retention_time_history<
-        MT: SchemaApi + kvapi::AsKVApi<Error = KVAppError>,
+        MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>,
     >(
         self,
         mt: &MT,
@@ -2301,7 +2302,7 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn create_out_of_retention_time_db<MT: SchemaApi + kvapi::AsKVApi<Error = KVAppError>>(
+    async fn create_out_of_retention_time_db<MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>>(
         self,
         mt: &MT,
         db_name: DatabaseNameIdent,
@@ -2339,7 +2340,7 @@ impl SchemaApiTestSuite {
 
     #[tracing::instrument(level = "debug", skip_all)]
     async fn database_gc_out_of_retention_time<
-        MT: SchemaApi + kvapi::AsKVApi<Error = KVAppError>,
+        MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>,
     >(
         self,
         mt: &MT,
@@ -2424,7 +2425,7 @@ impl SchemaApiTestSuite {
 
     #[tracing::instrument(level = "debug", skip_all)]
     async fn create_out_of_retention_time_table<
-        MT: SchemaApi + kvapi::AsKVApi<Error = KVAppError>,
+        MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>,
     >(
         self,
         mt: &MT,
@@ -2477,7 +2478,7 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn table_gc_out_of_retention_time<MT: SchemaApi + kvapi::AsKVApi<Error = KVAppError>>(
+    async fn table_gc_out_of_retention_time<MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>>(
         self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -2612,7 +2613,7 @@ impl SchemaApiTestSuite {
 
     #[tracing::instrument(level = "debug", skip_all)]
     async fn table_drop_out_of_retention_time_history<
-        MT: SchemaApi + kvapi::AsKVApi<Error = KVAppError>,
+        MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>,
     >(
         self,
         mt: &MT,
@@ -3544,9 +3545,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    async fn get_tables_from_share<
-        MT: ShareApi + kvapi::AsKVApi<Error = KVAppError> + SchemaApi,
-    >(
+    async fn get_tables_from_share<MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi>(
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {

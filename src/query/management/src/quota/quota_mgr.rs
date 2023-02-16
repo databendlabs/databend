@@ -21,9 +21,9 @@ use common_meta_app::tenant::TenantQuota;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::IntoSeqV;
-use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
+use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 
@@ -32,12 +32,12 @@ use super::quota_api::QuotaApi;
 static QUOTA_API_KEY_PREFIX: &str = "__fd_quotas";
 
 pub struct QuotaMgr {
-    kv_api: Arc<dyn kvapi::KVApi<Error = KVAppError>>,
+    kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
     key: String,
 }
 
 impl QuotaMgr {
-    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = KVAppError>>, tenant: &str) -> Result<Self> {
+    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: &str) -> Result<Self> {
         if tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
                 "Tenant can not empty(while quota mgr create)",
