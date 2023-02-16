@@ -22,6 +22,7 @@ use common_base::runtime::Runtime;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ColumnId;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
@@ -30,7 +31,6 @@ use opendal::Operator;
 use storages_common_cache::LoadParams;
 use storages_common_cache_manager::BloomIndexMeta;
 use storages_common_index::filters::Xor8Filter;
-use storages_common_table_meta::meta::ColumnId;
 use storages_common_table_meta::meta::Location;
 
 use crate::index::filters::BlockBloomFilterIndexVersion;
@@ -62,7 +62,9 @@ impl BloomBlockFilterReader for Location {
             BlockBloomFilterIndexVersion::V0(_) => Err(ErrorCode::DeprecatedIndexFormat(
                 "bloom filter index version(v0) is deprecated",
             )),
-            BlockBloomFilterIndexVersion::V2(_) | BlockBloomFilterIndexVersion::V3(_) => {
+            BlockBloomFilterIndexVersion::V2(_)
+            | BlockBloomFilterIndexVersion::V3(_)
+            | BlockBloomFilterIndexVersion::V4(_) => {
                 let res = load_bloom_filter_by_columns(dal, columns, path, index_length).await?;
                 Ok(res)
             }

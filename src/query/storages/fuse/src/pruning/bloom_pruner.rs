@@ -18,10 +18,12 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_function;
+use common_expression::ColumnId;
 use common_expression::ConstantFolder;
 use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
+use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use opendal::Operator;
@@ -33,15 +35,20 @@ use crate::io::BloomBlockFilterReader;
 
 #[async_trait::async_trait]
 pub trait BloomPruner {
-    // returns ture, if target should NOT be pruned (false positive allowed)
-    async fn should_keep(&self, index_location: &Option<Location>, index_length: u64) -> bool;
+    // returns true, if target should NOT be pruned (false positive allowed)
+    async fn should_keep(
+        &self,
+        index_location: &Option<Location>,
+        index_length: u64,
+        column_ids: Vec<ColumnId>,
+    ) -> bool;
 }
 
 pub struct BloomPrunerCreator {
     func_ctx: FunctionContext,
 
     /// indices that should be loaded from filter block
-    index_columns: Vec<String>,
+    index_fields: Vec<TableField>,
 
     /// the expression that would be evaluate
     filter_expression: Expr<String>,
@@ -89,19 +96,21 @@ impl BloomPrunerCreator {
 
             if !point_query_cols.is_empty() {
                 // convert to filter column names
-                let mut filter_block_cols = vec![];
+                let mut filter_fields = Vec::with_capacity(point_query_cols.len());
                 let mut scalar_map = HashMap::<Scalar, u64>::new();
                 for (col_name, scalar, ty) in point_query_cols.iter() {
-                    filter_block_cols.push(BloomIndex::build_filter_column_name(col_name));
-                    if !scalar_map.contains_key(scalar) {
-                        let digest = BloomIndex::calculate_scalar_digest(func_ctx, scalar, ty)?;
-                        scalar_map.insert(scalar.clone(), digest);
+                    if let Ok(field) = schema.field_with_name(col_name) {
+                        filter_fields.push(field.clone());
+                        if !scalar_map.contains_key(scalar) {
+                            let digest = BloomIndex::calculate_scalar_digest(func_ctx, scalar, ty)?;
+                            scalar_map.insert(scalar.clone(), digest);
+                        }
                     }
                 }
 
                 let creator = BloomPrunerCreator {
                     func_ctx,
-                    index_columns: filter_block_cols,
+                    index_fields: filter_fields,
                     filter_expression: optimized_expr,
                     scalar_map,
                     dal,
@@ -114,10 +123,27 @@ impl BloomPrunerCreator {
     }
 
     // Check a location file is hit or not by bloom filter.
-    pub async fn apply(&self, index_location: &Location, index_length: u64) -> Result<bool> {
+    pub async fn apply(
+        &self,
+        index_location: &Location,
+        index_length: u64,
+        column_ids_of_indexed_block: Vec<ColumnId>,
+    ) -> Result<bool> {
+        let version = index_location.1;
+
+        // filter out columns that no longer exist in the indexed block
+        let index_columns = self.index_fields.iter().try_fold(
+            Vec::with_capacity(self.index_fields.len()),
+            |mut acc, field| {
+                if column_ids_of_indexed_block.contains(&field.column_id()) {
+                    acc.push(BloomIndex::build_filter_column_name(version, field)?);
+                }
+                Ok::<_, ErrorCode>(acc)
+            },
+        )?;
         // load the relevant index columns
         let maybe_filter = index_location
-            .read_block_filter(self.dal.clone(), &self.index_columns, index_length)
+            .read_block_filter(self.dal.clone(), &index_columns, index_length)
             .await;
 
         match maybe_filter {
@@ -126,12 +152,12 @@ impl BloomPrunerCreator {
                 self.data_schema.clone(),
                 filter.filter_schema,
                 filter.filters,
-                index_location.1,
+                version,
             )?
             .apply(self.filter_expression.clone(), &self.scalar_map)?
                 != FilterEvalResult::MustFalse),
             Err(e) if e.code() == ErrorCode::DEPRECATED_INDEX_FORMAT => {
-                // In case that the index is no longer supported, just return ture to indicate
+                // In case that the index is no longer supported, just return true to indicate
                 // that the block being pruned should be kept. (Although the caller of this method
                 // "FilterPruner::should_keep",  will ignore any exceptions returned)
                 Ok(true)
@@ -143,14 +169,19 @@ impl BloomPrunerCreator {
 
 #[async_trait::async_trait]
 impl BloomPruner for BloomPrunerCreator {
-    async fn should_keep(&self, index_location: &Option<Location>, index_length: u64) -> bool {
+    async fn should_keep(
+        &self,
+        index_location: &Option<Location>,
+        index_length: u64,
+        column_ids: Vec<ColumnId>,
+    ) -> bool {
         if let Some(loc) = index_location {
             // load filter, and try pruning according to filter expression
-            match self.apply(loc, index_length).await {
+            match self.apply(loc, index_length, column_ids).await {
                 Ok(v) => v,
                 Err(e) => {
                     // swallow exceptions intentionally, corrupted index should not prevent execution
-                    tracing::warn!("failed to apply bloom pruner, returning ture. {}", e);
+                    tracing::warn!("failed to apply bloom pruner, returning true. {}", e);
                     true
                 }
             }

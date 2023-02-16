@@ -1,0 +1,99 @@
+name: Benchmark Commentator (trusted)
+
+on:
+  workflow_run:
+    workflows: ["Benchmark"]
+    types:
+      - completed
+
+permissions:
+  id-token: write
+  pull-requests: write
+  contents: read
+
+jobs:
+  comment_on_pr:
+    runs-on: [self-hosted, X64, Linux, dev]
+    if: >
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Download benchmark results
+        working-directory: benchmark/clickbench
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download ${{ github.event.workflow_run.id }} --dir ./results/ --name benchmark-results-s3
+          gh run download ${{ github.event.workflow_run.id }} --dir ./results/ --name benchmark-results-fs
+          echo "PR_NUMBER=$(jq -r '.extra.pr' ./results/result-fs.json)" >> $GITHUB_ENV
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: ${{ secrets.REPO_ROLE_ARN }}
+          role-duration-seconds: 900
+          aws-region: us-east-2
+      - name: Upload PR clickbench result to repo.databend.rs
+        working-directory: benchmark/clickbench
+        run: |
+          aws s3 cp ./results/result-fs.json s3://repo.databend.rs/benchmark/clickbench/pr/${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}-fs.json
+          aws s3 cp ./results/result-s3.json s3://repo.databend.rs/benchmark/clickbench/pr/${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}-s3.json
+      - name: Generate report
+        working-directory: benchmark/clickbench
+        run: |
+          aws s3 sync "s3://repo.databend.rs/benchmark/clickbench/release/$(date -u +%Y)/$(date -u +%m)/" ./results/
+          mkdir -p "./results/PR-${{ env.PR_NUMBER }}"
+          mv ./results/result-fs.json "./results/PR-${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}-fs.json"
+          mv ./results/result-s3.json "./results/PR-${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}-s3.json"
+          ./update-results.sh
+      - name: Upload PR clickbench report to repo.databend.rs
+        working-directory: benchmark/clickbench
+        run: |
+          aws s3 cp ./results/index.html s3://repo.databend.rs/benchmark/clickbench/pr/${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}.html
+      - name: Comment on PR
+        uses: everpcpc/comment-on-pr-action@v1
+        with:
+          number: ${{ env.PR_NUMBER }}
+          token: ${{ github.token }}
+          body: |
+            ![platform](https://img.shields.io/static/v1?label=AWS%20EC2&message=c5.4xlarge&color=orange&logo=amazonec2)
+            **Benchmark Results**: https://repo.databend.rs/benchmark/clickbench/pr/${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}.html
+
+  archive_for_release:
+    runs-on: [self-hosted, X64, Linux, dev]
+    if: >
+      github.event.workflow_run.event == 'workflow_dispatch' &&
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Download benchmark results
+        working-directory: benchmark/clickbench
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download ${{ github.event.workflow_run.id }} --dir ./results/ --name benchmark-results-fs
+          gh run download ${{ github.event.workflow_run.id }} --dir ./results/ --name benchmark-results-s3
+          echo "RELEASE_TAG=$(jq -r '.extra.release' ./results/result-fs.json)" >> $GITHUB_ENV
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: ${{ secrets.REPO_ROLE_ARN }}
+          role-duration-seconds: 900
+          aws-region: us-east-2
+      - name: Upload nightly results to repo.databend.rs
+        working-directory: benchmark/clickbench
+        run: |
+          RESULT_PEFIX="$(date -u +%Y)/$(date -u +%m)/$(date -u +%Y-%m-%d)/${{ env.RELEASE_TAG }}"
+          aws s3 cp ./results/result-fs.json "s3://repo.databend.rs/benchmark/clickbench/release/${RESULT_PEFIX}-fs.json"
+          aws s3 cp ./results/result-s3.json "s3://repo.databend.rs/benchmark/clickbench/release/${RESULT_PEFIX}-s3.json"
+          rm -f ./results/result-fs.json
+          rm -f ./results/result-s3.json
+      - name: Generate report
+        working-directory: benchmark/clickbench
+        run: |
+          aws s3 sync "s3://repo.databend.rs/benchmark/clickbench/release/$(date -u +%Y)/$(date -u +%m)/" ./results/
+          ./update-results.sh
+      - name: Upload PR clickbench report to repo.databend.rs
+        working-directory: benchmark/clickbench
+        run: |
+          aws s3 cp ./results/index.html s3://repo.databend.rs/benchmark/clickbench/release/index.html

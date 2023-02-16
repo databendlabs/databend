@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::pipe::Pipe;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_sink_writer::create_writer_items;
@@ -38,7 +39,7 @@ impl ExchangeSink {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let exchange_manager = ctx.get_exchange_manager();
-        let flight_exchange = exchange_manager.get_flight_exchanges(params)?;
+        let mut flight_exchanges = exchange_manager.get_flight_exchanges(params)?;
 
         match params {
             ExchangeParams::MergeExchange(params) => {
@@ -59,24 +60,25 @@ impl ExchangeSink {
                     ))
                 })?;
 
-                assert_eq!(flight_exchange.len(), 1);
+                assert_eq!(flight_exchanges.len(), 1);
+                let flight_exchange = flight_exchanges.remove(0);
                 pipeline.add_sink(|input| {
-                    Ok(ExchangeWriterSink::create(
+                    Ok(ProcessorPtr::create(ExchangeWriterSink::create(
                         input,
-                        flight_exchange[0].clone(),
-                    ))
+                        flight_exchange.clone(),
+                    )))
                 })
             }
             ExchangeParams::ShuffleExchange(params) => {
                 exchange_shuffle(params, pipeline)?;
 
                 // exchange serialize transform
-                let len = flight_exchange.len();
+                let len = flight_exchanges.len();
                 let items = create_serializer_items(len, &params.schema);
                 pipeline.add_pipe(Pipe::create(len, len, items));
 
                 // exchange writer sink
-                let items = create_writer_items(flight_exchange);
+                let items = create_writer_items(flight_exchanges);
                 pipeline.add_pipe(Pipe::create(len, 0, items));
                 Ok(())
             }

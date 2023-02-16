@@ -18,5 +18,7 @@ use poem::IntoResponse;
 
 #[poem::handler]
 pub async fn config_handler() -> poem::Result<impl IntoResponse> {
-    Ok(Json(GlobalConfig::instance().as_ref().clone().into_outer()))
+    Ok(Json(
+        GlobalConfig::instance().as_ref().clone().into_config(),
+    ))
 }

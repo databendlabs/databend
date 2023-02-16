@@ -3,7 +3,7 @@
 Support Platform: `linux/amd64`, `linux/arm64`
 
 
-## Available Enviroment Variables
+## Available Environment Variables
 
 * QUERY_CONFIG_FILE
 * QUERY_DEFAULT_USER

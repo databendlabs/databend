@@ -18,27 +18,27 @@ use common_base::base::escape_for_key;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::is_builtin_function;
+use common_meta_app::principal::UserDefinedFunction;
 use common_meta_kvapi::kvapi;
+use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::IntoSeqV;
-use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
+use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
-use common_meta_types::UpsertKVReq;
-use common_meta_types::UserDefinedFunction;
 
 use crate::udf::UdfApi;
 
 static UDF_API_KEY_PREFIX: &str = "__fd_udfs";
 
 pub struct UdfMgr {
-    kv_api: Arc<dyn kvapi::KVApi<Error = KVAppError>>,
+    kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
     udf_prefix: String,
 }
 
 impl UdfMgr {
-    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = KVAppError>>, tenant: &str) -> Result<Self> {
+    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: &str) -> Result<Self> {
         if tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
                 "Tenant can not empty(while udf mgr create)",

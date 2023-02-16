@@ -16,8 +16,9 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_meta_types::GrantObject;
+use common_meta_app::principal::GrantObject;
 
+use crate::procedures::ProcedureFactory;
 use crate::sessions::QueryContext;
 
 pub async fn validate_grant_object_exists(
@@ -28,6 +29,13 @@ pub async fn validate_grant_object_exists(
 
     match &object {
         GrantObject::Table(catalog_name, database_name, table_name) => {
+            if ProcedureFactory::instance()
+                .get(format!("{}${}", database_name, table_name))
+                .is_ok()
+            {
+                return Ok(());
+            }
+
             let catalog = ctx.get_catalog(catalog_name)?;
             if !catalog
                 .exists_table(tenant.as_str(), database_name, table_name)

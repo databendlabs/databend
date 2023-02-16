@@ -10,7 +10,8 @@ runs:
     - name: pack failure artifacts
       shell: bash
       run: |
-        tar --exclude='target' \
+        tar --warning=no-file-changed \
+            --exclude='target' \
             --exclude='website' \
             --exclude='docs' \
             --exclude='docker' \

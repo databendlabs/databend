@@ -25,7 +25,7 @@ pub static METRIC_TEST: &str = "metrics.test";
 #[tokio::test(flavor = "multi_thread")]
 async fn test_metric_server() -> common_exception::Result<()> {
     init_default_metrics_recorder();
-    let mut service = MetricService::create()?;
+    let mut service = MetricService::create();
     let listening = "127.0.0.1:0".parse::<SocketAddr>()?;
     let listening = service.start(listening).await?;
     let client = reqwest::Client::builder().build().unwrap();

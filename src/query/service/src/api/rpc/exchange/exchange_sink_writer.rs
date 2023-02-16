@@ -20,18 +20,19 @@ use common_expression::DataBlock;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
 use common_pipeline_sinks::AsyncSink;
 use common_pipeline_sinks::AsyncSinker;
 
 use crate::api::rpc::exchange::serde::exchange_serializer::ExchangeSerializeMeta;
-use crate::api::rpc::flight_client::FlightExchange;
+use crate::api::rpc::flight_client::FlightExchangeRef;
 
 pub struct ExchangeWriterSink {
-    exchange: FlightExchange,
+    exchange: FlightExchangeRef,
 }
 
 impl ExchangeWriterSink {
-    pub fn create(input: Arc<InputPort>, flight_exchange: FlightExchange) -> ProcessorPtr {
+    pub fn create(input: Arc<InputPort>, flight_exchange: FlightExchangeRef) -> Box<dyn Processor> {
         AsyncSinker::create(input, ExchangeWriterSink {
             exchange: flight_exchange,
         })
@@ -42,13 +43,18 @@ impl ExchangeWriterSink {
 impl AsyncSink for ExchangeWriterSink {
     const NAME: &'static str = "ExchangeWriterSink";
 
+    async fn on_start(&mut self) -> Result<()> {
+        self.exchange.close_input().await;
+        Ok(())
+    }
+
     async fn on_finish(&mut self) -> Result<()> {
-        self.exchange.close_output();
+        self.exchange.close_output().await;
         Ok(())
     }
 
     #[async_trait::unboxed_simple]
-    async fn consume(&mut self, mut data_block: DataBlock) -> Result<()> {
+    async fn consume(&mut self, mut data_block: DataBlock) -> Result<bool> {
         let packet = match data_block.take_meta() {
             None => Err(ErrorCode::Internal(
                 "ExchangeWriterSink only recv ExchangeSerializeMeta.",
@@ -64,20 +70,23 @@ impl AsyncSink for ExchangeWriterSink {
             },
         }?;
 
-        self.exchange.send(packet).await?;
-        Ok(())
+        match self.exchange.send(packet).await {
+            Ok(_) => Ok(false),
+            Err(error) if error.code() == ErrorCode::ABORTED_QUERY => Ok(true),
+            Err(error) => Err(error),
+        }
     }
 }
 
-pub fn create_writer_item(exchange: FlightExchange) -> PipeItem {
+pub fn create_writer_item(exchange: FlightExchangeRef) -> PipeItem {
     let input = InputPort::create();
     PipeItem::create(
-        ExchangeWriterSink::create(input.clone(), exchange),
+        ProcessorPtr::create(ExchangeWriterSink::create(input.clone(), exchange)),
         vec![input],
         vec![],
     )
 }
 
-pub fn create_writer_items(exchanges: Vec<FlightExchange>) -> Vec<PipeItem> {
+pub fn create_writer_items(exchanges: Vec<FlightExchangeRef>) -> Vec<PipeItem> {
     exchanges.into_iter().map(create_writer_item).collect()
 }

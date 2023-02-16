@@ -94,6 +94,8 @@ pub struct BindContext {
     pub in_grouping: bool,
 
     pub ctes_map: Box<DashMap<String, CteInfo>>,
+
+    pub is_view: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -111,6 +113,7 @@ impl BindContext {
             aggregate_info: AggregateInfo::default(),
             in_grouping: false,
             ctes_map: Box::new(DashMap::new()),
+            is_view: false,
         }
     }
 
@@ -121,6 +124,7 @@ impl BindContext {
             aggregate_info: Default::default(),
             in_grouping: false,
             ctes_map: parent.ctes_map.clone(),
+            is_view: false,
         }
     }
 

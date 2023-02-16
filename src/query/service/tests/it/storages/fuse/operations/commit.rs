@@ -35,6 +35,9 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
+use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::RoleInfo;
+use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -65,8 +68,6 @@ use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
-use common_meta_types::RoleInfo;
-use common_meta_types::UserInfo;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storages_fuse::operations::AppendOperationLogEntry;
@@ -456,6 +457,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
+        todo!()
+    }
+
+    async fn get_file_format(&self, _name: &str) -> Result<FileFormatOptions> {
         todo!()
     }
 

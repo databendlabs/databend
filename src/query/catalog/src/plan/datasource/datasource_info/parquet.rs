@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_expression::TableSchema;
+use common_meta_app::principal::UserStageInfo;
 use common_meta_app::schema::TableInfo;
-use common_meta_types::UserStageInfo;
 use common_storage::StageFilesInfo;
 
 use crate::plan::datasource::datasource_info::parquet_read_options::ParquetReadOptions;

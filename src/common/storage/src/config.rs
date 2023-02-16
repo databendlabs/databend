@@ -20,7 +20,7 @@ use common_auth::RefreshableToken;
 use common_auth::TokenFile;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::GlobalInstance;
-use common_meta_types::StorageParams;
+use common_meta_app::storage::StorageParams;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -39,7 +39,7 @@ use serde::Serialize;
 /// [storage.cache]
 /// type = "redis"
 ///
-/// [storage.temperary]
+/// [storage.temporary]
 /// type = "s3"
 /// ```
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

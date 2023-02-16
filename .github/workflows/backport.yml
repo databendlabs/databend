@@ -8,7 +8,6 @@ on:
       - "docs/**"
       - "website/**"
       - "**.md"
-      - "scripts/setup/**"
       - ".devcontainer/**"
 
 concurrency:
@@ -18,6 +17,7 @@ concurrency:
 env:
   BUILD_PROFILE: release
   TARGET: x86_64-unknown-linux-gnu
+  CARGO_INCREMENTAL: 0
 
 jobs:
   build:

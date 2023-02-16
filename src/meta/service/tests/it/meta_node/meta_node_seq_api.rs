@@ -16,6 +16,7 @@
 //! It can also be used by apps to generate mono incremental seq numbers.
 
 use common_base::base::tokio;
+use common_meta_client::reply_to_meta_result;
 use common_meta_raft_store::applied_state::AppliedState;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::Cmd;
@@ -46,7 +47,7 @@ async fn test_meta_node_incr_seq() -> anyhow::Result<()> {
         };
         let raft_reply = client.write(req).await?.into_inner();
 
-        let res: Result<AppliedState, MetaError> = raft_reply.into();
+        let res: Result<AppliedState, MetaError> = reply_to_meta_result(raft_reply);
         let resp: AppliedState = res?;
         match resp {
             AppliedState::Seq { seq } => {

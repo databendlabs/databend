@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_expression::ColumnId;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -23,7 +24,6 @@ use crate::meta::v0::statistics::ClusterStatistics;
 use crate::meta::v0::statistics::ColumnStatistics;
 use crate::meta::v0::statistics::Statistics;
 use crate::meta::v0::ColumnMeta;
-use crate::meta::ColumnId;
 use crate::meta::Compression;
 use crate::meta::Location;
 use crate::meta::Versioned;

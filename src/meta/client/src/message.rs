@@ -13,24 +13,23 @@
 // limitations under the License.
 
 use common_base::base::tokio::sync::oneshot::Sender;
+use common_meta_kvapi::kvapi::GetKVReply;
+use common_meta_kvapi::kvapi::GetKVReq;
+use common_meta_kvapi::kvapi::ListKVReply;
+use common_meta_kvapi::kvapi::ListKVReq;
+use common_meta_kvapi::kvapi::MGetKVReply;
+use common_meta_kvapi::kvapi::MGetKVReq;
+use common_meta_kvapi::kvapi::UpsertKVReply;
+use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::ClientInfo;
 use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
-use common_meta_types::GetKVReply;
-use common_meta_types::GetKVReq;
-use common_meta_types::KVAppError;
-use common_meta_types::ListKVReply;
-use common_meta_types::ListKVReq;
-use common_meta_types::MGetKVReply;
-use common_meta_types::MGetKVReq;
 use common_meta_types::MetaClientError;
 use common_meta_types::MetaError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
-use common_meta_types::UpsertKVReply;
-use common_meta_types::UpsertKVReq;
 use tonic::codegen::InterceptedService;
 use tonic::transport::Channel;
 
@@ -64,7 +63,7 @@ pub enum Request {
     /// Run a transaction on remote
     Txn(TxnRequest),
 
-    /// Watch KV changes, expecting a Stream that reports KV chnage events
+    /// Watch KV changes, expecting a Stream that reports KV change events
     Watch(WatchRequest),
 
     /// Export all data
@@ -100,11 +99,11 @@ impl Request {
 /// Meta-client worker-to-handle response body
 #[derive(Debug, derive_more::TryInto)]
 pub enum Response {
-    Get(Result<GetKVReply, KVAppError>),
-    MGet(Result<MGetKVReply, KVAppError>),
-    PrefixList(Result<ListKVReply, KVAppError>),
-    Upsert(Result<UpsertKVReply, KVAppError>),
-    Txn(Result<TxnReply, KVAppError>),
+    Get(Result<GetKVReply, MetaError>),
+    MGet(Result<MGetKVReply, MetaError>),
+    PrefixList(Result<ListKVReply, MetaError>),
+    Upsert(Result<UpsertKVReply, MetaError>),
+    Txn(Result<TxnReply, MetaError>),
     Watch(Result<tonic::codec::Streaming<WatchResponse>, MetaError>),
     Export(Result<tonic::codec::Streaming<ExportedChunk>, MetaError>),
     MakeClient(

@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::RoleInfo;
+use common_meta_app::principal::RoleInfo;
 use common_sql::plans::CreateRolePlan;
 use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
@@ -48,7 +48,9 @@ impl Interpreter for CreateRoleInterpreter {
         // TODO: add privilege check about CREATE ROLE
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
-        UserApiProvider::instance()
+        let user_mgr = UserApiProvider::instance();
+        user_mgr.ensure_builtin_roles(&tenant).await?;
+        user_mgr
             .add_role(&tenant, RoleInfo::new(&plan.role_name), plan.if_not_exists)
             .await?;
         RoleCacheManager::instance().force_reload(&tenant).await?;

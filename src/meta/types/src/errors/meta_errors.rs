@@ -40,8 +40,6 @@ pub enum MetaError {
     APIError(#[from] MetaAPIError),
 }
 
-pub type MetaResult<T> = Result<T, MetaError>;
-
 impl From<MetaError> for ErrorCode {
     fn from(e: MetaError) -> Self {
         match e {

@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::principal::StageType;
 use common_meta_types::MatchSeq;
-use common_meta_types::StageType;
 use common_sql::plans::CreateStagePlan;
 use common_users::UserApiProvider;
 

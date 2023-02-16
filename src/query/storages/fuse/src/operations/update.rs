@@ -19,6 +19,7 @@ use common_catalog::plan::Projection;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::TableDataType;
 use common_expression::TableField;
@@ -42,7 +43,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
-        col_indices: Vec<usize>,
+        col_indices: Vec<FieldIndex>,
         update_list: Vec<(usize, RemoteExpr<String>)>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
@@ -105,47 +106,47 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
-        col_indices: Vec<usize>,
-        update_list: Vec<(usize, RemoteExpr<String>)>,
+        col_indices: Vec<FieldIndex>,
+        update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
         base_snapshot: &TableSnapshot,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let all_col_ids = self.all_the_columns_ids();
+        let all_column_indices = self.all_column_indices();
         let schema = self.schema();
 
         let mut offset_map = BTreeMap::new();
         let mut remain_reader = None;
         let mut pos = 0;
         let (projection, input_schema) = if col_indices.is_empty() {
-            all_col_ids.iter().for_each(|&id| {
-                offset_map.insert(id, pos);
+            all_column_indices.iter().for_each(|&index| {
+                offset_map.insert(index, pos);
                 pos += 1;
             });
 
-            (Projection::Columns(all_col_ids), schema.clone())
+            (Projection::Columns(all_column_indices), schema.clone())
         } else {
-            col_indices.iter().for_each(|&id| {
-                offset_map.insert(id, pos);
+            col_indices.iter().for_each(|&index| {
+                offset_map.insert(index, pos);
                 pos += 1;
             });
 
             let mut fields: Vec<TableField> = col_indices
                 .iter()
-                .map(|idx| schema.fields()[*idx].clone())
+                .map(|index| schema.fields()[*index].clone())
                 .collect();
 
-            let remain_col_ids: Vec<usize> = all_col_ids
+            let remain_col_indices: Vec<FieldIndex> = all_column_indices
                 .into_iter()
-                .filter(|id| !col_indices.contains(id))
+                .filter(|index| !col_indices.contains(index))
                 .collect();
-            if !remain_col_ids.is_empty() {
-                remain_col_ids.iter().for_each(|&id| {
-                    offset_map.insert(id, pos);
+            if !remain_col_indices.is_empty() {
+                remain_col_indices.iter().for_each(|&index| {
+                    offset_map.insert(index, pos);
                     pos += 1;
                 });
 
                 let reader =
-                    self.create_block_reader(Projection::Columns(remain_col_ids), ctx.clone())?;
+                    self.create_block_reader(Projection::Columns(remain_col_indices), ctx.clone())?;
                 fields.extend_from_slice(reader.schema().fields());
                 remain_reader = Some((*reader).clone());
             }

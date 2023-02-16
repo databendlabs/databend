@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_config::Config;
+use common_config::InnerConfig;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
 
@@ -21,12 +21,12 @@ use crate::api::FlightClient;
 
 #[async_trait::async_trait]
 pub trait Packet: Send + Sync {
-    async fn commit(&self, config: &Config, timeout: u64) -> Result<()>;
+    async fn commit(&self, config: &InnerConfig, timeout: u64) -> Result<()>;
 }
 
 #[async_trait::async_trait]
 impl<T: Packet> Packet for Vec<T> {
-    async fn commit(&self, config: &Config, timeout: u64) -> Result<()> {
+    async fn commit(&self, config: &InnerConfig, timeout: u64) -> Result<()> {
         for packet in self.iter() {
             packet.commit(config, timeout).await?;
         }
@@ -35,7 +35,7 @@ impl<T: Packet> Packet for Vec<T> {
     }
 }
 
-pub async fn create_client(config: &Config, address: &str) -> Result<FlightClient> {
+pub async fn create_client(config: &InnerConfig, address: &str) -> Result<FlightClient> {
     match config.tls_query_cli_enabled() {
         true => Ok(FlightClient::new(FlightServiceClient::new(
             ConnectionFactory::create_rpc_channel(

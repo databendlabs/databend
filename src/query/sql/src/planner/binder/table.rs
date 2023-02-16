@@ -26,13 +26,13 @@ use common_ast::ast::Statement;
 use common_ast::ast::TableAlias;
 use common_ast::ast::TableReference;
 use common_ast::ast::TimeTravelPoint;
+use common_ast::ast::UriLocation;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::ParquetReadOptions;
-use common_catalog::table::ColumnId;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
@@ -41,10 +41,11 @@ use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
+use common_expression::ColumnId;
 use common_expression::ConstantFolder;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
-use common_meta_types::StageFileFormatType;
-use common_meta_types::UserStageInfo;
+use common_meta_app::principal::StageFileFormatType;
+use common_meta_app::principal::UserStageInfo;
 use common_storage::StageFilesInfo;
 use common_storages_parquet::ParquetTable;
 use common_storages_view::view_table::QUERY;
@@ -62,8 +63,10 @@ use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::Scan;
 use crate::plans::Statistics;
+use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnEntry;
+use crate::DerivedColumn;
 use crate::IndexType;
 
 impl Binder {
@@ -98,6 +101,7 @@ impl Binder {
             database.to_string(),
             table_meta,
             None,
+            false,
         );
 
         self.bind_base_table(bind_context, database, table_index)
@@ -167,9 +171,17 @@ impl Binder {
                         let backtrace = Backtrace::new();
                         let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
                         // For view, we need use a new context to bind it.
-                        let new_bind_context =
+                        let mut new_bind_context =
                             BindContext::with_parent(Box::new(bind_context.clone()));
+                        new_bind_context.is_view = true;
                         if let Statement::Query(query) = &stmt {
+                            self.metadata.write().add_table(
+                                catalog,
+                                database.clone(),
+                                table_meta,
+                                table_alias_name,
+                                false,
+                            );
                             let (s_expr, mut new_bind_context) =
                                 self.bind_query(&new_bind_context, query).await?;
                             if let Some(alias) = alias {
@@ -199,6 +211,7 @@ impl Binder {
                             database.clone(),
                             table_meta,
                             table_alias_name,
+                            bind_context.is_view,
                         );
 
                         let (s_expr, mut bind_context) = self
@@ -246,6 +259,7 @@ impl Binder {
                     "system".to_string(),
                     table.clone(),
                     table_alias_name,
+                    false,
                 );
 
                 let (s_expr, mut bind_context) = self
@@ -281,8 +295,10 @@ impl Binder {
                     FileLocation::Stage(location) => {
                         parse_stage_location_v2(&self.ctx, &location.name, &location.path).await?
                     }
-                    FileLocation::Uri(mut l) => {
-                        let (storage_params, path) = parse_uri_location(&mut l)?;
+                    FileLocation::Uri(uri) => {
+                        let mut location =
+                            UriLocation::from_uri(uri, "".to_string(), options.connection.clone())?;
+                        let (storage_params, path) = parse_uri_location(&mut location)?;
                         if !storage_params.is_secure()
                             && !GlobalConfig::instance().storage.allow_insecure
                         {
@@ -295,10 +311,11 @@ impl Binder {
                     }
                 };
 
-                if matches!(
-                    user_stage_info.file_format_options.format,
-                    StageFileFormatType::Parquet
-                ) {
+                let file_format_options = match &options.file_format {
+                    Some(f) => self.ctx.get_file_format(f).await?,
+                    None => user_stage_info.file_format_options.clone(),
+                };
+                if matches!(file_format_options.format, StageFileFormatType::Parquet) {
                     let files_info = StageFilesInfo {
                         path,
                         pattern: options.pattern.clone(),
@@ -323,6 +340,7 @@ impl Binder {
                         "system".to_string(),
                         table.clone(),
                         table_alias_name,
+                        false,
                     );
 
                     let (s_expr, mut bind_context) = self
@@ -396,14 +414,14 @@ impl Binder {
         let mut col_stats: HashMap<IndexType, Option<ColumnStatistics>> = HashMap::new();
         for column in columns.iter() {
             match column {
-                ColumnEntry::BaseTableColumn {
+                ColumnEntry::BaseTableColumn(BaseTableColumn {
                     column_name,
                     column_index,
                     path_indices,
                     data_type,
                     leaf_index,
                     ..
-                } => {
+                }) => {
                     let column_binding = ColumnBinding {
                         database_name: Some(database_name.to_string()),
                         table_name: Some(table.name().to_string()),
@@ -440,8 +458,12 @@ impl Binder {
                     columns: columns
                         .into_iter()
                         .map(|col| match col {
-                            ColumnEntry::BaseTableColumn { column_index, .. } => column_index,
-                            ColumnEntry::DerivedColumn { column_index, .. } => column_index,
+                            ColumnEntry::BaseTableColumn(BaseTableColumn {
+                                column_index, ..
+                            }) => column_index,
+                            ColumnEntry::DerivedColumn(DerivedColumn { column_index, .. }) => {
+                                column_index
+                            }
                         })
                         .collect(),
                     push_down_predicates: None,

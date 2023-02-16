@@ -23,7 +23,7 @@ use common_base::mem_allocator::GlobalAllocator;
 use common_base::runtime::Runtime;
 use common_base::runtime::GLOBAL_MEM_STAT;
 use common_base::set_alloc_error_hook;
-use common_config::Config;
+use common_config::InnerConfig;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_config::QUERY_SEMVER;
 use common_exception::Result;
@@ -62,7 +62,7 @@ fn main() {
 }
 
 async fn main_entrypoint() -> Result<()> {
-    let conf: Config = Config::load()?;
+    let conf: InnerConfig = InnerConfig::load()?;
 
     if run_cmd(&conf).await? {
         return Ok(());
@@ -145,7 +145,7 @@ async fn main_entrypoint() -> Result<()> {
         let hostname = conf.query.clickhouse_http_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.clickhouse_http_handler_port);
 
-        let mut srv = HttpHandler::create(HttpHandlerKind::Clickhouse)?;
+        let mut srv = HttpHandler::create(HttpHandlerKind::Clickhouse);
         let listening = srv.start(listening.parse()?).await?;
         shutdown_handle.add_service(srv);
 
@@ -161,7 +161,7 @@ async fn main_entrypoint() -> Result<()> {
         let hostname = conf.query.http_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.http_handler_port);
 
-        let mut srv = HttpHandler::create(HttpHandlerKind::Query)?;
+        let mut srv = HttpHandler::create(HttpHandlerKind::Query);
         let listening = srv.start(listening.parse()?).await?;
         shutdown_handle.add_service(srv);
 
@@ -175,7 +175,7 @@ async fn main_entrypoint() -> Result<()> {
     // Metric API service.
     {
         let address = conf.query.metric_api_address.clone();
-        let mut srv = MetricService::create()?;
+        let mut srv = MetricService::create();
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
         info!("Listening for Metric API: {}/metrics", listening);
@@ -184,7 +184,7 @@ async fn main_entrypoint() -> Result<()> {
     // Admin HTTP API service.
     {
         let address = conf.query.admin_api_address.clone();
-        let mut srv = HttpService::create(&conf)?;
+        let mut srv = HttpService::create(&conf);
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
         info!("Listening for Admin HTTP API: {}", listening);
@@ -237,12 +237,9 @@ async fn main_entrypoint() -> Result<()> {
             "unlimited".to_string()
         }
     });
-    println!("    allocator config: {}", {
-        use tikv_jemalloc_ctl::config;
-        config::malloc_conf::mib()
-            .and_then(|mib| mib.read().map(|v| v.to_owned()))
-            .unwrap_or_else(|e| format!("N/A: failed to read jemalloc config, {}", e))
-    });
+    println!("    allocator: {}", GlobalAllocator::name());
+    println!("    config: {}", GlobalAllocator::conf());
+
     println!("Cluster: {}", {
         let cluster = ClusterDiscovery::instance().discover(&conf).await?;
         let nodes = cluster.nodes.len();
@@ -313,7 +310,7 @@ async fn main_entrypoint() -> Result<()> {
     Ok(())
 }
 
-async fn run_cmd(conf: &Config) -> Result<bool> {
+async fn run_cmd(conf: &InnerConfig) -> Result<bool> {
     if conf.cmd.is_empty() {
         return Ok(false);
     }

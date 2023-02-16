@@ -1,4 +1,5 @@
-<img src="https://user-images.githubusercontent.com/172204/193307982-a286c574-80ef-41de-b52f-1b064ae7fccd.png" alt="databend" />
+<h1 align="center">The Future of Cloud Data Analysis</h1>
+
 <div align="center">
 
 <h4 align="center">
@@ -40,15 +41,8 @@
 
 </div>
 </div>
-<br>
 
-- [What is Databend?](#what-is-databend)
-- [Architecture](#architecture)
-- [Try Databend](#try-databend)
-- [Getting Started](#getting-started)
-- [Contributing](#contributing)
-- [Community](#community)
-- [Roadmap](#roadmap)
+<img src="https://user-images.githubusercontent.com/172204/218997620-2bbdbbfe-9351-421e-bf6e-6cc5e0f3881b.svg" alt="databend" />
 
 ## What is Databend?
 
@@ -79,7 +73,7 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 
 - __Support for Semi-Structured Data__
 
-  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON, and Parquet, which are located in the cloud or your local file system; Databend also supports semi-structured data types: [ARRAY, MAP, JSON](https://databend.rs/doc/sql-reference/data-types/data-type-semi-structured-types), which is easy to import and operate on semi-structured.
+  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON, and Parquet, which are located in the cloud or your local file system; Databend also supports semi-structured data types: [ARRAY, TUPLE, MAP, JSON](https://databend.rs/doc/sql-reference/data-types/data-type-semi-structured-types), which is easy to import and operate on semi-structured.
 
 
 - __MySQL/ClickHouse Compatible__
@@ -142,6 +136,11 @@ docker run --net=host  datafuselabs/databend
 - [How to Load Data from Amazon S3](https://databend.rs/doc/load-data/s3)
 - [How to Load Data from Databend Stages](https://databend.rs/doc/load-data/stage)
 
+
+## Unloading Data from Databend
+
+- [How to Unload Data from Databend](https://databend.rs/doc/unload-data/)
+
 ### Managing Users
 
 - [How to Create a User](https://databend.rs/doc/sql-commands/ddl/user/user-create-user)
@@ -189,7 +188,6 @@ docker run --net=host  datafuselabs/databend
 
 ### Performance
 
-- [How to Benchmark Databend](https://databend.rs/doc/use-cases/analyze-ontime-with-databend-on-ec2-and-s3)
 - [How to Benchmark Databend using TPC-H](https://databend.rs/blog/2022/08/08/benchmark-tpc-h)
 
 
@@ -215,6 +213,8 @@ For general help in using Databend, please refer to the official documentation. 
 - [I'm feeling lucky](https://link.databend.rs/i-m-feeling-lucky) (Pick up a good first issue now!)
 
 ## Roadmap
+
+- [Roadmap v1.0](https://github.com/datafuselabs/databend/issues/9604)
 - [Roadmap v0.9](https://github.com/datafuselabs/databend/issues/7052)
 - [Roadmap 2023](https://github.com/datafuselabs/databend/issues/9448)
 

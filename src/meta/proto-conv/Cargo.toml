@@ -13,7 +13,6 @@ test = false
 [dependencies]
 common-expression = { path = "../../query/expression" }
 common-meta-app = { path = "../app" }
-common-meta-types = { path = "../types" }
 common-protos = { path = "../protos" }
 
 chrono = { workspace = true }

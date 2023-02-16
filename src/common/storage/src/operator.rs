@@ -19,22 +19,23 @@ use std::io::Result;
 use std::time::Duration;
 
 use anyhow::anyhow;
-use backon::ExponentialBackoff;
 use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
-use common_meta_types::StorageAzblobConfig;
-use common_meta_types::StorageFsConfig;
-use common_meta_types::StorageGcsConfig;
-use common_meta_types::StorageHttpConfig;
-use common_meta_types::StorageIpfsConfig;
-use common_meta_types::StorageMokaConfig;
-use common_meta_types::StorageObsConfig;
-use common_meta_types::StorageOssConfig;
-use common_meta_types::StorageParams;
-use common_meta_types::StorageRedisConfig;
-use common_meta_types::StorageS3Config;
+use common_meta_app::storage::StorageAzblobConfig;
+use common_meta_app::storage::StorageFsConfig;
+use common_meta_app::storage::StorageGcsConfig;
+#[cfg(feature = "storage-hdfs")]
+use common_meta_app::storage::StorageHdfsConfig;
+use common_meta_app::storage::StorageHttpConfig;
+use common_meta_app::storage::StorageIpfsConfig;
+use common_meta_app::storage::StorageMokaConfig;
+use common_meta_app::storage::StorageObsConfig;
+use common_meta_app::storage::StorageOssConfig;
+use common_meta_app::storage::StorageParams;
+use common_meta_app::storage::StorageRedisConfig;
+use common_meta_app::storage::StorageS3Config;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MetricsLayer;
@@ -82,7 +83,7 @@ pub fn build_operator<A: Accessor>(acc: A) -> Operator {
 
     ob
         // Add retry
-        .layer(RetryLayer::new(ExponentialBackoff::default().with_jitter()))
+        .layer(RetryLayer::new().with_jitter())
         // Add metrics
         .layer(MetricsLayer)
         // Add logging
@@ -146,7 +147,7 @@ fn init_gcs_operator(cfg: &StorageGcsConfig) -> Result<impl Accessor> {
 
 /// init_hdfs_operator will init an opendal hdfs operator.
 #[cfg(feature = "storage-hdfs")]
-fn init_hdfs_operator(cfg: &common_meta_types::StorageHdfsConfig) -> Result<impl Accessor> {
+fn init_hdfs_operator(cfg: &StorageHdfsConfig) -> Result<impl Accessor> {
     let mut builder = services::Hdfs::default();
 
     // Endpoint.

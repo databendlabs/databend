@@ -99,7 +99,7 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
             Ok(result) => assert!(
                 result
                     .as_ref()
-                    .sematically_eq(&optimized_result.clone().unwrap().as_ref()),
+                    .semantically_eq(&optimized_result.clone().unwrap().as_ref()),
                 "{} should eq {}, expr: {}, optimized_expr: {}",
                 result,
                 optimized_result.unwrap(),

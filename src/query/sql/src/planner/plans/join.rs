@@ -393,7 +393,14 @@ impl Operator for Join {
             // TODO(leiysky): we can enforce redistribution here
             required.distribution = Distribution::Serial;
         } else if ctx.get_settings().get_prefer_broadcast_join()?
-            && !matches!(self.join_type, JoinType::Right | JoinType::Full)
+            && !matches!(
+                self.join_type,
+                JoinType::Right
+                    | JoinType::Full
+                    | JoinType::RightAnti
+                    | JoinType::RightSemi
+                    | JoinType::RightMark
+            )
         {
             required.distribution = Distribution::Broadcast;
         } else if child_index == 0 {

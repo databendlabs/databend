@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(write_all_vectored)]
 #![allow(clippy::uninlined_format_args)]
 #[cfg(feature = "heapsize")]
 #[cfg(not(target_os = "macos"))]

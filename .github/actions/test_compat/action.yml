@@ -29,7 +29,7 @@ runs:
         build-tool bash ./tests/compat/test-compat.sh
 
     - name: Upload failure
-      if: failure()
+      if: failure() || cancelled()
       uses: ./.github/actions/artifact_failure
       with:
         name: test-compat

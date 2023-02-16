@@ -15,9 +15,11 @@
 #![allow(clippy::uninlined_format_args)]
 
 mod debug;
+mod errors;
 mod health;
 mod http_shutdown_handlers;
 
 pub use debug::*;
+pub use errors::HttpError;
 pub use health::*;
 pub use http_shutdown_handlers::HttpShutdownHandler;

@@ -28,6 +28,7 @@ impl Plan {
             }
             Plan::ExplainAst { .. } => Ok("ExplainAst".to_string()),
             Plan::ExplainSyntax { .. } => Ok("ExplainSyntax".to_string()),
+            Plan::ExplainAnalyze { .. } => Ok("ExplainAnalyze".to_string()),
 
             Plan::Copy(plan) => Ok(format!("{:?}", plan)),
 
@@ -85,6 +86,11 @@ impl Plan {
             Plan::CreateStage(create_stage) => Ok(format!("{:?}", create_stage)),
             Plan::DropStage(s) => Ok(format!("{:?}", s)),
             Plan::RemoveStage(s) => Ok(format!("{:?}", s)),
+
+            // FileFormat
+            Plan::CreateFileFormat(create_file_format) => Ok(format!("{:?}", create_file_format)),
+            Plan::DropFileFormat(drop_file_format) => Ok(format!("{:?}", drop_file_format)),
+            Plan::ShowFileFormats(show_file_formats) => Ok(format!("{:?}", show_file_formats)),
 
             // Account
             Plan::GrantRole(grant_role) => Ok(format!("{:?}", grant_role)),

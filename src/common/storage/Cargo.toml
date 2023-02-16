@@ -7,7 +7,7 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [features]
-storage-hdfs = ["common-meta-types/storage-hdfs"]
+storage-hdfs = ["common-meta-app/storage-hdfs"]
 
 [dependencies]
 common-arrow = { path = "../arrow" }
@@ -15,12 +15,13 @@ common-auth = { path = "../auth" }
 common-base = { path = "../base" }
 common-exception = { path = "../exception" }
 common-expression = { path = "../../query/expression" }
+common-meta-app = { path = "../../meta/app" }
 common-meta-types = { path = "../../meta/types" }
 
 anyhow = { workspace = true }
 async-stream = "0.3.3"
 async-trait = "0.1"
-backon = "0.2"
+backon = "0.4"
 bytes = "1"
 futures = "0.3"
 globiter = "0.1"

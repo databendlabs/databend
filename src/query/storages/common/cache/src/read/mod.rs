@@ -17,9 +17,9 @@ mod cached_reader;
 mod loader;
 mod readers;
 
+pub use cached_reader::CachedReader;
 pub use loader::CacheKey;
 pub use loader::LoadParams;
 pub use loader::Loader;
-pub use readers::DiskCacheReader;
 pub use readers::InMemoryBytesCacheReader;
 pub use readers::InMemoryItemCacheReader;

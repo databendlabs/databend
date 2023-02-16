@@ -20,12 +20,12 @@ use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
 /// ProbeState used for probe phase of hash join.
 /// We may need some reuseable state for probe phase.
 pub struct ProbeState {
-    pub(crate) probe_indexs: Vec<u32>,
-    pub(crate) build_indexs: Vec<RowPtr>,
+    pub(crate) probe_indexes: Vec<u32>,
+    pub(crate) build_indexes: Vec<RowPtr>,
     pub(crate) valids: Option<Bitmap>,
     // In the probe phase, the probe block with N rows could join result into M rows
     // e.g.: [0, 1, 2, 3]  results into [0, 1, 2, 2, 3]
-    // probe_indexs: the result index to the probe block row -> [0, 1, 2, 2, 3]
+    // probe_indexes: the result index to the probe block row -> [0, 1, 2, 2, 3]
     // row_state:  the state (counter) of the probe block row -> [1, 1, 2, 1]
     pub(crate) row_state: Vec<u32>,
     pub(crate) markers: Option<Vec<MarkerKind>>,
@@ -33,16 +33,16 @@ pub struct ProbeState {
 
 impl ProbeState {
     pub fn clear(&mut self) {
-        self.probe_indexs.clear();
-        self.build_indexs.clear();
+        self.probe_indexes.clear();
+        self.build_indexes.clear();
         self.row_state.clear();
         self.valids = None;
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
         ProbeState {
-            probe_indexs: Vec::with_capacity(capacity),
-            build_indexs: Vec::with_capacity(capacity),
+            probe_indexes: Vec::with_capacity(capacity),
+            build_indexes: Vec::with_capacity(capacity),
             row_state: Vec::with_capacity(capacity),
             valids: None,
             markers: None,

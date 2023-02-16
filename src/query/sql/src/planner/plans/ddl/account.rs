@@ -20,12 +20,12 @@ use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
-use common_meta_types::AuthInfo;
-use common_meta_types::GrantObject;
-use common_meta_types::PrincipalIdentity;
-use common_meta_types::UserIdentity;
-use common_meta_types::UserOption;
-use common_meta_types::UserPrivilegeSet;
+use common_meta_app::principal::AuthInfo;
+use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::PrincipalIdentity;
+use common_meta_app::principal::UserIdentity;
+use common_meta_app::principal::UserOption;
+use common_meta_app::principal::UserPrivilegeSet;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateUserPlan {

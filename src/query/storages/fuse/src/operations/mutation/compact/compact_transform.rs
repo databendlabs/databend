@@ -19,7 +19,6 @@ use std::time::Instant;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
-use common_cache::Cache;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -29,6 +28,7 @@ use common_expression::TableSchemaRef;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use opendal::Operator;
 use storages_common_blocks::blocks_to_parquet;
+use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CacheManager;
 use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::BlockMeta;
@@ -53,6 +53,7 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
+use crate::statistics::gen_col_stats_lite;
 use crate::statistics::reduce_block_statistics;
 use crate::statistics::reducers::reduce_block_metas;
 
@@ -225,8 +226,13 @@ impl Processor for CompactTransform {
                     let compact_blocks: Vec<_> = blocks.drain(0..block_num).collect();
                     let new_block = DataBlock::concat(&compact_blocks)?;
 
+                    let col_stats_lites = gen_col_stats_lite(
+                        &new_block,
+                        self.block_reader.schema().fields(),
+                        &self.block_reader.default_vals,
+                    )?;
                     // generate block statistics.
-                    let col_stats = reduce_block_statistics(&stats, Some(&new_block))?;
+                    let col_stats = reduce_block_statistics(&stats, Some(&col_stats_lites))?;
                     let row_count = new_block.num_rows() as u64;
                     let block_size = new_block.memory_size() as u64;
                     let (block_location, block_id) = self.location_gen.gen_block_location();
@@ -306,8 +312,7 @@ impl Processor for CompactTransform {
             }
             State::Output { location, segment } => {
                 if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
-                    let cache = &mut segment_cache.write();
-                    cache.put(location.clone(), segment.clone());
+                    segment_cache.put(location.clone(), segment.clone())
                 }
 
                 let meta = CompactSinkMeta::create(

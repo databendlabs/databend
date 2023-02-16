@@ -20,7 +20,7 @@ common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
 common-formats = { path = "../../formats" }
 common-io = { path = "../../../common/io" }
-common-meta-types = { path = "../../../meta/types" }
+common-meta-app = { path = "../../../meta/app" }
 common-pipeline-core = { path = "../core" }
 common-settings = { path = "../../settings" }
 

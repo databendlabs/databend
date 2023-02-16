@@ -14,15 +14,15 @@
 
 use std::sync::Arc;
 
-use common_config::Config;
+use common_config::InnerConfig;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::Result;
-use common_meta_types::AuthInfo;
-use common_meta_types::GrantObject;
+use common_meta_app::principal::AuthInfo;
+use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::PasswordHashMethod;
+use common_meta_app::principal::UserInfo;
+use common_meta_app::principal::UserPrivilegeSet;
 use common_meta_types::NodeInfo;
-use common_meta_types::PasswordHashMethod;
-use common_meta_types::UserInfo;
-use common_meta_types::UserPrivilegeSet;
 use databend_query::clusters::Cluster;
 use databend_query::clusters::ClusterHelper;
 use databend_query::sessions::QueryContext;
@@ -69,7 +69,7 @@ pub async fn create_query_context_with_session(
 }
 
 pub async fn create_query_context_with_config(
-    config: Config,
+    config: InnerConfig,
     mut current_user: Option<UserInfo>,
 ) -> Result<(TestGuard, Arc<QueryContext>)> {
     let guard = TestGlobalServices::setup(config).await?;

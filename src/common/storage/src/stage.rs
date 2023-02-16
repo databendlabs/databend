@@ -16,8 +16,8 @@ use std::path::Path;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::StageType;
-use common_meta_types::UserStageInfo;
+use common_meta_app::principal::StageType;
+use common_meta_app::principal::UserStageInfo;
 use futures::TryStreamExt;
 use opendal::ObjectMetadata;
 use opendal::ObjectMode;
@@ -176,7 +176,7 @@ async fn list_files_with_pattern(
 
     // path is a dir
     let mut files = Vec::new();
-    let mut list = operator.batch().walk_top_down(path)?;
+    let mut list = operator.object(path).scan().await?;
     while let Some(obj) = list.try_next().await? {
         let meta = obj.metadata().await?;
         if check_file(obj.path(), &meta, &pattern) {

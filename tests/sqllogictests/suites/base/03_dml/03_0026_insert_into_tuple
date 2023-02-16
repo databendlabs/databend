@@ -76,5 +76,14 @@ select t:a:m, t:a:n, t:a, t:b:x, t:b:y, t:b from v
 10 11 (10,11) 20 21 (20,21)
 30 31 (30,31) 40 41 (40,41)
 
+
+statement ok
+create table t4 (a Tuple(Int, Int) )
+
+query TTTT
+desc t4
+----
+a (1 INT32, 2 INT32) NO (0, 0) (empty)
+
 statement ok
 DROP DATABASE db1

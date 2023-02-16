@@ -146,7 +146,14 @@ pub fn check_cast<Index: ColumnIndex>(
     } else {
         // fast path to eval function for cast
         if let Some(cast_fn) = get_simple_cast_function(is_try, dest_type) {
-            if let Ok(cast_expr) = check_function(span, &cast_fn, &[], &[expr.clone()], fn_registry)
+            let params = if let DataType::Decimal(ty) = dest_type {
+                vec![ty.precision() as usize, ty.scale() as usize]
+            } else {
+                vec![]
+            };
+
+            if let Ok(cast_expr) =
+                check_function(span, &cast_fn, &params, &[expr.clone()], fn_registry)
             {
                 if cast_expr.data_type() == &wrapped_dest_type {
                     return Ok(cast_expr);
@@ -266,11 +273,11 @@ pub fn check_function<Index: ColumnIndex>(
 }
 
 #[derive(Debug)]
-pub struct Subsitution(pub HashMap<usize, DataType>);
+pub struct Substitution(pub HashMap<usize, DataType>);
 
-impl Subsitution {
+impl Substitution {
     pub fn empty() -> Self {
-        Subsitution(HashMap::new())
+        Substitution(HashMap::new())
     }
 
     pub fn equation(idx: usize, ty: DataType) -> Self {
@@ -330,10 +337,11 @@ pub fn try_check_function<Index: ColumnIndex>(
         .zip(&sig.args_type)
         .map(|(src_ty, dest_ty)| unify(src_ty, dest_ty, additional_rules))
         .collect::<Result<Vec<_>>>()?;
+
     let subst = substs
         .into_iter()
         .try_reduce(|subst1, subst2| subst1.merge(subst2))?
-        .unwrap_or_else(Subsitution::empty);
+        .unwrap_or_else(Substitution::empty);
 
     let checked_args = args
         .iter()
@@ -370,12 +378,12 @@ pub fn unify(
     src_ty: &DataType,
     dest_ty: &DataType,
     additional_rules: &AutoCastSignature,
-) -> Result<Subsitution> {
+) -> Result<Substitution> {
     match (src_ty, dest_ty) {
         (DataType::Generic(_), _) => unreachable!("source type must not contain generic type"),
-        (ty, DataType::Generic(idx)) => Ok(Subsitution::equation(*idx, ty.clone())),
-        (DataType::Null, DataType::Nullable(_)) => Ok(Subsitution::empty()),
-        (DataType::EmptyArray, DataType::Array(_)) => Ok(Subsitution::empty()),
+        (ty, DataType::Generic(idx)) => Ok(Substitution::equation(*idx, ty.clone())),
+        (DataType::Null, DataType::Nullable(_)) => Ok(Substitution::empty()),
+        (DataType::EmptyArray, DataType::Array(_)) => Ok(Substitution::empty()),
         (DataType::Nullable(src_ty), DataType::Nullable(dest_ty)) => {
             unify(src_ty, dest_ty, additional_rules)
         }
@@ -394,16 +402,16 @@ pub fn unify(
             let subst = substs
                 .into_iter()
                 .try_reduce(|subst1, subst2| subst1.merge(subst2))?
-                .unwrap_or_else(Subsitution::empty);
+                .unwrap_or_else(Substitution::empty);
             Ok(subst)
         }
-        (src_ty, dest_ty) if can_auto_cast_to(src_ty, dest_ty) => Ok(Subsitution::empty()),
+        (src_ty, dest_ty) if can_auto_cast_to(src_ty, dest_ty) => Ok(Substitution::empty()),
         (src_ty, dest_ty)
             if additional_rules
                 .iter()
                 .any(|(src, dest)| src == src_ty && dest == dest_ty) =>
         {
-            Ok(Subsitution::empty())
+            Ok(Substitution::empty())
         }
         _ => Err(ErrorCode::from_string_no_backtrace(format!(
             "unable to unify `{}` with `{}`",
@@ -429,6 +437,8 @@ pub fn can_auto_cast_to(src_ty: &DataType, dest_ty: &DataType) -> bool {
             || *dest_num_ty == NumberDataType::Float64
             || src_num_ty.can_lossless_cast_to(*dest_num_ty)
         }
+
+        (DataType::Number(_) | DataType::Decimal(_), DataType::Decimal(_)) => true,
 
         // Note: comment these because : select 'str' -1 will auto transform into: `minus(CAST('str' AS Date), CAST(1 AS Int64))`
         // (DataType::String, DataType::Date) => true,
@@ -477,7 +487,10 @@ pub fn common_super_type(ty1: DataType, ty2: DataType) -> Option<DataType> {
 }
 
 pub fn get_simple_cast_function(is_try: bool, dest_type: &DataType) -> Option<String> {
-    let function_name = format!("to_{}", dest_type.to_string().to_lowercase());
+    let mut function_name = format!("to_{}", dest_type.to_string().to_lowercase());
+    if dest_type.is_decimal() {
+        function_name = "to_decimal".to_owned();
+    }
 
     if is_simple_cast_function(&function_name) {
         let prefix = if is_try { "try_" } else { "" };
@@ -488,7 +501,7 @@ pub fn get_simple_cast_function(is_try: bool, dest_type: &DataType) -> Option<St
 }
 
 pub fn is_simple_cast_function(name: &str) -> bool {
-    const SIMPLE_CAST_FUNCTIONS: &[&str; 15] = &[
+    const SIMPLE_CAST_FUNCTIONS: &[&str; 16] = &[
         "to_string",
         "to_uint8",
         "to_uint16",
@@ -504,6 +517,7 @@ pub fn is_simple_cast_function(name: &str) -> bool {
         "to_date",
         "to_variant",
         "to_boolean",
+        "to_decimal",
     ];
     SIMPLE_CAST_FUNCTIONS.contains(&name)
 }

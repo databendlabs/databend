@@ -16,7 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use backon::ExponentialBackoff;
+use backon::ExponentialBuilder;
 use backon::Retryable;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_context::TableContext;
@@ -268,7 +268,7 @@ impl Processor for StageTableSink {
 
                 let object = self.data_accessor.object(&path);
                 { || object.write(bytes.as_slice()) }
-                    .retry(ExponentialBackoff::default().with_jitter())
+                    .retry(&ExponentialBuilder::default().with_jitter())
                     .when(|err| err.is_temporary())
                     .notify(|err, dur| {
                         warn!(

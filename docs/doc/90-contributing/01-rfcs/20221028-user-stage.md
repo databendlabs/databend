@@ -74,7 +74,7 @@ pub enum StageType {
 The stage prefix rule will be:
 
 - `LegacyInternal` => `stage/{stage_name}`
-- `External` => spcified location.
+- `External` => specified location.
 - `Internal` => `stage/internal/{stage_name}`
 - `User` => `stage/user/{user_name}`
 

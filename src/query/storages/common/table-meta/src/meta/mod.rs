@@ -26,7 +26,6 @@ pub use compression::Compression;
 pub use current::*;
 pub use statistics::ClusterKey;
 pub use statistics::ClusterStatistics;
-pub use statistics::ColumnId;
 pub use statistics::ColumnStatistics;
 pub use statistics::Location;
 pub use statistics::SnapshotId;

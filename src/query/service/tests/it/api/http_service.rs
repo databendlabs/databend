@@ -33,7 +33,7 @@ async fn test_http_service_tls_server() -> Result<()> {
             .api_tls_server_key(TEST_SERVER_KEY)
             .api_tls_server_cert(TEST_SERVER_CERT)
             .build(),
-    )?;
+    );
 
     let listening = srv.start(address_str.parse()?).await?;
 
@@ -69,7 +69,7 @@ async fn test_http_service_tls_server_failed_case_1() -> Result<()> {
             .api_tls_server_key(TEST_SERVER_KEY)
             .api_tls_server_cert(TEST_SERVER_CERT)
             .build(),
-    )?;
+    );
     let listening = http_service.start(address_str.parse()?).await?;
 
     // test cert is issued for "localhost"
@@ -91,7 +91,7 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
             .api_tls_server_cert(TEST_TLS_SERVER_CERT)
             .api_tls_server_root_ca_cert(TEST_TLS_CA_CERT)
             .build(),
-    )?;
+    );
     let listening = srv.start(addr_str.parse()?).await?;
 
     // test cert is issued for "localhost"
@@ -129,7 +129,7 @@ async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
             .api_tls_server_cert(TEST_TLS_SERVER_CERT)
             .api_tls_server_root_ca_cert(TEST_TLS_CA_CERT)
             .build(),
-    )?;
+    );
     let listening = srv.start(address_str.parse()?).await?;
 
     // test cert is issued for "localhost"

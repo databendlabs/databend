@@ -56,7 +56,7 @@ SELECT * FROM allemployees ORDER BY id;
 | 1  | Ryan      | Tory     | M      |
 | 2  | Oliver    | Green    | M      |
 | 3  | Noah      | Shuster  | M      |
-| 4  | Lily      | McMent   | F      |
+| 4  | Lily      | McMeant   | F      |
 | 5  | Macy      | Lee      | F      |
 
 -- Exclude the column "id" from the result
@@ -68,7 +68,7 @@ SELECT * EXCLUDE id FROM allemployees;
 | Noah      | Shuster  | M      |
 | Ryan      | Tory     | M      |
 | Oliver    | Green    | M      |
-| Lily      | McMent   | F      |
+| Lily      | McMeant   | F      |
 | Macy      | Lee      | F      |
 
 -- Exclude the columns "id" and "lastname" from the result

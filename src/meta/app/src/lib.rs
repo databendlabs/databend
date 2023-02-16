@@ -20,7 +20,10 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![deny(unused_crate_dependencies)]
+#![feature(no_sanitize)]
 
+pub mod principal;
 pub mod schema;
-// pub mod user;
 pub mod share;
+pub mod storage;
+pub mod tenant;

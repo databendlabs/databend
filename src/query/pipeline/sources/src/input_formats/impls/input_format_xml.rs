@@ -25,8 +25,8 @@ use common_formats::FieldDecoderRowBased;
 use common_formats::FieldDecoderXML;
 use common_formats::FileFormatOptionsExt;
 use common_io::cursor_ext::*;
-use common_meta_types::OnErrorMode;
-use common_meta_types::StageFileFormatType;
+use common_meta_app::principal::OnErrorMode;
+use common_meta_app::principal::StageFileFormatType;
 use xml::reader::XmlEvent;
 use xml::ParserConfig;
 

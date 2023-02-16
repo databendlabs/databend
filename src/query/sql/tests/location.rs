@@ -21,19 +21,19 @@ use std::collections::BTreeMap;
 use anyhow::Result;
 use common_ast::ast::UriLocation;
 use common_base::base::GlobalInstance;
-use common_config::Config;
 use common_config::GlobalConfig;
-use common_meta_types::StorageFsConfig;
+use common_config::InnerConfig;
+use common_meta_app::storage::StorageFsConfig;
 // use common_storage::StorageFtpConfig;
-use common_meta_types::StorageGcsConfig;
-use common_meta_types::StorageHttpConfig;
-use common_meta_types::StorageIpfsConfig;
-use common_meta_types::StorageOssConfig;
-use common_meta_types::StorageParams;
-use common_meta_types::StorageS3Config;
-use common_meta_types::STORAGE_GCS_DEFAULT_ENDPOINT;
-use common_meta_types::STORAGE_IPFS_DEFAULT_ENDPOINT;
-use common_meta_types::STORAGE_S3_DEFAULT_ENDPOINT;
+use common_meta_app::storage::StorageGcsConfig;
+use common_meta_app::storage::StorageHttpConfig;
+use common_meta_app::storage::StorageIpfsConfig;
+use common_meta_app::storage::StorageOssConfig;
+use common_meta_app::storage::StorageParams;
+use common_meta_app::storage::StorageS3Config;
+use common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
+use common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
+use common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
 use common_sql::planner::binder::parse_uri_location;
 
 #[test]
@@ -44,7 +44,7 @@ fn test_parse_uri_location() -> Result<()> {
     };
 
     GlobalInstance::init_testing(&thread_name);
-    GlobalConfig::init(Config::default())?;
+    GlobalConfig::init(InnerConfig::default())?;
 
     let cases = vec![
         (
