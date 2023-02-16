@@ -37,7 +37,6 @@ pub trait SyncSource: Send {
 // TODO: This can be refactored using proc macros
 pub struct SyncSourcer<T: 'static + SyncSource> {
     is_finish: bool,
-
     inner: T,
     output: Arc<OutputPort>,
     generated_data: Option<DataBlock>,

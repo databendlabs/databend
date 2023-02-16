@@ -19,7 +19,7 @@ use common_expression::DataBlock;
 use common_expression::SortColumnDescription;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
 
 use crate::processors::transforms::Transform;
 use crate::processors::transforms::Transformer;
@@ -35,7 +35,7 @@ impl TransformSortPartial {
         output: Arc<OutputPort>,
         limit: Option<usize>,
         sort_columns_descriptions: Vec<SortColumnDescription>,
-    ) -> Result<ProcessorPtr> {
+    ) -> Result<Box<dyn Processor>> {
         Ok(Transformer::create(input, output, TransformSortPartial {
             limit,
             sort_columns_descriptions,

@@ -23,11 +23,11 @@ use common_arrow::arrow::array::Array;
 use common_arrow::native::read::reader::NativeReader;
 use common_arrow::native::read::NativeReadBuf;
 use common_catalog::plan::PartInfoPtr;
-use common_catalog::table::ColumnId;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::Value;
 use opendal::Object;
@@ -114,7 +114,6 @@ impl BlockReader {
         for meta in metas {
             let (offset, length) = meta.offset_length();
             let mut native_meta = meta.as_native().unwrap().clone();
-
             if let Some(range) = &range {
                 native_meta = native_meta.slice(range.start, range.end);
             }
@@ -183,7 +182,6 @@ impl BlockReader {
         parts: &VecDeque<PartInfoPtr>,
     ) -> Result<DataBlock> {
         let part = FusePartInfo::from_part(&parts[0])?;
-        let column_nodes = self.projection.project_column_nodes(&self.column_nodes)?;
         let mut need_to_fill_data = false;
 
         let columns_meta = &part.columns_meta;
@@ -210,7 +208,6 @@ impl BlockReader {
                 &data_block,
                 &data_block_column_ids,
                 &default_vals,
-                part.nums_rows,
             )?)
         } else {
             Ok(data_block)

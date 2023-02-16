@@ -119,6 +119,10 @@ impl<'a, V> Iterator for TableEmptyIter<'a, V> {
             Some(&self.slice[0])
         }
     }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = if self.i > 0 { 0 } else { 1 };
+        (len, Some(len))
+    }
 }
 
 pub struct TableEmptyIterMut<'a, V> {

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::alloc::Allocator;
+use std::iter::TrustedLen;
 use std::mem;
 use std::mem::MaybeUninit;
 
@@ -162,7 +163,14 @@ macro_rules! lookup_impl {
                     Some(res)
                 }
             }
+
+            fn size_hint(&self) -> (usize, Option<usize>) {
+                let remaining = $capacity - self.i;
+                (remaining, Some(remaining))
+            }
         }
+
+        unsafe impl<'a, V> TrustedLen for LookupTableIter<'a, $capacity, $ty, V> {}
 
         impl<'a, V> Iterator for LookupTableIterMut<'a, $capacity, $ty, V> {
             type Item = &'a mut Entry<$ty, V>;

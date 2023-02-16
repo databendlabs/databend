@@ -61,6 +61,7 @@ common-pipeline-core = { path = "../pipeline/core" }
 common-pipeline-sinks = { path = "../pipeline/sinks" }
 common-pipeline-sources = { path = "../pipeline/sources" }
 common-pipeline-transforms = { path = "../pipeline/transforms" }
+common-profile = { path = "../../common/profile" }
 common-settings = { path = "../settings" }
 common-sql = { path = "../sql" }
 common-storage = { path = "../../common/storage" }
@@ -106,6 +107,7 @@ chrono-tz = { workspace = true }
 dashmap = "5.4"
 futures = "0.3.24"
 futures-util = "0.3.24"
+h2 = "0.3.15"
 headers = "0.3.8"
 http = "0.2.8"
 itertools = "0.10.5"

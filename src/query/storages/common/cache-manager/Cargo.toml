@@ -11,6 +11,7 @@ edition = { workspace = true }
 [dependencies]
 common-arrow = { path = "../../../../common/arrow" }
 common-base = { path = "../../../../common/base" }
+common-cache = { path = "../../../../common/cache" }
 common-config = { path = "../../../config" }
 common-exception = { path = "../../../../common/exception" }
 storages-common-cache = { path = "../../common/cache" }

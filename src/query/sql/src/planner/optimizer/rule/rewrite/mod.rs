@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod filter_join;
 mod rule_eliminate_eval_scalar;
 mod rule_eliminate_filter;
 mod rule_fold_count_aggregate;

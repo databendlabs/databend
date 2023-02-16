@@ -17,9 +17,6 @@ use std::collections::BTreeMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::native::read::column_iter_to_arrays;
 use common_arrow::native::read::reader::NativeReader;
 use common_arrow::native::read::ArrayIter;
@@ -147,7 +144,7 @@ impl NativeDeserializeDataTransform {
         let mut column_leaves = Vec::with_capacity(block_reader.project_column_nodes.len());
         for column_node in &block_reader.project_column_nodes {
             let leaves: Vec<ColumnDescriptor> = column_node
-                .leaf_ids
+                .leaf_indices
                 .iter()
                 .map(|i| block_reader.parquet_schema_descriptor.columns()[*i].clone())
                 .collect::<Vec<_>>();
@@ -244,7 +241,7 @@ impl NativeDeserializeDataTransform {
 
     fn skip_chunks_page(read_columns: &[usize], chunks: &mut DataChunks) -> Result<()> {
         for (index, readers) in chunks.iter_mut() {
-            if read_columns.contains(&index) {
+            if read_columns.contains(index) {
                 continue;
             }
             for reader in readers {
@@ -368,7 +365,7 @@ impl Processor for NativeDeserializeDataTransform {
 
                             if sorter.never_match_any(&col) {
                                 self.skipped_page += 1;
-                                for (_, skip_num) in self.array_skips.iter_mut() {
+                                for (i, skip_num) in self.array_skips.iter_mut() {
                                     if self.read_columns.contains(i) {
                                         continue;
                                     }
@@ -408,7 +405,7 @@ impl Processor for NativeDeserializeDataTransform {
                     }
                 };
 
-                let skip_pages = self.array_skips.get(index).unwrap_or_else(|| &0);
+                let skip_pages = self.array_skips.get(index).unwrap_or(&0);
                 match array_iter.nth(*skip_pages) {
                     Some(array) => {
                         self.read_columns.push(*index);
@@ -500,7 +497,7 @@ impl Processor for NativeDeserializeDataTransform {
                     }
                 };
 
-                let skip_pages = self.array_skips.get(index).unwrap_or_else(|| &0);
+                let skip_pages = self.array_skips.get(index).unwrap_or(&0);
                 let array = array_iter.nth(*skip_pages).unwrap();
                 arrays.push((*index, array?));
                 self.array_iters.insert(*index, array_iter);

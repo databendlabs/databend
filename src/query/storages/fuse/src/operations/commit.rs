@@ -425,7 +425,11 @@ impl FuseTable {
                 acc.col_stats = if acc.col_stats.is_empty() {
                     stats.col_stats.clone()
                 } else {
-                    statistics::reduce_block_statistics(&[&acc.col_stats, &stats.col_stats], None)?
+                    statistics::reduce_block_statistics(
+                        &[&acc.col_stats, &stats.col_stats],
+                        None,
+                        None,
+                    )?
                 };
                 seg_acc.push(location.clone());
                 Ok::<_, ErrorCode>((acc, seg_acc))

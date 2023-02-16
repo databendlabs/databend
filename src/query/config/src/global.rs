@@ -17,17 +17,17 @@ use std::sync::Arc;
 use common_base::base::GlobalInstance;
 use common_exception::Result;
 
-use crate::Config;
+use crate::InnerConfig;
 
 pub struct GlobalConfig;
 
 impl GlobalConfig {
-    pub fn init(config: Config) -> Result<()> {
+    pub fn init(config: InnerConfig) -> Result<()> {
         GlobalInstance::set(Arc::new(config));
         Ok(())
     }
 
-    pub fn instance() -> Arc<Config> {
+    pub fn instance() -> Arc<InnerConfig> {
         GlobalInstance::get()
     }
 }

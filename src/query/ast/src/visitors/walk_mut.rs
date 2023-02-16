@@ -299,6 +299,7 @@ pub fn walk_cte_mut<V: VisitorMut>(visitor: &mut V, cte: &mut CTE) {
 pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statement) {
     match statement {
         Statement::Explain { kind, query } => visitor.visit_explain(kind, &mut *query),
+        Statement::ExplainAnalyze { query } => visitor.visit_statement(&mut *query),
         Statement::Query(query) => visitor.visit_query(&mut *query),
         Statement::Insert(insert) => visitor.visit_insert(insert),
         Statement::Delete {
@@ -404,6 +405,15 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
             visitor.visit_remove_stage(location, pattern)
         }
         Statement::DescribeStage { stage_name } => visitor.visit_describe_stage(stage_name),
+        Statement::CreateFileFormat {
+            if_not_exists,
+            name,
+            file_format_options,
+        } => visitor.visit_create_file_format(*if_not_exists, name, file_format_options),
+        Statement::DropFileFormat { if_exists, name } => {
+            visitor.visit_drop_file_format(*if_exists, name)
+        }
+        Statement::ShowFileFormats => visitor.visit_show_file_formats(),
         Statement::Call(stmt) => visitor.visit_call(stmt),
         Statement::Presign(stmt) => visitor.visit_presign(stmt),
         Statement::CreateShare(stmt) => visitor.visit_create_share(stmt),

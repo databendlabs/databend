@@ -62,7 +62,7 @@ enum State {
     },
     MergeRemain {
         part: PartInfoPtr,
-        chunks: MergeIOReadResult,
+        merged_io_read_result: MergeIOReadResult,
         data_block: DataBlock,
         filter: Value<AnyType>,
     },
@@ -170,11 +170,7 @@ impl Processor for MutationSource {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::FilterData(part, read_res) => {
-                let chunks = read_res
-                    .columns_chunks()?
-                    .into_iter()
-                    .map(|(column_idx, column_chunk)| (column_idx, column_chunk))
-                    .collect::<Vec<_>>();
+                let chunks = read_res.columns_chunks()?;
                 let mut data_block = self
                     .block_reader
                     .deserialize_parquet_chunks(part.clone(), chunks)?;
@@ -272,17 +268,12 @@ impl Processor for MutationSource {
             }
             State::MergeRemain {
                 part,
-                chunks,
+                merged_io_read_result,
                 mut data_block,
                 filter,
             } => {
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
-                    let chunks = chunks
-                        .columns_chunks()?
-                        .into_iter()
-                        .map(|(column_idx, column_chunk)| (column_idx, column_chunk))
-                        .collect::<Vec<_>>();
-
+                    let chunks = merged_io_read_result.columns_chunks()?;
                     let remain_block = remain_reader.deserialize_parquet_chunks(part, chunks)?;
 
                     match self.action {
@@ -360,7 +351,7 @@ impl Processor for MutationSource {
                         .await?;
                     self.state = State::MergeRemain {
                         part,
-                        chunks: read_res,
+                        merged_io_read_result: read_res,
                         data_block,
                         filter,
                     };

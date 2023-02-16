@@ -19,6 +19,7 @@ use common_expression::types::NumberType;
 use common_expression::types::ValueType;
 use common_expression::Column;
 use common_expression::DataBlock;
+use common_expression::FieldIndex;
 use common_expression::Scalar;
 use common_expression::TableSchemaRef;
 use common_functions::aggregates::eval_aggr;
@@ -39,16 +40,16 @@ pub fn get_traverse_columns_dfs(data_block: &DataBlock) -> traverse::TraverseRes
 
 pub fn gen_columns_statistics(
     data_block: &DataBlock,
-    column_distinct_count: Option<HashMap<usize, usize>>,
-    schema: Option<&TableSchemaRef>,
+    column_distinct_count: Option<HashMap<FieldIndex, usize>>,
+    schema: &TableSchemaRef,
 ) -> Result<StatisticsOfColumns> {
     let mut statistics = StatisticsOfColumns::new();
     let data_block = data_block.convert_to_full();
     let rows = data_block.num_rows();
 
     let leaves = get_traverse_columns_dfs(&data_block)?;
-    let column_ids = schema.map(|schema| schema.to_column_ids());
-    for (idx, (col_idx, col, data_type)) in leaves.iter().enumerate() {
+    let leaf_column_ids = schema.to_leaf_column_ids();
+    for ((col_idx, col, data_type), column_id) in leaves.iter().zip(leaf_column_ids) {
         if col.is_none() {
             continue;
         }
@@ -123,11 +124,6 @@ pub fn gen_columns_statistics(
             distinct_of_values: Some(distinct_of_values),
         };
 
-        // use column id as key instead of index
-        let column_id = match column_ids {
-            Some(ref column_ids) => column_ids[idx],
-            None => idx as u32,
-        };
         statistics.insert(column_id, col_stats);
     }
     Ok(statistics)

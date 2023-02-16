@@ -104,7 +104,6 @@ fn test_data_block_create_with_default_value_functions() -> Result<()> {
             TableField::new("e", TableDataType::String),
         ]);
 
-        let num_rows = 3;
         let block = new_block(&[
             Int32Type::from_data(vec![1i32, 2, 3]),
             Int32Type::from_data(vec![4i32, 5, 6]),
@@ -127,7 +126,6 @@ fn test_data_block_create_with_default_value_functions() -> Result<()> {
             &block,
             &block_column_ids,
             &default_vals,
-            num_rows,
         )
         .unwrap();
 

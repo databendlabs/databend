@@ -14,6 +14,7 @@
 
 use std::alloc::Allocator;
 use std::intrinsics::unlikely;
+use std::iter::TrustedLen;
 use std::mem::MaybeUninit;
 
 use common_base::mem_allocator::MmapAllocator;
@@ -201,7 +202,13 @@ where K: Keyable
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next()
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
 }
+
+unsafe impl<'a, K, V> TrustedLen for HashtableIter<'a, K, V> where K: Keyable {}
 
 pub struct HashtableIterMut<'a, K, V> {
     inner: std::iter::Chain<std::option::IterMut<'a, Entry<K, V>>, Table0IterMut<'a, K, V>>,

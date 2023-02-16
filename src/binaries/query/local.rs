@@ -16,7 +16,7 @@ use std::time::Instant;
 
 use comfy_table::Cell;
 use comfy_table::Table;
-use common_config::Config;
+use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -28,7 +28,7 @@ use databend_query::sql::Planner;
 use databend_query::GlobalServices;
 use tokio_stream::StreamExt;
 
-pub async fn query_local(conf: &Config) -> Result<()> {
+pub async fn query_local(conf: &InnerConfig) -> Result<()> {
     let mut conf = conf.clone();
     conf.storage.allow_insecure = true;
     let local_conf = conf.local.clone();

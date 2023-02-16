@@ -24,8 +24,8 @@ use std::time::Duration;
 use common_base::base::tokio;
 use common_base::base::GlobalInstance;
 use common_base::base::SignalStream;
-use common_config::Config;
 use common_config::GlobalConfig;
+use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metrics::label_counter;
@@ -59,13 +59,13 @@ pub struct SessionManager {
 }
 
 impl SessionManager {
-    pub fn init(conf: &Config) -> Result<()> {
+    pub fn init(conf: &InnerConfig) -> Result<()> {
         GlobalInstance::set(Self::create(conf));
 
         Ok(())
     }
 
-    pub fn create(conf: &Config) -> Arc<SessionManager> {
+    pub fn create(conf: &InnerConfig) -> Arc<SessionManager> {
         let max_sessions = conf.query.max_active_sessions as usize;
         Arc::new(SessionManager {
             max_sessions,

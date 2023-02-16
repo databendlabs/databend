@@ -13,22 +13,24 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
-use common_cache::Cache;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use opendal::Operator;
 use storages_common_blocks::blocks_to_parquet;
+use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CacheManager;
 use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::BlockMeta;
@@ -90,6 +92,7 @@ pub struct CompactTransform {
     location_gen: TableMetaLocationGenerator,
     dal: Operator,
     schema: TableSchemaRef,
+    column_id_set: HashSet<ColumnId>,
 
     // Limit the memory size of the block read.
     max_memory: u64,
@@ -121,6 +124,7 @@ impl CompactTransform {
         let max_threads = settings.get_max_threads()?;
         let max_memory = max_memory_usage / max_threads;
         let max_io_requests = settings.get_max_storage_io_requests()? as usize;
+        let column_id_set = schema.to_column_id_set();
         Ok(ProcessorPtr::create(Box::new(CompactTransform {
             ctx,
             state: State::Consume,
@@ -132,6 +136,7 @@ impl CompactTransform {
             location_gen,
             dal,
             schema,
+            column_id_set,
             max_memory,
             max_io_requests,
             compact_tasks: VecDeque::new(),
@@ -226,7 +231,11 @@ impl Processor for CompactTransform {
                     let new_block = DataBlock::concat(&compact_blocks)?;
 
                     // generate block statistics.
-                    let col_stats = reduce_block_statistics(&stats, Some(&new_block))?;
+                    let col_stats = reduce_block_statistics(
+                        &stats,
+                        Some(&new_block),
+                        Some(&self.column_id_set),
+                    )?;
                     let row_count = new_block.num_rows() as u64;
                     let block_size = new_block.memory_size() as u64;
                     let (block_location, block_id) = self.location_gen.gen_block_location();
@@ -306,8 +315,7 @@ impl Processor for CompactTransform {
             }
             State::Output { location, segment } => {
                 if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
-                    let cache = &mut segment_cache.write();
-                    cache.put(location.clone(), segment.clone());
+                    segment_cache.put(location.clone(), segment.clone())
                 }
 
                 let meta = CompactSinkMeta::create(

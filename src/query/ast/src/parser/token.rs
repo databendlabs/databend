@@ -423,6 +423,8 @@ pub enum TokenKind {
     NAN_DISPLAY,
     #[token("FILE_FORMAT", ignore(ascii_case))]
     FILE_FORMAT,
+    #[token("FILE", ignore(ascii_case))]
+    FILE,
     #[token("FILES", ignore(ascii_case))]
     FILES,
     #[token("FINAL", ignore(ascii_case))]
@@ -441,6 +443,10 @@ pub enum TokenKind {
     FORCE,
     #[token("FORMAT", ignore(ascii_case))]
     FORMAT,
+    #[token("FORMAT_NAME", ignore(ascii_case))]
+    FORMAT_NAME,
+    #[token("FORMATS", ignore(ascii_case))]
+    FORMATS,
     #[token("FRAGMENTS", ignore(ascii_case))]
     FRAGMENTS,
     #[token("FROM", ignore(ascii_case))]

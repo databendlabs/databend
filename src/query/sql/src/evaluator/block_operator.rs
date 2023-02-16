@@ -19,11 +19,12 @@ use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::Expr;
+use common_expression::FieldIndex;
 use common_expression::FunctionContext;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_pipeline_transforms::processors::transforms::Transformer;
 
@@ -37,7 +38,7 @@ pub enum BlockOperator {
     Filter { expr: Expr },
 
     /// Reorganize the input `DataBlock` with `projection`.
-    Project { projection: Vec<usize> },
+    Project { projection: Vec<FieldIndex> },
     // Remap { indices: Vec<(IndexType, IndexType)> },
 }
 
@@ -63,8 +64,8 @@ impl BlockOperator {
 
             BlockOperator::Project { projection } => {
                 let mut result = DataBlock::new(vec![], input.num_rows());
-                for id in projection {
-                    result.add_column(input.get_by_offset(*id).clone());
+                for index in projection {
+                    result.add_column(input.get_by_offset(*index).clone());
                 }
                 Ok(result)
             }
@@ -84,7 +85,7 @@ impl CompoundBlockOperator {
         output_port: Arc<OutputPort>,
         ctx: FunctionContext,
         operators: Vec<BlockOperator>,
-    ) -> ProcessorPtr {
+    ) -> Box<dyn Processor> {
         Transformer::<Self>::create(input_port, output_port, Self { operators, ctx })
     }
 

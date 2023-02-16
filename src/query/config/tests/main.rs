@@ -16,19 +16,19 @@ use std::ffi::OsString;
 
 use clap::Parser;
 use common_config::Config;
-use common_config::OuterConfig;
+use common_config::InnerConfig;
 use pretty_assertions::assert_eq;
 
-/// It's required to make sure config's default value is the same with clap.
+/// It's required to make sure setting's default value is the same with clap.
 #[test]
 fn test_config_default() {
-    let type_default = Config::default();
-    let args_default: Config = OuterConfig::parse_from(Vec::<OsString>::new())
+    let setting_default = InnerConfig::default();
+    let config_default: InnerConfig = Config::parse_from(Vec::<OsString>::new())
         .try_into()
         .expect("parse from args must succeed");
 
     assert_eq!(
-        type_default, args_default,
-        "inner config's default value is different from args, please check again"
+        setting_default, config_default,
+        "default setting is different from default config, please check again"
     )
 }

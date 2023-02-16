@@ -120,6 +120,8 @@ pub trait SchemaApi: Send + Sync {
         table_id: MetaId,
     ) -> Result<(TableIdent, Arc<TableMeta>), KVAppError>;
 
+    async fn drop_table_by_id(&self, table_id: MetaId) -> Result<DropTableReply, KVAppError>;
+
     async fn get_table_copied_file_info(
         &self,
         req: GetTableCopiedFileReq,

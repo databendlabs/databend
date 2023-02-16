@@ -14,10 +14,10 @@
 
 use std::collections::HashMap;
 
+use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use storages_common_table_meta::meta::ClusterStatistics;
-use storages_common_table_meta::meta::ColumnId;
 use storages_common_table_meta::meta::ColumnStatistics;
 
 use crate::statistics::column_statistic;
@@ -45,7 +45,7 @@ impl BlockStatistics {
             block_column_statistics: column_statistic::gen_columns_statistics(
                 data_block,
                 column_distinct_count,
-                Some(schema),
+                schema,
             )?,
             block_cluster_statistics: cluster_stats,
         })

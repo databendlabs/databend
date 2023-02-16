@@ -19,11 +19,11 @@ use backon::Retryable;
 use common_arrow::arrow::chunk::Chunk as ArrowChunk;
 use common_arrow::native::write::NativeWriter;
 use common_exception::Result;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use opendal::Operator;
 use storages_common_blocks::blocks_to_parquet;
-use storages_common_table_meta::meta::ColumnId;
 use storages_common_table_meta::meta::ColumnMeta;
 use tracing::warn;
 

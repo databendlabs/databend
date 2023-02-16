@@ -1,0 +1,20 @@
+---copy into table, use format csv from stage
+6
+---copy into table, use format csv from copy stmt
+6
+---copy into table, use format my_parquet from copy stmt
+3
+---copy into table, use format parquet from copy stmt
+3
+---copy from table
+12
+---select_stage use format my_parquet
+3
+---select_stage use format parquet
+3
+---infer_schema use format my_parquet
+id	INT	0	0
+t	(A INT32, B STRING)	0	1
+---infer_schema use format parquet
+id	INT	0	0
+t	(A INT32, B STRING)	0	1
