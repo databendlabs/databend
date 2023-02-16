@@ -75,8 +75,8 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
                 in_memory_size += col_stats.in_memory_size;
             }
 
-            if let Some(stats) = col_stats_lites {
-                if let Some(stat) = stats.get(id) {
+            if let Some(col_stats_lite) = col_stats_lites {
+                if let Some(stat) = col_stats_lite.get(id) {
                     // fill the default value for min max.
                     if stats.len() < stats_len {
                         min_stats.push(stat.default_val.clone());
