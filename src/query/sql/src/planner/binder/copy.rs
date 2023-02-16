@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -235,7 +236,7 @@ impl<'a> Binder {
 
         let (mut stage_info, path) =
             parse_stage_location_v2(&self.ctx, src_stage, src_path).await?;
-        self.apply_stage_options(stmt, &mut stage_info)?;
+        self.apply_stage_options(stmt, &mut stage_info).await?;
 
         let from = DataSourcePlan {
             catalog: dst_catalog_name.to_string(),
@@ -294,7 +295,7 @@ impl<'a> Binder {
         }
 
         let mut stage_info = UserStageInfo::new_external_stage(storage_params, &path);
-        self.apply_stage_options(stmt, &mut stage_info)?;
+        self.apply_stage_options(stmt, &mut stage_info).await?;
         let from = DataSourcePlan {
             catalog: dst_catalog_name.to_string(),
             source_info: DataSourceInfo::StageSource(StageTableInfo {
@@ -361,7 +362,7 @@ impl<'a> Binder {
 
         let (mut stage_info, path) =
             parse_stage_location_v2(&self.ctx, dst_stage, dst_path).await?;
-        self.apply_stage_options(stmt, &mut stage_info)?;
+        self.apply_stage_options(stmt, &mut stage_info).await?;
 
         Ok(Plan::Copy(Box::new(CopyPlanV2::IntoStage {
             stage: Box::new(stage_info),
@@ -412,7 +413,7 @@ impl<'a> Binder {
         }
 
         let mut stage_info = UserStageInfo::new_external_stage(storage_params, &path);
-        self.apply_stage_options(stmt, &mut stage_info)?;
+        self.apply_stage_options(stmt, &mut stage_info).await?;
 
         Ok(Plan::Copy(Box::new(CopyPlanV2::IntoStage {
             stage: Box::new(stage_info),
@@ -441,7 +442,7 @@ impl<'a> Binder {
 
         let (mut stage_info, path) =
             parse_stage_location_v2(&self.ctx, dst_stage, dst_path).await?;
-        self.apply_stage_options(stmt, &mut stage_info)?;
+        self.apply_stage_options(stmt, &mut stage_info).await?;
 
         Ok(Plan::Copy(Box::new(CopyPlanV2::IntoStage {
             stage: Box::new(stage_info),
@@ -476,7 +477,7 @@ impl<'a> Binder {
         }
 
         let mut stage_info = UserStageInfo::new_external_stage(storage_params, &path);
-        self.apply_stage_options(stmt, &mut stage_info)?;
+        self.apply_stage_options(stmt, &mut stage_info).await?;
 
         Ok(Plan::Copy(Box::new(CopyPlanV2::IntoStage {
             stage: Box::new(stage_info),
@@ -486,9 +487,13 @@ impl<'a> Binder {
         })))
     }
 
-    fn apply_stage_options(&mut self, stmt: &CopyStmt, stage: &mut UserStageInfo) -> Result<()> {
+    async fn apply_stage_options(
+        &mut self,
+        stmt: &CopyStmt,
+        stage: &mut UserStageInfo,
+    ) -> Result<()> {
         if !stmt.file_format.is_empty() {
-            stage.file_format_options = FileFormatOptions::from_map(&stmt.file_format)?;
+            stage.file_format_options = self.try_resolve_file_format(&stmt.file_format).await?;
         }
 
         // Copy options.
@@ -512,6 +517,18 @@ impl<'a> Binder {
         }
 
         Ok(())
+    }
+
+    async fn try_resolve_file_format(
+        &self,
+        options: &BTreeMap<String, String>,
+    ) -> Result<FileFormatOptions> {
+        let opt = if let Some(name) = options.get("format_name") {
+            self.ctx.get_file_format(&name).await?.file_format_options
+        } else {
+            FileFormatOptions::from_map(options)?
+        };
+        Ok(opt)
     }
 }
 

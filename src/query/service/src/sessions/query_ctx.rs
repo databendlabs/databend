@@ -42,6 +42,7 @@ use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_meta_app::principal::RoleInfo;
+use common_meta_app::principal::UserDefinedFileFormat;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::TableInfo;
 use common_settings::Settings;
@@ -50,6 +51,7 @@ use common_storage::StorageMetrics;
 use common_storages_fuse::TableContext;
 use common_storages_parquet::ParquetTable;
 use common_storages_stage::StageTable;
+use common_users::UserApiProvider;
 use parking_lot::RwLock;
 use tracing::debug;
 
@@ -383,6 +385,12 @@ impl TableContext for QueryContext {
 
     fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
         self.shared.consume_precommit_blocks()
+    }
+
+    async fn get_file_format(&self, name: &str) -> Result<UserDefinedFileFormat> {
+        let user_mgr = UserApiProvider::instance();
+        let tenant = self.get_tenant();
+        user_mgr.get_file_format(&tenant, name).await
     }
 
     /// Fetch a Table by db and table name.

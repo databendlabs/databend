@@ -36,6 +36,7 @@ use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_meta_app::principal::RoleInfo;
+use common_meta_app::principal::UserDefinedFileFormat;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
@@ -456,6 +457,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
+        todo!()
+    }
+
+    async fn get_file_format(&self, _name: &str) -> Result<UserDefinedFileFormat> {
         todo!()
     }
 
