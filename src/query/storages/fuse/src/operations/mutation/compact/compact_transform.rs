@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
@@ -24,7 +23,6 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
-use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
@@ -55,6 +53,7 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
+use crate::statistics::gen_col_stats_lite;
 use crate::statistics::reduce_block_statistics;
 use crate::statistics::reducers::reduce_block_metas;
 
@@ -92,7 +91,6 @@ pub struct CompactTransform {
     location_gen: TableMetaLocationGenerator,
     dal: Operator,
     schema: TableSchemaRef,
-    column_id_set: HashSet<ColumnId>,
 
     // Limit the memory size of the block read.
     max_memory: u64,
@@ -124,7 +122,6 @@ impl CompactTransform {
         let max_threads = settings.get_max_threads()?;
         let max_memory = max_memory_usage / max_threads;
         let max_io_requests = settings.get_max_storage_io_requests()? as usize;
-        let column_id_set = schema.to_column_id_set();
         Ok(ProcessorPtr::create(Box::new(CompactTransform {
             ctx,
             state: State::Consume,
@@ -136,7 +133,6 @@ impl CompactTransform {
             location_gen,
             dal,
             schema,
-            column_id_set,
             max_memory,
             max_io_requests,
             compact_tasks: VecDeque::new(),
@@ -230,12 +226,13 @@ impl Processor for CompactTransform {
                     let compact_blocks: Vec<_> = blocks.drain(0..block_num).collect();
                     let new_block = DataBlock::concat(&compact_blocks)?;
 
-                    // generate block statistics.
-                    let col_stats = reduce_block_statistics(
-                        &stats,
-                        Some(&new_block),
-                        Some(&self.column_id_set),
+                    let col_stats_lites = gen_col_stats_lite(
+                        &new_block,
+                        self.block_reader.schema().fields(),
+                        &self.block_reader.default_vals,
                     )?;
+                    // generate block statistics.
+                    let col_stats = reduce_block_statistics(&stats, Some(&col_stats_lites))?;
                     let row_count = new_block.num_rows() as u64;
                     let block_size = new_block.memory_size() as u64;
                     let (block_location, block_id) = self.location_gen.gen_block_location();
