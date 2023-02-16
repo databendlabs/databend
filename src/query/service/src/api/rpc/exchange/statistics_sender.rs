@@ -84,20 +84,19 @@ impl StatisticsSender {
                             );
                         }
 
+                        flight_exchange.close_input().await;
+                        flight_exchange.close_output().await;
                         return;
                     }
                     Either::Left((Ok(Some(command)), right)) => {
                         notified = right;
                         recv = Box::pin(flight_exchange.recv());
 
-                        if matches!(command, DataPacket::ClosingClient) {
-                            ctx.get_exchange_manager().shutdown_query(&query_id);
-                            return;
-                        }
-
                         if let Err(_cause) = Self::on_command(&ctx, command, &flight_exchange).await
                         {
                             ctx.get_exchange_manager().shutdown_query(&query_id);
+                            flight_exchange.close_input().await;
+                            flight_exchange.close_output().await;
                             return;
                         }
                     }
@@ -105,14 +104,13 @@ impl StatisticsSender {
             }
 
             if let Ok(Some(command)) = flight_exchange.recv().await {
-                if matches!(command, DataPacket::ClosingClient) {
-                    return;
-                }
-
                 if let Err(error) = Self::on_command(&ctx, command, &flight_exchange).await {
                     tracing::warn!("Statistics send has error, cause: {:?}.", error);
                 }
             }
+
+            flight_exchange.close_input().await;
+            flight_exchange.close_output().await;
         });
     }
 
@@ -141,6 +139,8 @@ impl StatisticsSender {
             DataPacket::ErrorCode(_) => unreachable!(),
             DataPacket::FragmentData(_) => unreachable!(),
             DataPacket::ProgressAndPrecommit { .. } => unreachable!(),
+            DataPacket::ClosingInput => unreachable!(),
+            DataPacket::ClosingOutput => unreachable!(),
             DataPacket::FetchProgressAndPrecommit => {
                 exchange_flight
                     .send(DataPacket::ProgressAndPrecommit {
@@ -149,7 +149,6 @@ impl StatisticsSender {
                     })
                     .await
             }
-            DataPacket::ClosingClient => unreachable!(),
         }
     }
 
