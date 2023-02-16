@@ -60,7 +60,7 @@ use super::normalize_identifier;
 use crate::binder::Binder;
 use crate::binder::NameResolutionResult;
 use crate::optimizer::RelExpr;
-use crate::planner::binder::wrap_cast_if_needed;
+use crate::planner::binder::wrap_cast;
 use crate::planner::metadata::optimize_remove_count_args;
 use crate::plans::AggregateFunction;
 use crate::plans::AndExpr;
@@ -1388,7 +1388,7 @@ impl<'a> TypeChecker<'a> {
                 // Make comparison scalar type keep consistent
                 let coercion_type = common_super_type(scalar_data_type, *data_type.clone())
                     .ok_or_else(|| ErrorCode::Internal("Cannot find common super type"))?;
-                scalar = wrap_cast_if_needed(&scalar, &coercion_type);
+                scalar = wrap_cast(&scalar, &coercion_type);
                 data_type = Box::new(coercion_type);
             }
             child_scalar = Some(Box::new(scalar));
