@@ -2,9 +2,9 @@
 title: How to Write a Scalar Function
 ---
 
-## What's scalar functions
+## What's Scalar Function
 
-Scalar functions (sometimes referred to as User-Defined Functions / UDFs) return a single value as a return value for each row, not as a result set, and can be used in most places within a query or SET statement, except for the FROM clause.
+A scalar function (also known as User-Defined Functions or UDFs) returns a single value for each row instead of a result set. Scalar functions can be used in most places within a query or SET statement (except the FROM clause).
 
 ```text title="One to One Mapping execution"
 
@@ -23,14 +23,15 @@ Scalar functions (sometimes referred to as User-Defined Functions / UDFs) return
 └─────┘                    └──────┘
 ```
 
-### Knowledge before writing the eval function
+### What You Need to Know before Writing
 
-#### Logical datatypes and physical datatypes.
+#### Logical Datatypes and Physical Datatypes
 
-Logical datatypes are the datatypes that we use in Databend, and physical datatypes are the datatypes that we use in the execution/compute engine.
-Such as `Date`, it's a logical data type, but its physical is `Int32`, so its column is represented by `Buffer<i32>`.
+We use logical datatypes in Databend and physical datatypes in the execution/compute engine.
 
-#### Arrow's memory layout
+Take `Date` as an example, `Date` is a logical datatype while its physical datatype is `Int32`, so its column is represented by `Buffer<i32>`.
+
+#### Arrow's Memory Layout
 
 Databend's memory layout is based on the Arrow system, you can find Arrow's memory layout [here] (https://arrow.apache.org/docs/format/Columnar.html#format-columnar).
 
@@ -58,19 +59,19 @@ Would look like this:
 In most cases, we can ignore null for simd operation, and add the null mask to the result after the operation.
 This is very common optimization and widely used in arrow's compute system.
 
-### Special column
+### Special Column
 
 - Constant column
 
-  Sometimes column is constant in the block, such as: `SELECT 3 from table`, the column 3 is always 3, so we can use a constant column to represent it. This is useful to save the memory space during computation.
+  Sometimes column is constant in the block, such as: `SELECT 3 from table`, the column 3 is always 3, so we can use a constant column to represent it. This helps save memory space during computation.
 
 - Nullable column
 
-  By default, columns are not nullable. If we want a nullable column, we can use this to represent it.
+  By default, columns are not nullable. To include null values in a column, you can use a nullable column.
 
 ## Function Registration
 
-The `FunctionRegistry` is responsible for registering functions.
+The `FunctionRegistry` is used to register functions.
 
 ```rust
 #[derive(Default)]
@@ -87,9 +88,9 @@ pub struct FunctionRegistry {
 
 It contains three HashMaps: `funcs`, `factories`, and `aliases`.
 
-`funcs` and `factories` store registered functions. The former registering functions with a fixed number of parameters (currently the minimum number of arguments is `0` and the maximum number of arguments is `5`), `register_0_arg`, `register_1_arg` and so on. The latter registering functions with variable-length parameter (such as concat) and call the `register_function_factory function`.
+Both `funcs` and `factories` store registered functions. `funcs` takes a fixed number of arguments (currently from 0 to 5), `register_0_arg`, `register_1_arg`, and so on. `factories` takes variable-length parameters (such as concat) and calls the function`register_function_factory`.
 
-`aliases` is used to store aliases for functions. A function may have more than one alias (e.g. `minus` has `subtract` and `neg` aliases), its key is the alias of a function, value is the name of the currently existing function, and the `register_aliases` function will be called.
+`aliases` uses key-value pairs to store aliases for functions. A function can have more than one alias (for example, `minus` has `subtract` and 'neg'). The key is the alias of a function, and the value is the name of the current function, and the `register_aliases` function will be called.
 
 In addition, there are different levels of register api depending on the function required.
 
@@ -103,7 +104,7 @@ In addition, there are different levels of register api depending on the functio
 
 ## Function Composition
 
-Since the values of `funcs` are the body of the function, let's see how `Function` is constructed in Databend.
+Since the values of `funcs` are the body of the function, let's see how a `Function` is constructed in Databend.
 
 ```rust
 pub struct Function {
@@ -130,7 +131,7 @@ pub enum TokenKind {
 }
 ```
 
-As an example, let's consider the addition function used in the query `select 1+2`. The `+` token is converted to `Plus`, and the function name needs to be lowercase. Therefore, the function name used in registration is `plus`.
+As an example, let's consider the addition function used in the query `select 1+2`. The `+` token is converted to `Plus`, and the function name needs to be lowercase. Therefore, the function name used for registration is `plus`.
 
 ```rust
 with_number_mapped_type!(|NUM_TYPE| match left {
@@ -155,7 +156,7 @@ There are several categories of functions, including arithmetic, array, boolean,
 
 ### `length` function
 
-The length function takes a `String` parameter and returns a `Number`. It is named `length`, with **no domain restrictions** since any string has a length. The last argument is a closure function that serves as the implementation of `length`.
+The length function takes a `String` parameter and returns a `Number`. It is named as `length`, with **no domain restrictions** since each string should have a length. The last argument is a closure function that serves as the implementation of `length`.
 
 ```rust
 registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
@@ -208,11 +209,11 @@ select length(id) from t;
 +------------+
 ```
 
-Therefore, if we don't need to handle `null` values in the function, we can simply use `register_x_arg`. If we need to handle `null` values, we can refer to the implementation of [try_to_timestamp](https://github.com/datafuselabs/databend/blob/d5e06af03ba0f99afdd6bdc974bf2f5c1c022db8/src/query/functions/src/scalars/datetime.rs).
+Therefore, if we don't need to handle `null` values in the function, we can simply use `register_x_arg`. Otherwise, we can refer to the implementation of [try_to_timestamp](https://github.com/datafuselabs/databend/blob/d5e06af03ba0f99afdd6bdc974bf2f5c1c022db8/src/query/functions/src/scalars/datetime.rs).
 
 For functions that require specialization in vectorize, `register_passthrough_nullable_x_arg` should be used to perform specific vectorization optimization.
 
-For example, the implementation of the `regexp` function takes two `String` parameters and returns a `Bool`. In order to further optimize and reduce the repeated parsing of regular expressions, a `HashMap` structure is introduced in vectorized execution. Therefore, `vectorize_regexp` is separately implemented to handle this optimization.
+For example, the implementation of the `regexp` function takes two `String` parameters and returns a `Bool`. In order to further optimize and reduce the repeated parsing of regular expressions, a `HashMap` structure is introduced to vectorized execution. Therefore, `vectorize_regexp` is separately implemented to handle this optimization.
 
 ```rust
 registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
