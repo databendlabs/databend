@@ -144,7 +144,7 @@ const DEFAULT_DATA_RETENTION_SECONDS: i64 = 24 * 60 * 60;
 /// SchemaApi is implemented upon kvapi::KVApi.
 /// Thus every type that impl kvapi::KVApi impls SchemaApi.
 #[tonic::async_trait]
-impl<KV: kvapi::KVApi<Error = KVAppError>> SchemaApi for KV {
+impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn create_database(
         &self,
@@ -2332,7 +2332,7 @@ impl<KV: kvapi::KVApi<Error = KVAppError>> SchemaApi for KV {
 }
 
 async fn remove_table_copied_files(
-    kv_api: &impl kvapi::KVApi<Error = KVAppError>,
+    kv_api: &impl kvapi::KVApi<Error = MetaError>,
     table_id: u64,
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
@@ -2362,7 +2362,7 @@ async fn remove_table_copied_files(
 }
 
 async fn gc_dropped_table(
-    kv_api: &impl kvapi::KVApi<Error = KVAppError>,
+    kv_api: &impl kvapi::KVApi<Error = MetaError>,
     tenant: String,
     at_least: u32,
 ) -> Result<u32, KVAppError> {
@@ -2482,7 +2482,7 @@ async fn gc_dropped_table(
                 else_then: vec![],
             };
 
-            let (_succ, _responses) = send_txn(kv_api, txn_req).await?;
+            let _resp = kv_api.transaction(txn_req).await?;
             cnt += remove_table_keys.len() as u32;
             if cnt >= at_least {
                 break;
@@ -2493,7 +2493,7 @@ async fn gc_dropped_table(
 }
 
 async fn remove_db_id_from_share(
-    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     db_id: u64,
     from_share: ShareNameIdent,
     condition: &mut Vec<TxnCondition>,
@@ -2519,7 +2519,7 @@ async fn remove_db_id_from_share(
 }
 
 async fn gc_dropped_db(
-    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     tenant: String,
     at_least: u32,
 ) -> Result<u32, KVAppError> {
@@ -2627,7 +2627,7 @@ fn is_drop_time_out_of_retention_time(
 
 /// Returns (db_id_seq, db_id, db_meta_seq, db_meta)
 pub(crate) async fn get_db_or_err(
-    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     name_key: &DatabaseNameIdent,
     msg: impl Display,
 ) -> Result<(u64, u64, u64, DatabaseMeta), KVAppError> {
@@ -2691,7 +2691,7 @@ fn table_has_to_not_exist(
 /// It returns (seq, `u64` value).
 /// If the count value is not in the kv space, (0, `u64` value) is returned.
 async fn count_tables(
-    kv_api: &impl kvapi::KVApi<Error = KVAppError>,
+    kv_api: &impl kvapi::KVApi<Error = MetaError>,
     key: &CountTablesKey,
 ) -> Result<u64, KVAppError> {
     // For backward compatibility:
@@ -2715,7 +2715,7 @@ async fn count_tables(
 }
 
 async fn get_table_id_from_share_by_name(
-    kv_api: &impl kvapi::KVApi<Error = KVAppError>,
+    kv_api: &impl kvapi::KVApi<Error = MetaError>,
     share: &ShareNameIdent,
     db_id: u64,
     table_name: &String,
@@ -2761,7 +2761,7 @@ async fn get_table_id_from_share_by_name(
 }
 
 async fn get_table_names_by_ids(
-    kv_api: &impl kvapi::KVApi<Error = KVAppError>,
+    kv_api: &impl kvapi::KVApi<Error = MetaError>,
     ids: &[u64],
 ) -> Result<Vec<String>, KVAppError> {
     let mut table_names = vec![];
@@ -2784,7 +2784,7 @@ async fn get_table_names_by_ids(
 }
 
 async fn get_tableinfos_by_ids(
-    kv_api: &impl kvapi::KVApi<Error = KVAppError>,
+    kv_api: &impl kvapi::KVApi<Error = MetaError>,
     ids: &[u64],
     tenant_dbname: &DatabaseNameIdent,
     dbid_tbnames_opt: Option<Vec<DBIdTableName>>,
@@ -2841,7 +2841,7 @@ async fn get_tableinfos_by_ids(
 }
 
 async fn list_tables_from_unshare_db(
-    kv_api: &impl kvapi::KVApi<Error = KVAppError>,
+    kv_api: &impl kvapi::KVApi<Error = MetaError>,
     db_id: u64,
     tenant_dbname: &DatabaseNameIdent,
 ) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
@@ -2866,7 +2866,7 @@ async fn list_tables_from_unshare_db(
 }
 
 async fn list_tables_from_share_db(
-    kv_api: &impl kvapi::KVApi<Error = KVAppError>,
+    kv_api: &impl kvapi::KVApi<Error = MetaError>,
     share: ShareNameIdent,
     db_id: u64,
     tenant_dbname: &DatabaseNameIdent,

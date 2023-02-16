@@ -67,10 +67,8 @@ impl Projection {
                 let paths: Vec<&Vec<usize>> = path_indices.values().collect();
                 paths
                     .iter()
-                    .map(|path| {
-                        ColumnNodes::traverse_path(&column_nodes.column_nodes, path).unwrap()
-                    })
-                    .collect()
+                    .map(|path| ColumnNodes::traverse_path(&column_nodes.column_nodes, path))
+                    .collect::<Result<_>>()?
             }
         };
         Ok(column_nodes)

@@ -20,6 +20,8 @@ use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
 
+use url::Url;
+
 use crate::ast::write_quoted_comma_separated_list;
 use crate::ast::write_space_separated_map;
 use crate::ast::Identifier;
@@ -264,6 +266,53 @@ impl UriLocation {
             connection: Connection::new(conns),
         }
     }
+
+    pub fn from_uri(
+        uri: String,
+        part_prefix: String,
+        conns: BTreeMap<String, String>,
+    ) -> common_exception::Result<Self> {
+        // fs location is not a valid url, let's check it in advance.
+        if let Some(path) = uri.strip_prefix("fs://") {
+            return Ok(UriLocation::new(
+                "fs".to_string(),
+                "".to_string(),
+                path.to_string(),
+                part_prefix,
+                BTreeMap::default(),
+            ));
+        }
+
+        let parsed = Url::parse(&uri)
+            .map_err(|e| common_exception::ErrorCode::BadArguments(format!("invalid uri {}", e)))?;
+
+        let protocol = parsed.scheme().to_string();
+
+        let name = parsed
+            .host_str()
+            .map(|hostname| {
+                if let Some(port) = parsed.port() {
+                    format!("{}:{}", hostname, port)
+                } else {
+                    hostname.to_string()
+                }
+            })
+            .ok_or(common_exception::ErrorCode::BadArguments("invalid uri"))?;
+
+        let path = if parsed.path().is_empty() {
+            "/".to_string()
+        } else {
+            parsed.path().to_string()
+        };
+
+        Ok(Self {
+            protocol,
+            name,
+            path,
+            part_prefix,
+            connection: Connection::new(conns),
+        })
+    }
 }
 
 impl Display for UriLocation {
@@ -292,7 +341,7 @@ impl Display for StageLocation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FileLocation {
     Stage(StageLocation),
-    Uri(UriLocation),
+    Uri(String),
 }
 
 impl Display for FileLocation {

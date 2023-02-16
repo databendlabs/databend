@@ -79,6 +79,7 @@ pub enum SelectStageOption {
     Files(Vec<String>),
     Pattern(String),
     FileFormat(String),
+    Connection((String, String)),
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -86,6 +87,7 @@ pub struct SelectStageOptions {
     pub files: Option<Vec<String>>,
     pub pattern: Option<String>,
     pub file_format: Option<String>,
+    pub connection: BTreeMap<String, String>,
 }
 
 impl SelectStageOptions {
@@ -96,6 +98,9 @@ impl SelectStageOptions {
                 SelectStageOption::Files(v) => options.files = Some(v),
                 SelectStageOption::Pattern(v) => options.pattern = Some(v),
                 SelectStageOption::FileFormat(v) => options.file_format = Some(v),
+                SelectStageOption::Connection((k, v)) => {
+                    options.connection.insert(k, v);
+                }
             }
         }
         options

@@ -20,9 +20,9 @@ use common_exception::Result;
 use common_meta_app::principal::UserDefinedFileFormat;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
+use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 
@@ -33,12 +33,12 @@ use crate::FileFormatApi;
 static USER_FILE_FORMAT_API_KEY_PREFIX: &str = "__fd_file_formats";
 
 pub struct FileFormatMgr {
-    kv_api: Arc<dyn kvapi::KVApi<Error = KVAppError>>,
+    kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
     file_format_prefix: String,
 }
 
 impl FileFormatMgr {
-    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = KVAppError>>, tenant: &str) -> Result<Self> {
+    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: &str) -> Result<Self> {
         if tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
                 "Tenant can not empty(while role mgr create)",

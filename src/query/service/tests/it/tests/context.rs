@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_config::Config;
+use common_config::InnerConfig;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::Result;
 use common_meta_app::principal::AuthInfo;
@@ -69,7 +69,7 @@ pub async fn create_query_context_with_session(
 }
 
 pub async fn create_query_context_with_config(
-    config: Config,
+    config: InnerConfig,
     mut current_user: Option<UserInfo>,
 ) -> Result<(TestGuard, Arc<QueryContext>)> {
     let guard = TestGlobalServices::setup(config).await?;

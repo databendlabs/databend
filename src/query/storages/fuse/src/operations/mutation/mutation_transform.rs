@@ -17,7 +17,6 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_cache::Cache;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -25,6 +24,7 @@ use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use opendal::Operator;
+use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CacheManager;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
@@ -155,8 +155,7 @@ impl MutationTransform {
             handles.push(async move {
                 op.object(&segment.location).write(segment.data).await?;
                 if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
-                    let cache = &mut segment_cache.write();
-                    cache.put(segment.location.clone(), segment.segment.clone());
+                    segment_cache.put(segment.location.clone(), segment.segment.clone());
                 }
                 Ok::<_, ErrorCode>(())
             });

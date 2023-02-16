@@ -1294,9 +1294,13 @@ dependencies = [
 name = "common-cache"
 version = "0.1.0"
 dependencies = [
+ "crc32fast",
  "heapsize",
+ "hex",
  "ritelinked",
- "tempfile",
+ "siphasher",
+ "tracing",
+ "walkdir",
 ]
 
 [[package]]
@@ -1614,7 +1618,9 @@ dependencies = [
  "common-tracing",
  "enumflags2",
  "maplit",
+ "serde",
  "serde_json",
+ "thiserror",
  "tonic",
  "tracing",
 ]
@@ -1649,6 +1655,7 @@ dependencies = [
 name = "common-meta-client"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "common-arrow",
  "common-base",
  "common-building",
@@ -1669,6 +1676,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "thiserror",
  "tonic",
  "tracing",
 ]
@@ -2107,7 +2115,6 @@ dependencies = [
  "chrono",
  "common-arrow",
  "common-base",
- "common-cache",
  "common-catalog",
  "common-exception",
  "common-expression",
@@ -3113,6 +3120,7 @@ dependencies = [
  "futures",
  "futures-util",
  "goldenfile",
+ "h2",
  "headers",
  "hex",
  "http",
@@ -6976,6 +6984,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ringbuffer"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1973f95452ec56a4b2c683f5eabc15617e38f4faf2776ed4a0011d5070ecb37e"
+
+[[package]]
 name = "rio"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7808,11 +7822,19 @@ dependencies = [
  "common-base",
  "common-cache",
  "common-exception",
+ "crc32fast",
+ "crossbeam-channel",
+ "hex",
  "metrics",
  "opendal",
  "parking_lot 0.12.1",
+ "ringbuffer",
  "serde",
  "serde_json",
+ "siphasher",
+ "tempfile",
+ "tracing",
+ "walkdir",
 ]
 
 [[package]]
@@ -7821,6 +7843,7 @@ version = "0.1.0"
 dependencies = [
  "common-arrow",
  "common-base",
+ "common-cache",
  "common-config",
  "common-exception",
  "storages-common-cache",

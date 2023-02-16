@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::providers::BytesCache;
-use crate::providers::DiskCache;
-use crate::providers::ItemCache;
 use crate::read::cached_reader::CachedReader;
+use crate::InMemoryBytesCacheHolder;
+use crate::InMemoryItemCacheHolder;
+use crate::NamedCache;
 
-pub type InMemoryItemCacheReader<T, L> = CachedReader<T, L, ItemCache<T>>;
-pub type InMemoryBytesCacheReader<T, L> = CachedReader<T, L, BytesCache>;
-// NOTE: dummy impl, just for api testing
-pub type DiskCacheReader<T, L> = CachedReader<T, L, DiskCache>;
+pub type InMemoryItemCacheReader<T, L> = CachedReader<L, NamedCache<InMemoryItemCacheHolder<T>>>;
+pub type InMemoryBytesCacheReader<L> = CachedReader<L, NamedCache<InMemoryBytesCacheHolder>>;
