@@ -1618,7 +1618,9 @@ dependencies = [
  "common-tracing",
  "enumflags2",
  "maplit",
+ "serde",
  "serde_json",
+ "thiserror",
  "tonic",
  "tracing",
 ]
@@ -1653,6 +1655,7 @@ dependencies = [
 name = "common-meta-client"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "common-arrow",
  "common-base",
  "common-building",
@@ -1673,6 +1676,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "thiserror",
  "tonic",
  "tracing",
 ]

@@ -35,6 +35,7 @@ use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
+use common_meta_types::KVAppError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_metrics::counter::Count;
@@ -84,20 +85,6 @@ impl MetaServiceImpl {
             Status::unauthenticated(format!("token verify failed: {}, {}", token, e))
         })?;
         Ok(claim)
-    }
-
-    async fn execute_txn(&self, req: TxnRequest) -> TxnReply {
-        let ret = self.meta_node.transaction(req).await;
-        network_metrics::incr_request_result(ret.is_ok());
-
-        match ret {
-            Ok(resp) => resp,
-            Err(err) => TxnReply {
-                success: false,
-                error: serde_json::to_string(&err).expect("fail to serialize"),
-                responses: vec![],
-            },
-        }
     }
 }
 
@@ -178,18 +165,22 @@ impl MetaService for MetaServiceImpl {
         let reply = match req {
             MetaGrpcReq::UpsertKV(a) => {
                 let res = m.upsert_kv(a).await;
+                let res = res.map_err(KVAppError::from);
                 RaftReply::from(res)
             }
             MetaGrpcReq::GetKV(a) => {
                 let res = m.get_kv(&a.key).await;
+                let res = res.map_err(KVAppError::from);
                 RaftReply::from(res)
             }
             MetaGrpcReq::MGetKV(a) => {
                 let res = m.mget_kv(&a.keys).await;
+                let res = res.map_err(KVAppError::from);
                 RaftReply::from(res)
             }
             MetaGrpcReq::ListKV(a) => {
                 let res = m.prefix_list_kv(&a.prefix).await;
+                let res = res.map_err(KVAppError::from);
                 RaftReply::from(res)
             }
         };
@@ -214,7 +205,21 @@ impl MetaService for MetaServiceImpl {
 
         info!("Receive txn_request: {}", request);
 
-        let body = self.execute_txn(request).await;
+        let ret = self.meta_node.transaction(request).await;
+        network_metrics::incr_request_result(ret.is_ok());
+
+        let body = match ret {
+            Ok(resp) => resp,
+            Err(err) => {
+                let err = KVAppError::from(err);
+                TxnReply {
+                    success: false,
+                    error: serde_json::to_string(&err).expect("fail to serialize"),
+                    responses: vec![],
+                }
+            }
+        };
+
         network_metrics::incr_sent_bytes(body.encoded_len() as u64);
 
         Ok(Response::new(body))
