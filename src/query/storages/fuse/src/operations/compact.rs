@@ -31,6 +31,7 @@ use crate::operations::mutation::SegmentCompactMutator;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::Pipeline;
+use crate::statistics::traverse::traverse_scalar_dns;
 use crate::FuseTable;
 use crate::Table;
 use crate::TableContext;
@@ -143,6 +144,8 @@ impl FuseTable {
         let all_column_indices = self.all_column_indices();
         let projection = Projection::Columns(all_column_indices);
         let block_reader = self.create_block_reader(projection, ctx.clone())?;
+        let col_default_vals =
+            traverse_scalar_dns(block_reader.schema().fields(), &block_reader.default_vals);
 
         pipeline.add_transform(|input, output| {
             CompactTransform::try_create(
@@ -154,6 +157,7 @@ impl FuseTable {
                 self.meta_location_generator().clone(),
                 self.operator.clone(),
                 self.schema(),
+                col_default_vals.clone(),
                 thresholds,
                 self.get_write_settings(),
             )

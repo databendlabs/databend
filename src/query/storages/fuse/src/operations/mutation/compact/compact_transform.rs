@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
@@ -27,6 +27,7 @@ use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::ColumnId;
 use common_expression::DataBlock;
+use common_expression::Scalar;
 use common_expression::TableSchemaRef;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use opendal::Operator;
@@ -34,6 +35,7 @@ use storages_common_blocks::blocks_to_parquet;
 use storages_common_cache_manager::CacheManager;
 use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 use storages_common_table_meta::table::TableCompression;
@@ -92,7 +94,7 @@ pub struct CompactTransform {
     location_gen: TableMetaLocationGenerator,
     dal: Operator,
     schema: TableSchemaRef,
-    column_id_set: HashSet<ColumnId>,
+    col_default_vals: HashMap<ColumnId, Scalar>,
 
     // Limit the memory size of the block read.
     max_memory: u64,
@@ -116,6 +118,7 @@ impl CompactTransform {
         location_gen: TableMetaLocationGenerator,
         dal: Operator,
         schema: TableSchemaRef,
+        col_default_vals: HashMap<ColumnId, Scalar>,
         thresholds: BlockThresholds,
         write_settings: WriteSettings,
     ) -> Result<ProcessorPtr> {
@@ -124,7 +127,6 @@ impl CompactTransform {
         let max_threads = settings.get_max_threads()?;
         let max_memory = max_memory_usage / max_threads;
         let max_io_requests = settings.get_max_storage_io_requests()? as usize;
-        let column_id_set = schema.to_column_id_set();
         Ok(ProcessorPtr::create(Box::new(CompactTransform {
             ctx,
             state: State::Consume,
@@ -136,7 +138,7 @@ impl CompactTransform {
             location_gen,
             dal,
             schema,
-            column_id_set,
+            col_default_vals,
             max_memory,
             max_io_requests,
             compact_tasks: VecDeque::new(),
@@ -231,11 +233,7 @@ impl Processor for CompactTransform {
                     let new_block = DataBlock::concat(&compact_blocks)?;
 
                     // generate block statistics.
-                    let col_stats = reduce_block_statistics(
-                        &stats,
-                        Some(&new_block),
-                        Some(&self.column_id_set),
-                    )?;
+                    let col_stats = reduce_block_statistics(&stats, Some(&new_block))?;
                     let row_count = new_block.num_rows() as u64;
                     let block_size = new_block.memory_size() as u64;
                     let (block_location, block_id) = self.location_gen.gen_block_location();
@@ -374,7 +372,23 @@ impl Processor for CompactTransform {
                         };
                         self.scan_progress.incr(&progress_values);
 
-                        meta_stats.push(meta.col_stats.clone());
+                        let col_stats = self.col_default_vals.iter().fold(
+                            HashMap::new(),
+                            |mut acc, (id, val)| {
+                                let stats =
+                                    meta.col_stats.get(id).cloned().unwrap_or(ColumnStatistics {
+                                        min: val.clone(),
+                                        max: val.clone(),
+                                        null_count: 0,
+                                        in_memory_size: val.as_ref().memory_size() as u64
+                                            * meta.row_count,
+                                        distinct_of_values: Some(1),
+                                    });
+                                acc.insert(*id, stats);
+                                acc
+                            },
+                        );
+                        meta_stats.push(col_stats);
                         let settings = ReadSettings::from_ctx(&self.ctx)?;
 
                         // read block in parallel.

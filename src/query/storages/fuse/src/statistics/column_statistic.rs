@@ -138,6 +138,9 @@ pub mod traverse {
     use common_expression::types::DataType;
     use common_expression::BlockEntry;
     use common_expression::Column;
+    use common_expression::ColumnId;
+    use common_expression::TableDataType;
+    use common_expression::TableField;
 
     use super::*;
 
@@ -202,6 +205,56 @@ pub mod traverse {
             }
         }
         Ok(())
+    }
+
+    pub fn traverse_scalar_dns(
+        fields: &[TableField],
+        default_vals: &[Scalar],
+    ) -> HashMap<ColumnId, Scalar> {
+        fn collect_leaves(
+            column_type: &TableDataType,
+            column_id: &mut ColumnId,
+            default_val: Option<&Scalar>,
+            leaves: &mut HashMap<ColumnId, Scalar>,
+        ) {
+            match column_type {
+                TableDataType::Tuple { fields_type, .. } => match default_val {
+                    Some(Scalar::Tuple(vals)) => {
+                        for (ty, val) in fields_type.iter().zip(vals) {
+                            collect_leaves(ty, column_id, Some(val), leaves)
+                        }
+                    }
+                    None => fields_type
+                        .iter()
+                        .for_each(|ty| collect_leaves(ty, column_id, None, leaves)),
+                    _ => unreachable!(),
+                },
+                TableDataType::Array(inner_type) => {
+                    collect_leaves(inner_type, column_id, None, leaves)
+                }
+                _ => {
+                    if let Some(val) = default_val {
+                        let data_type = column_type.into();
+                        if RangeIndex::supported_type(&data_type) {
+                            leaves.insert(*column_id, val.clone());
+                        }
+                    }
+                    *column_id += 1;
+                }
+            }
+        }
+
+        let mut leaves = HashMap::new();
+        for (field, val) in fields.iter().zip(default_vals) {
+            let mut next_column_id = field.column_id();
+            collect_leaves(
+                field.data_type(),
+                &mut next_column_id,
+                Some(val),
+                &mut leaves,
+            );
+        }
+        leaves
     }
 }
 

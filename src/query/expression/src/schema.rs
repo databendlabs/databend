@@ -789,14 +789,15 @@ impl TableField {
         self.column_ids().contains(&column_id)
     }
 
-    // `column_ids` contains nest-type parent column id,
-    // if field is Tuple(t1, t2), it will return a column id vector of 3 column id.
     // `leaf_column_ids` return only the child column id.
+    // if field is Tuple(t1, t2), it will return a column id vector of 2 column id.
     pub fn leaf_column_ids(&self) -> Vec<ColumnId> {
         let h: BTreeSet<u32> = BTreeSet::from_iter(self.column_ids().iter().cloned());
         h.into_iter().sorted().collect()
     }
 
+    // `column_ids` contains nest-type parent column id,
+    // if field is Tuple(t1, t2), it will return a column id vector of 3 column id.
     pub fn column_ids(&self) -> Vec<ColumnId> {
         let mut column_ids = vec![];
         let mut new_next_column_id = self.column_id;
