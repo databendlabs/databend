@@ -15,8 +15,8 @@
 use std::net::SocketAddr;
 use std::path::Path;
 
-use common_config::Config;
 use common_config::GlobalConfig;
+use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_http::HttpError;
 use common_http::HttpShutdownHandler;
@@ -82,7 +82,7 @@ impl HttpHandler {
         })
     }
 
-    async fn build_router(&self, config: &Config, sock: SocketAddr) -> impl Endpoint {
+    async fn build_router(&self, config: &InnerConfig, sock: SocketAddr) -> impl Endpoint {
         let ep = match self.kind {
             HttpHandlerKind::Query => Route::new()
                 .at(
@@ -107,7 +107,7 @@ impl HttpHandler {
             .boxed()
     }
 
-    fn build_tls(config: &Config) -> Result<RustlsConfig, std::io::Error> {
+    fn build_tls(config: &InnerConfig) -> Result<RustlsConfig, std::io::Error> {
         let certificate = RustlsCertificate::new()
             .cert(std::fs::read(
                 config.query.http_handler_tls_server_cert.as_str(),

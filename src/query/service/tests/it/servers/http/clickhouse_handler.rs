@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 
 use common_base::base::tokio;
-use common_config::Config;
+use common_config::InnerConfig;
 use databend_query::auth::AuthMgr;
 use databend_query::servers::http::middleware::HTTPSessionEndpoint;
 use databend_query::servers::http::middleware::HTTPSessionMiddleware;
@@ -421,7 +421,7 @@ struct Server {
 }
 
 impl Server {
-    pub async fn new(config: &Config) -> Self {
+    pub async fn new(config: &InnerConfig) -> Self {
         let session_middleware =
             HTTPSessionMiddleware::create(HttpHandlerKind::Clickhouse, AuthMgr::create(config));
         let endpoint = Route::new()

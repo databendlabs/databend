@@ -23,7 +23,7 @@ use common_expression::BlockMetaInfoPtr;
 use serde::Deserializer;
 use serde::Serializer;
 
-use crate::MergeIOReadResult;
+use crate::io::MergeIOReadResult;
 
 pub struct DataSourceMeta {
     pub part: Vec<PartInfoPtr>,
