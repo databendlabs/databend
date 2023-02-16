@@ -12,69 +12,47 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
+use std::hash::BuildHasher;
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_cache::CountableMeter;
 use common_exception::Result;
 use parking_lot::RwLock;
 
 use super::loader::LoadParams;
-use super::loader::Loader;
-use crate::cache::StorageCache;
-use crate::metrics::metrics_inc_cache_access_count;
-use crate::metrics::metrics_inc_cache_hit_count;
-use crate::metrics::metrics_inc_cache_miss_count;
 use crate::metrics::metrics_inc_cache_miss_load_millisecond;
+use crate::providers::ImMemoryCache;
+use crate::CacheAccessor;
+use crate::Loader;
+use crate::NamedCache;
 
-/// A generic cache-aware reader
-///
-/// Given an impl of [StorageCache], e.g. `ItemCache` or `DiskCache` and a proper impl
-/// [LoaderWithCacheKey], which is able to load `T`, `CachedReader` will load the `T`
-/// by using [LoaderWithCacheKey], and populate the cache item into [StorageCache] by using
-/// the loaded `T` and the key that [LoaderWithCacheKey] provides.
-pub struct CachedReader<T, L, C> {
-    cache: Option<Arc<RwLock<C>>>,
+/// A cache-aware reader
+pub struct CachedReader<L, C> {
+    cache: Option<C>,
     loader: L,
-    /// name of this cache instance
-    name: String,
-    _p: PhantomData<T>,
 }
 
-impl<T, L, C, M> CachedReader<T, L, C>
+pub type CacheHolder<V, S, M> = Arc<RwLock<ImMemoryCache<V, S, M>>>;
+
+impl<V, L, S, M> CachedReader<L, NamedCache<CacheHolder<V, S, M>>>
 where
-    L: Loader<T> + Sync,
-    C: StorageCache<String, T, Meter = M>,
+    L: Loader<V> + Sync,
+    S: BuildHasher,
+    M: CountableMeter<String, Arc<V>>,
 {
-    pub fn new(cache: Option<Arc<RwLock<C>>>, name: impl Into<String>, loader: L) -> Self {
-        Self {
-            cache,
-            name: name.into(),
-            loader,
-            _p: PhantomData,
-        }
+    pub fn new(cache: Option<NamedCache<CacheHolder<V, S, M>>>, loader: L) -> Self {
+        Self { cache, loader }
     }
 
     /// Load the object at `location`, uses/populates the cache if possible/necessary.
-    pub async fn read(&self, params: &LoadParams) -> Result<Arc<T>> {
+    pub async fn read(&self, params: &LoadParams) -> Result<Arc<V>> {
         match &self.cache {
             None => Ok(Arc::new(self.loader.load(params).await?)),
-            Some(labeled_cache) => {
-                // Perf.
-                {
-                    metrics_inc_cache_access_count(1, &self.name);
-                }
-
+            Some(cache) => {
                 let cache_key = self.loader.cache_key(params);
-                match self.get_cached(cache_key.as_ref(), labeled_cache) {
-                    Some(item) => {
-                        // Perf.
-                        {
-                            metrics_inc_cache_hit_count(1, &self.name);
-                        }
-
-                        Ok(item)
-                    }
+                match cache.get(cache_key.as_str()) {
+                    Some(item) => Ok(item),
                     None => {
                         let start = Instant::now();
 
@@ -83,15 +61,13 @@ where
 
                         // Perf.
                         {
-                            metrics_inc_cache_miss_count(1, &self.name);
                             metrics_inc_cache_miss_load_millisecond(
                                 start.elapsed().as_millis() as u64,
-                                &self.name,
+                                cache.name(),
                             );
                         }
 
-                        let mut cache_guard = labeled_cache.write();
-                        cache_guard.put(cache_key, item.clone());
+                        cache.put(cache_key, item.clone());
                         Ok(item)
                     }
                 }
@@ -100,10 +76,6 @@ where
     }
 
     pub fn name(&self) -> &str {
-        self.name.as_str()
-    }
-
-    fn get_cached(&self, key: &str, cache: &RwLock<C>) -> Option<Arc<T>> {
-        cache.write().get(key).cloned()
+        self.cache.as_ref().map(|c| c.name()).unwrap_or("")
     }
 }

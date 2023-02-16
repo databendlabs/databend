@@ -32,7 +32,7 @@ use common_meta_app::principal::UserStageInfo;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
-use common_pipeline_transforms::processors::transforms::TransformLimit;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_storages_fuse::io::Files;
 use common_storages_stage::StageTable;
@@ -42,6 +42,7 @@ use tracing::info;
 use crate::interpreters::common::append2table;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreterV2;
+use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -333,12 +334,12 @@ impl CopyInterpreterV2 {
             build_res.main_pipeline.resize(1)?;
             build_res.main_pipeline.add_transform(
                 |transform_input_port, transform_output_port| {
-                    TransformLimit::try_create(
+                    Ok(ProcessorPtr::create(TransformLimit::try_create(
                         Some(limit),
                         0,
                         transform_input_port,
                         transform_output_port,
-                    )
+                    )?))
                 },
             )?;
         }
