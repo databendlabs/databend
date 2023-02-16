@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -33,7 +32,6 @@ use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_app::principal::FileFormatOptions;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::UserStageInfo;
 use common_users::UserApiProvider;
@@ -517,18 +515,6 @@ impl<'a> Binder {
         }
 
         Ok(())
-    }
-
-    async fn try_resolve_file_format(
-        &self,
-        options: &BTreeMap<String, String>,
-    ) -> Result<FileFormatOptions> {
-        let opt = if let Some(name) = options.get("format_name") {
-            self.ctx.get_file_format(&name).await?.file_format_options
-        } else {
-            FileFormatOptions::from_map(options)?
-        };
-        Ok(opt)
     }
 }
 
