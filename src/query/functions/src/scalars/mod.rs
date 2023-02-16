@@ -244,7 +244,17 @@ fn register_auto_cast_rules(registry: &mut FunctionRegistry) {
     }
 
     registry.register_additional_cast_rules("array", vec![
+        (DataType::Boolean, DataType::Number(NumberDataType::UInt8)),
+        (DataType::Boolean, DataType::Number(NumberDataType::UInt16)),
+        (DataType::Boolean, DataType::Number(NumberDataType::UInt32)),
+        (DataType::Boolean, DataType::Number(NumberDataType::UInt64)),
+        (DataType::Boolean, DataType::Number(NumberDataType::Int8)),
+        (DataType::Boolean, DataType::Number(NumberDataType::Int16)),
+        (DataType::Boolean, DataType::Number(NumberDataType::Int32)),
         (DataType::Boolean, DataType::Number(NumberDataType::Int64)),
+        (DataType::Boolean, DataType::Number(NumberDataType::Float32)),
+        (DataType::Boolean, DataType::Number(NumberDataType::Float64)),
+        (DataType::Boolean, DataType::String),
         (DataType::Number(NumberDataType::UInt8), DataType::String),
         (DataType::Number(NumberDataType::UInt16), DataType::String),
         (DataType::Number(NumberDataType::UInt32), DataType::String),
@@ -255,5 +265,7 @@ fn register_auto_cast_rules(registry: &mut FunctionRegistry) {
         (DataType::Number(NumberDataType::Int64), DataType::String),
         (DataType::Number(NumberDataType::Float32), DataType::String),
         (DataType::Number(NumberDataType::Float64), DataType::String),
+        (DataType::Date, DataType::String),
+        (DataType::Timestamp, DataType::String),
     ]);
 }
