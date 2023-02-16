@@ -94,13 +94,10 @@ impl Processor for ExchangeSourceReader {
         }
 
         if self.output_data.is_none() {
-            println!("before finished");
             if let Some(output_data) = self.flight_exchange.recv().await? {
                 self.output_data = Some(output_data);
                 return Ok(());
             }
-
-            println!("reader finished");
         }
 
         if !self.finished {

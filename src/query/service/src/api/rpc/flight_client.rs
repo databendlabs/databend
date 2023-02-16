@@ -197,6 +197,12 @@ impl FlightExchange {
                     Ok(message) if DataPacket::is_closing_input(&message) => {
                         if !response_rx.is_closed() {
                             response_rx.close();
+
+                            // Send ClosingOutput response after other response.
+                            while let Ok(response) = response_rx.recv().await {
+                                let _ = network_tx.send(response).await;
+                            }
+
                             let _ = network_tx.send(f(DataPacket::ClosingOutput)).await;
                         }
                     }
@@ -219,19 +225,17 @@ impl FlightExchange {
                         }
 
                         // We need to continue consume stream for avoid stream die message blocking io buffer.
-                        if let Err(_) = tx.send(other).await {
-                            println!("cannot pull data");
-                        }
+                        let _ = tx.send(other).await;
                     }
                 };
 
                 if CLOSE_CONN && tx.is_closed() && response_rx.is_closed() {
                     // We cannot stop the loop immediately. Because the connection will be reset when destroy streaming and network_tx.
                     // the remote may still be receiving data.
+
+                    // Close network channel after all responses is sent.
                     while let Ok(resp) = response_rx.recv().await {
-                        if let Err(_) = network_tx.send(resp).await {
-                            println!("cannot push data");
-                        }
+                        let _ = network_tx.send(resp).await;
                     }
 
                     network_tx.close();
@@ -253,7 +257,6 @@ impl FlightExchange {
         common_base::base::tokio::spawn(async move {
             while let Ok(response) = response_rx.recv().await {
                 if let Err(_) = network_tx.send(response).await {
-                    println!("cannot push data");
                     break;
                 }
             }
@@ -301,6 +304,22 @@ impl FlightExchange {
         }
     }
 
+    pub fn is_closed_input(&self) -> bool {
+        match self {
+            FlightExchange::Dummy => true,
+            FlightExchange::Client(exchange) => exchange.request_rx.is_closed(),
+            FlightExchange::Server(exchange) => exchange.request_rx.is_closed(),
+        }
+    }
+
+    pub fn is_closed_output(&self) -> bool {
+        match self {
+            FlightExchange::Dummy => true,
+            FlightExchange::Client(exchange) => exchange.response_tx.is_closed(),
+            FlightExchange::Server(exchange) => exchange.response_tx.is_closed(),
+        }
+    }
+
     pub async fn close_input(&self) {
         match self {
             FlightExchange::Dummy => { /* do nothing*/ }
@@ -327,8 +346,19 @@ pub struct FlightExchangeRef {
 
 impl Drop for FlightExchangeRef {
     fn drop(&mut self) {
-        // assert!(self.is_closed_request.load(Ordering::Relaxed));
-        // assert!(self.is_closed_response.load(Ordering::Relaxed));
+        if !matches!(self.inner, FlightExchange::Dummy) {
+            assert!(
+                self.is_closed_request.load(Ordering::Relaxed),
+                "Call close_input at least once before destroying the exchange."
+            );
+        }
+
+        if !matches!(self.inner, FlightExchange::Dummy) {
+            assert!(
+                self.is_closed_response.load(Ordering::Relaxed),
+                "Call close_output at least once before destroying the exchange."
+            );
+        }
     }
 }
 
@@ -443,24 +473,19 @@ impl ClientFlightExchange {
 
     pub async fn close_input(&self) {
         // Notify remote not to send messages.
+        // We send it directly to the network channel avoid response channel is closed
         if let Some(network_tx) = self.network_tx.upgrade() {
             let packet = FlightData::from(DataPacket::ClosingInput);
             let _ = network_tx.send(packet).await;
         }
-
-        // Close local message channel
-        // self.request_rx.close();
     }
 
     pub async fn close_output(&self) {
         // Notify remote that no message will be sent.
-        if let Some(network_tx) = self.network_tx.upgrade() {
+        if !self.response_tx.is_closed() {
             let packet = FlightData::from(DataPacket::ClosingOutput);
-            let _ = network_tx.send(packet).await;
+            let _ = self.response_tx.send(packet).await;
         }
-
-        // Close local message channel
-        // self.response_tx.close();
     }
 }
 
@@ -515,24 +540,19 @@ impl ServerFlightExchange {
 
     pub async fn close_input(&self) {
         // Notify remote not to send messages.
+        // We send it directly to the network channel avoid response channel is closed
         if let Some(network_tx) = self.network_tx.upgrade() {
             let packet = FlightData::from(DataPacket::ClosingInput);
             let _ = network_tx.send(Ok(packet)).await;
         }
-
-        // Close local message channel
-        // self.request_rx.close();
     }
 
     pub async fn close_output(&self) {
         // Notify remote that no message will be sent.
-        if let Some(network_tx) = self.network_tx.upgrade() {
+        if !self.response_tx.is_closed() {
             let packet = FlightData::from(DataPacket::ClosingOutput);
-            let _ = network_tx.send(Ok(packet)).await;
+            let _ = self.response_tx.send(Ok(packet)).await;
         }
-
-        // Close local message channel
-        // self.response_tx.close();
     }
 }
 
