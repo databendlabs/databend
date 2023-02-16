@@ -14,13 +14,14 @@
 
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_io::prelude::serialize_into_buf;
 use opendal::Operator;
+use uuid::Uuid;
 
-use crate::common::gen_result_cache_location;
+use crate::common::write_blocks_to_buffer;
 
 pub(super) struct ResultCacheWriter {
     operator: Operator,
+    location: String,
 
     current_bytes: usize,
     max_bytes: usize,
@@ -30,8 +31,9 @@ pub(super) struct ResultCacheWriter {
 }
 
 impl ResultCacheWriter {
-    pub fn create(operator: Operator, max_bytes: usize) -> Self {
+    pub fn create(location: String, operator: Operator, max_bytes: usize) -> Self {
         ResultCacheWriter {
+            location,
             operator,
             current_bytes: 0,
             max_bytes,
@@ -52,21 +54,14 @@ impl ResultCacheWriter {
 
     /// Write the result cache to the storage and return the location.
     pub async fn write_to_storage(&self) -> Result<String> {
-        // Merge all blocks
-        let block = DataBlock::concat(&self.blocks)?;
-        block.convert_to_full();
-        let cols = block
-            .columns()
-            .iter()
-            .map(|c| c.value.as_column().unwrap().clone())
-            .collect::<Vec<_>>();
-
-        let location = gen_result_cache_location();
-        let object = self.operator.object(&location);
         let mut buf = Vec::with_capacity(self.current_bytes);
-        serialize_into_buf(&mut buf, &cols)?;
+        write_blocks_to_buffer(&self.blocks, &mut buf)?;
+
+        let file_location = format!("{}/{}", self.location, Uuid::new_v4().as_simple());
+        let object = self.operator.object(&file_location);
+
         object.write(buf).await?;
-        Ok(location)
+        Ok(file_location)
     }
 
     pub fn current_bytes(&self) -> usize {

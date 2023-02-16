@@ -27,6 +27,8 @@ use common_pipeline_core::processors::Processor;
 use common_storage::DataOperator;
 
 use super::writer::ResultCacheWriter;
+use crate::common::gen_common_key;
+use crate::common::gen_result_cache_dir;
 use crate::common::gen_result_cache_meta_key;
 use crate::common::ResultCacheValue;
 use crate::meta_manager::ResultCacheMetaManager;
@@ -101,11 +103,14 @@ impl TransformWriteResultCache {
         let ttl = settings.get_result_cache_ttl()?;
         let tenant = ctx.get_tenant();
         let sql = ctx.get_query_str();
-        let key = gen_result_cache_meta_key(&tenant, &sql);
         let partitions_sha = ctx.get_partitions_sha().unwrap();
 
+        let key = gen_common_key(&sql);
+        let meta_key = gen_result_cache_meta_key(&tenant, &key);
+        let location = gen_result_cache_dir(&key);
+
         let operator = DataOperator::instance().operator();
-        let cache_writer = ResultCacheWriter::create(operator, max_bytes);
+        let cache_writer = ResultCacheWriter::create(location, operator, max_bytes);
 
         Ok(ProcessorPtr::create(Box::new(TransformWriteResultCache {
             input,
@@ -113,7 +118,7 @@ impl TransformWriteResultCache {
             called_on_finish: false,
             sql,
             partitions_sha,
-            meta_mgr: ResultCacheMetaManager::create(kv_store, key, ttl),
+            meta_mgr: ResultCacheMetaManager::create(kv_store, meta_key, ttl),
             cache_writer,
         })))
     }
@@ -121,7 +126,7 @@ impl TransformWriteResultCache {
     fn pull_data(&mut self) -> Result<Event> {
         if self.input.has_data() {
             let data = self.input.pull_data().unwrap()?;
-            if !self.cache_writer.over_limit() {
+            if !self.cache_writer.over_limit() && !data.is_empty() {
                 self.cache_writer.append_block(data.clone());
             }
             self.output.push_data(Ok(data));

@@ -144,7 +144,7 @@ impl Partitions {
     pub fn compute_sha256(&self) -> Result<String> {
         let buf = serde_json::to_vec(&self.partitions)?;
         let sha = sha2::Sha256::digest(buf);
-        Ok(format!("{sha:?}"))
+        Ok(format!("{:x}", sha))
     }
 }
 

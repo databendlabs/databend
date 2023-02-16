@@ -85,16 +85,18 @@ impl Interpreter for SelectInterpreterV2 {
     #[tracing::instrument(level = "debug", name = "select_interpreter_v2_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         if self.ctx.get_settings().get_enable_query_result_cache()? {
-            let kv_store = UserApiProvider::instance().get_meta_store_client();
+            // 0. Need to build pipeline first to get the partitions.
+            let mut build_res = self.build_pipeline().await?;
+
             // 1. Try to get result from cache.
+            let kv_store = UserApiProvider::instance().get_meta_store_client();
             let cache_reader = ResultCacheReader::create(self.ctx.clone(), kv_store.clone());
-            if let Some(block) = cache_reader.try_read_cached_result().await? {
+            if let Some(blocks) = cache_reader.try_read_cached_result().await? {
                 // 2. If found, return the result directly.
-                return PipelineBuildResult::from_blocks(vec![block]);
+                return PipelineBuildResult::from_blocks(blocks);
             }
 
             // 3. If not found result in cache, build the pipeline and add a transform to write the result to cache.
-            let mut build_res = self.build_pipeline().await?;
             build_res.main_pipeline.add_transform(|input, output| {
                 TransformWriteResultCache::try_create(
                     self.ctx.clone(),
