@@ -109,7 +109,8 @@ impl Binder {
         };
 
         if !file_format_options.is_empty() {
-            stage_info.file_format_options = FileFormatOptions::from_map(file_format_options)?;
+            stage_info.file_format_options =
+                self.try_resolve_file_format(file_format_options).await?;
         }
         // Copy options.
         {
