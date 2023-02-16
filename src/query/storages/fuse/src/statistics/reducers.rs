@@ -18,19 +18,15 @@ use std::collections::HashMap;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::ColumnId;
-use common_expression::DataBlock;
 use common_expression::Scalar;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 
-use crate::statistics::column_statistic::calc_column_distinct_of_values;
-use crate::statistics::column_statistic::get_traverse_columns_dfs;
-
 pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     stats_of_columns: &[T],
-    data_block: Option<&DataBlock>,
+    distinct_values_of_cols: Option<&HashMap<ColumnId, u64>>,
 ) -> Result<StatisticsOfColumns> {
     // Combine statistics of a column into `Vec`, that is:
     // from : `&[HashMap<ColumnId, ColumnStatistics>]`
@@ -44,12 +40,6 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
             },
         )
     });
-
-    let leaves = if let Some(data_block) = data_block {
-        Some(get_traverse_columns_dfs(data_block)?)
-    } else {
-        None
-    };
 
     // Reduce the `Vec<&ColumnStatistics` into ColumnStatistics`, i.e.:
     // from : `HashMap<ColumnId, Vec<&ColumnStatistics>)>`
@@ -91,27 +81,14 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
                 .cloned()
                 .unwrap_or(Scalar::Null);
 
-            let distinct_of_values = match data_block {
-                Some(data_block) => {
-                    if let Some(col) = leaves.as_ref().unwrap().get(*id as usize) {
-                        if let Some(column) = &col.1 {
-                            calc_column_distinct_of_values(column, data_block.num_rows())?
-                        } else {
-                            0
-                        }
-                    } else {
-                        0
-                    }
-                }
-                None => 0,
-            };
+            let distinct_of_values = distinct_values_of_cols.and_then(|map| map.get(id).cloned());
 
             acc.insert(*id, ColumnStatistics {
                 min,
                 max,
                 null_count,
                 in_memory_size,
-                distinct_of_values: Some(distinct_of_values),
+                distinct_of_values,
             });
             Ok(acc)
         })

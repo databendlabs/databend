@@ -15,9 +15,11 @@
 use std::collections::HashMap;
 
 use common_exception::Result;
+use common_expression::types::DataType;
 use common_expression::types::NumberType;
 use common_expression::types::ValueType;
 use common_expression::Column;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::FieldIndex;
 use common_expression::Scalar;
@@ -129,6 +131,71 @@ pub fn gen_columns_statistics(
     Ok(statistics)
 }
 
+pub fn gen_distinct_of_values(
+    data_block: &DataBlock,
+    column_ids: &HashMap<FieldIndex, ColumnId>,
+) -> Result<HashMap<ColumnId, u64>> {
+    fn collect_distinct_of_values(
+        column: Option<&Column>,
+        data_type: &DataType,
+        leaf_index: &mut FieldIndex,
+        leaves: &mut HashMap<ColumnId, u64>,
+        column_ids: &HashMap<FieldIndex, ColumnId>,
+        rows: usize,
+    ) -> Result<()> {
+        match data_type {
+            DataType::Tuple(inner_types) => {
+                if let Some(col) = column {
+                    let (inner_columns, _) = col.as_tuple().unwrap();
+                    for (inner_column, inner_type) in inner_columns.iter().zip(inner_types.iter()) {
+                        collect_distinct_of_values(
+                            Some(inner_column),
+                            inner_type,
+                            leaf_index,
+                            leaves,
+                            column_ids,
+                            rows,
+                        )?;
+                    }
+                } else {
+                    for inner_type in inner_types.iter() {
+                        collect_distinct_of_values(
+                            None, inner_type, leaf_index, leaves, column_ids, rows,
+                        )?;
+                    }
+                }
+            }
+            DataType::Array(inner_type) => {
+                collect_distinct_of_values(None, inner_type, leaf_index, leaves, column_ids, rows)?;
+            }
+            _ => {
+                if let Some((id, col)) = column_ids.get(leaf_index).zip(column) {
+                    leaves.insert(*id, calc_column_distinct_of_values(col, rows)?);
+                }
+                *leaf_index += 1;
+            }
+        }
+        Ok(())
+    }
+
+    let columns = data_block.columns();
+    let mut leaves = HashMap::with_capacity(column_ids.len());
+    let mut leaf_index = 0;
+    for entry in columns.iter() {
+        let data_type = &entry.data_type;
+        let column = entry.value.as_column().unwrap();
+        collect_distinct_of_values(
+            Some(column),
+            data_type,
+            &mut leaf_index,
+            &mut leaves,
+            column_ids,
+            data_block.num_rows(),
+        )?;
+    }
+    Ok(leaves)
+}
+
 pub mod traverse {
     use common_expression::types::DataType;
     use common_expression::BlockEntry;
@@ -205,44 +272,48 @@ pub mod traverse {
     pub fn traverse_scalar_dns(
         fields: &[TableField],
         default_vals: &[Scalar],
-    ) -> HashMap<ColumnId, Scalar> {
+    ) -> HashMap<ColumnId, (FieldIndex, Scalar)> {
         fn collect_leaves(
+            leaf_indices: &mut FieldIndex,
             column_type: &TableDataType,
             column_id: &mut ColumnId,
             default_val: Option<&Scalar>,
-            leaves: &mut HashMap<ColumnId, Scalar>,
+            leaves: &mut HashMap<ColumnId, (FieldIndex, Scalar)>,
         ) {
             match column_type {
                 TableDataType::Tuple { fields_type, .. } => match default_val {
                     Some(Scalar::Tuple(vals)) => {
-                        for (ty, val) in fields_type.iter().zip(vals) {
-                            collect_leaves(ty, column_id, Some(val), leaves)
-                        }
+                        fields_type.iter().zip(vals).for_each(|(ty, val)| {
+                            collect_leaves(leaf_indices, ty, column_id, Some(val), leaves);
+                        })
                     }
                     None => fields_type
                         .iter()
-                        .for_each(|ty| collect_leaves(ty, column_id, None, leaves)),
+                        .for_each(|ty| collect_leaves(leaf_indices, ty, column_id, None, leaves)),
                     _ => unreachable!(),
                 },
                 TableDataType::Array(inner_type) => {
-                    collect_leaves(inner_type, column_id, None, leaves)
+                    collect_leaves(leaf_indices, inner_type, column_id, None, leaves);
                 }
                 _ => {
                     if let Some(val) = default_val {
                         let data_type = column_type.into();
                         if RangeIndex::supported_type(&data_type) {
-                            leaves.insert(*column_id, val.clone());
+                            leaves.insert(*column_id, (*leaf_indices, val.clone()));
                         }
                     }
+                    *leaf_indices += 1;
                     *column_id += 1;
                 }
             }
         }
 
         let mut leaves = HashMap::new();
+        let mut leaf_indices = 0;
         for (field, val) in fields.iter().zip(default_vals) {
             let mut next_column_id = field.column_id();
             collect_leaves(
+                &mut leaf_indices,
                 field.data_type(),
                 &mut next_column_id,
                 Some(val),
