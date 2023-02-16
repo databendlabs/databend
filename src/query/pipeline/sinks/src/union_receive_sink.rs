@@ -21,7 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
 
 use crate::AsyncSink;
 use crate::AsyncSinker;
@@ -31,7 +31,7 @@ pub struct UnionReceiveSink {
 }
 
 impl UnionReceiveSink {
-    pub fn create(sender: Option<Sender<DataBlock>>, input: Arc<InputPort>) -> ProcessorPtr {
+    pub fn create(sender: Option<Sender<DataBlock>>, input: Arc<InputPort>) -> Box<dyn Processor> {
         AsyncSinker::create(input, UnionReceiveSink { sender })
     }
 }

@@ -27,6 +27,7 @@ use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
+use common_profile::ProfSpanSetRef;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
 
@@ -653,7 +654,8 @@ impl FragmentCoordinator {
             match &self.payload {
                 FragmentPayload::Plan(plan) => {
                     let pipeline_ctx = QueryContext::create_from(ctx);
-                    let pipeline_builder = PipelineBuilder::create(pipeline_ctx);
+                    let pipeline_builder =
+                        PipelineBuilder::create(pipeline_ctx, false, ProfSpanSetRef::default());
                     self.pipeline_build_res = Some(pipeline_builder.finalize(plan)?);
                 }
             };

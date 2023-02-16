@@ -116,8 +116,15 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
     );
 
     map(
-        rule! { "(" ~ (#option_type | #option_compression | #string_options | #int_options | #none_options)* ~ ")"},
-        |(_, opts, _)| BTreeMap::from_iter(opts.iter().map(|(k, v)| (k.to_lowercase(), v.clone()))),
+        rule! { (#option_type | #option_compression | #string_options | #int_options | #none_options)* },
+        |opts| BTreeMap::from_iter(opts.iter().map(|(k, v)| (k.to_lowercase(), v.clone()))),
+    )(i)
+}
+
+pub fn file_format_clause(i: Input) -> IResult<BTreeMap<String, String>> {
+    map(
+        rule! { FILE_FORMAT ~ "=" ~ "(" ~ #format_options ~ ")" },
+        |(_, _, _, opts, _)| opts,
     )(i)
 }
 

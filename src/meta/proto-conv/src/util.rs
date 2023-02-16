@@ -86,6 +86,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
         "2023-01-16: Add: metadata.proto/DataSchema::next_column_id",
     ),
     (27, "2023-02-10: Add: metadata.proto/DataType Decimal types"),
+    (28, "2023-02-13: Add: user.proto/UserDefinedFileFormat"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

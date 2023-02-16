@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_sink_writer::create_writer_items;
@@ -66,7 +67,10 @@ impl ExchangeSink {
                 for flight_exchange in flight_exchange {
                     let input = InputPort::create();
                     items.push(PipeItem::create(
-                        ExchangeWriterSink::create(input.clone(), flight_exchange),
+                        ProcessorPtr::create(ExchangeWriterSink::create(
+                            input.clone(),
+                            flight_exchange,
+                        )),
                         vec![input],
                         vec![],
                     ));

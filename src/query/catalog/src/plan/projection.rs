@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::fmt::Formatter;
 
 use common_exception::Result;
+use common_expression::FieldIndex;
 use common_expression::TableSchema;
 use common_storage::ColumnNode;
 use common_storage::ColumnNodes;
@@ -23,11 +24,11 @@ use common_storage::ColumnNodes;
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub enum Projection {
     /// column indices of the table
-    Columns(Vec<usize>),
+    Columns(Vec<FieldIndex>),
     /// inner column indices for tuple data type with inner columns.
     /// the key is the column_index of ColumnEntry.
     /// the value is the path indices of inner columns.
-    InnerColumns(BTreeMap<usize, Vec<usize>>),
+    InnerColumns(BTreeMap<FieldIndex, Vec<FieldIndex>>),
 }
 
 impl Projection {
@@ -66,16 +67,47 @@ impl Projection {
                 let paths: Vec<&Vec<usize>> = path_indices.values().collect();
                 paths
                     .iter()
-                    .map(|path| {
-                        ColumnNodes::traverse_path(&column_nodes.column_nodes, path).unwrap()
-                    })
-                    .collect()
+                    .map(|path| ColumnNodes::traverse_path(&column_nodes.column_nodes, path))
+                    .collect::<Result<_>>()?
             }
         };
         Ok(column_nodes)
     }
 
-    pub fn add_col(&mut self, col: usize) {
+    /// ColumnNode projection.
+    ///
+    /// `ColumnNode`s returned are paired with a boolean which indicates if it
+    /// is part of a nested field
+    pub fn project_column_nodes_nested_aware<'a>(
+        &'a self,
+        column_nodes: &'a ColumnNodes,
+    ) -> Result<Vec<(&ColumnNode, bool)>> {
+        let column_nodes = match self {
+            Projection::Columns(indices) => indices
+                .iter()
+                .map(|idx| {
+                    let column_node = &column_nodes.column_nodes[*idx];
+                    (column_node, column_node.children.is_some())
+                })
+                .collect(),
+            Projection::InnerColumns(path_indices) => {
+                let paths: Vec<&Vec<usize>> = path_indices.values().collect();
+                paths
+                    .iter()
+                    .map(|path| {
+                        ColumnNodes::traverse_path_nested_aware(
+                            &column_nodes.column_nodes,
+                            path,
+                            false,
+                        )
+                    })
+                    .collect::<Result<_>>()?
+            }
+        };
+        Ok(column_nodes)
+    }
+
+    pub fn add_col(&mut self, col: FieldIndex) {
         match self {
             Projection::Columns(indices) => {
                 if indices.contains(&col) {
@@ -90,7 +122,7 @@ impl Projection {
         }
     }
 
-    pub fn remove_col(&mut self, col: usize) {
+    pub fn remove_col(&mut self, col: FieldIndex) {
         match self {
             Projection::Columns(indices) => {
                 if let Some(pos) = indices.iter().position(|x| *x == col) {

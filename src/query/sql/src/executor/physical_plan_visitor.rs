@@ -58,6 +58,7 @@ pub trait PhysicalPlanReplacer {
         let input = self.replace(&plan.input)?;
 
         Ok(PhysicalPlan::Filter(Filter {
+            plan_id: plan.plan_id,
             input: Box::new(input),
             predicates: plan.predicates.clone(),
             stat_info: plan.stat_info.clone(),
@@ -68,6 +69,7 @@ pub trait PhysicalPlanReplacer {
         let input = self.replace(&plan.input)?;
 
         Ok(PhysicalPlan::Project(Project {
+            plan_id: plan.plan_id,
             input: Box::new(input),
             projections: plan.projections.clone(),
             columns: plan.columns.clone(),
@@ -79,6 +81,7 @@ pub trait PhysicalPlanReplacer {
         let input = self.replace(&plan.input)?;
 
         Ok(PhysicalPlan::EvalScalar(EvalScalar {
+            plan_id: plan.plan_id,
             input: Box::new(input),
             exprs: plan.exprs.clone(),
             stat_info: plan.stat_info.clone(),
@@ -89,6 +92,7 @@ pub trait PhysicalPlanReplacer {
         let input = self.replace(&plan.input)?;
 
         Ok(PhysicalPlan::AggregatePartial(AggregatePartial {
+            plan_id: plan.plan_id,
             input: Box::new(input),
             group_by: plan.group_by.clone(),
             agg_funcs: plan.agg_funcs.clone(),
@@ -100,6 +104,7 @@ pub trait PhysicalPlanReplacer {
         let input = self.replace(&plan.input)?;
 
         Ok(PhysicalPlan::AggregateFinal(AggregateFinal {
+            plan_id: plan.plan_id,
             input: Box::new(input),
             before_group_by_schema: plan.before_group_by_schema.clone(),
             group_by: plan.group_by.clone(),
@@ -114,6 +119,7 @@ pub trait PhysicalPlanReplacer {
         let probe = self.replace(&plan.probe)?;
 
         Ok(PhysicalPlan::HashJoin(HashJoin {
+            plan_id: plan.plan_id,
             build: Box::new(build),
             probe: Box::new(probe),
             build_keys: plan.build_keys.clone(),
@@ -130,6 +136,7 @@ pub trait PhysicalPlanReplacer {
         let input = self.replace(&plan.input)?;
 
         Ok(PhysicalPlan::Sort(Sort {
+            plan_id: plan.plan_id,
             input: Box::new(input),
             order_by: plan.order_by.clone(),
             limit: plan.limit,
@@ -141,6 +148,7 @@ pub trait PhysicalPlanReplacer {
         let input = self.replace(&plan.input)?;
 
         Ok(PhysicalPlan::Limit(Limit {
+            plan_id: plan.plan_id,
             input: Box::new(input),
             limit: plan.limit,
             offset: plan.offset,
@@ -180,6 +188,7 @@ pub trait PhysicalPlanReplacer {
         let left = self.replace(&plan.left)?;
         let right = self.replace(&plan.right)?;
         Ok(PhysicalPlan::UnionAll(UnionAll {
+            plan_id: plan.plan_id,
             left: Box::new(left),
             right: Box::new(right),
             schema: plan.schema.clone(),

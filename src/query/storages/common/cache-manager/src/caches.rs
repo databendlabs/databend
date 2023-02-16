@@ -12,9 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Borrow;
+use std::sync::Arc;
+
 use common_arrow::parquet::metadata::FileMetaData;
+use common_cache::DefaultHashBuilder;
+use common_cache::Meter;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::InMemoryItemCacheHolder;
+use storages_common_cache::NamedCache;
 use storages_common_index::filters::Xor8Filter;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -23,24 +29,33 @@ use storages_common_table_meta::meta::TableSnapshotStatistics;
 use crate::cache_manager::CacheManager;
 
 /// In memory object cache of SegmentInfo
-pub type SegmentInfoCache = InMemoryItemCacheHolder<SegmentInfo>;
+pub type SegmentInfoCache = NamedCache<InMemoryItemCacheHolder<SegmentInfo>>;
 /// In memory object cache of TableSnapshot
-pub type TableSnapshotCache = InMemoryItemCacheHolder<TableSnapshot>;
+pub type TableSnapshotCache = NamedCache<InMemoryItemCacheHolder<TableSnapshot>>;
 /// In memory object cache of TableSnapshotStatistics
-pub type TableSnapshotStatisticCache = InMemoryItemCacheHolder<TableSnapshotStatistics>;
-/// In memory data cache of bloom index data.
+pub type TableSnapshotStatisticCache = NamedCache<InMemoryItemCacheHolder<TableSnapshotStatistics>>;
+/// In memory object cache of bloom filter.
 /// For each indexed data block, the bloom xor8 filter of column is cached individually
-pub type BloomIndexFilterCache = InMemoryItemCacheHolder<Xor8Filter>;
+pub type BloomIndexFilterCache = NamedCache<InMemoryItemCacheHolder<Xor8Filter>>;
 pub struct BloomIndexMeta(pub FileMetaData);
 /// In memory object cache of parquet FileMetaData of bloom index data
-pub type BloomIndexMetaCache = InMemoryItemCacheHolder<BloomIndexMeta>;
+pub type BloomIndexMetaCache = NamedCache<InMemoryItemCacheHolder<BloomIndexMeta>>;
 /// In memory object cache of parquet FileMetaData of external parquet files
-pub type FileMetaDataCache = InMemoryItemCacheHolder<FileMetaData>;
+pub type FileMetaDataCache = NamedCache<InMemoryItemCacheHolder<FileMetaData>>;
+
+/// In memory object cache of table column array
+pub type ColumnArrayCache =
+    NamedCache<InMemoryItemCacheHolder<SizedColumnArray, DefaultHashBuilder, ColumnArrayMeter>>;
+pub type ArrayRawDataUncompressedSize = usize;
+pub type SizedColumnArray = (
+    Box<dyn common_arrow::arrow::array::Array>,
+    ArrayRawDataUncompressedSize,
+);
 
 // Bind Type of cached objects to Caches
 //
-// The `Cache` returned should
-// - cache item s of Type `T`
+// The `Cache` should return
+// - cache item of Type `T`
 // - and implement `CacheAccessor` properly
 pub trait CachedObject<T> {
     type Cache: CacheAccessor<String, T>;
@@ -86,5 +101,15 @@ impl CachedObject<FileMetaData> for FileMetaData {
     type Cache = FileMetaDataCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_file_meta_data_cache()
+    }
+}
+
+pub struct ColumnArrayMeter;
+
+impl<K, V> Meter<K, Arc<(V, usize)>> for ColumnArrayMeter {
+    type Measure = usize;
+    fn measure<Q: ?Sized>(&self, _: &Q, v: &Arc<(V, usize)>) -> usize
+    where K: Borrow<Q> {
+        v.1
     }
 }

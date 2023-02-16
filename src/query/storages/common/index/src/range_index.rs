@@ -27,6 +27,7 @@ use common_expression::types::StringType;
 use common_expression::types::TimestampType;
 use common_expression::types::ValueType;
 use common_expression::with_number_mapped_type;
+use common_expression::ColumnId;
 use common_expression::ConstantFolder;
 use common_expression::Domain;
 use common_expression::Expr;
@@ -43,7 +44,7 @@ use crate::Index;
 pub struct RangeIndex {
     expr: Expr<String>,
     func_ctx: FunctionContext,
-    column_ids: HashMap<String, u32>,
+    column_ids: HashMap<String, ColumnId>,
 }
 
 impl RangeIndex {
@@ -62,11 +63,14 @@ impl RangeIndex {
 
         let (new_expr, _) = ConstantFolder::fold(&conjunction, func_ctx, &BUILTIN_FUNCTIONS);
 
-        let (leaf_column_ids, leaf_fields) = schema.leaf_fields();
-        let mut column_ids: HashMap<String, u32> = HashMap::new();
-        for (leaf_index, field) in leaf_fields.iter().enumerate() {
-            column_ids.insert(field.name().clone(), leaf_column_ids[leaf_index]);
-        }
+        let leaf_fields = schema.leaf_fields();
+        let column_ids = leaf_fields.iter().fold(
+            HashMap::with_capacity(leaf_fields.len()),
+            |mut acc, field| {
+                acc.insert(field.name().clone(), field.column_id());
+                acc
+            },
+        );
 
         Ok(Self {
             expr: new_expr,

@@ -22,11 +22,12 @@ use common_arrow::arrow::array::Array;
 use common_arrow::native::read::reader::NativeReader;
 use common_arrow::native::read::NativeReadBuf;
 use common_catalog::plan::PartInfoPtr;
-use common_catalog::table::ColumnId;
 use common_exception::Result;
 use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
+use common_expression::FieldIndex;
 use common_expression::Value;
 use opendal::Object;
 use storages_common_table_meta::meta::ColumnMeta;
@@ -49,7 +50,7 @@ impl BlockReader {
     pub async fn async_read_native_columns_data(
         &self,
         part: PartInfoPtr,
-    ) -> Result<Vec<(usize, NativeReader<Reader>)>> {
+    ) -> Result<Vec<(FieldIndex, NativeReader<Reader>)>> {
         // Perf
         {
             metrics_inc_remote_io_read_parts(1);
@@ -90,11 +91,11 @@ impl BlockReader {
 
     pub async fn read_native_columns_data(
         o: Object,
-        index: usize,
+        index: FieldIndex,
         meta: &ColumnMeta,
         range: &Option<Range<usize>>,
         data_type: common_arrow::arrow::datatypes::DataType,
-    ) -> Result<(usize, NativeReader<Reader>)> {
+    ) -> Result<(FieldIndex, NativeReader<Reader>)> {
         let (offset, length) = meta.offset_length();
         let mut meta = meta.as_native().unwrap().clone();
 
@@ -112,7 +113,7 @@ impl BlockReader {
     pub fn sync_read_native_columns_data(
         &self,
         part: PartInfoPtr,
-    ) -> Result<Vec<(usize, NativeReader<Reader>)>> {
+    ) -> Result<Vec<(FieldIndex, NativeReader<Reader>)>> {
         let part = FusePartInfo::from_part(&part)?;
 
         let mut results = Vec::with_capacity(self.project_indices.len());
@@ -139,11 +140,11 @@ impl BlockReader {
 
     pub fn sync_read_native_column(
         o: Object,
-        index: usize,
+        index: FieldIndex,
         column_meta: &ColumnMeta,
         range: &Option<Range<usize>>,
         data_type: common_arrow::arrow::datatypes::DataType,
-    ) -> Result<(usize, NativeReader<Reader>)> {
+    ) -> Result<(FieldIndex, NativeReader<Reader>)> {
         let mut column_meta = column_meta.as_native().unwrap().clone();
 
         if let Some(range) = range {
@@ -186,11 +187,6 @@ impl BlockReader {
         if need_to_fill_data {
             let data_block_column_ids: HashSet<ColumnId> =
                 part.columns_meta.keys().cloned().collect();
-            let mut num_rows = 0;
-            for part in parts {
-                let part = FusePartInfo::from_part(part)?;
-                num_rows += part.nums_rows;
-            }
 
             let default_vals = self.default_vals.clone();
 
@@ -199,7 +195,6 @@ impl BlockReader {
                 &data_block,
                 &data_block_column_ids,
                 &default_vals,
-                num_rows,
             )?)
         } else {
             Ok(data_block)

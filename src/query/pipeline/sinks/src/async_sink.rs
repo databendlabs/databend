@@ -21,7 +21,6 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
 #[async_trait]
@@ -50,15 +49,15 @@ pub struct AsyncSinker<T: AsyncSink + 'static> {
 }
 
 impl<T: AsyncSink + 'static> AsyncSinker<T> {
-    pub fn create(input: Arc<InputPort>, inner: T) -> ProcessorPtr {
-        ProcessorPtr::create(Box::new(AsyncSinker {
+    pub fn create(input: Arc<InputPort>, inner: T) -> Box<dyn Processor> {
+        Box::new(AsyncSinker {
             inner,
             input,
             finished: false,
             input_data: None,
             called_on_start: false,
             called_on_finish: false,
-        }))
+        })
     }
 }
 

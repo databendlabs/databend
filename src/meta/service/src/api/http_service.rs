@@ -15,15 +15,17 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use anyerror::AnyError;
 use common_base::base::tokio::sync::broadcast;
 use common_base::base::Stoppable;
-use common_exception::Result;
 use common_http::health_handler;
 use common_http::home::debug_home_handler;
 #[cfg(feature = "memory-profiling")]
 use common_http::jeprof::debug_jeprof_dump_handler;
 use common_http::pprof::debug_pprof_handler;
+use common_http::HttpError;
 use common_http::HttpShutdownHandler;
+use common_meta_types::MetaNetworkError;
 use poem::get;
 use poem::listener::RustlsCertificate;
 use poem::listener::RustlsConfig;
@@ -90,26 +92,32 @@ impl HttpService {
         route.data(self.meta_node.clone()).data(self.cfg.clone())
     }
 
-    fn build_tls(config: &Config) -> Result<RustlsConfig> {
+    fn build_tls(config: &Config) -> Result<RustlsConfig, MetaNetworkError> {
         let conf = config.clone();
-        let tls_cert = std::fs::read(conf.admin_tls_server_cert.as_str())?;
-        let tls_key = std::fs::read(conf.admin_tls_server_key)?;
+
+        let tls_cert = std::fs::read(conf.admin_tls_server_cert.as_str())
+            .map_err(|e| MetaNetworkError::TLSConfigError(AnyError::new(&e)))?;
+
+        let tls_key = std::fs::read(conf.admin_tls_server_key)
+            .map_err(|e| MetaNetworkError::TLSConfigError(AnyError::new(&e)))?;
+
         let certificate = RustlsCertificate::new().cert(tls_cert).key(tls_key);
         let cfg = RustlsConfig::new().fallback(certificate);
         Ok(cfg)
     }
 
-    async fn start_with_tls(&mut self, listening: SocketAddr) -> Result<()> {
+    async fn start_with_tls(&mut self, listening: SocketAddr) -> Result<(), HttpError> {
         info!("Http API TLS enabled");
 
-        let tls_config = Self::build_tls(&self.cfg.clone())?;
+        let tls_config = Self::build_tls(&self.cfg.clone())
+            .map_err(|e| HttpError::TlsConfigError(AnyError::new(&e)))?;
         self.shutdown_handler
             .start_service(listening, Some(tls_config), self.build_router(), None)
             .await?;
         Ok(())
     }
 
-    async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<()> {
+    async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<(), HttpError> {
         warn!("Http API TLS not set");
 
         self.shutdown_handler
@@ -121,16 +129,26 @@ impl HttpService {
 
 #[async_trait::async_trait]
 impl Stoppable for HttpService {
-    async fn start(&mut self) -> Result<()> {
+    type Error = AnyError;
+
+    async fn start(&mut self) -> Result<(), Self::Error> {
         let conf = self.cfg.clone();
-        let listening = conf.admin_api_address.parse::<SocketAddr>()?;
-        match conf.admin_tls_server_key.is_empty() || conf.admin_tls_server_cert.is_empty() {
-            true => self.start_without_tls(listening).await,
-            false => self.start_with_tls(listening).await,
-        }
+        let listening = conf
+            .admin_api_address
+            .parse::<SocketAddr>()
+            .map_err(|e| AnyError::new(&e))?;
+
+        let res =
+            match conf.admin_tls_server_key.is_empty() || conf.admin_tls_server_cert.is_empty() {
+                true => self.start_without_tls(listening).await,
+                false => self.start_with_tls(listening).await,
+            };
+
+        res.map_err(|e| AnyError::new(&e))
     }
 
-    async fn stop(&mut self, force: Option<broadcast::Receiver<()>>) -> Result<()> {
-        self.shutdown_handler.stop(force).await
+    async fn stop(&mut self, force: Option<broadcast::Receiver<()>>) -> Result<(), Self::Error> {
+        self.shutdown_handler.stop(force).await;
+        Ok(())
     }
 }

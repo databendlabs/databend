@@ -15,10 +15,12 @@
 use std::net::SocketAddr;
 use std::path::Path;
 
-use common_config::Config;
 use common_config::GlobalConfig;
-use common_exception::Result;
+use common_config::InnerConfig;
+use common_exception::ErrorCode;
+use common_http::HttpError;
 use common_http::HttpShutdownHandler;
+use common_meta_types::anyerror::AnyError;
 use poem::get;
 use poem::listener::RustlsCertificate;
 use poem::listener::RustlsConfig;
@@ -73,14 +75,14 @@ pub struct HttpHandler {
 }
 
 impl HttpHandler {
-    pub fn create(kind: HttpHandlerKind) -> Result<Box<dyn Server>> {
-        Ok(Box::new(HttpHandler {
+    pub fn create(kind: HttpHandlerKind) -> Box<dyn Server> {
+        Box::new(HttpHandler {
             kind,
             shutdown_handler: HttpShutdownHandler::create("http handler".to_string()),
-        }))
+        })
     }
 
-    async fn build_router(&self, config: &Config, sock: SocketAddr) -> Result<impl Endpoint> {
+    async fn build_router(&self, config: &InnerConfig, sock: SocketAddr) -> impl Endpoint {
         let ep = match self.kind {
             HttpHandlerKind::Query => Route::new()
                 .at(
@@ -96,16 +98,16 @@ impl HttpHandler {
             HttpHandlerKind::Clickhouse => Route::new().nest("/", clickhouse_router()),
         };
 
-        let auth_manager = AuthMgr::create(config)?;
+        let auth_manager = AuthMgr::create(config);
         let session_middleware = HTTPSessionMiddleware::create(self.kind, auth_manager);
-        Ok(ep
-            .with(session_middleware)
+
+        ep.with(session_middleware)
             .with(NormalizePath::new(TrailingSlash::Trim))
             .with(CatchPanic::new())
-            .boxed())
+            .boxed()
     }
 
-    fn build_tls(config: &Config) -> Result<RustlsConfig> {
+    fn build_tls(config: &InnerConfig) -> Result<RustlsConfig, std::io::Error> {
         let certificate = RustlsCertificate::new()
             .cert(std::fs::read(
                 config.query.http_handler_tls_server_cert.as_str(),
@@ -122,22 +124,24 @@ impl HttpHandler {
         Ok(cfg)
     }
 
-    async fn start_with_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
+    async fn start_with_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr, HttpError> {
         info!("Http Handler TLS enabled");
 
         let config = GlobalConfig::instance();
 
-        let tls_config = Self::build_tls(config.as_ref())?;
-        let router = self.build_router(config.as_ref(), listening).await?;
+        let tls_config = Self::build_tls(config.as_ref())
+            .map_err(|e: std::io::Error| HttpError::TlsConfigError(AnyError::new(&e)))?;
+
+        let router = self.build_router(config.as_ref(), listening).await;
         self.shutdown_handler
             .start_service(listening, Some(tls_config), router, None)
             .await
     }
 
-    async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
+    async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr, HttpError> {
         let router = self
             .build_router(GlobalConfig::instance().as_ref(), listening)
-            .await?;
+            .await;
         self.shutdown_handler
             .start_service(listening, None, router, None)
             .await
@@ -150,13 +154,24 @@ impl Server for HttpHandler {
         self.shutdown_handler.shutdown(graceful).await;
     }
 
-    async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
+    async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr, ErrorCode> {
         let config = GlobalConfig::instance();
-        match config.query.http_handler_tls_server_key.is_empty()
+
+        let res = match config.query.http_handler_tls_server_key.is_empty()
             || config.query.http_handler_tls_server_cert.is_empty()
         {
             true => self.start_without_tls(listening).await,
             false => self.start_with_tls(listening).await,
-        }
+        };
+
+        res.map_err(|e: HttpError| match e {
+            HttpError::BadAddressFormat(any_err) => {
+                ErrorCode::BadAddressFormat(any_err.to_string())
+            }
+            le @ HttpError::ListenError { .. } => ErrorCode::CannotListenerPort(le.to_string()),
+            HttpError::TlsConfigError(any_err) => {
+                ErrorCode::TLSConfigurationFailure(any_err.to_string())
+            }
+        })
     }
 }

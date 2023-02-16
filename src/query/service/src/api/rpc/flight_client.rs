@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::backtrace::Backtrace;
 use std::convert::TryInto;
 use std::error::Error;
 use std::sync::atomic::AtomicBool;
@@ -21,23 +20,14 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use async_channel::Receiver;
-use async_channel::Recv;
-use async_channel::RecvError;
 use async_channel::Sender;
 use async_channel::WeakSender;
-use async_stream::stream;
 use common_arrow::arrow_format::flight::data::Action;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::base::tokio::runtime::Handle;
-use common_base::base::tokio::runtime::TryCurrentError;
-use common_base::base::tokio::sync::Barrier;
-use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::time::Duration;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use futures_util::future::Either;
-use futures_util::stream::Next;
 use futures_util::StreamExt;
 use parking_lot::Mutex;
 use tonic::transport::channel::Channel;
@@ -77,7 +67,7 @@ impl FlightClient {
                     .with_metadata("x-query-id", query_id)?
                     .build(),
             )
-                .await?,
+            .await?,
         ))
     }
 
@@ -98,13 +88,13 @@ impl FlightClient {
                     .with_metadata("x-fragment-id", &fragment_id.to_string())?
                     .build(),
             )
-                .await?,
+            .await?,
         ))
     }
 
     async fn exchange_streaming(
         &mut self,
-        request: impl tonic::IntoStreamingRequest<Message=FlightData>,
+        request: impl tonic::IntoStreamingRequest<Message = FlightData>,
     ) -> Result<Streaming<FlightData>> {
         match self.inner.do_exchange(request).await {
             Ok(res) => Ok(res.into_inner()),
@@ -148,7 +138,7 @@ impl FlightExchange {
     ) -> FlightExchange {
         let streaming = streaming.into_inner();
         let state = Arc::new(ChannelState::create());
-        let f = |x| { Ok(FlightData::from(x)) };
+        let f = |x| Ok(FlightData::from(x));
         let (tx, rx) =
             Self::listen_request::<true, _>(state.clone(), response_tx.clone(), streaming, f);
 
@@ -165,7 +155,7 @@ impl FlightExchange {
         streaming: Streaming<FlightData>,
     ) -> FlightExchange {
         let state = Arc::new(ChannelState::create());
-        let f = |x| { FlightData::from(x) };
+        let f = FlightData::from;
         let (tx, rx) =
             Self::listen_request::<false, _>(state.clone(), response_tx.clone(), streaming, f);
 
@@ -186,10 +176,7 @@ impl FlightExchange {
         let (tx, rx) = async_channel::bounded(1);
         let (response_tx, response_rx) = async_channel::bounded(1);
 
-        Self::start_push_worker(
-            network_tx.clone(),
-            response_rx.clone(),
-        );
+        Self::start_push_worker(network_tx.clone(), response_rx.clone());
 
         common_base::base::tokio::spawn(async move {
             while let Some(message) = streaming.next().await {
@@ -256,7 +243,7 @@ impl FlightExchange {
     ) {
         common_base::base::tokio::spawn(async move {
             while let Ok(response) = response_rx.recv().await {
-                if let Err(_) = network_tx.send(response).await {
+                if network_tx.send(response).await.is_err() {
                     break;
                 }
             }

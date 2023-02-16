@@ -14,9 +14,19 @@
 
 mod disk_cache;
 mod memory_cache;
+mod table_data_cache;
+pub use disk_cache::result::Error as DiskCacheError;
+pub use disk_cache::result::Result as DiskCacheResult;
 pub use disk_cache::DiskCache;
+pub use disk_cache::DiskCacheKey;
+pub use disk_cache::LruDiskCache;
+pub use disk_cache::LruDiskCacheBuilder;
+pub use disk_cache::LruDiskCacheHolder;
 pub use memory_cache::BytesCache;
+pub use memory_cache::ImMemoryCache;
 pub use memory_cache::InMemoryBytesCacheHolder;
 pub use memory_cache::InMemoryCacheBuilder;
 pub use memory_cache::InMemoryItemCacheHolder;
-pub use memory_cache::ItemCache;
+pub use table_data_cache::TableDataCache;
+pub use table_data_cache::TableDataCacheBuilder;
+pub use table_data_cache::TableDataCacheKey;

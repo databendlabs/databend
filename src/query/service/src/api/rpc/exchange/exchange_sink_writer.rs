@@ -20,11 +20,11 @@ use common_expression::DataBlock;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
 use common_pipeline_sinks::AsyncSink;
 use common_pipeline_sinks::AsyncSinker;
 
 use crate::api::rpc::exchange::serde::exchange_serializer::ExchangeSerializeMeta;
-use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::rpc::flight_client::FlightExchangeRef;
 
 pub struct ExchangeWriterSink {
@@ -32,7 +32,7 @@ pub struct ExchangeWriterSink {
 }
 
 impl ExchangeWriterSink {
-    pub fn create(input: Arc<InputPort>, flight_exchange: FlightExchangeRef) -> ProcessorPtr {
+    pub fn create(input: Arc<InputPort>, flight_exchange: FlightExchangeRef) -> Box<dyn Processor> {
         AsyncSinker::create(input, ExchangeWriterSink {
             exchange: flight_exchange,
         })
@@ -81,7 +81,7 @@ impl AsyncSink for ExchangeWriterSink {
 pub fn create_writer_item(exchange: FlightExchangeRef) -> PipeItem {
     let input = InputPort::create();
     PipeItem::create(
-        ExchangeWriterSink::create(input.clone(), exchange),
+        ProcessorPtr::create(ExchangeWriterSink::create(input.clone(), exchange)),
         vec![input],
         vec![],
     )

@@ -29,14 +29,17 @@ use common_meta_app::principal::UserDefinedFunction;
 use crate::planner::udf_validator::UDFValidator;
 use crate::plans::AlterUDFPlan;
 use crate::plans::CallPlan;
+use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::CreateUDFPlan;
+use crate::plans::DropFileFormatPlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropStagePlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
+use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowGrantsPlan;
 use crate::plans::ShowRolesPlan;
 use crate::plans::UseDatabasePlan;
@@ -104,6 +107,11 @@ impl<'a> Binder {
                     ExplainKind::Syntax(formatted_sql) => Plan::ExplainSyntax { formatted_sql: formatted_sql.clone() },
                     _ => Plan::Explain { kind: kind.clone(), plan: Box::new(self.bind_statement(bind_context, query).await?) },
                 }
+            }
+
+            Statement::ExplainAnalyze { query } => {
+                let plan = self.bind_statement(bind_context, query).await?;
+                Plan::ExplainAnalyze { plan: Box::new(plan) }
             }
 
             Statement::ShowFunctions { limit } => {
@@ -228,6 +236,22 @@ impl<'a> Binder {
                 principal: principal.clone(),
             })),
             Statement::Revoke(stmt) => self.bind_revoke(stmt).await?,
+
+            // File Formats
+            Statement::CreateFileFormat{  if_not_exists, name, file_format_options} =>  Plan::CreateFileFormat(Box::new(CreateFileFormatPlan {
+                if_not_exists: *if_not_exists,
+                name: name.clone(),
+                file_format_options: file_format_options.clone()
+            })),
+
+            Statement::DropFileFormat{
+                if_exists,
+                name,
+            } => Plan::DropFileFormat(Box::new(DropFileFormatPlan {
+                if_exists: *if_exists,
+                name: name.clone(),
+            })),
+            Statement::ShowFileFormats  => Plan::ShowFileFormats(Box::new(ShowFileFormatsPlan {})),
 
             // UDFs
             Statement::CreateUDF {

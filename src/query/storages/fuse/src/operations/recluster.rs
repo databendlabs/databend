@@ -25,11 +25,11 @@ use common_exception::Result;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::SortColumnDescription;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
+use common_pipeline_transforms::processors::transforms::try_create_transform_sort_merge;
 use common_pipeline_transforms::processors::transforms::BlockCompactor;
-use common_pipeline_transforms::processors::transforms::SortMergeCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
-use common_pipeline_transforms::processors::transforms::TransformSortMerge;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
 use storages_common_table_meta::meta::BlockMeta;
 
@@ -165,39 +165,37 @@ impl FuseTable {
             .collect();
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformSortPartial::try_create(
+            Ok(ProcessorPtr::create(TransformSortPartial::try_create(
                 transform_input_port,
                 transform_output_port,
                 None,
                 sort_descs.clone(),
-            )
+            )?))
         })?;
         let block_size = ctx.get_settings().get_max_block_size()? as usize;
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformSortMerge::try_create(
-                transform_input_port,
-                transform_output_port,
-                SortMergeCompactor::new(block_size, None, sort_descs.clone()),
-            )
-        })?;
-
         // construct output fields
         let output_fields: Vec<DataField> = cluster_stats_gen.out_fields.clone();
+        let schema = DataSchemaRefExt::create(output_fields);
 
-        try_add_multi_sort_merge(
-            pipeline,
-            DataSchemaRefExt::create(output_fields),
-            block_size,
-            None,
-            sort_descs,
-        )?;
+        pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(try_create_transform_sort_merge(
+                input,
+                output,
+                schema.clone(),
+                block_size,
+                None,
+                sort_descs.clone(),
+            )?))
+        })?;
+
+        try_add_multi_sort_merge(pipeline, schema, block_size, None, sort_descs)?;
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformCompact::try_create(
+            Ok(ProcessorPtr::create(TransformCompact::try_create(
                 transform_input_port,
                 transform_output_port,
                 BlockCompactor::new(block_compact_thresholds, true),
-            )
+            )?))
         })?;
 
         pipeline.add_sink(|input| {

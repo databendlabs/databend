@@ -15,6 +15,7 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
@@ -64,6 +65,11 @@ use crate::Value;
 use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use crate::ARROW_EXT_TYPE_VARIANT;
 
+// Column id of TableField
+pub type ColumnId = u32;
+// Index of TableSchema.fields array
+pub type FieldIndex = usize;
+
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct DataSchema {
     pub(crate) fields: Vec<DataField>,
@@ -77,7 +83,7 @@ pub struct DataField {
     data_type: DataType,
 }
 
-fn uninit_column_id() -> u32 {
+fn uninit_column_id() -> ColumnId {
     0
 }
 
@@ -87,7 +93,7 @@ pub struct TableSchema {
     pub(crate) metadata: BTreeMap<String, String>,
     // next column id that assign to TableField.column_id
     #[serde(default = "uninit_column_id")]
-    pub(crate) next_column_id: u32,
+    pub(crate) next_column_id: ColumnId,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -96,7 +102,7 @@ pub struct TableField {
     default_expr: Option<String>,
     data_type: TableDataType,
     #[serde(default = "uninit_column_id")]
-    column_id: u32,
+    column_id: ColumnId,
 }
 
 /// DataType with more information that is only available for table field, e.g, the
@@ -161,14 +167,14 @@ impl DataSchema {
         false
     }
 
-    pub fn fields_map(&self) -> BTreeMap<usize, DataField> {
+    pub fn fields_map(&self) -> BTreeMap<FieldIndex, DataField> {
         let x = self.fields().iter().cloned().enumerate();
         x.collect::<BTreeMap<_, _>>()
     }
 
     /// Returns an immutable reference of a specific `Field` instance selected using an
     /// offset within the internal `fields` vector.
-    pub fn field(&self, i: usize) -> &DataField {
+    pub fn field(&self, i: FieldIndex) -> &DataField {
         &self.fields[i]
     }
 
@@ -184,7 +190,7 @@ impl DataSchema {
     }
 
     /// Find the index of the column with the given name.
-    pub fn index_of(&self, name: &str) -> Result<usize> {
+    pub fn index_of(&self, name: &str) -> Result<FieldIndex> {
         for i in 0..self.fields.len() {
             if self.fields[i].name() == name {
                 return Ok(i);
@@ -200,7 +206,7 @@ impl DataSchema {
 
     /// Look up a column by name and return a immutable reference to the column along with
     /// its index.
-    pub fn column_with_name(&self, name: &str) -> Option<(usize, &DataField)> {
+    pub fn column_with_name(&self, name: &str) -> Option<(FieldIndex, &DataField)> {
         self.fields
             .iter()
             .enumerate()
@@ -223,7 +229,7 @@ impl DataSchema {
 
     /// project will do column pruning.
     #[must_use]
-    pub fn project(&self, projection: &[usize]) -> Self {
+    pub fn project(&self, projection: &[FieldIndex]) -> Self {
         let fields = projection
             .iter()
             .map(|idx| self.fields()[*idx].clone())
@@ -272,7 +278,7 @@ impl TableSchema {
 
     fn build_members_from_fields(
         fields: Vec<TableField>,
-        next_column_id: u32,
+        next_column_id: ColumnId,
     ) -> (u32, Vec<TableField>) {
         if next_column_id > 0 {
             // make sure that field column id has been inited.
@@ -319,7 +325,7 @@ impl TableSchema {
     pub fn new_from_column_ids(
         fields: Vec<TableField>,
         metadata: BTreeMap<String, String>,
-        next_column_id: u32,
+        next_column_id: ColumnId,
     ) -> Self {
         let (next_column_id, new_fields) = Self::build_members_from_fields(fields, next_column_id);
         Self {
@@ -330,20 +336,20 @@ impl TableSchema {
     }
 
     #[inline]
-    pub fn next_column_id(&self) -> u32 {
+    pub fn next_column_id(&self) -> ColumnId {
         self.next_column_id
     }
 
-    pub fn column_id_of_index(&self, i: usize) -> Result<u32> {
+    pub fn column_id_of_index(&self, i: FieldIndex) -> Result<ColumnId> {
         Ok(self.fields[i].column_id())
     }
 
-    pub fn column_id_of(&self, name: &str) -> Result<u32> {
+    pub fn column_id_of(&self, name: &str) -> Result<ColumnId> {
         let i = self.index_of(name)?;
         Ok(self.fields[i].column_id())
     }
 
-    pub fn is_column_deleted(&self, column_id: u32) -> bool {
+    pub fn is_column_deleted(&self, column_id: ColumnId) -> bool {
         for field in &self.fields {
             if field.contain_column_id(column_id) {
                 return false;
@@ -379,7 +385,11 @@ impl TableSchema {
         Ok(())
     }
 
-    pub fn to_column_ids(&self) -> Vec<u32> {
+    pub fn to_column_id_set(&self) -> HashSet<ColumnId> {
+        HashSet::from_iter(self.to_column_ids().iter().cloned())
+    }
+
+    pub fn to_column_ids(&self) -> Vec<ColumnId> {
         let mut column_ids = Vec::with_capacity(self.fields.len());
 
         self.fields.iter().for_each(|f| {
@@ -389,7 +399,7 @@ impl TableSchema {
         column_ids
     }
 
-    pub fn to_leaf_column_ids(&self) -> Vec<u32> {
+    pub fn to_leaf_column_ids(&self) -> Vec<ColumnId> {
         let mut column_ids = Vec::with_capacity(self.fields.len());
 
         self.fields.iter().for_each(|f| {
@@ -406,7 +416,7 @@ impl TableSchema {
     }
 
     #[inline]
-    pub fn field_column_ids(&self) -> Vec<Vec<u32>> {
+    pub fn field_column_ids(&self) -> Vec<Vec<ColumnId>> {
         let mut field_column_ids = Vec::with_capacity(self.fields.len());
 
         self.fields.iter().for_each(|f| {
@@ -417,7 +427,7 @@ impl TableSchema {
     }
 
     #[inline]
-    pub fn field_leaf_column_ids(&self) -> Vec<Vec<u32>> {
+    pub fn field_leaf_column_ids(&self) -> Vec<Vec<ColumnId>> {
         let mut field_column_ids = Vec::with_capacity(self.fields.len());
 
         self.fields.iter().for_each(|f| {
@@ -442,14 +452,14 @@ impl TableSchema {
         false
     }
 
-    pub fn fields_map(&self) -> BTreeMap<usize, TableField> {
+    pub fn fields_map(&self) -> BTreeMap<FieldIndex, TableField> {
         let x = self.fields().iter().cloned().enumerate();
         x.collect::<BTreeMap<_, _>>()
     }
 
     /// Returns an immutable reference of a specific `Field` instance selected using an
     /// offset within the internal `fields` vector.
-    pub fn field(&self, i: usize) -> &TableField {
+    pub fn field(&self, i: FieldIndex) -> &TableField {
         &self.fields[i]
     }
 
@@ -465,7 +475,7 @@ impl TableSchema {
     }
 
     /// Find the index of the column with the given name.
-    pub fn index_of(&self, name: &str) -> Result<usize> {
+    pub fn index_of(&self, name: &str) -> Result<FieldIndex> {
         for i in 0..self.fields.len() {
             if self.fields[i].name == name {
                 return Ok(i);
@@ -481,7 +491,7 @@ impl TableSchema {
 
     /// Look up a column by name and return a immutable reference to the column along with
     /// its index.
-    pub fn column_with_name(&self, name: &str) -> Option<(usize, &TableField)> {
+    pub fn column_with_name(&self, name: &str) -> Option<(FieldIndex, &TableField)> {
         self.fields
             .iter()
             .enumerate()
@@ -504,7 +514,7 @@ impl TableSchema {
 
     /// project will do column pruning.
     #[must_use]
-    pub fn project(&self, projection: &[usize]) -> Self {
+    pub fn project(&self, projection: &[FieldIndex]) -> Self {
         let mut fields = Vec::with_capacity(projection.len());
         for idx in projection {
             fields.push(self.fields[*idx].clone());
@@ -518,7 +528,7 @@ impl TableSchema {
     }
 
     /// project with inner columns by path.
-    pub fn inner_project(&self, path_indices: &BTreeMap<usize, Vec<usize>>) -> Self {
+    pub fn inner_project(&self, path_indices: &BTreeMap<FieldIndex, Vec<FieldIndex>>) -> Self {
         let paths: Vec<Vec<usize>> = path_indices.values().cloned().collect();
         let schema_fields = self.fields();
         let column_ids = self.to_column_ids();
@@ -537,8 +547,8 @@ impl TableSchema {
 
     fn traverse_paths(
         fields: &[TableField],
-        path: &[usize],
-        column_ids: &[u32],
+        path: &[FieldIndex],
+        column_ids: &[ColumnId],
     ) -> Result<TableField> {
         if path.is_empty() {
             return Err(ErrorCode::BadArguments(
@@ -588,38 +598,55 @@ impl TableSchema {
         )))
     }
 
-    // return leaf fields and column ids
-    pub fn leaf_fields(&self) -> (Vec<u32>, Vec<TableField>) {
-        fn collect_in_field(field: &TableField, fields: &mut Vec<TableField>) {
+    // return leaf fields with column id
+    pub fn leaf_fields(&self) -> Vec<TableField> {
+        fn collect_in_field(
+            field: &TableField,
+            fields: &mut Vec<TableField>,
+            next_column_id: &mut ColumnId,
+        ) {
             match field.data_type() {
                 TableDataType::Tuple {
                     fields_type,
                     fields_name,
                 } => {
                     for (name, ty) in fields_name.iter().zip(fields_type) {
-                        collect_in_field(&TableField::new(name, ty.clone()), fields);
+                        collect_in_field(
+                            &TableField::new_from_column_id(name, ty.clone(), *next_column_id),
+                            fields,
+                            next_column_id,
+                        );
                     }
                 }
                 TableDataType::Array(ty) => {
                     collect_in_field(
-                        &TableField::new(&format!("{}:0", field.name()), ty.as_ref().to_owned()),
+                        &TableField::new_from_column_id(
+                            &format!("{}:0", field.name()),
+                            ty.as_ref().to_owned(),
+                            *next_column_id,
+                        ),
                         fields,
+                        next_column_id,
                     );
                 }
-                _ => fields.push(field.clone()),
+                _ => {
+                    *next_column_id += 1;
+                    fields.push(field.clone())
+                }
             }
         }
 
         let mut fields = Vec::new();
         for field in self.fields() {
-            collect_in_field(field, &mut fields);
+            let mut next_column_id = field.column_id;
+            collect_in_field(field, &mut fields, &mut next_column_id);
         }
-        (self.to_leaf_column_ids(), fields)
+        fields
     }
 
     /// project will do column pruning.
     #[must_use]
-    pub fn project_by_fields(&self, fields: &BTreeMap<usize, TableField>) -> Self {
+    pub fn project_by_fields(&self, fields: &BTreeMap<FieldIndex, TableField>) -> Self {
         let column_ids = self.to_column_ids();
         let mut new_fields = Vec::with_capacity(fields.len());
         for (index, f) in fields.iter() {
@@ -706,7 +733,7 @@ impl TableField {
         }
     }
 
-    pub fn new_from_column_id(name: &str, data_type: TableDataType, column_id: u32) -> Self {
+    pub fn new_from_column_id(name: &str, data_type: TableDataType, column_id: ColumnId) -> Self {
         TableField {
             name: name.to_string(),
             default_expr: None,
@@ -717,8 +744,8 @@ impl TableField {
 
     fn build_column_ids_from_data_type(
         data_type: &TableDataType,
-        column_ids: &mut Vec<u32>,
-        next_column_id: &mut u32,
+        column_ids: &mut Vec<ColumnId>,
+        next_column_id: &mut ColumnId,
     ) {
         column_ids.push(*next_column_id);
 
@@ -740,7 +767,7 @@ impl TableField {
         }
     }
 
-    pub fn build_column_id(&self, next_column_id: &mut u32) -> Self {
+    pub fn build_column_id(&self, next_column_id: &mut ColumnId) -> Self {
         let data_type = self.data_type();
 
         let column_id = *next_column_id;
@@ -758,19 +785,19 @@ impl TableField {
         }
     }
 
-    pub fn contain_column_id(&self, column_id: u32) -> bool {
+    pub fn contain_column_id(&self, column_id: ColumnId) -> bool {
         self.column_ids().contains(&column_id)
     }
 
     // `column_ids` contains nest-type parent column id,
     // if field is Tuple(t1, t2), it will return a column id vector of 3 column id.
     // `leaf_column_ids` return only the child column id.
-    pub fn leaf_column_ids(&self) -> Vec<u32> {
+    pub fn leaf_column_ids(&self) -> Vec<ColumnId> {
         let h: BTreeSet<u32> = BTreeSet::from_iter(self.column_ids().iter().cloned());
         h.into_iter().sorted().collect()
     }
 
-    pub fn column_ids(&self) -> Vec<u32> {
+    pub fn column_ids(&self) -> Vec<ColumnId> {
         let mut column_ids = vec![];
         let mut new_next_column_id = self.column_id;
         Self::build_column_ids_from_data_type(
@@ -782,7 +809,7 @@ impl TableField {
         column_ids
     }
 
-    pub fn column_id(&self) -> u32 {
+    pub fn column_id(&self) -> ColumnId {
         self.column_id
     }
 
@@ -1280,6 +1307,7 @@ impl From<&DataType> for ArrowDataType {
                     .iter()
                     .enumerate()
                     .map(|(index, ty)| {
+                        let index = index + 1;
                         let name = format!("{index}");
                         ArrowField::new(name.as_str(), ty.into(), ty.is_nullable())
                     })
@@ -1391,7 +1419,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
             let fields_name = fields
                 .iter()
                 .enumerate()
-                .map(|(idx, _)| idx.to_string())
+                .map(|(idx, _)| (idx + 1).to_string())
                 .collect::<Vec<_>>();
             Ok(TableDataType::Tuple {
                 fields_name,

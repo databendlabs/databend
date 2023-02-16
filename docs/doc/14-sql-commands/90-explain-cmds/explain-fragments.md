@@ -33,5 +33,4 @@ EXPLAIN FRAGMENTS select COUNT() from numbers(10) GROUP BY number % 3;
 |       Remote[receive fragment: 0]                                                                                                                                           |
 +-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 11 rows in set (0.02 sec)
-Read 0 rows, 0.00 B in 0.003 sec., 0 rows/sec., 0.00 B/sec.
 ```

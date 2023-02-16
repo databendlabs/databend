@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_config::Config;
+use common_config::InnerConfig;
 use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
@@ -54,7 +54,7 @@ pub struct SystemDatabase {
 }
 
 impl SystemDatabase {
-    pub fn create(sys_db_meta: &mut InMemoryMetas, config: &Config) -> Self {
+    pub fn create(sys_db_meta: &mut InMemoryMetas, config: &InnerConfig) -> Self {
         let table_list: Vec<Arc<dyn Table>> = vec![
             OneTable::create(sys_db_meta.next_table_id()),
             FunctionsTable::create(sys_db_meta.next_table_id()),
