@@ -80,7 +80,7 @@ impl CacheManager {
         );
 
         // setup in-memory table meta cache
-        if !config.enable_table_meta_caches {
+        if !config.enable_table_meta_cache {
             GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache: None,
                 segment_info_cache: None,

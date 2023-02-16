@@ -46,7 +46,7 @@ fn test_env_config_s3() -> Result<()> {
             ("QUERY_FLIGHT_API_ADDRESS", Some("1.2.3.4:9091")),
             ("QUERY_ADMIN_API_ADDRESS", Some("1.2.3.4:8081")),
             ("QUERY_METRIC_API_ADDRESS", Some("1.2.3.4:7071")),
-            ("CACHE_ENABLE_TABLE_META_CACHES", Some("true")),
+            ("CACHE_ENABLE_TABLE_META_CACHE", Some("true")),
             ("CACHE_DISK_PATH", Some("_cache_env")),
             ("CACHE_DISK_MAX_BYES", Some("512")),
             ("CACHE_TABLE_META_SNAPSHOT_COUNT", Some("256")),
@@ -128,8 +128,8 @@ fn test_env_config_s3() -> Result<()> {
             assert_eq!("us.key", configured.storage.s3.secret_access_key);
             assert_eq!("us.bucket", configured.storage.s3.bucket);
 
-            assert!(configured.cache.enable_table_meta_caches);
-            assert!(configured.cache.enable_table_bloom_index_caches);
+            assert!(configured.cache.enable_table_meta_cache);
+            assert!(configured.cache.enable_table_bloom_index_cache);
             assert_eq!(10240, configured.cache.table_meta_segment_count);
             assert_eq!(256, configured.cache.table_meta_snapshot_count);
             assert_eq!(3000, configured.cache.table_bloom_index_meta_count);
@@ -246,8 +246,8 @@ fn test_env_config_fs() -> Result<()> {
             assert_eq!("", configured.storage.gcs.gcs_root);
             assert_eq!("", configured.storage.gcs.credential);
 
-            assert!(configured.cache.enable_table_bloom_index_caches);
-            assert!(configured.cache.enable_table_meta_caches);
+            assert!(configured.cache.enable_table_bloom_index_cache);
+            assert!(configured.cache.enable_table_meta_cache);
             assert_eq!("_cache_env", configured.cache.disk_cache_config.path);
             assert_eq!(512, configured.cache.disk_cache_config.max_bytes);
             assert_eq!(10240, configured.cache.table_meta_segment_count);
@@ -371,8 +371,8 @@ fn test_env_config_gcs() -> Result<()> {
             assert_eq!("", configured.storage.oss.oss_access_key_id);
             assert_eq!("", configured.storage.oss.oss_access_key_secret);
 
-            assert!(configured.cache.enable_table_meta_caches);
-            assert!(configured.cache.enable_table_bloom_index_caches);
+            assert!(configured.cache.enable_table_meta_cache);
+            assert!(configured.cache.enable_table_bloom_index_cache);
             assert_eq!("_cache_env", configured.cache.disk_cache_config.path);
             assert_eq!(512, configured.cache.disk_cache_config.max_bytes);
             assert_eq!(10240, configured.cache.table_meta_segment_count);
@@ -407,7 +407,7 @@ fn test_env_config_oss() -> Result<()> {
             ("QUERY_FLIGHT_API_ADDRESS", Some("1.2.3.4:9091")),
             ("QUERY_ADMIN_API_ADDRESS", Some("1.2.3.4:8081")),
             ("QUERY_METRIC_API_ADDRESS", Some("1.2.3.4:7071")),
-            ("CACHE_ENABLE_TABLE_META_CACHES", Some("true")),
+            ("CACHE_ENABLE_TABLE_META_CACHE", Some("true")),
             ("CACHE_DATA_CACHE_STORAGE", Some("disk")),
             ("TABLE_CACHE_BLOOM_INDEX_FILTER_COUNT", Some("1")),
             ("CACHE_DISK_PATH", Some("_cache_env")),
@@ -505,7 +505,7 @@ fn test_env_config_oss() -> Result<()> {
             assert_eq!("", configured.storage.gcs.gcs_root);
             assert_eq!("", configured.storage.gcs.credential);
 
-            assert!(configured.cache.enable_table_meta_caches);
+            assert!(configured.cache.enable_table_meta_cache);
             assert_eq!("_cache_env", configured.cache.disk_cache_config.path);
             assert_eq!(512, configured.cache.disk_cache_config.max_bytes);
             assert_eq!(10240, configured.cache.table_meta_segment_count);
@@ -634,7 +634,7 @@ protocol = "binary"
 
 [cache]
 
-enable_table_meta_caches = false
+enable_table_meta_cache = false
 table_meta_snapshot_count = 256
 table_meta_segment_count = 10240
 table_bloom_index_meta_count = 3000

@@ -70,7 +70,7 @@ mysql> SELECT * FROM system.configs;
 | meta    | auto_sync_interval                     | 0                              |             |
 | meta    | rpc_tls_meta_server_root_ca_cert       |                                |             |
 | meta    | rpc_tls_meta_service_domain_name       | localhost                      |             |
-| cache   | enable_table_meta_caches               | true                           |             |
+| cache   | enable_table_meta_cache                | true                           |             |
 | cache   | table_meta_snapshot_count              | 256                            |             |
 | cache   | table_meta_segment_count               | 10240                          |             |
 | cache   | table_meta_statistic_count             | 256                            |             |

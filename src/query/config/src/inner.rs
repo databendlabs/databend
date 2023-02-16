@@ -397,7 +397,7 @@ impl Default for LocalConfig {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CacheConfig {
     /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
-    pub enable_table_meta_caches: bool,
+    pub enable_table_meta_cache: bool,
 
     /// Max number of cached table snapshot
     pub table_meta_snapshot_count: u64,
@@ -482,7 +482,7 @@ impl Default for DiskCacheConfig {
 impl Default for CacheConfig {
     fn default() -> Self {
         Self {
-            enable_table_meta_caches: true,
+            enable_table_meta_cache: true,
             table_meta_snapshot_count: 256,
             table_meta_segment_count: 10240,
             table_meta_statistic_count: 256,
