@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 pub use common_catalog::catalog::StorageDescription;
-use common_config::Config;
+use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
@@ -67,7 +67,7 @@ pub struct StorageFactory {
 }
 
 impl StorageFactory {
-    pub fn create(conf: Config) -> Self {
+    pub fn create(conf: InnerConfig) -> Self {
         let creators: DashMap<String, Storage> = Default::default();
 
         // Register memory table engine.

@@ -12,16 +12,23 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 use common_expression::types::number::Float64Type;
 use common_expression::types::number::Int64Type;
+use common_expression::types::NumberDataType;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::FromData;
 use common_expression::Scalar;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchema;
+use common_expression::TableSchemaRef;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
 
-fn gen_sample_block() -> (DataBlock, Vec<Column>) {
+fn gen_sample_block() -> (DataBlock, Vec<Column>, TableSchemaRef) {
     //   sample message
     //
     //   struct {
@@ -35,6 +42,24 @@ fn gen_sample_block() -> (DataBlock, Vec<Column>) {
     //      f : i64,
     //      g: f64,
     //   }
+
+    let schema = Arc::new(TableSchema::new(vec![
+        TableField::new("a", TableDataType::Tuple {
+            fields_name: vec!["b".to_string(), "e".to_string()],
+            fields_type: vec![
+                TableDataType::Tuple {
+                    fields_name: vec!["c".to_string(), "d".to_string()],
+                    fields_type: vec![
+                        TableDataType::Number(NumberDataType::Int64),
+                        TableDataType::Number(NumberDataType::Float64),
+                    ],
+                },
+                TableDataType::Number(NumberDataType::Float64),
+            ],
+        }),
+        TableField::new("f", TableDataType::Number(NumberDataType::Int64)),
+        TableField::new("g", TableDataType::Number(NumberDataType::Float64)),
+    ]));
 
     // prepare leaves
     let col_c = Int64Type::from_data(vec![1i64, 2, 3]);
@@ -54,15 +79,17 @@ fn gen_sample_block() -> (DataBlock, Vec<Column>) {
     };
 
     let columns = vec![col_a, col_f.clone(), col_g.clone()];
-    (DataBlock::new_from_columns(columns), vec![
-        col_c, col_d, col_e, col_f, col_g,
-    ])
+    (
+        DataBlock::new_from_columns(columns),
+        vec![col_c, col_d, col_e, col_f, col_g],
+        schema,
+    )
 }
 
 #[test]
 fn test_column_statistic() -> Result<()> {
-    let (sample_block, sample_cols) = gen_sample_block();
-    let col_stats = gen_columns_statistics(&sample_block, None, None)?;
+    let (sample_block, sample_cols, schema) = gen_sample_block();
+    let col_stats = gen_columns_statistics(&sample_block, None, &schema)?;
 
     assert_eq!(5, col_stats.len());
 

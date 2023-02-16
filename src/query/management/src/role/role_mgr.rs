@@ -21,9 +21,9 @@ use common_meta_app::principal::RoleInfo;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::IntoSeqV;
-use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
+use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 
@@ -32,12 +32,12 @@ use crate::role::role_api::RoleApi;
 static ROLE_API_KEY_PREFIX: &str = "__fd_roles";
 
 pub struct RoleMgr {
-    kv_api: Arc<dyn kvapi::KVApi<Error = KVAppError>>,
+    kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
     role_prefix: String,
 }
 
 impl RoleMgr {
-    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = KVAppError>>, tenant: &str) -> Result<Self> {
+    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: &str) -> Result<Self> {
         if tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
                 "Tenant can not empty(while role mgr create)",

@@ -241,7 +241,7 @@ pub trait Table: Sync + Send {
         let (_, _, _, _) = (ctx, filter, col_indices, pipeline);
 
         Err(ErrorCode::Unimplemented(format!(
-            "table {},  of engine type {}, does not support DELETE FROM",
+            "table {}, engine type {}, does not support DELETE FROM",
             self.name(),
             self.get_table_info().engine(),
         )))

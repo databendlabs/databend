@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::str::FromStr;
 
 use common_ast::ast::CreateStageStmt;
@@ -108,7 +109,8 @@ impl Binder {
         };
 
         if !file_format_options.is_empty() {
-            stage_info.file_format_options = FileFormatOptions::from_map(file_format_options)?;
+            stage_info.file_format_options =
+                self.try_resolve_file_format(file_format_options).await?;
         }
         // Copy options.
         {
@@ -126,5 +128,17 @@ impl Binder {
             tenant: self.ctx.get_tenant(),
             user_stage_info: stage_info,
         })))
+    }
+
+    pub(crate) async fn try_resolve_file_format(
+        &self,
+        options: &BTreeMap<String, String>,
+    ) -> Result<FileFormatOptions> {
+        let opt = if let Some(name) = options.get("format_name") {
+            self.ctx.get_file_format(name).await?
+        } else {
+            FileFormatOptions::from_map(options)?
+        };
+        Ok(opt)
     }
 }

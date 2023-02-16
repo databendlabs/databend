@@ -20,7 +20,6 @@ use std::time::Instant;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
-use common_cache::Cache;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -31,6 +30,7 @@ use common_expression::TableSchemaRef;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use opendal::Operator;
 use storages_common_blocks::blocks_to_parquet;
+use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CacheManager;
 use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::BlockMeta;
@@ -317,8 +317,7 @@ impl Processor for CompactTransform {
             }
             State::Output { location, segment } => {
                 if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
-                    let cache = &mut segment_cache.write();
-                    cache.put(location.clone(), segment.clone());
+                    segment_cache.put(location.clone(), segment.clone())
                 }
 
                 let meta = CompactSinkMeta::create(

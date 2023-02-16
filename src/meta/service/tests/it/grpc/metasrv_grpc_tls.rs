@@ -19,7 +19,6 @@ use common_grpc::RpcClientTlsConfig;
 use common_meta_api::SchemaApi;
 use common_meta_client::MetaGrpcClient;
 use common_meta_kvapi::kvapi::KVApi;
-use common_meta_types::KVAppError;
 use common_meta_types::MetaClientError;
 use common_meta_types::MetaError;
 use common_meta_types::MetaNetworkError;
@@ -100,9 +99,9 @@ async fn test_tls_client_config_failure() -> anyhow::Result<()> {
 
     let e = c.unwrap_err();
 
-    if let KVAppError::MetaError(MetaError::ClientError(MetaClientError::NetworkError(
+    if let MetaError::ClientError(MetaClientError::NetworkError(
         MetaNetworkError::TLSConfigError(any_err),
-    ))) = e
+    )) = e
     {
         let _ = any_err;
     } else {

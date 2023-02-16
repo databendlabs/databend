@@ -47,7 +47,6 @@ impl MetaReaders {
     pub fn segment_info_reader(dal: Operator, schema: TableSchemaRef) -> SegmentInfoReader {
         SegmentInfoReader::new(
             CacheManager::instance().get_table_segment_cache(),
-            "segment_info_cache".to_owned(),
             LoaderWrapper((dal, schema)),
         )
     }
@@ -55,7 +54,6 @@ impl MetaReaders {
     pub fn table_snapshot_reader(dal: Operator) -> TableSnapshotReader {
         TableSnapshotReader::new(
             CacheManager::instance().get_table_snapshot_cache(),
-            "snapshot_cache".to_owned(),
             LoaderWrapper(dal),
         )
     }
@@ -63,7 +61,6 @@ impl MetaReaders {
     pub fn table_snapshot_statistics_reader(dal: Operator) -> TableSnapshotStatisticsReader {
         TableSnapshotStatisticsReader::new(
             CacheManager::instance().get_table_snapshot_statistics_cache(),
-            "table_statistics_cache".to_owned(),
             LoaderWrapper(dal),
         )
     }
@@ -71,7 +68,6 @@ impl MetaReaders {
     pub fn bloom_index_meta_reader(dal: Operator) -> BloomIndexMetaReader {
         BloomIndexMetaReader::new(
             CacheManager::instance().get_bloom_index_meta_cache(),
-            "bloom_index_meta_cache".to_owned(),
             LoaderWrapper(dal),
         )
     }
@@ -79,7 +75,6 @@ impl MetaReaders {
     pub fn delete_mark_meta_reader(dal: Operator) -> DeleteMarkMetaReader {
         DeleteMarkMetaReader::new(
             CacheManager::instance().get_delete_mark_meta_cache(),
-            "delete_mark_meta_cache".to_owned(),
             LoaderWrapper(dal),
         )
     }

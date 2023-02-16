@@ -45,7 +45,7 @@ impl BlockStatistics {
             block_column_statistics: column_statistic::gen_columns_statistics(
                 data_block,
                 column_distinct_count,
-                Some(schema),
+                schema,
             )?,
             block_cluster_statistics: cluster_stats,
         })

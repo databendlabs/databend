@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_base::base::GlobalInstance;
-use common_config::Config;
+use common_config::InnerConfig;
 use common_exception::Result;
 use common_tracing::set_panic_hook;
 use databend_query::clusters::ClusterDiscovery;
@@ -27,7 +27,7 @@ unsafe impl Send for TestGlobalServices {}
 unsafe impl Sync for TestGlobalServices {}
 
 impl TestGlobalServices {
-    pub async fn setup(config: Config) -> Result<TestGuard> {
+    pub async fn setup(config: InnerConfig) -> Result<TestGuard> {
         set_panic_hook();
         std::env::set_var("UNIT_TEST", "TRUE");
 

@@ -28,8 +28,8 @@ use common_meta_kvapi::kvapi::ListKVReply;
 use common_meta_kvapi::kvapi::MGetKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
+use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::TxnReply;
@@ -42,23 +42,23 @@ mock! {
     pub KV {}
     #[async_trait]
     impl kvapi::KVApi for KV {
-        type Error = KVAppError;
+        type Error = MetaError;
 
         async fn upsert_kv(
             &self,
             act: UpsertKVReq,
-        ) -> Result<UpsertKVReply, KVAppError>;
+        ) -> Result<UpsertKVReply, MetaError>;
 
-        async fn get_kv(&self, key: &str) -> Result<GetKVReply,KVAppError>;
+        async fn get_kv(&self, key: &str) -> Result<GetKVReply,MetaError>;
 
         async fn mget_kv(
             &self,
             key: &[String],
-        ) -> Result<MGetKVReply,KVAppError>;
+        ) -> Result<MGetKVReply,MetaError>;
 
-        async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, KVAppError>;
+        async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, MetaError>;
 
-        async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, KVAppError>;
+        async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError>;
 
         }
 }

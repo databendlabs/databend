@@ -17,7 +17,6 @@ on:
 permissions:
   id-token: write
   contents: write
-  actions: write
 
 jobs:
   create_release:
@@ -83,7 +82,7 @@ jobs:
           echo "Trigger benchmark for ${{ steps.generated-tag.outputs.tag }}"
           gh workflow run benchmark.yml -f tag=${{ steps.generated-tag.outputs.tag }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.DATABEND_BOT_TOKEN }}
 
 
   publish_macos:
@@ -498,6 +497,18 @@ jobs:
           gh release upload ${version} databend_*.${{ matrix.packager }} --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish_packages:
+    name: publish packages
+    runs-on: ubuntu-latest
+    needs: [create_release, release_packages]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/publish_repository
+        with:
+          version: ${{ needs.create_release.outputs.version }}
+          repo_role_arn: ${{ secrets.REPO_ROLE_ARN }}
+          gpg_signing_key: ${{ secrets.GPG_KEY_DEB }}
 
   upload-sha256sums-plugin:
     needs: [create_release, publish_linux, publish_macos, release_packages]

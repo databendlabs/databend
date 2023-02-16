@@ -13,7 +13,6 @@
 //  limitations under the License.
 
 use std::any::Any;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
@@ -184,11 +183,11 @@ impl AsyncSource for InferSchemaSource {
         let operator = init_stage_operator(&stage_info)?;
 
         let first_file = files_info.first_file(&operator).await?;
-        let file_format = match &self.args_parsed.file_format {
-            Some(f) => StageFileFormatType::from_str(f)?,
-            None => stage_info.file_format_options.format.clone(),
+        let file_format_options = match &self.args_parsed.file_format {
+            Some(f) => self.ctx.get_file_format(f).await?,
+            None => stage_info.file_format_options.clone(),
         };
-        let schema = match file_format {
+        let schema = match file_format_options.format {
             StageFileFormatType::Parquet => {
                 let arrow_schema = read_parquet_schema_async(&operator, &first_file.path).await?;
                 TableSchema::from(&arrow_schema)

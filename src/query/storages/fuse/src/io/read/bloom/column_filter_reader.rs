@@ -44,8 +44,6 @@ type CachedReader = InMemoryItemCacheReader<Xor8Filter, Xor8FilterLoader>;
 /// Load the filter of a given bloom index column. Also
 /// - generates the proper cache key
 /// - takes cares of getting the correct cache instance from [CacheManager]
-///
-/// this could be generified to be the template of cached data block column reader
 pub struct BloomColumnFilterReader {
     cached_reader: CachedReader,
     param: LoadParams,
@@ -68,11 +66,7 @@ impl BloomColumnFilterReader {
             column_descriptor: column_chunk_meta.descriptor().clone(),
         };
 
-        let cached_reader = CachedReader::new(
-            Xor8Filter::cache(),
-            "bloom_index_filter_cache".to_owned(),
-            loader,
-        );
+        let cached_reader = CachedReader::new(Xor8Filter::cache(), loader);
 
         let param = LoadParams {
             location: index_path,
