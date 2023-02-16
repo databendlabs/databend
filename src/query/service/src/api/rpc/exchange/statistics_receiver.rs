@@ -141,9 +141,15 @@ impl StatisticsReceiver {
         flight_exchange: &FlightExchange,
         recv: impl Future<Output = Result<Option<DataPacket>>>,
     ) -> Result<bool> {
-        flight_exchange
+        if let Err(error) = flight_exchange
             .send(DataPacket::FetchProgressAndPrecommit)
-            .await?;
+            .await
+        {
+            return match error.code() == ErrorCode::ABORTED_QUERY {
+                true => Ok(true),
+                false => Err(error),
+            };
+        }
 
         Self::recv_data(ctx, recv.await)
     }
