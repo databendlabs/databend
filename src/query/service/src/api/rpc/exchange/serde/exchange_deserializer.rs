@@ -110,7 +110,8 @@ impl Transform for TransformExchangeDeserializer {
             {
                 return match exchange_meta.packet.take().unwrap() {
                     DataPacket::ErrorCode(v) => Err(v),
-                    DataPacket::ClosingClient => unreachable!(),
+                    DataPacket::ClosingInput => unreachable!(),
+                    DataPacket::ClosingOutput => unreachable!(),
                     DataPacket::FetchProgressAndPrecommit => unreachable!(),
                     DataPacket::ProgressAndPrecommit { .. } => unreachable!(),
                     DataPacket::FragmentData(v) => self.recv_data(v),

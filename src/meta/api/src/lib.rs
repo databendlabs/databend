@@ -16,8 +16,10 @@
 #![deny(unused_crate_dependencies)]
 extern crate common_meta_types;
 
+pub mod errors;
 mod id;
 mod id_generator;
+pub mod reply;
 mod schema_api;
 mod schema_api_impl;
 mod schema_api_keys;

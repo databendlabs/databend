@@ -37,7 +37,7 @@ use common_grpc::ConnectionFactory;
 use common_grpc::GrpcConnectionError;
 use common_grpc::RpcClientConf;
 use common_grpc::RpcClientTlsConfig;
-use common_meta_kvapi::kvapi::KVApi;
+use common_meta_api::reply::reply_to_api_result;
 use common_meta_types::anyerror::AnyError;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::ClientInfo;
@@ -52,7 +52,6 @@ use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::ConnectionError;
 use common_meta_types::InvalidArgument;
-use common_meta_types::KVAppError;
 use common_meta_types::MetaClientError;
 use common_meta_types::MetaError;
 use common_meta_types::MetaHandshakeError;
@@ -814,7 +813,7 @@ impl MetaGrpcClient {
     }
 
     #[tracing::instrument(level = "debug", skip(self, v))]
-    pub(crate) async fn kv_api<T, R>(&self, v: T) -> Result<R, KVAppError>
+    pub(crate) async fn kv_api<T, R>(&self, v: T) -> Result<R, MetaError>
     where
         T: RequestFor<Reply = R>,
         T: Into<MetaGrpcReq>,
@@ -861,12 +860,12 @@ impl MetaGrpcClient {
         };
         let raft_reply = rpc_res?;
 
-        let res: Result<R, KVAppError> = raft_reply.into();
-        res
+        let resp: R = reply_to_api_result(raft_reply)?;
+        Ok(resp)
     }
 
     #[tracing::instrument(level = "debug", skip(self, req))]
-    pub(crate) async fn transaction(&self, req: TxnRequest) -> Result<TxnReply, KVAppError> {
+    pub(crate) async fn transaction(&self, req: TxnRequest) -> Result<TxnReply, MetaError> {
         let txn: TxnRequest = req;
 
         debug!(req = display(&txn), "MetaGrpcClient::transaction request");

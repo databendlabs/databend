@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_config::Config;
+use common_config::InnerConfig;
 use common_exception::Result;
 use common_meta_types::NodeInfo;
 
@@ -53,7 +53,7 @@ impl InitNodesChannelPacket {
 
 #[async_trait::async_trait]
 impl Packet for InitNodesChannelPacket {
-    async fn commit(&self, config: &Config, timeout: u64) -> Result<()> {
+    async fn commit(&self, config: &InnerConfig, timeout: u64) -> Result<()> {
         let executor_info = &self.executor;
         let mut conn = create_client(config, &executor_info.flight_address).await?;
         let action = FlightAction::InitNodesChannel(InitNodesChannel {

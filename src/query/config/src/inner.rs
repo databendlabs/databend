@@ -30,13 +30,13 @@ use common_storage::StorageConfig;
 use common_tracing::Config as LogConfig;
 use common_users::idm_config::IDMConfig;
 
-use super::outer_v0::Config as OuterV0Config;
+use super::config::Config;
 
 /// Inner config for query.
 ///
 /// All function should implement based on this Config.
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
-pub struct Config {
+pub struct InnerConfig {
     pub cmd: String,
     pub config_file: String,
 
@@ -58,14 +58,17 @@ pub struct Config {
     // - Later, catalog information SHOULD be kept in KV Service
     // - currently only supports HIVE (via hive meta store)
     pub catalogs: HashMap<String, CatalogConfig>,
+
+    // Cache Config
+    pub cache: CacheConfig,
 }
 
-impl Config {
-    /// As requires by [RFC: Config Backward Compatibility](https://github.com/datafuselabs/databend/pull/5324), we will load user's config via wrapper [`ConfigV0`] and then convert from [`ConfigV0`] to [`Config`].
+impl InnerConfig {
+    /// As requires by [RFC: Config Backward Compatibility](https://github.com/datafuselabs/databend/pull/5324), we will load user's config via wrapper [`ConfigV0`] and then convert from [`ConfigV0`] to [`InnerConfig`].
     ///
     /// In the future, we could have `ConfigV1` and `ConfigV2`.
     pub fn load() -> Result<Self> {
-        let cfg: Self = OuterV0Config::load(true)?.try_into()?;
+        let cfg: Self = Config::load(true)?.try_into()?;
 
         // Only check meta config when cmd is empty.
         if cfg.cmd.is_empty() {
@@ -78,7 +81,7 @@ impl Config {
     ///
     /// This function is served for tests only.
     pub fn load_for_test() -> Result<Self> {
-        let cfg: Self = OuterV0Config::load(false)?.try_into()?;
+        let cfg: Self = Config::load(false)?.try_into()?;
         Ok(cfg)
     }
 
@@ -96,7 +99,7 @@ impl Config {
         !self.query.rpc_tls_server_key.is_empty() && !self.query.rpc_tls_server_cert.is_empty()
     }
 
-    /// Transform config into the outer style.
+    /// Transform inner::Config into the Config.
     ///
     /// This function should only be used for end-users.
     ///
@@ -105,8 +108,8 @@ impl Config {
     /// - system config table
     /// - HTTP Handler
     /// - tests
-    pub fn into_outer(self) -> OuterV0Config {
-        OuterV0Config::from(self)
+    pub fn into_config(self) -> Config {
+        Config::from(self)
     }
 }
 
@@ -147,26 +150,6 @@ pub struct QueryConfig {
     pub table_engine_memory_enabled: bool,
     pub wait_timeout_mills: u64,
     pub max_query_log_size: usize,
-    /// Table Cached enabled
-    pub table_meta_cache_enabled: bool,
-    /// Max number of cached table block meta
-    pub table_cache_block_meta_count: u64,
-    /// Table memory cache size (mb)
-    pub table_memory_cache_mb_size: u64,
-    /// Table disk cache folder root
-    pub table_disk_cache_root: String,
-    /// Table disk cache size (mb)
-    pub table_disk_cache_mb_size: u64,
-    /// Max number of cached table snapshot
-    pub table_cache_snapshot_count: u64,
-    /// Max number of cached table statistic
-    pub table_cache_statistic_count: u64,
-    /// Max number of cached table segment
-    pub table_cache_segment_count: u64,
-    /// Max number of cached bloom index meta objects
-    pub table_cache_bloom_index_meta_count: u64,
-    /// Max number of cached bloom index filters
-    pub table_cache_bloom_index_filter_count: u64,
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
     pub management_mode: bool,
     pub jwt_key_file: String,
@@ -212,17 +195,7 @@ impl Default for QueryConfig {
             rpc_tls_query_service_domain_name: "localhost".to_string(),
             table_engine_memory_enabled: true,
             wait_timeout_mills: 5000,
-            max_query_log_size: 10000,
-            table_meta_cache_enabled: true,
-            table_cache_block_meta_count: 102400,
-            table_memory_cache_mb_size: 256,
-            table_disk_cache_root: "_cache".to_string(),
-            table_disk_cache_mb_size: 1024,
-            table_cache_snapshot_count: 256,
-            table_cache_statistic_count: 256,
-            table_cache_segment_count: 10240,
-            table_cache_bloom_index_meta_count: 3000,
-            table_cache_bloom_index_filter_count: 1024 * 1024,
+            max_query_log_size: 10_000,
             management_mode: false,
             jwt_key_file: "".to_string(),
             jwt_key_files: Vec::new(),
@@ -417,6 +390,118 @@ impl Default for LocalConfig {
         Self {
             sql: "SELECT 1".to_string(),
             table: "".to_string(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CacheConfig {
+    /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
+    pub enable_table_meta_cache: bool,
+
+    /// Max number of cached table snapshot
+    pub table_meta_snapshot_count: u64,
+
+    /// Max number of cached table segment
+    pub table_meta_segment_count: u64,
+
+    /// Max number of cached table segment
+    pub table_meta_statistic_count: u64,
+
+    /// Enable bloom index cache. Default is enabled. Set it to false to disable all the bloom index caches
+    pub enable_table_index_bloom: bool,
+
+    /// Max number of cached bloom index meta objects. Set it to 0 to disable it.
+    pub table_bloom_index_meta_count: u64,
+
+    /// Max number of cached bloom index filters. Set it to 0 to disable it.
+    // One bloom index filter per column of data block being indexed will be generated if necessary.
+    //
+    // For example, a table of 1024 columns, with 800 data blocks, a query that triggers a full
+    // table filter on 2 columns, might populate 2 * 800 bloom index filter cache items (at most)
+    pub table_bloom_index_filter_count: u64,
+
+    pub data_cache_storage: CacheStorageTypeConfig,
+
+    /// Max size of external cache population queue length
+    ///
+    /// the items being queued reference table column raw data, which are
+    /// un-deserialized and usually compressed (depends on table compression options).
+    ///
+    /// - please monitor the 'table_data_cache_population_pending_count' metric
+    ///   if it is too high, and takes too much memory, please consider decrease this value
+    ///
+    /// - please monitor the 'population_overflow_count' metric
+    ///   if it keeps increasing, and disk cache hits rate is not as expected. please consider
+    ///   increase this value.
+    pub table_data_cache_population_queue_size: u32,
+
+    /// Storage that hold the raw data caches
+    pub disk_cache_config: DiskCacheConfig,
+
+    /// Max size of in memory table column object cache. By default it is 0 (disabled)
+    ///
+    /// CAUTION: The cache items are deserialized table column objects, may take a lot of memory.
+    ///
+    /// Only if query nodes have plenty of un-utilized memory, the working set can be fitted into,
+    /// and the access pattern will benefit from caching, consider enabled this cache.
+    pub table_data_deserialized_data_bytes: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CacheStorageTypeConfig {
+    None,
+    Disk,
+    // Redis,
+}
+
+impl Default for CacheStorageTypeConfig {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+impl ToString for CacheStorageTypeConfig {
+    fn to_string(&self) -> String {
+        match self {
+            CacheStorageTypeConfig::None => "none".to_string(),
+            CacheStorageTypeConfig::Disk => "disk".to_string(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DiskCacheConfig {
+    /// Max bytes of cached raw table data. Default 20GB, set it to 0 to disable it.
+    pub max_bytes: u64,
+
+    /// Table disk cache root path
+    pub path: String,
+}
+
+impl Default for DiskCacheConfig {
+    fn default() -> Self {
+        Self {
+            max_bytes: 21474836480,
+            path: "./.databend/_cache".to_owned(),
+        }
+    }
+}
+
+impl Default for CacheConfig {
+    fn default() -> Self {
+        Self {
+            enable_table_meta_cache: true,
+            table_meta_snapshot_count: 256,
+            table_meta_segment_count: 10240,
+            table_meta_statistic_count: 256,
+            enable_table_index_bloom: true,
+            table_bloom_index_meta_count: 3000,
+            table_bloom_index_filter_count: 1048576,
+            data_cache_storage: Default::default(),
+            table_data_cache_population_queue_size: 65536,
+            disk_cache_config: Default::default(),
+            table_data_deserialized_data_bytes: 0,
         }
     }
 }

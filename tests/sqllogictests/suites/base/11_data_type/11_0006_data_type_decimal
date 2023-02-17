@@ -112,3 +112,28 @@ query I
 SELECT CAST(-4.56 AS DECIMAL(6, 2)) / CAST(-1.23 AS DECIMAL(6, 2)) AS result;
 ----
 3.69
+
+query I
+SELECT MIN(CAST(-4.56 AS DECIMAL(6, 2)))
+----
+-4.55
+
+query I
+SELECT MAX(CAST(4.26 AS DECIMAL(6, 2)))
+----
+4.26
+
+query I
+select max(number::Decimal(6,2)) as result from numbers(10);
+----
+9.00
+
+query I
+select min(number::Decimal(6,2)) as result from numbers(10);
+----
+0.00
+
+query I
+SELECT ANY(CAST(2.34 AS DECIMAL(6, 2)))
+----
+2.34

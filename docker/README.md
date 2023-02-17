@@ -79,3 +79,87 @@ docker run \
     -v query_config_file:/etc/databend/mine.toml \
     datafuselabs/databend
 ```
+
+
+## How to connect
+
+There are two ways connecting to databend with docker:
+
+### Using default root user
+
+```shell
+docker run \
+    --net=host \
+    datafuselabs/databend
+
+
+❯ bendsql connect
+Connected to Databend on Host: localhost
+Version: DatabendQuery v0.9.41-nightly-0edcc16(rust-1.68.0-nightly-2023-02-17T01:35:15.271479Z)
+
+❯ bendsql query
+Connected with driver databend (DatabendQuery v0.9.41-nightly-0edcc16(rust-1.68.0-nightly-2023-02-17T01:35:15.271479Z))
+Type "help" for help.
+
+dd:root@localhost/default=>
+
+
+❯ mysql -P3307 -uroot --protocol=tcp
+Welcome to the MySQL monitor.  Commands end with ; or \g.
+Your MySQL connection id is 10
+Server version: 8.0.26-v0.9.41-nightly-0edcc16(rust-1.68.0-nightly-2023-02-17T01:35:15.271479Z) 0
+
+Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+
+Oracle is a registered trademark of Oracle Corporation and/or its
+affiliates. Other names may be trademarks of their respective
+owners.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+mysql>
+```
+
+> NOTE:
+> * `--net=host` is required for root user since it would only allow connections from localhost.
+
+### Adding an built-in user
+
+```shell
+docker run \
+    -p 8000:8000 \
+    -p 3307:3307 \
+    -e QUERY_DEFAULT_USER=databend \
+    -e QUERY_DEFAULT_PASSWORD=databend \
+    datafuselabs/databend
+
+
+❯ bendsql connect -u databend -p databend
+Connected to Databend on Host: localhost
+Version: DatabendQuery v0.9.41-nightly-0edcc16(rust-1.68.0-nightly-2023-02-17T01:35:15.271479Z)
+
+❯ bendsql query
+Connected with driver databend (DatabendQuery v0.9.41-nightly-0edcc16(rust-1.68.0-nightly-2023-02-17T01:35:15.271479Z))
+Type "help" for help.
+
+dd:databend@localhost/default=>
+
+
+❯ mysql -P3307 -udatabend -pdatabend --protocol=tcp
+mysql: [Warning] Using a password on the command line interface can be insecure.
+Welcome to the MySQL monitor.  Commands end with ; or \g.
+Your MySQL connection id is 10
+Server version: 8.0.26-v0.9.41-nightly-0edcc16(rust-1.68.0-nightly-2023-02-17T01:35:15.271479Z) 0
+
+Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+
+Oracle is a registered trademark of Oracle Corporation and/or its
+affiliates. Other names may be trademarks of their respective
+owners.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+mysql>
+```
+
+> This method is also avaible with `--net=host`.

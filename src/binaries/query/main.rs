@@ -23,7 +23,7 @@ use common_base::mem_allocator::GlobalAllocator;
 use common_base::runtime::Runtime;
 use common_base::runtime::GLOBAL_MEM_STAT;
 use common_base::set_alloc_error_hook;
-use common_config::Config;
+use common_config::InnerConfig;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_config::QUERY_SEMVER;
 use common_exception::Result;
@@ -62,7 +62,7 @@ fn main() {
 }
 
 async fn main_entrypoint() -> Result<()> {
-    let conf: Config = Config::load()?;
+    let conf: InnerConfig = InnerConfig::load()?;
 
     if run_cmd(&conf).await? {
         return Ok(());
@@ -250,7 +250,7 @@ async fn main_entrypoint() -> Result<()> {
         }
     });
     println!("Storage: {}", conf.storage.params);
-    println!("Cache: {}", conf.storage.cache.params);
+    println!("Cache: {}", conf.cache.data_cache_storage.to_string());
     println!(
         "Builtin users: {}",
         conf.query
@@ -310,7 +310,7 @@ async fn main_entrypoint() -> Result<()> {
     Ok(())
 }
 
-async fn run_cmd(conf: &Config) -> Result<bool> {
+async fn run_cmd(conf: &InnerConfig) -> Result<bool> {
     if conf.cmd.is_empty() {
         return Ok(false);
     }

@@ -28,6 +28,7 @@ use common_base::base::tokio::task::JoinHandle;
 use common_base::base::tokio::time::Instant;
 use common_grpc::ConnectionFactory;
 use common_grpc::DNSResolver;
+use common_meta_client::reply_to_api_result;
 use common_meta_raft_store::applied_state::AppliedState;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::key_spaces::GenericKV;
@@ -665,7 +666,7 @@ impl MetaNode {
                 Ok(r) => {
                     let reply = r.into_inner();
 
-                    let res: Result<ForwardResponse, MetaAPIError> = reply.into();
+                    let res: Result<ForwardResponse, MetaAPIError> = reply_to_api_result(reply);
                     match res {
                         Ok(v) => {
                             info!("join cluster via {} success: {:?}", addr, v);
@@ -1091,7 +1092,7 @@ impl MetaNode {
         })?;
         let raft_mes = resp.into_inner();
 
-        let res: Result<ForwardResponse, MetaAPIError> = raft_mes.into();
+        let res: Result<ForwardResponse, MetaAPIError> = reply_to_api_result(raft_mes);
         let resp = res?;
         Ok(resp)
     }

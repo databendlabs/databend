@@ -443,6 +443,8 @@ pub enum TokenKind {
     FORCE,
     #[token("FORMAT", ignore(ascii_case))]
     FORMAT,
+    #[token("FORMAT_NAME", ignore(ascii_case))]
+    FORMAT_NAME,
     #[token("FORMATS", ignore(ascii_case))]
     FORMATS,
     #[token("FRAGMENTS", ignore(ascii_case))]

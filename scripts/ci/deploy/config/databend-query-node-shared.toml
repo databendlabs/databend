@@ -31,14 +31,6 @@ tenant_id = "shared_tenant"
 cluster_id = "test_cluster"
 
 table_engine_memory_enabled = true
-database_engine_github_enabled = true
-
-table_meta_cache_enabled = true
-table_memory_cache_mb_size = 1024
-table_disk_cache_root = "_cache"
-table_disk_cache_mb_size = 10240
-table_cache_bloom_index_meta_count=3000
-table_cache_bloom_index_filter_count=1048576
 
 share_endpoint_address = "127.0.0.1:33003" # receive shared information from open sharing
 # [[query.users]]
@@ -110,3 +102,44 @@ data_path = "./.databend/stateless_test_data"
 # endpoint_url = "<your-endpoint>"
 # access_key_id = "<your-key-id>"
 # access_key_secret = "<your-account-key>"
+
+[cache]
+
+### table meta caches ###
+# Enable table meta cache. Default is true.
+# Set it to false wll disable all the table meta caches
+enable_table_meta_cache = true
+# Max number of cached table snapshot. Set it to 0 to disable it.
+table_meta_snapshot_count = 256
+# Max number of cached table segment. Set it to 0 to disable it.
+table_meta_segment_count = 10240
+# Max number of cached table statistic meta. Set it to 0 to disable it.
+table_meta_statistic_count = 256
+
+### table bloom index caches ###
+# Enable bloom index cache. Default is true
+# Set it to false will disable all the bloom index caches
+enable_table_bloom_index_cache = true
+# Max number of cached bloom index meta objects. Set it to 0 to disable it.
+table_bloom_index_meta_count = 3000
+# Max number of cached bloom index filters. Set it to 0 to disable it.
+table_bloom_index_filter_count = 1048576
+
+### table data caches ###
+
+# Type of storage to keep the table data cache
+#
+# available options: [none|disk]
+# default is "none", which disable table data cache
+# use "disk" to enabled disk cache
+data_cache_storage = "none"
+
+# Max size of external cache population queue length
+table_data_cache_population_queue_size = 65535
+
+
+[cache.disk]
+# cache path
+path = "./databend/_cache"
+# max bytes of cached data 20G
+max_bytes = 21474836480

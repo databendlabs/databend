@@ -100,6 +100,27 @@ impl ColumnNodes {
         }
         Ok(column_node)
     }
+
+    pub fn traverse_path_nested_aware<'a>(
+        column_nodes: &'a [ColumnNode],
+        path: &'a [usize],
+        is_nested: bool,
+    ) -> Result<(&'a ColumnNode, bool)> {
+        let column_node = &column_nodes[path[0]];
+        let is_nested = is_nested || column_node.children.is_some();
+        if path.len() > 1 {
+            return match &column_node.children {
+                Some(ref children) => {
+                    Self::traverse_path_nested_aware(children, &path[1..], is_nested)
+                }
+                None => Err(ErrorCode::Internal(format!(
+                    "Cannot get column_node by path: {:?}",
+                    path
+                ))),
+            };
+        }
+        Ok((column_node, is_nested))
+    }
 }
 
 /// `ColumnNode` contains all the leaf column ids of the column.
@@ -127,6 +148,10 @@ impl ColumnNode {
             children,
             leaf_column_ids: vec![],
         }
+    }
+
+    pub fn has_children(&self) -> bool {
+        self.children.is_some()
     }
 
     pub fn build_leaf_column_ids(&mut self, leaf_column_ids: &Vec<u32>) {

@@ -32,7 +32,7 @@ use common_base::base::GlobalUniqName;
 use common_base::base::SignalStream;
 use common_base::base::SignalType;
 pub use common_catalog::cluster_info::Cluster;
-use common_config::Config;
+use common_config::InnerConfig;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -73,7 +73,7 @@ pub trait ClusterHelper {
     fn is_empty(&self) -> bool;
     fn is_local(&self, node: &NodeInfo) -> bool;
     fn local_id(&self) -> String;
-    async fn create_node_conn(&self, name: &str, config: &Config) -> Result<FlightClient>;
+    async fn create_node_conn(&self, name: &str, config: &InnerConfig) -> Result<FlightClient>;
     fn get_nodes(&self) -> Vec<Arc<NodeInfo>>;
 }
 
@@ -102,7 +102,7 @@ impl ClusterHelper for Cluster {
         self.local_id.clone()
     }
 
-    async fn create_node_conn(&self, name: &str, config: &Config) -> Result<FlightClient> {
+    async fn create_node_conn(&self, name: &str, config: &InnerConfig) -> Result<FlightClient> {
         for node in &self.nodes {
             if node.id == name {
                 return match config.tls_query_cli_enabled() {
@@ -140,7 +140,7 @@ impl ClusterHelper for Cluster {
 impl ClusterDiscovery {
     const METRIC_LABEL_FUNCTION: &'static str = "function";
 
-    pub async fn create_meta_client(cfg: &Config) -> Result<MetaStore> {
+    pub async fn create_meta_client(cfg: &InnerConfig) -> Result<MetaStore> {
         let meta_api_provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
         match meta_api_provider.create_meta_store().await {
             Ok(meta_store) => Ok(meta_store),
@@ -150,14 +150,17 @@ impl ClusterDiscovery {
         }
     }
 
-    pub async fn init(cfg: Config) -> Result<()> {
+    pub async fn init(cfg: InnerConfig) -> Result<()> {
         let metastore = ClusterDiscovery::create_meta_client(&cfg).await?;
         GlobalInstance::set(Self::try_create(&cfg, metastore).await?);
 
         Ok(())
     }
 
-    pub async fn try_create(cfg: &Config, metastore: MetaStore) -> Result<Arc<ClusterDiscovery>> {
+    pub async fn try_create(
+        cfg: &InnerConfig,
+        metastore: MetaStore,
+    ) -> Result<Arc<ClusterDiscovery>> {
         let (lift_time, provider) = Self::create_provider(cfg, metastore)?;
 
         Ok(Arc::new(ClusterDiscovery {
@@ -180,7 +183,7 @@ impl ClusterDiscovery {
     }
 
     fn create_provider(
-        cfg: &Config,
+        cfg: &InnerConfig,
         metastore: MetaStore,
     ) -> Result<(Duration, Arc<dyn ClusterApi>)> {
         // TODO: generate if tenant or cluster id is empty
@@ -192,7 +195,7 @@ impl ClusterDiscovery {
         Ok((lift_time, Arc::new(cluster_manager)))
     }
 
-    pub async fn discover(&self, config: &Config) -> Result<Arc<Cluster>> {
+    pub async fn discover(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
         match self.api_provider.get_nodes().await {
             Err(cause) => {
                 label_counter_with_val_and_labels(
@@ -351,7 +354,7 @@ impl ClusterDiscovery {
         };
     }
 
-    pub async fn register_to_metastore(self: &Arc<Self>, cfg: &Config) -> Result<()> {
+    pub async fn register_to_metastore(self: &Arc<Self>, cfg: &InnerConfig) -> Result<()> {
         let cpus = cfg.query.num_cpus;
         let mut address = cfg.query.flight_api_address.clone();
 
@@ -503,7 +506,7 @@ impl ClusterHeartbeat {
     }
 }
 
-pub async fn create_client(config: &Config, address: &str) -> Result<FlightClient> {
+pub async fn create_client(config: &InnerConfig, address: &str) -> Result<FlightClient> {
     match config.tls_query_cli_enabled() {
         true => Ok(FlightClient::new(FlightServiceClient::new(
             ConnectionFactory::create_rpc_channel(

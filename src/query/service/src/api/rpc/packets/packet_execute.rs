@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_config::Config;
+use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::NodeInfo;
@@ -49,7 +49,7 @@ impl ExecutePartialQueryPacket {
 
 #[async_trait::async_trait]
 impl Packet for ExecutePartialQueryPacket {
-    async fn commit(&self, config: &Config, timeout: u64) -> Result<()> {
+    async fn commit(&self, config: &InnerConfig, timeout: u64) -> Result<()> {
         if !self.executors_info.contains_key(&self.executor) {
             return Err(ErrorCode::ClusterUnknownNode(format!(
                 "Not found {} node in cluster",

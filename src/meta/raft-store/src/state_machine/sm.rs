@@ -374,17 +374,6 @@ impl StateMachine {
     }
 
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]
-    fn apply_incr_seq_cmd(
-        &self,
-        key: &str,
-        txn_tree: &TransactionSledTree,
-    ) -> Result<AppliedState, MetaStorageError> {
-        let r = Self::txn_incr_seq(key, txn_tree)?;
-
-        Ok(r.into())
-    }
-
-    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
     fn apply_add_node_cmd(
         &self,
         node_id: &u64,
@@ -766,8 +755,6 @@ impl StateMachine {
         let now = Instant::now();
 
         let res = match cmd {
-            Cmd::IncrSeq { ref key } => self.apply_incr_seq_cmd(key, txn_tree),
-
             Cmd::AddNode {
                 ref node_id,
                 ref node,

@@ -13,12 +13,12 @@ CREATE FUNCTION <name> AS ([ argname ]) -> '<function_definition>'
 ## Examples
 
 ```sql
-ALTER FUNCTION a_plus_3 AS (a) -> a+6;
+ALTER FUNCTION a_plus_3 AS (a) -> a+3;
 
 SELECT a_plus_3(2);
 +---------+
-| (2 + 6) |
+| (2 + 3) |
 +---------+
-|       8 |
+|       5 |
 +---------+
 ```
