@@ -26,6 +26,7 @@ use crate::processors::port::OutputPort;
 use crate::processors::processor::ProcessorPtr;
 use crate::processors::DuplicateProcessor;
 use crate::processors::ResizeProcessor;
+use crate::processors::ShuffleProcessor;
 use crate::SinkPipeBuilder;
 use crate::SourcePipeBuilder;
 use crate::TransformPipeBuilder;
@@ -233,6 +234,26 @@ impl Pipeline {
                     pipe.output_length * 2,
                     items,
                 ));
+            }
+            _ => {}
+        }
+    }
+
+    pub fn shuffle(&mut self, rule: Vec<usize>) {
+        match self.pipes.last() {
+            Some(pipe) if pipe.output_length > 1 => {
+                debug_assert!(rule.len() == pipe.output_length);
+                let processor = ShuffleProcessor::create(rule);
+                let inputs_port = processor.get_inputs().to_vec();
+                let outputs_port = processor.get_outputs().to_vec();
+                self.pipes
+                    .push(Pipe::create(inputs_port.len(), outputs_port.len(), vec![
+                        PipeItem::create(
+                            ProcessorPtr::create(Box::new(processor)),
+                            inputs_port,
+                            outputs_port,
+                        ),
+                    ]));
             }
             _ => {}
         }
