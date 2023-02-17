@@ -215,7 +215,7 @@ async fn test_catalogs_table() -> Result<()> {
         let tbl = catalog.get_table(tenant, "default", "test_table").await?;
         let mut req = DropTableReq {
             if_exists: false,
-            tb_id: tbl.get_table_info().ident.table_id
+            tb_id: tbl.get_table_info().ident.table_id,
         };
         let res = catalog.drop_table(req.clone()).await;
         assert!(res.is_ok());
