@@ -551,6 +551,7 @@ impl<T: Number> SimpleDomain<T> {
     pub fn overflow_cast_with_minmax<U: Number>(&self, min: U, max: U) -> (SimpleDomain<U>, bool) {
         let (min, min_overflowing) = overflow_cast_with_minmax::<T, U>(self.min, min, max, min);
         let (max, max_overflowing) = overflow_cast_with_minmax::<T, U>(self.max, min, max, max);
+
         (
             SimpleDomain { min, max },
             min_overflowing || max_overflowing,

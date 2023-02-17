@@ -605,6 +605,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         let mut old_domain = None;
         for _ in 0..MAX_ITERATIONS {
             let (new_expr, domain) = self.fold_once(&old_expr);
+
             if new_expr == old_expr {
                 return (new_expr, domain);
             }
