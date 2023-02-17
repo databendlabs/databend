@@ -49,12 +49,10 @@ impl SyncMpscSink for TestSink {
         Ok(())
     }
 
-    fn consume(&mut self, data_block: Vec<DataBlock>) -> Result<bool> {
-        self.count.fetch_add(
-            data_block.iter().map(|b| b.num_rows()).sum(),
-            Ordering::SeqCst,
-        );
-        Ok(true)
+    fn consume(&mut self, data_block: DataBlock) -> Result<bool> {
+        self.count
+            .fetch_add(data_block.num_rows(), Ordering::SeqCst);
+        Ok(false)
     }
 }
 
@@ -85,7 +83,11 @@ async fn test_sync_mpsc_sink() -> Result<()> {
     matches!(sink.event()?, Event::Sync);
     sink.process()?;
     assert_eq!(count.load(Ordering::SeqCst), 1);
-    // consume
+    // consume block1
+    matches!(sink.event()?, Event::Sync);
+    sink.process()?;
+    assert_eq!(count.load(Ordering::SeqCst), 2);
+    // consume block2
     matches!(sink.event()?, Event::Sync);
     sink.process()?;
     assert_eq!(count.load(Ordering::SeqCst), 4);

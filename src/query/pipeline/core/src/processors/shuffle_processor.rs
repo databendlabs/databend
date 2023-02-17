@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -25,16 +24,11 @@ use crate::processors::Processor;
 
 pub struct ShuffleProcessor {
     channel: Vec<(Arc<InputPort>, Arc<OutputPort>)>,
-    not_finished: HashSet<usize>,
 }
 
 impl ShuffleProcessor {
     pub fn create(channel: Vec<(Arc<InputPort>, Arc<OutputPort>)>) -> Self {
-        let not_finished = (0..channel.len()).collect();
-        ShuffleProcessor {
-            channel,
-            not_finished,
-        }
+        ShuffleProcessor { channel }
     }
 }
 
@@ -49,24 +43,21 @@ impl Processor for ShuffleProcessor {
     }
 
     fn event(&mut self) -> Result<Event> {
-        let mut finished = Vec::with_capacity(self.not_finished.len());
+        let mut finished = true;
         let mut need_data = true;
-        for i in self.not_finished.iter() {
-            let (input, output) = &self.channel[*i];
+        for (input, output) in self.channel.iter() {
             match (input.is_finished(), output.is_finished()) {
-                (true, true) => finished.push(*i),
+                (true, true) => {}
                 (true, false) => {
                     output.finish();
-                    finished.push(*i);
                 }
                 (false, true) => {
                     input.finish();
-                    finished.push(*i);
                 }
                 (false, false) => {
+                    finished = false;
                     if !output.can_push() {
-                        need_data = false;
-                        break;
+                        return Ok(Event::NeedConsume);
                     }
                     if input.has_data() {
                         need_data = false;
@@ -75,15 +66,10 @@ impl Processor for ShuffleProcessor {
                 }
             }
         }
-        if finished.len() == self.not_finished.len() {
-            return Ok(Event::Finished);
-        }
 
-        for i in finished {
-            self.not_finished.remove(&i);
-        }
-
-        if need_data {
+        if finished {
+            Ok(Event::Finished)
+        } else if need_data {
             Ok(Event::NeedData)
         } else {
             Ok(Event::NeedConsume)

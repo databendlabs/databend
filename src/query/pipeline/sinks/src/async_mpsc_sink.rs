@@ -37,43 +37,64 @@ pub trait AsyncMpscSink: Send {
     }
 
     #[unboxed_simple]
-    async fn consume(&mut self, data_block: Vec<DataBlock>) -> Result<bool>;
+    async fn consume(&mut self, data_block: DataBlock) -> Result<bool>;
 }
 
 pub struct AsyncMpscSinker<T: AsyncMpscSink + 'static> {
     inner: T,
     finished: bool,
     inputs: Vec<Arc<InputPort>>,
-    inputs_data: Option<Vec<DataBlock>>,
+    input_data: Option<DataBlock>,
+
+    cur_input_index: usize,
     called_on_start: bool,
     called_on_finish: bool,
 }
 
 impl<T: AsyncMpscSink + 'static> AsyncMpscSinker<T> {
     pub fn create(inputs: Vec<Arc<InputPort>>, inner: T) -> Box<dyn Processor> {
+        for input in &inputs {
+            input.set_need_data();
+        }
         Box::new(AsyncMpscSinker {
             inner,
             inputs,
             finished: false,
-            inputs_data: None,
+            input_data: None,
+            cur_input_index: 0,
             called_on_start: false,
             called_on_finish: false,
         })
     }
 
-    fn get_ready_inputs(&self) -> Option<Vec<Arc<InputPort>>> {
-        let mut ready = Vec::with_capacity(self.inputs.len());
-        let mut all_finished = true;
-        for input in self.inputs.iter() {
+    fn get_current_input(&mut self) -> Option<Arc<InputPort>> {
+        let mut finished = true;
+        let mut index = self.cur_input_index;
+
+        loop {
+            let input = &self.inputs[index];
+
             if !input.is_finished() {
-                all_finished = false;
-                input.set_need_data();
+                finished = false;
+
                 if input.has_data() {
-                    ready.push(input.clone());
+                    self.cur_input_index = index;
+                    return Some(input.clone());
                 }
             }
+
+            index += 1;
+            if index == self.inputs.len() {
+                index = 0;
+            }
+
+            if index == self.cur_input_index {
+                return match finished {
+                    true => Some(input.clone()),
+                    false => None,
+                };
+            }
         }
-        if all_finished { None } else { Some(ready) }
     }
 
     fn finish_inputs(&mut self) {
@@ -98,7 +119,7 @@ impl<T: AsyncMpscSink + 'static> Processor for AsyncMpscSinker<T> {
             return Ok(Event::Async);
         }
 
-        if self.inputs_data.is_some() {
+        if self.input_data.is_some() {
             return Ok(Event::Async);
         }
 
@@ -111,21 +132,22 @@ impl<T: AsyncMpscSink + 'static> Processor for AsyncMpscSinker<T> {
             return Ok(Event::Finished);
         }
 
-        match self.get_ready_inputs() {
-            Some(inputs) if !inputs.is_empty() => {
-                let blocks = inputs
-                    .iter()
-                    .map(|input| input.pull_data().unwrap())
-                    .collect::<Result<Vec<_>>>()?;
-                self.inputs_data = Some(blocks);
-                Ok(Event::Async)
+        match self.get_current_input() {
+            Some(input) => {
+                if input.is_finished() {
+                    // All finished
+                    if self.called_on_finish {
+                        Ok(Event::Finished)
+                    } else {
+                        Ok(Event::Async)
+                    }
+                } else {
+                    let block = input.pull_data().unwrap()?;
+                    self.input_data = Some(block);
+                    Ok(Event::Async)
+                }
             }
-            Some(_) => Ok(Event::NeedData),
-            None => match !self.called_on_finish {
-                // All finished
-                true => Ok(Event::Async),
-                false => Ok(Event::Finished),
-            },
+            None => Ok(Event::NeedData),
         }
     }
 
@@ -133,7 +155,7 @@ impl<T: AsyncMpscSink + 'static> Processor for AsyncMpscSinker<T> {
         if !self.called_on_start {
             self.called_on_start = true;
             self.inner.on_start().await?;
-        } else if let Some(data_block) = self.inputs_data.take() {
+        } else if let Some(data_block) = self.input_data.take() {
             self.finished = self.inner.consume(data_block).await?;
         } else if !self.called_on_finish {
             self.called_on_finish = true;
