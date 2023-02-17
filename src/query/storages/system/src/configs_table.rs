@@ -55,8 +55,7 @@ impl SyncSystemTable for ConfigsTable {
         let mut descs: Vec<String> = vec![];
 
         let query_config = config.query;
-        let query_config_value =
-            Self::remove_obsolete_query_configs(serde_json::to_value(query_config)?);
+        let query_config_value = Self::remove_obsolete_configs(serde_json::to_value(query_config)?);
 
         ConfigsTable::extract_config(
             &mut names,
@@ -282,7 +281,7 @@ impl ConfigsTable {
         descs.push(desc);
     }
 
-    fn remove_obsolete_query_configs(config_json: JsonValue) -> JsonValue {
+    fn remove_obsolete_configs(config_json: JsonValue) -> JsonValue {
         match config_json {
             Value::Object(mut config_json_obj) => {
                 for key in Config::obsoleted_option_keys().iter() {
