@@ -24,6 +24,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::common_super_type;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
@@ -609,8 +610,16 @@ impl<'a> JoinConditionResolver<'a> {
         let left_type = left.data_type();
         let right_type = right.data_type();
         if left_type.ne(&right_type) {
-            let least_super_type = common_super_type(left_type, right_type)
-                .ok_or_else(|| ErrorCode::Internal("Cannot find common super type"))?;
+            let least_super_type = common_super_type(
+                left_type.clone(),
+                right_type.clone(),
+                &BUILTIN_FUNCTIONS.default_cast_rules,
+            )
+            .ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "Left type {left_type} and right type {right_type} cannot be matched"
+                ))
+            })?;
             // Wrap cast for both left and right, `cast` can change the physical type of the data block
             // Related issue: https://github.com/datafuselabs/databend/issues/7650
             left = wrap_cast(&left, &least_super_type);

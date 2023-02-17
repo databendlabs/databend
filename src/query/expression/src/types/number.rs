@@ -25,7 +25,6 @@ use ordered_float::OrderedFloat;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::concat_array;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -40,14 +39,14 @@ use crate::ScalarRef;
 pub type F32 = OrderedFloat<f32>;
 pub type F64 = OrderedFloat<f64>;
 
-pub const ALL_UNSIGNED_INTEGER_TYPES: &[NumberDataType; 4] = &[
+pub const ALL_UNSIGNED_INTEGER_TYPES: &[NumberDataType] = &[
     NumberDataType::UInt8,
     NumberDataType::UInt16,
     NumberDataType::UInt32,
     NumberDataType::UInt64,
 ];
 
-pub const ALL_INTEGER_TYPES: &[NumberDataType; 8] = &[
+pub const ALL_INTEGER_TYPES: &[NumberDataType] = &[
     NumberDataType::UInt8,
     NumberDataType::UInt16,
     NumberDataType::UInt32,
@@ -58,10 +57,19 @@ pub const ALL_INTEGER_TYPES: &[NumberDataType; 8] = &[
     NumberDataType::Int64,
 ];
 
-pub const ALL_FLOAT_TYPES: &[NumberDataType; 2] =
-    &[NumberDataType::Float32, NumberDataType::Float64];
-pub const ALL_NUMERICS_TYPES: &[NumberDataType; 10] =
-    &concat_array(ALL_INTEGER_TYPES, ALL_FLOAT_TYPES);
+pub const ALL_FLOAT_TYPES: &[NumberDataType] = &[NumberDataType::Float32, NumberDataType::Float64];
+pub const ALL_NUMERICS_TYPES: &[NumberDataType] = &[
+    NumberDataType::UInt8,
+    NumberDataType::UInt16,
+    NumberDataType::UInt32,
+    NumberDataType::UInt64,
+    NumberDataType::Int8,
+    NumberDataType::Int16,
+    NumberDataType::Int32,
+    NumberDataType::Int64,
+    NumberDataType::Float32,
+    NumberDataType::Float64,
+];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NumberType<T: Number>(PhantomData<T>);
@@ -372,50 +380,6 @@ impl NumberDataType {
             },
         }
     }
-
-    pub fn super_type(self, other: Self) -> Self {
-        if self.can_lossless_cast_to(other) {
-            return other;
-        } else if other.can_lossless_cast_to(self) {
-            return self;
-        }
-        let max_bit_width = 64;
-        match (self.is_float(), other.is_float()) {
-            (true, true) => NumberDataType::new(
-                max_bit_with(self.bit_width(), other.bit_width()),
-                true,
-                true,
-            ),
-            (true, false) => {
-                let bin_width = next_bit_width(other.bit_width()).unwrap_or(max_bit_width);
-                NumberDataType::new(max_bit_with(bin_width, self.bit_width()), true, true)
-            }
-            (false, true) => {
-                let bin_width = next_bit_width(self.bit_width()).unwrap_or(max_bit_width);
-                NumberDataType::new(max_bit_with(bin_width, other.bit_width()), true, true)
-            }
-            (false, false) => match (self.is_signed(), other.is_signed()) {
-                (true, true) => NumberDataType::new(
-                    max_bit_with(self.bit_width(), other.bit_width()),
-                    true,
-                    false,
-                ),
-                (false, false) => NumberDataType::new(
-                    max_bit_with(self.bit_width(), other.bit_width()),
-                    false,
-                    false,
-                ),
-                (false, true) => {
-                    let bin_width = next_bit_width(other.bit_width()).unwrap_or(max_bit_width);
-                    NumberDataType::new(max_bit_with(bin_width, self.bit_width()), true, false)
-                }
-                (true, false) => {
-                    let bin_width = next_bit_width(self.bit_width()).unwrap_or(max_bit_width);
-                    NumberDataType::new(max_bit_with(bin_width, other.bit_width()), true, false)
-                }
-            },
-        }
-    }
 }
 
 const fn next_bit_width(width: u8) -> Option<u8> {
@@ -426,10 +390,6 @@ const fn next_bit_width(width: u8) -> Option<u8> {
         64 => None,
         _ => panic!("invalid bit width"),
     }
-}
-
-const fn max_bit_with(lhs: u8, rhs: u8) -> u8 {
-    if lhs > rhs { lhs } else { rhs }
 }
 
 impl PartialOrd for NumberScalar {

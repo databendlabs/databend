@@ -14,6 +14,7 @@
 
 use common_exception::Result;
 use common_expression::type_check::common_super_type;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 
 use crate::binder::JoinPredicate;
 use crate::optimizer::rule::rewrite::filter_join::convert_mark_to_semi_join;
@@ -170,7 +171,8 @@ pub fn try_push_down_filter_join(
             JoinPredicate::Both { left, right } => {
                 let left_type = left.data_type();
                 let right_type = right.data_type();
-                let join_key_type = common_super_type(left_type, right_type);
+                let join_key_type =
+                    common_super_type(left_type, right_type, &BUILTIN_FUNCTIONS.default_cast_rules);
 
                 // We have to check if left_type and right_type can be coerced to
                 // a super type. If the coercion is failed, we cannot push the

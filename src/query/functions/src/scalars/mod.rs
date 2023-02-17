@@ -47,9 +47,9 @@ use self::comparison::ALL_MATCH_FUNC_NAMES;
 pub static BUILTIN_FUNCTIONS: FunctionRegistry = builtin_functions();
 
 fn builtin_functions() -> FunctionRegistry {
-    let mut registry = FunctionRegistry::new();
+    let mut registry = FunctionRegistry::empty();
 
-    register_casting_rules(&mut registry);
+    register_auto_cast_rules(&mut registry);
 
     arithmetic::register(&mut registry);
     array::register(&mut registry);
@@ -70,10 +70,142 @@ fn builtin_functions() -> FunctionRegistry {
     registry
 }
 
-fn register_casting_rules(registry: &mut FunctionRegistry) {
+fn register_auto_cast_rules(registry: &mut FunctionRegistry) {
+    registry.register_default_cast_rules(vec![
+        (DataType::Date, DataType::Timestamp),
+        (
+            DataType::Number(NumberDataType::UInt8),
+            DataType::Number(NumberDataType::UInt16),
+        ),
+        (
+            DataType::Number(NumberDataType::UInt8),
+            DataType::Number(NumberDataType::UInt32),
+        ),
+        (
+            DataType::Number(NumberDataType::UInt8),
+            DataType::Number(NumberDataType::UInt64),
+        ),
+        (
+            DataType::Number(NumberDataType::UInt8),
+            DataType::Number(NumberDataType::Int16),
+        ),
+        (
+            DataType::Number(NumberDataType::UInt8),
+            DataType::Number(NumberDataType::Int32),
+        ),
+        (
+            DataType::Number(NumberDataType::UInt8),
+            DataType::Number(NumberDataType::Int64),
+        ),
+        (
+            DataType::Number(NumberDataType::UInt8),
+            DataType::Number(NumberDataType::Float32),
+        ),
+        (
+            DataType::Number(NumberDataType::UInt8),
+            DataType::Number(NumberDataType::Float64),
+        ),
+        (
+            DataType::Number(NumberDataType::UInt16),
+            DataType::Number(NumberDataType::UInt32),
+        ),
+        (
+            DataType::Number(NumberDataType::UInt16),
+            DataType::Number(NumberDataType::UInt64),
+        ),
+        (
+            DataType::Number(NumberDataType::UInt16),
+            DataType::Number(NumberDataType::Int32),
+        ),
+        (
+            DataType::Number(NumberDataType::UInt16),
+            DataType::Number(NumberDataType::Int64),
+        ),
+        (
+            DataType::Number(NumberDataType::UInt16),
+            DataType::Number(NumberDataType::Float32),
+        ),
+        (
+            DataType::Number(NumberDataType::UInt16),
+            DataType::Number(NumberDataType::Float64),
+        ),
+        (
+            DataType::Number(NumberDataType::UInt32),
+            DataType::Number(NumberDataType::UInt64),
+        ),
+        (
+            DataType::Number(NumberDataType::UInt32),
+            DataType::Number(NumberDataType::Int64),
+        ),
+        (
+            DataType::Number(NumberDataType::UInt32),
+            DataType::Number(NumberDataType::Float64),
+        ),
+        (
+            DataType::Number(NumberDataType::UInt64),
+            DataType::Number(NumberDataType::Int64),
+        ),
+        (
+            DataType::Number(NumberDataType::UInt64),
+            DataType::Number(NumberDataType::Float64),
+        ),
+        (
+            DataType::Number(NumberDataType::Int8),
+            DataType::Number(NumberDataType::Int16),
+        ),
+        (
+            DataType::Number(NumberDataType::Int8),
+            DataType::Number(NumberDataType::Int32),
+        ),
+        (
+            DataType::Number(NumberDataType::Int8),
+            DataType::Number(NumberDataType::Int64),
+        ),
+        (
+            DataType::Number(NumberDataType::Int8),
+            DataType::Number(NumberDataType::Float32),
+        ),
+        (
+            DataType::Number(NumberDataType::Int8),
+            DataType::Number(NumberDataType::Float64),
+        ),
+        (
+            DataType::Number(NumberDataType::Int16),
+            DataType::Number(NumberDataType::Int32),
+        ),
+        (
+            DataType::Number(NumberDataType::Int16),
+            DataType::Number(NumberDataType::Int64),
+        ),
+        (
+            DataType::Number(NumberDataType::Int16),
+            DataType::Number(NumberDataType::Float32),
+        ),
+        (
+            DataType::Number(NumberDataType::Int16),
+            DataType::Number(NumberDataType::Float64),
+        ),
+        (
+            DataType::Number(NumberDataType::Int32),
+            DataType::Number(NumberDataType::Int64),
+        ),
+        (
+            DataType::Number(NumberDataType::Int32),
+            DataType::Number(NumberDataType::Float64),
+        ),
+        (
+            DataType::Number(NumberDataType::Int64),
+            DataType::Number(NumberDataType::Float64),
+        ),
+        (
+            DataType::Number(NumberDataType::Float32),
+            DataType::Number(NumberDataType::Float64),
+        ),
+    ]);
+
     for func_name in ["and", "or", "not", "xor"] {
         for data_type in ALL_INTEGER_TYPES {
-            registry.register_auto_cast_signatures(func_name, vec![(
+            registry.register_additional_cast_rules(func_name, vec![(
                 DataType::Number(*data_type),
                 DataType::Boolean,
             )]);
@@ -81,7 +213,7 @@ fn register_casting_rules(registry: &mut FunctionRegistry) {
     }
 
     for name in ALL_COMP_FUNC_NAMES {
-        registry.register_auto_cast_signatures(name, vec![
+        registry.register_additional_cast_rules(name, vec![
             (DataType::String, DataType::Timestamp),
             (DataType::String, DataType::Date),
             (DataType::Date, DataType::Timestamp),
@@ -102,12 +234,38 @@ fn register_casting_rules(registry: &mut FunctionRegistry) {
         ]);
     }
 
-    registry.register_auto_cast_signatures("eq", vec![
+    registry.register_additional_cast_rules("eq", vec![
         (DataType::String, DataType::Number(NumberDataType::Float64)),
         (DataType::String, DataType::Number(NumberDataType::Int64)),
     ]);
 
     for name in ALL_MATCH_FUNC_NAMES {
-        registry.register_auto_cast_signatures(name, vec![(DataType::Variant, DataType::String)]);
+        registry.register_additional_cast_rules(name, vec![(DataType::Variant, DataType::String)]);
     }
+
+    registry.register_additional_cast_rules("array", vec![
+        (DataType::Boolean, DataType::Number(NumberDataType::UInt8)),
+        (DataType::Boolean, DataType::Number(NumberDataType::UInt16)),
+        (DataType::Boolean, DataType::Number(NumberDataType::UInt32)),
+        (DataType::Boolean, DataType::Number(NumberDataType::UInt64)),
+        (DataType::Boolean, DataType::Number(NumberDataType::Int8)),
+        (DataType::Boolean, DataType::Number(NumberDataType::Int16)),
+        (DataType::Boolean, DataType::Number(NumberDataType::Int32)),
+        (DataType::Boolean, DataType::Number(NumberDataType::Int64)),
+        (DataType::Boolean, DataType::Number(NumberDataType::Float32)),
+        (DataType::Boolean, DataType::Number(NumberDataType::Float64)),
+        (DataType::Boolean, DataType::String),
+        (DataType::Number(NumberDataType::UInt8), DataType::String),
+        (DataType::Number(NumberDataType::UInt16), DataType::String),
+        (DataType::Number(NumberDataType::UInt32), DataType::String),
+        (DataType::Number(NumberDataType::UInt64), DataType::String),
+        (DataType::Number(NumberDataType::Int8), DataType::String),
+        (DataType::Number(NumberDataType::Int16), DataType::String),
+        (DataType::Number(NumberDataType::Int32), DataType::String),
+        (DataType::Number(NumberDataType::Int64), DataType::String),
+        (DataType::Number(NumberDataType::Float32), DataType::String),
+        (DataType::Number(NumberDataType::Float64), DataType::String),
+        (DataType::Date, DataType::String),
+        (DataType::Timestamp, DataType::String),
+    ]);
 }
