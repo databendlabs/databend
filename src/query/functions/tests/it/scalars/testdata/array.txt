@@ -18,9 +18,9 @@ output         : ["a", "1"]
 
 ast            : [-1, true]
 raw expr       : array(minus(1_u8), true)
-checked expr   : array<T0=Int64><T0, T0>(to_int64<Int16>(minus<UInt8>(1_u8)), to_int64<Boolean>(true))
+checked expr   : array<T0=Int16><T0, T0>(minus<UInt8>(1_u8), to_int16<Boolean>(true))
 optimized expr : [-1, 1]
-output type    : Array(Int64)
+output type    : Array(Int16)
 output domain  : [{-1..=1}]
 output         : [-1, 1]
 
@@ -478,15 +478,28 @@ evaluation (internal):
 +--------------+---------------------------------------------------------------------------+
 
 
-error: 
-  --> SQL:1:14
-  |
-1 | nullable_col in (1, '9', 3, 10, 12, true, [1,2,3])
-  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `array(UInt8, String, UInt8, UInt8, UInt8, Boolean)`
-
-has tried possible overloads:
-  array(T0, T0, T0, T0, T0, T0) :: Array(T0)  : unable to find a common super type for `String` and `Boolean`
-
+ast            : nullable_col in (1, '9', 3, 10, 12, true, [1,2,3])
+raw expr       : contains(array(1_u8, "9", 3_u8, 10_u8, 12_u8, true), nullable_col::Int64 NULL)
+checked expr   : contains<T0=Variant NULL><Array(T0), T0>(CAST(array<T0=String><T0, T0, T0, T0, T0, T0>(to_string<UInt8>(1_u8), "9", to_string<UInt8>(3_u8), to_string<UInt8>(10_u8), to_string<UInt8>(12_u8), to_string<Boolean>(true)) AS Array(Variant NULL)), CAST(nullable_col AS Variant NULL))
+optimized expr : contains<T0=Variant NULL><Array(T0), T0>(["1", "9", "3", "10", "12", "true"], CAST(nullable_col AS Variant NULL))
+evaluation:
++--------+-------------------+---------------+
+|        | nullable_col      | Output        |
++--------+-------------------+---------------+
+| Type   | Int64 NULL        | Boolean       |
+| Domain | {9..=12} ∪ {NULL} | {FALSE, TRUE} |
+| Row 0  | 9                 | false         |
+| Row 1  | 10                | false         |
+| Row 2  | NULL              | false         |
+| Row 3  | NULL              | false         |
++--------+-------------------+---------------+
+evaluation (internal):
++--------------+---------------------------------------------------------------------------+
+| Column       | Data                                                                      |
++--------------+---------------------------------------------------------------------------+
+| nullable_col | NullableColumn { column: Int64([9, 10, 11, 12]), validity: [0b____0011] } |
+| Output       | Boolean([0b____0000])                                                     |
++--------------+---------------------------------------------------------------------------+
 
 
 ast            : array_remove_first([])
