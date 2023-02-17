@@ -201,6 +201,8 @@ pub trait Decimal:
     // 10**scale
     fn e(n: u32) -> Self;
 
+    fn checked_add(self, rhs: Self) -> Option<Self>;
+    fn checked_sub(self, rhs: Self) -> Option<Self>;
     fn checked_div(self, rhs: Self) -> Option<Self>;
     fn checked_mul(self, rhs: Self) -> Option<Self>;
 
@@ -234,6 +236,14 @@ impl Decimal for i128 {
 
     fn e(n: u32) -> Self {
         10_i128.pow(n)
+    }
+
+    fn checked_add(self, rhs: Self) -> Option<Self> {
+        self.checked_add(rhs)
+    }
+
+    fn checked_sub(self, rhs: Self) -> Option<Self> {
+        self.checked_sub(rhs)
     }
 
     fn checked_div(self, rhs: Self) -> Option<Self> {
@@ -325,6 +335,14 @@ impl Decimal for i256 {
 
     fn e(n: u32) -> Self {
         (i256::ONE * 10).pow(n)
+    }
+
+    fn checked_add(self, rhs: Self) -> Option<Self> {
+        self.checked_add(rhs)
+    }
+
+    fn checked_sub(self, rhs: Self) -> Option<Self> {
+        self.checked_sub(rhs)
     }
 
     fn checked_div(self, rhs: Self) -> Option<Self> {

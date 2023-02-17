@@ -242,7 +242,7 @@ where T: Decimal
             .and_then(|v| v.checked_div(T::from_float(count as f64)))
         {
             Some(value) => {
-                builder.push(value.into());
+                builder.push(value);
                 Ok(())
             }
             None => {
