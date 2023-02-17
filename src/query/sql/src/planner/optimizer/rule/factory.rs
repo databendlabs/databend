@@ -27,7 +27,6 @@ use super::rewrite::RulePushDownLimitExpression;
 use super::transform::RuleCommuteJoin;
 use super::transform::RuleLeftAssociateJoin;
 use super::transform::RuleRightAssociateJoin;
-use super::RuleSet;
 use crate::optimizer::rule::rewrite::RuleEliminateFilter;
 use crate::optimizer::rule::rewrite::RuleMergeEvalScalar;
 use crate::optimizer::rule::rewrite::RuleMergeFilter;
@@ -48,11 +47,9 @@ use crate::optimizer::rule::RulePtr;
 use crate::MetadataRef;
 
 // read only, so thread safe
-pub static mut RULE_FACTORY: Lazy<RuleFactory> = Lazy::new(|| RuleFactory::create());
+pub static mut RULE_FACTORY: Lazy<RuleFactory> = Lazy::new(RuleFactory::create);
 
 pub struct RuleFactory {
-    pub rule_set: RuleSet,
-
     pub transformation_rules: roaring::RoaringBitmap,
     pub exploration_rules: roaring::RoaringBitmap,
 }
@@ -60,17 +57,12 @@ pub struct RuleFactory {
 impl RuleFactory {
     pub fn create() -> Self {
         RuleFactory {
-            rule_set: RuleSet::create(),
             transformation_rules: (RuleID::NormalizeScalarFilter as u32
                 ..RuleID::FoldCountAggregate as u32)
                 .collect::<RoaringBitmap>(),
             exploration_rules: (RuleID::CommuteJoin as u32..RuleID::ExchangeJoin as u32)
                 .collect::<RoaringBitmap>(),
         }
-    }
-
-    pub fn get_rule(&self, id: &RuleID) -> Option<&RulePtr> {
-        self.rule_set.get(id)
     }
 
     pub fn create_rule(&self, id: RuleID, metadata: Option<MetadataRef>) -> Result<RulePtr> {
