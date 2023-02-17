@@ -38,7 +38,6 @@ use common_meta_app::schema::UpsertTableCopiedFileReply;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
-use common_meta_types::MetaId;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
@@ -136,11 +135,6 @@ impl Database for DefaultDatabase {
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
         let res = self.ctx.meta.drop_table(req).await?;
-        Ok(res)
-    }
-
-    async fn drop_table_by_id(&self, tb_id: MetaId) -> Result<DropTableReply> {
-        let res = self.ctx.meta.drop_table_by_id(tb_id).await?;
         Ok(res)
     }
 

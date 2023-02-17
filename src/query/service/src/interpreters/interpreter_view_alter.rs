@@ -74,16 +74,19 @@ impl AlterViewInterpreter {
     async fn alter_view(&self) -> Result<PipelineBuildResult> {
         // drop view
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
-        let plan = DropTableReq {
-            if_exists: true,
-
-            name_ident: TableNameIdent {
-                tenant: self.plan.tenant.clone(),
-                db_name: self.plan.database.clone(),
-                table_name: self.plan.viewname.clone(),
-            },
-        };
-        catalog.drop_table(plan).await?;
+        let tbl = catalog
+            .get_table(
+                self.plan.tenant.as_str(),
+                self.plan.database.as_str(),
+                self.plan.viewname.as_str(),
+            )
+            .await?;
+        catalog
+            .drop_table(DropTableReq {
+                if_exists: true,
+                tb_id: tbl.get_id(),
+            })
+            .await?;
 
         // create new view
         let mut options = BTreeMap::new();

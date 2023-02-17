@@ -250,14 +250,7 @@ impl Catalog for MutableCatalog {
     }
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
-        let db = self
-            .get_database(&req.name_ident.tenant, &req.name_ident.db_name)
-            .await?;
-        db.drop_table(req).await
-    }
-
-    async fn drop_table_by_id(&self, tb_id: MetaId) -> Result<DropTableReply> {
-        let res = self.ctx.meta.drop_table_by_id(tb_id).await?;
+        let res = self.ctx.meta.drop_table(req).await?;
         Ok(res)
     }
 

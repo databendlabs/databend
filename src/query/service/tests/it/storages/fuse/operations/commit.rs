@@ -543,10 +543,6 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
-    async fn drop_table_by_id(&self, _tb_id: MetaId) -> Result<DropTableReply> {
-        todo!()
-    }
-
     async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
         todo!()
     }

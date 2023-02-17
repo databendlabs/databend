@@ -116,8 +116,6 @@ pub trait Catalog: DynClone + Send + Sync {
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply>;
 
-    async fn drop_table_by_id(&self, tb_id: MetaId) -> Result<DropTableReply>;
-
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply>;
 
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply>;

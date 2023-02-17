@@ -325,25 +325,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
-        if req.tenant().is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty(while drop table)",
-            ));
-        }
-        info!("Drop table from req:{:?}", req);
-
-        if self
-            .immutable_catalog
-            .exists_database(req.tenant(), req.db_name())
-            .await?
-        {
-            return self.immutable_catalog.drop_table(req).await;
-        }
-        self.mutable_catalog.drop_table(req).await
-    }
-
-    async fn drop_table_by_id(&self, tb_id: MetaId) -> Result<DropTableReply> {
-        let res = self.mutable_catalog.drop_table_by_id(tb_id).await?;
+        let res = self.mutable_catalog.drop_table(req).await?;
         Ok(res)
     }
 

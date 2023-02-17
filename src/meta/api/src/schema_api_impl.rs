@@ -1047,138 +1047,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
-    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, KVAppError> {
-        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
-
-        let tenant_dbname_tbname = &req.name_ident;
-        let tenant_dbname = req.name_ident.db_name_ident();
-        let mut tbcount_found = false;
-        let mut tb_count = 0;
-        let mut tb_count_seq;
-
-        let mut retry = 0;
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
-            // Get db by name to ensure presence
-
-            let (_, db_id, db_meta_seq, db_meta) =
-                get_db_or_err(self, &tenant_dbname, "drop_table").await?;
-
-            // cannot operate on shared database
-            if let Some(from_share) = db_meta.from_share {
-                return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
-                    ShareHasNoGrantedPrivilege::new(&from_share.tenant, &from_share.share_name),
-                )));
-            }
-
-            // Get table by tenant,db_id, table_name to assert presence.
-
-            let dbid_tbname = DBIdTableName {
-                db_id,
-                table_name: req.name_ident.table_name.clone(),
-            };
-
-            let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
-            if tb_id_seq == 0 {
-                return if req.if_exists {
-                    Ok(DropTableReply {})
-                } else {
-                    Err(KVAppError::AppError(AppError::UnknownTable(
-                        UnknownTable::new(
-                            &tenant_dbname_tbname.table_name,
-                            format!("drop_table: {}", tenant_dbname_tbname),
-                        ),
-                    )))
-                };
-            }
-
-            let tbid = TableId { table_id };
-
-            let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) =
-                get_struct_value(self, &tbid).await?;
-
-            // get current table count from _fd_table_count/tenant
-            let tb_count_key = CountTablesKey {
-                tenant: tenant_dbname.tenant.clone(),
-            };
-            (tb_count_seq, tb_count) = {
-                let (seq, count) = get_u64_value(self, &tb_count_key).await?;
-                if seq > 0 {
-                    (seq, count)
-                } else if !tbcount_found {
-                    // only count_tables for the first time.
-                    tbcount_found = true;
-                    (0, count_tables(self, &tb_count_key).await?)
-                } else {
-                    (0, tb_count)
-                }
-            };
-            // Delete table by these operations:
-            // del (db_id, table_name) -> table_id
-            // set table_meta.drop_on = now and update (table_id) -> table_meta
-
-            debug!(
-                ident = display(&tbid),
-                name = display(&tenant_dbname_tbname),
-                "drop table"
-            );
-
-            {
-                // update drop on time
-                let mut tb_meta = tb_meta.unwrap();
-                // drop a table with drop_on time
-                if tb_meta.drop_on.is_some() {
-                    return Err(KVAppError::AppError(AppError::DropTableWithDropTime(
-                        DropTableWithDropTime::new(&tenant_dbname_tbname.table_name),
-                    )));
-                }
-
-                tb_meta.drop_on = Some(Utc::now());
-
-                let txn_req = TxnRequest {
-                    condition: vec![
-                        // db has not to change, i.e., no new table is created.
-                        // Renaming db is OK and does not affect the seq of db_meta.
-                        txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq),
-                        // still this table id
-                        txn_cond_seq(&dbid_tbname, Eq, tb_id_seq),
-                        // table is not changed
-                        txn_cond_seq(&tbid, Eq, tb_meta_seq),
-                        // update table count atomically
-                        txn_cond_seq(&tb_count_key, Eq, tb_count_seq),
-                    ],
-                    if_then: vec![
-                        // Changing a table in a db has to update the seq of db_meta,
-                        // to block the batch-delete-tables when deleting a db.
-                        txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?), /* (db_id) -> db_meta */
-                        txn_op_del(&dbid_tbname), // (db_id, tb_name) -> tb_id
-                        txn_op_put(&tbid, serialize_struct(&tb_meta)?), /* (tenant, db_id, tb_id) -> tb_meta */
-                        txn_op_put(&tb_count_key, serialize_u64(tb_count - 1)?), /* _fd_table_count/tenant -> tb_count */
-                    ],
-                    else_then: vec![],
-                };
-
-                let (succ, _responses) = send_txn(self, txn_req).await?;
-
-                debug!(
-                    name = debug(&tenant_dbname_tbname),
-                    id = debug(&tbid),
-                    succ = display(succ),
-                    "drop_table"
-                );
-
-                if succ {
-                    return Ok(DropTableReply {});
-                }
-            }
-        }
-
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("drop_table", TXN_MAX_RETRY_TIMES),
-        )))
-    }
-
-    #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
@@ -1785,7 +1653,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
-    async fn drop_table_by_id(&self, table_id: MetaId) -> Result<DropTableReply, KVAppError> {
+    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, KVAppError> {
+        let table_id = req.tb_id;
         debug!(req = debug(&table_id), "SchemaApi: {}", func_name!());
 
         let mut tbcount_found = false;
@@ -1823,9 +1692,13 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             let tbname = dbid_tbname.table_name.clone();
             let (tb_id_seq, _) = get_u64_value(self, &dbid_tbname).await?;
             if tb_id_seq == 0 {
-                return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(table_id, "drop_table_by_id failed to get valid tb_id_seq"),
-                )));
+                return if req.if_exists {
+                    Ok(DropTableReply {})
+                } else {
+                    return Err(KVAppError::AppError(AppError::UnknownTable(
+                        UnknownTable::new(tbname, "drop_table"),
+                    )));
+                };
             }
 
             let db_id_to_name = DatabaseIdToName {
