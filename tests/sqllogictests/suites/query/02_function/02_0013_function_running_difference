@@ -15,7 +15,7 @@ select running_difference(a), running_difference(b), running_difference(c), runn
 2 2 2 2.0 0
 5 5 5 5.0 0
 
-statement error 1065
+statement error 1001
 select d, running_difference(d) from running_difference_test
 
 statement ok
