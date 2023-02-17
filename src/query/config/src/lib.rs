@@ -30,6 +30,7 @@
 mod config;
 mod global;
 mod inner;
+mod obsolete;
 mod version;
 
 pub use config::CacheStorageTypeConfig;
