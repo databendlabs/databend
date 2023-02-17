@@ -34,10 +34,6 @@ use openraft::AppDataResponse;
     derive_more::TryInto,
 )]
 pub enum AppliedState {
-    Seq {
-        seq: u64,
-    },
-
     Node {
         prev: Option<Node>,
         result: Option<Node>,
@@ -57,9 +53,6 @@ impl fmt::Display for AppliedState {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "AppliedState: ")?;
         match self {
-            AppliedState::Seq { seq } => {
-                write!(f, "Seq: {}", seq)
-            }
             AppliedState::Node { prev, result } => {
                 write!(f, "Node: prev: {:?}, result: {:?}", prev, result)
             }
@@ -80,7 +73,6 @@ impl AppliedState {
     /// Whether the state changed
     pub fn changed(&self) -> bool {
         match self {
-            AppliedState::Seq { .. } => true,
             AppliedState::Node {
                 ref prev,
                 ref result,
@@ -109,7 +101,6 @@ impl AppliedState {
 
     pub fn prev_is_none(&self) -> bool {
         match self {
-            AppliedState::Seq { .. } => false,
             AppliedState::Node { ref prev, .. } => prev.is_none(),
             AppliedState::KV(Change { ref prev, .. }) => prev.is_none(),
             AppliedState::None => true,
@@ -119,7 +110,6 @@ impl AppliedState {
 
     pub fn result_is_none(&self) -> bool {
         match self {
-            AppliedState::Seq { .. } => false,
             AppliedState::Node { ref result, .. } => result.is_none(),
             AppliedState::KV(Change { ref result, .. }) => result.is_none(),
             AppliedState::None => true,
