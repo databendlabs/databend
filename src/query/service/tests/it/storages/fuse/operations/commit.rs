@@ -539,7 +539,7 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
-    async fn drop_table(&self, _req: DropTableReq) -> Result<DropTableReply> {
+    async fn drop_table_by_id(&self, _req: DropTableReq) -> Result<DropTableReply> {
         todo!()
     }
 

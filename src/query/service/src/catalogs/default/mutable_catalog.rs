@@ -249,8 +249,8 @@ impl Catalog for MutableCatalog {
         db.create_table(req).await
     }
 
-    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
-        let res = self.ctx.meta.drop_table(req).await?;
+    async fn drop_table_by_id(&self, req: DropTableReq) -> Result<DropTableReply> {
+        let res = self.ctx.meta.drop_table_by_id(req).await?;
         Ok(res)
     }
 

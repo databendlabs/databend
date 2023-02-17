@@ -1629,7 +1629,7 @@ impl SchemaApiTestSuite {
                     if_exists: false,
                     tb_id,
                 };
-                mt.drop_table(plan.clone()).await?;
+                mt.drop_table_by_id(plan.clone()).await?;
 
                 info!("--- get table after drop");
                 {
@@ -1652,7 +1652,7 @@ impl SchemaApiTestSuite {
                     if_exists: false,
                     tb_id,
                 };
-                let res = mt.drop_table(plan).await;
+                let res = mt.drop_table_by_id(plan).await;
                 let err = res.unwrap_err();
                 assert_eq!(
                     ErrorCode::UnknownTable("").code(),
@@ -1668,7 +1668,7 @@ impl SchemaApiTestSuite {
                     if_exists: true,
                     tb_id,
                 };
-                mt.drop_table(plan.clone()).await?;
+                mt.drop_table_by_id(plan.clone()).await?;
             }
 
             expected_tb_count -= 1;
@@ -2772,7 +2772,7 @@ impl SchemaApiTestSuite {
         {
             // first drop table
             let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
-            mt.drop_table(DropTableReq {
+            mt.drop_table_by_id(DropTableReq {
                 if_exists: false,
                 tb_id,
             })
@@ -2826,7 +2826,7 @@ impl SchemaApiTestSuite {
         {
             // first drop table
             let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
-            mt.drop_table(DropTableReq {
+            mt.drop_table_by_id(DropTableReq {
                 if_exists: false,
                 tb_id,
             })
@@ -2883,7 +2883,7 @@ impl SchemaApiTestSuite {
             // then drop table
             let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
             let tb_info = mt.get_table((tenant, db_name, tbl_name).into()).await?;
-            mt.drop_table(DropTableReq {
+            mt.drop_table_by_id(DropTableReq {
                 if_exists: false,
                 tb_id: tb_info.ident.table_id,
             })
@@ -2990,7 +2990,7 @@ impl SchemaApiTestSuite {
             };
 
             let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
-            mt.drop_table(drop_plan.clone()).await?;
+            mt.drop_table_by_id(drop_plan.clone()).await?;
             let cur_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
             assert!(old_db.ident.seq < cur_db.ident.seq);
 

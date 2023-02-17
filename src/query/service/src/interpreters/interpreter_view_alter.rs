@@ -82,7 +82,7 @@ impl AlterViewInterpreter {
             )
             .await?;
         catalog
-            .drop_table(DropTableReq {
+            .drop_table_by_id(DropTableReq {
                 if_exists: true,
                 tb_id: tbl.get_id(),
             })

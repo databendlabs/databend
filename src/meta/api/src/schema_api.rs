@@ -103,7 +103,7 @@ pub trait SchemaApi: Send + Sync {
     /// It returns a list of (table-id, table-meta-seq, table-meta).
     async fn list_all_tables(&self) -> Result<Vec<(TableId, u64, TableMeta)>, KVAppError>;
 
-    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, KVAppError>;
+    async fn drop_table_by_id(&self, req: DropTableReq) -> Result<DropTableReply, KVAppError>;
 
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply, KVAppError>;
 

@@ -168,7 +168,7 @@ impl Catalog for ImmutableCatalog {
         ))
     }
 
-    async fn drop_table(&self, _req: DropTableReq) -> Result<DropTableReply> {
+    async fn drop_table_by_id(&self, _req: DropTableReq) -> Result<DropTableReply> {
         Err(ErrorCode::Unimplemented(
             "Cannot drop table in system database",
         ))

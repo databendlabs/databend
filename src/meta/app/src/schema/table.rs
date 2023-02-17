@@ -460,7 +460,7 @@ impl Display for DropTableReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "drop_table(if_exists={}):{}",
+            "drop_table_by_id(if_exists={}):{}",
             self.if_exists,
             self.tb_id(),
         )

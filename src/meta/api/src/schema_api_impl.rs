@@ -1653,7 +1653,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
-    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, KVAppError> {
+    async fn drop_table_by_id(&self, req: DropTableReq) -> Result<DropTableReply, KVAppError> {
         let table_id = req.tb_id;
         debug!(req = debug(&table_id), "SchemaApi: {}", func_name!());
 
@@ -1696,7 +1696,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                     Ok(DropTableReply {})
                 } else {
                     return Err(KVAppError::AppError(AppError::UnknownTable(
-                        UnknownTable::new(tbname, "drop_table"),
+                        UnknownTable::new(tbname, "drop_table_by_id"),
                     )));
                 };
             }

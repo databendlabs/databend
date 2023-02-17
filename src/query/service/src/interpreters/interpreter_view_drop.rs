@@ -65,7 +65,7 @@ impl Interpreter for DropViewInterpreter {
 
             let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
             catalog
-                .drop_table(DropTableReq {
+                .drop_table_by_id(DropTableReq {
                     if_exists: self.plan.if_exists,
                     tb_id: table.get_id(),
                 })

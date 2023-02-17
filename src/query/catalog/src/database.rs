@@ -109,9 +109,9 @@ pub trait Database: DynClone + Sync + Send {
         )))
     }
 
-    async fn drop_table(&self, _req: DropTableReq) -> Result<DropTableReply> {
+    async fn drop_table_by_id(&self, _req: DropTableReq) -> Result<DropTableReply> {
         Err(ErrorCode::Unimplemented(format!(
-            "UnImplement drop_table in {} Database",
+            "UnImplement drop_table_by_id in {} Database",
             self.name()
         )))
     }
