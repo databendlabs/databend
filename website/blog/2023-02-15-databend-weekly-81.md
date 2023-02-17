@@ -104,27 +104,27 @@ Stay connected with the latest news about Databend.
 
 ### RFC: Query Result Cache
 
-For some expensive queries with data that doesn't change frequently, we can cache the results to speed up the query response. For the same query with the same underlying data, we can return the cached result directly which improves the query efficiency greatly.
+Caching the results of queries against data that doesn't update frequently can greatly reduce response time. Once cached, the result will be returned in a much shorter time if you run the query again.
 
 - [Docs | RFC: Query Result Cache](https://databend.rs/doc/contributing/rfcs/query-result-cache)
 - [Tracking Issue | RFC: query result cache](https://github.com/datafuselabs/databend/issues/10011)
 
-### How to Write Scalar/Aggregate Functions
+### How to Write a Scalar / Aggregate Function
 
-If you're working with Databend, you might be interested in extending its capabilities by implementing custom scalar or aggregate functions. Luckily, it's not too hard to do!
+Did you know that you can enhance the power of Databend by creating your own scalar or aggregate functions? Fortunately, it's not a difficult task!
 
-In these two articles, we explain how to create and register your own functions in Databend, using Rust code and a few simple steps. Our examples cover different types of functions, and provide code snippets and explanations to guide you through the process. So whether you're a Databend user looking to customize your workflows or a Rust developer interested in database, these articles are worth checking out.
+The following guides are intended for Rust developers and Databend users who want to create their own workflows. The guides provide step-by-step instructions on how to create and register your own functions using Rust, along with code snippets and examples of various types of functions to walk you through the process.
 
 - [Docs | How to Write a Scalar Function](https://databend.rs/doc/contributing/how-to-write-scalar-functions)
 - [Docs | How to Write an Aggregate Function](https://databend.rs/doc/contributing/how-to-write-aggregate-functions)
 
 ### Profile-Guided Optimization
 
-Profile-guided optimization (PGO) is a compiler optimization technique that collects execution data during program runtime, allowing for optimizations tailored to hot and cold code paths.
+Profile-guided optimization (PGO) is a compiler optimization technique that collects execution data during the program runtime and allows for tailoring optimizations tailored to both hot and cold code paths.
 
-In this article, we will walk you through the step-by-step process of PGO-optimizing Databend binary builds using Databend's SQL logic tests as an example.
+In this blog, we'll guide you through the process of optimizing Databend binary builds using PGO. We'll use Databend's SQL logic tests as an example to illustrate the step-by-step procedure.
 
-It is worth noting that PGO always requires generating perf data using workloads that are statistically representative, and there is no guarantee that performance will always be better. We recommend that users decide whether to use it based on their actual needs.
+Please note that PGO always requires generating perf data using workloads that are statistically representative. However, there's no guarantee that performance will always improve. Decide whether to use it based on your actual needs.
 
 **Learn More**
 
@@ -134,11 +134,9 @@ It is worth noting that PGO always requires generating perf data using workloads
 
 We're always open to cutting-edge technologies and innovative ideas. You're more than welcome to join the community and bring them to Databend.
 
-### Reorganise the Functions Doc
+### Restructure function-related documentation
 
-To provide clearer and more understandable documentation, we intend to restructure function-related documentation in a similar format to that of DuckDB's documentation.
-
-This task is divided into manageable sub-tasks based on function categories, making it easy for anyone interested in improving Databend's documentation to get involved.
+To make our documentation clearer and easier to understand, we plan to restructure our function-related documentation to follow the same format as DuckDB's documentation. This involves breaking down the task into smaller sub-tasks based on function categories, so that anyone who wants to help improve Databend's documentation can easily get involved.
 
 [Issue 10029: Tracking: re-org the functions doc](https://github.com/datafuselabs/databend/issues/10029)
 
