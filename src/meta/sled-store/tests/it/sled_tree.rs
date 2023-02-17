@@ -19,6 +19,7 @@ use common_meta_types::LogEntry;
 use common_meta_types::LogId;
 use common_meta_types::LogIndex;
 use common_meta_types::SeqV;
+use common_meta_types::UpsertKV;
 use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
 use testing::new_sled_test_context;
@@ -72,9 +73,7 @@ async fn test_as_range() -> anyhow::Result<()> {
                 txid: None,
                 time_ms: None,
 
-                cmd: Cmd::IncrSeq {
-                    key: "foo".to_string(),
-                },
+                cmd: Cmd::UpsertKV(UpsertKV::insert("foo", b"foo")),
             }),
         },
     ];
@@ -148,9 +147,7 @@ async fn test_key_space_last() -> anyhow::Result<()> {
                 txid: None,
                 time_ms: None,
 
-                cmd: Cmd::IncrSeq {
-                    key: "foo".to_string(),
-                },
+                cmd: Cmd::UpsertKV(UpsertKV::insert("foo", b"foo")),
             }),
         },
     ];
@@ -201,9 +198,7 @@ async fn test_key_space_append() -> anyhow::Result<()> {
                 txid: None,
                 time_ms: None,
 
-                cmd: Cmd::IncrSeq {
-                    key: "foo".to_string(),
-                },
+                cmd: Cmd::UpsertKV(UpsertKV::insert("foo", b"foo")),
             }),
         }),
     ];
@@ -217,9 +212,7 @@ async fn test_key_space_append() -> anyhow::Result<()> {
                 txid: None,
                 time_ms: None,
 
-                cmd: Cmd::IncrSeq {
-                    key: "foo".to_string(),
-                },
+                cmd: Cmd::UpsertKV(UpsertKV::insert("foo", b"foo")),
             }),
         },
         Entry {
@@ -261,9 +254,7 @@ async fn test_key_space_append_and_range_get() -> anyhow::Result<()> {
                 txid: None,
                 time_ms: None,
 
-                cmd: Cmd::IncrSeq {
-                    key: "foo".to_string(),
-                },
+                cmd: Cmd::UpsertKV(UpsertKV::insert("foo", b"foo")),
             }),
         },
         Entry {
@@ -421,9 +412,7 @@ async fn test_key_space_insert() -> anyhow::Result<()> {
                 txid: None,
                 time_ms: None,
 
-                cmd: Cmd::IncrSeq {
-                    key: "foo".to_string(),
-                },
+                cmd: Cmd::UpsertKV(UpsertKV::insert("foo", b"foo")),
             }),
         },
     ];
@@ -485,9 +474,7 @@ async fn test_key_space_get() -> anyhow::Result<()> {
                 txid: None,
                 time_ms: None,
 
-                cmd: Cmd::IncrSeq {
-                    key: "foo".to_string(),
-                },
+                cmd: Cmd::UpsertKV(UpsertKV::insert("foo", b"foo")),
             }),
         },
     ];
@@ -524,9 +511,7 @@ async fn test_key_space_range_remove() -> anyhow::Result<()> {
                 txid: None,
                 time_ms: None,
 
-                cmd: Cmd::IncrSeq {
-                    key: "foo".to_string(),
-                },
+                cmd: Cmd::UpsertKV(UpsertKV::insert("foo", b"foo")),
             }),
         },
         Entry {
@@ -588,9 +573,7 @@ async fn test_key_space_multi_types() -> anyhow::Result<()> {
                 txid: None,
                 time_ms: None,
 
-                cmd: Cmd::IncrSeq {
-                    key: "foo".to_string(),
-                },
+                cmd: Cmd::UpsertKV(UpsertKV::insert("foo", b"foo")),
             }),
         },
     ];
@@ -658,9 +641,7 @@ async fn test_export() -> anyhow::Result<()> {
                 payload: EntryPayload::Normal(LogEntry {
                     txid: None,
                     time_ms: None,
-                    cmd: Cmd::IncrSeq {
-                        key: "foo".to_string(),
-                    },
+                    cmd: Cmd::UpsertKV(UpsertKV::insert("foo", b"foo")),
                 }),
             },
         ];

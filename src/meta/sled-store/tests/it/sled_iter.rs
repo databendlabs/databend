@@ -18,6 +18,7 @@ use common_meta_sled_store::SledTree;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
+use common_meta_types::UpsertKV;
 use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
 use pretty_assertions::assert_eq;
@@ -45,9 +46,7 @@ async fn test_sled_iter() -> anyhow::Result<()> {
                 txid: None,
                 time_ms: None,
 
-                cmd: Cmd::IncrSeq {
-                    key: "foo".to_string(),
-                },
+                cmd: Cmd::UpsertKV(UpsertKV::insert("foo", b"foo")),
             }),
         },
     ];

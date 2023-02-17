@@ -35,7 +35,6 @@ use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
-use common_meta_types::KVAppError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_metrics::counter::Count;
@@ -204,7 +203,7 @@ impl MetaService for MetaServiceImpl {
         let ret = self.meta_node.transaction(request).await;
         network_metrics::incr_request_result(ret.is_ok());
 
-        let body = match res {
+        let body = match ret {
             Ok(resp) => TxnReply {
                 success: resp.success,
                 error: "".to_string(),

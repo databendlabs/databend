@@ -29,9 +29,6 @@ use crate::TxnRequest;
 /// and is the essential part of a raft log.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum Cmd {
-    /// Increment the sequence number generator specified by `key` and returns the new value.
-    IncrSeq { key: String },
-
     /// Add node if absent
     AddNode {
         node_id: NodeId,
@@ -72,9 +69,6 @@ pub struct UpsertKV {
 impl fmt::Display for Cmd {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Cmd::IncrSeq { key } => {
-                write!(f, "incr_seq:{}", key)
-            }
             Cmd::AddNode {
                 node_id,
                 node,
