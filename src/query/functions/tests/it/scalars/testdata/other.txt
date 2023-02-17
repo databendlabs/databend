@@ -168,7 +168,7 @@ output         : false
 
 ast            : ignore(100, 'str')
 raw expr       : ignore(100_u8, "str")
-checked expr   : ignore<T0=Variant><T0, T0>(to_variant<T0=UInt8><T0>(100_u8), to_variant<T0=String><T0>("str"))
+checked expr   : ignore<T0=UInt8, T1=String><T0, T1>(100_u8, "str")
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}

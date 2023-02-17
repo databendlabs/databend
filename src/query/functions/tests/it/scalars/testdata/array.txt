@@ -7,6 +7,24 @@ output domain  : []
 output         : []
 
 
+ast            : ['a', 1]
+raw expr       : array("a", 1_u8)
+checked expr   : array<T0=String><T0, T0>("a", to_string<UInt8>(1_u8))
+optimized expr : ["a", "1"]
+output type    : Array(String)
+output domain  : [{"1"..="a"}]
+output         : ["a", "1"]
+
+
+ast            : [-1, true]
+raw expr       : array(minus(1_u8), true)
+checked expr   : array<T0=Int16><T0, T0>(minus<UInt8>(1_u8), to_int16<Boolean>(true))
+optimized expr : [-1, 1]
+output type    : Array(Int16)
+output domain  : [{-1..=1}]
+output         : [-1, 1]
+
+
 ast            : [NULL, 8, -10]
 raw expr       : array(NULL, 8_u8, minus(10_u8))
 checked expr   : array<T0=Int16 NULL><T0, T0, T0>(CAST(NULL AS Int16 NULL), CAST(8_u8 AS Int16 NULL), CAST(minus<UInt8>(10_u8) AS Int16 NULL))
@@ -25,13 +43,15 @@ output domain  : [[{"a"..="b"}]]
 output         : [["a", "b"], []]
 
 
-ast            : ['a', 1, parse_json('{"foo":"bar"}')]
-raw expr       : array("a", 1_u8, parse_json("{\"foo\":\"bar\"}"))
-checked expr   : array<T0=Variant><T0, T0, T0>(to_variant<T0=String><T0>("a"), to_variant<T0=UInt8><T0>(1_u8), parse_json<String>("{\"foo\":\"bar\"}"))
-optimized expr : ["a", 1, {"foo":"bar"}]
-output type    : Array(Variant)
-output domain  : [Undefined]
-output         : ["a", 1, {"foo":"bar"}]
+error: 
+  --> SQL:1:1
+  |
+1 | ['a', 1, parse_json('{"foo":"bar"}')]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `array(String, UInt8, Variant)`
+
+has tried possible overloads:
+  array(T0, T0, T0) :: Array(T0)  : unable to find a common super type for `String` and `Variant`
+
 
 
 ast            : [parse_json('[]'), parse_json('{"foo":"bar"}')]
@@ -460,8 +480,8 @@ evaluation (internal):
 
 ast            : nullable_col in (1, '9', 3, 10, 12, true, [1,2,3])
 raw expr       : contains(array(1_u8, "9", 3_u8, 10_u8, 12_u8, true), nullable_col::Int64 NULL)
-checked expr   : contains<T0=Variant NULL><Array(T0), T0>(CAST(array<T0=Variant><T0, T0, T0, T0, T0, T0>(to_variant<T0=UInt8><T0>(1_u8), to_variant<T0=String><T0>("9"), to_variant<T0=UInt8><T0>(3_u8), to_variant<T0=UInt8><T0>(10_u8), to_variant<T0=UInt8><T0>(12_u8), to_variant<T0=Boolean><T0>(true)) AS Array(Variant NULL)), CAST(nullable_col AS Variant NULL))
-optimized expr : contains<T0=Variant NULL><Array(T0), T0>([1, "9", 3, 10, 12, true], CAST(nullable_col AS Variant NULL))
+checked expr   : contains<T0=Variant NULL><Array(T0), T0>(CAST(array<T0=String><T0, T0, T0, T0, T0, T0>(to_string<UInt8>(1_u8), "9", to_string<UInt8>(3_u8), to_string<UInt8>(10_u8), to_string<UInt8>(12_u8), to_string<Boolean>(true)) AS Array(Variant NULL)), CAST(nullable_col AS Variant NULL))
+optimized expr : contains<T0=Variant NULL><Array(T0), T0>(["1", "9", "3", "10", "12", "true"], CAST(nullable_col AS Variant NULL))
 evaluation:
 +--------+-------------------+---------------+
 |        | nullable_col      | Output        |
@@ -469,7 +489,7 @@ evaluation:
 | Type   | Int64 NULL        | Boolean       |
 | Domain | {9..=12} ∪ {NULL} | {FALSE, TRUE} |
 | Row 0  | 9                 | false         |
-| Row 1  | 10                | true          |
+| Row 1  | 10                | false         |
 | Row 2  | NULL              | false         |
 | Row 3  | NULL              | false         |
 +--------+-------------------+---------------+
@@ -478,7 +498,7 @@ evaluation (internal):
 | Column       | Data                                                                      |
 +--------------+---------------------------------------------------------------------------+
 | nullable_col | NullableColumn { column: Int64([9, 10, 11, 12]), validity: [0b____0011] } |
-| Output       | Boolean([0b____0010])                                                     |
+| Output       | Boolean([0b____0000])                                                     |
 +--------------+---------------------------------------------------------------------------+
 
 
@@ -645,22 +665,39 @@ output domain  : [{FALSE, TRUE}]
 output         : [false, true]
 
 
-ast            : array_concat([false, true], [1,2])
-raw expr       : array_concat(array(false, true), array(1_u8, 2_u8))
-checked expr   : array_concat<T0=Variant><Array(T0), Array(T0)>(CAST(array<T0=Boolean><T0, T0>(false, true) AS Array(Variant)), CAST(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(Variant)))
-optimized expr : [false, true, 1, 2]
-output type    : Array(Variant)
-output domain  : [Undefined]
-output         : [false, true, 1, 2]
+error: 
+  --> SQL:1:1
+  |
+1 | array_concat([false, true], [1,2])
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `array_concat(Array(Boolean), Array(UInt8))`
+
+has tried possible overloads:
+  array_concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing)  : unable to unify `Array(Boolean)` with `Array(Nothing)`
+  array_concat(Array(T0), Array(T0)) :: Array(T0)                           : unable to find a common super type for `Boolean` and `UInt8`
+  array_concat(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL            : unable to find a common super type for `Boolean` and `UInt8`
 
 
-ast            : array_concat([1,2,3], ['s', null])
-raw expr       : array_concat(array(1_u8, 2_u8, 3_u8), array("s", NULL))
-checked expr   : array_concat<T0=Variant NULL><Array(T0), Array(T0)>(CAST(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(Variant NULL)), CAST(array<T0=String NULL><T0, T0>(CAST("s" AS String NULL), CAST(NULL AS String NULL)) AS Array(Variant NULL)))
-optimized expr : [1, 2, 3, "s", NULL]
-output type    : Array(Variant NULL)
-output domain  : [Undefined ∪ {NULL}]
-output         : [1, 2, 3, "s", NULL]
+
+ast            : array_concat([false, true], [true, false])
+raw expr       : array_concat(array(false, true), array(true, false))
+checked expr   : array_concat<T0=Boolean><Array(T0), Array(T0)>(array<T0=Boolean><T0, T0>(false, true), array<T0=Boolean><T0, T0>(true, false))
+optimized expr : [false, true, true, false]
+output type    : Array(Boolean)
+output domain  : [{FALSE, TRUE}]
+output         : [false, true, true, false]
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | array_concat([1,2,3], ['s', null])
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `array_concat(Array(UInt8), Array(String NULL))`
+
+has tried possible overloads:
+  array_concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing)  : unable to unify `Array(UInt8)` with `Array(Nothing)`
+  array_concat(Array(T0), Array(T0)) :: Array(T0)                           : unable to find a common super type for `UInt8` and `String NULL`
+  array_concat(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL            : unable to find a common super type for `UInt8` and `String NULL`
+
 
 
 ast            : array_concat([1, 2, 3, 4, 5, null], [nullable_col])
@@ -858,27 +895,31 @@ output domain  : {0..=0}
 output         : 0
 
 
-ast            : array_indexof([false, true], 0)
-raw expr       : array_indexof(array(false, true), 0_u8)
-checked expr   : array_indexof<T0=Variant><Array(T0), T0>(CAST(array<T0=Boolean><T0, T0>(false, true) AS Array(Variant)), to_variant<T0=UInt8><T0>(0_u8))
-optimized expr : 0_u64
-output type    : UInt64
-output domain  : {0..=0}
-output         : 0
+error: 
+  --> SQL:1:1
+  |
+1 | array_indexof([false, true], 0)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `array_indexof(Array(Boolean), UInt8)`
+
+has tried possible overloads:
+  array_indexof(NULL, NULL) :: NULL                      : unable to unify `Array(Boolean)` with `NULL`
+  array_indexof(Array(T0), T0) :: UInt64                 : unable to find a common super type for `Boolean` and `UInt8`
+  array_indexof(Array(T0) NULL, T0 NULL) :: UInt64 NULL  : unable to find a common super type for `Boolean` and `UInt8`
+
 
 
 ast            : array_indexof([1,2,3,'s'], 's')
 raw expr       : array_indexof(array(1_u8, 2_u8, 3_u8, "s"), "s")
-checked expr   : array_indexof<T0=Variant><Array(T0), T0>(array<T0=Variant><T0, T0, T0, T0>(to_variant<T0=UInt8><T0>(1_u8), to_variant<T0=UInt8><T0>(2_u8), to_variant<T0=UInt8><T0>(3_u8), to_variant<T0=String><T0>("s")), to_variant<T0=String><T0>("s"))
+checked expr   : array_indexof<T0=String><Array(T0), T0>(array<T0=String><T0, T0, T0, T0>(to_string<UInt8>(1_u8), to_string<UInt8>(2_u8), to_string<UInt8>(3_u8), "s"), "s")
 optimized expr : 4_u64
 output type    : UInt64
 output domain  : {4..=4}
 output         : 4
 
 
-ast            : array_indexof([1,'x',null,'x'], 'x')
-raw expr       : array_indexof(array(1_u8, "x", NULL, "x"), "x")
-checked expr   : array_indexof<T0=Variant NULL><Array(T0), T0>(array<T0=Variant NULL><T0, T0, T0, T0>(CAST(1_u8 AS Variant NULL), CAST("x" AS Variant NULL), CAST(NULL AS Variant NULL), CAST("x" AS Variant NULL)), CAST("x" AS Variant NULL))
+ast            : array_indexof([1::VARIANT,'x'::VARIANT,null::VARIANT,'x'::VARIANT], 'x'::VARIANT)
+raw expr       : array_indexof(array(CAST(1_u8 AS Variant), CAST("x" AS Variant), CAST(NULL AS Variant), CAST("x" AS Variant)), CAST("x" AS Variant))
+checked expr   : array_indexof<T0=Variant><Array(T0), T0>(array<T0=Variant><T0, T0, T0, T0>(to_variant<T0=UInt8><T0>(1_u8), to_variant<T0=String><T0>("x"), to_variant<T0=NULL><T0>(NULL), to_variant<T0=String><T0>("x")), to_variant<T0=String><T0>("x"))
 optimized expr : 2_u64
 output type    : UInt64
 output domain  : {2..=2}
@@ -1740,20 +1781,20 @@ output         : [0, 1.2, 3.4, 5.6, 7.8, 9.32]
 
 ast            : array_sort(['x', 0, 1.2, 3.4, 5.6, 7.8])
 raw expr       : array_sort_asc_null_first(array("x", 0_u8, 1.2_f64, 3.4_f64, 5.6_f64, 7.8_f64))
-checked expr   : array_sort_asc_null_first<T0=Variant><Array(T0)>(array<T0=Variant><T0, T0, T0, T0, T0, T0>(to_variant<T0=String><T0>("x"), to_variant<T0=UInt8><T0>(0_u8), to_variant<T0=Float64><T0>(1.2_f64), to_variant<T0=Float64><T0>(3.4_f64), to_variant<T0=Float64><T0>(5.6_f64), to_variant<T0=Float64><T0>(7.8_f64)))
-optimized expr : [0, 1.2, 3.4, 5.6, 7.8, "x"]
-output type    : Array(Variant)
-output domain  : [Undefined]
-output         : [0, 1.2, 3.4, 5.6, 7.8, "x"]
+checked expr   : array_sort_asc_null_first<T0=String><Array(T0)>(array<T0=String><T0, T0, T0, T0, T0, T0>("x", to_string<UInt8>(0_u8), to_string<Float64>(1.2_f64), to_string<Float64>(3.4_f64), to_string<Float64>(5.6_f64), to_string<Float64>(7.8_f64)))
+optimized expr : ["0", "1.2", "3.4", "5.6", "7.8", "x"]
+output type    : Array(String)
+output domain  : [{"0"..="x"}]
+output         : ["0", "1.2", "3.4", "5.6", "7.8", "x"]
 
 
 ast            : array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'DESC', 'NULLS FIRST')
 raw expr       : array_sort_desc_null_first(array(1.2_f64, NULL, 3.4_f64, 5.6_f64, "2.2", NULL))
-checked expr   : array_sort_desc_null_first<T0=Variant NULL><Array(T0)>(array<T0=Variant NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_f64 AS Variant NULL), CAST(NULL AS Variant NULL), CAST(3.4_f64 AS Variant NULL), CAST(5.6_f64 AS Variant NULL), CAST("2.2" AS Variant NULL), CAST(NULL AS Variant NULL)))
-optimized expr : [NULL, NULL, "2.2", 5.6, 3.4, 1.2]
-output type    : Array(Variant NULL)
-output domain  : [Undefined ∪ {NULL}]
-output         : [NULL, NULL, "2.2", 5.6, 3.4, 1.2]
+checked expr   : array_sort_desc_null_first<T0=String NULL><Array(T0)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_f64 AS String NULL), CAST(NULL AS String NULL), CAST(3.4_f64 AS String NULL), CAST(5.6_f64 AS String NULL), CAST("2.2" AS String NULL), CAST(NULL AS String NULL)))
+optimized expr : [NULL, NULL, "5.6", "3.4", "2.2", "1.2"]
+output type    : Array(String NULL)
+output domain  : [{""..="5.6"} ∪ {NULL}]
+output         : [NULL, NULL, "5.6", "3.4", "2.2", "1.2"]
 
 
 ast            : array_sort([], 'DESC', 'NULLS FIRST')
@@ -1767,11 +1808,11 @@ output         : []
 
 ast            : array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'DESC', 'NULLS LAST')
 raw expr       : array_sort_desc_null_last(array(1.2_f64, NULL, 3.4_f64, 5.6_f64, "2.2", NULL))
-checked expr   : array_sort_desc_null_last<T0=Variant NULL><Array(T0)>(array<T0=Variant NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_f64 AS Variant NULL), CAST(NULL AS Variant NULL), CAST(3.4_f64 AS Variant NULL), CAST(5.6_f64 AS Variant NULL), CAST("2.2" AS Variant NULL), CAST(NULL AS Variant NULL)))
-optimized expr : ["2.2", 5.6, 3.4, 1.2, NULL, NULL]
-output type    : Array(Variant NULL)
-output domain  : [Undefined ∪ {NULL}]
-output         : ["2.2", 5.6, 3.4, 1.2, NULL, NULL]
+checked expr   : array_sort_desc_null_last<T0=String NULL><Array(T0)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_f64 AS String NULL), CAST(NULL AS String NULL), CAST(3.4_f64 AS String NULL), CAST(5.6_f64 AS String NULL), CAST("2.2" AS String NULL), CAST(NULL AS String NULL)))
+optimized expr : ["5.6", "3.4", "2.2", "1.2", NULL, NULL]
+output type    : Array(String NULL)
+output domain  : [{""..="5.6"} ∪ {NULL}]
+output         : ["5.6", "3.4", "2.2", "1.2", NULL, NULL]
 
 
 ast            : array_sort([], 'DESC', 'NULLS LAST')
@@ -1785,11 +1826,11 @@ output         : []
 
 ast            : array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'ASC', 'NULLS FIRST')
 raw expr       : array_sort_asc_null_first(array(1.2_f64, NULL, 3.4_f64, 5.6_f64, "2.2", NULL))
-checked expr   : array_sort_asc_null_first<T0=Variant NULL><Array(T0)>(array<T0=Variant NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_f64 AS Variant NULL), CAST(NULL AS Variant NULL), CAST(3.4_f64 AS Variant NULL), CAST(5.6_f64 AS Variant NULL), CAST("2.2" AS Variant NULL), CAST(NULL AS Variant NULL)))
-optimized expr : [NULL, NULL, 1.2, 3.4, 5.6, "2.2"]
-output type    : Array(Variant NULL)
-output domain  : [Undefined ∪ {NULL}]
-output         : [NULL, NULL, 1.2, 3.4, 5.6, "2.2"]
+checked expr   : array_sort_asc_null_first<T0=String NULL><Array(T0)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_f64 AS String NULL), CAST(NULL AS String NULL), CAST(3.4_f64 AS String NULL), CAST(5.6_f64 AS String NULL), CAST("2.2" AS String NULL), CAST(NULL AS String NULL)))
+optimized expr : [NULL, NULL, "1.2", "2.2", "3.4", "5.6"]
+output type    : Array(String NULL)
+output domain  : [{""..="5.6"} ∪ {NULL}]
+output         : [NULL, NULL, "1.2", "2.2", "3.4", "5.6"]
 
 
 ast            : array_sort([], 'ASC', 'NULLS FIRST')
