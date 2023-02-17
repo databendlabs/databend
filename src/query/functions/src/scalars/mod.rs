@@ -204,7 +204,7 @@ fn register_auto_cast_rules(registry: &mut FunctionRegistry) {
     ]);
 
     for data_type in ALL_INTEGER_TYPES {
-        registry.register_auto_cast_signatures("is_true", vec![(
+        registry.register_additional_cast_rules("is_true", vec![(
             DataType::Number(*data_type),
             DataType::Boolean,
         )]);

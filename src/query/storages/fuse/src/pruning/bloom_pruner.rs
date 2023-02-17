@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_function;
+use common_expression::ColumnId;
 use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;

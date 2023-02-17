@@ -61,11 +61,14 @@ impl RangeIndex {
             })
             .unwrap();
 
-        let (leaf_column_ids, leaf_fields) = schema.leaf_fields();
-        let mut column_ids: HashMap<String, u32> = HashMap::new();
-        for (leaf_index, field) in leaf_fields.iter().enumerate() {
-            column_ids.insert(field.name().clone(), leaf_column_ids[leaf_index]);
-        }
+        let leaf_fields = schema.leaf_fields();
+        let column_ids = leaf_fields.iter().fold(
+            HashMap::with_capacity(leaf_fields.len()),
+            |mut acc, field| {
+                acc.insert(field.name().clone(), field.column_id());
+                acc
+            },
+        );
 
         Ok(Self {
             expr: conjunction,
