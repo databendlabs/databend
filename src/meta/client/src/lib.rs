@@ -52,9 +52,11 @@ pub static METACLI_COMMIT_SEMVER: Lazy<Version> = Lazy::new(|| {
 ///   Update server.min_cli_ver to 0.8.80, the min ver in which meta-client switched from
 ///   `read_msg/write_msg` to `kv_api`
 ///
-/// - 2023-02-17: since 0.9.42+:
+/// - 2023-02-16: since 0.9.41:
 ///   Meta client add `Compatible` layer to accept KVAppError or MetaAPIError
-// TODO: update 0.9.42+ when this patch is merged
+///
+/// - 2023-02-17: since 0.9.42:
+///   Meta service only responds with MetaAPIError.
 pub static MIN_METASRV_SEMVER: Version = Version {
     major: 0,
     minor: 8,
