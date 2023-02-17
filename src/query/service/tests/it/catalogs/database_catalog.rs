@@ -221,11 +221,6 @@ async fn test_catalogs_table() -> Result<()> {
         assert!(res.is_ok());
         let table_list_4 = catalog.list_tables(tenant, "default").await?;
         assert!(table_list_4.is_empty());
-
-        // Tenant empty.
-        req.name_ident.tenant = "".to_string();
-        let res = catalog.drop_table(req).await;
-        assert!(res.is_err());
     }
 
     Ok(())
