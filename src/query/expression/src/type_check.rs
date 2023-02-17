@@ -143,6 +143,13 @@ pub fn check_cast<Index: ColumnIndex>(
 
     if expr.data_type() == &wrapped_dest_type {
         Ok(expr)
+    } else if expr.data_type().wrap_nullable() == wrapped_dest_type {
+        Ok(Expr::Cast {
+            span,
+            is_try,
+            expr: Box::new(expr),
+            dest_type: wrapped_dest_type,
+        })
     } else {
         // fast path to eval function for cast
         if let Some(cast_fn) = get_simple_cast_function(is_try, dest_type) {
@@ -213,7 +220,7 @@ pub fn check_function<Index: ColumnIndex>(
 
     let mut fail_resaons = Vec::with_capacity(candidates.len());
     for (id, func) in &candidates {
-        match try_check_function(args, &func.signature, auto_cast_rules, fn_registry) {
+        match try_check_function(span, args, &func.signature, auto_cast_rules, fn_registry) {
             Ok((checked_args, return_type, generics)) => {
                 return Ok(Expr::FunctionCall {
                     span,
@@ -322,6 +329,7 @@ impl Substitution {
 
 #[allow(clippy::type_complexity)]
 pub fn try_check_function<Index: ColumnIndex>(
+    span: Span,
     args: &[Expr<Index>],
     sig: &FunctionSignature,
     auto_cast_rules: AutoCastRules,
@@ -346,7 +354,7 @@ pub fn try_check_function<Index: ColumnIndex>(
         .zip(&sig.args_type)
         .map(|(arg, sig_type)| {
             let sig_type = subst.apply(sig_type.clone())?;
-            check_cast(None, false, arg.clone(), &sig_type, fn_registry)
+            check_cast(span, false, arg.clone(), &sig_type, fn_registry)
         })
         .collect::<Result<Vec<_>>>()?;
 

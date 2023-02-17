@@ -181,7 +181,7 @@ pub struct FunctionRegistry {
 
     /// Default cast rules for all functions.
     pub default_cast_rules: Vec<(DataType, DataType)>,
-    /// Extra cast rules for specific functions, including the default cast rules.
+    /// Cast rules for specific functions, excluding the default cast rules.
     pub additional_cast_rules: HashMap<String, Vec<(DataType, DataType)>>,
 }
 
@@ -294,19 +294,23 @@ impl FunctionRegistry {
         }
     }
 
-    pub fn register_default_cast_rules(&mut self, default_cast_rules: Vec<(DataType, DataType)>) {
-        self.default_cast_rules.extend(default_cast_rules);
+    pub fn register_default_cast_rules(
+        &mut self,
+        default_cast_rules: impl IntoIterator<Item = (DataType, DataType)>,
+    ) {
+        self.default_cast_rules
+            .extend(default_cast_rules.into_iter());
     }
 
     pub fn register_additional_cast_rules(
         &mut self,
         fn_name: &str,
-        additional_cast_rules: Vec<(DataType, DataType)>,
+        additional_cast_rules: impl IntoIterator<Item = (DataType, DataType)>,
     ) {
         self.additional_cast_rules
             .entry(fn_name.to_string())
-            .or_insert_with(|| self.default_cast_rules.clone())
-            .extend(additional_cast_rules);
+            .or_insert_with(Vec::new)
+            .extend(additional_cast_rules.into_iter());
     }
 }
 
