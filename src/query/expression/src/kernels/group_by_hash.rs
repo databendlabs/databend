@@ -38,8 +38,8 @@ use crate::types::DataType;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
 use crate::types::ValueType;
+use crate::with_integer_mapped_type;
 use crate::with_number_mapped_type;
-use crate::with_unsigned_number_mapped_type;
 use crate::Column;
 use crate::TypeDeserializer;
 
@@ -274,10 +274,10 @@ where T: Clone
     ) -> Result<Vec<Column>> {
         debug_assert!(!keys.is_empty());
 
-        // faster path for single unsigned integer to column
-        if group_items.len() == 1 && group_items[0].1.is_unsigned_numeric() {
+        // faster path for single signed/unsigned integer to column
+        if group_items.len() == 1 && group_items[0].1.is_numeric() {
             if let DataType::Number(ty) = group_items[0].1 {
-                with_unsigned_number_mapped_type!(|NUM_TYPE| match ty {
+                with_integer_mapped_type!(|NUM_TYPE| match ty {
                     NumberDataType::NUM_TYPE => {
                         let buffer: Buffer<T> = keys.into();
                         let col =
@@ -374,7 +374,7 @@ where T: Clone
 }
 
 macro_rules! impl_hash_method_fixed_keys {
-    ($dt: ident, $ty:ty) => {
+    ($dt: ident, $ty:ty, $signed_ty: ty) => {
         impl HashMethod for HashMethodFixedKeys<$ty> {
             type HashKey = $ty;
             type HashKeyIter<'a> = std::slice::Iter<'a, $ty>;
@@ -389,9 +389,21 @@ macro_rules! impl_hash_method_fixed_keys {
                 rows: usize,
             ) -> Result<KeysState> {
                 // faster path for single fixed keys
-                if group_columns.len() == 1 && group_columns[0].1.is_unsigned_numeric() {
-                    return Ok(KeysState::Column(group_columns[0].0.clone()));
+                if group_columns.len() == 1 {
+                    if group_columns[0].1.is_unsigned_numeric() {
+                        return Ok(KeysState::Column(group_columns[0].0.clone()));
+                    }
+
+                    if group_columns[0].1.is_signed_numeric() {
+                        let col =
+                            NumberType::<$signed_ty>::try_downcast_column(&group_columns[0].0)
+                                .unwrap();
+                        let buffer =
+                            unsafe { std::mem::transmute::<Buffer<$signed_ty>, Buffer<$ty>>(col) };
+                        return Ok(KeysState::Column(NumberType::<$ty>::upcast_column(buffer)));
+                    }
                 }
+
                 let keys = self.build_keys_vec(group_columns, rows)?;
                 let col = Buffer::<$ty>::from(keys);
                 Ok(KeysState::Column(NumberType::<$ty>::upcast_column(col)))
@@ -411,10 +423,10 @@ macro_rules! impl_hash_method_fixed_keys {
     };
 }
 
-impl_hash_method_fixed_keys! {UInt8, u8}
-impl_hash_method_fixed_keys! {UInt16, u16}
-impl_hash_method_fixed_keys! {UInt32, u32}
-impl_hash_method_fixed_keys! {UInt64, u64}
+impl_hash_method_fixed_keys! {UInt8, u8, i8}
+impl_hash_method_fixed_keys! {UInt16, u16, i16}
+impl_hash_method_fixed_keys! {UInt32, u32, i32}
+impl_hash_method_fixed_keys! {UInt64, u64, i64}
 
 macro_rules! impl_hash_method_fixed_large_keys {
     ($ty:ty, $name: ident) => {
@@ -490,7 +502,7 @@ pub fn serialize_column_binary(column: &Column, row: usize, vec: &mut Vec<u8>) {
         Column::String(v) => {
             BinaryWrite::write_binary(vec, unsafe { v.index_unchecked(row) }).unwrap()
         }
-        Column::Decimal(_) => todo!("decimal"),
+        Column::Decimal(_) => unreachable!("Decimal is not supported in group by keys format"),
         Column::Timestamp(v) => vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
         Column::Date(v) => vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
         Column::Array(array) => {

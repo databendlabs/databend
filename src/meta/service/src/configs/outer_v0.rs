@@ -245,7 +245,7 @@ impl Config {
 }
 
 /// #[serde(flatten)] doesn't work correctly for env.
-/// We should work around it by flatten them manully.
+/// We should work around it by flatten them manually.
 /// We are seeking for better solutions.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]

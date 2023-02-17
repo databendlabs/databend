@@ -15,6 +15,7 @@
 // To avoid RUSTFLAGS="-C target-feature=+sse4.2" warning.
 #![allow(unused_imports)]
 use std::hash::BuildHasher;
+use std::iter::TrustedLen;
 use std::mem::MaybeUninit;
 use std::num::NonZeroU64;
 
@@ -439,7 +440,7 @@ pub trait HashtableLike {
         Self::Key: 'a,
         Self::Value: 'a;
 
-    type Iterator<'a>: Iterator<Item = Self::EntryRef<'a>>
+    type Iterator<'a>: Iterator<Item = Self::EntryRef<'a>> + TrustedLen
     where
         Self: 'a,
         Self::Key: 'a,

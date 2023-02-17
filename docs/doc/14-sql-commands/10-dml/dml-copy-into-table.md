@@ -81,7 +81,7 @@ externalLocation ::=
   'azblob://<container>[<path>]'
   CONNECTION = (
         ENDPOINT_URL = 'https://<endpoint-URL>'
-        ACCOUT_NAME = '<your-account-name>'
+        ACCOUNT_NAME = '<your-account-name>'
         ACCOUNT_KEY = '<your-account-key>'
   )
 ```
@@ -187,13 +187,13 @@ The parameter ON_ERROR currently does not work for parquet files.
 ### Loading Data from an Internal Stage
 
 ```sql
-COPY INTO mytable FROM @my_internal_s1 pattern = 'books.*parquet' file_format = (type = 'PARQUET');
+COPY INTO mytable FROM @my_internal_s1 pattern = 'books.*parquet' FILE_FORMAT = (TYPE = PARQUET);
 ```
 
 ### Loading Data from an External Stage
 
 ```sql
-COPY INTO mytable FROM @my_external_s1 pattern = 'books.*parquet' file_format = (type = 'PARQUET');
+COPY INTO mytable FROM @my_external_s1 pattern = 'books.*parquet' FILE_FORMAT = (TYPE = PARQUET);
 ```
 
 ### Loading Data from External Locations
@@ -240,7 +240,7 @@ COPY INTO mytable
   CONNECTION = (
       ACCESS_KEY_ID = '<your-access-key-ID>'
       SECRET_ACCESS_KEY = '<your-secret-access-key>')
-  FILE_FORMAT = (type = PARQUET);
+  FILE_FORMAT = (TYPE = PARQUET);
 ```
 
 **Azure Blob storage**

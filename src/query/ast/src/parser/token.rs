@@ -423,6 +423,8 @@ pub enum TokenKind {
     NAN_DISPLAY,
     #[token("FILE_FORMAT", ignore(ascii_case))]
     FILE_FORMAT,
+    #[token("FILE", ignore(ascii_case))]
+    FILE,
     #[token("FILES", ignore(ascii_case))]
     FILES,
     #[token("FINAL", ignore(ascii_case))]
@@ -441,6 +443,10 @@ pub enum TokenKind {
     FORCE,
     #[token("FORMAT", ignore(ascii_case))]
     FORMAT,
+    #[token("FORMAT_NAME", ignore(ascii_case))]
+    FORMAT_NAME,
+    #[token("FORMATS", ignore(ascii_case))]
+    FORMATS,
     #[token("FRAGMENTS", ignore(ascii_case))]
     FRAGMENTS,
     #[token("FROM", ignore(ascii_case))]
@@ -545,8 +551,8 @@ pub enum TokenKind {
     METRICS,
     #[token("MICROSECONDS", ignore(ascii_case))]
     MICROSECONDS,
-    #[token("MILLENIUM", ignore(ascii_case))]
-    MILLENIUM,
+    #[token("MILLENNIUM", ignore(ascii_case))]
+    MILLENNIUM,
     #[token("MILLISECONDS", ignore(ascii_case))]
     MILLISECONDS,
     #[token("MINUTE", ignore(ascii_case))]
@@ -751,6 +757,8 @@ pub enum TokenKind {
     TRANSIENT,
     #[token("TRIM", ignore(ascii_case))]
     TRIM,
+    #[token("ARRAY_SORT", ignore(ascii_case))]
+    ARRAY_SORT,
     #[token("TRUE", ignore(ascii_case))]
     TRUE,
     #[token("TRUNCATE", ignore(ascii_case))]
@@ -981,6 +989,7 @@ impl TokenKind {
             | TokenKind::TRAILING
             // | TokenKind::TREAT
             | TokenKind::TRIM
+            | TokenKind::ARRAY_SORT
             | TokenKind::TRUE
             | TokenKind::TRY_CAST
             // | TokenKind::UNIQUE

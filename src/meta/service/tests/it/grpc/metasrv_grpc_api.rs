@@ -57,7 +57,7 @@ async fn test_restart() -> anyhow::Result<()> {
         let res = client
             .upsert_kv(UpsertKVReq::new(
                 "foo",
-                MatchSeq::Any,
+                MatchSeq::GE(0),
                 Operation::Update(b"bar".to_vec()),
                 None,
             ))
@@ -232,7 +232,7 @@ async fn test_join() -> anyhow::Result<()> {
             let res = cli
                 .upsert_kv(UpsertKVReq::new(
                     k.as_str(),
-                    MatchSeq::Any,
+                    MatchSeq::GE(0),
                     Operation::Update(k.clone().into_bytes()),
                     None,
                 ))
@@ -320,7 +320,7 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
         let res = client
             .upsert_kv(UpsertKVReq::new(
                 k.as_str(),
-                MatchSeq::Any,
+                MatchSeq::GE(0),
                 Operation::Update(k.clone().into_bytes()),
                 None,
             ))

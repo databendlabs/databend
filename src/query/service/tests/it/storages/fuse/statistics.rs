@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_base::base::tokio;
 use common_expression::type_check::check;
@@ -31,6 +32,9 @@ use common_expression::FunctionContext;
 use common_expression::Literal;
 use common_expression::RawExpr;
 use common_expression::Scalar;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchema;
 use common_functions::aggregates::eval_aggr;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
@@ -59,12 +63,16 @@ use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[test]
 fn test_ft_stats_block_stats() -> common_exception::Result<()> {
+    let schema = Arc::new(TableSchema::new(vec![
+        TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
+        TableField::new("b", TableDataType::String),
+    ]));
     let block = DataBlock::new_from_columns(vec![
         Int32Type::from_data(vec![1, 2, 3]),
         StringType::from_data(vec!["aa", "aa", "bb"]),
     ]);
 
-    let r = gen_columns_statistics(&block, None, None)?;
+    let r = gen_columns_statistics(&block, None, &schema)?;
     assert_eq!(2, r.len());
     let col_stats = r.get(&0).unwrap();
     assert_eq!(col_stats.min, Scalar::Number(NumberScalar::Int32(1)));
@@ -79,6 +87,11 @@ fn test_ft_stats_block_stats() -> common_exception::Result<()> {
 
 #[test]
 fn test_ft_stats_block_stats_with_column_distinct_count() -> common_exception::Result<()> {
+    let schema = Arc::new(TableSchema::new(vec![
+        TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
+        TableField::new("b", TableDataType::String),
+    ]));
+
     let block = DataBlock::new_from_columns(vec![
         Int32Type::from_data(vec![1, 2, 3]),
         StringType::from_data(vec!["aa", "aa", "bb"]),
@@ -86,7 +99,7 @@ fn test_ft_stats_block_stats_with_column_distinct_count() -> common_exception::R
     let mut column_distinct_count = HashMap::new();
     column_distinct_count.insert(0, 3);
     column_distinct_count.insert(1, 2);
-    let r = gen_columns_statistics(&block, Some(column_distinct_count), None)?;
+    let r = gen_columns_statistics(&block, Some(column_distinct_count), &schema)?;
     assert_eq!(2, r.len());
     let col_stats = r.get(&0).unwrap();
     assert_eq!(col_stats.min, Scalar::Number(NumberScalar::Int32(1)));
@@ -101,6 +114,17 @@ fn test_ft_stats_block_stats_with_column_distinct_count() -> common_exception::R
 
 #[test]
 fn test_ft_tuple_stats_block_stats() -> common_exception::Result<()> {
+    let schema = Arc::new(TableSchema::new(vec![TableField::new(
+        "a",
+        TableDataType::Tuple {
+            fields_name: vec!["a11".to_string(), "a12".to_string()],
+            fields_type: vec![
+                TableDataType::Number(NumberDataType::Int32),
+                TableDataType::Number(NumberDataType::Int32),
+            ],
+        },
+    )]));
+
     let inner_columns = vec![
         Int32Type::from_data(vec![1, 2, 3]),
         Int32Type::from_data(vec![4, 5, 6]),
@@ -112,7 +136,7 @@ fn test_ft_tuple_stats_block_stats() -> common_exception::Result<()> {
 
     let block = DataBlock::new_from_columns(vec![column]);
 
-    let r = gen_columns_statistics(&block, None, None)?;
+    let r = gen_columns_statistics(&block, None, &schema)?;
     assert_eq!(2, r.len());
     let col0_stats = r.get(&0).unwrap();
     assert_eq!(col0_stats.min, Scalar::Number(NumberScalar::Int32(1)));
@@ -130,11 +154,11 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
     let rows_per_block = 3;
     let val_start_with = 1;
 
-    let (_, blocks) =
+    let (schema, blocks) =
         TestFixture::gen_sample_blocks_ex(num_of_blocks, rows_per_block, val_start_with);
     let col_stats = blocks
         .iter()
-        .map(|b| gen_columns_statistics(&b.clone().unwrap(), None, None))
+        .map(|b| gen_columns_statistics(&b.clone().unwrap(), None, &schema))
         .collect::<common_exception::Result<Vec<_>>>()?;
     let r = reducers::reduce_block_statistics(&col_stats, None);
     assert!(r.is_ok());
@@ -215,7 +239,7 @@ async fn test_accumulator() -> common_exception::Result<()> {
     let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
     for item in blocks {
         let block = item?;
-        let col_stats = gen_columns_statistics(&block, None, Some(&schema))?;
+        let col_stats = gen_columns_statistics(&block, None, &schema)?;
         let block_statistics =
             BlockStatistics::from(&block, "does_not_matter".to_owned(), None, None, &schema)?;
         let block_writer = BlockWriter::new(&operator, &loc_generator);
@@ -401,6 +425,11 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> common_exce
             rand_strings.push(rand_string);
         }
 
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "a",
+            TableDataType::String,
+        )]));
+
         // build test data block, which has only on column, of String type
         let data_col = StringType::from_data(
             rand_strings
@@ -417,7 +446,7 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> common_exce
         let max_expr = max_col.0.index(0).unwrap();
 
         // generate the statistics of column
-        let stats_of_columns = gen_columns_statistics(&block, None, None).unwrap();
+        let stats_of_columns = gen_columns_statistics(&block, None, &schema).unwrap();
 
         // check if the max value (untrimmed) is in degenerated condition:
         // - the length of string value is larger or equal than STRING_PREFIX_LEN

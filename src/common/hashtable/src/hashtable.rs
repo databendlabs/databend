@@ -14,9 +14,9 @@
 
 use std::alloc::Allocator;
 use std::intrinsics::unlikely;
+use std::iter::TrustedLen;
 use std::mem::MaybeUninit;
 
-use common_base::mem_allocator::GlobalAllocator;
 use common_base::mem_allocator::MmapAllocator;
 
 use super::container::HeapContainer;
@@ -29,7 +29,7 @@ use super::traits::Keyable;
 use super::utils::ZeroEntry;
 use crate::FastHash;
 
-pub struct Hashtable<K, V, A = MmapAllocator<GlobalAllocator>>
+pub struct Hashtable<K, V, A = MmapAllocator>
 where
     K: Keyable,
     A: Allocator + Clone,
@@ -202,7 +202,13 @@ where K: Keyable
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next()
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
 }
+
+unsafe impl<'a, K, V> TrustedLen for HashtableIter<'a, K, V> where K: Keyable {}
 
 pub struct HashtableIterMut<'a, K, V> {
     inner: std::iter::Chain<std::option::IterMut<'a, Entry<K, V>>, Table0IterMut<'a, K, V>>,

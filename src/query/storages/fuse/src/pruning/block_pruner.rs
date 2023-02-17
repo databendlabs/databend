@@ -107,6 +107,7 @@ impl BlockPruner {
                     let page_pruner = page_pruner.clone();
                     let index_location = block_meta.bloom_filter_index_location.clone();
                     let index_size = block_meta.bloom_filter_index_size;
+                    let column_ids = block_meta.col_metas.keys().cloned().collect::<Vec<_>>();
 
                     let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
                         Box::pin(async move {
@@ -119,7 +120,9 @@ impl BlockPruner {
                             }
 
                             let _permit = permit;
-                            let keep = bloom_pruner.should_keep(&index_location, index_size).await
+                            let keep = bloom_pruner
+                                .should_keep(&index_location, index_size, column_ids)
+                                .await
                                 && limit_pruner.within_limit(row_count);
 
                             if keep {

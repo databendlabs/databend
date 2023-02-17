@@ -14,7 +14,6 @@ test = false
 [dependencies]
 common-arrow = { path = "../../../common/arrow" }
 common-base = { path = "../../../common/base" }
-common-cache = { path = "../../../common/cache" }
 common-catalog = { path = "../../catalog" }
 common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
@@ -39,7 +38,7 @@ storages-common-table-meta = { path = "../common/table-meta" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
-backon = "0.2"
+backon = "0.4"
 chrono = { workspace = true }
 futures = "0.3.24"
 futures-util = "0.3.24"

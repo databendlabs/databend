@@ -62,16 +62,16 @@ impl Interpreter for ShowObjectGrantPrivilegesInterpreter {
         }
         let mut share_names: Vec<Vec<u8>> = vec![];
         let mut privileges: Vec<Vec<u8>> = vec![];
-        let mut created_ons: Vec<Vec<u8>> = vec![];
+        let mut created_owns: Vec<Vec<u8>> = vec![];
 
         for privilege in resp.privileges {
             share_names.push(privilege.share_name.as_bytes().to_vec());
             privileges.push(privilege.privileges.to_string().as_bytes().to_vec());
-            created_ons.push(privilege.grant_on.to_string().as_bytes().to_vec());
+            created_owns.push(privilege.grant_on.to_string().as_bytes().to_vec());
         }
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-            StringType::from_data(created_ons),
+            StringType::from_data(created_owns),
             StringType::from_data(privileges),
             StringType::from_data(share_names),
         ])])

@@ -17,44 +17,43 @@ use std::collections::HashMap;
 
 use common_exception::Result;
 use common_expression::BlockThresholds;
-use common_expression::DataBlock;
+use common_expression::ColumnId;
 use common_expression::Scalar;
 use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::ColumnId;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 
-use crate::statistics::column_statistic::calc_column_distinct_of_values;
-use crate::statistics::column_statistic::get_traverse_columns_dfs;
+use crate::statistics::ColumnStatisticsLite;
 
 pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     stats_of_columns: &[T],
-    data_block: Option<&DataBlock>,
+    col_stats_lites: Option<&HashMap<ColumnId, ColumnStatisticsLite>>,
 ) -> Result<StatisticsOfColumns> {
     // Combine statistics of a column into `Vec`, that is:
     // from : `&[HashMap<ColumnId, ColumnStatistics>]`
     // to   : `HashMap<ColumnId, Vec<&ColumnStatistics>)>`
     let col_to_stats_lit = stats_of_columns.iter().fold(HashMap::new(), |acc, item| {
-        item.borrow().iter().fold(
-            acc,
-            |mut acc: HashMap<ColumnId, Vec<&ColumnStatistics>>, (col_id, col_stats)| {
-                acc.entry(*col_id).or_default().push(col_stats);
-                acc
-            },
-        )
+        item.borrow()
+            .iter()
+            // ignore dropped column statistics by column id
+            .filter(|(col_id, _)| {
+                col_stats_lites.map_or(true, |col_stats_lite| col_stats_lite.contains_key(col_id))
+            })
+            .fold(
+                acc,
+                |mut acc: HashMap<ColumnId, Vec<&ColumnStatistics>>, (col_id, col_stats)| {
+                    acc.entry(*col_id).or_default().push(col_stats);
+                    acc
+                },
+            )
     });
-
-    let leaves = if let Some(data_block) = data_block {
-        Some(get_traverse_columns_dfs(data_block)?)
-    } else {
-        None
-    };
 
     // Reduce the `Vec<&ColumnStatistics` into ColumnStatistics`, i.e.:
     // from : `HashMap<ColumnId, Vec<&ColumnStatistics>)>`
     // to   : `type BlockStatistics = HashMap<ColumnId, ColumnStatistics>`
-    let len = stats_of_columns.len();
+    let len = col_to_stats_lit.len();
+    let stats_len = stats_of_columns.len();
     col_to_stats_lit
         .iter()
         .try_fold(HashMap::with_capacity(len), |mut acc, (id, stats)| {
@@ -62,6 +61,7 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
             let mut max_stats = Vec::with_capacity(stats.len());
             let mut null_count = 0;
             let mut in_memory_size = 0;
+            let mut distinct_of_values = None;
 
             for col_stats in stats {
                 min_stats.push(col_stats.min.clone());
@@ -69,6 +69,19 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
 
                 null_count += col_stats.null_count;
                 in_memory_size += col_stats.in_memory_size;
+            }
+
+            if let Some(col_stats_lite) = col_stats_lites {
+                if let Some(stat) = col_stats_lite.get(id) {
+                    // fill the default value for min max.
+                    if stats.len() < stats_len {
+                        min_stats.push(stat.default_val.clone());
+                        max_stats.push(stat.default_val.clone());
+                    }
+                    null_count = stat.null_count;
+                    in_memory_size = stat.in_memory_size;
+                    distinct_of_values = Some(stat.distinct_of_values);
+                };
             }
 
             // TODO:
@@ -91,27 +104,12 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
                 .cloned()
                 .unwrap_or(Scalar::Null);
 
-            let distinct_of_values = match data_block {
-                Some(data_block) => {
-                    if let Some(col) = leaves.as_ref().unwrap().get(*id as usize) {
-                        if let Some(column) = &col.1 {
-                            calc_column_distinct_of_values(column, data_block.num_rows())?
-                        } else {
-                            0
-                        }
-                    } else {
-                        0
-                    }
-                }
-                None => 0,
-            };
-
             acc.insert(*id, ColumnStatistics {
                 min,
                 max,
                 null_count,
                 in_memory_size,
-                distinct_of_values: Some(distinct_of_values),
+                distinct_of_values,
             });
             Ok(acc)
         })

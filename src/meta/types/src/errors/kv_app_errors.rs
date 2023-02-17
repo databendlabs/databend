@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::type_name;
+
 use common_exception::ErrorCode;
 use common_meta_stoerr::MetaStorageError;
 use tonic::Status;
@@ -97,4 +99,50 @@ impl From<InvalidReply> for KVAppError {
         let meta_err = MetaError::from(e);
         Self::MetaError(meta_err)
     }
+}
+
+impl TryInto<MetaAPIError> for KVAppError {
+    type Error = InvalidReply;
+
+    fn try_into(self) -> Result<MetaAPIError, Self::Error> {
+        match self {
+            KVAppError::AppError(app_err) => Err(InvalidReply::new(
+                format!(
+                    "expect: {}, got: {}",
+                    type_name::<MetaAPIError>(),
+                    typ(&app_err)
+                ),
+                &app_err,
+            )),
+            KVAppError::MetaError(meta_err) => match meta_err {
+                MetaError::APIError(api_err) => Ok(api_err),
+                e => Err(InvalidReply::new(
+                    format!("expect: {}, got: {}", type_name::<MetaAPIError>(), typ(&e)),
+                    &e,
+                )),
+            },
+        }
+    }
+}
+
+impl TryInto<MetaError> for KVAppError {
+    type Error = InvalidReply;
+
+    fn try_into(self) -> Result<MetaError, Self::Error> {
+        match self {
+            KVAppError::AppError(app_err) => Err(InvalidReply::new(
+                format!(
+                    "expect: {}, got: {}",
+                    type_name::<MetaError>(),
+                    typ(&app_err)
+                ),
+                &app_err,
+            )),
+            KVAppError::MetaError(meta_err) => Ok(meta_err),
+        }
+    }
+}
+
+fn typ<T>(_v: &T) -> &'static str {
+    type_name::<T>()
 }

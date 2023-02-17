@@ -9,14 +9,14 @@ Creates a stage.
 ```sql
 -- Internal stage
 CREATE STAGE [ IF NOT EXISTS ] <internal_stage_name>
-  [ FILE_FORMAT = ( { TYPE = { CSV | PARQUET } [ formatTypeOptions ] ) } ]
+  [ FILE_FORMAT = ( { TYPE = { PARQUET | CSV | TSV | NDJSON } [ formatTypeOptions ] ) } ]
   [ COPY_OPTIONS = ( copyOptions ) ]
   [ COMMENT = '<string_literal>' ]
 
 -- External stage
 CREATE STAGE [ IF NOT EXISTS ] <external_stage_name>
     externalStageParams
-  [ FILE_FORMAT = ( { TYPE = { CSV | PARQUET } [ formatTypeOptions ] ) } ]
+  [ FILE_FORMAT = ( { TYPE = { PARQUET | CSV | TSV | NDJSON } [ formatTypeOptions ] ) } ]
   [ COPY_OPTIONS = ( copyOptions ) ]
   [ COMMENT = '<string_literal>' ]
 ```
@@ -55,7 +55,7 @@ externalStageParams ::=
   URL = 'azblob://<container>[<path/>]'
   CONNECTION = (
         ENDPOINT_URL = 'https://<endpoint-URL>'
-        ACCOUT_NAME = '<your-account-name>'
+        ACCOUNT_NAME = '<your-account-name>'
         ACCOUNT_KEY = '<your-account-key>'
   )
 ```
@@ -68,18 +68,8 @@ externalStageParams ::=
 | ACCOUNT_KEY                	| Your account key for connecting the Azure Blob storage.  	| Optional 	|
 
 ### formatTypeOptions
-```
-formatTypeOptions ::=
-  RECORD_DELIMITER = '<character>'
-  FIELD_DELIMITER = '<character>'
-  SKIP_HEADER = <integer>
-```
 
-| Parameters  | Description | Required |
-| ----------- | ----------- | --- |
-| `RECORD_DELIMITER = '<character>'`  | One characters that separate records in an input file. Default `'\n'` | Optional |
-| `FIELD_DELIMITER = '<character>'`  | One characters that separate fields in an input file. Default `','` | Optional |
-| `SKIP_HEADER = <integer>`  | Number of lines at the start of the file to skip. Default `0` | Optional |
+For details about `FILE_FORMAT`, see [Input & Output File Formats](../../../13-sql-reference/75-file-format-options.md).
 
 ### copyOptions
 ```

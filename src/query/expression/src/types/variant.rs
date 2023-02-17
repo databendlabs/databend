@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::ops::Range;
 
 use super::date::date_to_string;
@@ -186,7 +187,7 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
             NumberScalar::Float32(n) => n.0.into(),
             NumberScalar::Float64(n) => n.0.into(),
         },
-        ScalarRef::Decimal(_) => todo!("decimal"),
+        ScalarRef::Decimal(x) => common_jsonb::Value::String(Cow::from(x.to_string())),
         ScalarRef::Boolean(b) => common_jsonb::Value::Bool(b),
         ScalarRef::String(s) => common_jsonb::Value::String(String::from_utf8_lossy(s)),
         ScalarRef::Timestamp(ts) => timestamp_to_string(ts, inner_tz).to_string().into(),

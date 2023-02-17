@@ -256,8 +256,8 @@ output domain  : Undefined
 output         : [0,1,2]
 
 
-ast            : CAST([0, 'a'] AS VARIANT)
-raw expr       : CAST(array(0_u8, "a") AS Variant)
+ast            : CAST([0::VARIANT, 'a'::VARIANT] AS VARIANT)
+raw expr       : CAST(array(CAST(0_u8 AS Variant), CAST("a" AS Variant)) AS Variant)
 checked expr   : to_variant<T0=Array(Variant)><T0>(array<T0=Variant><T0, T0>(to_variant<T0=UInt8><T0>(0_u8), to_variant<T0=String><T0>("a")))
 optimized expr : 0x8000000220000001100000010061
 output type    : Variant
@@ -2067,8 +2067,8 @@ output domain  : Undefined
 output         : [0,1,2]
 
 
-ast            : TRY_CAST([0, 'a'] AS VARIANT)
-raw expr       : TRY_CAST(array(0_u8, "a") AS Variant)
+ast            : TRY_CAST([0::VARIANT, 'a'::VARIANT] AS VARIANT)
+raw expr       : TRY_CAST(array(CAST(0_u8 AS Variant), CAST("a" AS Variant)) AS Variant)
 checked expr   : try_to_variant<T0=Array(Variant)><T0>(array<T0=Variant><T0, T0>(to_variant<T0=UInt8><T0>(0_u8), to_variant<T0=String><T0>("a")))
 optimized expr : 0x8000000220000001100000010061
 output type    : Variant NULL

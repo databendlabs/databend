@@ -19,7 +19,6 @@ use std::io::Result;
 use std::time::Duration;
 
 use anyhow::anyhow;
-use backon::ExponentialBackoff;
 use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
@@ -49,7 +48,6 @@ use opendal::Builder;
 use opendal::Operator;
 
 use crate::runtime_layer::RuntimeLayer;
-use crate::CacheConfig;
 use crate::StorageConfig;
 
 /// init_operator will init an opendal operator based on storage config.
@@ -84,7 +82,7 @@ pub fn build_operator<A: Accessor>(acc: A) -> Operator {
 
     ob
         // Add retry
-        .layer(RetryLayer::new(ExponentialBackoff::default().with_jitter()))
+        .layer(RetryLayer::new().with_jitter())
         // Add metrics
         .layer(MetricsLayer)
         // Add logging
@@ -351,62 +349,5 @@ impl DataOperator {
 
     pub fn instance() -> DataOperator {
         GlobalInstance::get()
-    }
-}
-
-/// CacheOperator is the operator to access cache services.
-///
-/// # Notes
-///
-/// As described in [RFC: Cache](https://databend.rs/doc/contributing/rfcs/cache):
-///
-/// All data stored in cache operator should be non-persist and could be GC or
-/// background auto evict at any time.
-#[derive(Clone, Debug)]
-pub struct CacheOperator {
-    op: Option<Operator>,
-}
-
-impl CacheOperator {
-    pub async fn init(conf: &CacheConfig) -> common_exception::Result<()> {
-        GlobalInstance::set(Self::try_create(conf).await?);
-
-        Ok(())
-    }
-
-    pub async fn try_create(conf: &CacheConfig) -> common_exception::Result<CacheOperator> {
-        if conf.params == StorageParams::None {
-            return Ok(CacheOperator { op: None });
-        }
-
-        let operator = init_operator(&conf.params)?;
-
-        // OpenDAL will send a real request to underlying storage to check whether it works or not.
-        // If this check failed, it's highly possible that the users have configured it wrongly.
-        //
-        // Make sure the check is called inside GlobalIORuntime to prevent
-        // IO hang on reuse connection.
-        let op = operator.clone();
-        if let Err(cause) = GlobalIORuntime::instance()
-            .spawn(async move { op.object("health_check").create().await })
-            .await
-            .expect("join must succeed")
-        {
-            return Err(ErrorCode::StorageUnavailable(format!(
-                "current configured cache is not available: config: {:?}, cause: {cause}",
-                conf
-            )));
-        }
-
-        Ok(CacheOperator { op: Some(operator) })
-    }
-
-    pub fn instance() -> Option<Operator> {
-        let v: CacheOperator = GlobalInstance::get();
-        v.inner()
-    }
-
-    fn inner(&self) -> Option<Operator> {
-        self.op.clone()
     }
 }

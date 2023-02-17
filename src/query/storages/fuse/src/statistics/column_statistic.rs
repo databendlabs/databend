@@ -15,11 +15,15 @@
 use std::collections::HashMap;
 
 use common_exception::Result;
+use common_expression::types::DataType;
 use common_expression::types::NumberType;
 use common_expression::types::ValueType;
 use common_expression::Column;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
+use common_expression::FieldIndex;
 use common_expression::Scalar;
+use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_functions::aggregates::eval_aggr;
 use storages_common_index::Index;
@@ -39,16 +43,16 @@ pub fn get_traverse_columns_dfs(data_block: &DataBlock) -> traverse::TraverseRes
 
 pub fn gen_columns_statistics(
     data_block: &DataBlock,
-    column_distinct_count: Option<HashMap<usize, usize>>,
-    schema: Option<&TableSchemaRef>,
+    column_distinct_count: Option<HashMap<FieldIndex, usize>>,
+    schema: &TableSchemaRef,
 ) -> Result<StatisticsOfColumns> {
     let mut statistics = StatisticsOfColumns::new();
     let data_block = data_block.convert_to_full();
     let rows = data_block.num_rows();
 
     let leaves = get_traverse_columns_dfs(&data_block)?;
-    let column_ids = schema.map(|schema| schema.to_column_ids());
-    for (idx, (col_idx, col, data_type)) in leaves.iter().enumerate() {
+    let leaf_column_ids = schema.to_leaf_column_ids();
+    for ((col_idx, col, data_type), column_id) in leaves.iter().zip(leaf_column_ids) {
         if col.is_none() {
             continue;
         }
@@ -123,14 +127,96 @@ pub fn gen_columns_statistics(
             distinct_of_values: Some(distinct_of_values),
         };
 
-        // use column id as key instead of index
-        let column_id = match column_ids {
-            Some(ref column_ids) => column_ids[idx],
-            None => idx as u32,
-        };
         statistics.insert(column_id, col_stats);
     }
     Ok(statistics)
+}
+
+pub struct ColumnStatisticsLite {
+    pub default_val: Scalar,
+    pub null_count: u64,
+    pub in_memory_size: u64,
+    pub distinct_of_values: u64,
+}
+
+pub fn gen_col_stats_lite(
+    data_block: &DataBlock,
+    fields: &[TableField],
+    default_vals: &[Scalar],
+) -> Result<HashMap<ColumnId, ColumnStatisticsLite>> {
+    fn collect_col_stats(
+        col_scalar: Option<(&Column, &Scalar)>,
+        data_type: &DataType,
+        column_id: &mut ColumnId,
+        stats: &mut HashMap<ColumnId, ColumnStatisticsLite>,
+        rows: usize,
+    ) -> Result<()> {
+        match data_type {
+            DataType::Tuple(inner_types) => {
+                if let Some((col, val)) = col_scalar {
+                    let (inner_columns, _) = col.as_tuple().unwrap();
+                    let inner_scalars = val.as_tuple().unwrap();
+                    for ((inner_column, inner_type), inner_scalar) in
+                        inner_columns.iter().zip(inner_types).zip(inner_scalars)
+                    {
+                        collect_col_stats(
+                            Some((inner_column, inner_scalar)),
+                            inner_type,
+                            column_id,
+                            stats,
+                            rows,
+                        )?;
+                    }
+                } else {
+                    for inner_type in inner_types.iter() {
+                        collect_col_stats(None, inner_type, column_id, stats, rows)?;
+                    }
+                }
+            }
+            DataType::Array(inner_type) => {
+                collect_col_stats(None, inner_type, column_id, stats, rows)?
+            }
+            _ => {
+                if let Some((col, val)) = col_scalar {
+                    if RangeIndex::supported_type(data_type) {
+                        let (is_all_null, bitmap) = col.validity();
+                        let unset_bits = match (is_all_null, bitmap) {
+                            (true, _) => rows,
+                            (false, Some(bitmap)) => bitmap.unset_bits(),
+                            (false, None) => 0,
+                        };
+                        let in_memory_size = col.memory_size() as u64;
+                        let distinct_of_values = calc_column_distinct_of_values(col, rows)?;
+                        stats.insert(*column_id, ColumnStatisticsLite {
+                            default_val: val.clone(),
+                            null_count: unset_bits as u64,
+                            in_memory_size,
+                            distinct_of_values,
+                        });
+                    }
+                }
+
+                *column_id += 1;
+            }
+        }
+        Ok(())
+    }
+
+    let columns = data_block.columns();
+    let mut stats = HashMap::new();
+    for (idx, entry) in columns.iter().enumerate() {
+        let data_type = &entry.data_type;
+        let column = entry.value.as_column().unwrap();
+        let mut next_column_id = fields[idx].column_id();
+        collect_col_stats(
+            Some((column, &default_vals[idx])),
+            data_type,
+            &mut next_column_id,
+            &mut stats,
+            data_block.num_rows(),
+        )?;
+    }
+    Ok(stats)
 }
 
 pub mod traverse {

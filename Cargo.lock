@@ -101,9 +101,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.68"
+version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cb2f989d18dd141ab8ae82f64d1a8cdd37e0840f73a406896cf5e99502fab61"
+checksum = "224afbd727c3d6e4b90103ece64b8d1b67fbb1973b1046c2281eed3f3803f800"
 
 [[package]]
 name = "approx"
@@ -468,9 +468,9 @@ dependencies = [
 
 [[package]]
 name = "backon"
-version = "0.2.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6cd1a59bc091e593ee9ed62df4e4a07115e00a0e0a52fd7e0e04540773939b80"
+checksum = "f34fac4d7cdaefa2deded0eda2d5d59dbfd43370ff3f856209e72340ae84c294"
 dependencies = [
  "futures",
  "pin-project",
@@ -1252,6 +1252,7 @@ dependencies = [
 name = "common-base"
 version = "0.1.0"
 dependencies = [
+ "anyerror",
  "anyhow",
  "async-channel",
  "async-trait",
@@ -1284,7 +1285,7 @@ dependencies = [
  "anyhow",
  "cargo-license",
  "cargo_metadata 0.15.2",
- "git2 0.16.1",
+ "git2",
  "tracing",
  "vergen",
 ]
@@ -1293,9 +1294,13 @@ dependencies = [
 name = "common-cache"
 version = "0.1.0"
 dependencies = [
+ "crc32fast",
  "heapsize",
+ "hex",
  "ritelinked",
- "tempfile",
+ "siphasher",
+ "tracing",
+ "walkdir",
 ]
 
 [[package]]
@@ -1317,7 +1322,6 @@ dependencies = [
  "dashmap",
  "dyn-clone",
  "goldenfile",
- "opendal",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -1335,7 +1339,6 @@ dependencies = [
  "common-grpc",
  "common-hive-meta-store",
  "common-meta-app",
- "common-meta-types",
  "common-storage",
  "common-tracing",
  "common-users",
@@ -1465,6 +1468,7 @@ dependencies = [
  "crc32fast",
  "criterion",
  "ctor",
+ "ethnum",
  "geo",
  "geohash",
  "goldenfile",
@@ -1535,6 +1539,7 @@ dependencies = [
 name = "common-http"
 version = "0.1.0"
 dependencies = [
+ "anyerror",
  "common-base",
  "common-exception",
  "futures",
@@ -1542,6 +1547,7 @@ dependencies = [
  "pretty_assertions",
  "serde",
  "tempfile",
+ "thiserror",
  "tracing",
 ]
 
@@ -1611,7 +1617,9 @@ dependencies = [
  "common-tracing",
  "enumflags2",
  "maplit",
+ "serde",
  "serde_json",
+ "thiserror",
  "tonic",
  "tracing",
 ]
@@ -1646,6 +1654,7 @@ dependencies = [
 name = "common-meta-client"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "common-arrow",
  "common-base",
  "common-building",
@@ -1666,6 +1675,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "thiserror",
  "tonic",
  "tracing",
 ]
@@ -1896,6 +1906,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-profile"
+version = "0.1.0"
+
+[[package]]
 name = "common-proto-conv"
 version = "0.1.0"
 dependencies = [
@@ -2003,6 +2017,7 @@ dependencies = [
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-pipeline-transforms",
+ "common-profile",
  "common-settings",
  "common-storage",
  "common-storages-parquet",
@@ -2099,7 +2114,6 @@ dependencies = [
  "chrono",
  "common-arrow",
  "common-base",
- "common-cache",
  "common-catalog",
  "common-exception",
  "common-expression",
@@ -2492,6 +2506,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
+ "wiremock",
 ]
 
 [[package]]
@@ -2926,6 +2941,7 @@ checksum = "23d8666cb01533c39dde32bcbab8e227b4ed6679b2c925eba05feabea39508fb"
 name = "databend-binaries"
 version = "0.1.0"
 dependencies = [
+ "anyerror",
  "anyhow",
  "clap 3.2.23",
  "comfy-table",
@@ -2955,7 +2971,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sharing-endpoint",
- "tikv-jemalloc-ctl",
  "tokio-stream",
  "tonic",
  "tracing",
@@ -3080,6 +3095,7 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
+ "common-profile",
  "common-settings",
  "common-sql",
  "common-storage",
@@ -3103,6 +3119,7 @@ dependencies = [
  "futures",
  "futures-util",
  "goldenfile",
+ "h2",
  "headers",
  "hex",
  "http",
@@ -4025,19 +4042,6 @@ name = "gimli"
 version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dec7af912d60cdbd3677c1af9352ebae6fb8394d165568a2234df0fa00f87793"
-
-[[package]]
-name = "git2"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2994bee4a3a6a51eb90c218523be382fd7ea09b16380b9312e9dbe955ff7c7d1"
-dependencies = [
- "bitflags",
- "libc",
- "libgit2-sys",
- "log",
- "url",
-]
 
 [[package]]
 name = "git2"
@@ -5261,9 +5265,9 @@ dependencies = [
 
 [[package]]
 name = "moka"
-version = "0.9.6"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b49a05f67020456541f4f29cbaa812016a266a86ec76f96d3873d459c68fe5e"
+checksum = "2b6446f16d504e3d575df79cabb11bfbe9f24b17e9562d964a815db7b28ae3ec"
 dependencies = [
  "async-io",
  "async-lock",
@@ -5631,9 +5635,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.26.2"
+version = "0.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c40ed33cc9fed187ce8293587416e0afd6ac9fcde17f2a20ad0dca14dd685ebe"
+checksum = "39f2018ea448841041cf00a01f6c145b5017753958dbb563c2bf8921ce4b3e49"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -5641,7 +5645,6 @@ dependencies = [
  "async-trait",
  "backon",
  "base64 0.21.0",
- "bincode 2.0.0-rc.2",
  "bytes",
  "flagset",
  "futures",
@@ -6849,9 +6852,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f446438814fde3785305a59a85a6d1b361ce2c9d29e58dd87c9103a242c40b6"
+checksum = "7e0154ced5e44389686689a3c96c49ca5a70ad9c708e0989982adae2e0378bbf"
 dependencies = [
  "anyhow",
  "backon",
@@ -6978,6 +6981,12 @@ dependencies = [
  "web-sys",
  "winapi",
 ]
+
+[[package]]
+name = "ringbuffer"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1973f95452ec56a4b2c683f5eabc15617e38f4faf2776ed4a0011d5070ecb37e"
 
 [[package]]
 name = "rio"
@@ -7812,11 +7821,19 @@ dependencies = [
  "common-base",
  "common-cache",
  "common-exception",
+ "crc32fast",
+ "crossbeam-channel",
+ "hex",
  "metrics",
  "opendal",
  "parking_lot 0.12.1",
+ "ringbuffer",
  "serde",
  "serde_json",
+ "siphasher",
+ "tempfile",
+ "tracing",
+ "walkdir",
 ]
 
 [[package]]
@@ -7825,6 +7842,7 @@ version = "0.1.0"
 dependencies = [
  "common-arrow",
  "common-base",
+ "common-cache",
  "common-config",
  "common-exception",
  "storages-common-cache",
@@ -7888,7 +7906,7 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 [[package]]
 name = "strawboat"
 version = "0.1.0"
-source = "git+https://github.com/sundy-li/strawboat?rev=92a8e4f#92a8e4fcf499827145ac7f32315b2228552507e5"
+source = "git+https://github.com/sundy-li/strawboat?rev=24bd7f6#24bd7f6513c8301e20bf71959ff98ee094090a16"
 dependencies = [
  "arrow2",
  "bytemuck",
@@ -8034,9 +8052,9 @@ dependencies = [
 
 [[package]]
 name = "sysinfo"
-version = "0.27.2"
+version = "0.27.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17351d0e9eb8841897b14e9669378f3c69fb57779cc04f8ca9a9d512edfb2563"
+checksum = "975fe381e0ecba475d4acff52466906d95b153a40324956552e027b2a9eaa89e"
 dependencies = [
  "cfg-if",
  "core-foundation-sys",
@@ -8820,15 +8838,15 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "vergen"
-version = "7.5.0"
+version = "7.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "571b69f690c855821462709b6f41d42ceccc316fbd17b60bd06d06928cfe6a99"
+checksum = "f21b881cd6636ece9735721cf03c1fe1e774fe258683d084bb2812ab67435749"
 dependencies = [
  "anyhow",
  "cfg-if",
  "enum-iterator",
  "getset",
- "git2 0.15.0",
+ "git2",
  "rustc_version",
  "rustversion",
  "sysinfo",

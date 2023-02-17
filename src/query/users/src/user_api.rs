@@ -17,6 +17,8 @@ use std::sync::Arc;
 use common_base::base::GlobalInstance;
 use common_exception::Result;
 use common_grpc::RpcClientConf;
+use common_management::FileFormatApi;
+use common_management::FileFormatMgr;
 use common_management::QuotaApi;
 use common_management::QuotaMgr;
 use common_management::RoleApi;
@@ -30,18 +32,18 @@ use common_management::UdfMgr;
 use common_management::UserApi;
 use common_management::UserMgr;
 use common_meta_app::principal::AuthInfo;
+use common_meta_app::tenant::TenantQuota;
 use common_meta_kvapi::kvapi;
 use common_meta_store::MetaStore;
 use common_meta_store::MetaStoreProvider;
-use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
-use common_meta_types::TenantQuota;
+use common_meta_types::MetaError;
 
 use crate::idm_config::IDMConfig;
 
 pub struct UserApiProvider {
     meta: MetaStore,
-    client: Arc<dyn kvapi::KVApi<Error = KVAppError>>,
+    client: Arc<dyn kvapi::KVApi<Error = MetaError>>,
     idm_config: IDMConfig,
 }
 
@@ -92,6 +94,13 @@ impl UserApiProvider {
 
     pub fn get_stage_api_client(&self, tenant: &str) -> Result<Arc<dyn StageApi>> {
         Ok(Arc::new(StageMgr::create(self.client.clone(), tenant)?))
+    }
+
+    pub fn get_file_format_api_client(&self, tenant: &str) -> Result<Arc<dyn FileFormatApi>> {
+        Ok(Arc::new(FileFormatMgr::create(
+            self.client.clone(),
+            tenant,
+        )?))
     }
 
     pub fn get_udf_api_client(&self, tenant: &str) -> Result<Arc<dyn UdfApi>> {

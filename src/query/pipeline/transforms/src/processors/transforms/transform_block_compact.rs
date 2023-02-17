@@ -79,7 +79,7 @@ impl Compactor for BlockCompactor {
             blocks.clear();
 
             if accumulated_rows >= self.thresholds.max_rows_per_block {
-                // Used for recluster opreation, will be removed later.
+                // Used for recluster operation, will be removed later.
                 if self.is_recluster {
                     let mut offset = 0;
                     let mut remain_rows = accumulated_rows;

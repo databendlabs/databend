@@ -78,6 +78,48 @@ select count(*) from bloom_test_t where c1 = 5
 ----
 1
 
+# for issue which addressed in PR #10022 (https://github.com/datafuselabs/databend/pull/10022)
+statement ok
+alter table bloom_test_t drop column c2
+
+statement ok
+alter table bloom_test_t add column c2 int
+
+statement ok
+insert into  bloom_test_t values(2,2), (4,4)
+
+query T
+explain select * from bloom_test_t where c2=0;
+----
+Filter
+├── filters: [eq(bloom_test_t.c2 (#1), to_int32(0))]
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.bloom_test_t
+    ├── read rows: 6
+    ├── read bytes: 86
+    ├── partitions total: 3
+    ├── partitions scanned: 2
+    ├── pruning stats: [segments: <range pruning: 3 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 2>]
+    ├── push downs: [filters: [eq(bloom_test_t.c2 (#1), 0)], limit: NONE]
+    └── estimated rows: 8.00
+
+query T
+explain select * from bloom_test_t where c2=3;
+----
+Filter
+├── filters: [eq(bloom_test_t.c2 (#1), to_int32(3))]
+├── estimated rows: 1.14
+└── TableScan
+    ├── table: default.default.bloom_test_t
+    ├── read rows: 6
+    ├── read bytes: 86
+    ├── partitions total: 3
+    ├── partitions scanned: 2
+    ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 3, bloom pruning: 3 to 2>]
+    ├── push downs: [filters: [eq(bloom_test_t.c2 (#1), 3)], limit: NONE]
+    └── estimated rows: 8.00
+
 statement ok
 drop table bloom_test_t
 

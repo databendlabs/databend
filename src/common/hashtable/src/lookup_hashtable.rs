@@ -13,21 +13,17 @@
 // limitations under the License.
 
 use std::alloc::Allocator;
+use std::iter::TrustedLen;
 use std::mem;
 use std::mem::MaybeUninit;
 
-use common_base::mem_allocator::GlobalAllocator;
 use common_base::mem_allocator::MmapAllocator;
 
 use crate::table0::Entry;
 use crate::HashtableLike;
 
-pub struct LookupHashtable<
-    K: Sized,
-    const CAPACITY: usize,
-    V,
-    A: Allocator + Clone = MmapAllocator<GlobalAllocator>,
-> {
+pub struct LookupHashtable<K: Sized, const CAPACITY: usize, V, A: Allocator + Clone = MmapAllocator>
+{
     flags: Box<[bool; CAPACITY], A>,
     data: Box<[Entry<K, V>; CAPACITY], A>,
     len: usize,
@@ -167,7 +163,14 @@ macro_rules! lookup_impl {
                     Some(res)
                 }
             }
+
+            fn size_hint(&self) -> (usize, Option<usize>) {
+                let remaining = $capacity - self.i;
+                (remaining, Some(remaining))
+            }
         }
+
+        unsafe impl<'a, V> TrustedLen for LookupTableIter<'a, $capacity, $ty, V> {}
 
         impl<'a, V> Iterator for LookupTableIterMut<'a, $capacity, $ty, V> {
             type Item = &'a mut Entry<$ty, V>;

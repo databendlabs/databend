@@ -13,11 +13,15 @@
 // limitations under the License.
 //
 mod block_reader;
+mod block_reader_merge_io;
+mod block_reader_merge_io_async;
+mod block_reader_merge_io_sync;
 mod block_reader_native;
 mod block_reader_parquet;
+mod block_reader_parquet_deserialize;
 mod decompressor;
 
 pub use block_reader::BlockReader;
-pub use block_reader::MergeIOReadResult;
+pub use block_reader_merge_io::MergeIOReadResult;
 pub use block_reader_native::NativeReaderExt;
 pub use decompressor::UncompressedBuffer;

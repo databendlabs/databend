@@ -278,6 +278,14 @@ pub enum ExprElement {
     Array {
         exprs: Vec<Expr>,
     },
+    /// ARRAY_SORT([1,2,3], ASC|DESC, NULLS FIRST|LAST)
+    ArraySort {
+        expr: Box<Expr>,
+        // Optional `ASC` or `DESC`
+        asc: Option<String>,
+        // Optional `NULLS FIRST` or `NULLS LAST`
+        nulls_first: Option<String>,
+    },
     Interval {
         expr: Expr,
         unit: IntervalKind,
@@ -461,6 +469,41 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 span: transform_span(elem.span.0),
                 exprs,
             },
+            ExprElement::ArraySort {
+                expr,
+                asc,
+                nulls_first,
+            } => {
+                let asc = if let Some(asc) = asc {
+                    if asc.to_lowercase() == "asc" {
+                        true
+                    } else if asc.to_lowercase() == "desc" {
+                        false
+                    } else {
+                        return Err("Sorting order must be either ASC or DESC");
+                    }
+                } else {
+                    true
+                };
+                let null_first = if let Some(nulls_first) = nulls_first {
+                    let null_first = nulls_first.trim().to_lowercase();
+                    if null_first == "nulls first" {
+                        true
+                    } else if null_first == "nulls last" {
+                        false
+                    } else {
+                        return Err("Null sorting order must be either NULLS FIRST or NULLS LAST");
+                    }
+                } else {
+                    true
+                };
+                Expr::ArraySort {
+                    span: transform_span(elem.span.0),
+                    expr,
+                    asc,
+                    null_first,
+                }
+            }
             ExprElement::Interval { expr, unit } => Expr::Interval {
                 span: transform_span(elem.span.0),
                 expr: Box::new(expr),
@@ -581,7 +624,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
 
 pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let column_ref = map(
-        peroid_separated_idents_1_to_3,
+        period_separated_idents_1_to_3,
         |(database, table, column)| ExprElement::ColumnRef {
             database,
             table,
@@ -729,7 +772,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     });
     let tuple = map(
         rule! {
-            "(" ~ #comma_separated_list0_ignore_trailling(subexpr(0)) ~ ","? ~ ^")"
+            "(" ~ #comma_separated_list0_ignore_trailing(subexpr(0)) ~ ","? ~ ^")"
         },
         |(_, mut exprs, opt_trail, _)| {
             if exprs.len() == 1 && opt_trail.is_none() {
@@ -814,7 +857,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let binary_op = map(binary_op, |op| ExprElement::BinaryOp { op });
     let unary_op = map(unary_op, |op| ExprElement::UnaryOp { op });
     let map_access = map(map_access, |accessor| ExprElement::MapAccess { accessor });
-    // Floating point literal with leading dot will be parsed as a peroid map access,
+    // Floating point literal with leading dot will be parsed as a period map access,
     // and then will be converted back to a floating point literal if the map access
     // is not following a primary element nor a postfix element.
     let literal = map(literal, |lit| ExprElement::Literal { lit });
@@ -823,11 +866,27 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         // and then will be converted back to an array if the map access is not following
         // a primary element nor a postfix element.
         rule! {
-            "[" ~ #comma_separated_list0_ignore_trailling(subexpr(0))? ~ ","? ~ ^"]"
+            "[" ~ #comma_separated_list0_ignore_trailing(subexpr(0))? ~ ","? ~ ^"]"
         },
         |(_, opt_args, _, _)| {
             let exprs = opt_args.unwrap_or_default();
             ExprElement::Array { exprs }
+        },
+    );
+    // ARRAY_SORT([...], ASC | DESC, NULLS FIRST | LAST)
+    let array_sort = map(
+        rule! {
+            ( ARRAY_SORT )
+            ~ "("
+            ~ #subexpr(0)
+            ~ ( "," ~ #literal_string )?
+            ~ ( "," ~ #literal_string )?
+            ~ ")"
+        },
+        |(_, _, expr, opt_asc, opt_null_first, _)| ExprElement::ArraySort {
+            expr: Box::new(expr),
+            asc: opt_asc.map(|(_, asc)| asc),
+            nulls_first: opt_null_first.map(|(_, first_last)| first_last),
         },
     );
     let date_add = map(
@@ -890,6 +949,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND) FROM ...)`"
             | #position : "`POSITION(... IN ...)`"
             | #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
+            | #array_sort : "`ARRAY_SORT([...], 'ASC' | 'DESC', 'NULLS FIRST' | 'NULLS LAST')`"
             | #trim : "`TRIM(...)`"
             | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
         ),

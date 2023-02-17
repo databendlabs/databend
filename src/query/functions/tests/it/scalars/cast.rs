@@ -143,7 +143,11 @@ fn test_cast_to_variant(file: &mut impl Write, is_try: bool) {
         &[],
     );
     run_ast(file, format!("{prefix}CAST([0, 1, 2] AS VARIANT)"), &[]);
-    run_ast(file, format!("{prefix}CAST([0, 'a'] AS VARIANT)"), &[]);
+    run_ast(
+        file,
+        format!("{prefix}CAST([0::VARIANT, 'a'::VARIANT] AS VARIANT)"),
+        &[],
+    );
     run_ast(
         file,
         format!("{prefix}CAST(to_timestamp(1000000) AS VARIANT)"),

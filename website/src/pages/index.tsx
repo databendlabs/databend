@@ -12,7 +12,7 @@ function HomepageHeader() {
       <>
         <section className={clsx('hero hero--primary', styles.heroBanner, styles.bannerItemHeight)}>
           <div className={clsx('container', styles.container)}>
-            <h1 className={clsx('hero__title', styles.heroTitle)}><Texty>Databend</Texty></h1>
+            <h2 className={clsx('hero__title', styles.heroTitle)}><Texty>The Future of Cloud Data Analytics</Texty></h2>
             <p className={clsx('hero__subtitle', styles.heroSubTitle)}>{siteConfig.tagline}</p>
 
             <Link
@@ -37,7 +37,7 @@ export default function Home(): JSX.Element {
     const {siteConfig} = useDocusaurusContext();
     return (
       <Layout
-        title={`Databend - The modern cloud data warehouse that empowers your object storage for real-time analytics.`}
+        title={`Databend - The Future of Cloud Data Analytics.`}
         description={`The modern cloud data warehouse that empowers your object storage(S3, Azure Blob, or MinIO) for real-time analytics`}>
         <HomepageHeader/>
       </Layout>

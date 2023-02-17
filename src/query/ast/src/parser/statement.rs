@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use common_meta_app::principal::AuthType;
+use common_meta_app::principal::FileFormatOptions;
 use common_meta_app::principal::PrincipalIdentity;
 use common_meta_app::principal::UserIdentity;
 use common_meta_app::principal::UserPrivilegeType;
@@ -82,10 +83,18 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+    let explain_analyze = map(
+        rule! {
+            EXPLAIN ~ ANALYZE ~ #statement
+        },
+        |(_, _, statement)| Statement::ExplainAnalyze {
+            query: Box::new(statement.stmt),
+        },
+    );
     let insert = map(
         rule! {
             INSERT ~ ( INTO | OVERWRITE ) ~ TABLE?
-            ~ #peroid_separated_idents_1_to_3
+            ~ #period_separated_idents_1_to_3
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ #insert_source
         },
@@ -174,9 +183,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! {
             UNSET ~ #unset_source
         },
-        |(_, unset_souce)| {
+        |(_, unset_source)| {
             Statement::UnSetVariable(UnSetStmt {
-                source: unset_souce,
+                source: unset_source,
             })
         },
     );
@@ -247,7 +256,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let show_create_database = map(
         rule! {
-            SHOW ~ CREATE ~ ( DATABASE | SCHEMA ) ~ #peroid_separated_idents_1_to_2
+            SHOW ~ CREATE ~ ( DATABASE | SCHEMA ) ~ #period_separated_idents_1_to_2
         },
         |(_, _, _, (catalog, database))| {
             Statement::ShowCreateDatabase(ShowCreateDatabaseStmt { catalog, database })
@@ -255,7 +264,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let create_database = map(
         rule! {
-            CREATE ~ ( DATABASE | SCHEMA ) ~ ( IF ~ NOT ~ EXISTS )? ~ #peroid_separated_idents_1_to_2 ~ #create_database_option?
+            CREATE ~ ( DATABASE | SCHEMA ) ~ ( IF ~ NOT ~ EXISTS )? ~ #period_separated_idents_1_to_2 ~ #create_database_option?
         },
         |(_, _, opt_if_not_exists, (catalog, database), create_database_option)| {
             match create_database_option {
@@ -292,7 +301,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_database = map(
         rule! {
-            DROP ~ ( DATABASE | SCHEMA ) ~ ( IF ~ EXISTS )? ~ #peroid_separated_idents_1_to_2
+            DROP ~ ( DATABASE | SCHEMA ) ~ ( IF ~ EXISTS )? ~ #period_separated_idents_1_to_2
         },
         |(_, _, opt_if_exists, (catalog, database))| {
             Statement::DropDatabase(DropDatabaseStmt {
@@ -305,7 +314,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let undrop_database = map(
         rule! {
-            UNDROP ~ DATABASE ~ #peroid_separated_idents_1_to_2
+            UNDROP ~ DATABASE ~ #period_separated_idents_1_to_2
         },
         |(_, _, (catalog, database))| {
             Statement::UndropDatabase(UndropDatabaseStmt { catalog, database })
@@ -314,7 +323,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let alter_database = map(
         rule! {
-            ALTER ~ DATABASE ~ ( IF ~ EXISTS )? ~ #peroid_separated_idents_1_to_2 ~ #alter_database_action
+            ALTER ~ DATABASE ~ ( IF ~ EXISTS )? ~ #period_separated_idents_1_to_2 ~ #alter_database_action
         },
         |(_, _, opt_if_exists, (catalog, database), action)| {
             Statement::AlterDatabase(AlterDatabaseStmt {
@@ -333,7 +342,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let show_tables = map(
         rule! {
-            SHOW ~ FULL? ~ TABLES ~ HISTORY? ~ ( ( FROM | IN ) ~ #peroid_separated_idents_1_to_2 )? ~ #show_limit?
+            SHOW ~ FULL? ~ TABLES ~ HISTORY? ~ ( ( FROM | IN ) ~ #period_separated_idents_1_to_2 )? ~ #show_limit?
         },
         |(_, opt_full, _, opt_history, ctl_db, limit)| {
             let (catalog, database) = match ctl_db {
@@ -352,7 +361,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let show_create_table = map(
         rule! {
-            SHOW ~ CREATE ~ TABLE ~ #peroid_separated_idents_1_to_3
+            SHOW ~ CREATE ~ TABLE ~ #period_separated_idents_1_to_3
         },
         |(_, _, _, (catalog, database, table))| {
             Statement::ShowCreateTable(ShowCreateTableStmt {
@@ -364,7 +373,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let describe_table = map(
         rule! {
-            ( DESC | DESCRIBE ) ~ #peroid_separated_idents_1_to_3
+            ( DESC | DESCRIBE ) ~ #period_separated_idents_1_to_3
         },
         |(_, (catalog, database, table))| {
             Statement::DescribeTable(DescribeTableStmt {
@@ -378,7 +387,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     // parse `show fields from` statement
     let show_fields = map(
         rule! {
-            SHOW ~ FIELDS ~ FROM ~ #peroid_separated_idents_1_to_3
+            SHOW ~ FIELDS ~ FROM ~ #period_separated_idents_1_to_3
         },
         |(_, _, _, (catalog, database, table))| {
             Statement::DescribeTable(DescribeTableStmt {
@@ -403,7 +412,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let create_table = map(
         rule! {
             CREATE ~ TRANSIENT? ~ TABLE ~ ( IF ~ NOT ~ EXISTS )?
-            ~ #peroid_separated_idents_1_to_3
+            ~ #period_separated_idents_1_to_3
             ~ #create_table_source?
             ~ ( #engine )?
             ~ ( #uri_location )?
@@ -443,7 +452,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_table = map(
         rule! {
-            DROP ~ TABLE ~ ( IF ~ EXISTS )? ~ #peroid_separated_idents_1_to_3 ~ ( ALL )?
+            DROP ~ TABLE ~ ( IF ~ EXISTS )? ~ #period_separated_idents_1_to_3 ~ ( ALL )?
         },
         |(_, _, opt_if_exists, (catalog, database, table), opt_all)| {
             Statement::DropTable(DropTableStmt {
@@ -457,7 +466,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let undrop_table = map(
         rule! {
-            UNDROP ~ TABLE ~ #peroid_separated_idents_1_to_3
+            UNDROP ~ TABLE ~ #period_separated_idents_1_to_3
         },
         |(_, _, (catalog, database, table))| {
             Statement::UndropTable(UndropTableStmt {
@@ -481,7 +490,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let rename_table = map(
         rule! {
-            RENAME ~ TABLE ~ ( IF ~ EXISTS )? ~ #peroid_separated_idents_1_to_3 ~ TO ~ #peroid_separated_idents_1_to_3
+            RENAME ~ TABLE ~ ( IF ~ EXISTS )? ~ #period_separated_idents_1_to_3 ~ TO ~ #period_separated_idents_1_to_3
         },
         |(
             _,
@@ -504,7 +513,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let truncate_table = map(
         rule! {
-            TRUNCATE ~ TABLE ~ #peroid_separated_idents_1_to_3 ~ PURGE?
+            TRUNCATE ~ TABLE ~ #period_separated_idents_1_to_3 ~ PURGE?
         },
         |(_, _, (catalog, database, table), opt_purge)| {
             Statement::TruncateTable(TruncateTableStmt {
@@ -517,7 +526,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let optimize_table = map(
         rule! {
-            OPTIMIZE ~ TABLE ~ #peroid_separated_idents_1_to_3 ~ #optimize_table_action
+            OPTIMIZE ~ TABLE ~ #period_separated_idents_1_to_3 ~ #optimize_table_action
         },
         |(_, _, (catalog, database, table), action)| {
             Statement::OptimizeTable(OptimizeTableStmt {
@@ -530,7 +539,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let analyze_table = map(
         rule! {
-            ANALYZE ~ TABLE ~ #peroid_separated_idents_1_to_3
+            ANALYZE ~ TABLE ~ #period_separated_idents_1_to_3
         },
         |(_, _, (catalog, database, table))| {
             Statement::AnalyzeTable(AnalyzeTableStmt {
@@ -542,7 +551,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let exists_table = map(
         rule! {
-            EXISTS ~ TABLE ~ #peroid_separated_idents_1_to_3
+            EXISTS ~ TABLE ~ #period_separated_idents_1_to_3
         },
         |(_, _, (catalog, database, table))| {
             Statement::ExistsTable(ExistsTableStmt {
@@ -555,7 +564,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let create_view = map(
         rule! {
             CREATE ~ VIEW ~ ( IF ~ NOT ~ EXISTS )?
-            ~ #peroid_separated_idents_1_to_3
+            ~ #period_separated_idents_1_to_3
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ AS ~ #query
         },
@@ -574,7 +583,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_view = map(
         rule! {
-            DROP ~ VIEW ~ ( IF ~ EXISTS )? ~ #peroid_separated_idents_1_to_3
+            DROP ~ VIEW ~ ( IF ~ EXISTS )? ~ #period_separated_idents_1_to_3
         },
         |(_, _, opt_if_exists, (catalog, database, view))| {
             Statement::DropView(DropViewStmt {
@@ -588,7 +597,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let alter_view = map(
         rule! {
             ALTER ~ VIEW
-            ~ #peroid_separated_idents_1_to_3
+            ~ #period_separated_idents_1_to_3
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ AS ~ #query
         },
@@ -775,7 +784,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             CREATE ~ STAGE ~ ( IF ~ NOT ~ EXISTS )?
             ~ ( #stage_name )
             ~ ( URL ~ "=" ~ #uri_location)?
-            ~ ( FILE_FORMAT ~ "=" ~ #format_options)?
+            ~ ( #file_format_clause )?
             ~ ( ON_ERROR ~ "=" ~ #ident)?
             ~ ( SIZE_LIMIT ~ "=" ~ #literal_u64)?
             ~ ( VALIDATION_MODE ~ "=" ~ #ident)?
@@ -797,9 +806,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 if_not_exists: opt_if_not_exists.is_some(),
                 stage_name: stage.to_string(),
                 location: url_opt.map(|v| v.2),
-                file_format_options: file_format_opt
-                    .map(|(_, _, file_format_opt)| file_format_opt)
-                    .unwrap_or_default(),
+                file_format_options: file_format_opt.unwrap_or_default(),
                 on_error: on_error_opt.map(|v| v.2.to_string()).unwrap_or_default(),
                 size_limit: size_limit_opt.map(|v| v.2 as usize).unwrap_or_default(),
                 validation_mode: validation_mode_opt
@@ -988,10 +995,39 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         |(_, _)| Statement::ShowShares(ShowSharesStmt {}),
     );
 
+    let create_file_format = map_res(
+        rule! {
+            CREATE ~ FILE ~ FORMAT ~ ( IF ~ NOT ~ EXISTS )?
+            ~ #ident ~ #format_options
+        },
+        |(_, _, _, opt_if_not_exists, name, file_format_options)| {
+            let file_format_options = FileFormatOptions::from_map(&file_format_options)
+                .map_err(|_| ErrorKind::Other("invalid statement"))?;
+            Ok(Statement::CreateFileFormat {
+                if_not_exists: opt_if_not_exists.is_some(),
+                name: name.to_string(),
+                file_format_options,
+            })
+        },
+    );
+
+    let drop_file_format = map(
+        rule! {
+            DROP ~ FILE ~ FORMAT ~ ( IF ~  EXISTS )? ~ #ident
+        },
+        |(_, _, _, opt_if_exists, name)| Statement::DropFileFormat {
+            if_exists: opt_if_exists.is_some(),
+            name: name.to_string(),
+        },
+    );
+
+    let show_file_formats = value(Statement::ShowFileFormats, rule! { SHOW ~ FILE ~ FORMATS });
+
     let statement_body = alt((
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
+            | #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
             | #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #delete : "`DELETE FROM <table> [WHERE ...]`"
             | #update : "`UPDATE <table> SET <column> = <expr> [, <column> = <expr> , ... ] [WHERE ...]`"
@@ -1058,6 +1094,11 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #remove_stage: "`REMOVE @<stage_name> [pattern = '<pattern>']`"
             | #drop_stage: "`DROP STAGE <stage_name>`"
         ),
+        rule!(
+            #create_file_format: "`CREATE FILE FORMAT [ IF NOT EXISTS ] <format_name> formatTypeOptions`"
+            | #show_file_formats: "`SHOW FILE FORMATS`"
+            | #drop_file_format: "`DROP FILE FORMAT  [ IF EXISTS ] <format_name>`"
+        ),
         rule! (
             #copy_into: "`COPY
                 INTO { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> }
@@ -1093,7 +1134,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule!(
          #show_catalogs : "`SHOW CATALOGS [<show_limit>]`"
         | #show_create_catalog : "`SHOW CREATE CATALOG <catalog>`"
-        | #create_catalog: "`CREATE CATALOG [IF NOT EXISITS] <catalog> TYPE=<catalog_type> CONNECTION=<catalog_options>`"
+        | #create_catalog: "`CREATE CATALOG [IF NOT EXISTS] <catalog> TYPE=<catalog_type> CONNECTION=<catalog_options>`"
         | #drop_catalog: "`DROP CATALOG [IF EXISTS] <catalog>`"
         ),
     ));
@@ -1126,9 +1167,9 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
     );
     let streaming_v2 = map(
         rule! {
-            FILE_FORMAT ~ "=" ~ #format_options ~ #rest_str
+           #file_format_clause ~ #rest_str
         },
-        |(_, _, options, (_, start))| InsertSource::StreamingV2 {
+        |(options, (_, start))| InsertSource::StreamingV2 {
             settings: options,
             start,
         },
@@ -1416,7 +1457,7 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
     );
     let like = map(
         rule! {
-            LIKE ~ #peroid_separated_idents_1_to_3
+            LIKE ~ #period_separated_idents_1_to_3
         },
         |(_, (catalog, database, table))| CreateTableSource::Like {
             catalog,
@@ -1550,7 +1591,7 @@ pub fn copy_unit(i: Input) -> IResult<CopyUnit> {
     // Parse input like `mytable`
     let table = |i| {
         map(
-            peroid_separated_idents_1_to_3,
+            period_separated_idents_1_to_3,
             |(catalog, database, table)| CopyUnit::Table {
                 catalog,
                 database,
@@ -1730,10 +1771,9 @@ pub fn copy_option(i: Input) -> IResult<CopyOption> {
             rule! { PATTERN ~ "=" ~ #literal_string },
             |(_, _, pattern)| CopyOption::Pattern(pattern),
         ),
-        map(
-            rule! { FILE_FORMAT ~ "=" ~ #format_options },
-            |(_, _, options)| CopyOption::FileFormat(options),
-        ),
+        map(rule! { #file_format_clause }, |options| {
+            CopyOption::FileFormat(options)
+        }),
         map(
             rule! { VALIDATION_MODE ~ "=" ~ #literal_string },
             |(_, _, validation_mode)| CopyOption::ValidationMode(validation_mode),
@@ -1796,7 +1836,7 @@ pub fn presign_option(i: Input) -> IResult<PresignOption> {
 pub fn table_reference_only(i: Input) -> IResult<TableReference> {
     map(
         consumed(rule! {
-            #peroid_separated_idents_1_to_3
+            #period_separated_idents_1_to_3
         }),
         |(span, (catalog, database, table))| TableReference::Table {
             span: transform_span(span.0),

@@ -16,7 +16,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use backon::ExponentialBackoff;
+use backon::BackoffBuilder;
+use backon::ExponentialBuilder;
 use common_base::base::tokio::time::sleep;
 use common_base::containers::ItemManager;
 use common_base::containers::Pool;
@@ -116,11 +117,12 @@ impl Network {
     }
 
     pub(crate) fn back_off(&self) -> impl Iterator<Item = Duration> {
-        let policy = ExponentialBackoff::default()
+        let policy = ExponentialBuilder::default()
             .with_factor(self.back_off_ratio)
             .with_min_delay(self.back_off_min_delay)
             .with_max_delay(self.back_off_max_delay)
-            .with_max_times(self.back_off_chances as usize);
+            .with_max_times(self.back_off_chances as usize)
+            .build();
         // the last period of back off should be zero
         // so the longest back off will not be wasted
         let zero = vec![Duration::default()].into_iter();

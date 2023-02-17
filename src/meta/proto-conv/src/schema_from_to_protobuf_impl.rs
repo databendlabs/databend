@@ -206,6 +206,9 @@ impl FromToProto for ex::TableDataType {
                         }
                     }
                     Dt24::VariantT(_) => ex::TableDataType::Variant,
+                    Dt24::DecimalT(x) => {
+                        ex::TableDataType::Decimal(ex::types::decimal::DecimalDataType::from_pb(x)?)
+                    }
                 };
                 Ok(x)
             }
@@ -226,7 +229,10 @@ impl FromToProto for ex::TableDataType {
                 let x = n.to_pb()?;
                 new_pb_dt24(Dt24::NumberT(x))
             }
-            TableDataType::Decimal(_) => unimplemented!("decimal type is not supported"),
+            TableDataType::Decimal(n) => {
+                let x = n.to_pb()?;
+                new_pb_dt24(Dt24::DecimalT(x))
+            }
             TableDataType::Timestamp => new_pb_dt24(Dt24::TimestampT(pb::Empty {})),
             TableDataType::Date => new_pb_dt24(Dt24::DateT(pb::Empty {})),
             TableDataType::Nullable(v) => {
@@ -318,6 +324,80 @@ impl FromToProto for ex::types::NumberDataType {
             min_reader_ver: MIN_READER_VER,
 
             num: Some(x),
+        })
+    }
+}
+
+impl FromToProto for ex::types::DecimalDataType {
+    type PB = pb::Decimal;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: pb::Decimal) -> Result<Self, Incompatible> {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        let num = match p.decimal {
+            None => {
+                return Err(Incompatible {
+                    reason: "Invalid Decimal: .decimal can not be None".to_string(),
+                });
+            }
+            Some(x) => x,
+        };
+
+        let x = match num {
+            pb::decimal::Decimal::Decimal128(x) => {
+                ex::types::DecimalDataType::Decimal128(ex::types::decimal::DecimalSize::from_pb(x)?)
+            }
+            pb::decimal::Decimal::Decimal256(x) => {
+                ex::types::DecimalDataType::Decimal256(ex::types::decimal::DecimalSize::from_pb(x)?)
+            }
+        };
+        Ok(x)
+    }
+
+    fn to_pb(&self) -> Result<pb::Decimal, Incompatible> {
+        let x = match self {
+            ex::types::DecimalDataType::Decimal128(x) => {
+                pb::decimal::Decimal::Decimal128(ex::types::decimal::DecimalSize::to_pb(x)?)
+            }
+            ex::types::DecimalDataType::Decimal256(x) => {
+                pb::decimal::Decimal::Decimal256(ex::types::decimal::DecimalSize::to_pb(x)?)
+            }
+        };
+        Ok(pb::Decimal {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+
+            decimal: Some(x),
+        })
+    }
+}
+
+impl FromToProto for ex::types::decimal::DecimalSize {
+    type PB = pb::DecimalSize;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+        Ok(ex::types::decimal::DecimalSize {
+            precision: p.precision as u8,
+            scale: p.scale as u8,
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        Ok(pb::DecimalSize {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            precision: self.precision as i32,
+            scale: self.scale as i32,
         })
     }
 }

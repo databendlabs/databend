@@ -23,10 +23,12 @@ common-exception = { path = "../exception" }
 # Github dependencies
 
 # Crates.io dependencies
+anyerror = { workspace = true }
 futures = "0.3.24"
 poem = { version = "1", features = ["rustls"] }
 serde = { workspace = true }
 tempfile = { version = "3.3.0", optional = true }
+thiserror = { workspace = true }
 tracing = "0.1.36"
 
 [dev-dependencies]

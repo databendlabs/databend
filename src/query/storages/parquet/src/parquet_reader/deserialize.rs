@@ -31,6 +31,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
+use common_expression::FieldIndex;
 use common_storage::ColumnNode;
 
 use super::filter::FilterState;
@@ -42,14 +43,14 @@ impl ParquetReader {
     pub fn deserialize(
         &self,
         part: &ParquetRowGroupPart,
-        chunks: Vec<(usize, Vec<u8>)>,
+        chunks: Vec<(FieldIndex, Vec<u8>)>,
         filter: Option<Bitmap>,
     ) -> Result<DataBlock> {
         if chunks.is_empty() {
             return Ok(DataBlock::new(vec![], part.num_rows));
         }
 
-        let mut chunk_map: HashMap<usize, Vec<u8>> = chunks.into_iter().collect();
+        let mut chunk_map: HashMap<FieldIndex, Vec<u8>> = chunks.into_iter().collect();
         let mut columns_array_iter = Vec::with_capacity(self.projected_arrow_schema.fields.len());
         let mut nested_columns_array_iter =
             Vec::with_capacity(self.projected_arrow_schema.fields.len());
@@ -60,7 +61,7 @@ impl ParquetReader {
         let mut cnt_map = Self::build_projection_count_map(column_nodes);
 
         for (idx, column_node) in column_nodes.iter().enumerate() {
-            let indices = &column_node.leaf_ids;
+            let indices = &column_node.leaf_indices;
             let mut metas = Vec::with_capacity(indices.len());
             let mut chunks = Vec::with_capacity(indices.len());
             for index in indices {
@@ -254,7 +255,7 @@ impl ParquetReader {
     fn build_projection_count_map(columns: &[ColumnNode]) -> HashMap<usize, usize> {
         let mut cnt_map = HashMap::with_capacity(columns.len());
         for column in columns {
-            for index in &column.leaf_ids {
+            for index in &column.leaf_indices {
                 if let Entry::Vacant(e) = cnt_map.entry(*index) {
                     e.insert(1);
                 } else {

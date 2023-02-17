@@ -34,7 +34,9 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::Scan;
 use crate::plans::Sort;
+use crate::BaseTableColumn;
 use crate::ColumnEntry;
+use crate::DerivedColumn;
 use crate::MetadataRef;
 
 #[derive(Clone)]
@@ -254,8 +256,12 @@ fn scan_to_format_tree(
                             .map(|item| format!(
                                 "{} (#{}) {}",
                                 match metadata.read().column(item.index) {
-                                    ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
-                                    ColumnEntry::DerivedColumn { alias, .. } => alias,
+                                    ColumnEntry::BaseTableColumn(BaseTableColumn {
+                                        column_name,
+                                        ..
+                                    }) => column_name,
+                                    ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) =>
+                                        alias,
                                 },
                                 item.index,
                                 if item.asc { "ASC" } else { "DESC" }
@@ -315,8 +321,12 @@ fn logical_get_to_format_tree(
                             .map(|item| format!(
                                 "{} (#{}) {}",
                                 match metadata.read().column(item.index) {
-                                    ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
-                                    ColumnEntry::DerivedColumn { alias, .. } => alias,
+                                    ColumnEntry::BaseTableColumn(BaseTableColumn {
+                                        column_name,
+                                        ..
+                                    }) => column_name,
+                                    ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) =>
+                                        alias,
                                 },
                                 item.index,
                                 if item.asc { "ASC" } else { "DESC" }
@@ -546,8 +556,8 @@ fn sort_to_format_tree(
         .map(|item| {
             let metadata = metadata.read();
             let name = match metadata.column(item.index) {
-                ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
-                ColumnEntry::DerivedColumn { alias, .. } => alias,
+                ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => column_name,
+                ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
             };
             format!(
                 "{} (#{}) {}",

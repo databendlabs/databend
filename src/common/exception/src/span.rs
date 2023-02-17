@@ -51,7 +51,7 @@ impl From<std::ops::Range<usize>> for Range {
     }
 }
 
-pub fn pretty_print_error(source: &str, lables: Vec<(Range, String)>) -> String {
+pub fn pretty_print_error(source: &str, labels: Vec<(Range, String)>) -> String {
     use codespan_reporting::diagnostic::Diagnostic;
     use codespan_reporting::diagnostic::Label;
     use codespan_reporting::files::SimpleFile;
@@ -68,7 +68,7 @@ pub fn pretty_print_error(source: &str, lables: Vec<(Range, String)>) -> String 
         ..Default::default()
     };
 
-    let lables = lables
+    let labels = labels
         .into_iter()
         .enumerate()
         .map(|(i, (span, msg))| {
@@ -80,7 +80,7 @@ pub fn pretty_print_error(source: &str, lables: Vec<(Range, String)>) -> String 
         })
         .collect();
 
-    let diagnostic = Diagnostic::error().with_labels(lables);
+    let diagnostic = Diagnostic::error().with_labels(labels);
 
     term::emit(&mut writer, &config, &file, &diagnostic).unwrap();
 

@@ -18,7 +18,7 @@ use common_meta_kvapi::kvapi::MGetKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::Cmd;
-use common_meta_types::KVAppError;
+use common_meta_types::MetaError;
 use common_meta_types::SeqV;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
@@ -30,9 +30,9 @@ use crate::state_machine::StateMachine;
 
 #[async_trait::async_trait]
 impl kvapi::KVApi for StateMachine {
-    type Error = KVAppError;
+    type Error = MetaError;
 
-    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, KVAppError> {
+    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, Self::Error> {
         let cmd = Cmd::UpsertKV(UpsertKV {
             key: act.key,
             seq: act.seq,
@@ -55,7 +55,7 @@ impl kvapi::KVApi for StateMachine {
         }
     }
 
-    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, KVAppError> {
+    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {
         let cmd = Cmd::Transaction(txn);
 
         let res = self.sm_tree.txn(true, |mut txn_sled_tree| {
@@ -69,12 +69,12 @@ impl kvapi::KVApi for StateMachine {
         match res {
             AppliedState::TxnReply(x) => Ok(x),
             _ => {
-                panic!("expect AppliedState::TxnReply");
+                unreachable!("expect AppliedState::TxnReply");
             }
         }
     }
 
-    async fn get_kv(&self, key: &str) -> Result<GetKVReply, KVAppError> {
+    async fn get_kv(&self, key: &str) -> Result<GetKVReply, Self::Error> {
         // TODO(xp) refine get(): a &str is enough for key
         let sv = self.kvs().get(&key.to_string())?;
         debug!("get_kv sv:{:?}", sv);
@@ -84,7 +84,7 @@ impl kvapi::KVApi for StateMachine {
         Ok(res)
     }
 
-    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, KVAppError> {
+    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, Self::Error> {
         let kvs = self.kvs();
         let mut res = vec![];
 
@@ -102,7 +102,7 @@ impl kvapi::KVApi for StateMachine {
     async fn prefix_list_kv(
         &self,
         prefix: &str,
-    ) -> Result<Vec<(String, SeqV<Vec<u8>>)>, KVAppError> {
+    ) -> Result<Vec<(String, SeqV<Vec<u8>>)>, Self::Error> {
         let kvs = self.kvs();
         let kv_pairs = kvs.scan_prefix(&prefix.to_string())?;
 

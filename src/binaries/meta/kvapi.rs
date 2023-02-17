@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::KVAppError;
 use common_meta_types::KVMeta;
+use common_meta_types::MetaError;
 use common_meta_types::SeqV;
 use common_meta_types::With;
 use databend_meta::configs::Config;
@@ -72,7 +72,7 @@ impl KvApiCommand {
 
     pub async fn execute(
         &self,
-        client: Arc<dyn kvapi::KVApi<Error = KVAppError>>,
+        client: Arc<dyn kvapi::KVApi<Error = MetaError>>,
     ) -> anyhow::Result<String> {
         let res_str = match self {
             KvApiCommand::Get(key) => {

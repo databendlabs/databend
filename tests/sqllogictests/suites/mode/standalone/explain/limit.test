@@ -91,32 +91,29 @@ Limit
                     ├── estimated rows: 1.00
                     ├── EvalScalar(Build)
                     │   ├── expressions: [COUNT(*) (#5)]
-                    │   ├── estimated rows: 0.33
+                    │   ├── estimated rows: 1.00
                     │   └── AggregateFinal
                     │       ├── group by: [number]
                     │       ├── aggregate functions: [count()]
-                    │       ├── estimated rows: 0.33
+                    │       ├── estimated rows: 1.00
                     │       └── AggregatePartial
                     │           ├── group by: [number]
                     │           ├── aggregate functions: [count()]
-                    │           ├── estimated rows: 0.33
+                    │           ├── estimated rows: 1.00
                     │           └── HashJoin
                     │               ├── join type: CROSS
                     │               ├── build keys: []
                     │               ├── probe keys: []
                     │               ├── filters: []
-                    │               ├── estimated rows: 0.33
-                    │               ├── Filter(Build)
-                    │               │   ├── filters: [eq(subquery_2 (#2), t2.number (#2))]
-                    │               │   ├── estimated rows: 0.33
-                    │               │   └── TableScan
-                    │               │       ├── table: default.system.numbers
-                    │               │       ├── read rows: 1
-                    │               │       ├── read bytes: 8
-                    │               │       ├── partitions total: 1
-                    │               │       ├── partitions scanned: 1
-                    │               │       ├── push downs: [filters: [eq(subquery_2 (#2), t2.number (#2))], limit: NONE]
-                    │               │       └── estimated rows: 1.00
+                    │               ├── estimated rows: 1.00
+                    │               ├── TableScan(Build)
+                    │               │   ├── table: default.system.numbers
+                    │               │   ├── read rows: 1
+                    │               │   ├── read bytes: 8
+                    │               │   ├── partitions total: 1
+                    │               │   ├── partitions scanned: 1
+                    │               │   ├── push downs: [filters: [], limit: NONE]
+                    │               │   └── estimated rows: 1.00
                     │               └── TableScan(Probe)
                     │                   ├── table: default.system.numbers
                     │                   ├── read rows: 1

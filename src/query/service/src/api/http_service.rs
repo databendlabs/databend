@@ -15,14 +15,16 @@
 use std::net::SocketAddr;
 use std::path::Path;
 
-use common_config::Config;
-use common_exception::Result;
+use common_config::InnerConfig;
+use common_exception::ErrorCode;
 use common_http::health_handler;
 use common_http::home::debug_home_handler;
 #[cfg(feature = "memory-profiling")]
 use common_http::jeprof::debug_jeprof_dump_handler;
 use common_http::pprof::debug_pprof_handler;
+use common_http::HttpError;
 use common_http::HttpShutdownHandler;
+use common_meta_types::anyerror::AnyError;
 use poem::get;
 use poem::listener::RustlsCertificate;
 use poem::listener::RustlsConfig;
@@ -34,16 +36,16 @@ use tracing::warn;
 use crate::servers::Server;
 
 pub struct HttpService {
-    config: Config,
+    config: InnerConfig,
     shutdown_handler: HttpShutdownHandler,
 }
 
 impl HttpService {
-    pub fn create(config: &Config) -> Result<Box<HttpService>> {
-        Ok(Box::new(HttpService {
+    pub fn create(config: &InnerConfig) -> Box<HttpService> {
+        Box::new(HttpService {
             config: config.clone(),
             shutdown_handler: HttpShutdownHandler::create("http api".to_string()),
-        }))
+        })
     }
 
     fn build_router(&self) -> impl Endpoint {
@@ -90,11 +92,13 @@ impl HttpService {
         route
     }
 
-    fn build_tls(config: &Config) -> Result<RustlsConfig> {
+    fn build_tls(config: &InnerConfig) -> Result<RustlsConfig, std::io::Error> {
         let certificate = RustlsCertificate::new()
             .cert(std::fs::read(config.query.api_tls_server_cert.as_str())?)
             .key(std::fs::read(config.query.api_tls_server_key.as_str())?);
+
         let mut cfg = RustlsConfig::new().fallback(certificate);
+
         if Path::new(&config.query.api_tls_server_root_ca_cert).exists() {
             cfg = cfg.client_auth_required(std::fs::read(
                 config.query.api_tls_server_root_ca_cert.as_str(),
@@ -103,10 +107,12 @@ impl HttpService {
         Ok(cfg)
     }
 
-    async fn start_with_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
+    async fn start_with_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr, HttpError> {
         info!("Http API TLS enabled");
 
-        let tls_config = Self::build_tls(&self.config)?;
+        let tls_config = Self::build_tls(&self.config)
+            .map_err(|e| HttpError::TlsConfigError(AnyError::new(&e)))?;
+
         let addr = self
             .shutdown_handler
             .start_service(listening, Some(tls_config), self.build_router(), None)
@@ -114,7 +120,7 @@ impl HttpService {
         Ok(addr)
     }
 
-    async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
+    async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr, HttpError> {
         warn!("Http API TLS not set");
 
         let addr = self
@@ -131,11 +137,22 @@ impl Server for HttpService {
         self.shutdown_handler.shutdown(graceful).await;
     }
 
-    async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
+    async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr, ErrorCode> {
         let config = &self.config.query;
-        match config.api_tls_server_key.is_empty() || config.api_tls_server_cert.is_empty() {
-            true => self.start_without_tls(listening).await,
-            false => self.start_with_tls(listening).await,
-        }
+        let res =
+            match config.api_tls_server_key.is_empty() || config.api_tls_server_cert.is_empty() {
+                true => self.start_without_tls(listening).await,
+                false => self.start_with_tls(listening).await,
+            };
+
+        res.map_err(|e: HttpError| match e {
+            HttpError::BadAddressFormat(any_err) => {
+                ErrorCode::BadAddressFormat(any_err.to_string())
+            }
+            le @ HttpError::ListenError { .. } => ErrorCode::CannotListenerPort(le.to_string()),
+            HttpError::TlsConfigError(any_err) => {
+                ErrorCode::TLSConfigurationFailure(any_err.to_string())
+            }
+        })
     }
 }

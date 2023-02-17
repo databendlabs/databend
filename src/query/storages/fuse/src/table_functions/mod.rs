@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod clustering_informations;
+mod clustering_information;
 mod fuse_blocks;
 mod fuse_segments;
 mod fuse_snapshots;
@@ -20,9 +20,9 @@ mod fuse_statistics;
 mod infer_schema;
 mod table_args;
 
-pub use clustering_informations::get_cluster_keys;
-pub use clustering_informations::ClusteringInformation;
-pub use clustering_informations::ClusteringInformationTable;
+pub use clustering_information::get_cluster_keys;
+pub use clustering_information::ClusteringInformation;
+pub use clustering_information::ClusteringInformationTable;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
 pub use fuse_blocks::FuseBlock;

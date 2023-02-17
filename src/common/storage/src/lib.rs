@@ -32,13 +32,11 @@
 #![feature(io_error_other)]
 
 mod config;
-pub use config::CacheConfig;
 pub use config::ShareTableConfig;
 pub use config::StorageConfig;
 
 mod operator;
 pub use operator::init_operator;
-pub use operator::CacheOperator;
 pub use operator::DataOperator;
 
 mod metrics;

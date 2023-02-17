@@ -16,7 +16,7 @@ These are low level API and should be avoided using if possible:
 - Some data stored in databend-meta are correlated, adding or deleting may break these internal consistency.
   E.g., deleting a `database` when there are still `table`s belonging to it.
 
-- Most data in databend-mata are raw bytes. Data interpreting is done on the client side, i.e., by databend-query.
+- Most data in databend-mate are raw bytes. Data interpreting is done on the client side, i.e., by databend-query.
   Modifying data may lead to compatibility issues.
 
 :::

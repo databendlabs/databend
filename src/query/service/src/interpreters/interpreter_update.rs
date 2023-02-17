@@ -92,8 +92,8 @@ impl Interpreter for UpdateInterpreter {
         let schema: DataSchema = tbl.schema().into();
         let update_list = self.plan.update_list.iter().try_fold(
             Vec::with_capacity(self.plan.update_list.len()),
-            |mut acc, (id, scalar)| {
-                let field = schema.field(*id);
+            |mut acc, (index, scalar)| {
+                let field = schema.field(*index);
                 let left = ScalarExpr::CastExpr(CastExpr {
                     is_try: false,
                     argument: Box::new(scalar.clone()),
@@ -131,7 +131,7 @@ impl Interpreter for UpdateInterpreter {
                         return_type: Box::new(return_type),
                     })
                 };
-                acc.push((*id, scalar.as_expr_with_col_name()?.as_remote_expr()));
+                acc.push((*index, scalar.as_expr_with_col_name()?.as_remote_expr()));
                 Ok::<_, ErrorCode>(acc)
             },
         )?;

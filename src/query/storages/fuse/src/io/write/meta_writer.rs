@@ -15,7 +15,7 @@
 use std::io::Error;
 use std::sync::Arc;
 
-use backon::ExponentialBackoff;
+use backon::ExponentialBuilder;
 use backon::Retryable;
 use common_exception::Result;
 use opendal::Operator;
@@ -69,7 +69,7 @@ where T: Serialize {
     let bs = serde_json::to_vec(&meta).map_err(Error::other)?;
     let object = data_accessor.object(location);
     { || object.write(bs.as_slice()) }
-        .retry(ExponentialBackoff::default().with_jitter())
+        .retry(&ExponentialBuilder::default().with_jitter())
         .when(|err| err.is_temporary())
         .notify(|err, dur| {
             warn!(

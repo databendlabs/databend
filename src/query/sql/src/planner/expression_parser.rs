@@ -42,6 +42,7 @@ use parking_lot::RwLock;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
+use crate::BaseTableColumn;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::Metadata;
@@ -61,18 +62,19 @@ pub fn parse_exprs(
         "default".to_string(),
         table_meta,
         None,
+        false,
     );
 
     let columns = metadata.read().columns_by_table_index(table_index);
     let table = metadata.read().table(table_index).clone();
     for (index, column) in columns.iter().enumerate() {
         let column_binding = match column {
-            ColumnEntry::BaseTableColumn {
+            ColumnEntry::BaseTableColumn(BaseTableColumn {
                 column_name,
                 data_type,
                 path_indices,
                 ..
-            } => ColumnBinding {
+            }) => ColumnBinding {
                 database_name: Some("default".to_string()),
                 table_name: Some(table.name().to_string()),
                 column_name: column_name.clone(),

@@ -126,7 +126,7 @@ impl UserPrivilegeSet {
         (database_privs.privileges | privs).into()
     }
 
-    /// The availabe privileges on database object contains ALL the available privileges to a table.
+    /// The available privileges on database object contains ALL the available privileges to a table.
     /// Currently the privileges available to a database and a table are the same, it might becomes
     /// some differences in the future.
     pub fn available_privileges_on_database() -> Self {
@@ -210,5 +210,13 @@ impl From<Vec<UserPrivilegeType>> for UserPrivilegeSet {
             result.set_privilege(privilege)
         }
         result
+    }
+}
+
+impl From<UserPrivilegeType> for UserPrivilegeSet {
+    fn from(value: UserPrivilegeType) -> Self {
+        let mut privileges = UserPrivilegeSet::empty();
+        privileges.set_privilege(value);
+        privileges
     }
 }

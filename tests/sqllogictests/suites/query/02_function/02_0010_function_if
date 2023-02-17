@@ -65,7 +65,7 @@ statement error 1065
 select multi_if(number = 4, 3) from numbers(1)
 
 query T
-select multi_if(number = 4, 3, number = 5, null, number = 6, 'a', null) from numbers(10)
+select multi_if(number = 4, 3::VARIANT, number = 5, null, number = 6, 'a'::VARIANT, null) from numbers(10)
 ----
 NULL
 NULL

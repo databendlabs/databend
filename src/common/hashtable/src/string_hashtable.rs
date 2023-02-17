@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use std::alloc::Allocator;
+use std::iter::TrustedLen;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 
 use bumpalo::Bump;
-use common_base::mem_allocator::GlobalAllocator;
 use common_base::mem_allocator::MmapAllocator;
 
 use super::container::HeapContainer;
@@ -37,7 +37,7 @@ use crate::table_empty::TableEmptyIterMut;
 /// Simple unsized hashtable is used for storing unsized keys in arena. It can be worked with HashMethodSerializer.
 /// Different from `ShortStringHashTable`, it doesn't use adpative sub hashtable to store key values via key size.
 /// It can be considered as a minimal hashtable implementation of ShortStringHashTable
-pub struct StringHashtable<K, V, A = MmapAllocator<GlobalAllocator>>
+pub struct StringHashtable<K, V, A = MmapAllocator>
 where
     K: UnsizedKeyable + ?Sized,
     A: Allocator + Clone,
@@ -217,7 +217,19 @@ where K: UnsizedKeyable + ?Sized
         }
         None
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let (l, u) = self
+            .it_empty
+            .as_ref()
+            .map_or((0, Some(0)), |it| it.size_hint());
+        let (l2, u2) = self.it.as_ref().map_or((0, Some(0)), |it| it.size_hint());
+
+        (l + l2, u.and_then(|u| u2.map(|u2| u + u2)))
+    }
 }
+
+unsafe impl<'a, K, V> TrustedLen for StringHashtableIter<'a, K, V> where K: UnsizedKeyable + ?Sized {}
 
 pub struct StringHashtableIterMut<'a, K, V>
 where K: UnsizedKeyable + ?Sized

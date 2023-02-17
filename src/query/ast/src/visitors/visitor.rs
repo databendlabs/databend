@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Span;
+use common_meta_app::principal::FileFormatOptions;
 use common_meta_app::principal::PrincipalIdentity;
 use common_meta_app::principal::UserIdentity;
 
@@ -161,7 +162,7 @@ pub trait Visitor<'ast>: Sized {
         walk_expr(self, expr);
     }
 
-    fn visit_positon(&mut self, _span: Span, substr_expr: &'ast Expr, str_expr: &'ast Expr) {
+    fn visit_position(&mut self, _span: Span, substr_expr: &'ast Expr, str_expr: &'ast Expr) {
         walk_expr(self, substr_expr);
         walk_expr(self, str_expr);
     }
@@ -255,6 +256,10 @@ pub trait Visitor<'ast>: Sized {
         for expr in exprs {
             walk_expr(self, expr);
         }
+    }
+
+    fn visit_array_sort(&mut self, _span: Span, expr: &'ast Expr, _asc: bool, _null_first: bool) {
+        walk_expr(self, expr);
     }
 
     fn visit_interval(&mut self, _span: Span, expr: &'ast Expr, _unit: &'ast IntervalKind) {
@@ -452,6 +457,18 @@ pub trait Visitor<'ast>: Sized {
     fn visit_remove_stage(&mut self, _location: &'ast str, _pattern: &'ast str) {}
 
     fn visit_list_stage(&mut self, _location: &'ast str, _pattern: &'ast str) {}
+
+    fn visit_create_file_format(
+        &mut self,
+        _if_not_exists: bool,
+        _name: &'ast str,
+        _file_format_options: &'ast FileFormatOptions,
+    ) {
+    }
+
+    fn visit_drop_file_format(&mut self, _if_exists: bool, _name: &'ast str) {}
+
+    fn visit_show_file_formats(&mut self) {}
 
     fn visit_presign(&mut self, _presign: &'ast PresignStmt) {}
 
