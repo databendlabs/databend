@@ -101,7 +101,7 @@ async fn test_sled_iter() -> anyhow::Result<()> {
 
         let want = vec![
             "2, Entry { log_id: LogId { term: 1, index: 2 }, payload: Blank }".to_string(),
-            "4, Entry { log_id: LogId { term: 3, index: 4 }, payload: Normal(LogEntry { txid: None, time_ms: None, cmd: IncrSeq { key: \"foo\" } }) }".to_string(),
+            "4, Entry { log_id: LogId { term: 3, index: 4 }, payload: Normal(LogEntry { txid: None, time_ms: None, cmd: UpsertKV(UpsertKV { key: \"foo\", seq: Exact(0), value: Update(\"[binary]\"), value_meta: None }) }) }".to_string(),
         ];
 
         assert_eq!(want, got);
@@ -130,9 +130,9 @@ async fn test_sled_iter() -> anyhow::Result<()> {
 
     let want = vec![
         "[1, 0, 0, 0, 0, 0, 0, 0, 2], {\"log_id\":{\"term\":1,\"index\":2},\"payload\":\"Blank\"}",
-        "[1, 0, 0, 0, 0, 0, 0, 0, 4], {\"log_id\":{\"term\":3,\"index\":4},\"payload\":{\"Normal\":{\"txid\":null,\"cmd\":{\"IncrSeq\":{\"key\":\"foo\"}}}}}",
+        "[1, 0, 0, 0, 0, 0, 0, 0, 4], {\"log_id\":{\"term\":3,\"index\":4},\"payload\":{\"Normal\":{\"txid\":null,\"cmd\":{\"UpsertKV\":{\"key\":\"foo\",\"seq\":{\"Exact\":0},\"value\":{\"Update\":[102,111,111]},\"value_meta\":null}}}}}",
         "[1, 0, 0, 0, 0, 0, 0, 0, 2], {\"log_id\":{\"term\":1,\"index\":2},\"payload\":\"Blank\"}",
-        "[1, 0, 0, 0, 0, 0, 0, 0, 4], {\"log_id\":{\"term\":3,\"index\":4},\"payload\":{\"Normal\":{\"txid\":null,\"cmd\":{\"IncrSeq\":{\"key\":\"foo\"}}}}}",
+        "[1, 0, 0, 0, 0, 0, 0, 0, 4], {\"log_id\":{\"term\":3,\"index\":4},\"payload\":{\"Normal\":{\"txid\":null,\"cmd\":{\"UpsertKV\":{\"key\":\"foo\",\"seq\":{\"Exact\":0},\"value\":{\"Update\":[102,111,111]},\"value_meta\":null}}}}}",
     ];
 
     assert_eq!(want, got);
