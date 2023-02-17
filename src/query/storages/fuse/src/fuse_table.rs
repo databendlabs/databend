@@ -18,7 +18,6 @@ use std::convert::TryFrom;
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::sync::RwLock;
 
 use common_catalog::catalog::StorageDescription;
 use common_catalog::plan::DataSourcePlan;
@@ -39,13 +38,11 @@ use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
-use common_expression::Scalar;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableInfo;
 use common_sharing::create_share_table_operator;
-use common_sql::field_default_value;
 use common_sql::parse_exprs;
 use common_storage::init_operator;
 use common_storage::DataOperator;
@@ -97,8 +94,6 @@ pub struct FuseTable {
 
     pub(crate) operator: Operator,
     pub(crate) data_metrics: Arc<StorageMetrics>,
-
-    schema_seq_default_vals: Arc<RwLock<(u64, Vec<Scalar>)>>,
 }
 
 impl FuseTable {
@@ -155,7 +150,6 @@ impl FuseTable {
             data_metrics,
             storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
             table_compression: table_compression.as_str().try_into()?,
-            schema_seq_default_vals: Arc::new(<RwLock<(u64, Vec<Scalar>)> as Default>::default()),
         }))
     }
 
@@ -302,29 +296,6 @@ impl FuseTable {
 
     pub fn transient(&self) -> bool {
         self.table_info.meta.options.contains_key("TRANSIENT")
-    }
-
-    pub fn try_get_default_values(&self, ctx: Arc<dyn TableContext>) -> Result<Vec<Scalar>> {
-        // Get read lock to check if default values exist
-        {
-            let schema_seq_default_vals = self.schema_seq_default_vals.read().unwrap();
-
-            if schema_seq_default_vals.0 == self.table_info.ident.seq
-                && !schema_seq_default_vals.1.is_empty()
-            {
-                return Ok(schema_seq_default_vals.1.clone());
-            }
-        }
-        // Get write lock to write default values
-        let mut schema_seq_default_vals = self.schema_seq_default_vals.write().unwrap();
-        let schema = self.table_info.meta.schema.as_ref();
-        let mut field_default_vals = Vec::with_capacity(schema.fields().len());
-        for field in schema.fields() {
-            field_default_vals.push(field_default_value(ctx.clone(), field)?);
-        }
-        schema_seq_default_vals.0 = self.table_info.ident.seq;
-        schema_seq_default_vals.1 = field_default_vals.clone();
-        Ok(field_default_vals)
     }
 }
 
