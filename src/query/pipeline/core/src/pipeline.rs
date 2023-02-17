@@ -24,6 +24,7 @@ use crate::pipe::PipeItem;
 use crate::processors::port::InputPort;
 use crate::processors::port::OutputPort;
 use crate::processors::processor::ProcessorPtr;
+use crate::processors::DuplicateProcessor;
 use crate::processors::ResizeProcessor;
 use crate::SinkPipeBuilder;
 use crate::SourcePipeBuilder;
@@ -207,6 +208,33 @@ impl Pipeline {
                     ]));
                 Ok(())
             }
+        }
+    }
+
+    /// Duplite a pipe input to two outputs
+    pub fn duplicate(&mut self) {
+        match self.pipes.last() {
+            Some(pipe) if pipe.output_length > 0 => {
+                let mut items = Vec::with_capacity(pipe.output_length);
+                for _ in 0..pipe.output_length {
+                    let input = InputPort::create();
+                    let output1 = OutputPort::create();
+                    let output2 = OutputPort::create();
+                    let processor =
+                        DuplicateProcessor::create(input.clone(), output1.clone(), output2.clone());
+                    items.push(PipeItem::create(
+                        ProcessorPtr::create(Box::new(processor)),
+                        vec![input],
+                        vec![output1, output2],
+                    ));
+                }
+                self.pipes.push(Pipe::create(
+                    pipe.output_length,
+                    pipe.output_length * 2,
+                    items,
+                ));
+            }
+            _ => {}
         }
     }
 

@@ -15,9 +15,11 @@
 pub mod port;
 pub mod processor;
 
+mod duplicate_processor;
 mod port_trigger;
 mod resize_processor;
 
+pub use duplicate_processor::DuplicateProcessor;
 pub use port::connect;
 pub use port_trigger::DirectedEdge;
 pub use port_trigger::UpdateList;
