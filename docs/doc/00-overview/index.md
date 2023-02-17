@@ -29,7 +29,7 @@ import TabItem from '@theme/TabItem';
 
 <TabItem value="Compatibility" label="Compatibility">
 
-- Compatible with MySQL/ClickHouse.
+- Compatible with MySQL / ClickHouse.
 - ANSI SQL compliant.
 - Easy connection with existing tools such as [MySQL Client](https://databend.rs/doc/integrations/api/mysql-handler), [ClickHouse Client](https://databend.rs/doc/integrations/api/clickhouse-handler), [Vector](https://vector.dev/), [DBeaver](https://dbeaver.com/), [Jupyter](https://databend.rs/doc/integrations/gui-tool/jupyter), [JDBC](https://databend.rs/doc/develop), and more.
 
