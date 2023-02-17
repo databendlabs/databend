@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::absurd_extreme_comparisons)]
+
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::nullable::NullableDomain;
 use common_expression::types::number::F64;
@@ -38,7 +40,6 @@ use num_traits::AsPrimitive;
 
 use super::arithmetic_modulo::vectorize_modulo;
 
-#[allow(clippy::absurd_extreme_comparisons)]
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("plus", &["add"]);
     registry.register_aliases("minus", &["subtract", "neg", "negate"]);

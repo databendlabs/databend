@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![allow(unused_comparisons)]
+#![allow(clippy::absurd_extreme_comparisons)]
 
 use common_expression::error_to_null;
 use common_expression::types::boolean::BooleanDomain;
