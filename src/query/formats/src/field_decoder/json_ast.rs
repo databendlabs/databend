@@ -178,7 +178,7 @@ impl FieldJsonAstDecoder {
                 column.builder.push(days);
                 Ok(())
             }
-            _ => Err(ErrorCode::BadBytes("Incorrect boolean value")),
+            _ => Err(ErrorCode::BadBytes("Incorrect date value")),
         }
     }
 
@@ -194,7 +194,7 @@ impl FieldJsonAstDecoder {
                 column.builder.push(micros.as_());
                 Ok(())
             }
-            _ => Err(ErrorCode::BadBytes("Incorrect boolean value")),
+            _ => Err(ErrorCode::BadBytes("Incorrect timestamp value")),
         }
     }
 

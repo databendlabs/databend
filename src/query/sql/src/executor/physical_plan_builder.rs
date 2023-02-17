@@ -315,6 +315,7 @@ impl PhysicalPlanBuilder {
                                     .project_column_ref(|index| {
                                         input_schema.index_of(&index.to_string()).unwrap()
                                     });
+
                             let (expr, _) = ConstantFolder::fold(
                                 &expr,
                                 self.ctx.get_function_context()?,
