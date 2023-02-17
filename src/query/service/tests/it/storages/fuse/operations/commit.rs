@@ -356,11 +356,11 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_paritions_sha(&self, _sha: String) -> Result<()> {
+    fn set_paritions_sha(&self, _sha: String) {
         todo!()
     }
 
-    fn get_partitions_sha(&self) -> String {
+    fn get_partitions_sha(&self) -> Option<String> {
         todo!()
     }
 

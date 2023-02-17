@@ -16,14 +16,14 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_meta_store::MetaStore;
 use common_meta_types::MatchSeq;
 use common_meta_types::SeqV;
 use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::processors::Processor;
+use common_pipeline_sinks::AsyncMpscSink;
+use common_pipeline_sinks::AsyncMpscSinker;
 use common_storage::DataOperator;
 
 use super::writer::ResultCacheWriter;
@@ -33,11 +33,7 @@ use crate::common::gen_result_cache_meta_key;
 use crate::common::ResultCacheValue;
 use crate::meta_manager::ResultCacheMetaManager;
 
-pub struct TransformWriteResultCache {
-    input: Arc<InputPort>,
-    output: Arc<OutputPort>,
-    called_on_finish: bool,
-
+pub struct WriteResultCacheSink {
     sql: String,
     partitions_sha: String,
 
@@ -45,26 +41,26 @@ pub struct TransformWriteResultCache {
     cache_writer: ResultCacheWriter,
 }
 
-// The logic is similar to `Transformers`, but use async to handle `on_finish`.
 #[async_trait::async_trait]
-impl Processor for TransformWriteResultCache {
-    fn name(&self) -> String {
-        "TransformWriteResultCache".to_string()
-    }
+impl AsyncMpscSink for WriteResultCacheSink {
+    const NAME: &'static str = "WriteResultCacheSink";
 
-    fn as_any(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-
-    fn event(&mut self) -> Result<Event> {
-        match self.output.is_finished() {
-            true => self.finish_input(),
-            false if !self.output.can_push() => self.not_need_data(),
-            false => self.pull_data(),
+    #[async_trait::unboxed_simple]
+    async fn consume(&mut self, block: DataBlock) -> Result<bool> {
+        if !self.cache_writer.over_limit() {
+            self.cache_writer.append_block(block);
+            Ok(false)
+        } else {
+            // Finish the cache writing pipeline.
+            Ok(true)
         }
     }
 
-    async fn async_process(&mut self) -> Result<()> {
+    async fn on_finish(&mut self) -> Result<()> {
+        if self.cache_writer.over_limit() {
+            return Ok(());
+        }
+
         // 1. Write the result cache to the storage.
         let location = self.cache_writer.write_to_storage().await?;
 
@@ -83,19 +79,14 @@ impl Processor for TransformWriteResultCache {
             location,
         };
         self.meta_mgr.set(value, MatchSeq::GE(0), expire_at).await?;
-
-        // 3. Finish
-        self.called_on_finish = true;
-
         Ok(())
     }
 }
 
-impl TransformWriteResultCache {
+impl WriteResultCacheSink {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
+        inputs: Vec<Arc<InputPort>>,
         kv_store: Arc<MetaStore>,
     ) -> Result<ProcessorPtr> {
         let settings = ctx.get_settings();
@@ -112,47 +103,14 @@ impl TransformWriteResultCache {
         let operator = DataOperator::instance().operator();
         let cache_writer = ResultCacheWriter::create(location, operator, max_bytes);
 
-        Ok(ProcessorPtr::create(Box::new(TransformWriteResultCache {
-            input,
-            output,
-            called_on_finish: false,
-            sql,
-            partitions_sha,
-            meta_mgr: ResultCacheMetaManager::create(kv_store, meta_key, ttl),
-            cache_writer,
-        })))
-    }
-
-    fn pull_data(&mut self) -> Result<Event> {
-        if self.input.has_data() {
-            let data = self.input.pull_data().unwrap()?;
-            if !self.cache_writer.over_limit() && !data.is_empty() {
-                self.cache_writer.append_block(data.clone());
-            }
-            self.output.push_data(Ok(data));
-            return Ok(Event::NeedConsume);
-        }
-
-        if self.input.is_finished() {
-            return self.finish_input();
-        }
-
-        self.input.set_need_data();
-        Ok(Event::NeedData)
-    }
-
-    fn not_need_data(&mut self) -> Result<Event> {
-        self.input.set_not_need_data();
-        Ok(Event::NeedConsume)
-    }
-
-    fn finish_input(&mut self) -> Result<Event> {
-        match !self.called_on_finish {
-            true if !self.cache_writer.over_limit() => Ok(Event::Async),
-            _ => {
-                self.input.finish();
-                Ok(Event::Finished)
-            }
-        }
+        Ok(ProcessorPtr::create(Box::new(AsyncMpscSinker::create(
+            inputs,
+            WriteResultCacheSink {
+                sql,
+                partitions_sha,
+                meta_mgr: ResultCacheMetaManager::create(kv_store, meta_key, ttl),
+                cache_writer,
+            },
+        ))))
     }
 }

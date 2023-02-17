@@ -16,12 +16,18 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::DataSchemaRef;
+use common_meta_store::MetaStore;
+use common_pipeline_core::pipe::Pipe;
+use common_pipeline_core::pipe::PipeItem;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::port::OutputPort;
 use common_sql::MetadataRef;
 use common_storages_result_cache::ResultCacheReader;
-use common_storages_result_cache::TransformWriteResultCache;
+use common_storages_result_cache::WriteResultCacheSink;
 use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::processors::TransformDummy;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
@@ -68,6 +74,56 @@ impl SelectInterpreterV2 {
         )
         .await
     }
+
+    fn append_write_cache(
+        &self,
+        build_res: &mut PipelineBuildResult,
+        kv_store: Arc<MetaStore>,
+    ) -> Result<()> {
+        // 1. Duplicate the pipes.
+        build_res.main_pipeline.duplicate(false)?;
+        // 2. Reorder the pipes.
+        let output_len = build_res.main_pipeline.output_len();
+        debug_assert!(output_len % 2 == 0);
+        let mut rule = vec![0; output_len];
+        for (i, r) in rule.iter_mut().enumerate().take(output_len) {
+            *r = if i % 2 == 0 {
+                i / 2
+            } else {
+                output_len / 2 + i / 2
+            };
+        }
+        build_res.main_pipeline.reorder_inputs(rule);
+
+        // `output_len` / 2 for `TransformDummy`; 1 for `WriteResultCacheSink`.
+        let mut items = Vec::with_capacity(output_len / 2 + 1);
+        // 3. Add dummy transforms to the front pipes.
+        for _ in 0..output_len / 2 {
+            let input = InputPort::create();
+            let output = OutputPort::create();
+            items.push(PipeItem::create(
+                TransformDummy::create(input.clone(), output.clone()),
+                vec![input],
+                vec![output],
+            ));
+        }
+
+        // 4. Add WriteResultCacheSink (AsyncMpscSinker) to the back pipes.
+        let mut sink_inputs = Vec::with_capacity(output_len / 2);
+        for _ in 0..output_len / 2 {
+            sink_inputs.push(InputPort::create());
+        }
+        items.push(PipeItem::create(
+            WriteResultCacheSink::try_create(self.ctx.clone(), sink_inputs.clone(), kv_store)?,
+            sink_inputs,
+            vec![],
+        ));
+        build_res
+            .main_pipeline
+            .add_pipe(Pipe::create(output_len, output_len / 2 + 1, items));
+
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -95,16 +151,8 @@ impl Interpreter for SelectInterpreterV2 {
                 // 2. If found, return the result directly.
                 return PipelineBuildResult::from_blocks(blocks);
             }
-
             // 3. If not found result in cache, build the pipeline and add a transform to write the result to cache.
-            build_res.main_pipeline.add_transform(|input, output| {
-                TransformWriteResultCache::try_create(
-                    self.ctx.clone(),
-                    input,
-                    output,
-                    kv_store.clone(),
-                )
-            })?;
+            self.append_write_cache(&mut build_res, kv_store)?;
             Ok(build_res)
         } else {
             Ok(self.build_pipeline().await?)

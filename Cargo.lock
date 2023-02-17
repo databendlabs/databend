@@ -2396,6 +2396,7 @@ dependencies = [
  "common-meta-store",
  "common-meta-types",
  "common-pipeline-core",
+ "common-pipeline-sinks",
  "common-storage",
  "common-users",
  "opendal",
