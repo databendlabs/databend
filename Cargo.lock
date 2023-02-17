@@ -1859,6 +1859,7 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-pipeline-core",
+ "tokio",
 ]
 
 [[package]]
