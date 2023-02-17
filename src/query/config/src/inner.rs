@@ -461,6 +461,15 @@ impl Default for CacheStorageTypeConfig {
     }
 }
 
+impl ToString for CacheStorageTypeConfig {
+    fn to_string(&self) -> String {
+        match self {
+            CacheStorageTypeConfig::None => "none".to_string(),
+            CacheStorageTypeConfig::Disk => "disk".to_string(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DiskCacheConfig {
     /// Max bytes of cached raw table data. Default 20GB, set it to 0 to disable it.
