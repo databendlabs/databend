@@ -38,7 +38,6 @@ use common_meta_app::storage::StorageParams;
 use common_meta_app::storage::StorageRedisConfig as InnerStorageRedisConfig;
 use common_meta_app::storage::StorageS3Config as InnerStorageS3Config;
 use common_meta_app::tenant::TenantQuota;
-use common_storage::CacheConfig as InnerCacheConfig;
 use common_storage::StorageConfig as InnerStorageConfig;
 use common_tracing::Config as InnerLogConfig;
 use common_tracing::FileConfig as InnerFileLogConfig;
@@ -245,9 +244,6 @@ pub struct StorageConfig {
     // OSS storage backend config
     #[clap(flatten)]
     pub oss: OssStorageConfig,
-
-    #[clap(skip)]
-    pub cache: StorageCacheConfig,
 }
 
 impl Default for StorageConfig {
@@ -269,8 +265,6 @@ impl From<InnerStorageConfig> for StorageConfig {
             azblob: Default::default(),
             hdfs: Default::default(),
             obs: Default::default(),
-
-            cache: inner.cache.into(),
         };
 
         match inner.params {
@@ -334,7 +328,6 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
                     _ => return Err(ErrorCode::StorageOther("not supported storage type")),
                 }
             },
-            cache: self.cache.try_into()?,
         })
     }
 }
@@ -441,82 +434,6 @@ impl From<InnerCatalogHiveConfig> for HiveCatalogConfig {
             meta_store_address: inner.address,
             protocol: inner.protocol.to_string(),
         }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct StorageCacheConfig {
-    #[serde(rename = "type")]
-    pub cache_type: String,
-
-    #[serde(rename = "num_cpus")]
-    pub cache_num_cpus: u64,
-
-    // Fs storage backend config.
-    pub fs: FsStorageConfig,
-
-    // Moka cache backend config.
-    pub moka: MokaStorageConfig,
-
-    // Redis cache backend config.
-    pub redis: RedisStorageConfig,
-}
-
-impl Default for StorageCacheConfig {
-    fn default() -> Self {
-        InnerCacheConfig::default().into()
-    }
-}
-
-impl From<InnerCacheConfig> for StorageCacheConfig {
-    fn from(inner: InnerCacheConfig) -> Self {
-        let mut cfg = Self {
-            cache_num_cpus: inner.num_cpus,
-            cache_type: "".to_string(),
-            fs: FsStorageConfig::default(),
-            moka: MokaStorageConfig::default(),
-            redis: RedisStorageConfig::default(),
-        };
-
-        match inner.params {
-            StorageParams::None => {
-                cfg.cache_type = "none".to_string();
-            }
-            StorageParams::Fs(v) => {
-                cfg.cache_type = "fs".to_string();
-                cfg.fs = v.into();
-            }
-            StorageParams::Moka(v) => {
-                cfg.cache_type = "moka".to_string();
-                cfg.moka = v.into();
-            }
-            StorageParams::Redis(v) => {
-                cfg.cache_type = "redis".to_string();
-                cfg.redis = v.into();
-            }
-            v => unreachable!("{v:?} should not be used as cache backend"),
-        }
-
-        cfg
-    }
-}
-
-impl TryInto<InnerCacheConfig> for StorageCacheConfig {
-    type Error = ErrorCode;
-    fn try_into(self) -> Result<InnerCacheConfig> {
-        Ok(InnerCacheConfig {
-            num_cpus: self.cache_num_cpus,
-            params: {
-                match self.cache_type.as_str() {
-                    "none" => StorageParams::None,
-                    "fs" => StorageParams::Fs(self.fs.try_into()?),
-                    "moka" => StorageParams::Moka(self.moka.try_into()?),
-                    "redis" => StorageParams::Redis(self.redis.try_into()?),
-                    _ => return Err(ErrorCode::StorageOther("not supported cache type")),
-                }
-            },
-        })
     }
 }
 

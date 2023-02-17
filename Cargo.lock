@@ -1339,7 +1339,6 @@ dependencies = [
  "common-grpc",
  "common-hive-meta-store",
  "common-meta-app",
- "common-meta-types",
  "common-storage",
  "common-tracing",
  "common-users",
