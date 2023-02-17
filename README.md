@@ -1,4 +1,4 @@
-<h1 align="center">The Future of Cloud Data Analysis</h1>
+<h1 align="center">The Future of Cloud Data Analytics</h1>
 
 <div align="center">
 
@@ -162,6 +162,7 @@ docker run --net=host  datafuselabs/databend
 - [How to Drop a Table](https://databend.rs/doc/sql-commands/ddl/table/ddl-drop-table)
 - [How to Rename a Table](https://databend.rs/doc/sql-commands/ddl/table/ddl-rename-table)
 - [How to Truncate a Table](https://databend.rs/doc/sql-commands/ddl/table/ddl-truncate-table)
+- [How to Add/Drop Table Column](https://databend.rs/doc/sql-commands/ddl/table/alter-table-column)
 
 ### Managing Views
 
