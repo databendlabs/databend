@@ -212,8 +212,10 @@ impl Pipeline {
         }
     }
 
-    /// Duplite a pipe input to two outputs
-    pub fn duplicate(&mut self, finish_together: bool) -> Result<()> {
+    /// Duplite a pipe input to two outputs.
+    ///
+    /// If `force_finish_together` enabled, once one output is finished, the other output will be finished too.
+    pub fn duplicate(&mut self, force_finish_together: bool) -> Result<()> {
         match self.pipes.last() {
             Some(pipe) if pipe.output_length > 0 => {
                 let mut items = Vec::with_capacity(pipe.output_length);
@@ -225,7 +227,7 @@ impl Pipeline {
                         input.clone(),
                         output1.clone(),
                         output2.clone(),
-                        finish_together,
+                        force_finish_together,
                     );
                     items.push(PipeItem::create(
                         ProcessorPtr::create(Box::new(processor)),

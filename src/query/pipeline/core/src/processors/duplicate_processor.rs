@@ -28,7 +28,7 @@ pub struct DuplicateProcessor {
     output2: Arc<OutputPort>,
 
     /// Whether two outputs should finish together.
-    finish_together: bool,
+    force_finish_together: bool,
 }
 
 /// This processor duplicate the input data to two outputs.
@@ -37,13 +37,13 @@ impl DuplicateProcessor {
         input: Arc<InputPort>,
         output1: Arc<OutputPort>,
         output2: Arc<OutputPort>,
-        finish_together: bool,
+        force_finish_together: bool,
     ) -> Self {
         DuplicateProcessor {
             input,
             output1,
             output2,
-            finish_together,
+            force_finish_together,
         }
     }
 }
@@ -67,7 +67,7 @@ impl Processor for DuplicateProcessor {
         let can_push1 = self.output1.can_push();
         let can_push2 = self.output2.can_push();
 
-        if all_finished || (self.finish_together && one_finished) {
+        if all_finished || (self.force_finish_together && one_finished) {
             self.input.finish();
             self.output1.finish();
             self.output2.finish();
