@@ -14,4 +14,5 @@
 
 mod duplicate;
 mod port_test;
+mod resize;
 mod shuffle;
