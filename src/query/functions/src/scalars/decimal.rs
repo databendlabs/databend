@@ -177,7 +177,6 @@ macro_rules! register_decimal_binary_op {
     };
 }
 
-// TODO add nullable wrapper
 pub fn register(registry: &mut FunctionRegistry) {
     // TODO checked overflow by default
     register_decimal_binary_op!(registry, "plus", +);
@@ -191,6 +190,10 @@ pub fn register(registry: &mut FunctionRegistry) {
             return None;
         }
         if !args_type[0].is_decimal() && !args_type[0].is_numeric() {
+            return None;
+        }
+
+        if params.len() != 2 {
             return None;
         }
 

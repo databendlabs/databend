@@ -29,6 +29,7 @@ use common_expression::types::DecimalDataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::types::ValueType;
+use common_expression::types::F64;
 use common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use common_expression::with_number_mapped_type;
 use common_expression::Column;
@@ -56,10 +57,17 @@ pub trait SumState: Send + Sync + Default + 'static {
     fn accumulate_keys(places: &[StateAddr], offset: usize, columns: &Column) -> Result<()>;
 
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()>;
+
+    fn merge_avg_result(
+        &mut self,
+        builder: &mut ColumnBuilder,
+        count: u64,
+        scale_add: u8,
+    ) -> Result<()>;
 }
 
 #[derive(Default)]
-struct NumberSumState<T: Number, TSum: Number> {
+pub struct NumberSumState<T: Number, TSum: Number> {
     pub value: TSum,
     _t: PhantomData<T>,
 }
@@ -67,7 +75,7 @@ struct NumberSumState<T: Number, TSum: Number> {
 impl<T, TSum> SumState for NumberSumState<T, TSum>
 where
     T: Number + AsPrimitive<TSum>,
-    TSum: Number + Serialize + DeserializeOwned + std::ops::AddAssign,
+    TSum: Number + AsPrimitive<f64> + Serialize + DeserializeOwned + std::ops::AddAssign,
 {
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         serialize_into_buf(writer, &self.value)
@@ -111,10 +119,23 @@ where
         builder.push(self.value);
         Ok(())
     }
+
+    fn merge_avg_result(
+        &mut self,
+        builder: &mut ColumnBuilder,
+        count: u64,
+        _scale_add: u8,
+    ) -> Result<()> {
+        let builder = NumberType::<F64>::try_downcast_builder(builder).unwrap();
+
+        let value = self.value.as_() / (count as f64);
+        builder.push(value.into());
+        Ok(())
+    }
 }
 
 #[derive(Default)]
-struct DecimalSumState<T: Decimal> {
+pub struct DecimalSumState<T: Decimal> {
     pub value: T,
 }
 
@@ -205,6 +226,33 @@ where T: Decimal
         let builder = T::try_downcast_builder(builder).unwrap();
         builder.push(self.value);
         Ok(())
+    }
+
+    fn merge_avg_result(
+        &mut self,
+        builder: &mut ColumnBuilder,
+        count: u64,
+        scale_add: u8,
+    ) -> Result<()> {
+        let builder = T::try_downcast_builder(builder).unwrap();
+
+        match self
+            .value
+            .checked_mul(T::e(scale_add as u32))
+            .and_then(|v| v.checked_div(T::from_float(count as f64)))
+        {
+            Some(value) => {
+                builder.push(value.into());
+                Ok(())
+            }
+            None => {
+                return Err(ErrorCode::Overflow(format!(
+                    "Decimal overflow: {} > (precision: {})",
+                    self.value,
+                    T::max_of_max_precision()
+                )));
+            }
+        }
     }
 }
 

@@ -201,6 +201,9 @@ pub trait Decimal:
     // 10**scale
     fn e(n: u32) -> Self;
 
+    fn checked_div(self, rhs: Self) -> Option<Self>;
+    fn checked_mul(self, rhs: Self) -> Option<Self>;
+
     fn max_of_max_precision() -> Self;
 
     fn min_for_precision(precision: u8) -> Self;
@@ -228,8 +231,17 @@ impl Decimal for i128 {
     fn one() -> Self {
         1_i128
     }
+
     fn e(n: u32) -> Self {
         10_i128.pow(n)
+    }
+
+    fn checked_div(self, rhs: Self) -> Option<Self> {
+        self.checked_div(rhs)
+    }
+
+    fn checked_mul(self, rhs: Self) -> Option<Self> {
+        self.checked_mul(rhs)
     }
 
     fn max_of_max_precision() -> Self {
@@ -313,6 +325,14 @@ impl Decimal for i256 {
 
     fn e(n: u32) -> Self {
         (i256::ONE * 10).pow(n)
+    }
+
+    fn checked_div(self, rhs: Self) -> Option<Self> {
+        self.checked_div(rhs)
+    }
+
+    fn checked_mul(self, rhs: Self) -> Option<Self> {
+        self.checked_mul(rhs)
     }
 
     fn max_of_max_precision() -> Self {
