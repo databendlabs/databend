@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::bitmap::Bitmap;
 use common_expression::error_to_null;
 use common_expression::types::boolean::BooleanDomain;
 use common_expression::types::nullable::NullableColumn;
@@ -19,6 +20,7 @@ use common_expression::types::nullable::NullableDomain;
 use common_expression::types::BooleanType;
 use common_expression::types::NullableType;
 use common_expression::types::StringType;
+use common_expression::types::ValueType;
 use common_expression::vectorize_2_arg;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::EvalContext;
@@ -259,6 +261,27 @@ pub fn register(registry: &mut FunctionRegistry) {
             ValueRef::Scalar(Some(scalar)) => Value::Scalar(scalar),
             ValueRef::Column(NullableColumn { column, validity }) => {
                 Value::Column((&column) & (&validity))
+            }
+        },
+    );
+
+    registry.register_1_arg_core::<NullableType<StringType>, BooleanType, _, _>(
+        "is_true",
+        FunctionProperty::default(),
+        |_domain| {
+            FunctionDomain::Domain(BooleanDomain {
+                has_false: true,
+                has_true: true,
+            })
+        },
+        |val, _| match val {
+            ValueRef::Scalar(None) => Value::Scalar(false),
+            ValueRef::Scalar(Some(scalar)) => Value::Scalar(!scalar.is_empty()),
+            ValueRef::Column(NullableColumn { column, validity }) => {
+                let v: Bitmap = StringType::iter_column(&column)
+                    .map(|s| !s.is_empty())
+                    .collect();
+                Value::Column((&v) & (&validity))
             }
         },
     );

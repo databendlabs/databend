@@ -69,6 +69,13 @@ fn builtin_functions() -> FunctionRegistry {
 }
 
 fn register_casting_rules(registry: &mut FunctionRegistry) {
+    for data_type in ALL_INTEGER_TYPES {
+        registry.register_auto_cast_signatures("is_true", vec![(
+            DataType::Number(*data_type),
+            DataType::Boolean,
+        )]);
+    }
+
     for func_name in ["and", "or", "not", "xor"] {
         for data_type in ALL_INTEGER_TYPES {
             registry.register_auto_cast_signatures(func_name, vec![(
