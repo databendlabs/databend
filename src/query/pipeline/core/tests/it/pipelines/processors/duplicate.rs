@@ -25,26 +25,55 @@ use common_pipeline_core::processors::Processor;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_duplicate_output_finish() -> Result<()> {
-    let input = InputPort::create();
-    let output1 = OutputPort::create();
-    let output2 = OutputPort::create();
-    let mut processor = DuplicateProcessor::create(input.clone(), output1.clone(), output2.clone());
+    {
+        let input = InputPort::create();
+        let output1 = OutputPort::create();
+        let output2 = OutputPort::create();
+        let mut processor =
+            DuplicateProcessor::create(input.clone(), output1.clone(), output2.clone(), false);
 
-    let upstream_output = OutputPort::create();
-    let downstream_input1 = InputPort::create();
-    let downstream_input2 = InputPort::create();
+        let upstream_output = OutputPort::create();
+        let downstream_input1 = InputPort::create();
+        let downstream_input2 = InputPort::create();
 
-    unsafe {
-        connect(&input, &upstream_output);
-        connect(&downstream_input1, &output1);
-        connect(&downstream_input2, &output2);
+        unsafe {
+            connect(&input, &upstream_output);
+            connect(&downstream_input1, &output1);
+            connect(&downstream_input2, &output2);
+        }
+
+        downstream_input1.set_need_data();
+        downstream_input2.set_need_data();
+        downstream_input1.finish();
+
+        assert!(matches!(processor.event()?, Event::NeedData));
+
+        downstream_input2.finish();
+        assert!(matches!(processor.event()?, Event::Finished));
+        assert!(input.is_finished());
     }
 
-    downstream_input1.finish();
-    downstream_input2.finish();
+    {
+        let input = InputPort::create();
+        let output1 = OutputPort::create();
+        let output2 = OutputPort::create();
+        let mut processor =
+            DuplicateProcessor::create(input.clone(), output1.clone(), output2.clone(), true);
 
-    assert!(matches!(processor.event()?, Event::Finished));
-    assert!(input.is_finished());
+        let upstream_output = OutputPort::create();
+        let downstream_input1 = InputPort::create();
+        let downstream_input2 = InputPort::create();
+
+        unsafe {
+            connect(&input, &upstream_output);
+            connect(&downstream_input1, &output1);
+            connect(&downstream_input2, &output2);
+        }
+
+        downstream_input1.finish();
+        assert!(matches!(processor.event()?, Event::Finished));
+        assert!(input.is_finished());
+    }
 
     Ok(())
 }
@@ -54,7 +83,8 @@ async fn test_duplicate_processor() -> Result<()> {
     let input = InputPort::create();
     let output1 = OutputPort::create();
     let output2 = OutputPort::create();
-    let mut processor = DuplicateProcessor::create(input.clone(), output1.clone(), output2.clone());
+    let mut processor =
+        DuplicateProcessor::create(input.clone(), output1.clone(), output2.clone(), true);
 
     let upstream_output = OutputPort::create();
     let downstream_input1 = InputPort::create();
@@ -65,6 +95,9 @@ async fn test_duplicate_processor() -> Result<()> {
         connect(&downstream_input1, &output1);
         connect(&downstream_input2, &output2);
     }
+
+    downstream_input1.set_need_data();
+    downstream_input2.set_need_data();
 
     let col = Int32Type::from_data(vec![1, 2, 3]);
     let block = DataBlock::new_from_columns(vec![col.clone()]);

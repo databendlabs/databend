@@ -70,47 +70,6 @@ impl ShuffleProcessor {
     pub fn get_outputs(&self) -> &[Arc<OutputPort>] {
         &self.outputs
     }
-
-    fn get_ready_inputs(&self) -> Option<Vec<usize>> {
-        let mut ready = Vec::with_capacity(self.inputs.len());
-        let mut all_finished = true;
-        for (i, input) in self.inputs.iter().enumerate() {
-            if !input.is_finished() {
-                all_finished = false;
-                input.set_need_data();
-                if input.has_data() {
-                    ready.push(i);
-                }
-            }
-        }
-        if all_finished { None } else { Some(ready) }
-    }
-
-    fn get_ready_outputs(&self) -> Option<Vec<usize>> {
-        let mut ready = Vec::with_capacity(self.outputs.len());
-        let mut all_finished = true;
-        for (i, output) in self.outputs.iter().enumerate() {
-            if !output.is_finished() {
-                all_finished = false;
-                if output.can_push() {
-                    ready.push(i);
-                }
-            }
-        }
-        if all_finished { None } else { Some(ready) }
-    }
-
-    fn finish_inputs(&mut self) {
-        for input in &self.inputs {
-            input.finish();
-        }
-    }
-
-    fn finish_outputs(&mut self) {
-        for output in &self.outputs {
-            output.finish();
-        }
-    }
 }
 
 #[async_trait::async_trait]
@@ -124,30 +83,41 @@ impl Processor for ShuffleProcessor {
     }
 
     fn event(&mut self) -> Result<Event> {
-        let ready_inputs = self.get_ready_inputs();
-        let ready_outputs = self.get_ready_outputs();
-
-        if let Some(ready_outputs) = ready_outputs {
-            if let Some(ready_inputs) = ready_inputs {
-                if ready_inputs.is_empty() {
-                    Ok(Event::NeedData)
-                } else {
-                    for input in ready_inputs {
-                        let output = self.rule[input];
-                        if ready_outputs.contains(&output) {
-                            let block = self.inputs[input].pull_data().unwrap();
-                            self.outputs[output].push_data(block);
-                        }
-                    }
-                    Ok(Event::NeedConsume)
+        let mut ready_inputs_and_outputs = Vec::with_capacity(self.rule.len());
+        let mut all_finished = true;
+        for (input, oid) in self.inputs.iter().zip(self.rule.iter()) {
+            let output = &self.outputs[*oid];
+            match (input.is_finished(), output.is_finished()) {
+                (true, true) => {}
+                (true, false) => {
+                    output.finish();
                 }
-            } else {
-                self.finish_outputs();
-                Ok(Event::Finished)
+                (false, true) => {
+                    input.finish();
+                }
+                (false, false) => {
+                    if !output.can_push() {
+                        return Ok(Event::NeedConsume);
+                    }
+                    all_finished = false;
+                    if input.has_data() {
+                        ready_inputs_and_outputs.push((input, output));
+                    }
+                }
             }
+        }
+
+        if all_finished {
+            return Ok(Event::Finished);
+        }
+
+        if ready_inputs_and_outputs.is_empty() {
+            Ok(Event::NeedData)
         } else {
-            self.finish_inputs();
-            Ok(Event::Finished)
+            for (input, output) in ready_inputs_and_outputs {
+                output.push_data(input.pull_data().unwrap());
+            }
+            Ok(Event::NeedConsume)
         }
     }
 }

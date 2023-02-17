@@ -213,7 +213,7 @@ impl Pipeline {
     }
 
     /// Duplite a pipe input to two outputs
-    pub fn duplicate(&mut self) {
+    pub fn duplicate(&mut self, finish_together: bool) {
         match self.pipes.last() {
             Some(pipe) if pipe.output_length > 0 => {
                 let mut items = Vec::with_capacity(pipe.output_length);
@@ -221,8 +221,12 @@ impl Pipeline {
                     let input = InputPort::create();
                     let output1 = OutputPort::create();
                     let output2 = OutputPort::create();
-                    let processor =
-                        DuplicateProcessor::create(input.clone(), output1.clone(), output2.clone());
+                    let processor = DuplicateProcessor::create(
+                        input.clone(),
+                        output1.clone(),
+                        output2.clone(),
+                        finish_together,
+                    );
                     items.push(PipeItem::create(
                         ProcessorPtr::create(Box::new(processor)),
                         vec![input],

@@ -26,6 +26,9 @@ pub struct DuplicateProcessor {
     input: Arc<InputPort>,
     output1: Arc<OutputPort>,
     output2: Arc<OutputPort>,
+
+    /// Whether two outputs should finish together.
+    finish_together: bool,
 }
 
 /// This processor duplicate the input data to two outputs.
@@ -34,11 +37,13 @@ impl DuplicateProcessor {
         input: Arc<InputPort>,
         output1: Arc<OutputPort>,
         output2: Arc<OutputPort>,
+        finish_together: bool,
     ) -> Self {
         DuplicateProcessor {
             input,
             output1,
             output2,
+            finish_together,
         }
     }
 }
@@ -54,21 +59,38 @@ impl Processor for DuplicateProcessor {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if self.output1.is_finished() && self.output2.is_finished() {
+        let is_finished1 = self.output1.is_finished();
+        let is_finished2 = self.output2.is_finished();
+        let one_finished = is_finished1 || is_finished2;
+        let all_finished = is_finished1 && is_finished2;
+
+        let can_push1 = self.output1.can_push();
+        let can_push2 = self.output2.can_push();
+
+        if all_finished || (self.finish_together && one_finished) {
             self.input.finish();
+            self.output1.finish();
+            self.output2.finish();
             return Ok(Event::Finished);
         }
+
         if self.input.is_finished() {
             self.output1.finish();
             self.output2.finish();
             return Ok(Event::Finished);
         }
+
+        if !can_push1 || !can_push2 {
+            return Ok(Event::NeedConsume);
+        }
+
         if self.input.has_data() {
             let block = self.input.pull_data().unwrap();
             self.output1.push_data(block.clone());
             self.output2.push_data(block);
             return Ok(Event::NeedConsume);
         }
+
         Ok(Event::NeedData)
     }
 }
