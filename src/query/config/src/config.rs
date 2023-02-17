@@ -1124,10 +1124,6 @@ pub struct QueryConfig {
     #[clap(long, parse(try_from_str), default_value = "true")]
     pub table_engine_memory_enabled: bool,
 
-    /// Deprecated: Database engine github enabled
-    #[clap(long, parse(try_from_str), default_value = "true")]
-    pub database_engine_github_enabled: bool,
-
     #[clap(long, default_value = "5000")]
     pub wait_timeout_mills: u64,
 
@@ -1319,7 +1315,6 @@ impl From<InnerQueryConfig> for QueryConfig {
             rpc_tls_query_server_root_ca_cert: inner.rpc_tls_query_server_root_ca_cert,
             rpc_tls_query_service_domain_name: inner.rpc_tls_query_service_domain_name,
             table_engine_memory_enabled: inner.table_engine_memory_enabled,
-            database_engine_github_enabled: true,
             wait_timeout_mills: inner.wait_timeout_mills,
             max_query_log_size: inner.max_query_log_size,
             management_mode: inner.management_mode,

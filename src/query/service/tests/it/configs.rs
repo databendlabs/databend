@@ -559,7 +559,6 @@ rpc_tls_server_key = ""
 rpc_tls_query_server_root_ca_cert = ""
 rpc_tls_query_service_domain_name = "localhost"
 table_engine_memory_enabled = true
-database_engine_github_enabled = true
 wait_timeout_mills = 5000
 max_query_log_size = 10000
 management_mode = false
