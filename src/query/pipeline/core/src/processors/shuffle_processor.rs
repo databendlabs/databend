@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -22,53 +23,18 @@ use crate::processors::port::OutputPort;
 use crate::processors::processor::Event;
 use crate::processors::Processor;
 
-/// [`ShuffleProcessor`] is used to re-order the input data according to the rule.
-///
-/// `rule` is a vector of [usize], each element is the index of the output port.
-///
-/// For example, if the rule is `[1, 2, 0]`, the data flow will be:
-///
-/// - input 0 -> output 1
-/// - input 1 -> output 2
-/// - input 2 -> output 0
 pub struct ShuffleProcessor {
-    inputs: Vec<Arc<InputPort>>,
-    outputs: Vec<Arc<OutputPort>>,
-
-    rule: Vec<usize>,
+    channel: Vec<(Arc<InputPort>, Arc<OutputPort>)>,
+    not_finished: HashSet<usize>,
 }
 
 impl ShuffleProcessor {
-    pub fn create(rule: Vec<usize>) -> Self {
-        debug_assert!({
-            let mut sorted = rule.clone();
-            sorted.sort();
-            let expected = (0..rule.len()).collect::<Vec<_>>();
-            sorted == expected
-        });
-
-        let num = rule.len();
-        let mut inputs = Vec::with_capacity(num);
-        let mut outputs = Vec::with_capacity(num);
-
-        for _ in 0..num {
-            inputs.push(InputPort::create());
-            outputs.push(OutputPort::create());
-        }
-
+    pub fn create(channel: Vec<(Arc<InputPort>, Arc<OutputPort>)>) -> Self {
+        let not_finished = (0..channel.len()).collect();
         ShuffleProcessor {
-            inputs,
-            outputs,
-            rule,
+            channel,
+            not_finished,
         }
-    }
-
-    pub fn get_inputs(&self) -> &[Arc<InputPort>] {
-        &self.inputs
-    }
-
-    pub fn get_outputs(&self) -> &[Arc<OutputPort>] {
-        &self.outputs
     }
 }
 
@@ -83,40 +49,43 @@ impl Processor for ShuffleProcessor {
     }
 
     fn event(&mut self) -> Result<Event> {
-        let mut ready_inputs_and_outputs = Vec::with_capacity(self.rule.len());
-        let mut all_finished = true;
-        for (input, oid) in self.inputs.iter().zip(self.rule.iter()) {
-            let output = &self.outputs[*oid];
+        let mut finished = Vec::with_capacity(self.not_finished.len());
+        let mut need_data = true;
+        for i in self.not_finished.iter() {
+            let (input, output) = &self.channel[*i];
             match (input.is_finished(), output.is_finished()) {
-                (true, true) => {}
+                (true, true) => finished.push(*i),
                 (true, false) => {
                     output.finish();
+                    finished.push(*i);
                 }
                 (false, true) => {
                     input.finish();
+                    finished.push(*i);
                 }
                 (false, false) => {
                     if !output.can_push() {
-                        return Ok(Event::NeedConsume);
+                        need_data = false;
+                        break;
                     }
-                    all_finished = false;
                     if input.has_data() {
-                        ready_inputs_and_outputs.push((input, output));
+                        need_data = false;
+                        output.push_data(input.pull_data().unwrap());
                     }
                 }
             }
         }
-
-        if all_finished {
+        if finished.len() == self.not_finished.len() {
             return Ok(Event::Finished);
         }
 
-        if ready_inputs_and_outputs.is_empty() {
+        for i in finished {
+            self.not_finished.remove(&i);
+        }
+
+        if need_data {
             Ok(Event::NeedData)
         } else {
-            for (input, output) in ready_inputs_and_outputs {
-                output.push_data(input.pull_data().unwrap());
-            }
             Ok(Event::NeedConsume)
         }
     }

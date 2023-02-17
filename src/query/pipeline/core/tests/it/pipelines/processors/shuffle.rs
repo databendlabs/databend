@@ -25,11 +25,15 @@ use common_pipeline_core::processors::ShuffleProcessor;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_shuffle_output_finish() -> Result<()> {
-    let mut processor = ShuffleProcessor::create(vec![0, 1]);
-    let input1 = processor.get_inputs()[0].clone();
-    let input2 = processor.get_inputs()[1].clone();
-    let output1 = processor.get_outputs()[0].clone();
-    let output2 = processor.get_outputs()[1].clone();
+    let input1 = InputPort::create();
+    let input2 = InputPort::create();
+    let output1 = OutputPort::create();
+    let output2 = OutputPort::create();
+
+    let mut processor = ShuffleProcessor::create(vec![
+        (input1.clone(), output1.clone()),
+        (input2.clone(), output2.clone()),
+    ]);
 
     let upstream_output1 = OutputPort::create();
     let upstream_output2 = OutputPort::create();
@@ -54,15 +58,21 @@ async fn test_shuffle_output_finish() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_shuffle_processor() -> Result<()> {
-    let mut processor = ShuffleProcessor::create(vec![0, 2, 1, 3]);
-    let input1 = processor.get_inputs()[0].clone();
-    let input2 = processor.get_inputs()[1].clone();
-    let input3 = processor.get_inputs()[2].clone();
-    let input4 = processor.get_inputs()[3].clone();
-    let output1 = processor.get_outputs()[0].clone();
-    let output2 = processor.get_outputs()[1].clone();
-    let output3 = processor.get_outputs()[2].clone();
-    let output4 = processor.get_outputs()[3].clone();
+    let input1 = InputPort::create();
+    let input2 = InputPort::create();
+    let input3 = InputPort::create();
+    let input4 = InputPort::create();
+    let output1 = OutputPort::create();
+    let output2 = OutputPort::create();
+    let output3 = OutputPort::create();
+    let output4 = OutputPort::create();
+
+    let mut processor = ShuffleProcessor::create(vec![
+        (input1.clone(), output1.clone()),
+        (input2.clone(), output3.clone()),
+        (input3.clone(), output2.clone()),
+        (input4.clone(), output4.clone()),
+    ]);
 
     let upstream_output1 = OutputPort::create();
     let upstream_output2 = OutputPort::create();

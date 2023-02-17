@@ -213,7 +213,7 @@ impl Pipeline {
     }
 
     /// Duplite a pipe input to two outputs
-    pub fn duplicate(&mut self, finish_together: bool) {
+    pub fn duplicate(&mut self, finish_together: bool) -> Result<()> {
         match self.pipes.last() {
             Some(pipe) if pipe.output_length > 0 => {
                 let mut items = Vec::with_capacity(pipe.output_length);
@@ -238,24 +238,50 @@ impl Pipeline {
                     pipe.output_length * 2,
                     items,
                 ));
+                Ok(())
             }
-            _ => {}
+            _ => Err(ErrorCode::Internal("Cannot duplicate empty pipe.")),
         }
     }
 
-    pub fn shuffle(&mut self, rule: Vec<usize>) {
+    /// Used to re-order the input data according to the rule.
+    ///
+    /// `rule` is a vector of [usize], each element is the index of the output port.
+    ///
+    /// For example, if the rule is `[1, 2, 0]`, the data flow will be:
+    ///
+    /// - input 0 -> output 1
+    /// - input 1 -> output 2
+    /// - input 2 -> output 0
+    pub fn reorder_inputs(&mut self, rule: Vec<usize>) {
         match self.pipes.last() {
             Some(pipe) if pipe.output_length > 1 => {
-                debug_assert!(rule.len() == pipe.output_length);
-                let processor = ShuffleProcessor::create(rule);
-                let inputs_port = processor.get_inputs().to_vec();
-                let outputs_port = processor.get_outputs().to_vec();
+                debug_assert!({
+                    let mut sorted = rule.clone();
+                    sorted.sort();
+                    let expected = (0..rule.len()).collect::<Vec<_>>();
+                    sorted == expected
+                });
+
+                let mut inputs = Vec::with_capacity(pipe.output_length);
+                let mut outputs = Vec::with_capacity(pipe.output_length);
+                for _ in 0..pipe.output_length {
+                    inputs.push(InputPort::create());
+                    outputs.push(OutputPort::create());
+                }
+                let mut channel = Vec::with_capacity(pipe.output_length);
+                for (i, input) in inputs.iter().enumerate() {
+                    let input = input.clone();
+                    let output = outputs[rule[i]].clone();
+                    channel.push((input, output));
+                }
+                let processor = ShuffleProcessor::create(channel);
                 self.pipes
-                    .push(Pipe::create(inputs_port.len(), outputs_port.len(), vec![
+                    .push(Pipe::create(inputs.len(), outputs.len(), vec![
                         PipeItem::create(
                             ProcessorPtr::create(Box::new(processor)),
-                            inputs_port,
-                            outputs_port,
+                            inputs,
+                            outputs,
                         ),
                     ]));
             }
