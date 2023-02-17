@@ -165,22 +165,18 @@ impl MetaService for MetaServiceImpl {
         let reply = match req {
             MetaGrpcReq::UpsertKV(a) => {
                 let res = m.upsert_kv(a).await;
-                let res = res.map_err(KVAppError::from);
                 RaftReply::from(res)
             }
             MetaGrpcReq::GetKV(a) => {
                 let res = m.get_kv(&a.key).await;
-                let res = res.map_err(KVAppError::from);
                 RaftReply::from(res)
             }
             MetaGrpcReq::MGetKV(a) => {
                 let res = m.mget_kv(&a.keys).await;
-                let res = res.map_err(KVAppError::from);
                 RaftReply::from(res)
             }
             MetaGrpcReq::ListKV(a) => {
                 let res = m.prefix_list_kv(&a.prefix).await;
-                let res = res.map_err(KVAppError::from);
                 RaftReply::from(res)
             }
         };
@@ -208,16 +204,17 @@ impl MetaService for MetaServiceImpl {
         let ret = self.meta_node.transaction(request).await;
         network_metrics::incr_request_result(ret.is_ok());
 
-        let body = match ret {
-            Ok(resp) => resp,
-            Err(err) => {
-                let err = KVAppError::from(err);
-                TxnReply {
-                    success: false,
-                    error: serde_json::to_string(&err).expect("fail to serialize"),
-                    responses: vec![],
-                }
-            }
+        let body = match res {
+            Ok(resp) => TxnReply {
+                success: resp.success,
+                error: "".to_string(),
+                responses: resp.responses,
+            },
+            Err(err) => TxnReply {
+                success: false,
+                error: serde_json::to_string(&err).expect("fail to serialize"),
+                responses: vec![],
+            },
         };
 
         network_metrics::incr_sent_bytes(body.encoded_len() as u64);

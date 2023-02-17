@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// TODO(xp): update these comment when merged. And client/meta plot picture.
-// Before 2023-02-15(<= v0.9.38-nightly) meta-service returns KVAppError
-//
-// Since 2023-02-15(> v0.9.38-nightly) meta-service returns just MetaError
-// ---
 /// Compatible layer to receive different types of errors from meta-service.
 ///
 /// It allows the server side to switch to return a smaller error type, e.g., from KVAppError to MetaAPIError.
