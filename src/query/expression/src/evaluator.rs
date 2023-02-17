@@ -517,7 +517,13 @@ impl<'a> Evaluator<'a> {
             display_name: String::new(),
         };
 
-        let cast_expr = match check_function(span, cast_fn, &[], &[expr], self.fn_registry) {
+        let params = if let DataType::Decimal(ty) = dest_type {
+            vec![ty.precision() as usize, ty.scale() as usize]
+        } else {
+            vec![]
+        };
+
+        let cast_expr = match check_function(span, cast_fn, &params, &[expr], self.fn_registry) {
             Ok(cast_expr) => cast_expr,
             Err(_) => return Ok(None),
         };
@@ -945,7 +951,12 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             display_name: String::new(),
         };
 
-        let cast_expr = check_function(span, cast_fn, &[], &[expr], self.fn_registry).ok()?;
+        let params = if let DataType::Decimal(ty) = dest_type {
+            vec![ty.precision() as usize, ty.scale() as usize]
+        } else {
+            vec![]
+        };
+        let cast_expr = check_function(span, cast_fn, &params, &[expr], self.fn_registry).ok()?;
 
         if cast_expr.data_type() != dest_type {
             return None;

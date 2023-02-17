@@ -183,11 +183,28 @@ pub struct DecimalSize {
 }
 
 pub trait Decimal:
-    Copy + Debug + Default + Clone + Copy + PartialEq + Eq + PartialOrd + Ord + Sync + Send + 'static
+    Sized
+    + Default
+    + Debug
+    + std::fmt::Display
+    + Copy
+    + Clone
+    + PartialEq
+    + Eq
+    + PartialOrd
+    + Ord
+    + Sync
+    + Send
+    + 'static
 {
     fn one() -> Self;
     // 10**scale
     fn e(n: u32) -> Self;
+
+    fn checked_add(self, rhs: Self) -> Option<Self>;
+    fn checked_sub(self, rhs: Self) -> Option<Self>;
+    fn checked_div(self, rhs: Self) -> Option<Self>;
+    fn checked_mul(self, rhs: Self) -> Option<Self>;
 
     fn max_of_max_precision() -> Self;
 
@@ -216,8 +233,25 @@ impl Decimal for i128 {
     fn one() -> Self {
         1_i128
     }
+
     fn e(n: u32) -> Self {
         10_i128.pow(n)
+    }
+
+    fn checked_add(self, rhs: Self) -> Option<Self> {
+        self.checked_add(rhs)
+    }
+
+    fn checked_sub(self, rhs: Self) -> Option<Self> {
+        self.checked_sub(rhs)
+    }
+
+    fn checked_div(self, rhs: Self) -> Option<Self> {
+        self.checked_div(rhs)
+    }
+
+    fn checked_mul(self, rhs: Self) -> Option<Self> {
+        self.checked_mul(rhs)
     }
 
     fn max_of_max_precision() -> Self {
@@ -301,6 +335,22 @@ impl Decimal for i256 {
 
     fn e(n: u32) -> Self {
         (i256::ONE * 10).pow(n)
+    }
+
+    fn checked_add(self, rhs: Self) -> Option<Self> {
+        self.checked_add(rhs)
+    }
+
+    fn checked_sub(self, rhs: Self) -> Option<Self> {
+        self.checked_sub(rhs)
+    }
+
+    fn checked_div(self, rhs: Self) -> Option<Self> {
+        self.checked_div(rhs)
+    }
+
+    fn checked_mul(self, rhs: Self) -> Option<Self> {
+        self.checked_mul(rhs)
     }
 
     fn max_of_max_precision() -> Self {
