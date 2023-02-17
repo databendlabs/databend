@@ -305,13 +305,17 @@ impl FuseTable {
     }
 
     pub fn try_get_default_values(&self, ctx: Arc<dyn TableContext>) -> Result<Vec<Scalar>> {
-        let schema_seq_default_vals = self.schema_seq_default_vals.read().unwrap();
-
-        if schema_seq_default_vals.0 == self.table_info.ident.seq
-            && !schema_seq_default_vals.1.is_empty()
+        // Get read lock to check if default values exist
         {
-            return Ok(schema_seq_default_vals.1.clone());
+            let schema_seq_default_vals = self.schema_seq_default_vals.read().unwrap();
+
+            if schema_seq_default_vals.0 == self.table_info.ident.seq
+                && !schema_seq_default_vals.1.is_empty()
+            {
+                return Ok(schema_seq_default_vals.1.clone());
+            }
         }
+        // Get write lock to write default values
         let mut schema_seq_default_vals = self.schema_seq_default_vals.write().unwrap();
         let schema = self.table_info.meta.schema.as_ref();
         let mut field_default_vals = Vec::with_capacity(schema.fields().len());
