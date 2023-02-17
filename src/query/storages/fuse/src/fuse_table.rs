@@ -18,7 +18,7 @@ use std::convert::TryFrom;
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::RwLock;
 
 use common_catalog::catalog::StorageDescription;
 use common_catalog::plan::DataSourcePlan;
@@ -98,7 +98,7 @@ pub struct FuseTable {
     pub(crate) operator: Operator,
     pub(crate) data_metrics: Arc<StorageMetrics>,
 
-    schema_seq_default_vals: Arc<Mutex<(u64, Vec<Scalar>)>>,
+    schema_seq_default_vals: Arc<RwLock<(u64, Vec<Scalar>)>>,
 }
 
 impl FuseTable {
@@ -155,7 +155,7 @@ impl FuseTable {
             data_metrics,
             storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
             table_compression: table_compression.as_str().try_into()?,
-            schema_seq_default_vals: Default::default(),
+            schema_seq_default_vals: Arc::new(<RwLock<(u64, Vec<Scalar>)> as Default>::default()),
         }))
     }
 
@@ -305,12 +305,14 @@ impl FuseTable {
     }
 
     pub fn try_get_default_values(&self, ctx: Arc<dyn TableContext>) -> Result<Vec<Scalar>> {
-        let mut schema_seq_default_vals = self.schema_seq_default_vals.lock().unwrap().to_owned();
-        let (seq, default_vals) = schema_seq_default_vals;
+        let schema_seq_default_vals = self.schema_seq_default_vals.read().unwrap();
 
-        if seq == self.table_info.ident.seq && !default_vals.is_empty() {
-            return Ok(default_vals);
+        if schema_seq_default_vals.0 == self.table_info.ident.seq
+            && !schema_seq_default_vals.1.is_empty()
+        {
+            return Ok(schema_seq_default_vals.1.clone());
         }
+        let mut schema_seq_default_vals = self.schema_seq_default_vals.write().unwrap();
         let schema = self.table_info.meta.schema.as_ref();
         let mut field_default_vals = Vec::with_capacity(schema.fields().len());
         for field in schema.fields() {
