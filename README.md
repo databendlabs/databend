@@ -42,7 +42,7 @@
 </div>
 </div>
 
-<img src="https://user-images.githubusercontent.com/172204/218997620-2bbdbbfe-9351-421e-bf6e-6cc5e0f3881b.svg" alt="databend" />
+<img src="https://user-images.githubusercontent.com/172204/219559279-ab7a11a4-9437-4a0a-85e8-cedf9ba0e24b.svg" alt="databend" />
 
 ## What is Databend?
 
