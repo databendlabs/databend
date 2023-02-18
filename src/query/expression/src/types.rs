@@ -63,6 +63,7 @@ use crate::deserializations::TimestampDeserializer;
 use crate::deserializations::TupleDeserializer;
 use crate::deserializations::VariantDeserializer;
 use crate::property::Domain;
+use crate::types::decimal::DecimalScalar;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
@@ -298,6 +299,13 @@ impl DataType {
                 Scalar::Tuple(tys.iter().map(|ty| ty.default_value()).collect())
             }
             DataType::Variant => Scalar::Variant(vec![]),
+            DataType::Decimal(DecimalDataType::Decimal128(s)) => {
+                Scalar::Decimal(DecimalScalar::Decimal128(0.into(), *s))
+            }
+            DataType::Decimal(DecimalDataType::Decimal256(s)) => {
+                Scalar::Decimal(DecimalScalar::Decimal256(0.into(), *s))
+            }
+
             _ => unimplemented!(),
         }
     }

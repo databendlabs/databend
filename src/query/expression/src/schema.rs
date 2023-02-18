@@ -1374,6 +1374,12 @@ impl From<&DataType> for ArrowDataType {
                 Box::new(ArrowDataType::LargeBinary),
                 None,
             ),
+            DataType::Decimal(DecimalDataType::Decimal128(s)) => {
+                ArrowDataType::Decimal(s.precision as usize, s.scale as usize)
+            }
+            DataType::Decimal(DecimalDataType::Decimal256(s)) => {
+                ArrowDataType::Decimal256(s.precision as usize, s.scale as usize)
+            }
 
             _ => unreachable!(),
         }
