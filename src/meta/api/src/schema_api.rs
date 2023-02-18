@@ -53,8 +53,9 @@ use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::GCDroppedDataReply;
 use common_meta_types::GCDroppedDataReq;
-use common_meta_types::KVAppError;
 use common_meta_types::MetaId;
+
+use crate::kv_app_error::KVAppError;
 
 /// SchemaApi defines APIs that provides schema storage, such as database, table.
 #[async_trait::async_trait]
