@@ -141,20 +141,20 @@ const config = {
                 style: 'dark',
                 links: [
                     {
-                        title: 'About',
+                        title: 'GET STARTED',
                         items: [
                             {
-                                label: 'What is Databend?',
+                                label: 'What is Databend',
                                 to: '/doc'
                             },
                             {
-                                label: 'Contributing',
-                                to: '/doc/contributing/good-pr'
+                                label: 'Quick Start',
+                                to: '/doc/guides'
                             },
                         ]
                     },
                     {
-                        title: 'Resources',
+                        title: 'RESOURCES',
                         items: [
                             {
                                 label: 'Deployment',
@@ -167,7 +167,7 @@ const config = {
                         ]
                     },
                     {
-                        title: 'Community',
+                        title: 'COMMUNITY',
                         items: [
                             {
                                 label: 'Slack',
@@ -176,19 +176,6 @@ const config = {
                             {
                                 label: 'Twitter',
                                 href: 'https://twitter.com/Datafuse_Labs',
-                            },
-                        ],
-                    },
-                    {
-                        title: 'More',
-                        items: [
-                            {
-                                label: 'Weekly',
-                                href: 'https://weekly.databend.rs/'
-                            },
-                            {
-                                label: 'GitHub',
-                                href: 'https://github.com/datafuselabs/databend',
                             },
                         ],
                     },
