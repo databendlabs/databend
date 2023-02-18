@@ -28,7 +28,7 @@ use crate::utils::str_field_to_scalar;
 
 pub struct HivePartitionPruner {
     pub ctx: Arc<dyn TableContext>,
-    pub filters: Vec<Expr<String>>,
+    pub filter: Expr<String>,
     // pub partitions: Vec<String>,
     pub partition_schema: Arc<TableSchema>,
     pub full_schema: Arc<TableSchema>,
@@ -37,13 +37,13 @@ pub struct HivePartitionPruner {
 impl HivePartitionPruner {
     pub fn create(
         ctx: Arc<dyn TableContext>,
-        filters: Vec<Expr<String>>,
+        filter: Expr<String>,
         partition_schema: Arc<TableSchema>,
         full_schema: Arc<TableSchema>,
     ) -> Self {
         HivePartitionPruner {
             ctx,
-            filters,
+            filter,
             partition_schema,
             full_schema,
         }
@@ -76,7 +76,7 @@ impl HivePartitionPruner {
     pub fn prune(&self, partitions: Vec<String>) -> Result<Vec<String>> {
         let range_filter = RangeIndex::try_create(
             self.ctx.get_function_context()?,
-            &self.filters,
+            &self.filter,
             self.full_schema.clone(),
         )?;
         let column_stats = self.get_column_stats(&partitions)?;

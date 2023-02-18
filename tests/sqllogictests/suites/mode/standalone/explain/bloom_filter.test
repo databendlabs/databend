@@ -92,7 +92,7 @@ query T
 explain select * from bloom_test_t where c2=0;
 ----
 Filter
-├── filters: [eq(bloom_test_t.c2 (#1), to_int32(0))]
+├── filters: [eq(bloom_test_t.c2 (#1), 0)]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.bloom_test_t
@@ -108,7 +108,7 @@ query T
 explain select * from bloom_test_t where c2=3;
 ----
 Filter
-├── filters: [eq(bloom_test_t.c2 (#1), to_int32(3))]
+├── filters: [eq(bloom_test_t.c2 (#1), 3)]
 ├── estimated rows: 1.14
 └── TableScan
     ├── table: default.default.bloom_test_t
@@ -145,7 +145,7 @@ Filter
     ├── partitions total: 2
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]
-    ├── push downs: [filters: [is_true(eq(bloom_test_nullable_t.c1 (#0), 5)), is_true(gt(bloom_test_nullable_t.c2 (#1), 1))], limit: NONE]
+    ├── push downs: [filters: [and(eq(bloom_test_nullable_t.c1 (#0), 5), gt(bloom_test_nullable_t.c2 (#1), 1))], limit: NONE]
     └── estimated rows: 6.00
 
 statement ok

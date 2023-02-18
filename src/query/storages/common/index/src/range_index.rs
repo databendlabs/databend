@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 
 use common_exception::Result;
-use common_expression::type_check::check_function;
 use common_expression::types::nullable::NullableDomain;
 use common_expression::types::number::SimpleDomain;
 use common_expression::types::string::StringDomain;
@@ -50,17 +49,9 @@ pub struct RangeIndex {
 impl RangeIndex {
     pub fn try_create(
         func_ctx: FunctionContext,
-        exprs: &[Expr<String>],
+        expr: &Expr<String>,
         schema: TableSchemaRef,
     ) -> Result<Self> {
-        let conjunction = exprs
-            .iter()
-            .cloned()
-            .reduce(|lhs, rhs| {
-                check_function(None, "and", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS).unwrap()
-            })
-            .unwrap();
-
         let leaf_fields = schema.leaf_fields();
         let column_ids = leaf_fields.iter().fold(
             HashMap::with_capacity(leaf_fields.len()),
@@ -71,7 +62,7 @@ impl RangeIndex {
         );
 
         Ok(Self {
-            expr: conjunction,
+            expr: expr.clone(),
             func_ctx,
             column_ids,
         })

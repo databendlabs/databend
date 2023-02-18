@@ -196,7 +196,7 @@ impl FuseTable {
         let projection = Projection::Columns(col_indices.clone());
         self.mutation_block_pruning(
             ctx.clone(),
-            vec![filter.clone()],
+            Some(filter.clone()),
             projection.clone(),
             base_snapshot,
         )
@@ -255,13 +255,13 @@ impl FuseTable {
     pub async fn mutation_block_pruning(
         &self,
         ctx: Arc<dyn TableContext>,
-        filters: Vec<RemoteExpr<String>>,
+        filter: Option<RemoteExpr<String>>,
         projection: Projection,
         base_snapshot: &TableSnapshot,
     ) -> Result<()> {
         let push_down = Some(PushDownInfo {
             projection: Some(projection),
-            filters,
+            filter,
             ..PushDownInfo::default()
         });
 

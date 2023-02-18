@@ -24,10 +24,12 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check::check_function;
 use common_expression::types::DataType;
 use common_expression::ConstantFolder;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRefExt;
+use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
@@ -647,22 +649,30 @@ impl PhysicalPlanBuilder {
             Self::build_projection(&metadata, table_schema, &scan.columns, has_inner_column);
         let _project_schema = projection.project_schema(table_schema);
 
-        let push_down_filters = scan
+        let push_down_filter = scan
             .push_down_predicates
-            .clone()
-            .map(|predicates| -> Result<Vec<RemoteExpr<String>>> {
-                predicates
+            .as_ref()
+            .filter(|p| !p.is_empty())
+            .map(|predicates| -> Result<RemoteExpr<String>> {
+                let predicates: Result<Vec<Expr<String>>> = predicates
+                    .iter()
+                    .map(|p| p.as_expr_with_col_name())
+                    .collect();
+
+                let predicates = predicates?;
+                let expr = predicates
                     .into_iter()
-                    .map(|scalar| {
-                        let expr = cast_expr_to_non_null_boolean(scalar.as_expr_with_col_name()?)?;
-                        let (expr, _) = ConstantFolder::fold(
-                            &expr,
-                            self.ctx.get_function_context()?,
-                            &BUILTIN_FUNCTIONS,
-                        );
-                        Ok(expr.as_remote_expr())
+                    .reduce(|lhs, rhs| {
+                        check_function(None, "and", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS).unwrap()
                     })
-                    .collect::<Result<Vec<_>>>()
+                    .unwrap();
+
+                let (expr, _) = ConstantFolder::fold(
+                    &expr,
+                    self.ctx.get_function_context()?,
+                    &BUILTIN_FUNCTIONS,
+                );
+                Ok(expr.as_remote_expr())
             })
             .transpose()?;
 
@@ -760,7 +770,7 @@ impl PhysicalPlanBuilder {
 
         Ok(PushDownInfo {
             projection: Some(projection),
-            filters: push_down_filters.unwrap_or_default(),
+            filter: push_down_filter,
             prewhere: prewhere_info,
             limit: scan.limit,
             order_by: order_by.unwrap_or_default(),

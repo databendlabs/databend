@@ -97,14 +97,13 @@ fn table_scan_to_format_tree(
         .source
         .push_downs
         .as_ref()
-        .map_or("".to_string(), |extras| {
+        .and_then(|extras| {
             extras
-                .filters
-                .iter()
+                .filter
+                .as_ref()
                 .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                .collect::<Vec<_>>()
-                .join(", ")
-        });
+        })
+        .unwrap_or_default();
 
     let limit = plan
         .source

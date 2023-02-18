@@ -48,7 +48,7 @@ Exchange
         ├── Exchange(Build)
         │   ├── exchange type: Hash(t2.a (#2))
         │   └── Filter
-        │       ├── filters: [or(gt(t2.a (#2), to_int32(3)), gt(t2.a (#2), to_int32(1)))]
+        │       ├── filters: [or(gt(t2.a (#2), 3), gt(t2.a (#2), 1))]
         │       ├── estimated rows: 0.00
         │       └── TableScan
         │           ├── table: default.default.t2
