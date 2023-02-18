@@ -15,27 +15,18 @@
 //! Meta service impl a grpc server that serves both raft protocol: append_entries, vote and install_snapshot.
 //! It also serves RPC for user-data access.
 
-use std::convert::TryInto;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
 
-use anyerror::AnyError;
-use common_meta_raft_store::applied_state::AppliedState;
 use common_meta_types::protobuf::raft_service_server::RaftService;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
-use common_meta_types::InvalidReply;
-use common_meta_types::LogEntry;
-use common_meta_types::MetaError;
-use common_meta_types::MetaNetworkError;
 use tonic::codegen::futures_core::Stream;
 
 use crate::message::ForwardRequest;
-use crate::message::ForwardRequestBody;
 use crate::meta_service::MetaNode;
 use crate::metrics::raft_metrics;
-use crate::metrics::server_metrics;
 
 pub type GrpcStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
@@ -60,50 +51,6 @@ impl RaftServiceImpl {
 
 #[async_trait::async_trait]
 impl RaftService for RaftServiceImpl {
-    /// Handles a write request.
-    /// This node must be leader or an error returned.
-    #[tracing::instrument(level = "debug", skip(self))]
-    async fn write(
-        &self,
-        request: tonic::Request<RaftRequest>,
-    ) -> Result<tonic::Response<RaftReply>, tonic::Status> {
-        common_tracing::extract_remote_span_as_parent(&request);
-
-        let raft_req = request.into_inner();
-        let ent: LogEntry = raft_req.try_into()?;
-
-        let res = self
-            .meta_node
-            .handle_forwardable_request(ForwardRequest {
-                forward_to_leader: 1,
-                body: ForwardRequestBody::Write(ent),
-            })
-            .await;
-
-        let res = match res {
-            Ok(r) => {
-                let a: Result<AppliedState, MetaError> = r.try_into().map_err(|e: &str| {
-                    server_metrics::incr_proposals_failed();
-
-                    let inv_reply = InvalidReply::new(
-                        "expect type: Result<AppliedState,MetaError>",
-                        &AnyError::error(e),
-                    );
-                    let net_err = MetaNetworkError::InvalidReply(inv_reply);
-                    MetaError::NetworkError(net_err)
-                });
-                a
-            }
-            Err(e) => {
-                server_metrics::incr_proposals_failed();
-                Err(MetaError::from(e))
-            }
-        };
-
-        let raft_reply = RaftReply::from(res);
-        return Ok(tonic::Response::new(raft_reply));
-    }
-
     #[tracing::instrument(level = "debug", skip_all)]
     async fn forward(
         &self,

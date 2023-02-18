@@ -19,8 +19,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseInfo;
+use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
-use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::RenameTableReply;
@@ -109,9 +109,9 @@ pub trait Database: DynClone + Sync + Send {
         )))
     }
 
-    async fn drop_table(&self, _req: DropTableReq) -> Result<DropTableReply> {
+    async fn drop_table_by_id(&self, _req: DropTableByIdReq) -> Result<DropTableReply> {
         Err(ErrorCode::Unimplemented(format!(
-            "UnImplement drop_table in {} Database",
+            "UnImplement drop_table_by_id in {} Database",
             self.name()
         )))
     }

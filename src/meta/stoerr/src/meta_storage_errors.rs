@@ -12,12 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any;
-use std::backtrace::Backtrace;
-
 use anyerror::AnyError;
-use common_exception::ErrorCode;
-use common_exception::ErrorWithContext;
 use serde::Deserialize;
 use serde::Serialize;
 use sled::transaction::UnabortableTransactionError;
@@ -43,12 +38,6 @@ pub enum MetaStorageError {
     TransactionConflict,
 }
 
-impl From<MetaStorageError> for ErrorCode {
-    fn from(e: MetaStorageError) -> Self {
-        ErrorCode::MetaStorageError(e.to_string()).set_backtrace(any::request_ref::<Backtrace>(&e))
-    }
-}
-
 impl From<std::string::FromUtf8Error> for MetaStorageError {
     fn from(error: std::string::FromUtf8Error) -> Self {
         MetaStorageError::BytesError(MetaBytesError::new(&error))
@@ -64,12 +53,6 @@ impl From<serde_json::Error> for MetaStorageError {
 impl From<sled::Error> for MetaStorageError {
     fn from(e: sled::Error) -> MetaStorageError {
         MetaStorageError::SledError(AnyError::new(&e))
-    }
-}
-
-impl From<ErrorWithContext<sled::Error>> for MetaStorageError {
-    fn from(e: ErrorWithContext<sled::Error>) -> MetaStorageError {
-        MetaStorageError::SledError(AnyError::new(&e.err).add_context(|| e.context))
     }
 }
 

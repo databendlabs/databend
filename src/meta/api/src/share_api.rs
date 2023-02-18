@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use common_meta_app::share::*;
-use common_meta_types::KVAppError;
+
+use crate::kv_app_error::KVAppError;
 
 #[async_trait::async_trait]
 pub trait ShareApi: Sync + Send {

@@ -150,8 +150,6 @@ message ClientInfo {
 
 service RaftService {
 
-  rpc Write(RaftRequest) returns (RaftReply) {}
-
   /// Forward a request to other
   rpc Forward(RaftRequest) returns (RaftReply) {}
 

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use anyerror::AnyError;
-use common_exception::ErrorCode;
 
 use crate::MetaHandshakeError;
 use crate::MetaNetworkError;
@@ -32,19 +31,4 @@ pub enum MetaClientError {
 
     #[error(transparent)]
     HandshakeError(MetaHandshakeError),
-}
-
-impl From<MetaClientError> for ErrorCode {
-    fn from(e: MetaClientError) -> Self {
-        match e {
-            MetaClientError::ClientRuntimeError(rt_err) => {
-                ErrorCode::MetaServiceError(rt_err.to_string())
-            }
-            MetaClientError::ConfigError(conf_err) => {
-                ErrorCode::MetaServiceError(conf_err.to_string())
-            }
-            MetaClientError::NetworkError(net_err) => net_err.into(),
-            MetaClientError::HandshakeError(handshake_err) => handshake_err.into(),
-        }
-    }
 }
