@@ -667,6 +667,8 @@ impl PhysicalPlanBuilder {
                     })
                     .unwrap();
 
+                let expr = cast_expr_to_non_null_boolean(expr)?;
+
                 let (expr, _) = ConstantFolder::fold(
                     &expr,
                     self.ctx.get_function_context()?,
