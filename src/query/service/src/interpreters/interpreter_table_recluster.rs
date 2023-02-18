@@ -68,7 +68,12 @@ impl Interpreter for ReclusterTableInterpreter {
             let table = self
                 .ctx
                 .get_catalog(&plan.catalog)?
-                .get_table(tenant.as_str(), &plan.database, &plan.table)
+                .get_table(
+                    Some(self.ctx.clone()),
+                    tenant.as_str(),
+                    &plan.database,
+                    &plan.table,
+                )
                 .await?;
 
             let mut pipeline = Pipeline::create();

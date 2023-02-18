@@ -201,7 +201,12 @@ impl PhysicalPlanBuilder {
                 let catalogs = CatalogManager::instance();
                 let table = catalogs
                     .get_catalog(CATALOG_DEFAULT)?
-                    .get_table(self.ctx.get_tenant().as_str(), "system", "one")
+                    .get_table(
+                        Some(self.ctx.clone()),
+                        self.ctx.get_tenant().as_str(),
+                        "system",
+                        "one",
+                    )
                     .await?;
                 let source = table
                     .read_plan_with_catalog(self.ctx.clone(), CATALOG_DEFAULT.to_string(), None)

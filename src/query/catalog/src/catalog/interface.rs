@@ -51,6 +51,7 @@ use dyn_clone::DynClone;
 use crate::database::Database;
 use crate::table::Table;
 use crate::table_args::TableArgs;
+use crate::table_context::TableContext;
 use crate::table_function::TableFunction;
 
 #[derive(Default, Clone)]
@@ -103,6 +104,7 @@ pub trait Catalog: DynClone + Send + Sync {
     // Get one table by db and table name.
     async fn get_table(
         &self,
+        ctx: Option<Arc<dyn TableContext>>,
         tenant: &str,
         db_name: &str,
         table_name: &str,
@@ -121,7 +123,7 @@ pub trait Catalog: DynClone + Send + Sync {
 
     // Check a db.table is exists or not.
     async fn exists_table(&self, tenant: &str, db_name: &str, table_name: &str) -> Result<bool> {
-        match self.get_table(tenant, db_name, table_name).await {
+        match self.get_table(None, tenant, db_name, table_name).await {
             Ok(_) => Ok(true),
             Err(err) => {
                 if err.code() == ErrorCode::UNKNOWN_TABLE {

@@ -21,6 +21,7 @@ use common_catalog::catalog::StorageDescription;
 use common_catalog::database::Database;
 use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
+use common_catalog::table_context::TableContext;
 use common_catalog::table_function::TableFunction;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -278,9 +279,10 @@ impl Catalog for HiveCatalog {
     }
 
     // Get one table by db and table name.
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "info", skip(self, _ctx))]
     async fn get_table(
         &self,
+        _ctx: Option<Arc<dyn TableContext>>,
         _tenant: &str,
         db_name: &str,
         table_name: &str,
@@ -334,7 +336,7 @@ impl Catalog for HiveCatalog {
     // Check a db.table is exists or not.
     async fn exists_table(&self, tenant: &str, db_name: &str, table_name: &str) -> Result<bool> {
         // TODO refine this
-        match self.get_table(tenant, db_name, table_name).await {
+        match self.get_table(None, tenant, db_name, table_name).await {
             Ok(_) => Ok(true),
             Err(err) => {
                 if err.code() == ErrorCode::UNKNOWN_TABLE {

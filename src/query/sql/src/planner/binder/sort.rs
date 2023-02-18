@@ -247,6 +247,7 @@ impl Binder {
                     let catalog = self.ctx.get_catalog(catalog_name.as_str())?;
                     catalog
                         .get_table(
+                            Some(self.ctx.clone()),
                             &self.ctx.get_tenant(),
                             &database_name.name,
                             &table_name.name,

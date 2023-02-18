@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_config::InnerConfig;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
@@ -220,6 +221,7 @@ impl Catalog for MutableCatalog {
 
     async fn get_table(
         &self,
+        _ctx: Option<Arc<dyn TableContext>>,
         tenant: &str,
         db_name: &str,
         table_name: &str,

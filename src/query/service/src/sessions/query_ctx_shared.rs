@@ -32,6 +32,7 @@ use common_meta_app::principal::UserInfo;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
+use common_storages_fuse::TableContext;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
@@ -205,6 +206,7 @@ impl QueryContextShared {
 
     pub async fn get_table(
         &self,
+        ctx: Option<Arc<dyn TableContext>>,
         catalog: &str,
         database: &str,
         table: &str,
@@ -215,7 +217,7 @@ impl QueryContextShared {
 
         let already_in_cache = { self.tables_refs.lock().contains_key(&table_meta_key) };
         match already_in_cache {
-            false => self.get_table_to_cache(catalog, database, table).await,
+            false => self.get_table_to_cache(ctx, catalog, database, table).await,
             true => Ok(self
                 .tables_refs
                 .lock()
@@ -227,6 +229,7 @@ impl QueryContextShared {
 
     async fn get_table_to_cache(
         &self,
+        ctx: Option<Arc<dyn TableContext>>,
         catalog: &str,
         database: &str,
         table: &str,
@@ -234,7 +237,9 @@ impl QueryContextShared {
         let tenant = self.get_tenant();
         let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
         let catalog = self.catalog_manager.get_catalog(catalog)?;
-        let cache_table = catalog.get_table(tenant.as_str(), database, table).await?;
+        let cache_table = catalog
+            .get_table(ctx, tenant.as_str(), database, table)
+            .await?;
 
         let mut tables_refs = self.tables_refs.lock();
 

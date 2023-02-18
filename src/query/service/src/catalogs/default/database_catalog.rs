@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_catalog::table_args::TableArgs;
+use common_catalog::table_context::TableContext;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -229,6 +230,7 @@ impl Catalog for DatabaseCatalog {
 
     async fn get_table(
         &self,
+        ctx: Option<Arc<dyn TableContext>>,
         tenant: &str,
         db_name: &str,
         table_name: &str,
@@ -241,14 +243,14 @@ impl Catalog for DatabaseCatalog {
 
         let res = self
             .immutable_catalog
-            .get_table(tenant, db_name, table_name)
+            .get_table(ctx.clone(), tenant, db_name, table_name)
             .await;
         match res {
             Ok(v) => Ok(v),
             Err(e) => {
                 if e.code() == ErrorCode::UNKNOWN_DATABASE {
                     self.mutable_catalog
-                        .get_table(tenant, db_name, table_name)
+                        .get_table(ctx, tenant, db_name, table_name)
                         .await
                 } else {
                     Err(e)

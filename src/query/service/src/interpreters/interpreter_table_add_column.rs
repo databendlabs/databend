@@ -52,7 +52,12 @@ impl Interpreter for AddTableColumnInterpreter {
         let tbl = self
             .ctx
             .get_catalog(catalog_name)?
-            .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
+            .get_table(
+                Some(self.ctx.clone()),
+                self.ctx.get_tenant().as_str(),
+                db_name,
+                tbl_name,
+            )
             .await
             .ok();
 

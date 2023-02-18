@@ -108,7 +108,12 @@ impl Interpreter for OptimizeTableInterpreter {
                 table = self
                     .ctx
                     .get_catalog(&plan.catalog)?
-                    .get_table(ctx.get_tenant().as_str(), &plan.database, &plan.table)
+                    .get_table(
+                        Some(ctx.clone()),
+                        ctx.get_tenant().as_str(),
+                        &plan.database,
+                        &plan.table,
+                    )
                     .await?;
             }
         }

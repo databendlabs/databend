@@ -417,7 +417,9 @@ impl TableContext for QueryContext {
         database: &str,
         table: &str,
     ) -> Result<Arc<dyn Table>> {
-        self.shared.get_table(catalog, database, table).await
+        self.shared
+            .get_table(Some(Arc::new(self.to_owned())), catalog, database, table)
+            .await
     }
 }
 

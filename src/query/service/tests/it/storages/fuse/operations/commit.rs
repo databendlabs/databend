@@ -516,6 +516,7 @@ impl Catalog for FakedCatalog {
 
     async fn get_table(
         &self,
+        _ctx: Option<Arc<dyn TableContext>>,
         _tenant: &str,
         _db_name: &str,
         _table_name: &str,

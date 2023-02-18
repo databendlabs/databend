@@ -200,7 +200,7 @@ impl CopyInterpreterV2 {
         let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(catalog_name)?;
         let table = catalog
-            .get_table(&tenant, database_name, table_name)
+            .get_table(Some(ctx.clone()), &tenant, database_name, table_name)
             .await?;
         let table_id = table.get_id();
 

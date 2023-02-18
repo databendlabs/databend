@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -141,6 +142,7 @@ impl Catalog for ImmutableCatalog {
 
     async fn get_table(
         &self,
+        _ctx: Option<Arc<dyn TableContext>>,
         tenant: &str,
         db_name: &str,
         table_name: &str,

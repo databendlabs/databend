@@ -52,6 +52,7 @@ impl OneBlockProcedure for FuseSnapshotProcedure {
         let tbl = ctx
             .get_catalog(&ctx.get_current_catalog())?
             .get_table(
+                Some(ctx.clone()),
                 tenant_id.as_str(),
                 database_name.as_str(),
                 table_name.as_str(),

@@ -116,7 +116,12 @@ impl CreateTableInterpreterV2 {
         // TODO: maybe the table creation and insertion should be a transaction, but it may require create_table support 2pc.
         catalog.create_table(self.build_request()?).await?;
         let table = catalog
-            .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
+            .get_table(
+                Some(self.ctx.clone()),
+                tenant.as_str(),
+                &self.plan.database,
+                &self.plan.table,
+            )
             .await?;
 
         // If the table creation query contains column definitions, like 'CREATE TABLE t1(a int) AS SELECT * from t2',

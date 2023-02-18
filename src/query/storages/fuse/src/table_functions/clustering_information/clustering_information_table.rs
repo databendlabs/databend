@@ -173,6 +173,7 @@ impl AsyncSource for ClusteringInformationSource {
             .ctx
             .get_catalog(CATALOG_DEFAULT)?
             .get_table(
+                Some(self.ctx.clone()),
                 tenant_id.as_str(),
                 self.arg_database_name.as_str(),
                 self.arg_table_name.as_str(),

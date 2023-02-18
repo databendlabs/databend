@@ -45,7 +45,12 @@ impl Interpreter for RevertTableInterpreter {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
 
         let table = catalog
-            .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
+            .get_table(
+                Some(self.ctx.clone()),
+                tenant.as_str(),
+                &self.plan.database,
+                &self.plan.table,
+            )
             .await?;
 
         let navigation_descriptor = NavigationDescriptor {

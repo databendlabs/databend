@@ -492,7 +492,9 @@ impl Binder {
     ) -> Result<Arc<dyn Table>> {
         // Resolve table with catalog
         let catalog = self.catalogs.get_catalog(catalog_name)?;
-        let mut table_meta = catalog.get_table(tenant, database_name, table_name).await?;
+        let mut table_meta = catalog
+            .get_table(Some(self.ctx.clone()), tenant, database_name, table_name)
+            .await?;
 
         if let Some(tp) = travel_point {
             table_meta = table_meta.navigate_to(tp).await?;
