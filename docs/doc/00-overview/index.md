@@ -1,49 +1,58 @@
 ---
-title: Architecture Overview
+title: Welcome
 slug: /
 ---
+import GetLatest from '@site/src/components/GetLatest';
 
-Databend is an open-source **Elastic** and **Workload-Aware** modern cloud data warehouse focusing on Low-Cost and Low-Complexity for your massive-scale analytics needs.
+Welcome to the Databend documentation! 
 
-Databend uses the latest techniques in vectorized query processing to allow you to do blazing-fast data analytics on object storage:
-([S3](https://aws.amazon.com/s3/), [Azure Blob](https://azure.microsoft.com/en-us/services/storage/blobs/), [Google Cloud Storage](https://cloud.google.com/storage/), [Alibaba Cloud OSS](https://www.alibabacloud.com/product/object-storage-service), [Tencent Cloud COS](https://www.tencentcloud.com/products/cos), [Huawei Cloud OBS](https://www.huaweicloud.com/intl/en-us/product/obs.html), [Cloudflare R2](https://www.cloudflare.com/products/r2/), [Wasabi](https://wasabi.com/) or [MinIO](https://min.io)).
+Databend is an **open-source**, **elastic**, and **workload-aware** modern cloud data warehouse designed to meet businesses' massive-scale analytics needs at low cost and with low complexity.
 
-- __Feature-Rich__
+This welcome page guides you through the features, architecture, and other important details about Databend.
 
-  Support `SELECT/INSERT/DELETE/UPDATE/COPY/ALTER`,  Time Travel, Multi Catalog(Apache Hive/Apache Iceberg).
+## Why Databend?
 
+Databend is always searching for and incorporating the most advanced and innovative technologies to provide you with an exceptional user experience.
 
-- __Instant Elasticity__
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
 
-  Databend completely separates storage from compute, which allows you easily scale up or scale down based on your application's needs.
+<Tabs groupId="whydatabend">
+<TabItem value="Performance" label="Performance">
 
+- Blazing-fast data analytics on object storage.
+- Leverages data-level parallelism and instruction-level parallelism technologies for optimal performance.
+- Supports Git-like MVCC storage for easy querying, cloning, and restoration of historical data.
+- No indexes to build, no manual tuning, and no need to figure out partitions or shard data.
 
-- __Blazing Performance__
+</TabItem>
 
-  Databend leverages data-level parallelism(Vectorized Query Execution) and instruction-level parallelism(SIMD) technology, offering blazing performance data analytics.
+<TabItem value="Compatibility" label="Compatibility">
 
+- Compatible with MySQL / ClickHouse.
+- ANSI SQL compliant.
+- Easy connection with existing tools such as [MySQL Client](https://databend.rs/doc/integrations/api/mysql-handler), [ClickHouse Client](https://databend.rs/doc/integrations/api/clickhouse-handler), [Vector](https://vector.dev/), [DBeaver](https://dbeaver.com/), [Jupyter](https://databend.rs/doc/integrations/gui-tool/jupyter), [JDBC](https://databend.rs/doc/develop), and more.
 
-- __Git-like MVCC Storage__
+</TabItem>
 
-  Databend stores data with snapshots. It's easy to query, clone, and restore historical data in tables.
- 
+<TabItem value="Data Manipulation" label="Data Manipulation">
 
-- __Support for Semi-Structured Data__
+- Supports atomic operations such as SELECT, INSERT, DELETE, UPDATE, COPY, and ALTER.
+- Provides advanced features such as Time Travel and Multi Catalog (Apache Hive / Apache Iceberg).
+- Supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON, and Parquet.
+- Supports semi-structured data types such as [ARRAY, MAP, and JSON](https://databend.rs/doc/sql-reference/data-types/data-type-semi-structured-types).
 
-  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON, and Parquet, which are located in the cloud or your local file system; Databend also supports semi-structured data types: [ARRAY, MAP, JSON](https://databend.rs/doc/sql-reference/data-types/data-type-semi-structured-types), which is easy to import and operate on semi-structured.
- 
+</TabItem>
 
-- __MySQL/ClickHouse Compatible__
+<TabItem value="Cloud Storage" label="Cloud Storage">
 
-  Databend is ANSI SQL compliant and MySQL/ClickHouse wire protocol compatible, making it easy to connect with existing tools([MySQL Client](https://databend.rs/doc/integrations/api/mysql-handler), [ClickHouse Client](https://databend.rs/doc/integrations/api/clickhouse-handler), [Vector](https://vector.dev/), [DBeaver](https://dbeaver.com/), [Jupyter](https://databend.rs/doc/integrations/gui-tool/jupyter), [JDBC](https://databend.rs/doc/develop), etc.).
+- Supports various cloud storage platforms, including [Amazon S3](https://aws.amazon.com/s3/), [Azure Blob](https://azure.microsoft.com/en-us/services/storage/blobs/), [Google Cloud Storage](https://cloud.google.com/storage/), [Alibaba Cloud OSS](https://www.alibabacloud.com/product/object-storage-service), [Tencent Cloud COS](https://www.tencentcloud.com/products/cos), [Huawei Cloud OBS](https://www.huaweicloud.com/intl/en-us/product/obs.html), [Cloudflare R2](https://www.cloudflare.com/products/r2/), [Wasabi](https://wasabi.com/), and [MinIO](https://min.io).
+- Allows instant elasticity, enabling users to scale up or down based on their application needs.
 
+</TabItem>
+</Tabs>
 
-- __Easy to Use__
-
-  Databend has no indexes to build, no manual tuning required, no manual figuring out partitions or shard data, it’s all done for you as data is loaded into the table.
- 
- 
-## Design Overview
+## Databend Architucture
 
 This is the high-level architecture of Databend. It consists of three components:
 - `meta service layer`
@@ -123,10 +132,6 @@ For efficient pruning, Databend also creates indexes for each Parquet file:
 
 With the indexes, we can speed up the queries by reducing the I/O and CPU costs.
 Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 has `min_max.idx` of `[4, 6)` in column `x` if the query predicate is `WHERE x < 4`, only f1 needs to be accessed and processed.
-
-## Getting Started
-
-- [Guides](/doc/guides)
 
 ## Community
 

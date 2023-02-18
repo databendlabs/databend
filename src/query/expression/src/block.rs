@@ -297,6 +297,12 @@ impl DataBlock {
 
     #[inline]
     pub fn add_meta(self, meta: Option<BlockMetaInfoPtr>) -> Result<Self> {
+        if self.meta.is_some() {
+            return Err(ErrorCode::Internal(
+                "Internal error, block meta data is set twice.",
+            ));
+        }
+
         Ok(Self {
             columns: self.columns.clone(),
             num_rows: self.num_rows,

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
 use common_meta_stoerr::MetaStorageError;
 use serde::Deserialize;
 use serde::Serialize;
@@ -38,17 +37,6 @@ pub enum MetaError {
 
     #[error(transparent)]
     APIError(#[from] MetaAPIError),
-}
-
-impl From<MetaError> for ErrorCode {
-    fn from(e: MetaError) -> Self {
-        match e {
-            MetaError::NetworkError(net_err) => net_err.into(),
-            MetaError::StorageError(sto_err) => sto_err.into(),
-            MetaError::ClientError(ce) => ce.into(),
-            MetaError::APIError(e) => e.into(),
-        }
-    }
 }
 
 impl From<tonic::Status> for MetaError {

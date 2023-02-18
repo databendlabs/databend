@@ -158,7 +158,7 @@ build_exceptions! {
     TableSchemaMismatch(1303),
 }
 
-// Metasvr errors [2001, 3000].
+// Meta service errors [2001, 3000].
 build_exceptions! {
     // Meta service does not work.
     MetaServiceError(2001),

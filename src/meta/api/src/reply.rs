@@ -14,7 +14,6 @@
 
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::InvalidReply;
-use common_meta_types::KVAppError;
 use common_meta_types::MetaAPIError;
 use common_meta_types::MetaError;
 use common_meta_types::MetaNetworkError;
@@ -22,7 +21,8 @@ use common_meta_types::TxnOpResponse;
 use common_meta_types::TxnReply;
 use serde::de::DeserializeOwned;
 
-use crate::errors::Compatible;
+use crate::compat_errors::Compatible;
+use crate::kv_app_error::KVAppError;
 
 /// Compatible layer:
 /// Convert either KVAppError or MetaAPIError to MetaAPIError

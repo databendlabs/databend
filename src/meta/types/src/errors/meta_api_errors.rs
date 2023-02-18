@@ -15,7 +15,6 @@
 use std::fmt::Display;
 
 use anyerror::AnyError;
-use common_exception::ErrorCode;
 use openraft::error::ChangeMembershipError;
 use openraft::error::Fatal;
 use openraft::error::ForwardToLeader;
@@ -44,20 +43,6 @@ pub enum MetaAPIError {
     /// Error occurs on remote peer.
     #[error(transparent)]
     RemoteError(MetaDataError),
-}
-
-impl From<MetaAPIError> for ErrorCode {
-    fn from(e: MetaAPIError) -> Self {
-        match e {
-            MetaAPIError::ForwardToLeader(to_leader) => {
-                ErrorCode::MetaServiceError(to_leader.to_string())
-            }
-            MetaAPIError::CanNotForward(e) => ErrorCode::MetaServiceError(e.to_string()),
-            MetaAPIError::NetworkError(e) => ErrorCode::MetaServiceError(e.to_string()),
-            MetaAPIError::DataError(e) => ErrorCode::MetaServiceError(e.to_string()),
-            MetaAPIError::RemoteError(e) => ErrorCode::MetaServiceError(e.to_string()),
-        }
-    }
 }
 
 /// Errors raised when handling a request by raft node.

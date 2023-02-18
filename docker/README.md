@@ -118,16 +118,6 @@ owners.
 Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
 
 mysql>
-
-
-# Optional: using a third-party client for the Clickhouse with http
-# https://github.com/hatarist/clickhouse-cli
-❯ clickhouse-cli -p 8124
-clickhouse-cli version: 0.3.8
-Connecting to 127.0.0.1:8124
-Connected to ClickHouse server v8.12.14.
-
- :)
 ```
 
 > NOTE:

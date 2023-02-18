@@ -23,8 +23,8 @@ use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
-use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
@@ -53,8 +53,9 @@ use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::GCDroppedDataReply;
 use common_meta_types::GCDroppedDataReq;
-use common_meta_types::KVAppError;
 use common_meta_types::MetaId;
+
+use crate::kv_app_error::KVAppError;
 
 /// SchemaApi defines APIs that provides schema storage, such as database, table.
 #[async_trait::async_trait]
@@ -102,7 +103,7 @@ pub trait SchemaApi: Send + Sync {
     /// It returns a list of (table-id, table-meta-seq, table-meta).
     async fn list_all_tables(&self) -> Result<Vec<(TableId, u64, TableMeta)>, KVAppError>;
 
-    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, KVAppError>;
+    async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply, KVAppError>;
 
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply, KVAppError>;
 
@@ -119,8 +120,6 @@ pub trait SchemaApi: Send + Sync {
         &self,
         table_id: MetaId,
     ) -> Result<(TableIdent, Arc<TableMeta>), KVAppError>;
-
-    async fn drop_table_by_id(&self, table_id: MetaId) -> Result<DropTableReply, KVAppError>;
 
     async fn get_table_copied_file_info(
         &self,
