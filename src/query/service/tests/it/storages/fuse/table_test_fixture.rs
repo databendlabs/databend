@@ -293,6 +293,7 @@ impl TestFixture {
         self.ctx
             .get_catalog(CATALOG_DEFAULT)?
             .get_table(
+                Some(self.ctx()),
                 self.default_tenant().as_str(),
                 self.default_db_name().as_str(),
                 self.default_table_name().as_str(),

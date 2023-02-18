@@ -19,7 +19,6 @@ use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_catalog::plan::Projection;
-use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -30,7 +29,6 @@ use common_expression::FieldIndex;
 use common_expression::Scalar;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
-use common_sql::field_default_value;
 use common_storage::ColumnNode;
 use common_storage::ColumnNodes;
 use opendal::Operator;
@@ -76,7 +74,7 @@ impl BlockReader {
         operator: Operator,
         schema: TableSchemaRef,
         projection: Projection,
-        ctx: Arc<dyn TableContext>,
+        field_default_values: &[Scalar],
     ) -> Result<Arc<BlockReader>> {
         // init projected_schema and default_vals of schema.fields
         let (projected_schema, default_vals) = match projection {
@@ -84,27 +82,19 @@ impl BlockReader {
                 let projected_schema = TableSchemaRef::new(schema.project(indices));
                 // If projection by Columns, just calc default values by projected fields.
                 let mut default_vals = Vec::with_capacity(projected_schema.fields().len());
-                for field in projected_schema.fields() {
-                    let default_val = field_default_value(ctx.clone(), field)?;
-                    default_vals.push(default_val);
+                for index in indices {
+                    default_vals.push(field_default_values[*index].to_owned());
                 }
 
                 (projected_schema, default_vals)
             }
             Projection::InnerColumns(ref path_indices) => {
                 let projected_schema = TableSchemaRef::new(schema.inner_project(path_indices));
-                let mut field_default_vals = Vec::with_capacity(schema.fields().len());
 
-                // If projection by InnerColumns, first calc default value of all schema fields.
-                for field in schema.fields() {
-                    field_default_vals.push(field_default_value(ctx.clone(), field)?);
-                }
-
-                // Then calc project scalars by path_indices
                 let mut default_vals = Vec::with_capacity(schema.fields().len());
                 path_indices.values().for_each(|path| {
                     default_vals.push(
-                        inner_project_field_default_values(&field_default_vals, path).unwrap(),
+                        inner_project_field_default_values(field_default_values, path).unwrap(),
                     );
                 });
 

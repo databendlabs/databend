@@ -119,7 +119,7 @@ impl FuseTable {
             };
 
             // let's instantiate it
-            let table = FuseTable::do_create(table_info)?;
+            let table = FuseTable::do_create(None, table_info)?;
             Ok(table.into())
         } else {
             Err(ErrorCode::TableHistoricalDataNotFound(

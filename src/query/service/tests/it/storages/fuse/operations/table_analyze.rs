@@ -50,7 +50,12 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     execute_command(ctx.clone(), statistics_sql).await?;
 
     let table = catalog
-        .get_table(ctx.get_tenant().as_str(), "default", "t")
+        .get_table(
+            Some(fixture.ctx().clone()),
+            ctx.get_tenant().as_str(),
+            "default",
+            "t",
+        )
         .await?;
 
     // check count

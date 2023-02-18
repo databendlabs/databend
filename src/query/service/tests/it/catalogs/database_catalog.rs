@@ -199,9 +199,11 @@ async fn test_catalogs_table() -> Result<()> {
         // list tables
         let table_list_3 = catalog.list_tables(tenant, "default").await?;
         assert_eq!(table_list_3.len(), 1);
-        let table = catalog.get_table(tenant, "default", "test_table").await?;
+        let table = catalog
+            .get_table(None, tenant, "default", "test_table")
+            .await?;
         assert_eq!(table.name(), "test_table");
-        let table = catalog.get_table_by_info(table.get_table_info())?;
+        let table = catalog.get_table_by_info(None, table.get_table_info())?;
         assert_eq!(table.name(), "test_table");
 
         // Tenant empty.

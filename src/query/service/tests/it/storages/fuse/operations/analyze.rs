@@ -66,7 +66,7 @@ async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
         let ctx = fixture.ctx();
         let catalog = ctx.get_catalog(fixture.default_catalog_name().as_str())?;
         let table = catalog
-            .get_table(ctx.get_tenant().as_str(), &db, &tbl)
+            .get_table(Some(fixture.ctx()), ctx.get_tenant().as_str(), &db, &tbl)
             .await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         fuse_table.truncate(ctx, false).await?;
@@ -77,7 +77,7 @@ async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
         let ctx = fixture.ctx();
         let catalog = ctx.get_catalog(fixture.default_catalog_name().as_str())?;
         let table = catalog
-            .get_table(ctx.get_tenant().as_str(), &db, &tbl)
+            .get_table(Some(fixture.ctx()), ctx.get_tenant().as_str(), &db, &tbl)
             .await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let snapshot_opt = fuse_table.read_table_snapshot().await?;

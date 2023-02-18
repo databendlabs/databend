@@ -38,11 +38,13 @@ use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
+use common_expression::Scalar;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableInfo;
 use common_sharing::create_share_table_operator;
+use common_sql::field_default_value;
 use common_sql::parse_exprs;
 use common_storage::init_operator;
 use common_storage::DataOperator;
@@ -94,6 +96,7 @@ pub struct FuseTable {
 
     pub(crate) operator: Operator,
     pub(crate) data_metrics: Arc<StorageMetrics>,
+    pub(crate) field_default_vals: Option<Vec<Scalar>>,
 }
 
 impl FuseTable {
@@ -101,10 +104,13 @@ impl FuseTable {
         ctx: Option<Arc<dyn TableContext>>,
         table_info: TableInfo,
     ) -> Result<Box<dyn Table>> {
-        Ok(Self::do_create(table_info)?)
+        Ok(Self::do_create(ctx, table_info)?)
     }
 
-    pub fn do_create(table_info: TableInfo) -> Result<Box<FuseTable>> {
+    pub fn do_create(
+        ctx: Option<Arc<dyn TableContext>>,
+        table_info: TableInfo,
+    ) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix(&table_info)?;
         let cluster_key_meta = table_info.meta.cluster_key();
 
@@ -145,6 +151,17 @@ impl FuseTable {
         let meta_location_generator =
             TableMetaLocationGenerator::with_prefix(storage_prefix).with_part_prefix(part_prefix);
 
+        let field_default_vals = match ctx {
+            Some(ctx) => {
+                let schema = table_info.schema();
+                let mut field_default_vals = Vec::with_capacity(schema.fields().len());
+                for field in schema.fields() {
+                    field_default_vals.push(field_default_value(ctx.clone(), field)?);
+                }
+                Some(field_default_vals)
+            }
+            None => None,
+        };
         Ok(Box::new(FuseTable {
             table_info,
             meta_location_generator,
@@ -153,6 +170,7 @@ impl FuseTable {
             data_metrics,
             storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
             table_compression: table_compression.as_str().try_into()?,
+            field_default_vals,
         }))
     }
 

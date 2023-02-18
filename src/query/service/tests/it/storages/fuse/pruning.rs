@@ -110,6 +110,7 @@ async fn test_block_pruner() -> Result<()> {
     let catalog = ctx.get_catalog("default")?;
     let table = catalog
         .get_table(
+            Some(fixture.ctx().clone()),
             fixture.default_tenant().as_str(),
             fixture.default_db_name().as_str(),
             test_tbl_name,
@@ -144,6 +145,7 @@ async fn test_block_pruner() -> Result<()> {
     // get the latest tbl
     let table = catalog
         .get_table(
+            Some(fixture.ctx().clone()),
             fixture.default_tenant().as_str(),
             fixture.default_db_name().as_str(),
             test_tbl_name,

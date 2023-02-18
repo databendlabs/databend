@@ -81,7 +81,12 @@ async fn test_compact_segment_normal_case() -> Result<()> {
 
     // compact segment
     let table = catalog
-        .get_table(ctx.get_tenant().as_str(), "default", "t")
+        .get_table(
+            Some(fixture.ctx().clone()),
+            ctx.get_tenant().as_str(),
+            "default",
+            "t",
+        )
         .await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let mutator = build_mutator(fuse_table, ctx.clone(), None).await?;
@@ -123,7 +128,12 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
 
     // compact segment
     let table = catalog
-        .get_table(ctx.get_tenant().as_str(), "default", "t")
+        .get_table(
+            Some(fixture.ctx().clone()),
+            ctx.get_tenant().as_str(),
+            "default",
+            "t",
+        )
         .await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let mutator = build_mutator(fuse_table, ctx.clone(), None).await?;
@@ -180,7 +190,12 @@ async fn test_compact_segment_unresolvable_conflict() -> Result<()> {
 
     // try compact segment
     let table = catalog
-        .get_table(ctx.get_tenant().as_str(), "default", "t")
+        .get_table(
+            Some(fixture.ctx().clone()),
+            ctx.get_tenant().as_str(),
+            "default",
+            "t",
+        )
         .await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let mutator = build_mutator(fuse_table, ctx.clone(), None).await?;

@@ -48,7 +48,12 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
 
     let catalog = ctx.get_catalog(fixture.default_catalog_name().as_str())?;
     let table = catalog
-        .get_table(ctx.get_tenant().as_str(), &db_name, &tbl_name)
+        .get_table(
+            Some(fixture.ctx().clone()),
+            ctx.get_tenant().as_str(),
+            &db_name,
+            &tbl_name,
+        )
         .await?;
     // delete
     let query = format!("delete from {}.{} where id=1", db_name, tbl_name);

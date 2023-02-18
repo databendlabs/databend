@@ -200,7 +200,7 @@ impl FuseTable {
         )
         .await?;
 
-        let block_reader = self.create_block_reader(projection, ctx.clone())?;
+        let block_reader = self.create_block_reader(projection)?;
         let schema = block_reader.schema();
         let filter = Arc::new(Some(
             filter
@@ -219,11 +219,7 @@ impl FuseTable {
         } else {
             source_col_indices.extend_from_slice(&remain_column_indices);
             Arc::new(Some(
-                (*self.create_block_reader(
-                    Projection::Columns(remain_column_indices),
-                    ctx.clone(),
-                )?)
-                .clone(),
+                (*self.create_block_reader(Projection::Columns(remain_column_indices))?).clone(),
             ))
         };
 
