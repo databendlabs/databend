@@ -37,7 +37,7 @@ use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::DbIdList;
 use common_meta_app::schema::DbIdListKey;
 use common_meta_app::schema::DropDatabaseReq;
-use common_meta_app::schema::DropTableReq;
+use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
@@ -1625,7 +1625,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- drop table with if_exists = false");
             {
-                let plan = DropTableReq {
+                let plan = DropTableByIdReq {
                     if_exists: false,
                     tb_id,
                 };
@@ -1648,7 +1648,7 @@ impl SchemaApiTestSuite {
 
             info!("--- drop table with if_exists = false again, error");
             {
-                let plan = DropTableReq {
+                let plan = DropTableByIdReq {
                     if_exists: false,
                     tb_id,
                 };
@@ -1664,7 +1664,7 @@ impl SchemaApiTestSuite {
 
             info!("--- drop table with if_exists = true again, ok");
             {
-                let plan = DropTableReq {
+                let plan = DropTableByIdReq {
                     if_exists: true,
                     tb_id,
                 };
@@ -2772,7 +2772,7 @@ impl SchemaApiTestSuite {
         {
             // first drop table
             let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
-            mt.drop_table_by_id(DropTableReq {
+            mt.drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
                 tb_id,
             })
@@ -2826,7 +2826,7 @@ impl SchemaApiTestSuite {
         {
             // first drop table
             let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
-            mt.drop_table_by_id(DropTableReq {
+            mt.drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
                 tb_id,
             })
@@ -2883,7 +2883,7 @@ impl SchemaApiTestSuite {
             // then drop table
             let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
             let tb_info = mt.get_table((tenant, db_name, tbl_name).into()).await?;
-            mt.drop_table_by_id(DropTableReq {
+            mt.drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
                 tb_id: tb_info.ident.table_id,
             })
@@ -2984,7 +2984,7 @@ impl SchemaApiTestSuite {
             let new_tb_info = mt.get_table((tenant, db_name, new_tbl_name).into()).await?;
 
             // then drop drop table2
-            let drop_plan = DropTableReq {
+            let drop_plan = DropTableByIdReq {
                 if_exists: false,
                 tb_id: new_tb_info.ident.table_id,
             };

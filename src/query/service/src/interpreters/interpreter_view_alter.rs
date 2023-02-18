@@ -18,7 +18,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CreateTableReq;
-use common_meta_app::schema::DropTableReq;
+use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_sql::plans::AlterViewPlan;
@@ -82,7 +82,7 @@ impl AlterViewInterpreter {
             )
             .await?;
         catalog
-            .drop_table_by_id(DropTableReq {
+            .drop_table_by_id(DropTableByIdReq {
                 if_exists: true,
                 tb_id: tbl.get_id(),
             })

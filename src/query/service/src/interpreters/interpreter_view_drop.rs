@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_app::schema::DropTableReq;
+use common_meta_app::schema::DropTableByIdReq;
 use common_sql::plans::DropViewPlan;
 use common_storages_view::view_table::VIEW_ENGINE;
 
@@ -65,7 +65,7 @@ impl Interpreter for DropViewInterpreter {
 
             let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
             catalog
-                .drop_table_by_id(DropTableReq {
+                .drop_table_by_id(DropTableByIdReq {
                     if_exists: self.plan.if_exists,
                     tb_id: table.get_id(),
                 })

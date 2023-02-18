@@ -25,8 +25,8 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
-use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::RenameDatabaseReply;
@@ -324,7 +324,7 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog.create_table(req).await
     }
 
-    async fn drop_table_by_id(&self, req: DropTableReq) -> Result<DropTableReply> {
+    async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply> {
         let res = self.mutable_catalog.drop_table_by_id(req).await?;
         Ok(res)
     }

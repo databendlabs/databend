@@ -26,7 +26,7 @@ use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DropDatabaseReq;
-use common_meta_app::schema::DropTableReq;
+use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
@@ -214,7 +214,7 @@ async fn test_catalogs_table() -> Result<()> {
     {
         let tbl = catalog.get_table(tenant, "default", "test_table").await?;
         let res = catalog
-            .drop_table_by_id(DropTableReq {
+            .drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
                 tb_id: tbl.get_table_info().ident.table_id,
             })

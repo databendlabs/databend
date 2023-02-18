@@ -19,8 +19,8 @@ use common_exception::Result;
 use common_meta_api::SchemaApi;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseInfo;
+use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
-use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
@@ -132,7 +132,7 @@ impl Database for ShareDatabase {
         Ok(())
     }
 
-    async fn drop_table_by_id(&self, req: DropTableReq) -> Result<DropTableReply> {
+    async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply> {
         let res = self.ctx.meta.drop_table_by_id(req).await?;
         Ok(res)
     }

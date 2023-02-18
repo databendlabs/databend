@@ -445,18 +445,18 @@ pub struct CreateTableReply {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct DropTableReq {
+pub struct DropTableByIdReq {
     pub if_exists: bool,
     pub tb_id: MetaId,
 }
 
-impl DropTableReq {
+impl DropTableByIdReq {
     pub fn tb_id(&self) -> MetaId {
         self.tb_id
     }
 }
 
-impl Display for DropTableReq {
+impl Display for DropTableByIdReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
