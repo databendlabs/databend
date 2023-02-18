@@ -64,7 +64,10 @@ pub struct MemoryTable {
 }
 
 impl MemoryTable {
-    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(
+        _ctx: Option<Arc<dyn TableContext>>,
+        table_info: TableInfo,
+    ) -> Result<Box<dyn Table>> {
         let table_id = &table_info.ident.table_id;
         let blocks = {
             let mut in_mem_data = IN_MEMORY_DATA.write();

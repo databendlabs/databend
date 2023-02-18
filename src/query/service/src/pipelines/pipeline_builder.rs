@@ -799,7 +799,7 @@ impl PipelineBuilder {
         let table = self
             .ctx
             .get_catalog(&insert_select.catalog)?
-            .get_table_by_info(&insert_select.table_info)?;
+            .get_table_by_info(Some(self.ctx.clone()), &insert_select.table_info)?;
 
         // Fill missing columns.
         {

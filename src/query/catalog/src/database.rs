@@ -39,6 +39,7 @@ use common_meta_app::schema::UpsertTableOptionReq;
 use dyn_clone::DynClone;
 
 use crate::table::Table;
+use crate::table_context::TableContext;
 
 #[async_trait::async_trait]
 pub trait Database: DynClone + Sync + Send {
@@ -73,7 +74,11 @@ pub trait Database: DynClone + Sync + Send {
     }
 
     // Build a `Arc<dyn Table>` from `TableInfo`.
-    fn get_table_by_info(&self, _table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+    fn get_table_by_info(
+        &self,
+        _ctx: Option<Arc<dyn TableContext>>,
+        _table_info: &TableInfo,
+    ) -> Result<Arc<dyn Table>> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement get_table_by_info in {} Database",
             self.name()
@@ -81,7 +86,11 @@ pub trait Database: DynClone + Sync + Send {
     }
 
     // Get one table by db and table name.
-    async fn get_table(&self, _table_name: &str) -> Result<Arc<dyn Table>> {
+    async fn get_table(
+        &self,
+        _ctx: Option<Arc<dyn TableContext>>,
+        _table_name: &str,
+    ) -> Result<Arc<dyn Table>> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement get_table in {} Database",
             self.name()

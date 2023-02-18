@@ -19,6 +19,7 @@ use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
+use common_storages_fuse::TableContext;
 use common_storages_memory::MemoryTable;
 use common_storages_null::NullTable;
 use common_storages_random::RandomTable;
@@ -29,16 +30,24 @@ use crate::fuse::FuseTable;
 use crate::Table;
 
 pub trait StorageCreator: Send + Sync {
-    fn try_create(&self, table_info: TableInfo) -> Result<Box<dyn Table>>;
+    fn try_create(
+        &self,
+        ctx: Option<Arc<dyn TableContext>>,
+        table_info: TableInfo,
+    ) -> Result<Box<dyn Table>>;
 }
 
 impl<T> StorageCreator for T
 where
-    T: Fn(TableInfo) -> Result<Box<dyn Table>>,
+    T: Fn(Option<Arc<dyn TableContext>>, TableInfo) -> Result<Box<dyn Table>>,
     T: Send + Sync,
 {
-    fn try_create(&self, table_info: TableInfo) -> Result<Box<dyn Table>> {
-        self(table_info)
+    fn try_create(
+        &self,
+        ctx: Option<Arc<dyn TableContext>>,
+        table_info: TableInfo,
+    ) -> Result<Box<dyn Table>> {
+        self(ctx, table_info)
     }
 }
 
@@ -105,13 +114,17 @@ impl StorageFactory {
         StorageFactory { storages: creators }
     }
 
-    pub fn get_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+    pub fn get_table(
+        &self,
+        ctx: Option<Arc<dyn TableContext>>,
+        table_info: &TableInfo,
+    ) -> Result<Arc<dyn Table>> {
         let engine = table_info.engine().to_uppercase();
         let factory = self.storages.get(&engine).ok_or_else(|| {
             ErrorCode::UnknownTableEngine(format!("Unknown table engine {}", engine))
         })?;
 
-        let table: Arc<dyn Table> = factory.creator.try_create(table_info.clone())?.into();
+        let table: Arc<dyn Table> = factory.creator.try_create(ctx, table_info.clone())?.into();
         Ok(table)
     }
 

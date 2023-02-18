@@ -121,7 +121,11 @@ impl Catalog for ImmutableCatalog {
         Err(ErrorCode::Unimplemented("Cannot rename system database"))
     }
 
-    fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+    fn get_table_by_info(
+        &self,
+        _ctx: Option<Arc<dyn TableContext>>,
+        table_info: &TableInfo,
+    ) -> Result<Arc<dyn Table>> {
         let table_id = table_info.ident.table_id;
 
         let table = self

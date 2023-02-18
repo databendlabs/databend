@@ -97,7 +97,10 @@ pub struct FuseTable {
 }
 
 impl FuseTable {
-    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(
+        ctx: Option<Arc<dyn TableContext>>,
+        table_info: TableInfo,
+    ) -> Result<Box<dyn Table>> {
         Ok(Self::do_create(table_info)?)
     }
 

@@ -102,7 +102,7 @@ impl QueryContext {
     ) -> Result<Arc<dyn Table>> {
         let catalog = self.get_catalog(catalog_name)?;
         match table_args {
-            None => catalog.get_table_by_info(table_info),
+            None => catalog.get_table_by_info(Some(Arc::new(self.to_owned())), table_info),
             Some(table_args) => Ok(catalog
                 .get_table_function(&table_info.name, table_args)?
                 .as_table()),

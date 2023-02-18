@@ -264,7 +264,11 @@ impl Catalog for HiveCatalog {
         ))
     }
 
-    fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+    fn get_table_by_info(
+        &self,
+        _ctx: Option<Arc<dyn TableContext>>,
+        table_info: &TableInfo,
+    ) -> Result<Arc<dyn Table>> {
         let res: Arc<dyn Table> = Arc::new(HiveTable::try_create(table_info.clone())?);
         Ok(res)
     }

@@ -206,9 +206,13 @@ impl Catalog for MutableCatalog {
         Ok(res)
     }
 
-    fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+    fn get_table_by_info(
+        &self,
+        ctx: Option<Arc<dyn TableContext>>,
+        table_info: &TableInfo,
+    ) -> Result<Arc<dyn Table>> {
         let storage = self.ctx.storage_factory.clone();
-        storage.get_table(table_info)
+        storage.get_table(ctx, table_info)
     }
 
     async fn get_table_meta_by_id(
@@ -221,13 +225,13 @@ impl Catalog for MutableCatalog {
 
     async fn get_table(
         &self,
-        _ctx: Option<Arc<dyn TableContext>>,
+        ctx: Option<Arc<dyn TableContext>>,
         tenant: &str,
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
         let db = self.get_database(tenant, db_name).await?;
-        db.get_table(table_name).await
+        db.get_table(ctx, table_name).await
     }
 
     async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {

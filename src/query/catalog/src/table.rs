@@ -334,7 +334,7 @@ pub trait TableExt: Table {
             tenant: "".to_owned(),
             db_type: DatabaseType::NormalDB,
         };
-        catalog.get_table_by_info(&table_info)
+        catalog.get_table_by_info(None, &table_info)
     }
 }
 

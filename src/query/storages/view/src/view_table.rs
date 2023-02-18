@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
 use common_catalog::table::Table;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
@@ -30,7 +31,10 @@ pub const VIEW_ENGINE: &str = "VIEW";
 pub const QUERY: &str = "query";
 
 impl ViewTable {
-    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(
+        _ctx: Option<Arc<dyn TableContext>>,
+        table_info: TableInfo,
+    ) -> Result<Box<dyn Table>> {
         let query = table_info.options().get(QUERY).cloned();
         if let Some(query) = query {
             Ok(Box::new(ViewTable { query, table_info }))

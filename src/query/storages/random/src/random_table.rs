@@ -42,7 +42,10 @@ pub struct RandomTable {
 }
 
 impl RandomTable {
-    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(
+        _ctx: Option<Arc<dyn TableContext>>,
+        table_info: TableInfo,
+    ) -> Result<Box<dyn Table>> {
         Ok(Box::new(Self { table_info }))
     }
 

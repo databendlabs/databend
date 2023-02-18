@@ -204,13 +204,17 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog.rename_database(req).await
     }
 
-    fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        let res = self.immutable_catalog.get_table_by_info(table_info);
+    fn get_table_by_info(
+        &self,
+        ctx: Option<Arc<dyn TableContext>>,
+        table_info: &TableInfo,
+    ) -> Result<Arc<dyn Table>> {
+        let res = self.immutable_catalog.get_table_by_info(None, table_info);
         match res {
             Ok(t) => Ok(t),
             Err(e) => {
                 if e.code() == ErrorCode::UNKNOWN_TABLE {
-                    self.mutable_catalog.get_table_by_info(table_info)
+                    self.mutable_catalog.get_table_by_info(ctx, table_info)
                 } else {
                     Err(e)
                 }
@@ -243,7 +247,7 @@ impl Catalog for DatabaseCatalog {
 
         let res = self
             .immutable_catalog
-            .get_table(ctx.clone(), tenant, db_name, table_name)
+            .get_table(None, tenant, db_name, table_name)
             .await;
         match res {
             Ok(v) => Ok(v),

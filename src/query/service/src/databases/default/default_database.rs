@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_catalog::table::Table;
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
 use common_meta_app::schema::CreateTableReq;
@@ -58,7 +59,7 @@ impl DefaultDatabase {
 
     fn load_tables(&self, table_infos: Vec<Arc<TableInfo>>) -> Result<Vec<Arc<dyn Table>>> {
         table_infos.iter().try_fold(vec![], |mut acc, item| {
-            let tbl = self.get_table_by_info(item.as_ref())?;
+            let tbl = self.get_table_by_info(None, item.as_ref())?;
             acc.push(tbl);
             Ok(acc)
         })
@@ -75,13 +76,21 @@ impl Database for DefaultDatabase {
         &self.db_info
     }
 
-    fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+    fn get_table_by_info(
+        &self,
+        ctx: Option<Arc<dyn TableContext>>,
+        table_info: &TableInfo,
+    ) -> Result<Arc<dyn Table>> {
         let storage = self.ctx.storage_factory.clone();
-        storage.get_table(table_info)
+        storage.get_table(ctx, table_info)
     }
 
     // Get one table by db and table name.
-    async fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
+    async fn get_table(
+        &self,
+        ctx: Option<Arc<dyn TableContext>>,
+        table_name: &str,
+    ) -> Result<Arc<dyn Table>> {
         let table_info = self
             .ctx
             .meta
@@ -91,7 +100,7 @@ impl Database for DefaultDatabase {
                 table_name,
             ))
             .await?;
-        self.get_table_by_info(table_info.as_ref())
+        self.get_table_by_info(ctx, table_info.as_ref())
     }
 
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {

@@ -506,8 +506,12 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
-    fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        self.cat.get_table_by_info(table_info)
+    fn get_table_by_info(
+        &self,
+        ctx: Option<Arc<dyn TableContext>>,
+        table_info: &TableInfo,
+    ) -> Result<Arc<dyn Table>> {
+        self.cat.get_table_by_info(ctx, table_info)
     }
 
     async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {

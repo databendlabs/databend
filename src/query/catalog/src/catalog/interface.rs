@@ -96,7 +96,11 @@ pub trait Catalog: DynClone + Send + Sync {
     /// Table.
 
     // Build a `Arc<dyn Table>` from `TableInfo`.
-    fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>>;
+    fn get_table_by_info(
+        &self,
+        ctx: Option<Arc<dyn TableContext>>,
+        table_info: &TableInfo,
+    ) -> Result<Arc<dyn Table>>;
 
     // Get the table meta by meta id.
     async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)>;
