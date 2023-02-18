@@ -15,7 +15,6 @@
 use std::fmt::Display;
 
 use anyerror::AnyError;
-use common_exception::ErrorCode;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
@@ -56,32 +55,6 @@ impl MetaNetworkError {
             Self::BadAddressFormat(e) => Self::BadAddressFormat(e.add_context(|| context)),
             Self::InvalidArgument(e) => e.add_context(context).into(),
             Self::InvalidReply(e) => e.add_context(context).into(),
-        }
-    }
-}
-
-impl From<MetaNetworkError> for ErrorCode {
-    fn from(net_err: MetaNetworkError) -> Self {
-        match net_err {
-            MetaNetworkError::BadAddressFormat(any_err) => {
-                ErrorCode::BadAddressFormat(any_err.to_string())
-            }
-            MetaNetworkError::ConnectionError(any_err) => {
-                ErrorCode::CannotConnectNode(any_err.to_string())
-            }
-            MetaNetworkError::GetNodeAddrError(_) => {
-                ErrorCode::MetaServiceError(net_err.to_string())
-            }
-            MetaNetworkError::TLSConfigError(any_err) => {
-                ErrorCode::TLSConfigurationFailure(any_err.to_string())
-            }
-            MetaNetworkError::DnsParseError(_) => ErrorCode::DnsParseError(net_err.to_string()),
-            MetaNetworkError::InvalidArgument(inv_arg) => {
-                ErrorCode::InvalidArgument(inv_arg.to_string())
-            }
-            MetaNetworkError::InvalidReply(inv_reply) => {
-                ErrorCode::InvalidReply(inv_reply.to_string())
-            }
         }
     }
 }

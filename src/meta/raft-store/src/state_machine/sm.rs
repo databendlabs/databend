@@ -20,7 +20,6 @@ use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use common_exception::WithContext;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::EffectiveMembership;
@@ -147,8 +146,7 @@ impl StateMachine {
         let db = get_sled_db();
 
         // it blocks and slow
-        db.drop_tree(tree_name)
-            .context(|| "drop prev state machine")?;
+        db.drop_tree(tree_name)?;
 
         Ok(())
     }
@@ -208,7 +206,7 @@ impl StateMachine {
 
         let mut kvs = Vec::new();
         for rkv in view {
-            let (k, v) = rkv.context(|| "taking snapshot")?;
+            let (k, v) = rkv?;
             kvs.push(vec![k.to_vec(), v.to_vec()]);
         }
         let snap = SerializableSnapshot { kvs };
