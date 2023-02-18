@@ -26,6 +26,7 @@ use common_exception::Result;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_meta_types::MatchSeq;
+use common_meta_types::MetaId;
 use maplit::hashmap;
 
 use crate::schema::database::DatabaseNameIdent;
@@ -444,32 +445,24 @@ pub struct CreateTableReply {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct DropTableReq {
+pub struct DropTableByIdReq {
     pub if_exists: bool,
-    pub name_ident: TableNameIdent,
+    pub tb_id: MetaId,
 }
 
-impl DropTableReq {
-    pub fn tenant(&self) -> &str {
-        &self.name_ident.tenant
-    }
-    pub fn db_name(&self) -> &str {
-        &self.name_ident.db_name
-    }
-    pub fn table_name(&self) -> &str {
-        &self.name_ident.table_name
+impl DropTableByIdReq {
+    pub fn tb_id(&self) -> MetaId {
+        self.tb_id
     }
 }
 
-impl Display for DropTableReq {
+impl Display for DropTableByIdReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "drop_table(if_exists={}):{}/{}-{}",
+            "drop_table_by_id(if_exists={}):{}",
             self.if_exists,
-            self.tenant(),
-            self.db_name(),
-            self.table_name()
+            self.tb_id(),
         )
     }
 }
