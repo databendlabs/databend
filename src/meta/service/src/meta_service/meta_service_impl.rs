@@ -27,7 +27,7 @@ use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::InvalidReply;
 use common_meta_types::LogEntry;
-use common_meta_types::MetaError;
+use common_meta_types::MetaAPIError;
 use common_meta_types::MetaNetworkError;
 use tonic::codegen::futures_core::Stream;
 
@@ -67,6 +67,7 @@ impl RaftService for RaftServiceImpl {
         &self,
         request: tonic::Request<RaftRequest>,
     ) -> Result<tonic::Response<RaftReply>, tonic::Status> {
+        // TODO: this method is never used
         common_tracing::extract_remote_span_as_parent(&request);
 
         let raft_req = request.into_inner();
@@ -82,7 +83,7 @@ impl RaftService for RaftServiceImpl {
 
         let res = match res {
             Ok(r) => {
-                let a: Result<AppliedState, MetaError> = r.try_into().map_err(|e: &str| {
+                let a: Result<AppliedState, MetaAPIError> = r.try_into().map_err(|e: &str| {
                     server_metrics::incr_proposals_failed();
 
                     let inv_reply = InvalidReply::new(
@@ -90,13 +91,13 @@ impl RaftService for RaftServiceImpl {
                         &AnyError::error(e),
                     );
                     let net_err = MetaNetworkError::InvalidReply(inv_reply);
-                    MetaError::NetworkError(net_err)
+                    MetaAPIError::NetworkError(net_err)
                 });
                 a
             }
             Err(e) => {
                 server_metrics::incr_proposals_failed();
-                Err(MetaError::from(e))
+                Err(e)
             }
         };
 

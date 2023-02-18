@@ -19,10 +19,8 @@ use serde::Serialize;
 
 use crate::protobuf::RaftReply;
 use crate::protobuf::RaftRequest;
-use crate::KVAppError;
 use crate::LogEntry;
 use crate::MetaAPIError;
-use crate::MetaError;
 
 impl tonic::IntoRequest<RaftRequest> for LogEntry {
     fn into_request(self) -> tonic::Request<RaftRequest> {
@@ -94,52 +92,6 @@ impl tonic::IntoRequest<RaftRequest> for &VoteRequest {
             data: serde_json::to_string(self).expect("fail to serialize"),
         };
         tonic::Request::new(mes)
-    }
-}
-
-impl<T> From<Result<T, KVAppError>> for RaftReply
-where T: Serialize
-{
-    fn from(r: Result<T, KVAppError>) -> Self {
-        match r {
-            Ok(x) => {
-                let data = serde_json::to_string(&x).expect("fail to serialize");
-                RaftReply {
-                    data,
-                    error: Default::default(),
-                }
-            }
-            Err(e) => {
-                let error = serde_json::to_string(&e).expect("fail to serialize");
-                RaftReply {
-                    data: Default::default(),
-                    error,
-                }
-            }
-        }
-    }
-}
-
-impl<T> From<Result<T, MetaError>> for RaftReply
-where T: Serialize
-{
-    fn from(r: Result<T, MetaError>) -> Self {
-        match r {
-            Ok(x) => {
-                let data = serde_json::to_string(&x).expect("fail to serialize");
-                RaftReply {
-                    data,
-                    error: Default::default(),
-                }
-            }
-            Err(e) => {
-                let error = serde_json::to_string(&e).expect("fail to serialize");
-                RaftReply {
-                    data: Default::default(),
-                    error,
-                }
-            }
-        }
     }
 }
 

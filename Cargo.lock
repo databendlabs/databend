@@ -1611,6 +1611,7 @@ dependencies = [
  "common-expression",
  "common-meta-app",
  "common-meta-kvapi",
+ "common-meta-stoerr",
  "common-meta-types",
  "common-proto-conv",
  "common-protos",
@@ -1675,7 +1676,6 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
- "thiserror",
  "tonic",
  "tracing",
 ]

@@ -74,7 +74,6 @@ use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::Key;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::GCDroppedDataReq;
-use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
 use common_meta_types::MetaError;
 use common_meta_types::Operation;
@@ -82,6 +81,7 @@ use tracing::debug;
 use tracing::info;
 
 use crate::is_all_db_data_removed;
+use crate::kv_app_error::KVAppError;
 use crate::serialize_struct;
 use crate::testing::get_kv_data;
 use crate::SchemaApi;

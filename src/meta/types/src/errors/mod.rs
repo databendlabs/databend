@@ -20,12 +20,7 @@
 //!
 //! ```text
 //! 
-//! KVAppError
-//! |
-//! +- AppError ------> TableNotFound
-//! |                   DbExists
-//! |                   ...
-//! `- MetaError
+//!    MetaError
 //!    |
 //!    +-  MetaStorageError
 //!    |
@@ -88,14 +83,6 @@
 //!
 //! ## Application level errors
 //!
-//! Application level errors(`KVAppError`) are defined for meta-store application, e.g.,
-//! `SchemaApi`, `ShareApi` etc. An application error has two main sub error: meta-store related or
-//! application related:
-//! - `KVAppError::MetaError` is error raised from inside meta-store and an application can do
-//!   nothing about it. It includes all errors that meta-store might return.
-//! - `KVAppError::AppError` are application specific errors, such as `TableNotFound`, `DbExists`.
-//!   These errors should be dealt with by an application correctly.
-//!
 //! ## `MetaError`
 //!
 //! `MetaError` defines every error could occur inside a meta-store implementation(an embedded meta-store
@@ -151,8 +138,6 @@
 //!
 //! - `ForwardRPCError` is another intermediate error to wrap a result of a forwarded request.
 
-pub mod app_error;
-pub mod kv_app_errors;
 pub mod meta_api_errors;
 pub mod meta_client_errors;
 pub mod meta_errors;
