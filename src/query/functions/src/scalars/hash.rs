@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::unnecessary-cast)]
+#![allow(clippy::unnecessary_cast)]
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hash;
