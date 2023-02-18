@@ -182,39 +182,23 @@ impl BlockReader {
         parts: &VecDeque<PartInfoPtr>,
     ) -> Result<DataBlock> {
         let part = FusePartInfo::from_part(&parts[0])?;
-        let mut need_to_fill_data = false;
 
-        let columns_meta = &part.columns_meta;
-        // check if need to fill default data
-        for column_node in &self.project_column_nodes {
-            for column_id in &column_node.leaf_column_ids {
-                if !columns_meta.contains_key(column_id) {
-                    need_to_fill_data = true;
-                    break;
-                }
-            }
-            if need_to_fill_data {
-                break;
-            }
-        }
+        let data_block_column_ids: HashSet<ColumnId> = part.columns_meta.keys().cloned().collect();
+        let default_vals = self.default_vals.clone();
 
-        if need_to_fill_data {
-            let data_block_column_ids: HashSet<ColumnId> =
-                part.columns_meta.keys().cloned().collect();
-            let default_vals = self.default_vals.clone();
-
-            Ok(DataBlock::create_with_default_value_and_block(
-                &self.projected_schema,
-                &data_block,
-                &data_block_column_ids,
-                &default_vals,
-            )?)
-        } else {
-            Ok(data_block)
-        }
+        DataBlock::create_with_default_value_and_block(
+            &self.projected_schema,
+            &data_block,
+            &data_block_column_ids,
+            &default_vals,
+        )
     }
 
-    pub fn build_block(&self, chunks: Vec<(usize, Box<dyn Array>)>) -> Result<DataBlock> {
+    pub fn build_block(
+        &self,
+        chunks: Vec<(usize, Box<dyn Array>)>,
+        default_val_indics: Option<HashSet<usize>>,
+    ) -> Result<DataBlock> {
         let mut rows = 0;
         let mut entries = Vec::with_capacity(chunks.len());
         for (index, _) in self.project_column_nodes.iter().enumerate() {
@@ -225,6 +209,15 @@ impl BlockReader {
                     value: Value::Column(Column::from_arrow(array.as_ref(), &data_type)),
                 });
                 rows = array.len();
+            } else if let Some(ref default_val_indics) = default_val_indics {
+                if default_val_indics.contains(&index) {
+                    let data_type: DataType = self.projected_schema.field(index).data_type().into();
+                    let default_val = &self.default_vals[index];
+                    entries.push(BlockEntry {
+                        data_type: data_type.clone(),
+                        value: Value::Scalar(default_val.to_owned()),
+                    });
+                }
             }
         }
         Ok(DataBlock::new(entries, rows))

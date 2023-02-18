@@ -104,6 +104,14 @@ impl TopKSorter {
     }
 
     #[inline]
+    pub fn never_match_value(&self, val: &Scalar) -> bool {
+        if self.data.len() != self.limit {
+            return false;
+        }
+        (self.asc && &self.data[0] < val) || (!self.asc && &self.data[0] > val)
+    }
+
+    #[inline]
     pub fn never_match_any(&self, col: &Column) -> bool {
         if self.data.len() != self.limit {
             return false;
