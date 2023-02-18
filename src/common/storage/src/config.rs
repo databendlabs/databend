@@ -48,25 +48,6 @@ pub struct StorageConfig {
     pub allow_insecure: bool,
 
     pub params: StorageParams,
-
-    pub cache: CacheConfig,
-}
-
-/// Config for cache backend.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CacheConfig {
-    pub num_cpus: u64,
-
-    pub params: StorageParams,
-}
-
-impl Default for CacheConfig {
-    fn default() -> Self {
-        Self {
-            num_cpus: 0,
-            params: StorageParams::None,
-        }
-    }
 }
 
 // TODO: This config should be moved out of common-storage crate.

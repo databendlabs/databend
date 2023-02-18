@@ -49,53 +49,6 @@ mod snapshot;
     init = "init_raft_store_ut!()",
     tracing_span = "debug"
 )]
-async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
-    let tc = new_raft_test_context();
-    let sm = StateMachine::open(&tc.raft_config, 1).await?;
-
-    for i in 0..3 {
-        // incr "foo"
-
-        let resp = sm.sm_tree.txn(true, |mut t| {
-            Ok(sm
-                .apply_cmd(
-                    &Cmd::IncrSeq {
-                        key: "foo".to_string(),
-                    },
-                    &mut t,
-                    None,
-                    0,
-                )
-                .unwrap())
-        })?;
-
-        assert_eq!(AppliedState::Seq { seq: i + 1 }, resp);
-
-        // incr "bar"
-
-        let resp = sm.sm_tree.txn(true, |mut t| {
-            Ok(sm
-                .apply_cmd(
-                    &Cmd::IncrSeq {
-                        key: "bar".to_string(),
-                    },
-                    &mut t,
-                    None,
-                    0,
-                )
-                .unwrap())
-        })?;
-        assert_eq!(AppliedState::Seq { seq: i + 1 }, resp);
-    }
-
-    Ok(())
-}
-
-#[async_entry::test(
-    worker_threads = 3,
-    init = "init_raft_store_ut!()",
-    tracing_span = "debug"
-)]
 async fn test_state_machine_apply_add_node() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
@@ -161,34 +114,6 @@ async fn test_state_machine_apply_add_node() -> anyhow::Result<()> {
             resp
         );
         assert_eq!(Some(n2()), sm.get_node(&1)?);
-    }
-
-    Ok(())
-}
-
-#[async_entry::test(
-    worker_threads = 3,
-    init = "init_raft_store_ut!()",
-    tracing_span = "debug"
-)]
-async fn test_state_machine_apply_incr_seq() -> anyhow::Result<()> {
-    let tc = new_raft_test_context();
-    let sm = StateMachine::open(&tc.raft_config, 1).await?;
-
-    let cases = common_meta_raft_store::state_machine::testing::cases_incr_seq();
-
-    for (name, txid, k, want) in cases.iter() {
-        let resp = sm
-            .apply(&Entry {
-                log_id: LogId { term: 0, index: 5 },
-                payload: EntryPayload::Normal(LogEntry {
-                    txid: txid.clone(),
-                    time_ms: None,
-                    cmd: Cmd::IncrSeq { key: k.to_string() },
-                }),
-            })
-            .await?;
-        assert_eq!(AppliedState::Seq { seq: *want }, resp, "{}", name);
     }
 
     Ok(())

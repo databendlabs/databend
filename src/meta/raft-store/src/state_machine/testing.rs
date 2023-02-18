@@ -50,13 +50,7 @@ pub fn snapshot_logs() -> (Vec<Entry<LogEntry>>, Vec<String>) {
         },
         Entry {
             log_id: LogId { term: 1, index: 8 },
-            payload: EntryPayload::Normal(LogEntry {
-                txid: None,
-                time_ms: None,
-                cmd: Cmd::IncrSeq {
-                    key: "c".to_string(),
-                },
-            }),
+            payload: EntryPayload::Blank,
         },
         Entry {
             log_id: LogId { term: 1, index: 9 },
@@ -77,7 +71,6 @@ pub fn snapshot_logs() -> (Vec<Entry<LogEntry>>, Vec<String>) {
         "[3, 2]:{\"Bool\":true}",                      // sm meta: init
         "[3, 3]:{\"Membership\":{\"log_id\":{\"term\":1,\"index\":5},\"membership\":{\"configs\":[[4,5,6]],\"all_nodes\":[4,5,6]}}}", // membership
         "[6, 97]:{\"seq\":1,\"meta\":null,\"data\":[65]}", // generic kv
-        "[7, 99]:1",                                       // sequence: c
         "[7, 103, 101, 110, 101, 114, 105, 99, 45, 107, 118]:1", // sequence: by upsertkv
     ]
     .iter()

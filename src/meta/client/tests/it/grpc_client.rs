@@ -22,6 +22,8 @@ use common_meta_app::schema::GetDatabaseReq;
 use common_meta_client::MetaGrpcClient;
 use common_meta_client::MIN_METASRV_SEMVER;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
+use common_meta_types::MetaClientError;
+use common_meta_types::MetaError;
 
 use crate::grpc_server::start_grpc_server;
 
@@ -69,7 +71,8 @@ async fn test_grpc_client_handshake_timeout() {
         .await;
 
         let got = res.unwrap_err();
-        let got = ErrorCode::from(got).message();
+        let got =
+            ErrorCode::from(MetaError::ClientError(MetaClientError::HandshakeError(got))).message();
         let expect = "failed to handshake with meta-service: when sending handshake rpc, cause: tonic::status::Status: status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} } source: transport error source: Timeout expired";
         assert_eq!(got, expect);
     }

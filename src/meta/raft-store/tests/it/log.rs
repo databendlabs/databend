@@ -17,6 +17,7 @@ use common_meta_raft_store::log::RaftLog;
 use common_meta_sled_store::openraft;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
+use common_meta_types::UpsertKV;
 use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
 use openraft::LogId;
@@ -54,13 +55,7 @@ async fn test_raft_log_append_and_range_get() -> anyhow::Result<()> {
         },
         Entry {
             log_id: LogId { term: 3, index: 4 },
-            payload: EntryPayload::Normal(LogEntry {
-                txid: None,
-                time_ms: None,
-                cmd: Cmd::IncrSeq {
-                    key: "foo".to_string(),
-                },
-            }),
+            payload: EntryPayload::Blank,
         },
         Entry {
             log_id: LogId { term: 1, index: 9 },
@@ -135,9 +130,7 @@ async fn test_raft_log_insert() -> anyhow::Result<()> {
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
                 time_ms: None,
-                cmd: Cmd::IncrSeq {
-                    key: "foo".to_string(),
-                },
+                cmd: Cmd::UpsertKV(UpsertKV::insert("foo", b"foo")),
             }),
         },
     ];
@@ -171,9 +164,7 @@ async fn test_raft_log_get() -> anyhow::Result<()> {
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
                 time_ms: None,
-                cmd: Cmd::IncrSeq {
-                    key: "foo".to_string(),
-                },
+                cmd: Cmd::UpsertKV(UpsertKV::insert("foo", b"foo")),
             }),
         },
     ];
@@ -211,9 +202,7 @@ async fn test_raft_log_last() -> anyhow::Result<()> {
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
                 time_ms: None,
-                cmd: Cmd::IncrSeq {
-                    key: "foo".to_string(),
-                },
+                cmd: Cmd::UpsertKV(UpsertKV::insert("foo", b"foo")),
             }),
         },
     ];
@@ -244,9 +233,7 @@ async fn test_raft_log_range_remove() -> anyhow::Result<()> {
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
                 time_ms: None,
-                cmd: Cmd::IncrSeq {
-                    key: "foo".to_string(),
-                },
+                cmd: Cmd::UpsertKV(UpsertKV::insert("foo", b"foo")),
             }),
         },
         Entry {

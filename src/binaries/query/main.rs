@@ -250,7 +250,7 @@ async fn main_entrypoint() -> Result<()> {
         }
     });
     println!("Storage: {}", conf.storage.params);
-    println!("Cache: {}", conf.storage.cache.params);
+    println!("Cache: {}", conf.cache.data_cache_storage.to_string());
     println!(
         "Builtin users: {}",
         conf.query

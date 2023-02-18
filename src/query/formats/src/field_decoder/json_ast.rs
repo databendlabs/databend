@@ -194,6 +194,16 @@ impl FieldJsonAstDecoder {
                 column.builder.push(micros.as_());
                 Ok(())
             }
+            Value::Number(number) => match number.as_i64() {
+                Some(n) => {
+                    check_timestamp(n)?;
+                    column.builder.push(n);
+                    Ok(())
+                }
+                None => Err(ErrorCode::BadArguments(
+                    "Incorrect timestamp value, must be i64",
+                )),
+            },
             _ => Err(ErrorCode::BadBytes("Incorrect boolean value")),
         }
     }

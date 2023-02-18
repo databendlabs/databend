@@ -17,6 +17,7 @@ use std::env::temp_dir;
 use std::fs;
 use std::io::Write;
 
+use common_config::CacheConfig;
 use common_config::CacheStorageTypeConfig;
 use common_config::CatalogConfig;
 use common_config::CatalogHiveConfig;
@@ -558,7 +559,6 @@ rpc_tls_server_key = ""
 rpc_tls_query_server_root_ca_cert = ""
 rpc_tls_query_service_domain_name = "localhost"
 table_engine_memory_enabled = true
-database_engine_github_enabled = true
 wait_timeout_mills = 5000
 max_query_log_size = 10000
 management_mode = false
@@ -808,5 +808,33 @@ fn test_env_config_obsoleted() -> Result<()> {
         });
     }
 
+    Ok(())
+}
+
+#[test]
+fn test_env_cache_config_and_defaults() -> Result<()> {
+    // test if one of the cache config option is overridden by environment variable
+    // default values of other cache config options are correct
+    //
+    // @see issue https://github.com/datafuselabs/databend/issues/10088
+    temp_env::with_vars(
+        vec![("CACHE_ENABLE_TABLE_META_CACHE", Some("true"))],
+        || {
+            let configured = InnerConfig::load_for_test()
+                .expect("must success")
+                .into_config();
+
+            let default = CacheConfig::default();
+            assert!(configured.cache.enable_table_meta_cache);
+            assert_eq!(
+                default.table_meta_segment_count,
+                configured.cache.table_meta_segment_count
+            );
+            assert_eq!(
+                default.table_meta_snapshot_count,
+                configured.cache.table_meta_snapshot_count
+            );
+        },
+    );
     Ok(())
 }

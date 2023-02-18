@@ -7,34 +7,34 @@ abs(Float64) :: Float64
 abs(Float64 NULL) :: Float64 NULL
 acos(Float64) :: Float64
 acos(Float64 NULL) :: Float64 NULL
-add_days(Timestamp, Int64) :: Timestamp
-add_days(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 add_days(Date, Int64) :: Date
 add_days(Date NULL, Int64 NULL) :: Date NULL
-add_hours(Timestamp, Int64) :: Timestamp
-add_hours(Timestamp NULL, Int64 NULL) :: Timestamp NULL
+add_days(Timestamp, Int64) :: Timestamp
+add_days(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 add_hours(Date, Int64) :: Timestamp
 add_hours(Date NULL, Int64 NULL) :: Timestamp NULL
-add_minutes(Timestamp, Int64) :: Timestamp
-add_minutes(Timestamp NULL, Int64 NULL) :: Timestamp NULL
+add_hours(Timestamp, Int64) :: Timestamp
+add_hours(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 add_minutes(Date, Int64) :: Timestamp
 add_minutes(Date NULL, Int64 NULL) :: Timestamp NULL
-add_months(Timestamp, Int64) :: Timestamp
-add_months(Timestamp NULL, Int64 NULL) :: Timestamp NULL
+add_minutes(Timestamp, Int64) :: Timestamp
+add_minutes(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 add_months(Date, Int64) :: Date
 add_months(Date NULL, Int64 NULL) :: Date NULL
-add_quarters(Timestamp, Int64) :: Timestamp
-add_quarters(Timestamp NULL, Int64 NULL) :: Timestamp NULL
+add_months(Timestamp, Int64) :: Timestamp
+add_months(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 add_quarters(Date, Int64) :: Date
 add_quarters(Date NULL, Int64 NULL) :: Date NULL
-add_seconds(Timestamp, Int64) :: Timestamp
-add_seconds(Timestamp NULL, Int64 NULL) :: Timestamp NULL
+add_quarters(Timestamp, Int64) :: Timestamp
+add_quarters(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 add_seconds(Date, Int64) :: Timestamp
 add_seconds(Date NULL, Int64 NULL) :: Timestamp NULL
-add_years(Timestamp, Int64) :: Timestamp
-add_years(Timestamp NULL, Int64 NULL) :: Timestamp NULL
+add_seconds(Timestamp, Int64) :: Timestamp
+add_seconds(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 add_years(Date, Int64) :: Date
 add_years(Date NULL, Int64 NULL) :: Date NULL
+add_years(Timestamp, Int64) :: Timestamp
+add_years(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 and(Boolean, Boolean) :: Boolean
 and(Boolean NULL, Boolean NULL) :: Boolean NULL
 and_filters(Boolean, Boolean) :: Boolean
@@ -351,26 +351,6 @@ city64withseed(Float64, Float64) :: UInt64
 city64withseed(Float64 NULL, Float64 NULL) :: UInt64 NULL
 city64withseed(Float64, Float32) :: UInt64
 city64withseed(Float64 NULL, Float32 NULL) :: UInt64 NULL
-city64withseed(Timestamp, UInt8) :: UInt64
-city64withseed(Timestamp NULL, UInt8 NULL) :: UInt64 NULL
-city64withseed(Timestamp, UInt16) :: UInt64
-city64withseed(Timestamp NULL, UInt16 NULL) :: UInt64 NULL
-city64withseed(Timestamp, UInt32) :: UInt64
-city64withseed(Timestamp NULL, UInt32 NULL) :: UInt64 NULL
-city64withseed(Timestamp, UInt64) :: UInt64
-city64withseed(Timestamp NULL, UInt64 NULL) :: UInt64 NULL
-city64withseed(Timestamp, Int8) :: UInt64
-city64withseed(Timestamp NULL, Int8 NULL) :: UInt64 NULL
-city64withseed(Timestamp, Int16) :: UInt64
-city64withseed(Timestamp NULL, Int16 NULL) :: UInt64 NULL
-city64withseed(Timestamp, Int32) :: UInt64
-city64withseed(Timestamp NULL, Int32 NULL) :: UInt64 NULL
-city64withseed(Timestamp, Int64) :: UInt64
-city64withseed(Timestamp NULL, Int64 NULL) :: UInt64 NULL
-city64withseed(Timestamp, Float64) :: UInt64
-city64withseed(Timestamp NULL, Float64 NULL) :: UInt64 NULL
-city64withseed(Timestamp, Float32) :: UInt64
-city64withseed(Timestamp NULL, Float32 NULL) :: UInt64 NULL
 city64withseed(Date, UInt8) :: UInt64
 city64withseed(Date NULL, UInt8 NULL) :: UInt64 NULL
 city64withseed(Date, UInt16) :: UInt64
@@ -391,6 +371,26 @@ city64withseed(Date, Float64) :: UInt64
 city64withseed(Date NULL, Float64 NULL) :: UInt64 NULL
 city64withseed(Date, Float32) :: UInt64
 city64withseed(Date NULL, Float32 NULL) :: UInt64 NULL
+city64withseed(Timestamp, UInt8) :: UInt64
+city64withseed(Timestamp NULL, UInt8 NULL) :: UInt64 NULL
+city64withseed(Timestamp, UInt16) :: UInt64
+city64withseed(Timestamp NULL, UInt16 NULL) :: UInt64 NULL
+city64withseed(Timestamp, UInt32) :: UInt64
+city64withseed(Timestamp NULL, UInt32 NULL) :: UInt64 NULL
+city64withseed(Timestamp, UInt64) :: UInt64
+city64withseed(Timestamp NULL, UInt64 NULL) :: UInt64 NULL
+city64withseed(Timestamp, Int8) :: UInt64
+city64withseed(Timestamp NULL, Int8 NULL) :: UInt64 NULL
+city64withseed(Timestamp, Int16) :: UInt64
+city64withseed(Timestamp NULL, Int16 NULL) :: UInt64 NULL
+city64withseed(Timestamp, Int32) :: UInt64
+city64withseed(Timestamp NULL, Int32 NULL) :: UInt64 NULL
+city64withseed(Timestamp, Int64) :: UInt64
+city64withseed(Timestamp NULL, Int64 NULL) :: UInt64 NULL
+city64withseed(Timestamp, Float64) :: UInt64
+city64withseed(Timestamp NULL, Float64 NULL) :: UInt64 NULL
+city64withseed(Timestamp, Float32) :: UInt64
+city64withseed(Timestamp NULL, Float32 NULL) :: UInt64 NULL
 city64withseed(Boolean, UInt8) :: UInt64
 city64withseed(Boolean NULL, UInt8 NULL) :: UInt64 NULL
 city64withseed(Boolean, UInt16) :: UInt64
@@ -1449,14 +1449,14 @@ minus(Float64, Float32) :: Float64
 minus(Float64 NULL, Float32 NULL) :: Float64 NULL
 minus(Float64, Float64) :: Float64
 minus(Float64 NULL, Float64 NULL) :: Float64 NULL
-minus(Timestamp, Int64) :: Timestamp
-minus(Timestamp NULL, Int64 NULL) :: Timestamp NULL
-minus(Timestamp, Timestamp) :: Int64
-minus(Timestamp NULL, Timestamp NULL) :: Int64 NULL
 minus(Date, Int64) :: Date
 minus(Date NULL, Int64 NULL) :: Date NULL
 minus(Date, Date) :: Int32
 minus(Date NULL, Date NULL) :: Int32 NULL
+minus(Timestamp, Int64) :: Timestamp
+minus(Timestamp NULL, Int64 NULL) :: Timestamp NULL
+minus(Timestamp, Timestamp) :: Int64
+minus(Timestamp NULL, Timestamp NULL) :: Int64 NULL
 modulo(UInt8, UInt8) :: UInt8
 modulo(UInt8 NULL, UInt8 NULL) :: UInt8 NULL
 modulo(UInt8, UInt16) :: UInt16
@@ -2104,14 +2104,14 @@ plus(Float64, Float32) :: Float64
 plus(Float64 NULL, Float32 NULL) :: Float64 NULL
 plus(Float64, Float64) :: Float64
 plus(Float64 NULL, Float64 NULL) :: Float64 NULL
-plus(Timestamp, Int64) :: Timestamp
-plus(Timestamp NULL, Int64 NULL) :: Timestamp NULL
-plus(Timestamp, Timestamp) :: Int64
-plus(Timestamp NULL, Timestamp NULL) :: Int64 NULL
 plus(Date, Int64) :: Date
 plus(Date NULL, Int64 NULL) :: Date NULL
 plus(Date, Date) :: Int32
 plus(Date NULL, Date NULL) :: Int32 NULL
+plus(Timestamp, Int64) :: Timestamp
+plus(Timestamp NULL, Int64 NULL) :: Timestamp NULL
+plus(Timestamp, Timestamp) :: Int64
+plus(Timestamp NULL, Timestamp NULL) :: Int64 NULL
 position(String, String) :: UInt64
 position(String NULL, String NULL) :: UInt64 NULL
 pow(Float64, Float64) :: Float64
@@ -2215,10 +2215,10 @@ siphash64(Float32) :: UInt64
 siphash64(Float32 NULL) :: UInt64 NULL
 siphash64(Float64) :: UInt64
 siphash64(Float64 NULL) :: UInt64 NULL
-siphash64(Timestamp) :: UInt64
-siphash64(Timestamp NULL) :: UInt64 NULL
 siphash64(Date) :: UInt64
 siphash64(Date NULL) :: UInt64 NULL
+siphash64(Timestamp) :: UInt64
+siphash64(Timestamp NULL) :: UInt64 NULL
 siphash64(Boolean) :: UInt64
 siphash64(Boolean NULL) :: UInt64 NULL
 siphash64(Variant) :: UInt64
@@ -2266,34 +2266,34 @@ substr_utf8(String, Int64) :: String
 substr_utf8(String NULL, Int64 NULL) :: String NULL
 substr_utf8(String, Int64, UInt64) :: String
 substr_utf8(String NULL, Int64 NULL, UInt64 NULL) :: String NULL
-subtract_days(Timestamp, Int64) :: Timestamp
-subtract_days(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 subtract_days(Date, Int64) :: Date
 subtract_days(Date NULL, Int64 NULL) :: Date NULL
-subtract_hours(Timestamp, Int64) :: Timestamp
-subtract_hours(Timestamp NULL, Int64 NULL) :: Timestamp NULL
+subtract_days(Timestamp, Int64) :: Timestamp
+subtract_days(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 subtract_hours(Date, Int64) :: Timestamp
 subtract_hours(Date NULL, Int64 NULL) :: Timestamp NULL
-subtract_minutes(Timestamp, Int64) :: Timestamp
-subtract_minutes(Timestamp NULL, Int64 NULL) :: Timestamp NULL
+subtract_hours(Timestamp, Int64) :: Timestamp
+subtract_hours(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 subtract_minutes(Date, Int64) :: Timestamp
 subtract_minutes(Date NULL, Int64 NULL) :: Timestamp NULL
-subtract_months(Timestamp, Int64) :: Timestamp
-subtract_months(Timestamp NULL, Int64 NULL) :: Timestamp NULL
+subtract_minutes(Timestamp, Int64) :: Timestamp
+subtract_minutes(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 subtract_months(Date, Int64) :: Date
 subtract_months(Date NULL, Int64 NULL) :: Date NULL
-subtract_quarters(Timestamp, Int64) :: Timestamp
-subtract_quarters(Timestamp NULL, Int64 NULL) :: Timestamp NULL
+subtract_months(Timestamp, Int64) :: Timestamp
+subtract_months(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 subtract_quarters(Date, Int64) :: Date
 subtract_quarters(Date NULL, Int64 NULL) :: Date NULL
-subtract_seconds(Timestamp, Int64) :: Timestamp
-subtract_seconds(Timestamp NULL, Int64 NULL) :: Timestamp NULL
+subtract_quarters(Timestamp, Int64) :: Timestamp
+subtract_quarters(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 subtract_seconds(Date, Int64) :: Timestamp
 subtract_seconds(Date NULL, Int64 NULL) :: Timestamp NULL
-subtract_years(Timestamp, Int64) :: Timestamp
-subtract_years(Timestamp NULL, Int64 NULL) :: Timestamp NULL
+subtract_seconds(Timestamp, Int64) :: Timestamp
+subtract_seconds(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 subtract_years(Date, Int64) :: Date
 subtract_years(Date NULL, Int64 NULL) :: Date NULL
+subtract_years(Timestamp, Int64) :: Timestamp
+subtract_years(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 tan(Float64) :: Float64
 tan(Float64 NULL) :: Float64 NULL
 time_slot(Timestamp) :: Timestamp
@@ -2468,10 +2468,10 @@ to_int64(Boolean) :: Int64
 to_int64(Boolean NULL) :: Int64 NULL
 to_int64(String) :: Int64
 to_int64(String NULL) :: Int64 NULL
-to_int64(Timestamp) :: Int64
-to_int64(Timestamp NULL) :: Int64 NULL
 to_int64(Date) :: Int64
 to_int64(Date NULL) :: Int64 NULL
+to_int64(Timestamp) :: Int64
+to_int64(Timestamp NULL) :: Int64 NULL
 to_int64(Variant) :: Int64
 to_int64(Variant NULL) :: Int64 NULL
 to_int8(UInt8) :: Int8
@@ -2502,10 +2502,10 @@ to_int8(Variant) :: Int8
 to_int8(Variant NULL) :: Int8 NULL
 to_minute(Timestamp) :: UInt8
 to_minute(Timestamp NULL) :: UInt8 NULL
-to_monday(Timestamp) :: Date
-to_monday(Timestamp NULL) :: Date NULL
 to_monday(Date) :: Date
 to_monday(Date NULL) :: Date NULL
+to_monday(Timestamp) :: Date
+to_monday(Timestamp NULL) :: Date NULL
 to_month(Date) :: UInt8
 to_month(Date NULL) :: UInt8 NULL
 to_month(Timestamp) :: UInt8
@@ -2522,36 +2522,36 @@ to_start_of_five_minutes(Timestamp) :: Timestamp
 to_start_of_five_minutes(Timestamp NULL) :: Timestamp NULL
 to_start_of_hour(Timestamp) :: Timestamp
 to_start_of_hour(Timestamp NULL) :: Timestamp NULL
-to_start_of_iso_year(Timestamp) :: Date
-to_start_of_iso_year(Timestamp NULL) :: Date NULL
 to_start_of_iso_year(Date) :: Date
 to_start_of_iso_year(Date NULL) :: Date NULL
+to_start_of_iso_year(Timestamp) :: Date
+to_start_of_iso_year(Timestamp NULL) :: Date NULL
 to_start_of_minute(Timestamp) :: Timestamp
 to_start_of_minute(Timestamp NULL) :: Timestamp NULL
-to_start_of_month(Timestamp) :: Date
-to_start_of_month(Timestamp NULL) :: Date NULL
 to_start_of_month(Date) :: Date
 to_start_of_month(Date NULL) :: Date NULL
-to_start_of_quarter(Timestamp) :: Date
-to_start_of_quarter(Timestamp NULL) :: Date NULL
+to_start_of_month(Timestamp) :: Date
+to_start_of_month(Timestamp NULL) :: Date NULL
 to_start_of_quarter(Date) :: Date
 to_start_of_quarter(Date NULL) :: Date NULL
+to_start_of_quarter(Timestamp) :: Date
+to_start_of_quarter(Timestamp NULL) :: Date NULL
 to_start_of_second(Timestamp) :: Timestamp
 to_start_of_second(Timestamp NULL) :: Timestamp NULL
 to_start_of_ten_minutes(Timestamp) :: Timestamp
 to_start_of_ten_minutes(Timestamp NULL) :: Timestamp NULL
-to_start_of_week(Timestamp) :: Date
-to_start_of_week(Timestamp NULL) :: Date NULL
 to_start_of_week(Date) :: Date
 to_start_of_week(Date NULL) :: Date NULL
-to_start_of_week(Timestamp, Int64) :: Date
-to_start_of_week(Timestamp NULL, Int64 NULL) :: Date NULL
+to_start_of_week(Timestamp) :: Date
+to_start_of_week(Timestamp NULL) :: Date NULL
 to_start_of_week(Date, Int64) :: Date
 to_start_of_week(Date NULL, Int64 NULL) :: Date NULL
-to_start_of_year(Timestamp) :: Date
-to_start_of_year(Timestamp NULL) :: Date NULL
+to_start_of_week(Timestamp, Int64) :: Date
+to_start_of_week(Timestamp NULL, Int64 NULL) :: Date NULL
 to_start_of_year(Date) :: Date
 to_start_of_year(Date NULL) :: Date NULL
+to_start_of_year(Timestamp) :: Date
+to_start_of_year(Timestamp NULL) :: Date NULL
 to_string(UInt8) :: String
 to_string(UInt8 NULL) :: String NULL
 to_string(UInt16) :: String
@@ -2574,10 +2574,10 @@ to_string(Float64) :: String
 to_string(Float64 NULL) :: String NULL
 to_string(Boolean) :: String
 to_string(Boolean NULL) :: String NULL
-to_string(Timestamp) :: String
-to_string(Timestamp NULL) :: String NULL
 to_string(Date) :: String
 to_string(Date NULL) :: String NULL
+to_string(Timestamp) :: String
+to_string(Timestamp NULL) :: String NULL
 to_string(Variant) :: String
 to_string(Variant NULL) :: String NULL
 to_timestamp(String) :: Timestamp
@@ -2920,10 +2920,10 @@ try_to_int64(Boolean) :: Int64 NULL
 try_to_int64(Boolean NULL) :: Int64 NULL
 try_to_int64(String) :: Int64 NULL
 try_to_int64(String NULL) :: Int64 NULL
-try_to_int64(Timestamp) :: Int64 NULL
-try_to_int64(Timestamp NULL) :: Int64 NULL
 try_to_int64(Date) :: Int64 NULL
 try_to_int64(Date NULL) :: Int64 NULL
+try_to_int64(Timestamp) :: Int64 NULL
+try_to_int64(Timestamp NULL) :: Int64 NULL
 try_to_int64(Variant) :: Int64 NULL
 try_to_int64(Variant NULL) :: Int64 NULL
 try_to_int8(UInt8) :: Int8 NULL
@@ -2974,10 +2974,10 @@ try_to_string(Float64) :: String NULL
 try_to_string(Float64 NULL) :: String NULL
 try_to_string(Boolean) :: String NULL
 try_to_string(Boolean NULL) :: String NULL
-try_to_string(Timestamp) :: String NULL
-try_to_string(Timestamp NULL) :: String NULL
 try_to_string(Date) :: String NULL
 try_to_string(Date NULL) :: String NULL
+try_to_string(Timestamp) :: String NULL
+try_to_string(Timestamp NULL) :: String NULL
 try_to_string(Variant) :: String NULL
 try_to_string(Variant NULL) :: String NULL
 try_to_timestamp(String) :: Timestamp NULL
@@ -3123,10 +3123,10 @@ xxhash32(Float32) :: UInt32
 xxhash32(Float32 NULL) :: UInt32 NULL
 xxhash32(Float64) :: UInt32
 xxhash32(Float64 NULL) :: UInt32 NULL
-xxhash32(Timestamp) :: UInt32
-xxhash32(Timestamp NULL) :: UInt32 NULL
 xxhash32(Date) :: UInt32
 xxhash32(Date NULL) :: UInt32 NULL
+xxhash32(Timestamp) :: UInt32
+xxhash32(Timestamp NULL) :: UInt32 NULL
 xxhash32(Boolean) :: UInt32
 xxhash32(Boolean NULL) :: UInt32 NULL
 xxhash32(Variant) :: UInt32
@@ -3153,10 +3153,10 @@ xxhash64(Float32) :: UInt64
 xxhash64(Float32 NULL) :: UInt64 NULL
 xxhash64(Float64) :: UInt64
 xxhash64(Float64 NULL) :: UInt64 NULL
-xxhash64(Timestamp) :: UInt64
-xxhash64(Timestamp NULL) :: UInt64 NULL
 xxhash64(Date) :: UInt64
 xxhash64(Date NULL) :: UInt64 NULL
+xxhash64(Timestamp) :: UInt64
+xxhash64(Timestamp NULL) :: UInt64 NULL
 xxhash64(Boolean) :: UInt64
 xxhash64(Boolean NULL) :: UInt64 NULL
 xxhash64(Variant) :: UInt64

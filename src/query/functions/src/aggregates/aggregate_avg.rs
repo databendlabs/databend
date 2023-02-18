@@ -20,89 +20,65 @@ use std::sync::Arc;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::number::Float64Type;
-use common_expression::types::number::Int8Type;
-use common_expression::types::number::Number;
-use common_expression::types::number::F64;
-use common_expression::types::ArgType;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberType;
-use common_expression::types::ValueType;
+use common_expression::types::decimal::*;
+use common_expression::types::*;
 use common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use common_expression::with_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
 use common_io::prelude::*;
-use num_traits::AsPrimitive;
-use num_traits::NumCast;
-use serde::de::DeserializeOwned;
+use ethnum::i256;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::aggregate_sum::sum_primitive;
+use super::aggregate_sum::DecimalSumState;
+use super::aggregate_sum::NumberSumState;
+use super::aggregate_sum::SumState;
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 
-// count = 0 means it's all nullable
-// so we do not need option like sum
 #[derive(Serialize, Deserialize)]
-struct AggregateAvgState<T: Number> {
-    #[serde(bound(deserialize = "T: DeserializeOwned"))]
+struct AvgState<T: SumState> {
     pub value: T,
     pub count: u64,
 }
 
-impl<T> AggregateAvgState<T>
-where T: std::ops::AddAssign + Number
-{
-    #[inline(always)]
-    fn add(&mut self, value: T, count: u64) {
-        self.value += value;
-        self.count += count;
-    }
-
-    #[inline(always)]
-    fn merge(&mut self, other: &Self) {
-        self.value += other.value;
-        self.count += other.count;
-    }
-}
-
 #[derive(Clone)]
-pub struct AggregateAvgFunction<T, SumT> {
+pub struct AggregateAvgFunction<T> {
     display_name: String,
     _arguments: Vec<DataType>,
     t: PhantomData<T>,
-    sum_t: PhantomData<SumT>,
+    return_type: DataType,
+
+    // only for decimals
+    // AVG：AVG(DECIMAL(a, b)) -> DECIMAL(38 or 76, max(b, 4))。
+    scale_add: u8,
 }
 
-impl<T, SumT> AggregateFunction for AggregateAvgFunction<T, SumT>
-where
-    T: Number + AsPrimitive<SumT>,
-    SumT: Number + Serialize + DeserializeOwned + std::ops::AddAssign,
+impl<T> AggregateFunction for AggregateAvgFunction<T>
+where T: SumState
 {
     fn name(&self) -> &str {
         "AggregateAvgFunction"
     }
 
     fn return_type(&self) -> Result<DataType> {
-        Ok(Float64Type::data_type())
+        Ok(self.return_type.clone())
     }
 
     fn init_state(&self, place: StateAddr) {
-        place.write(|| AggregateAvgState::<SumT> {
-            value: SumT::default(),
+        place.write(|| AvgState::<T> {
+            value: T::default(),
             count: 0,
         });
     }
 
     fn state_layout(&self) -> Layout {
-        Layout::new::<AggregateAvgState<SumT>>()
+        Layout::new::<AvgState<T>>()
     }
 
     fn accumulate(
@@ -112,11 +88,9 @@ where
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
-        let state = place.get::<AggregateAvgState<SumT>>();
-        let sum = sum_primitive::<T, SumT>(&columns[0], validity)?;
-        let cnt = input_rows - validity.map_or(0, |v| v.unset_bits());
-        state.add(sum, cnt as u64);
-        Ok(())
+        let state = place.get::<AvgState<T>>();
+        state.count += validity.map_or(input_rows as u64, |v| (v.len() - v.unset_bits()) as u64);
+        state.value.accumulate(&columns[0], validity)
     }
 
     fn accumulate_keys(
@@ -126,72 +100,70 @@ where
         columns: &[Column],
         _input_rows: usize,
     ) -> Result<()> {
-        let darray = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
-        darray.iter().zip(places.iter()).for_each(|(c, place)| {
-            let place = place.next(offset);
-            let state = place.get::<AggregateAvgState<SumT>>();
-            state.add(c.as_(), 1);
-        });
-        Ok(())
+        for place in places {
+            let state = place.next(offset).get::<AvgState<T>>();
+            state.count += 1;
+        }
+        T::accumulate_keys(places, offset, &columns[0])
     }
 
     fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
-        let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
-        let state = place.get::<AggregateAvgState<SumT>>();
-        let v = column[row].as_();
-        state.add(v, 1);
+        let state = place.get::<AvgState<T>>();
+        state.value.accumulate_row(&columns[0], row)?;
+        state.count += 1;
         Ok(())
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<AggregateAvgState<SumT>>();
-        serialize_into_buf(writer, state)
+        let state = place.get::<AvgState<T>>();
+
+        writer.write_scalar(&state.count)?;
+        state.value.serialize(writer)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<AggregateAvgState<SumT>>();
-        *state = deserialize_from_slice(reader)?;
-        Ok(())
+        let state = place.get::<AvgState<T>>();
+        state.count = reader.read_scalar()?;
+        state.value.deserialize(reader)
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let state = place.get::<AggregateAvgState<SumT>>();
-        let rhs = rhs.get::<AggregateAvgState<SumT>>();
-        state.merge(rhs);
-        Ok(())
+        let state = place.get::<AvgState<T>>();
+        let rhs = rhs.get::<AvgState<T>>();
+        state.count += rhs.count;
+        state.value.merge(&mut rhs.value)
     }
 
     #[allow(unused_mut)]
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
-        let state = place.get::<AggregateAvgState<SumT>>();
-        let builder = NumberType::<F64>::try_downcast_builder(builder).unwrap();
-        let v: f64 = NumCast::from(state.value).unwrap_or_default();
-        let val = v / state.count as f64;
-        builder.push(val.into());
-        Ok(())
+        let state = place.get::<AvgState<T>>();
+        state
+            .value
+            .merge_avg_result(builder, state.count, self.scale_add)
     }
 }
 
-impl<T, SumT> fmt::Display for AggregateAvgFunction<T, SumT> {
+impl<T> fmt::Display for AggregateAvgFunction<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
     }
 }
 
-impl<T, SumT> AggregateAvgFunction<T, SumT>
-where
-    T: Number + AsPrimitive<SumT>,
-    SumT: Number + Serialize + DeserializeOwned + std::ops::AddAssign,
+impl<T> AggregateAvgFunction<T>
+where T: SumState
 {
     pub fn try_create(
         display_name: &str,
         arguments: Vec<DataType>,
+        return_type: DataType,
+        scale_add: u8,
     ) -> Result<AggregateFunctionRef> {
         Ok(Arc::new(Self {
             display_name: display_name.to_string(),
             _arguments: arguments,
             t: PhantomData,
-            sum_t: PhantomData,
+            return_type,
+            scale_add,
         }))
     }
 }
@@ -211,9 +183,41 @@ pub fn try_create_aggregate_avg_function(
     };
     with_number_mapped_type!(|NUM_TYPE| match &data_type {
         DataType::Number(NumberDataType::NUM_TYPE) => {
-            AggregateAvgFunction::<NUM_TYPE, <NUM_TYPE as ResultTypeOfUnary>::Sum>::try_create(
+            type TSum = <NUM_TYPE as ResultTypeOfUnary>::Sum;
+            AggregateAvgFunction::<NumberSumState<NUM_TYPE, TSum>>::try_create(
                 display_name,
                 arguments,
+                Float64Type::data_type(),
+                0,
+            )
+        }
+        DataType::Decimal(DecimalDataType::Decimal128(s)) => {
+            let p = MAX_DECIMAL128_PRECISION;
+            let decimal_size = DecimalSize {
+                precision: p,
+                scale: s.scale.max(4),
+            };
+
+            AggregateAvgFunction::<DecimalSumState<i128>>::try_create(
+                display_name,
+                arguments,
+                DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
+                decimal_size.scale - s.scale,
+            )
+        }
+        DataType::Decimal(DecimalDataType::Decimal256(s)) => {
+            let p = MAX_DECIMAL256_PRECISION;
+
+            let decimal_size = DecimalSize {
+                precision: p,
+                scale: s.scale.max(4),
+            };
+
+            AggregateAvgFunction::<DecimalSumState<i256>>::try_create(
+                display_name,
+                arguments,
+                DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
+                decimal_size.scale - s.scale,
             )
         }
         _ => Err(ErrorCode::BadDataValueType(format!(

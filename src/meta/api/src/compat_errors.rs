@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// TODO(xp): update these comment when merged. And client/meta plot picture.
-// Before 2023-02-15(<= v0.9.38-nightly) meta-service returns KVAppError
-//
-// Since 2023-02-15(> v0.9.38-nightly) meta-service returns just MetaError
-// ---
 /// Compatible layer to receive different types of errors from meta-service.
 ///
 /// It allows the server side to switch to return a smaller error type, e.g., from KVAppError to MetaAPIError.
@@ -54,11 +49,11 @@ where
 #[cfg(test)]
 mod tests {
     use common_meta_types::ForwardToLeader;
-    use common_meta_types::KVAppError;
     use common_meta_types::MetaAPIError;
     use common_meta_types::MetaError;
 
-    use crate::errors::Compatible;
+    use crate::compat_errors::Compatible;
+    use crate::kv_app_error::KVAppError;
 
     #[test]
     fn test_read_api_err_from_api_err() -> anyhow::Result<()> {

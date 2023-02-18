@@ -38,7 +38,6 @@ use common_meta_app::storage::StorageParams;
 use common_meta_app::storage::StorageRedisConfig as InnerStorageRedisConfig;
 use common_meta_app::storage::StorageS3Config as InnerStorageS3Config;
 use common_meta_app::tenant::TenantQuota;
-use common_storage::CacheConfig as InnerCacheConfig;
 use common_storage::StorageConfig as InnerStorageConfig;
 use common_tracing::Config as InnerLogConfig;
 use common_tracing::FileConfig as InnerFileLogConfig;
@@ -182,7 +181,11 @@ impl Config {
             builder = builder.collect(from_self(arg_conf));
         }
 
-        Ok(builder.build()?)
+        // Check obsoleted.
+        let conf = builder.build()?;
+        conf.check_obsoleted()?;
+
+        Ok(conf)
     }
 }
 
@@ -245,9 +248,6 @@ pub struct StorageConfig {
     // OSS storage backend config
     #[clap(flatten)]
     pub oss: OssStorageConfig,
-
-    #[clap(skip)]
-    pub cache: StorageCacheConfig,
 }
 
 impl Default for StorageConfig {
@@ -269,8 +269,6 @@ impl From<InnerStorageConfig> for StorageConfig {
             azblob: Default::default(),
             hdfs: Default::default(),
             obs: Default::default(),
-
-            cache: inner.cache.into(),
         };
 
         match inner.params {
@@ -334,7 +332,6 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
                     _ => return Err(ErrorCode::StorageOther("not supported storage type")),
                 }
             },
-            cache: self.cache.try_into()?,
         })
     }
 }
@@ -441,82 +438,6 @@ impl From<InnerCatalogHiveConfig> for HiveCatalogConfig {
             meta_store_address: inner.address,
             protocol: inner.protocol.to_string(),
         }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct StorageCacheConfig {
-    #[serde(rename = "type")]
-    pub cache_type: String,
-
-    #[serde(rename = "num_cpus")]
-    pub cache_num_cpus: u64,
-
-    // Fs storage backend config.
-    pub fs: FsStorageConfig,
-
-    // Moka cache backend config.
-    pub moka: MokaStorageConfig,
-
-    // Redis cache backend config.
-    pub redis: RedisStorageConfig,
-}
-
-impl Default for StorageCacheConfig {
-    fn default() -> Self {
-        InnerCacheConfig::default().into()
-    }
-}
-
-impl From<InnerCacheConfig> for StorageCacheConfig {
-    fn from(inner: InnerCacheConfig) -> Self {
-        let mut cfg = Self {
-            cache_num_cpus: inner.num_cpus,
-            cache_type: "".to_string(),
-            fs: FsStorageConfig::default(),
-            moka: MokaStorageConfig::default(),
-            redis: RedisStorageConfig::default(),
-        };
-
-        match inner.params {
-            StorageParams::None => {
-                cfg.cache_type = "none".to_string();
-            }
-            StorageParams::Fs(v) => {
-                cfg.cache_type = "fs".to_string();
-                cfg.fs = v.into();
-            }
-            StorageParams::Moka(v) => {
-                cfg.cache_type = "moka".to_string();
-                cfg.moka = v.into();
-            }
-            StorageParams::Redis(v) => {
-                cfg.cache_type = "redis".to_string();
-                cfg.redis = v.into();
-            }
-            v => unreachable!("{v:?} should not be used as cache backend"),
-        }
-
-        cfg
-    }
-}
-
-impl TryInto<InnerCacheConfig> for StorageCacheConfig {
-    type Error = ErrorCode;
-    fn try_into(self) -> Result<InnerCacheConfig> {
-        Ok(InnerCacheConfig {
-            num_cpus: self.cache_num_cpus,
-            params: {
-                match self.cache_type.as_str() {
-                    "none" => StorageParams::None,
-                    "fs" => StorageParams::Fs(self.fs.try_into()?),
-                    "moka" => StorageParams::Moka(self.moka.try_into()?),
-                    "redis" => StorageParams::Redis(self.redis.try_into()?),
-                    _ => return Err(ErrorCode::StorageOther("not supported cache type")),
-                }
-            },
-        })
     }
 }
 
@@ -1203,10 +1124,6 @@ pub struct QueryConfig {
     #[clap(long, parse(try_from_str), default_value = "true")]
     pub table_engine_memory_enabled: bool,
 
-    /// Deprecated: Database engine github enabled
-    #[clap(long, parse(try_from_str), default_value = "true")]
-    pub database_engine_github_enabled: bool,
-
     #[clap(long, default_value = "5000")]
     pub wait_timeout_mills: u64,
 
@@ -1302,7 +1219,7 @@ pub struct QueryConfig {
     /// OBSOLETED: (cache of raw bloom filter data is no longer supported)
     /// Max bytes of cached bloom filter bytes.
     #[clap(long)]
-    table_cache_bloom_index_data_bytes: Option<u64>,
+    pub(crate) table_cache_bloom_index_data_bytes: Option<u64>,
 }
 
 impl Default for QueryConfig {
@@ -1315,7 +1232,6 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerQueryConfig> {
-        self.check_obsoleted()?;
         Ok(InnerQueryConfig {
             tenant_id: self.tenant_id,
             cluster_id: self.cluster_id,
@@ -1399,7 +1315,6 @@ impl From<InnerQueryConfig> for QueryConfig {
             rpc_tls_query_server_root_ca_cert: inner.rpc_tls_query_server_root_ca_cert,
             rpc_tls_query_service_domain_name: inner.rpc_tls_query_service_domain_name,
             table_engine_memory_enabled: inner.table_engine_memory_enabled,
-            database_engine_github_enabled: true,
             wait_timeout_mills: inner.wait_timeout_mills,
             max_query_log_size: inner.max_query_log_size,
             management_mode: inner.management_mode,
@@ -1817,7 +1732,7 @@ impl TryInto<InnerLocalConfig> for LocalConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default, deny_unknown_fields)]
 pub struct CacheConfig {
     /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
@@ -1891,6 +1806,13 @@ pub struct CacheConfig {
     /// and the access pattern will benefit from caching, consider enabled this cache.
     #[clap(long = "cache-table-data-deserialized-data-bytes", default_value = "0")]
     pub table_data_deserialized_data_bytes: u64,
+}
+
+impl Default for CacheConfig {
+    fn default() -> Self {
+        // Here we should (have to) convert self from the default value of  inner::CacheConfig :(
+        super::inner::CacheConfig::default().into()
+    }
 }
 
 #[inline]
@@ -2057,172 +1979,5 @@ mod cache_config_converters {
                 inner::CacheStorageTypeConfig::Disk => CacheStorageTypeConfig::Disk,
             }
         }
-    }
-}
-
-// Obsoleted configuration entries checking
-//
-// The following code should be removed from the release after the next release.
-// Just give user errors without any detail explanation and migration suggestions.
-impl QueryConfig {
-    fn check<T>(
-        target: &Option<T>,
-        cli_arg_name: &str,
-        alternative_cli_arg: &str,
-        alternative_toml_config: &str,
-        alternative_env_var: &str,
-    ) -> Option<String> {
-        target.as_ref().map(|_| {
-            format!(
-                "
- --------------------------------------------------------------
- *** {cli_arg_name} *** is obsoleted : 
- --------------------------------------------------------------
-   alternative command-line options : {alternative_cli_arg}
-   alternative environment variable : {alternative_env_var}
-            alternative toml config : {alternative_toml_config}
- --------------------------------------------------------------
-"
-            )
-        })
-    }
-    fn check_obsoleted(&self) -> Result<()> {
-        let check_results = vec![
-            Self::check(
-                &self.table_disk_cache_mb_size,
-                "table-disk-cache-mb-size",
-                "cache-disk-max-bytes",
-                r#"
-                    [cache]
-                    ...
-                    data_cache_storage = "disk"
-                    ...
-                    [cache.disk]
-                    max_bytes = [MAX_BYTES]  
-                    ...
-                  "#,
-                "CACHE_DISK_MAX_BYTES",
-            ),
-            Self::check(
-                &self.table_meta_cache_enabled,
-                "table-meta-cache-enabled",
-                "cache-enable-table-meta-cache",
-                r#"
-                    [cache]
-                    enable_table_meta_cache=[true|false]
-                  "#,
-                "CACHE_ENABLE_TABLE_META_CACHE",
-            ),
-            Self::check(
-                &self.table_cache_block_meta_count,
-                "table-cache-block-meta-count",
-                "N/A",
-                "N/A",
-                "N/A",
-            ),
-            Self::check(
-                &self.table_memory_cache_mb_size,
-                "table-memory-cache-mb-size",
-                "N/A",
-                "N/A",
-                "N/A",
-            ),
-            Self::check(
-                &self.table_disk_cache_root,
-                "table-disk-cache-root",
-                "cache-disk-path",
-                r#"
-                    [cache]
-                    ...
-                    data_cache_storage = "disk"
-                    ...
-                    [cache.disk]
-                    max_bytes = [MAX_BYTES]  
-                    path = [PATH]
-                    ...
-                    "#,
-                "CACHE_DISK_PATH",
-            ),
-            Self::check(
-                &self.table_cache_snapshot_count,
-                "table-cache-snapshot-count",
-                "cache-table-meta-snapshot-count",
-                r#"
-                    [cache]
-                    table_meta_snapshot_count = [COUNT]
-                    "#,
-                "CACHE_TABLE_META_SNAPSHOT_COUNT",
-            ),
-            Self::check(
-                &self.table_cache_statistic_count,
-                "table-cache-statistic-count",
-                "cache-table-meta-statistic-count",
-                r#"
-                    [cache]
-                    table_meta_statistic_count = [COUNT]
-                    "#,
-                "CACHE_TABLE_META_STATISTIC_COUNT",
-            ),
-            Self::check(
-                &self.table_cache_segment_count,
-                "table-cache-segment-count",
-                "cache-table-meta-segment-count",
-                r#"
-                    [cache]
-                    table_meta_segment_count = [COUNT]
-                    "#,
-                "CACHE_TABLE_META_SEGMENT_COUNT",
-            ),
-            Self::check(
-                &self.table_cache_bloom_index_meta_count,
-                "table-cache-bloom-index-meta-count",
-                "cache-table-bloom-index-meta-count",
-                r#"
-                    [cache]
-                    table_bloom_index_meta_count = [COUNT]
-                    "#,
-                "CACHE_TABLE_BLOOM_INDEX_META_COUNT",
-            ),
-            Self::check(
-                &self.table_cache_bloom_index_filter_count,
-                "table-cache-bloom-index-filter-count",
-                "cache-table-bloom-index-filter-count",
-                r#"
-                    [cache]
-                    table_bloom_index_filter_count = [COUNT]
-                    "#,
-                "CACHE_TABLE_BLOOM_INDEX_FILTER_COUNT",
-            ),
-            Self::check(
-                &self.table_cache_bloom_index_data_bytes,
-                "table-cache-bloom-index-data-bytes",
-                "N/A",
-                "N/A",
-                "N/A",
-            ),
-        ];
-        let messages = check_results.into_iter().flatten().collect::<Vec<_>>();
-        if !messages.is_empty() {
-            let errors = messages.join("\n");
-            Err(ErrorCode::InvalidConfig(format!("\n{errors}")))
-        } else {
-            Ok(())
-        }
-    }
-
-    pub const fn obsoleted_option_keys() -> &'static [&'static str; 11] {
-        &[
-            "table_disk_cache_mb_size",
-            "table_meta_cache_enabled",
-            "table_cache_block_meta_count",
-            "table_memory_cache_mb_size",
-            "table_disk_cache_root",
-            "table_cache_snapshot_count",
-            "table_cache_statistic_count",
-            "table_cache_segment_count",
-            "table_cache_bloom_index_meta_count",
-            "table_cache_bloom_index_filter_count",
-            "table_cache_bloom_index_data_bytes",
-        ]
     }
 }

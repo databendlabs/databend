@@ -42,6 +42,7 @@ use crate::message::JoinRequest;
 use crate::message::LeaveRequest;
 use crate::meta_service::raftmeta::MetaRaft;
 use crate::meta_service::MetaNode;
+use crate::metrics::server_metrics;
 use crate::metrics::ProposalPending;
 use crate::store::RaftStore;
 
@@ -238,6 +239,7 @@ impl<'a> MetaLeader<'a> {
             );
         }
         if let Err(err) = &write_res {
+            server_metrics::incr_proposals_failed();
             info!("raft.client_write res err: {:?}", err);
         }
 
