@@ -28,6 +28,7 @@ use serde::Serialize;
 use crate::date_helper::TzLUT;
 use crate::property::Domain;
 use crate::property::FunctionProperty;
+use crate::type_check::can_auto_cast_to;
 use crate::types::nullable::NullableColumn;
 use crate::types::*;
 use crate::utils::arrow::constant_bitmap;
@@ -183,6 +184,8 @@ pub struct FunctionRegistry {
     pub default_cast_rules: Vec<(DataType, DataType)>,
     /// Cast rules for specific functions, excluding the default cast rules.
     pub additional_cast_rules: HashMap<String, Vec<(DataType, DataType)>>,
+    /// The auto rules that should use TRY_CAST instead of CAST.
+    pub auto_try_cast_rules: Vec<(DataType, DataType)>,
 }
 
 impl FunctionRegistry {
@@ -277,6 +280,12 @@ impl FunctionRegistry {
             .unwrap_or(&self.default_cast_rules)
     }
 
+    pub fn is_auto_try_cast_rule(&self, arg_type: &DataType, sig_type: &DataType) -> bool {
+        self.auto_try_cast_rules
+            .iter()
+            .any(|(src_ty, dest_ty)| arg_type == src_ty && sig_type == dest_ty)
+    }
+
     pub fn register_function_factory(
         &mut self,
         name: &str,
@@ -311,6 +320,39 @@ impl FunctionRegistry {
             .entry(fn_name.to_string())
             .or_insert_with(Vec::new)
             .extend(additional_cast_rules.into_iter());
+    }
+
+    pub fn register_auto_try_cast_rules(
+        &mut self,
+        auto_try_cast_rules: impl IntoIterator<Item = (DataType, DataType)>,
+    ) {
+        self.auto_try_cast_rules.extend(auto_try_cast_rules);
+    }
+
+    pub fn check_ambiguity(&self) {
+        for (name, funcs) in &self.funcs {
+            let auto_cast_rules = self.get_auto_cast_rules(name);
+            for (i, former) in funcs.iter().enumerate() {
+                for latter in funcs.iter().skip(i + 1) {
+                    if former.signature.args_type.len() == latter.signature.args_type.len()
+                        && former
+                            .signature
+                            .args_type
+                            .iter()
+                            .zip(latter.signature.args_type.iter())
+                            .all(|(former_arg, latter_arg)| {
+                                can_auto_cast_to(latter_arg, former_arg, auto_cast_rules)
+                            })
+                    {
+                        panic!(
+                            "Ambiguous signatures for function:\n- {}\n- {}\n\
+                                    Suggestion: swap the order of the overloads.",
+                            former.signature, latter.signature
+                        );
+                    }
+                }
+            }
+        }
     }
 }
 

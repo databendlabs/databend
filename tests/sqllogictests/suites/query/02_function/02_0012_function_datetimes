@@ -5,14 +5,14 @@ statement ok
 set timezone = 'UTC'
 
 query B
-SELECT today() >= 18869
+SELECT today() >= 18869::DATE
 ----
 1
 
 
 
 query B
-SELECT now() >= 1630295616
+SELECT now() >= 1630295616::TIMESTAMP
 ----
 1
 

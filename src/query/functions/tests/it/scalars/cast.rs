@@ -349,6 +349,12 @@ fn test_cast_between_number_and_string(file: &mut impl Write, is_try: bool) {
             "9223372036854775807",
         ]),
     )]);
+    run_ast(file, format!("{prefix}CAST(str AS INT64)"), &[(
+        "str",
+        StringType::from_data_with_validity(vec!["foo", "foo", "0", "0"], vec![
+            true, false, true, false,
+        ]),
+    )]);
 
     run_ast(file, format!("{prefix}CAST(num AS STRING)"), &[(
         "num",

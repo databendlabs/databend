@@ -401,7 +401,7 @@ impl<'a> Evaluator<'a> {
                         .unwrap();
                     Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
                         column: new_col.column,
-                        validity: bitmap::or(&col.validity, &new_col.validity),
+                        validity: bitmap::and(&col.validity, &new_col.validity),
                     }))))
                 }
                 other => unreachable!("source: {}", other),

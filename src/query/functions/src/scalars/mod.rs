@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_expression::type_check::ALL_SIMPLE_CAST_FUNCTIONS;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::ALL_INTEGER_TYPES;
@@ -42,7 +43,6 @@ pub use comparison::is_like_pattern_escape;
 pub use comparison::PatternType;
 
 use self::comparison::ALL_COMP_FUNC_NAMES;
-use self::comparison::ALL_MATCH_FUNC_NAMES;
 
 #[ctor]
 pub static BUILTIN_FUNCTIONS: FunctionRegistry = builtin_functions();
@@ -52,6 +52,7 @@ fn builtin_functions() -> FunctionRegistry {
 
     register_auto_cast_rules(&mut registry);
 
+    variant::register(&mut registry);
     arithmetic::register(&mut registry);
     array::register(&mut registry);
     boolean::register(&mut registry);
@@ -62,7 +63,6 @@ fn builtin_functions() -> FunctionRegistry {
     string::register(&mut registry);
     string_multi_args::register(&mut registry);
     tuple::register(&mut registry);
-    variant::register(&mut registry);
     geo::register(&mut registry);
     hash::register(&mut registry);
     other::register(&mut registry);
@@ -74,6 +74,8 @@ fn builtin_functions() -> FunctionRegistry {
 fn register_auto_cast_rules(registry: &mut FunctionRegistry) {
     registry.register_default_cast_rules(GENERAL_CAST_RULES.iter().cloned());
     registry.register_default_cast_rules(CAST_FROM_STRING_RULES.iter().cloned());
+    registry.register_default_cast_rules(CAST_FROM_VARIANT_RULES());
+    registry.register_auto_try_cast_rules(CAST_FROM_VARIANT_RULES());
 
     for func_name in ["and", "or", "not", "xor"] {
         for data_type in ALL_INTEGER_TYPES {
@@ -84,29 +86,27 @@ fn register_auto_cast_rules(registry: &mut FunctionRegistry) {
             registry.register_additional_cast_rules(func_name, GENERAL_CAST_RULES.iter().cloned());
             registry
                 .register_additional_cast_rules(func_name, CAST_FROM_STRING_RULES.iter().cloned());
+            registry.register_additional_cast_rules(func_name, CAST_FROM_VARIANT_RULES());
         }
     }
 
-    registry.register_additional_cast_rules("eq", [
-        (DataType::String, DataType::Number(NumberDataType::Float64)),
-        (DataType::String, DataType::Number(NumberDataType::Int64)),
-    ]);
-    registry.register_additional_cast_rules("eq", GENERAL_CAST_RULES.iter().cloned());
-    registry.register_additional_cast_rules("eq", CAST_FROM_STRING_RULES.iter().cloned());
-
-    for func_name in ALL_MATCH_FUNC_NAMES {
-        registry.register_additional_cast_rules(func_name, [(DataType::Variant, DataType::String)]);
-        registry.register_additional_cast_rules("eq", GENERAL_CAST_RULES.iter().cloned());
-        registry.register_additional_cast_rules("eq", CAST_FROM_STRING_RULES.iter().cloned());
+    for func_name in ALL_SIMPLE_CAST_FUNCTIONS {
+        // Disable auto cast from strings or variants.
+        registry.register_additional_cast_rules(func_name, GENERAL_CAST_RULES.iter().cloned());
     }
 
     for func_name in ALL_COMP_FUNC_NAMES {
+        // Disable auto cast from strings, e.g., `1 < '1'`.
         registry.register_additional_cast_rules(func_name, GENERAL_CAST_RULES.iter().cloned());
+        registry.register_additional_cast_rules(func_name, CAST_FROM_VARIANT_RULES());
     }
 }
 
 /// The cast rules for any situation, including comparison functions, joins, etc.
 pub const GENERAL_CAST_RULES: AutoCastRules = &[
+    (DataType::String, DataType::Timestamp),
+    (DataType::String, DataType::Date),
+    (DataType::String, DataType::Boolean),
     (DataType::Date, DataType::Timestamp),
     (
         DataType::Number(NumberDataType::UInt8),
@@ -250,7 +250,122 @@ pub const CAST_FROM_STRING_RULES: AutoCastRules = &[
     (DataType::String, DataType::Number(NumberDataType::Int16)),
     (DataType::String, DataType::Number(NumberDataType::Int32)),
     (DataType::String, DataType::Number(NumberDataType::Int64)),
-    (DataType::String, DataType::Timestamp),
-    (DataType::String, DataType::Date),
-    (DataType::String, DataType::Boolean),
 ];
+
+#[allow(non_snake_case)]
+pub fn CAST_FROM_VARIANT_RULES() -> impl IntoIterator<Item = (DataType, DataType)> {
+    [
+        (
+            DataType::Variant,
+            DataType::Nullable(Box::new(DataType::Boolean)),
+        ),
+        (
+            DataType::Variant,
+            DataType::Nullable(Box::new(DataType::Date)),
+        ),
+        (
+            DataType::Variant,
+            DataType::Nullable(Box::new(DataType::Timestamp)),
+        ),
+        (
+            DataType::Variant,
+            DataType::Nullable(Box::new(DataType::String)),
+        ),
+        (
+            DataType::Variant,
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
+        ),
+        (
+            DataType::Variant,
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt16))),
+        ),
+        (
+            DataType::Variant,
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),
+        ),
+        (
+            DataType::Variant,
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+        ),
+        (
+            DataType::Variant,
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int8))),
+        ),
+        (
+            DataType::Variant,
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int16))),
+        ),
+        (
+            DataType::Variant,
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
+        ),
+        (
+            DataType::Variant,
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
+        ),
+        (
+            DataType::Variant,
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Float32))),
+        ),
+        (
+            DataType::Variant,
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Float64))),
+        ),
+        (
+            DataType::Nullable(Box::new(DataType::Variant)),
+            DataType::Nullable(Box::new(DataType::Boolean)),
+        ),
+        (
+            DataType::Nullable(Box::new(DataType::Variant)),
+            DataType::Nullable(Box::new(DataType::Date)),
+        ),
+        (
+            DataType::Nullable(Box::new(DataType::Variant)),
+            DataType::Nullable(Box::new(DataType::Timestamp)),
+        ),
+        (
+            DataType::Nullable(Box::new(DataType::Variant)),
+            DataType::Nullable(Box::new(DataType::String)),
+        ),
+        (
+            DataType::Nullable(Box::new(DataType::Variant)),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
+        ),
+        (
+            DataType::Nullable(Box::new(DataType::Variant)),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt16))),
+        ),
+        (
+            DataType::Nullable(Box::new(DataType::Variant)),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),
+        ),
+        (
+            DataType::Nullable(Box::new(DataType::Variant)),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+        ),
+        (
+            DataType::Nullable(Box::new(DataType::Variant)),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int8))),
+        ),
+        (
+            DataType::Nullable(Box::new(DataType::Variant)),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int16))),
+        ),
+        (
+            DataType::Nullable(Box::new(DataType::Variant)),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
+        ),
+        (
+            DataType::Nullable(Box::new(DataType::Variant)),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
+        ),
+        (
+            DataType::Nullable(Box::new(DataType::Variant)),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Float32))),
+        ),
+        (
+            DataType::Nullable(Box::new(DataType::Variant)),
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Float64))),
+        ),
+    ]
+}

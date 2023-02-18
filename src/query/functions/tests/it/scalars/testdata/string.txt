@@ -165,9 +165,9 @@ output         : 5
 
 ast            : octet_length(NULL)
 raw expr       : octet_length(NULL)
-checked expr   : length<Array(Nothing) NULL>(CAST(NULL AS Array(Nothing) NULL))
+checked expr   : length<Variant NULL>(CAST(NULL AS Variant NULL))
 optimized expr : NULL
-output type    : UInt8 NULL
+output type    : UInt32 NULL
 output domain  : {NULL}
 output         : NULL
 
