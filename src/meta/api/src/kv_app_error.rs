@@ -53,7 +53,7 @@ impl From<KVAppError> for ErrorCode {
     fn from(e: KVAppError) -> Self {
         match e {
             KVAppError::AppError(app_err) => app_err.into(),
-            KVAppError::MetaError(meta_err) => meta_err.into(),
+            KVAppError::MetaError(meta_err) => ErrorCode::MetaServiceError(meta_err.to_string()),
         }
     }
 }
