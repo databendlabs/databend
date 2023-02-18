@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use std::fmt;
+use std::net::AddrParseError;
 use std::net::SocketAddr;
 use std::str::FromStr;
 
-use common_exception::exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -97,7 +97,7 @@ impl NodeInfo {
         }
     }
 
-    pub fn ip_port(&self) -> Result<(String, u16)> {
+    pub fn ip_port(&self) -> Result<(String, u16), AddrParseError> {
         let addr = SocketAddr::from_str(&self.flight_address)?;
 
         Ok((addr.ip().to_string(), addr.port()))

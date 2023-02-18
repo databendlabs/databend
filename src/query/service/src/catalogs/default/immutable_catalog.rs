@@ -25,8 +25,8 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
-use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::RenameDatabaseReply;
@@ -174,7 +174,7 @@ impl Catalog for ImmutableCatalog {
         ))
     }
 
-    async fn drop_table(&self, _req: DropTableReq) -> Result<DropTableReply> {
+    async fn drop_table_by_id(&self, _req: DropTableByIdReq) -> Result<DropTableReply> {
         Err(ErrorCode::Unimplemented(
             "Cannot drop table in system database",
         ))

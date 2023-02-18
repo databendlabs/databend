@@ -24,7 +24,6 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::TableSchemaRef;
-use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::storage::StorageParams;
@@ -90,19 +89,6 @@ pub struct DropTablePlan {
 impl DropTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
-    }
-}
-
-impl From<DropTablePlan> for DropTableReq {
-    fn from(p: DropTablePlan) -> Self {
-        DropTableReq {
-            if_exists: p.if_exists,
-            name_ident: TableNameIdent {
-                tenant: p.tenant,
-                db_name: p.database,
-                table_name: p.table,
-            },
-        }
     }
 }
 

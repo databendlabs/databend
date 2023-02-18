@@ -15,7 +15,6 @@ test = false
 io-uring = ["sled/io_uring"]
 
 [dependencies]
-common-exception = { path = "../../common/exception" }
 common-meta-stoerr = { path = "../stoerr" }
 common-meta-types = { path = "../types" }
 

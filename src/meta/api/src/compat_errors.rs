@@ -49,11 +49,11 @@ where
 #[cfg(test)]
 mod tests {
     use common_meta_types::ForwardToLeader;
-    use common_meta_types::KVAppError;
     use common_meta_types::MetaAPIError;
     use common_meta_types::MetaError;
 
-    use crate::errors::Compatible;
+    use crate::compat_errors::Compatible;
+    use crate::kv_app_error::KVAppError;
 
     #[test]
     fn test_read_api_err_from_api_err() -> anyhow::Result<()> {
