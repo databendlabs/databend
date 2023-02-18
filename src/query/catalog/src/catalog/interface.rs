@@ -96,6 +96,7 @@ pub trait Catalog: DynClone + Send + Sync {
     /// Table.
 
     // Build a `Arc<dyn Table>` from `TableInfo`.
+    // If `ctx` is not None, then will get table schema field default values when init `dyn Table`.
     fn get_table_by_info(
         &self,
         ctx: Option<Arc<dyn TableContext>>,
@@ -106,6 +107,7 @@ pub trait Catalog: DynClone + Send + Sync {
     async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)>;
 
     // Get one table by db and table name.
+    // If `ctx` is not None, then will get table schema field default values when init `dyn Table`.
     async fn get_table(
         &self,
         ctx: Option<Arc<dyn TableContext>>,

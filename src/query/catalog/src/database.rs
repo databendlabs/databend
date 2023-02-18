@@ -74,6 +74,7 @@ pub trait Database: DynClone + Sync + Send {
     }
 
     // Build a `Arc<dyn Table>` from `TableInfo`.
+    // If `ctx` is not None, then will get table schema field default values when init `dyn Table`.
     fn get_table_by_info(
         &self,
         _ctx: Option<Arc<dyn TableContext>>,
@@ -86,6 +87,7 @@ pub trait Database: DynClone + Sync + Send {
     }
 
     // Get one table by db and table name.
+    // If `ctx` is not None, then will get table schema field default values when init `dyn Table`.
     async fn get_table(
         &self,
         _ctx: Option<Arc<dyn TableContext>>,

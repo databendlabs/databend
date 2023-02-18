@@ -59,6 +59,7 @@ impl DefaultDatabase {
 
     fn load_tables(&self, table_infos: Vec<Arc<TableInfo>>) -> Result<Vec<Arc<dyn Table>>> {
         table_infos.iter().try_fold(vec![], |mut acc, item| {
+            // No need to get schema field default values when load tables, so `ctx` param is None
             let tbl = self.get_table_by_info(None, item.as_ref())?;
             acc.push(tbl);
             Ok(acc)
