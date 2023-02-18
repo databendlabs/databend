@@ -161,8 +161,8 @@ const config = {
                                 to: '/doc/deploy'
                             },
                             {
-                                label: 'Develop',
-                                to: '/doc/develop'
+                                label: 'Releases',
+                                to: '/doc/releases'
                             },
                         ]
                     },
@@ -180,7 +180,7 @@ const config = {
                         ],
                     },
                 ],
-                copyright: `Copyright © ${new Date().getFullYear()} Datafuse Labs, Inc. Built with Docusaurus. <br><br> <img src="https://www.datocms-assets.com/31049/1618983297-powered-by-vercel.svg">`,
+                copyright: `Copyright © 2023 Datafuse Labs, Inc. Built with Docusaurus. <br><br> <img src="https://www.datocms-assets.com/31049/1618983297-powered-by-vercel.svg">`,
             },
             prism: {
                 theme: lightCodeTheme,
