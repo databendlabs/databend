@@ -37,7 +37,6 @@ pub use packets::ConnectionInfo;
 pub use packets::DataPacket;
 pub use packets::ExecutePartialQueryPacket;
 pub use packets::FragmentData;
-pub use packets::FragmentPayload;
 pub use packets::FragmentPlanPacket;
 pub use packets::InitNodesChannelPacket;
 pub use packets::Packet;

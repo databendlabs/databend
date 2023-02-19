@@ -27,7 +27,6 @@ use itertools::Itertools;
 use crate::api::ConnectionInfo;
 use crate::api::DataExchange;
 use crate::api::ExecutePartialQueryPacket;
-use crate::api::FragmentPayload;
 use crate::api::FragmentPlanPacket;
 use crate::api::InitNodesChannelPacket;
 use crate::api::QueryFragmentsPlanPacket;
@@ -39,14 +38,14 @@ use crate::sql::executor::PhysicalPlan;
 // Query plan fragment with executor name
 #[derive(Debug)]
 pub struct QueryFragmentAction {
-    pub payload: FragmentPayload,
+    pub physical_plan: PhysicalPlan,
     pub executor: String,
 }
 
 impl QueryFragmentAction {
-    pub fn create(executor: String, plan: PhysicalPlan) -> QueryFragmentAction {
+    pub fn create(executor: String, physical_plan: PhysicalPlan) -> QueryFragmentAction {
         QueryFragmentAction {
-            payload: FragmentPayload::Plan(plan),
+            physical_plan,
             executor,
         }
     }
@@ -85,7 +84,7 @@ impl QueryFragmentActions {
     pub fn get_schema(&self) -> Result<DataSchemaRef> {
         let mut actions_schema = Vec::with_capacity(self.fragment_actions.len());
         for fragment_action in &self.fragment_actions {
-            actions_schema.push(fragment_action.payload.schema()?);
+            actions_schema.push(fragment_action.physical_plan.output_schema()?);
         }
 
         if actions_schema.is_empty() {
@@ -358,7 +357,7 @@ impl QueryFragmentsActions {
             for fragment_action in &fragment_actions.fragment_actions {
                 let fragment_packet = FragmentPlanPacket::create(
                     fragment_actions.fragment_id,
-                    fragment_action.payload.clone(),
+                    fragment_action.physical_plan.clone(),
                     fragment_actions.data_exchange.clone(),
                 );
 
