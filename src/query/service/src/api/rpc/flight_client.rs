@@ -178,6 +178,7 @@ impl FlightExchange {
 
         Self::start_push_worker(network_tx.clone(), response_rx.clone());
 
+        let f = Arc::new(f);
         common_base::base::tokio::spawn(async move {
             while let Some(message) = streaming.next().await {
                 match message {
@@ -185,18 +186,28 @@ impl FlightExchange {
                         if !response_rx.is_closed() {
                             response_rx.close();
 
-                            // Send ClosingOutput response after other response.
-                            while let Ok(response) = response_rx.recv().await {
-                                let _ = network_tx.send(response).await;
-                            }
+                            let f = f.clone();
+                            let network_tx = network_tx.clone();
+                            let response_rx = response_rx.clone();
+                            common_base::base::tokio::spawn(async move {
+                                // Send ClosingOutput response after other response.
+                                while let Ok(response) = response_rx.recv().await {
+                                    let _ = network_tx.send(response).await;
+                                }
 
-                            let _ = network_tx.send(f(DataPacket::ClosingOutput)).await;
+                                let _ = network_tx.send(f(DataPacket::ClosingOutput)).await;
+                            });
                         }
                     }
                     Ok(message) if DataPacket::is_closing_output(&message) => {
                         if !tx.is_closed() {
                             tx.close();
-                            let _ = network_tx.send(f(DataPacket::ClosingInput)).await;
+
+                            let f = f.clone();
+                            let network_tx = network_tx.clone();
+                            common_base::base::tokio::spawn(async move {
+                                let _ = network_tx.send(f(DataPacket::ClosingInput)).await;
+                            });
                         }
                     }
                     other => {
