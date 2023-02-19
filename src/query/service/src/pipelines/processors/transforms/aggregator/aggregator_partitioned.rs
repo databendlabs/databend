@@ -240,16 +240,6 @@ where
     }
 }
 
-impl PartitionedAggregatorLike for SingleStateAggregator<true> {
-    const SUPPORT_TWO_LEVEL: bool = false;
-    type PartitionedAggregator = SingleStateAggregator<true>;
-}
-
-impl PartitionedAggregatorLike for SingleStateAggregator<false> {
-    const SUPPORT_TWO_LEVEL: bool = false;
-    type PartitionedAggregator = SingleStateAggregator<false>;
-}
-
 impl<Method, const HAS_AGG: bool> PartitionedAggregatorLike
     for ParallelFinalAggregator<HAS_AGG, Method>
 where

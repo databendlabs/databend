@@ -39,10 +39,10 @@ impl TransformAggregator {
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         if aggregator_params.group_columns.is_empty() {
-            return AggregatorTransform::create(
-                ctx,
-                transform_params,
-                FinalSingleStateAggregator::try_create(&aggregator_params, max_threads)?,
+            return FinalSingleStateAggregator::try_create(
+                transform_params.transform_input_port,
+                transform_params.transform_output_port,
+                &aggregator_params,
             );
         }
 
@@ -125,7 +125,7 @@ enum AggregatorTransform<TAggregator: Aggregator + PartitionedAggregatorLike> {
 }
 
 impl<TAggregator: Aggregator + PartitionedAggregatorLike + 'static>
-AggregatorTransform<TAggregator>
+    AggregatorTransform<TAggregator>
 {
     pub fn create(
         ctx: Arc<QueryContext>,
@@ -190,7 +190,7 @@ AggregatorTransform<TAggregator>
 }
 
 impl<TAggregator: Aggregator + PartitionedAggregatorLike + 'static> Processor
-for AggregatorTransform<TAggregator>
+    for AggregatorTransform<TAggregator>
 {
     fn name(&self) -> String {
         TAggregator::NAME.to_string()
@@ -222,7 +222,7 @@ for AggregatorTransform<TAggregator>
 }
 
 impl<TAggregator: Aggregator + PartitionedAggregatorLike + 'static>
-AggregatorTransform<TAggregator>
+    AggregatorTransform<TAggregator>
 {
     #[inline(always)]
     fn consume_event(&mut self) -> Result<Event> {

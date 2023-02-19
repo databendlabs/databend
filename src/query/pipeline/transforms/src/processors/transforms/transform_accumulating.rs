@@ -1,10 +1,12 @@
 use std::any::Any;
 use std::sync::Arc;
-use common_expression::DataBlock;
+
 use common_exception::Result;
-use common_pipeline_core::processors::port::{InputPort, OutputPort};
-use common_pipeline_core::processors::Processor;
+use common_expression::DataBlock;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::Processor;
 
 pub trait AccumulatingTransform {
     const NAME: &'static str;
@@ -41,10 +43,11 @@ impl<T: AccumulatingTransform + 'static> AccumulatingTransformer<T> {
 
 impl<T: AccumulatingTransform + 'static> Drop for AccumulatingTransformer<T> {
     fn drop(&mut self) {
-        self.inner.on_finish().unwrap();
+        if !self.called_on_finish {
+            self.inner.on_finish().unwrap();
+        }
     }
 }
-
 
 #[async_trait::async_trait]
 impl<T: AccumulatingTransform + 'static> Processor for AccumulatingTransformer<T> {
@@ -113,4 +116,3 @@ impl<T: AccumulatingTransform + 'static> Processor for AccumulatingTransformer<T
         Ok(())
     }
 }
-
