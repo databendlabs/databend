@@ -95,7 +95,8 @@ pub trait Interpreter: Sync + Send {
             return Ok(Box::pin(DataBlockStream::create(None, vec![])));
         }
 
-        let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
+        let pulling_executor =
+            PipelinePullingExecutor::from_pipelines(ctx.clone(), build_res, settings)?;
 
         ctx.set_executor(Arc::downgrade(&pulling_executor.get_inner()));
         Ok(Box::pin(ProgressStream::try_create(
