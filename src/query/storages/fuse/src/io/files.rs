@@ -19,7 +19,11 @@ use common_base::runtime::Runtime;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use futures::Stream;
 use futures_util::future;
+use futures_util::TryStreamExt;
+use opendal::ObjectMetadata;
+use opendal::ObjectMode;
 use opendal::Operator;
 use tracing::warn;
 use tracing::Instrument;
@@ -28,6 +32,11 @@ use tracing::Instrument;
 pub struct Files {
     ctx: Arc<dyn TableContext>,
     operator: Operator,
+}
+
+pub struct FileEntry<T> {
+    pub converted: T,
+    pub path: String,
 }
 
 impl Files {
@@ -93,5 +102,30 @@ impl Files {
     #[inline]
     async fn do_remove_file_by_location(operator: Operator, location: &str) -> Result<()> {
         Ok(operator.object(location.as_ref()).delete().await?)
+    }
+
+    pub fn list_files<T>(
+        operator: Operator,
+        path: String,
+    ) -> impl Stream<Item = Result<FileEntry<T>>>
+    where
+        T: From<ObjectMetadata>,
+    {
+        futures::stream::once(async move { operator.object(&path).list().await })
+            .map_ok(|entry_stream| {
+                entry_stream.try_filter_map(|object| async move {
+                    if let ObjectMode::FILE = object.mode().await? {
+                        let entry = FileEntry {
+                            converted: T::from(object.metadata().await?),
+                            path: object.path().to_owned(),
+                        };
+                        Ok(Some(entry))
+                    } else {
+                        Ok(None)
+                    }
+                })
+            })
+            .try_flatten()
+            .map_err(|e| ErrorCode::StorageOther(format!("list file failure: {}", e)))
     }
 }

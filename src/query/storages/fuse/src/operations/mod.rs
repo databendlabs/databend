@@ -18,6 +18,7 @@ mod commit;
 mod compact;
 mod delete;
 mod fuse_sink;
+mod gc;
 mod mutation;
 mod navigate;
 mod operation_log;

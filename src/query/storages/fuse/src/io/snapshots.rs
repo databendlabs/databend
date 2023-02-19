@@ -91,7 +91,7 @@ impl SnapshotsIO {
         &self,
         snapshot_files: &[String],
     ) -> Result<Vec<Result<Arc<TableSnapshot>>>> {
-        let ctx = self.ctx.clone();
+        let ctx = &self.ctx;
         let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
 
@@ -126,6 +126,50 @@ impl SnapshotsIO {
     }
 
     // TODO oops, another duplication
+    pub async fn read_snapshots_stream_new<T>(
+        &self,
+        snapshot_files: &[String],
+    ) -> Result<Vec<Result<T>>>
+    where
+        T: From<(String, Arc<TableSnapshot>)> + Send + 'static,
+    {
+        let ctx = &self.ctx;
+        let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+
+        // 1.1 combine all the tasks.
+        let mut iter = snapshot_files.iter();
+        let tasks = std::iter::from_fn(move || {
+            if let Some(location) = iter.next() {
+                let location = location.clone();
+                let format_version = self.format_version;
+                let operator = self.operator.clone();
+                Some(async move {
+                    let r = Self::read_snapshot(location.clone(), format_version, operator).await;
+                    r.map(|v: Arc<TableSnapshot>| T::from((location, v)))
+                })
+            } else {
+                None
+            }
+        });
+
+        // 1.2 build the runtime.
+        let semaphore = Semaphore::new(max_io_requests);
+        let snapshot_runtime = Arc::new(Runtime::with_worker_threads(
+            max_runtime_threads,
+            Some("fuse-req-snapshots-worker".to_owned()),
+        )?);
+
+        // 1.3 spawn all the tasks to the runtime.
+        let join_handlers = snapshot_runtime.try_spawn_batch(semaphore, tasks).await?;
+
+        // 1.4 get all the result.
+        future::try_join_all(join_handlers)
+            .await
+            .map_err(|e| ErrorCode::StorageOther(format!("read snapshots failure, {}", e)))
+    }
+
+    // TODO oops, another duplication
     pub async fn read_snapshots_stream<T>(
         &self,
         snapshot_files: &[String],
@@ -133,7 +177,7 @@ impl SnapshotsIO {
     where
         T: From<Arc<TableSnapshot>> + Send + 'static,
     {
-        let ctx = self.ctx.clone();
+        let ctx = &self.ctx;
         let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
 
@@ -216,8 +260,8 @@ impl SnapshotsIO {
     where
         T: Fn(String),
     {
-        let ctx = self.ctx.clone();
-        let data_accessor = self.operator.clone();
+        let ctx = &self.ctx;
+        let data_accessor = &self.operator;
 
         // List all the snapshot file paths
         // note that snapshot file paths of ongoing txs might be included
@@ -336,7 +380,7 @@ impl SnapshotsIO {
         limit: Option<usize>,
         exclude_file: Option<&str>,
     ) -> Result<Vec<String>> {
-        let data_accessor = self.operator.clone();
+        let data_accessor = &self.operator;
 
         let mut file_list = vec![];
         let mut ds = data_accessor.object(prefix).list().await?;

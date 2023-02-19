@@ -55,11 +55,17 @@ impl FuseTable {
         let block_path = format!("{}/{}", table_prefix, FUSE_TBL_BLOCK_PREFIX);
         let block_index_pref = format!("{}/{}", table_prefix, FUSE_TBL_BLOCK_INDEX_PREFIX);
 
-        // collect orphan snapshot
-        let (segments_should_be_kept, _orphan_snapshot) =
-            self.process_snapshot(ctx, snapshot_path).await?;
+        let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+        let chunk_size = max_io_requests;
 
-        // collect orphan segments
+        // scan the snapshot path
+        // - To limit the memory pressure, orphans will be removed in-place
+        // - Return the path digests of segments that should be kept
+        let (segments_should_be_kept, _orphan_snapshot) =
+            self.scan_snapshots(ctx, snapshot_path).await?;
+
+        // scan the snapshot path
+        // To limit the memory pressure, orphans will be removed in-place.
         let blocks_should_be_kept = self
             .process_segments(segment_path, segments_should_be_kept)
             .await?;
@@ -73,7 +79,7 @@ impl FuseTable {
             .await
     }
 
-    async fn process_snapshot(
+    async fn scan_snapshots(
         &self,
         ctx: &Arc<dyn TableContext>,
         snapshot_path: String,

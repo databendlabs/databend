@@ -19,6 +19,7 @@ mod segments;
 mod snapshots;
 mod write;
 
+pub use files::FileEntry;
 pub use files::Files;
 pub use locations::TableMetaLocationGenerator;
 pub use read::BlockReader;
