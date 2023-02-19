@@ -64,8 +64,7 @@ impl Debug for Pipeline {
 
 pub type InitCallback = Arc<Box<dyn Fn() -> Result<()> + Send + Sync + 'static>>;
 
-pub type FinishedCallback =
-    Arc<Box<dyn Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>>;
+pub type FinishedCallback = Box<dyn FnOnce(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>;
 
 impl Pipeline {
     pub fn create() -> Pipeline {
@@ -142,7 +141,7 @@ impl Pipeline {
     }
 
     pub fn add_transform<F>(&mut self, f: F) -> Result<()>
-    where F: Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> {
+        where F: Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> {
         let mut transform_builder = TransformPipeBuilder::create();
         for _index in 0..self.output_len() {
             let input_port = InputPort::create();
@@ -159,7 +158,7 @@ impl Pipeline {
     // Add source processor to pipeline.
     // numbers: how many output pipe numbers.
     pub fn add_source<F>(&mut self, f: F, numbers: usize) -> Result<()>
-    where F: Fn(Arc<OutputPort>) -> Result<ProcessorPtr> {
+        where F: Fn(Arc<OutputPort>) -> Result<ProcessorPtr> {
         if numbers == 0 {
             return Err(ErrorCode::Internal(
                 "Source output port numbers cannot be zero.",
@@ -177,7 +176,7 @@ impl Pipeline {
 
     // Add sink processor to pipeline.
     pub fn add_sink<F>(&mut self, f: F) -> Result<()>
-    where F: Fn(Arc<InputPort>) -> Result<ProcessorPtr> {
+        where F: Fn(Arc<InputPort>) -> Result<ProcessorPtr> {
         let mut sink_builder = SinkPipeBuilder::create();
         for _ in 0..self.output_len() {
             let input = InputPort::create();
@@ -306,22 +305,30 @@ impl Pipeline {
         self.on_init = Some(Arc::new(Box::new(f)));
     }
 
-    pub fn set_on_finished<F: Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>(
+    pub fn set_on_finished<F: FnOnce(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>(
         &mut self,
         f: F,
     ) {
-        if let Some(on_finished) = &self.on_finished {
-            let old_finished = on_finished.clone();
-
-            self.on_finished = Some(Arc::new(Box::new(move |may_error| {
-                old_finished(may_error)?;
+        if let Some(on_finished) = self.on_finished.take() {
+            self.on_finished = Some(Box::new(move |may_error| {
+                on_finished(may_error)?;
                 f(may_error)
-            })));
+            }));
 
             return;
         }
+        // if let Some(on_finished) = &self.on_finished {
+        //     let old_finished = on_finished.clone();
+        //
+        //     self.on_finished = Some(Arc::new(Box::new(move |may_error| {
+        //         old_finished(may_error)?;
+        //         f(may_error)
+        //     })));
+        //
+        //     return;
+        // }
 
-        self.on_finished = Some(Arc::new(Box::new(f)));
+        self.on_finished = Some(Box::new(f));
     }
 
     pub fn take_on_init(&mut self) -> InitCallback {
@@ -333,7 +340,7 @@ impl Pipeline {
 
     pub fn take_on_finished(&mut self) -> FinishedCallback {
         match self.on_finished.take() {
-            None => Arc::new(Box::new(|_may_error| Ok(()))),
+            None => Box::new(|_may_error| Ok(())),
             Some(on_finished) => on_finished,
         }
     }

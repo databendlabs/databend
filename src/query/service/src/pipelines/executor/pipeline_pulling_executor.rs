@@ -97,14 +97,21 @@ pub struct PipelinePullingExecutor {
 }
 
 impl PipelinePullingExecutor {
-    fn wrap_pipeline(pipeline: &mut Pipeline, tx: SyncSender<DataBlock>) -> Result<()> {
+    fn wrap_pipeline(pipeline: &mut Pipeline, mut tx: SyncSender<DataBlock>) -> Result<()> {
         if pipeline.is_pushing_pipeline()? || !pipeline.is_pulling_pipeline()? {
             return Err(ErrorCode::Internal(
                 "Logical error, PipelinePullingExecutor can only work on pulling pipeline.",
             ));
         }
 
-        pipeline.add_sink(|input| Ok(ProcessorPtr::create(PullingSink::create(tx.clone(), input))))
+        pipeline.add_sink(|input| Ok(ProcessorPtr::create(PullingSink::create(tx.clone(), input))))?;
+
+        pipeline.set_on_finished(move |_may_error| {
+            drop(tx);
+            Ok(())
+        });
+
+        Ok(())
     }
 
     pub fn try_create(
@@ -114,6 +121,7 @@ impl PipelinePullingExecutor {
         let (sender, receiver) = std::sync::mpsc::sync_channel(pipeline.output_len());
 
         Self::wrap_pipeline(&mut pipeline, sender)?;
+
         let executor = PipelineExecutor::create(pipeline, settings)?;
         Ok(PipelinePullingExecutor {
             receiver,
@@ -145,7 +153,7 @@ impl PipelinePullingExecutor {
         let threads_executor = self.executor.clone();
         let thread_function = Self::thread_function(state, threads_executor);
         #[allow(unused_mut)]
-        let mut thread_name = Some(String::from("PullingExecutor"));
+            let mut thread_name = Some(String::from("PullingExecutor"));
 
         #[cfg(debug_assertions)]
         {

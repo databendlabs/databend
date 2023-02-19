@@ -39,7 +39,7 @@ use crate::pipelines::pipeline::Pipeline;
 pub type InitCallback = Arc<Box<dyn Fn() -> Result<()> + Send + Sync + 'static>>;
 
 pub type FinishedCallback =
-    Arc<Box<dyn Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>>;
+Box<dyn FnOnce(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>;
 
 pub struct PipelineExecutor {
     threads_num: usize,
@@ -48,7 +48,7 @@ pub struct PipelineExecutor {
     pub async_runtime: Arc<Runtime>,
     pub global_tasks_queue: Arc<ExecutorTasksQueue>,
     on_init_callback: InitCallback,
-    on_finished_callback: FinishedCallback,
+    on_finished_callback: Mutex<Option<FinishedCallback>>,
     settings: ExecutorSettings,
     finished_notify: Notify,
     finished_error: Mutex<Option<ErrorCode>>,
@@ -108,13 +108,13 @@ impl PipelineExecutor {
 
                 Ok(())
             })),
-            Arc::new(Box::new(move |may_error| {
-                for on_finished_callback in &on_finished_callbacks {
+            Box::new(move |may_error| {
+                for on_finished_callback in on_finished_callbacks {
                     on_finished_callback(may_error)?;
                 }
 
                 Ok(())
-            })),
+            }),
             settings,
         )
     }
@@ -135,7 +135,7 @@ impl PipelineExecutor {
             workers_condvar,
             global_tasks_queue,
             on_init_callback,
-            on_finished_callback,
+            on_finished_callback: Mutex::new(Some(on_finished_callback)),
             async_runtime: GlobalIORuntime::instance(),
             settings,
             finished_notify: Notify::new(),
@@ -177,7 +177,12 @@ impl PipelineExecutor {
                 if let Some(error) = finished_error_guard.as_ref() {
                     let may_error = Some(error.clone());
                     drop(finished_error_guard);
-                    (self.on_finished_callback)(&may_error)?;
+
+                    let mut on_finished_callback = self.on_finished_callback.lock();
+                    if let Some(on_finished_callback) = on_finished_callback.take() {
+                        (on_finished_callback)(&may_error)?;
+                    }
+
                     return Err(may_error.unwrap());
                 }
             }
@@ -185,12 +190,19 @@ impl PipelineExecutor {
             // We will ignore the abort query error, because returned by finished_error if abort query.
             if matches!(&thread_res, Err(error) if error.code() != ErrorCode::ABORTED_QUERY) {
                 let may_error = Some(thread_res.unwrap_err());
-                (self.on_finished_callback)(&may_error)?;
+                let mut on_finished_callback = self.on_finished_callback.lock();
+                if let Some(on_finished_callback) = on_finished_callback.take() {
+                    (on_finished_callback)(&may_error)?;
+                }
                 return Err(may_error.unwrap());
             }
         }
 
-        (self.on_finished_callback)(&None)?;
+        let mut on_finished_callback = self.on_finished_callback.lock();
+        if let Some(on_finished_callback) = on_finished_callback.take() {
+            (on_finished_callback)(&None)?;
+        }
+        // (self.on_finished_callback)(&None)?;
         Ok(())
     }
 
@@ -251,7 +263,7 @@ impl PipelineExecutor {
         for thread_num in 0..threads {
             let this = self.clone();
             #[allow(unused_mut)]
-            let mut name = Some(format!("PipelineExecutor-{}", thread_num));
+                let mut name = Some(format!("PipelineExecutor-{}", thread_num));
 
             #[cfg(debug_assertions)]
             {
