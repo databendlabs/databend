@@ -145,11 +145,16 @@ impl ExploreExprTask {
         }
     }
 
-    fn calc_operator_rule_set(&self, operator: &RelOperator) -> roaring::RoaringBitmap {
+    fn calc_operator_rule_set(
+        &self,
+        optimizer: &CascadesOptimizer,
+        operator: &RelOperator,
+    ) -> roaring::RoaringBitmap {
         unsafe {
             operator
                 .exploration_candidate_rules()
                 .bitand(&RULE_FACTORY.exploration_rules)
+                .bitand(&optimizer.explore_rule_set)
         }
     }
 
@@ -162,7 +167,7 @@ impl ExploreExprTask {
             .memo
             .group(self.group_index)?
             .m_expr(self.m_expr_index)?;
-        let rule_set = self.calc_operator_rule_set(&m_expr.plan);
+        let rule_set = self.calc_operator_rule_set(optimizer, &m_expr.plan);
 
         for rule_id in rule_set.iter() {
             let apply_rule_task = ApplyRuleTask::with_parent(

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use roaring::RoaringBitmap;
+
 use crate::optimizer::RuleID;
 use crate::optimizer::RuleSet;
 
@@ -39,4 +41,25 @@ fn join_rule_set_rs_b2() -> RuleSet {
 /// Read paper "The Complexity of Transformation-Based Join Enumeration" for more details.
 fn join_rule_set_rs_l1() -> RuleSet {
     RuleSet::create_with_ids(vec![RuleID::CommuteJoinBaseTable, RuleID::LeftExchangeJoin]).unwrap()
+}
+
+pub fn calc_explore_rule_set(enable_bushy_join: bool) -> roaring::RoaringBitmap {
+    if enable_bushy_join {
+        calc_join_rule_set_rs_b2()
+    } else {
+        calc_join_rule_set_rs_l1()
+    }
+}
+
+/// Get rule set of join order RS-B2, which may generate bushy trees.
+/// Read paper "The Complexity of Transformation-Based Join Enumeration" for more details.
+fn calc_join_rule_set_rs_b2() -> roaring::RoaringBitmap {
+    (RuleID::CommuteJoin as u32..RuleID::ExchangeJoin as u32).collect::<RoaringBitmap>()
+}
+
+/// Get rule set of join order RS-L1, which will only generate left-deep trees.
+/// Read paper "The Complexity of Transformation-Based Join Enumeration" for more details.
+fn calc_join_rule_set_rs_l1() -> roaring::RoaringBitmap {
+    (RuleID::CommuteJoinBaseTable as u32..RuleID::LeftExchangeJoin as u32)
+        .collect::<RoaringBitmap>()
 }

@@ -58,12 +58,12 @@ pub enum RuleID {
 
     // Exploration rules
     CommuteJoin,
-    CommuteJoinBaseTable,
     LeftAssociateJoin,
     RightAssociateJoin,
+    ExchangeJoin,
+    CommuteJoinBaseTable,
     LeftExchangeJoin,
     RightExchangeJoin,
-    ExchangeJoin,
 }
 
 impl Display for RuleID {
