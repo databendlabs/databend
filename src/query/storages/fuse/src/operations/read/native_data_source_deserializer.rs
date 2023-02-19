@@ -580,8 +580,6 @@ impl Processor for NativeDeserializeDataTransform {
             for index in self.remain_columns.iter() {
                 if let Some(mut array_iter) = self.array_iters.remove(index) {
                     let skip_pages = self.array_skip_pages.get(index).unwrap();
-
-                    println!("\t remain nth skip_pages={:?}", skip_pages);
                     match array_iter.nth(*skip_pages) {
                         Some(array) => {
                             self.read_columns.push(*index);
