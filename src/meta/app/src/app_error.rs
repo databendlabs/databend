@@ -15,10 +15,9 @@
 use std::fmt::Display;
 
 use common_exception::ErrorCode;
+use common_meta_types::MatchSeq;
 use serde::Deserialize;
 use serde::Serialize;
-
-use crate::MatchSeq;
 
 /// Output message for end users, with sensitive info stripped.
 pub trait AppErrorMessage: Display {

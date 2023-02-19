@@ -12,4 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod duplicate;
 mod port_test;
+mod resize;
+mod shuffle;

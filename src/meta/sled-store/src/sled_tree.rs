@@ -17,7 +17,6 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 use std::ops::RangeBounds;
 
-use common_exception::WithContext;
 use common_meta_stoerr::MetaStorageError;
 use common_meta_types::anyerror::AnyError;
 use common_meta_types::Change;
@@ -117,9 +116,7 @@ impl SledTree {
             let x = &x[0..5];
             assert_eq!(x, b"test-");
         }
-        let t = db
-            .open_tree(&tree_name)
-            .context(|| format!("open tree: {}", tree_name))?;
+        let t = db.open_tree(&tree_name)?;
 
         debug!("SledTree opened tree: {}", tree_name);
 
@@ -208,10 +205,7 @@ impl SledTree {
         &self,
         key: &KV::K,
     ) -> Result<Option<KV::V>, MetaStorageError> {
-        let got = self
-            .tree
-            .get(KV::serialize_key(key)?)
-            .context(|| format!("get: {}:{}", self.name, key))?;
+        let got = self.tree.get(KV::serialize_key(key)?)?;
 
         let v = match got {
             None => None,
@@ -237,16 +231,12 @@ impl SledTree {
         // Convert K range into sled::IVec range
         let sled_range = KV::serialize_range(&range)?;
 
-        let range_mes = self.range_message::<KV, _>(&range);
-
         for item in self.tree.range(sled_range) {
-            let (k, _) = item.context(|| format!("range_remove: {}", range_mes,))?;
+            let (k, _) = item?;
             batch.remove(k);
         }
 
-        self.tree
-            .apply_batch(batch)
-            .context(|| format!("batch remove: {}", range_mes,))?;
+        self.tree.apply_batch(batch)?;
 
         self.flush_async(flush).await?;
 
@@ -265,14 +255,12 @@ impl SledTree {
         KV: SledKeySpace,
         R: RangeBounds<KV::K>,
     {
-        let range_mes = self.range_message::<KV, _>(&range);
-
         // Convert K range into sled::IVec range
         let range = KV::serialize_range(&range)?;
 
         let it = self.tree.range(range);
         let it = it.map(move |item| {
-            let (k, v) = item.context(|| format!("range_get: {}", range_mes,))?;
+            let (k, v) = item?;
 
             let item = SledItem::new(k, v);
             Ok(item)
@@ -291,11 +279,9 @@ impl SledTree {
     {
         let mut res = vec![];
 
-        let mes = || format!("scan_prefix: {}", prefix);
-
         let pref = KV::serialize_key(prefix)?;
         for item in self.tree.scan_prefix(pref) {
-            let (k, v) = item.context(mes)?;
+            let (k, v) = item?;
 
             let key = KV::deserialize_key(k)?;
             let value = KV::deserialize_value(v)?;
@@ -323,7 +309,7 @@ impl SledTree {
             batch.insert(k, v);
         }
 
-        self.tree.apply_batch(batch).context(|| "batch append")?;
+        self.tree.apply_batch(batch)?;
 
         self.flush_async(true).await?;
 
@@ -343,10 +329,7 @@ impl SledTree {
         let k = KV::serialize_key(key)?;
         let v = KV::serialize_value(value)?;
 
-        let prev = self
-            .tree
-            .insert(k, v)
-            .context(|| format!("insert_value {}", key))?;
+        let prev = self.tree.insert(k, v)?;
 
         let prev = match prev {
             None => None,
@@ -359,6 +342,7 @@ impl SledTree {
     }
 
     /// Build a string describing the range for a range operation.
+    #[allow(dead_code)]
     fn range_message<KV, R>(&self, range: &R) -> String
     where
         KV: SledKeySpace,
@@ -376,10 +360,7 @@ impl SledTree {
     #[tracing::instrument(level = "debug", skip(self))]
     async fn flush_async(&self, flush: bool) -> Result<(), MetaStorageError> {
         if flush && self.sync {
-            self.tree
-                .flush_async()
-                .await
-                .context(|| "flush sled-tree")?;
+            self.tree.flush_async().await?;
         }
         Ok(())
     }

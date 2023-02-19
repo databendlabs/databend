@@ -16,8 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_app::schema::DropTableReq;
-use common_meta_app::schema::TableNameIdent;
+use common_meta_app::schema::DropTableByIdReq;
 use common_sql::plans::DropViewPlan;
 use common_storages_view::view_table::VIEW_ENGINE;
 
@@ -63,18 +62,15 @@ impl Interpreter for DropViewInterpreter {
                     &self.plan.viewname
                 )));
             }
-        };
 
-        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
-        let plan = DropTableReq {
-            if_exists: self.plan.if_exists,
-            name_ident: TableNameIdent {
-                tenant: self.plan.tenant.clone(),
-                db_name,
-                table_name: viewname,
-            },
+            let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+            catalog
+                .drop_table_by_id(DropTableByIdReq {
+                    if_exists: self.plan.if_exists,
+                    tb_id: table.get_id(),
+                })
+                .await?;
         };
-        catalog.drop_table(plan).await?;
 
         Ok(PipelineBuildResult::create())
     }

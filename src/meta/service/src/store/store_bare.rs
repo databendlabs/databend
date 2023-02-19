@@ -20,7 +20,6 @@ use std::ops::RangeBounds;
 use anyerror::AnyError;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::tokio::sync::RwLockWriteGuard;
-use common_exception::WithContext;
 use common_meta_raft_store::applied_state::AppliedState;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::log::RaftLog;
@@ -262,7 +261,7 @@ impl RaftStoreBare {
         for x in snap.kvs.into_iter() {
             let k = &x[0];
             let v = &x[1];
-            tree.insert(k, v.clone()).context(|| "insert snapshot")?;
+            tree.insert(k, v.clone())?;
         }
 
         info!(
@@ -271,7 +270,7 @@ impl RaftStoreBare {
             new_sm.get_last_applied()?,
         );
 
-        tree.flush_async().await.context(|| "flush snapshot")?;
+        tree.flush_async().await?;
 
         info!("flushed tree, no_kvs: {}", nkvs);
 

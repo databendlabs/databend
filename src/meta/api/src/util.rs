@@ -14,6 +14,13 @@
 
 use std::fmt::Display;
 
+use common_meta_app::app_error::AppError;
+use common_meta_app::app_error::ShareHasNoGrantedDatabase;
+use common_meta_app::app_error::UnknownDatabase;
+use common_meta_app::app_error::UnknownShare;
+use common_meta_app::app_error::UnknownShareAccounts;
+use common_meta_app::app_error::UnknownShareId;
+use common_meta_app::app_error::UnknownTable;
 use common_meta_app::schema::DatabaseId;
 use common_meta_app::schema::DatabaseIdToName;
 use common_meta_app::schema::DatabaseMeta;
@@ -22,19 +29,11 @@ use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::*;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::errors::app_error::AppError;
-use common_meta_types::errors::app_error::ShareHasNoGrantedDatabase;
-use common_meta_types::errors::app_error::UnknownDatabase;
-use common_meta_types::errors::app_error::UnknownShare;
-use common_meta_types::errors::app_error::UnknownShareAccounts;
-use common_meta_types::errors::app_error::UnknownShareId;
-use common_meta_types::errors::app_error::UnknownTable;
 use common_meta_types::txn_condition::Target;
 use common_meta_types::txn_op::Request;
 use common_meta_types::ConditionResult;
 use common_meta_types::InvalidArgument;
 use common_meta_types::InvalidReply;
-use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
 use common_meta_types::MetaError;
 use common_meta_types::MetaNetworkError;
@@ -50,6 +49,7 @@ use enumflags2::BitFlags;
 use tracing::debug;
 use ConditionResult::Eq;
 
+use crate::kv_app_error::KVAppError;
 use crate::reply::txn_reply_to_api_result;
 use crate::Id;
 

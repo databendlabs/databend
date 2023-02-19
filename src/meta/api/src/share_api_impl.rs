@@ -12,6 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_meta_app::app_error::AppError;
+use common_meta_app::app_error::ShareAccountsAlreadyExists;
+use common_meta_app::app_error::ShareAlreadyExists;
+use common_meta_app::app_error::TxnRetryMaxTimes;
+use common_meta_app::app_error::UnknownShare;
+use common_meta_app::app_error::UnknownShareAccounts;
+use common_meta_app::app_error::UnknownTable;
+use common_meta_app::app_error::WrongShare;
+use common_meta_app::app_error::WrongShareObject;
 use common_meta_app::schema::DBIdTableName;
 use common_meta_app::schema::DatabaseId;
 use common_meta_app::schema::DatabaseIdToName;
@@ -22,17 +31,7 @@ use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::*;
 use common_meta_kvapi::kvapi;
-use common_meta_types::errors::app_error::AppError;
-use common_meta_types::errors::app_error::ShareAccountsAlreadyExists;
-use common_meta_types::errors::app_error::ShareAlreadyExists;
-use common_meta_types::errors::app_error::TxnRetryMaxTimes;
-use common_meta_types::errors::app_error::UnknownShare;
-use common_meta_types::errors::app_error::UnknownShareAccounts;
-use common_meta_types::errors::app_error::UnknownTable;
-use common_meta_types::errors::app_error::WrongShare;
-use common_meta_types::errors::app_error::WrongShareObject;
 use common_meta_types::ConditionResult::Eq;
-use common_meta_types::KVAppError;
 use common_meta_types::MetaError;
 use common_meta_types::TxnCondition;
 use common_meta_types::TxnOp;
@@ -52,6 +51,7 @@ use crate::get_struct_value;
 use crate::get_u64_value;
 use crate::id_generator::IdGenerator;
 use crate::is_db_need_to_be_remove;
+use crate::kv_app_error::KVAppError;
 use crate::list_keys;
 use crate::send_txn;
 use crate::serialize_struct;

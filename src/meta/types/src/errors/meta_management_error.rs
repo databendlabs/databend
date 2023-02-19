@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use anyerror::AnyError;
-use common_exception::ErrorCode;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -25,17 +24,4 @@ pub enum MetaManagementError {
 
     #[error(transparent)]
     Leave(AnyError),
-}
-
-impl From<MetaManagementError> for ErrorCode {
-    fn from(e: MetaManagementError) -> Self {
-        match e {
-            MetaManagementError::Join(ae) => {
-                ErrorCode::MetaServiceError(ae.to_string()).set_backtrace(ae.backtrace())
-            }
-            MetaManagementError::Leave(ae) => {
-                ErrorCode::MetaServiceError(ae.to_string()).set_backtrace(ae.backtrace())
-            }
-        }
-    }
 }
