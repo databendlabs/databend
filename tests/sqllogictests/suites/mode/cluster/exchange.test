@@ -144,7 +144,7 @@ Exchange
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [t.number (#1)]
-    ├── probe keys: [TRY_CAST(t1.number (#4) AS UInt64 NULL)]
+    ├── probe keys: [CAST(t1.number (#4) AS UInt64 NULL)]
     ├── filters: []
     ├── estimated rows: 2.00
     ├── Exchange(Build)
@@ -171,7 +171,7 @@ Exchange
     │                       ├── push downs: [filters: [], limit: NONE]
     │                       └── estimated rows: 1.00
     └── Exchange(Probe)
-        ├── exchange type: Hash(TRY_CAST(t1.number (#4) AS UInt64 NULL))
+        ├── exchange type: Hash(CAST(t1.number (#4) AS UInt64 NULL))
         └── TableScan
             ├── table: default.system.numbers
             ├── read rows: 2
@@ -238,7 +238,7 @@ Fragment 3:
     └── HashJoin
         ├── join type: INNER
         ├── build keys: [t.number (#1)]
-        ├── probe keys: [TRY_CAST(t1.number (#4) AS UInt64 NULL)]
+        ├── probe keys: [CAST(t1.number (#4) AS UInt64 NULL)]
         ├── filters: []
         ├── estimated rows: 2.00
         ├── ExchangeSource(Build)

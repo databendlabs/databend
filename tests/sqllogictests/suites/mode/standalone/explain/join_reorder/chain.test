@@ -288,7 +288,7 @@ explain select * from t left join t1 on t1.a = t.a
 ----
 HashJoin
 ├── join type: RIGHT OUTER
-├── build keys: [TRY_CAST(t.a (#0) AS UInt64 NULL)]
+├── build keys: [CAST(t.a (#0) AS UInt64 NULL)]
 ├── probe keys: [t1.a (#1)]
 ├── filters: []
 ├── estimated rows: 1.00
@@ -317,7 +317,7 @@ explain select * from t right join t1 on t1.a = t.a
 HashJoin
 ├── join type: LEFT OUTER
 ├── build keys: [t.a (#0)]
-├── probe keys: [TRY_CAST(t1.a (#1) AS UInt64 NULL)]
+├── probe keys: [CAST(t1.a (#1) AS UInt64 NULL)]
 ├── filters: []
 ├── estimated rows: 10.00
 ├── TableScan(Build)

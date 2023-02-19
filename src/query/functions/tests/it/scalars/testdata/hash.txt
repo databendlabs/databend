@@ -251,7 +251,7 @@ output         : 8535774936754559738
 
 ast            : city64withseed(NULL,0)
 raw expr       : city64withseed(NULL, 0_u8)
-checked expr   : city64withseed<String NULL, UInt8 NULL>(CAST(NULL AS String NULL), CAST(0_u8 AS UInt8 NULL))
+checked expr   : city64withseed<Variant NULL, UInt8 NULL>(CAST(NULL AS Variant NULL), CAST(0_u8 AS UInt8 NULL))
 optimized expr : NULL
 output type    : UInt64 NULL
 output domain  : {NULL}
@@ -328,7 +328,7 @@ output         : 17230848539826186862
 
 ast            : siphash64(NULL)
 raw expr       : siphash64(NULL)
-checked expr   : siphash64<String NULL>(CAST(NULL AS String NULL))
+checked expr   : siphash64<Variant NULL>(CAST(NULL AS Variant NULL))
 optimized expr : NULL
 output type    : UInt64 NULL
 output domain  : {NULL}
@@ -421,7 +421,7 @@ output         : 8691527656253933431
 
 ast            : xxhash64(NULL)
 raw expr       : xxhash64(NULL)
-checked expr   : xxhash64<String NULL>(CAST(NULL AS String NULL))
+checked expr   : xxhash64<Variant NULL>(CAST(NULL AS Variant NULL))
 optimized expr : NULL
 output type    : UInt64 NULL
 output domain  : {NULL}
@@ -514,7 +514,7 @@ output         : 2518126785
 
 ast            : xxhash32(NULL)
 raw expr       : xxhash32(NULL)
-checked expr   : xxhash32<String NULL>(CAST(NULL AS String NULL))
+checked expr   : xxhash32<Variant NULL>(CAST(NULL AS Variant NULL))
 optimized expr : NULL
 output type    : UInt32 NULL
 output domain  : {NULL}

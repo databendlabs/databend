@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::unnecessary_cast)]
+
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -19,6 +21,7 @@ use std::hash::Hasher;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::number::F32;
 use common_expression::types::number::F64;
+use common_expression::types::ArgType;
 use common_expression::types::BooleanType;
 use common_expression::types::DateType;
 use common_expression::types::NumberDataType;
@@ -46,6 +49,23 @@ use twox_hash::XxHash64;
 use crate::scalars::string::vectorize_string_to_string;
 
 pub fn register(registry: &mut FunctionRegistry) {
+    registry.register_aliases("siphash64", &["siphash"]);
+    registry.register_aliases("sha", &["sha1"]);
+
+    register_simple_domain_type_hash::<VariantType>(registry);
+    register_simple_domain_type_hash::<StringType>(registry);
+    register_simple_domain_type_hash::<DateType>(registry);
+    register_simple_domain_type_hash::<TimestampType>(registry);
+    register_simple_domain_type_hash::<BooleanType>(registry);
+
+    for ty in ALL_NUMERICS_TYPES {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
+            NumberDataType::NUM_TYPE => {
+                register_simple_domain_type_hash::<NumberType<NUM_TYPE>>(registry);
+            }
+        });
+    }
+
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "md5",
         FunctionProperty::default(),
@@ -89,7 +109,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         ),
     );
-    registry.register_aliases("sha", &["sha1"]);
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "blake3",
@@ -154,59 +173,52 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         ),
     );
-
-    register_string_hash(registry);
-    register_number_hash(registry);
-    register_date_hash(registry);
-    register_boolean_hash(registry);
-    register_variant_hash(registry);
-    registry.register_aliases("siphash64", &["siphash"]);
 }
 
-macro_rules! register_simple_domain_type_hash {
-    ($registry:ident, $T:ty) => {
-        $registry.register_passthrough_nullable_1_arg::<$T, NumberType<u64>, _, _>(
-            "siphash64",
-            FunctionProperty::default(),
-            |_| FunctionDomain::Full,
-            vectorize_with_builder_1_arg::<$T, NumberType<u64>>(|val, output, _| {
-                let mut hasher = DefaultHasher::default();
-                DFHash::hash(&val, &mut hasher);
-                output.push(hasher.finish());
-            }),
-        );
+fn register_simple_domain_type_hash<T: ArgType>(registry: &mut FunctionRegistry)
+where for<'a> T::ScalarRef<'a>: DFHash {
+    registry.register_passthrough_nullable_1_arg::<T, NumberType<u64>, _, _>(
+        "siphash64",
+        FunctionProperty::default(),
+        |_| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<T, NumberType<u64>>(|val, output, _| {
+            let mut hasher = DefaultHasher::default();
+            DFHash::hash(&val, &mut hasher);
+            output.push(hasher.finish());
+        }),
+    );
 
-        $registry.register_passthrough_nullable_1_arg::<$T, NumberType<u64>, _, _>(
-            "xxhash64",
-            FunctionProperty::default(),
-            |_| FunctionDomain::Full,
-            vectorize_with_builder_1_arg::<$T, NumberType<u64>>(|val, output, _| {
-                let mut hasher = XxHash64::default();
-                DFHash::hash(&val, &mut hasher);
-                output.push(hasher.finish());
-            }),
-        );
+    registry.register_passthrough_nullable_1_arg::<T, NumberType<u64>, _, _>(
+        "xxhash64",
+        FunctionProperty::default(),
+        |_| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<T, NumberType<u64>>(|val, output, _| {
+            let mut hasher = XxHash64::default();
+            DFHash::hash(&val, &mut hasher);
+            output.push(hasher.finish());
+        }),
+    );
 
-        $registry.register_passthrough_nullable_1_arg::<$T, NumberType<u32>, _, _>(
-            "xxhash32",
-            FunctionProperty::default(),
-            |_| FunctionDomain::Full,
-            vectorize_with_builder_1_arg::<$T, NumberType<u32>>(|val, output, _| {
-                let mut hasher = XxHash32::default();
-                DFHash::hash(&val, &mut hasher);
-                output.push(hasher.finish().try_into().unwrap());
-            }),
-        );
+    registry.register_passthrough_nullable_1_arg::<T, NumberType<u32>, _, _>(
+        "xxhash32",
+        FunctionProperty::default(),
+        |_| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<T, NumberType<u32>>(|val, output, _| {
+            let mut hasher = XxHash32::default();
+            DFHash::hash(&val, &mut hasher);
+            output.push(hasher.finish().try_into().unwrap());
+        }),
+    );
 
-        for num_type in ALL_INTEGER_TYPES {
-            with_integer_mapped_type!(|NUM_TYPE| match num_type {
-                NumberDataType::NUM_TYPE => {
-                    $registry
-                        .register_passthrough_nullable_2_arg::<$T, NumberType<NUM_TYPE>, NumberType<u64>, _, _>(
+    for num_type in ALL_INTEGER_TYPES {
+        with_integer_mapped_type!(|NUM_TYPE| match num_type {
+            NumberDataType::NUM_TYPE => {
+                registry
+                        .register_passthrough_nullable_2_arg::<T, NumberType<NUM_TYPE>, NumberType<u64>, _, _>(
                             "city64withseed",
                             FunctionProperty::default(),
                             |_, _| FunctionDomain::Full,
-                            vectorize_with_builder_2_arg::<$T, NumberType<NUM_TYPE>, NumberType<u64>>(
+                            vectorize_with_builder_2_arg::<T, NumberType<NUM_TYPE>, NumberType<u64>>(
                                 |val, l, output, _| {
                                     let mut hasher = CityHasher64::with_seed(l as u64);
                                     DFHash::hash(&val, &mut hasher);
@@ -214,64 +226,32 @@ macro_rules! register_simple_domain_type_hash {
                                 },
                             ),
                         );
-                }
-                _ => unreachable!(),
-            });
-        }
-
-        $registry.register_passthrough_nullable_2_arg::<$T, NumberType<F64>, NumberType<u64>, _, _>(
-            "city64withseed",
-            FunctionProperty::default(),
-            |_, _| FunctionDomain::Full,
-            vectorize_with_builder_2_arg::<$T, NumberType<F64>, NumberType<u64>>(
-                |val, l, output, _| {
-                    let mut hasher = CityHasher64::with_seed(l.0 as u64);
-                    DFHash::hash(&val, &mut hasher);
-                    output.push(hasher.finish());
-                },
-            ),
-        );
-
-        $registry.register_passthrough_nullable_2_arg::<$T, NumberType<F32>, NumberType<u64>, _, _>(
-            "city64withseed",
-            FunctionProperty::default(),
-            |_, _| FunctionDomain::Full,
-            vectorize_with_builder_2_arg::<$T, NumberType<F32>, NumberType<u64>>(
-                |val, l, output, _| {
-                    let mut hasher = CityHasher64::with_seed(l.0 as u64);
-                    DFHash::hash(&val, &mut hasher);
-                    output.push(hasher.finish());
-                },
-            ),
-        );
-    };
-}
-
-fn register_number_hash(registry: &mut FunctionRegistry) {
-    for ty in ALL_NUMERICS_TYPES {
-        with_number_mapped_type!(|NUM_TYPE| match ty {
-            NumberDataType::NUM_TYPE => {
-                register_simple_domain_type_hash!(registry, NumberType<NUM_TYPE>);
             }
+            _ => unreachable!(),
         });
     }
-}
 
-fn register_date_hash(registry: &mut FunctionRegistry) {
-    register_simple_domain_type_hash!(registry, DateType);
-    register_simple_domain_type_hash!(registry, TimestampType);
-}
+    registry.register_passthrough_nullable_2_arg::<T, NumberType<F32>, NumberType<u64>, _, _>(
+        "city64withseed",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<T, NumberType<F32>, NumberType<u64>>(|val, l, output, _| {
+            let mut hasher = CityHasher64::with_seed(l.0 as u64);
+            DFHash::hash(&val, &mut hasher);
+            output.push(hasher.finish());
+        }),
+    );
 
-fn register_string_hash(registry: &mut FunctionRegistry) {
-    register_simple_domain_type_hash!(registry, StringType);
-}
-
-fn register_boolean_hash(registry: &mut FunctionRegistry) {
-    register_simple_domain_type_hash!(registry, BooleanType);
-}
-
-fn register_variant_hash(registry: &mut FunctionRegistry) {
-    register_simple_domain_type_hash!(registry, VariantType);
+    registry.register_passthrough_nullable_2_arg::<T, NumberType<F64>, NumberType<u64>, _, _>(
+        "city64withseed",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<T, NumberType<F64>, NumberType<u64>>(|val, l, output, _| {
+            let mut hasher = CityHasher64::with_seed(l.0 as u64);
+            DFHash::hash(&val, &mut hasher);
+            output.push(hasher.finish());
+        }),
+    );
 }
 
 struct CityHasher64 {
