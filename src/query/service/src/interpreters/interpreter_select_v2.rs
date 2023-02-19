@@ -21,6 +21,7 @@ use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::Pipeline;
 use common_sql::MetadataRef;
 use common_storages_result_cache::ResultCacheReader;
 use common_storages_result_cache::WriteResultCacheSink;
@@ -75,15 +76,24 @@ impl SelectInterpreterV2 {
         .await
     }
 
-    fn append_write_cache(
-        &self,
-        build_res: &mut PipelineBuildResult,
-        kv_store: Arc<MetaStore>,
-    ) -> Result<()> {
+    /// Add pipelines for writing query result cache.
+    fn add_result_cache(&self, pipeline: &mut Pipeline, kv_store: Arc<MetaStore>) -> Result<()> {
+        //              ┌─────────┐ 1  ┌─────────┐ 1
+        //              │         ├───►│         ├───►Dummy───►Downstream
+        // Upstream────►│Duplicate│ 2  │         │ 3
+        //              │         ├───►│         ├───►Dummy───►Downstream
+        //              └─────────┘    │         │
+        //                             │ Shuffle │
+        //              ┌─────────┐ 3  │         │ 2  ┌─────────┐
+        //              │         ├───►│         ├───►│  Write  │
+        // Upstream────►│Duplicate│ 4  │         │ 4  │ Result  │
+        //              │         ├───►│         ├───►│  Cache  │
+        //              └─────────┘    └─────────┘    └─────────┘
+
         // 1. Duplicate the pipes.
-        build_res.main_pipeline.duplicate(false)?;
+        pipeline.duplicate(false)?;
         // 2. Reorder the pipes.
-        let output_len = build_res.main_pipeline.output_len();
+        let output_len = pipeline.output_len();
         debug_assert!(output_len % 2 == 0);
         let mut rule = vec![0; output_len];
         for (i, r) in rule.iter_mut().enumerate().take(output_len) {
@@ -93,11 +103,11 @@ impl SelectInterpreterV2 {
                 output_len / 2 + i / 2
             };
         }
-        build_res.main_pipeline.reorder_inputs(rule);
+        pipeline.reorder_inputs(rule);
 
         // `output_len` / 2 for `TransformDummy`; 1 for `WriteResultCacheSink`.
         let mut items = Vec::with_capacity(output_len / 2 + 1);
-        // 3. Add dummy transforms to the front pipes.
+        // 3. Add `TransformDummy` to the front half pipes.
         for _ in 0..output_len / 2 {
             let input = InputPort::create();
             let output = OutputPort::create();
@@ -108,7 +118,7 @@ impl SelectInterpreterV2 {
             ));
         }
 
-        // 4. Add WriteResultCacheSink (AsyncMpscSinker) to the back pipes.
+        // 4. Add `WriteResultCacheSink` (`AsyncMpscSinker`) to the back half pipes.
         let mut sink_inputs = Vec::with_capacity(output_len / 2);
         for _ in 0..output_len / 2 {
             sink_inputs.push(InputPort::create());
@@ -118,9 +128,8 @@ impl SelectInterpreterV2 {
             sink_inputs,
             vec![],
         ));
-        build_res
-            .main_pipeline
-            .add_pipe(Pipe::create(output_len, output_len / 2 + 1, items));
+
+        pipeline.add_pipe(Pipe::create(output_len, output_len / 2, items));
 
         Ok(())
     }
@@ -140,19 +149,28 @@ impl Interpreter for SelectInterpreterV2 {
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
     #[tracing::instrument(level = "debug", name = "select_interpreter_v2_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        if self.ctx.get_settings().get_enable_query_result_cache()? {
+        // Only single table query can use result cache now. Multi-tables query will be supported later.
+        if self.ctx.get_settings().get_enable_query_result_cache()?
+            && self.metadata.read().tables().len() == 1
+        {
             // 0. Need to build pipeline first to get the partitions.
             let mut build_res = self.build_pipeline().await?;
 
             // 1. Try to get result from cache.
             let kv_store = UserApiProvider::instance().get_meta_store_client();
-            let cache_reader = ResultCacheReader::create(self.ctx.clone(), kv_store.clone());
+            let cache_reader = ResultCacheReader::create(
+                self.ctx.clone(),
+                kv_store.clone(),
+                self.ctx
+                    .get_settings()
+                    .get_tolerate_inconsistent_result_cache()?,
+            );
             if let Some(blocks) = cache_reader.try_read_cached_result().await? {
                 // 2. If found, return the result directly.
                 return PipelineBuildResult::from_blocks(blocks);
             }
             // 3. If not found result in cache, build the pipeline and add a transform to write the result to cache.
-            self.append_write_cache(&mut build_res, kv_store)?;
+            self.add_result_cache(&mut build_res.main_pipeline, kv_store)?;
             Ok(build_res)
         } else {
             Ok(self.build_pipeline().await?)

@@ -137,6 +137,7 @@ impl PipelinePullingExecutor {
     ) -> Result<PipelinePullingExecutor> {
         let mut main_pipeline = build_res.main_pipeline;
         let (sender, receiver) = std::sync::mpsc::sync_channel(main_pipeline.output_len());
+
         Self::wrap_pipeline(&mut main_pipeline, sender)?;
 
         let mut pipelines = build_res.sources_pipelines;

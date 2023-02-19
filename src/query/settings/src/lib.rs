@@ -471,24 +471,27 @@ impl Settings {
                     UserSettingValue::UInt64(0),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Enable the cache result of each query",
+                desc: "Enable the cache result of each query. It's disabled by default.",
                 possible_values: None,
             },
             SettingValue {
                 default_value: UserSettingValue::UInt64(1048576), // 1MB
                 user_setting: UserSetting::create(
                     "max_result_cache_bytes",
-                    UserSettingValue::UInt64(0),
+                    UserSettingValue::UInt64(1048576),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The maximum bytes of the result cache for one query",
+                desc: "The maximum bytes of the result cache for one query, default: 1048576 bytes (1MB).",
                 possible_values: None,
             },
             SettingValue {
                 default_value: UserSettingValue::UInt64(300), // seconds
-                user_setting: UserSetting::create("result_cache_ttl", UserSettingValue::UInt64(0)),
+                user_setting: UserSetting::create(
+                    "result_cache_ttl",
+                    UserSettingValue::UInt64(300),
+                ),
                 level: ScopeLevel::Session,
-                desc: "Time-to-live of query result cache",
+                desc: "Time-to-live of query result cache, default: 300 seconds (5 minutes).",
                 possible_values: None,
             },
             SettingValue {
@@ -498,7 +501,7 @@ impl Settings {
                     UserSettingValue::UInt64(0),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Tolerate inconsistent result cache",
+                desc: "Tolerate inconsistent result cache. It's disabled by default.",
                 possible_values: None,
             },
         ];

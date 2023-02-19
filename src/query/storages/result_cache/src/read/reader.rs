@@ -30,11 +30,20 @@ pub struct ResultCacheReader {
     meta_mgr: ResultCacheMetaManager,
 
     operator: Operator,
+    /// To ensure the cache is valid.
     partitions_sha: String,
+
+    /// If true, the cache will be used even if it is inconsistent.
+    /// In another word, `partitions_sha` will not be checked.
+    tolerate_inconsistent: bool,
 }
 
 impl ResultCacheReader {
-    pub fn create(ctx: Arc<dyn TableContext>, kv_store: Arc<MetaStore>) -> Self {
+    pub fn create(
+        ctx: Arc<dyn TableContext>,
+        kv_store: Arc<MetaStore>,
+        tolerate_inconsistent: bool,
+    ) -> Self {
         let sql = ctx.get_query_str();
         let tenant = ctx.get_tenant();
         let key = gen_common_key(&sql);
@@ -45,13 +54,14 @@ impl ResultCacheReader {
             meta_mgr: ResultCacheMetaManager::create(kv_store, meta_key, 0),
             partitions_sha,
             operator: DataOperator::instance().operator(),
+            tolerate_inconsistent,
         }
     }
 
     pub async fn try_read_cached_result(&self) -> Result<Option<Vec<DataBlock>>> {
         match self.meta_mgr.get().await? {
             Some(value) => {
-                if value.partitions_sha == self.partitions_sha {
+                if self.tolerate_inconsistent || value.partitions_sha == self.partitions_sha {
                     if value.num_rows == 0 {
                         Ok(Some(vec![DataBlock::empty()]))
                     } else {
