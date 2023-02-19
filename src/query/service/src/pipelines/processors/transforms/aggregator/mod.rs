@@ -33,5 +33,4 @@ pub use aggregator_partitioned::PartitionedAggregator;
 pub use aggregator_partitioned::PartitionedAggregatorLike;
 pub use aggregator_single_key::FinalSingleStateAggregator;
 pub use aggregator_single_key::PartialSingleStateAggregator;
-pub use aggregator_single_key::SingleStateAggregator;
 pub use utils::*;

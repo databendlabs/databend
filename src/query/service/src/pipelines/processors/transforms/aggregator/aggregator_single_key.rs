@@ -18,7 +18,6 @@ use std::sync::Arc;
 use std::vec;
 
 use bumpalo::Bump;
-use common_base::runtime::ThreadPool;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -31,18 +30,15 @@ use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::aggregates::StateAddr;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::transforms::transform_accumulating::AccumulatingTransform;
 use common_pipeline_transforms::processors::transforms::transform_accumulating::AccumulatingTransformer;
 
-use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::processors::AggregatorParams;
-
-// pub type FinalSingleStateAggregator = SingleStateAggregator<true>;
 
 /// SELECT COUNT | SUM FROM table;
 pub struct PartialSingleStateAggregator {
+    #[allow(dead_code)]
     arena: Bump,
     places: Vec<StateAddr>,
     arg_indices: Vec<Vec<usize>>,
@@ -139,7 +135,6 @@ pub struct FinalSingleStateAggregator {
     arena: Bump,
     layout: Layout,
     to_merge_places: Vec<Vec<StateAddr>>,
-    arg_indices: Vec<Vec<usize>>,
     funcs: Vec<AggregateFunctionRef>,
     offsets_aggregate_states: Vec<usize>,
 }
@@ -164,7 +159,6 @@ impl FinalSingleStateAggregator {
                 arena,
                 layout,
                 funcs: params.aggregate_functions.clone(),
-                arg_indices: params.aggregate_functions_arguments.clone(),
                 to_merge_places: vec![vec![]; params.aggregate_functions.len()],
                 offsets_aggregate_states: params.offsets_aggregate_states.clone(),
             },

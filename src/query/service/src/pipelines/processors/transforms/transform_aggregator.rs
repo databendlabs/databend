@@ -37,7 +37,6 @@ impl TransformAggregator {
     ) -> Result<Box<dyn Processor>> {
         let aggregator_params = transform_params.aggregator_params.clone();
 
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
         if aggregator_params.group_columns.is_empty() {
             return FinalSingleStateAggregator::try_create(
                 transform_params.transform_input_port,
@@ -72,7 +71,6 @@ impl TransformAggregator {
     ) -> Result<Box<dyn Processor>> {
         let aggregator_params = transform_params.aggregator_params.clone();
 
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
         if aggregator_params.group_columns.is_empty() {
             return PartialSingleStateAggregator::try_create(
                 transform_params.transform_input_port,
