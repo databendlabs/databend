@@ -141,33 +141,33 @@ const config = {
                 style: 'dark',
                 links: [
                     {
-                        title: 'About',
+                        title: 'GET STARTED',
                         items: [
                             {
-                                label: 'What is Databend?',
+                                label: 'What is Databend',
                                 to: '/doc'
                             },
                             {
-                                label: 'Contributing',
-                                to: '/doc/contributing/good-pr'
+                                label: 'Quick Start',
+                                to: '/doc/guides'
                             },
                         ]
                     },
                     {
-                        title: 'Resources',
+                        title: 'RESOURCES',
                         items: [
                             {
                                 label: 'Deployment',
                                 to: '/doc/deploy'
                             },
                             {
-                                label: 'Develop',
-                                to: '/doc/develop'
+                                label: 'Releases',
+                                to: '/doc/releases'
                             },
                         ]
                     },
                     {
-                        title: 'Community',
+                        title: 'COMMUNITY',
                         items: [
                             {
                                 label: 'Slack',
@@ -179,21 +179,8 @@ const config = {
                             },
                         ],
                     },
-                    {
-                        title: 'More',
-                        items: [
-                            {
-                                label: 'Weekly',
-                                href: 'https://weekly.databend.rs/'
-                            },
-                            {
-                                label: 'GitHub',
-                                href: 'https://github.com/datafuselabs/databend',
-                            },
-                        ],
-                    },
                 ],
-                copyright: `Copyright © ${new Date().getFullYear()} Datafuse Labs, Inc. Built with Docusaurus. <br><br> <img src="https://www.datocms-assets.com/31049/1618983297-powered-by-vercel.svg">`,
+                copyright: `Copyright © 2023 Datafuse Labs, Inc. Built with Docusaurus. <br><br> <img src="https://www.datocms-assets.com/31049/1618983297-powered-by-vercel.svg">`,
             },
             prism: {
                 theme: lightCodeTheme,

@@ -26,7 +26,6 @@ pub use rpc::ExecutePartialQueryPacket;
 pub use rpc::FlightAction;
 pub use rpc::FlightClient;
 pub use rpc::FragmentData;
-pub use rpc::FragmentPayload;
 pub use rpc::FragmentPlanPacket;
 pub use rpc::InitNodesChannelPacket;
 pub use rpc::MergeExchange;
