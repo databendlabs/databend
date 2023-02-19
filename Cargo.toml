@@ -170,7 +170,7 @@ rpath = false
 # For example:
 # arrow-format = { git = "https://github.com/datafuse-extras/arrow-format", rev = "78dacc1" }
 
-arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "211be21" }
+arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "ac28bc9" }
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "ed0e1ff" }
 limits-rs = { git = "https://github.com/datafuse-extras/limits-rs", rev = "abfcf7b" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "bc49d03" }

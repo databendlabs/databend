@@ -110,8 +110,7 @@ impl BlockReader {
             return self.build_default_values_block(num_rows);
         }
 
-        let fields = self.projection.project_column_nodes(&self.column_nodes)?;
-        let mut need_default_vals = Vec::with_capacity(fields.len());
+        let mut need_default_vals = Vec::with_capacity(self.project_column_nodes.len());
         let mut need_to_fill_default_val = false;
         let mut deserialized_column_arrays = Vec::with_capacity(self.projection.len());
         let field_deserialization_ctx = FieldDeserializationContext {
@@ -121,8 +120,8 @@ impl BlockReader {
             compression,
             uncompressed_buffer: &uncompressed_buffer,
         };
-        for column in &fields {
-            match self.deserialize_field(&field_deserialization_ctx, column)? {
+        for column_node in &self.project_column_nodes {
+            match self.deserialize_field(&field_deserialization_ctx, column_node)? {
                 None => {
                     need_to_fill_default_val = true;
                     need_default_vals.push(true);
