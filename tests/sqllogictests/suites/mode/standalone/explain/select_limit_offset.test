@@ -132,7 +132,7 @@ Limit
 ├── estimated rows: 2.00
 └── HashJoin
     ├── join type: RIGHT OUTER
-    ├── build keys: [TRY_CAST(t.a (#0) AS Int32 NULL)]
+    ├── build keys: [CAST(t.a (#0) AS Int32 NULL)]
     ├── probe keys: [t1.a (#1)]
     ├── filters: []
     ├── estimated rows: 2.00
@@ -168,7 +168,7 @@ Limit
 ├── estimated rows: 2.00
 └── HashJoin
     ├── join type: RIGHT OUTER
-    ├── build keys: [TRY_CAST(t.a (#1) AS Int32 NULL)]
+    ├── build keys: [CAST(t.a (#1) AS Int32 NULL)]
     ├── probe keys: [t1.a (#0)]
     ├── filters: []
     ├── estimated rows: 2.00

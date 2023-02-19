@@ -143,6 +143,13 @@ pub fn check_cast<Index: ColumnIndex>(
 
     if expr.data_type() == &wrapped_dest_type {
         Ok(expr)
+    } else if expr.data_type().wrap_nullable() == wrapped_dest_type {
+        Ok(Expr::Cast {
+            span,
+            is_try,
+            expr: Box::new(expr),
+            dest_type: wrapped_dest_type,
+        })
     } else {
         // fast path to eval function for cast
         if let Some(cast_fn) = get_simple_cast_function(is_try, dest_type) {
@@ -213,7 +220,7 @@ pub fn check_function<Index: ColumnIndex>(
 
     let mut fail_resaons = Vec::with_capacity(candidates.len());
     for (id, func) in &candidates {
-        match try_check_function(args, &func.signature, auto_cast_rules, fn_registry) {
+        match try_check_function(span, args, &func.signature, auto_cast_rules, fn_registry) {
             Ok((checked_args, return_type, generics)) => {
                 return Ok(Expr::FunctionCall {
                     span,
@@ -322,6 +329,7 @@ impl Substitution {
 
 #[allow(clippy::type_complexity)]
 pub fn try_check_function<Index: ColumnIndex>(
+    span: Span,
     args: &[Expr<Index>],
     sig: &FunctionSignature,
     auto_cast_rules: AutoCastRules,
@@ -346,7 +354,8 @@ pub fn try_check_function<Index: ColumnIndex>(
         .zip(&sig.args_type)
         .map(|(arg, sig_type)| {
             let sig_type = subst.apply(sig_type.clone())?;
-            check_cast(None, false, arg.clone(), &sig_type, fn_registry)
+            let is_try = fn_registry.is_auto_try_cast_rule(arg.data_type(), &sig_type);
+            check_cast(span, is_try, arg.clone(), &sig_type, fn_registry)
         })
         .collect::<Result<Vec<_>>>()?;
 
@@ -380,6 +389,9 @@ pub fn unify(
     match (src_ty, dest_ty) {
         (DataType::Generic(_), _) => unreachable!("source type must not contain generic type"),
         (ty, DataType::Generic(idx)) => Ok(Substitution::equation(*idx, ty.clone())),
+        (src_ty, dest_ty) if can_auto_cast_to(src_ty, dest_ty, auto_cast_rules) => {
+            Ok(Substitution::empty())
+        }
         (DataType::Null, DataType::Nullable(_)) => Ok(Substitution::empty()),
         (DataType::EmptyArray, DataType::Array(_)) => Ok(Substitution::empty()),
         (DataType::Nullable(src_ty), DataType::Nullable(dest_ty)) => {
@@ -402,9 +414,6 @@ pub fn unify(
                 .try_reduce(|subst1, subst2| subst1.merge(subst2, auto_cast_rules))?
                 .unwrap_or_else(Substitution::empty);
             Ok(subst)
-        }
-        (src_ty, dest_ty) if can_auto_cast_to(src_ty, dest_ty, auto_cast_rules) => {
-            Ok(Substitution::empty())
         }
         _ => Err(ErrorCode::from_string_no_backtrace(format!(
             "unable to unify `{}` with `{}`",
@@ -503,10 +512,11 @@ pub fn common_super_type(
 }
 
 pub fn get_simple_cast_function(is_try: bool, dest_type: &DataType) -> Option<String> {
-    let mut function_name = format!("to_{}", dest_type.to_string().to_lowercase());
-    if dest_type.is_decimal() {
-        function_name = "to_decimal".to_owned();
-    }
+    let function_name = if dest_type.is_decimal() {
+        "to_decimal".to_owned()
+    } else {
+        format!("to_{}", dest_type.to_string().to_lowercase())
+    };
 
     if is_simple_cast_function(&function_name) {
         let prefix = if is_try { "try_" } else { "" };
@@ -516,24 +526,25 @@ pub fn get_simple_cast_function(is_try: bool, dest_type: &DataType) -> Option<St
     }
 }
 
+pub const ALL_SIMPLE_CAST_FUNCTIONS: &[&str] = &[
+    "to_string",
+    "to_uint8",
+    "to_uint16",
+    "to_uint32",
+    "to_uint64",
+    "to_int8",
+    "to_int16",
+    "to_int32",
+    "to_int64",
+    "to_float32",
+    "to_float64",
+    "to_timestamp",
+    "to_date",
+    "to_variant",
+    "to_boolean",
+    "to_decimal",
+];
+
 pub fn is_simple_cast_function(name: &str) -> bool {
-    const SIMPLE_CAST_FUNCTIONS: &[&str; 16] = &[
-        "to_string",
-        "to_uint8",
-        "to_uint16",
-        "to_uint32",
-        "to_uint64",
-        "to_int8",
-        "to_int16",
-        "to_int32",
-        "to_int64",
-        "to_float32",
-        "to_float64",
-        "to_timestamp",
-        "to_date",
-        "to_variant",
-        "to_boolean",
-        "to_decimal",
-    ];
-    SIMPLE_CAST_FUNCTIONS.contains(&name)
+    ALL_SIMPLE_CAST_FUNCTIONS.contains(&name)
 }

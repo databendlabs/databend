@@ -9,7 +9,7 @@ output         : false
 
 ast            : null=null
 raw expr       : eq(NULL, NULL)
-checked expr   : eq<String NULL, String NULL>(CAST(NULL AS String NULL), CAST(NULL AS String NULL))
+checked expr   : eq<Variant NULL, Variant NULL>(CAST(NULL AS Variant NULL), CAST(NULL AS Variant NULL))
 optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
@@ -104,6 +104,8 @@ error:
   |          ^ no overload satisfies `eq(Tuple(UInt8, String), Tuple(UInt8,))`
 
 has tried possible overloads:
+  eq(Variant, Variant) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Variant`
+  eq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Variant`
   eq(String, String) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `String`
   eq(String NULL, String NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `String`
   eq(Date, Date) :: Boolean                                     : unable to unify `Tuple(UInt8, String)` with `Date`
@@ -132,8 +134,6 @@ has tried possible overloads:
   eq(Float64 NULL, Float64 NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Float64`
   eq(Boolean, Boolean) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Boolean`
   eq(Boolean NULL, Boolean NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Boolean`
-  eq(Variant, Variant) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Variant`
-  eq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Variant`
   eq(Array(Nothing), Array(Nothing)) :: Boolean                 : unable to unify `Tuple(UInt8, String)` with `Array(Nothing)`
   eq(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL  : unable to unify `Tuple(UInt8, String)` with `Array(Nothing)`
   eq(Array(T0), Array(T0)) :: Boolean                           : unable to unify `Tuple(UInt8, String)` with `Array(T0)`
@@ -369,6 +369,8 @@ error:
   |          ^^ no overload satisfies `noteq(Tuple(UInt8, String), Tuple(UInt8,))`
 
 has tried possible overloads:
+  noteq(Variant, Variant) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Variant`
+  noteq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Variant`
   noteq(String, String) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `String`
   noteq(String NULL, String NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `String`
   noteq(Date, Date) :: Boolean                                     : unable to unify `Tuple(UInt8, String)` with `Date`
@@ -397,8 +399,6 @@ has tried possible overloads:
   noteq(Float64 NULL, Float64 NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Float64`
   noteq(Boolean, Boolean) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Boolean`
   noteq(Boolean NULL, Boolean NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Boolean`
-  noteq(Variant, Variant) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Variant`
-  noteq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Variant`
   noteq(Array(Nothing), Array(Nothing)) :: Boolean                 : unable to unify `Tuple(UInt8, String)` with `Array(Nothing)`
   noteq(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL  : unable to unify `Tuple(UInt8, String)` with `Array(Nothing)`
   noteq(Array(T0), Array(T0)) :: Boolean                           : unable to unify `Tuple(UInt8, String)` with `Array(T0)`

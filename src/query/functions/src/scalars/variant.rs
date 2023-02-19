@@ -142,25 +142,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_2_arg_core::<NullableType<VariantType>, NullableType<UInt64Type>, NullableType<VariantType>, _, _>(
-        "get",
-        FunctionProperty::default(),
-        |_, _| FunctionDomain::Full,
-        vectorize_2_arg::<NullableType<VariantType>, NullableType<UInt64Type>, NullableType<VariantType>>(|val, idx, _| {
-            match (val, idx) {
-                (Some(val), Some(idx)) => {
-                    if val.is_empty() {
-                        None
-                    } else {
-                        let json_path = JsonPathRef::UInt64(idx);
-                        get_by_path(val, vec![json_path])
-                    }
-                }
-                (_, _) => None,
-            }
-        }),
-    );
-
     registry.register_2_arg_core::<NullableType<VariantType>, NullableType<StringType>, NullableType<VariantType>, _, _>(
         "get",
         FunctionProperty::default(),
@@ -179,6 +160,25 @@ pub fn register(registry: &mut FunctionRegistry) {
                             )
                         }).ok()?;
                         let json_path = JsonPathRef::String(Cow::Borrowed(&name));
+                        get_by_path(val, vec![json_path])
+                    }
+                }
+                (_, _) => None,
+            }
+        }),
+    );
+
+    registry.register_2_arg_core::<NullableType<VariantType>, NullableType<UInt64Type>, NullableType<VariantType>, _, _>(
+        "get",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        vectorize_2_arg::<NullableType<VariantType>, NullableType<UInt64Type>, NullableType<VariantType>>(|val, idx, _| {
+            match (val, idx) {
+                (Some(val), Some(idx)) => {
+                    if val.is_empty() {
+                        None
+                    } else {
+                        let json_path = JsonPathRef::UInt64(idx);
                         get_by_path(val, vec![json_path])
                     }
                 }

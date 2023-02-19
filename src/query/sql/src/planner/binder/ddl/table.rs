@@ -68,7 +68,6 @@ use tracing::debug;
 
 use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
-use crate::binder::wrap_cast;
 use crate::binder::Binder;
 use crate::binder::Visibility;
 use crate::optimizer::optimize;
@@ -80,6 +79,7 @@ use crate::planner::semantic::TypeChecker;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
+use crate::plans::CastExpr;
 use crate::plans::CreateTablePlanV2;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropTableClusterKeyPlan;
@@ -100,6 +100,7 @@ use crate::plans::UndropTablePlan;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::Planner;
+use crate::ScalarExpr;
 use crate::SelectBuilder;
 
 impl Binder {
@@ -907,9 +908,14 @@ impl Binder {
             fields_default_expr.push({
                 if let Some(default_expr) = &column.default_expr {
                     let (expr, _) = scalar_binder.bind(default_expr).await?;
-                    let cast_expr_to_field_type =
-                        wrap_cast(&expr, &DataType::from(&schema_data_type))
-                            .as_expr_with_col_index()?;
+                    let is_try = schema_data_type.is_nullable();
+                    let cast_expr_to_field_type = ScalarExpr::CastExpr(CastExpr {
+                        is_try,
+                        from_type: Box::new(expr.data_type()),
+                        target_type: Box::new(DataType::from(&schema_data_type)),
+                        argument: Box::new(expr),
+                    })
+                    .as_expr_with_col_index()?;
                     let (fold_to_constant, _) = ConstantFolder::fold(
                         &cast_expr_to_field_type,
                         self.ctx.get_function_context()?,

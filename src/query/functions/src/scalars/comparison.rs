@@ -50,20 +50,18 @@ use regex::bytes::Regex;
 use crate::scalars::string_multi_args::regexp;
 
 pub fn register(registry: &mut FunctionRegistry) {
+    register_variant_cmp(registry);
     register_string_cmp(registry);
     register_date_cmp(registry);
     register_timestamp_cmp(registry);
     register_number_cmp(registry);
     register_boolean_cmp(registry);
-    register_variant_cmp(registry);
     register_array_cmp(registry);
     register_tuple_cmp(registry);
     register_like(registry);
 }
 
-pub const ALL_COMP_FUNC_NAMES: [&str; 7] = ["eq", "noteq", "lt", "lte", "gt", "gte", "contains"];
-
-pub const ALL_MATCH_FUNC_NAMES: [&str; 2] = ["like", "regexp"];
+pub const ALL_COMP_FUNC_NAMES: &[&str] = &["eq", "noteq", "lt", "lte", "gt", "gte", "contains"];
 
 const ALL_TRUE_DOMAIN: BooleanDomain = BooleanDomain {
     has_true: true,
@@ -74,6 +72,59 @@ const ALL_FALSE_DOMAIN: BooleanDomain = BooleanDomain {
     has_true: false,
     has_false: true,
 };
+
+fn register_variant_cmp(registry: &mut FunctionRegistry) {
+    registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
+        "eq",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        |lhs, rhs, _| {
+            common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") == Ordering::Equal
+        },
+    );
+    registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
+        "noteq",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        |lhs, rhs, _| {
+            common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") != Ordering::Equal
+        },
+    );
+    registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
+        "gt",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        |lhs, rhs, _| {
+            common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value")
+                == Ordering::Greater
+        },
+    );
+    registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
+        "gte",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        |lhs, rhs, _| {
+            common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") != Ordering::Less
+        },
+    );
+    registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
+        "lt",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        |lhs, rhs, _| {
+            common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") == Ordering::Less
+        },
+    );
+    registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
+        "lte",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        |lhs, rhs, _| {
+            common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value")
+                != Ordering::Greater
+        },
+    );
+}
 
 fn register_string_cmp(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<StringType, StringType, BooleanType, _, _>(
@@ -284,59 +335,6 @@ fn register_number_cmp(registry: &mut FunctionRegistry) {
             }
         });
     }
-}
-
-fn register_variant_cmp(registry: &mut FunctionRegistry) {
-    registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
-        "eq",
-        FunctionProperty::default(),
-        |_, _| FunctionDomain::Full,
-        |lhs, rhs, _| {
-            common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") == Ordering::Equal
-        },
-    );
-    registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
-        "noteq",
-        FunctionProperty::default(),
-        |_, _| FunctionDomain::Full,
-        |lhs, rhs, _| {
-            common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") != Ordering::Equal
-        },
-    );
-    registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
-        "gt",
-        FunctionProperty::default(),
-        |_, _| FunctionDomain::Full,
-        |lhs, rhs, _| {
-            common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value")
-                == Ordering::Greater
-        },
-    );
-    registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
-        "gte",
-        FunctionProperty::default(),
-        |_, _| FunctionDomain::Full,
-        |lhs, rhs, _| {
-            common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") != Ordering::Less
-        },
-    );
-    registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
-        "lt",
-        FunctionProperty::default(),
-        |_, _| FunctionDomain::Full,
-        |lhs, rhs, _| {
-            common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") == Ordering::Less
-        },
-    );
-    registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
-        "lte",
-        FunctionProperty::default(),
-        |_, _| FunctionDomain::Full,
-        |lhs, rhs, _| {
-            common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value")
-                != Ordering::Greater
-        },
-    );
 }
 
 fn register_array_cmp(registry: &mut FunctionRegistry) {

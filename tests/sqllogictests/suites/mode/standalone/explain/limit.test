@@ -157,7 +157,7 @@ Limit
     ├── estimated rows: 2.00
     └── HashJoin
         ├── join type: RIGHT OUTER
-        ├── build keys: [TRY_CAST(t3.c1 (#1) AS UInt64 NULL)]
+        ├── build keys: [CAST(t3.c1 (#1) AS UInt64 NULL)]
         ├── probe keys: [t4.c (#5)]
         ├── filters: []
         ├── estimated rows: 2.00

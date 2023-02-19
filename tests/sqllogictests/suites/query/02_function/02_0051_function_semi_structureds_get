@@ -289,7 +289,7 @@ select id, get(arr, 5) from t4
 2 NULL
 
 
-statement error 1065
+statement error 1001
 select id, get(arr, 'a') from t4
 
 statement ok
