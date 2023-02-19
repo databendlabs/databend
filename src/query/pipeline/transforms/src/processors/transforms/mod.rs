@@ -14,6 +14,7 @@
 
 mod sort;
 pub mod transform;
+pub mod transform_accumulating;
 pub mod transform_block_compact;
 pub mod transform_block_compact_no_split;
 pub mod transform_compact;
