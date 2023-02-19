@@ -189,6 +189,7 @@ impl FlightExchange {
                             let f = f.clone();
                             let network_tx = network_tx.clone();
                             let response_rx = response_rx.clone();
+                            // create new future send packet to remote for avoid blocking recv data
                             common_base::base::tokio::spawn(async move {
                                 // Send ClosingOutput response after other response.
                                 while let Ok(response) = response_rx.recv().await {
@@ -205,6 +206,7 @@ impl FlightExchange {
 
                             let f = f.clone();
                             let network_tx = network_tx.clone();
+                            // create new future send packet to remote for avoid blocking recv data
                             common_base::base::tokio::spawn(async move {
                                 let _ = network_tx.send(f(DataPacket::ClosingInput)).await;
                             });
