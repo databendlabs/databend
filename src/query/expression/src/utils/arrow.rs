@@ -60,10 +60,12 @@ pub fn constant_bitmap(value: bool, len: usize) -> MutableBitmap {
 }
 
 pub fn buffer_into_mut<T: Clone>(mut buffer: Buffer<T>) -> Vec<T> {
-    buffer
-        .get_mut()
-        .map(std::mem::take)
-        .unwrap_or_else(|| buffer.to_vec())
+    unsafe {
+        buffer
+            .get_mut()
+            .map(std::mem::take)
+            .unwrap_or_else(|| buffer.to_vec())
+    }
 }
 
 pub fn serialize_column(col: &Column) -> Vec<u8> {

@@ -107,7 +107,7 @@ impl ValueType for BooleanType {
     }
 
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
-        col.clone().slice(range.start, range.end - range.start)
+        col.clone().sliced(range.start, range.end - range.start)
     }
 
     fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a> {

@@ -155,7 +155,7 @@ impl<Num: Number> ValueType for NumberType<Num> {
     }
 
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
-        col.clone().slice(range.start, range.end - range.start)
+        col.clone().sliced(range.start, range.end - range.start)
     }
 
     fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a> {
@@ -453,7 +453,7 @@ impl NumberColumn {
 
         crate::with_number_type!(|NUM_TYPE| match self {
             NumberColumn::NUM_TYPE(col) => {
-                NumberColumn::NUM_TYPE(col.clone().slice(range.start, range.end - range.start))
+                NumberColumn::NUM_TYPE(col.clone().sliced(range.start, range.end - range.start))
             }
         })
     }

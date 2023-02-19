@@ -229,7 +229,7 @@ impl<T: ValueType> NullableColumn<T> {
             validity: self
                 .validity
                 .clone()
-                .slice(range.start, range.end - range.start),
+                .sliced(range.start, range.end - range.start),
             column: T::slice_column(&self.column, range),
         }
     }
