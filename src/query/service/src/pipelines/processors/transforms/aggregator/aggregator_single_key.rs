@@ -29,14 +29,133 @@ use common_expression::Scalar;
 use common_expression::Value;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::aggregates::StateAddr;
+use common_pipeline_core::processors::port::{InputPort, OutputPort};
+use common_pipeline_core::processors::Processor;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_transforms::processors::transforms::transform_accumulating::{AccumulatingTransform, AccumulatingTransformer};
 
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::processors::AggregatorParams;
 
 pub type FinalSingleStateAggregator = SingleStateAggregator<true>;
-pub type PartialSingleStateAggregator = SingleStateAggregator<false>;
 
 /// SELECT COUNT | SUM FROM table;
+pub struct PartialSingleStateAggregator {
+    arena: Bump,
+    places: Vec<StateAddr>,
+    arg_indices: Vec<Vec<usize>>,
+    funcs: Vec<AggregateFunctionRef>,
+}
+
+impl PartialSingleStateAggregator {
+    pub fn try_create(input: Arc<InputPort>, output: Arc<OutputPort>, params: &Arc<AggregatorParams>) -> Result<Box<dyn Processor>> {
+        assert!(!params.offsets_aggregate_states.is_empty());
+
+        let arena = Bump::new();
+        let layout = params
+            .layout
+            .ok_or_else(|| ErrorCode::LayoutError("layout shouldn't be None"))?;
+
+        // let get_places = || -> Vec<StateAddr> {
+        let place: StateAddr = arena.alloc_layout(layout).into();
+        let mut places = Vec::with_capacity(params.offsets_aggregate_states.len());
+
+        for (idx, func) in params.aggregate_functions.iter().enumerate() {
+            let arg_place = place.next(params.offsets_aggregate_states[idx]);
+            func.init_state(arg_place);
+            places.push(arg_place);
+        }
+
+        Ok(AccumulatingTransformer::create(input, output, PartialSingleStateAggregator {
+            arena,
+            places,
+            funcs: params.aggregate_functions.clone(),
+            arg_indices: params.aggregate_functions_arguments.clone(),
+        }))
+    }
+}
+
+impl AccumulatingTransform for PartialSingleStateAggregator {
+    const NAME: &'static str = "AggregatorPartialTransform";
+
+    fn transform(&mut self, block: DataBlock) -> Result<Option<DataBlock>> {
+        let block = block.convert_to_full();
+
+        for (idx, func) in self.funcs.iter().enumerate() {
+            let mut arg_columns = vec![];
+            for index in self.arg_indices[idx].iter() {
+                arg_columns.push(
+                    block
+                        .get_by_offset(*index)
+                        .value
+                        .as_column()
+                        .unwrap()
+                        .clone(),
+                );
+            }
+            let place = self.places[idx];
+            func.accumulate(place, &arg_columns, None, block.num_rows())?;
+        }
+
+        Ok(None)
+    }
+
+    fn on_finish(&mut self) -> Result<Option<DataBlock>> {
+        let mut columns = Vec::with_capacity(self.funcs.len());
+
+        for (idx, func) in self.funcs.iter().enumerate() {
+            let place = self.places[idx];
+
+            let mut data = Vec::with_capacity(4);
+            func.serialize(place, &mut data)?;
+            columns.push(BlockEntry {
+                data_type: DataType::String,
+                value: Value::Scalar(Scalar::String(data)),
+            });
+        }
+
+        // destroy states
+        for (place, func) in self.places.iter().zip(self.funcs.iter()) {
+            if func.need_manual_drop_state() {
+                unsafe { func.drop_state(*place) }
+            }
+        }
+
+        Ok(Some(DataBlock::new(columns, 1)))
+    }
+}
+
+/// SELECT COUNT | SUM FROM table;
+pub struct FinalSingleStateAggregatorNew {
+    // arena: Bump,
+    // places: Vec<StateAddr>,
+    // arg_indices: Vec<Vec<usize>>,
+    // funcs: Vec<AggregateFunctionRef>,
+}
+
+impl AccumulatingTransform for FinalSingleStateAggregatorNew {
+    const NAME: &'static str = "AggregatorFinalTransform";
+
+    fn transform(&mut self, block: DataBlock) -> Result<Option<DataBlock>> {
+        if !block.is_empty() {
+            let block = block.convert_to_full();
+            // let places = self.new_places();
+        }
+
+        for (index, func) in self.funcs.iter().enumerate() {
+            let binary_array = block.get_by_offset(index).value.as_column().unwrap();
+            let binary_array = binary_array
+                .as_string()
+                .ok_or_else(|| ErrorCode::IllegalDataType("binary array should be string type"))?;
+
+            let mut data = unsafe { binary_array.index_unchecked(0) };
+            func.deserialize(places[index], &mut data)?;
+            self.to_merge_places[index].push(places[index]);
+        }
+        Ok(())
+    }
+}
+
 pub struct SingleStateAggregator<const FINAL: bool> {
     funcs: Vec<AggregateFunctionRef>,
     arg_indices: Vec<Vec<usize>>,
