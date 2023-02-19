@@ -58,8 +58,8 @@ pub enum RuleID {
 
     // Exploration rules
     CommuteJoin,
-    LeftAssociateJoin,
     RightAssociateJoin,
+    LeftAssociateJoin,
     ExchangeJoin,
     CommuteJoinBaseTable,
     LeftExchangeJoin,
