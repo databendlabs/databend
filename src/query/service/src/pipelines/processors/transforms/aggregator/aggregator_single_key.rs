@@ -127,10 +127,10 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
 
 /// SELECT COUNT | SUM FROM table;
 pub struct FinalSingleStateAggregatorNew {
-    // arena: Bump,
-    // places: Vec<StateAddr>,
-    // arg_indices: Vec<Vec<usize>>,
-    // funcs: Vec<AggregateFunctionRef>,
+    arena: Bump,
+    places: Vec<StateAddr>,
+    arg_indices: Vec<Vec<usize>>,
+    funcs: Vec<AggregateFunctionRef>,
 }
 
 impl AccumulatingTransform for FinalSingleStateAggregatorNew {
