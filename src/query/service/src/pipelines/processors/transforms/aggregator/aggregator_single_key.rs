@@ -105,18 +105,24 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
         Ok(None)
     }
 
-    fn on_finish(&mut self) -> Result<Option<DataBlock>> {
-        let mut columns = Vec::with_capacity(self.funcs.len());
+    fn on_finish(&mut self, generate_data: bool) -> Result<Option<DataBlock>> {
+        let mut generate_data_block = None;
 
-        for (idx, func) in self.funcs.iter().enumerate() {
-            let place = self.places[idx];
+        if generate_data {
+            let mut columns = Vec::with_capacity(self.funcs.len());
 
-            let mut data = Vec::with_capacity(4);
-            func.serialize(place, &mut data)?;
-            columns.push(BlockEntry {
-                data_type: DataType::String,
-                value: Value::Scalar(Scalar::String(data)),
-            });
+            for (idx, func) in self.funcs.iter().enumerate() {
+                let place = self.places[idx];
+
+                let mut data = Vec::with_capacity(4);
+                func.serialize(place, &mut data)?;
+                columns.push(BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Scalar(Scalar::String(data)),
+                });
+            }
+
+            generate_data_block = Some(DataBlock::new(columns, 1));
         }
 
         // destroy states
@@ -126,7 +132,7 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
             }
         }
 
-        Ok(Some(DataBlock::new(columns, 1)))
+        Ok(generate_data_block)
     }
 }
 
@@ -202,38 +208,44 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
         Ok(None)
     }
 
-    fn on_finish(&mut self) -> Result<Option<DataBlock>> {
-        let mut aggr_values = {
-            let mut builders = vec![];
-            for func in &self.funcs {
-                let data_type = func.return_type()?;
-                builders.push(ColumnBuilder::with_capacity(&data_type, 1));
+    fn on_finish(&mut self, generate_data: bool) -> Result<Option<DataBlock>> {
+        let mut generate_data_block = None;
+
+        if generate_data {
+            let mut aggr_values = {
+                let mut builders = vec![];
+                for func in &self.funcs {
+                    let data_type = func.return_type()?;
+                    builders.push(ColumnBuilder::with_capacity(&data_type, 1));
+                }
+                builders
+            };
+
+            let main_places = self.new_places();
+            for (index, func) in self.funcs.iter().enumerate() {
+                let main_place = main_places[index];
+
+                for place in self.to_merge_places[index].iter() {
+                    func.merge(main_place, *place)?;
+                }
+
+                let array = aggr_values[index].borrow_mut();
+                func.merge_result(main_place, array)?;
             }
-            builders
-        };
 
-        let main_places = self.new_places();
-        for (index, func) in self.funcs.iter().enumerate() {
-            let main_place = main_places[index];
-
-            for place in self.to_merge_places[index].iter() {
-                func.merge(main_place, *place)?;
+            let mut columns = Vec::with_capacity(self.funcs.len());
+            for builder in aggr_values {
+                columns.push(builder.build());
             }
 
-            let array = aggr_values[index].borrow_mut();
-            func.merge_result(main_place, array)?;
-        }
-
-        let mut columns = Vec::with_capacity(self.funcs.len());
-        for builder in aggr_values {
-            columns.push(builder.build());
-        }
-
-        // destroy states
-        for (place, func) in main_places.iter().zip(self.funcs.iter()) {
-            if func.need_manual_drop_state() {
-                unsafe { func.drop_state(*place) }
+            // destroy states
+            for (place, func) in main_places.iter().zip(self.funcs.iter()) {
+                if func.need_manual_drop_state() {
+                    unsafe { func.drop_state(*place) }
+                }
             }
+
+            generate_data_block = Some(DataBlock::new_from_columns(columns));
         }
 
         for (places, func) in self.to_merge_places.iter().zip(self.funcs.iter()) {
@@ -244,6 +256,6 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
             }
         }
 
-        Ok(Some(DataBlock::new_from_columns(columns)))
+        Ok(generate_data_block)
     }
 }

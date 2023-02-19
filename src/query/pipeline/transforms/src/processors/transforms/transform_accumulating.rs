@@ -27,7 +27,7 @@ pub trait AccumulatingTransform: Send {
 
     fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>>;
 
-    fn on_finish(&mut self) -> Result<Option<DataBlock>> {
+    fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
         Ok(None)
     }
 }
@@ -58,7 +58,7 @@ impl<T: AccumulatingTransform + 'static> AccumulatingTransformer<T> {
 impl<T: AccumulatingTransform + 'static> Drop for AccumulatingTransformer<T> {
     fn drop(&mut self) {
         if !self.called_on_finish {
-            self.inner.on_finish().unwrap();
+            self.inner.on_finish(false).unwrap();
         }
     }
 }
@@ -124,7 +124,7 @@ impl<T: AccumulatingTransform + 'static> Processor for AccumulatingTransformer<T
 
         if !self.called_on_finish {
             self.called_on_finish = true;
-            self.inner.on_finish()?;
+            self.output_data = self.inner.on_finish(true)?;
         }
 
         Ok(())
