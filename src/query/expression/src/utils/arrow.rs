@@ -68,6 +68,7 @@ pub fn buffer_into_mut<T: Clone>(mut buffer: Buffer<T>) -> Vec<T> {
 
 pub fn serialize_column(col: &Column) -> Vec<u8> {
     let mut buffer = Vec::new();
+
     let schema = Schema::from(vec![col.arrow_field()]);
     let mut writer = FileWriter::new(&mut buffer, schema, None, IpcWriteOptions::default());
     writer.start().unwrap();
@@ -78,15 +79,18 @@ pub fn serialize_column(col: &Column) -> Vec<u8> {
         )
         .unwrap();
     writer.finish().unwrap();
+
     buffer
 }
 
 pub fn deserialize_column(bytes: &[u8]) -> Option<Column> {
     let mut cursor = Cursor::new(bytes);
+
     let metadata = read_file_metadata(&mut cursor).ok()?;
     let f = metadata.schema.fields[0].clone();
     let table_type = TableDataType::from(&f);
     let data_type = (&table_type).into();
+
     let mut reader = FileReader::new(cursor, metadata, None, None);
     let col = reader.next()?.ok()?.into_arrays().remove(0);
 

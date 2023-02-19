@@ -33,16 +33,13 @@ pub struct InitQueryFragmentsPlan {
 }
 
 impl TryInto<InitQueryFragmentsPlan> for Vec<u8> {
-    type Error = Status;
+    type Error = ErrorCode;
 
     fn try_into(self) -> Result<InitQueryFragmentsPlan, Self::Error> {
-        match std::str::from_utf8(&self) {
-            Err(cause) => Err(Status::invalid_argument(cause.to_string())),
-            Ok(utf8_body) => match serde_json::from_str::<InitQueryFragmentsPlan>(utf8_body) {
-                Err(cause) => Err(Status::invalid_argument(cause.to_string())),
-                Ok(action) => Ok(action),
-            },
-        }
+        serde_json::from_slice(self.as_slice()).map_err_to_code(
+            ErrorCode::Internal,
+            || "Logical error: cannot deserialize InitQueryFragmentsPlan.",
+        )
     }
 }
 
@@ -52,7 +49,7 @@ impl TryInto<Vec<u8>> for InitQueryFragmentsPlan {
     fn try_into(self) -> Result<Vec<u8>, Self::Error> {
         serde_json::to_vec(&self).map_err_to_code(
             ErrorCode::Internal,
-            || "Logical error: cannot serialize PrepareExecutor.",
+            || "Logical error: cannot serialize InitQueryFragmentsPlan.",
         )
     }
 }

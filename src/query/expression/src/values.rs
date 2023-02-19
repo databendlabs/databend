@@ -1304,10 +1304,14 @@ impl Column {
     }
 }
 
+/// Serialize a column to a base64 string.
+/// Because we may use serde::json/bincode to serialize the column, so we wrap it into string
 impl Serialize for Column {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
-        serializer.serialize_bytes(&serialize_column(self))
+        let bytes = serialize_column(self);
+        let base64_str = base64::encode(bytes);
+        serializer.serialize_str(&base64_str)
     }
 }
 
@@ -1323,15 +1327,16 @@ impl<'de> Deserialize<'de> for Column {
                 formatter.write_str("an arrow chunk with exactly one column")
             }
 
-            fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
             where E: serde::de::Error {
-                let column = deserialize_column(value)
+                let bytes = base64::decode(v).unwrap();
+                let column = deserialize_column(&bytes)
                     .expect("expecting an arrow chunk with exactly one column");
                 Ok(column)
             }
         }
 
-        deserializer.deserialize_bytes(ColumnVisitor)
+        deserializer.deserialize_string(ColumnVisitor)
     }
 }
 
