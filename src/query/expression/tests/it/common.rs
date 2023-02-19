@@ -56,8 +56,8 @@ pub fn run_concat(file: &mut impl Write, blocks: &[DataBlock]) {
     match result {
         Ok(result_block) => {
             for (i, c) in blocks.iter().enumerate() {
-                writeln!(file, "Concat-Column {}:", i).unwrap();
-                writeln!(file, "{:?}", c).unwrap();
+                writeln!(file, "Concat-Column {i}:").unwrap();
+                writeln!(file, "{c:?}").unwrap();
             }
             writeln!(file, "Result:\n{result_block}").unwrap();
             write!(file, "\n\n").unwrap();

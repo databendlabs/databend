@@ -1038,7 +1038,6 @@ is_not_null(NULL) :: Boolean
 is_not_null(T0 NULL) :: Boolean
 is_true(Boolean) :: Boolean
 is_true(Boolean NULL) :: Boolean
-is_true(String NULL) :: Boolean
 json_extract_path_text(String, String) :: String NULL
 json_extract_path_text(String NULL, String NULL) :: String NULL
 left(String, UInt64) :: String
