@@ -1045,6 +1045,9 @@ pub struct QueryConfig {
     #[clap(long, default_value = "3307")]
     pub mysql_handler_port: u16,
 
+    #[clap(long, default_value = "120")]
+    pub mysql_handler_tcp_keepalive_timeout_secs: u64,
+
     #[clap(long, default_value = "256")]
     pub max_active_sessions: u64,
 
@@ -1242,6 +1245,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             num_cpus: self.num_cpus,
             mysql_handler_host: self.mysql_handler_host,
             mysql_handler_port: self.mysql_handler_port,
+            mysql_handler_tcp_keepalive_timeout_secs: self.mysql_handler_tcp_keepalive_timeout_secs,
             max_active_sessions: self.max_active_sessions,
             max_server_memory_usage: self.max_server_memory_usage,
             max_memory_limit_enabled: self.max_memory_limit_enabled,
@@ -1293,6 +1297,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             num_cpus: inner.num_cpus,
             mysql_handler_host: inner.mysql_handler_host,
             mysql_handler_port: inner.mysql_handler_port,
+            mysql_handler_tcp_keepalive_timeout_secs: inner
+                .mysql_handler_tcp_keepalive_timeout_secs,
             max_active_sessions: inner.max_active_sessions,
             max_server_memory_usage: inner.max_server_memory_usage,
             max_memory_limit_enabled: inner.max_memory_limit_enabled,
