@@ -20,15 +20,12 @@ use common_expression::types::DataType;
 use common_expression::DataSchemaRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
-<<<<<<< HEAD
+use common_sql::executor::cast_expr_to_non_null_boolean;
 use common_sql::plans::AndExpr;
 use common_sql::plans::BoundColumnRef;
 use common_sql::ColumnBinding;
 use common_sql::ScalarExpr;
 use common_sql::Visibility;
-=======
-use common_sql::executor::cast_expr_to_non_null_boolean;
->>>>>>> upstream/main
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;
@@ -88,7 +85,7 @@ impl Interpreter for DeleteInterpreter {
                     return_type: Box::new(DataType::Boolean),
                 })
             };
-            
+
             let filter =
                 cast_expr_to_non_null_boolean(scalar.as_expr_with_col_name()?)?.as_remote_expr();
 
