@@ -16,7 +16,6 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::str;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
@@ -50,6 +49,7 @@ use common_storage::ShareTableConfig;
 use common_storage::StorageMetrics;
 use common_storage::StorageMetricsLayer;
 use opendal::Operator;
+use opendal::Scheme;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::ColumnStatistics as FuseColumnStatistics;
@@ -142,14 +142,15 @@ impl FuseTable {
         let meta_location_generator =
             TableMetaLocationGenerator::with_prefix(storage_prefix).with_part_prefix(part_prefix);
 
+        let scheme = operator.metadata().scheme();
         Ok(Box::new(FuseTable {
             table_info,
             meta_location_generator,
             cluster_key_meta,
             operator,
             data_metrics,
-            storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
-            table_compression: table_compression.as_str().try_into()?,
+            storage_format: FuseStorageFormat::from_str_schema(storage_format.as_str(), scheme)?,
+            table_compression: Self::compression_from_str(table_compression.as_str(), scheme)?,
         }))
     }
 
@@ -296,6 +297,18 @@ impl FuseTable {
 
     pub fn transient(&self) -> bool {
         self.table_info.meta.options.contains_key("TRANSIENT")
+    }
+
+    pub fn compression_from_str(str: &str, schema: Scheme) -> Result<TableCompression> {
+        if str.is_empty() {
+            if matches!(schema, Scheme::Fs) {
+                Ok(TableCompression::LZ4)
+            } else {
+                Ok(TableCompression::Zstd)
+            }
+        } else {
+            TableCompression::try_from(str)
+        }
     }
 }
 
@@ -616,13 +629,18 @@ pub enum FuseStorageFormat {
     Native,
 }
 
-impl FromStr for FuseStorageFormat {
-    type Err = ErrorCode;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+impl FuseStorageFormat {
+    fn from_str_schema(s: &str, schema: opendal::Scheme) -> Result<Self> {
         match s.to_lowercase().as_str() {
-            "" | "parquet" => Ok(FuseStorageFormat::Parquet),
+            "parquet" => Ok(FuseStorageFormat::Parquet),
             "native" => Ok(FuseStorageFormat::Native),
+            "" => {
+                if matches!(schema, opendal::Scheme::Fs) {
+                    Ok(FuseStorageFormat::Native)
+                } else {
+                    Ok(FuseStorageFormat::Parquet)
+                }
+            }
             other => Err(ErrorCode::UnknownFormat(format!(
                 "unknown fuse storage_format {}",
                 other
@@ -630,7 +648,6 @@ impl FromStr for FuseStorageFormat {
         }
     }
 }
-
 #[derive(Default)]
 struct FuseTableColumnStatisticsProvider {
     column_stats: HashMap<ColumnId, FuseColumnStatistics>,
