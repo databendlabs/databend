@@ -87,7 +87,7 @@ use crate::pipelines::processors::AggregatorParams;
 //     }
 // }
 //
-pub trait PolymorphicKeysHelper<Method: HashMethod> {
+pub trait PolymorphicKeysHelper<Method: HashMethod>: Send + Sync + 'static {
     const SUPPORT_PARTITIONED: bool;
 
     type HashTable<T: Send + Sync + 'static>: HashtableLike<Key = Method::HashKey, Value = T>
@@ -512,8 +512,7 @@ impl<Method: HashMethod + Send> HashMethod for PartitionedHashMethod<Method> {
 impl<Method> PolymorphicKeysHelper<PartitionedHashMethod<Method>> for PartitionedHashMethod<Method>
 where
     Self: HashMethod<HashKey = Method::HashKey>,
-    Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
-    Method::HashKey: FastHash,
+    Method: HashMethod + PolymorphicKeysHelper<Method>,
 {
     // Partitioned cannot be recursive
     const SUPPORT_PARTITIONED: bool = false;
@@ -564,3 +563,7 @@ where
         self.method.get_hash(v)
     }
 }
+
+pub trait HashMethodBounds: HashMethod + PolymorphicKeysHelper<Self> {}
+
+impl<T: HashMethod + PolymorphicKeysHelper<T>> HashMethodBounds for T {}

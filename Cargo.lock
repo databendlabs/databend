@@ -1395,6 +1395,7 @@ dependencies = [
  "common-ast",
  "common-datavalues",
  "common-exception",
+ "common-hashtable",
  "common-io",
  "common-jsonb",
  "dashmap",

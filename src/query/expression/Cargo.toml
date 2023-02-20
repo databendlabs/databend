@@ -14,6 +14,7 @@ test = false
 common-arrow = { path = "../../common/arrow" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
+common-hashtable = { path = "../../common/hashtable" }
 common-io = { path = "../../common/io" }
 
 # Github dependencies
