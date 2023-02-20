@@ -270,6 +270,7 @@ impl FuseTable {
                         delete_locations_to_be_pruged.insert(loc.to_string());
                     }
                     status_delete_to_be_purged_count += delete_locations_to_be_pruged.len();
+
                     // todo(zhyass): add cache
                     self.try_purge_location_files_and_cache::<DeleteMarkMeta>(
                         ctx.clone(),
@@ -484,13 +485,9 @@ impl FuseTable {
                         .unwrap_or_default()
                         .0,
                 );
-                deletes.insert(
-                    block_meta
-                        .delete_mask_location
-                        .clone()
-                        .unwrap_or_default()
-                        .0,
-                );
+                if let Some(mask_location) = &block_meta.delete_mask_location {
+                    deletes.insert(mask_location.0.clone());
+                }
             }
         }
 
