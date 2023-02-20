@@ -22,7 +22,6 @@ use common_expression::with_hash_method;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
-use common_expression::HashMethod;
 use common_expression::HashMethodKind;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
@@ -41,8 +40,8 @@ use super::aggregator::AggregateHashStateInfo;
 use super::group_by::BUCKETS_LG2;
 use crate::pipelines::processors::transforms::aggregator::AggregateInfo;
 use crate::pipelines::processors::transforms::aggregator::BucketAggregator;
+use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
-use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::AggregatorParams;
 
 // Overflow to object storage data block
@@ -105,7 +104,7 @@ struct InputPortState {
 
 /// A helper class that  Map
 /// AggregateInfo/AggregateHashStateInfo  --->  ConvertGroupingMetaInfo { meta: blocks with Option<AggregateHashStateInfo> }
-pub struct TransformConvertGrouping<Method: HashMethod + PolymorphicKeysHelper<Method>> {
+pub struct TransformConvertGrouping<Method: HashMethodBounds> {
     output: Arc<OutputPort>,
     inputs: Vec<InputPortState>,
 
@@ -118,7 +117,7 @@ pub struct TransformConvertGrouping<Method: HashMethod + PolymorphicKeysHelper<M
     unsplitted_blocks: Vec<DataBlock>,
 }
 
-impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGrouping<Method> {
+impl<Method: HashMethodBounds> TransformConvertGrouping<Method> {
     pub fn create(
         method: Method,
         params: Arc<AggregatorParams>,
@@ -282,9 +281,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
 }
 
 #[async_trait::async_trait]
-impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Processor
-    for TransformConvertGrouping<Method>
-{
+impl<Method: HashMethodBounds> Processor for TransformConvertGrouping<Method> {
     fn name(&self) -> String {
         String::from("TransformConvertGrouping")
     }
@@ -400,7 +397,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
     }
 }
 
-fn build_convert_grouping<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>(
+fn build_convert_grouping<Method: HashMethodBounds>(
     method: Method,
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
@@ -438,7 +435,7 @@ pub fn efficiently_memory_final_aggregator(
     })
 }
 
-struct MergeBucketTransform<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> {
+struct MergeBucketTransform<Method: HashMethodBounds> {
     method: Method,
     params: Arc<AggregatorParams>,
 
@@ -449,9 +446,7 @@ struct MergeBucketTransform<Method: HashMethod + PolymorphicKeysHelper<Method> +
     output_blocks: Vec<DataBlock>,
 }
 
-impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>
-    MergeBucketTransform<Method>
-{
+impl<Method: HashMethodBounds> MergeBucketTransform<Method> {
     pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
@@ -470,9 +465,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>
 }
 
 #[async_trait::async_trait]
-impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Processor
-    for MergeBucketTransform<Method>
-{
+impl<Method: HashMethodBounds> Processor for MergeBucketTransform<Method> {
     fn name(&self) -> String {
         String::from("MergeBucketTransform")
     }

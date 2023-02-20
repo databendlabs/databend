@@ -21,12 +21,12 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_hashtable::FastHash;
 use common_io::prelude::BinaryWrite;
 use common_io::prelude::FormatSettings;
 use micromarshal::Marshal;
 use primitive_types::U256;
 use primitive_types::U512;
-use common_hashtable::FastHash;
 
 use crate::types::boolean::BooleanType;
 use crate::types::nullable::NullableColumn;
@@ -51,7 +51,7 @@ pub enum KeysState {
     U512(Vec<U512>),
 }
 
-pub trait HashMethod: Clone {
+pub trait HashMethod: Clone + Sync + Send + 'static {
     type HashKey: ?Sized + Eq + FastHash + Debug;
 
     type HashKeyIter<'a>: Iterator<Item = &'a Self::HashKey> + TrustedLen
