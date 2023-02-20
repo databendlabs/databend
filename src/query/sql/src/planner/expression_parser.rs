@@ -121,15 +121,15 @@ pub fn parse_exprs(
     Ok(exprs)
 }
 
-pub fn parse_to_remote_string_exprs(
+pub fn parse_to_remote_string_expr(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
     unwrap_tuple: bool,
     sql: &str,
-) -> Result<Vec<RemoteExpr<String>>> {
+) -> Result<RemoteExpr<String>> {
     let schema = table_meta.schema();
     let exprs = parse_exprs(ctx, table_meta, unwrap_tuple, sql)?;
-    let exprs = exprs
+    let exprs: Vec<RemoteExpr<String>> = exprs
         .iter()
         .map(|expr| {
             expr.project_column_ref(|index| schema.field(*index).name().to_string())
@@ -137,7 +137,14 @@ pub fn parse_to_remote_string_exprs(
         })
         .collect();
 
-    Ok(exprs)
+    if exprs.len() == 1 {
+        Ok(exprs[0].clone())
+    } else {
+        Err(ErrorCode::BadDataValueType(format!(
+            "Expected single expr, but got {}",
+            exprs.len()
+        )))
+    }
 }
 
 #[derive(Default)]

@@ -57,7 +57,7 @@ impl Interpreter for ReclusterTableInterpreter {
             let filter = scalar.as_expr_with_col_name()?.as_remote_expr();
 
             Some(PushDownInfo {
-                filters: vec![filter],
+                filter: Some(filter),
                 ..PushDownInfo::default()
             })
         } else {
