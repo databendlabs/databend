@@ -38,10 +38,6 @@ impl ResultCacheMetaManager {
 
     pub async fn set(&self, value: ResultCacheValue, seq: MatchSeq, expire_at: u64) -> Result<()> {
         let value = serde_json::to_vec(&value)?;
-        self.set_binary(value, seq, expire_at).await
-    }
-
-    async fn set_binary(&self, value: Vec<u8>, seq: MatchSeq, expire_at: u64) -> Result<()> {
         let _ = self
             .inner
             .upsert_kv(UpsertKV {
@@ -60,14 +56,8 @@ impl ResultCacheMetaManager {
         let raw = self.inner.get_kv(&self.key).await?;
         match raw {
             None => Ok(None),
-            Some(SeqV { seq, data, .. }) => {
+            Some(SeqV { data, .. }) => {
                 let value = serde_json::from_slice(&data)?;
-
-                // refresh TTL
-                let now = SeqV::<()>::now_ms();
-                self.set_binary(data, MatchSeq::Exact(seq), now + self.ttl)
-                    .await?;
-
                 Ok(Some(value))
             }
         }
