@@ -25,6 +25,7 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::filter_helper::FilterHelpers;
+use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::DataBlock;
@@ -264,10 +265,11 @@ impl Processor for ParquetDeserializeTransform {
 
                     // Step 2: Read Prewhere columns and get the filter
                     let evaluator = Evaluator::new(&prewhere_block, *func_ctx, &BUILTIN_FUNCTIONS);
-                    let result = evaluator
+                    let filter = evaluator
                         .run(filter)
-                        .map_err(|e| e.add_message("eval prewhere filter failed:"))?;
-                    let filter = FilterHelpers::cast_to_nonull_boolean(&result).unwrap();
+                        .map_err(|e| e.add_message("eval prewhere filter failed:"))?
+                        .try_downcast::<BooleanType>()
+                        .unwrap();
 
                     // Step 3: Apply the filter, if it's all filtered, we can skip the remain columns.
                     if FilterHelpers::is_all_unset(&filter) {
@@ -320,11 +322,10 @@ impl Processor for ParquetDeserializeTransform {
                         }
 
                         let block = prewhere_block.resort(&self.src_schema, &self.output_schema)?;
-                        block.filter_boolean_value(filter)
+                        block.filter_boolean_value(&filter)
                     } else {
                         // filter prewhere columns first.
-                        let mut prewhere_block =
-                            prewhere_block.filter_boolean_value(filter.clone())?;
+                        let mut prewhere_block = prewhere_block.filter_boolean_value(&filter)?;
                         // If row_selection is None, we can push down the prewhere filter to remain data deserialization.
                         let remain_block = match filter {
                             Value::Column(bitmap) => {

@@ -64,10 +64,10 @@ impl RangePrunerCreator {
     pub fn try_create<'a>(
         func_ctx: FunctionContext,
         schema: &'a TableSchemaRef,
-        filter_expr: Option<&'a [Expr<String>]>,
+        filter_expr: Option<&'a Expr<String>>,
     ) -> Result<Arc<dyn RangePruner + Send + Sync>> {
         Ok(match filter_expr {
-            Some(exprs) if !exprs.is_empty() => {
+            Some(exprs) => {
                 let range_filter = RangeIndex::try_create(func_ctx, exprs, schema.clone())?;
                 match range_filter.try_apply_const() {
                     Ok(v) => {

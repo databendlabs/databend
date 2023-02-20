@@ -187,7 +187,7 @@ impl FuseTable {
     ) -> (PartStatistics, Partitions) {
         let limit = push_down
             .as_ref()
-            .filter(|p| p.order_by.is_empty() && p.filters.is_empty())
+            .filter(|p| p.order_by.is_empty() && p.filter.is_none())
             .and_then(|p| p.limit)
             .unwrap_or(usize::MAX);
 
@@ -230,7 +230,7 @@ impl FuseTable {
     fn is_exact(push_downs: &Option<PushDownInfo>) -> bool {
         match push_downs {
             None => true,
-            Some(extra) => extra.filters.is_empty(),
+            Some(extra) => extra.filter.is_none(),
         }
     }
 

@@ -37,7 +37,8 @@ async fn test_generic_code_with_on_query() -> Result<()> {
     // Setup
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
-    let mut handler = MySQLHandler::create()?;
+    let tcp_keepalive_timeout_secs = 120;
+    let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs)?;
 
     let listening = "127.0.0.1:0".parse::<SocketAddr>()?;
     let runnable_server = handler.start(listening).await?;
@@ -54,7 +55,8 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
     let _guard =
         TestGlobalServices::setup(ConfigBuilder::create().max_active_sessions(1).build()).await?;
 
-    let mut handler = MySQLHandler::create()?;
+    let tcp_keepalive_timeout_secs = 120;
+    let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs)?;
 
     let listening = "127.0.0.1:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
@@ -120,7 +122,8 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
     let _guard =
         TestGlobalServices::setup(ConfigBuilder::create().max_active_sessions(1).build()).await?;
 
-    let mut handler = MySQLHandler::create()?;
+    let tcp_keepalive_timeout_secs = 120;
+    let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs)?;
 
     let listening = "127.0.0.1:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;

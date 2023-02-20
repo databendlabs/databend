@@ -32,9 +32,9 @@ use common_catalog::plan::TopK;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::filter_helper::FilterHelpers;
+use common_expression::types::BooleanType;
 use common_expression::BlockEntry;
 use common_expression::Column;
-use common_expression::ConstantFolder;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::Evaluator;
@@ -145,7 +145,7 @@ impl NativeDeserializeDataTransform {
 
         let func_ctx = ctx.get_function_context()?;
         let prewhere_schema = src_schema.project(&prewhere_columns);
-        let prewhere_filter = Self::build_prewhere_filter_expr(plan, func_ctx, &prewhere_schema)?;
+        let prewhere_filter = Self::build_prewhere_filter_expr(plan, &prewhere_schema)?;
 
         let mut column_leaves = Vec::with_capacity(block_reader.project_column_nodes.len());
         for column_node in &block_reader.project_column_nodes {
@@ -187,17 +187,16 @@ impl NativeDeserializeDataTransform {
 
     fn build_prewhere_filter_expr(
         plan: &DataSourcePlan,
-        ctx: FunctionContext,
         schema: &DataSchema,
     ) -> Result<Arc<Option<Expr>>> {
         Ok(
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => Arc::new(None),
                 Some(v) => {
-                    let expr = v.filter.as_expr(&BUILTIN_FUNCTIONS);
-                    let expr =
-                        expr.project_column_ref(|name| schema.column_with_name(name).unwrap().0);
-                    let (expr, _) = ConstantFolder::fold(&expr, ctx, &BUILTIN_FUNCTIONS);
+                    let expr = v
+                        .filter
+                        .as_expr(&BUILTIN_FUNCTIONS)
+                        .project_column_ref(|name| schema.column_with_name(name).unwrap().0);
                     Arc::new(Some(expr))
                 }
             },
@@ -264,10 +263,12 @@ impl NativeDeserializeDataTransform {
                     .collect::<Vec<_>>();
                 let prewhere_block = DataBlock::new(columns.to_vec(), 1);
                 let evaluator = Evaluator::new(&prewhere_block, self.func_ctx, &BUILTIN_FUNCTIONS);
-                let result = evaluator
+                let filter = evaluator
                     .run(filter)
-                    .map_err(|e| e.add_message("eval prewhere filter failed:"))?;
-                let filter = FilterHelpers::cast_to_nonull_boolean(&result).unwrap();
+                    .map_err(|e| e.add_message("eval prewhere filter failed:"))?
+                    .try_downcast::<BooleanType>()
+                    .unwrap();
+
                 if FilterHelpers::is_all_unset(&filter) {
                     return Ok(true);
                 }
@@ -533,10 +534,11 @@ impl Processor for NativeDeserializeDataTransform {
                         };
                         let evaluator =
                             Evaluator::new(&prewhere_block, self.func_ctx, &BUILTIN_FUNCTIONS);
-                        let result = evaluator
+                        let filter = evaluator
                             .run(filter)
-                            .map_err(|e| e.add_message("eval prewhere filter failed:"))?;
-                        let filter = FilterHelpers::cast_to_nonull_boolean(&result).unwrap();
+                            .map_err(|e| e.add_message("eval prewhere filter failed:"))?
+                            .try_downcast::<BooleanType>()
+                            .unwrap();
 
                         // Step 3: Apply the filter, if it's all filtered, we can skip the remain columns.
                         if FilterHelpers::is_all_unset(&filter) {
@@ -595,7 +597,7 @@ impl Processor for NativeDeserializeDataTransform {
 
             let block = self.block_reader.build_block(arrays, None)?;
             let block = if let Some(filter) = filter {
-                block.filter_boolean_value(filter)?
+                block.filter_boolean_value(&filter)?
             } else {
                 block
             };

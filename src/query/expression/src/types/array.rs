@@ -197,7 +197,7 @@ impl<T: ValueType> ArrayColumn<T> {
         let offsets = self
             .offsets
             .clone()
-            .slice(range.start, range.end - range.start + 1);
+            .sliced(range.start, range.end - range.start + 1);
         ArrayColumn {
             values: self.values.clone(),
             offsets,

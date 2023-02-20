@@ -29,7 +29,7 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
-use common_sql::parse_to_remote_string_exprs;
+use common_sql::parse_to_remote_string_expr;
 use common_sql::plans::CreateTablePlanV2;
 use common_storages_fuse::pruning::FusePruner;
 use common_storages_fuse::FuseTable;
@@ -170,7 +170,12 @@ async fn test_block_pruner() -> Result<()> {
 
     // nothing is pruned
     let e1 = PushDownInfo {
-        filters: parse_to_remote_string_exprs(ctx.clone(), table.clone(), false, "a > 3")?,
+        filter: Some(parse_to_remote_string_expr(
+            ctx.clone(),
+            table.clone(),
+            false,
+            "a > 3",
+        )?),
         ..Default::default()
     };
 
@@ -178,8 +183,12 @@ async fn test_block_pruner() -> Result<()> {
     let mut e2 = PushDownInfo::default();
     let max_val_of_b = 6u64;
 
-    e2.filters =
-        parse_to_remote_string_exprs(ctx.clone(), table.clone(), false, "a > 0 and b > 6")?;
+    e2.filter = Some(parse_to_remote_string_expr(
+        ctx.clone(),
+        table.clone(),
+        false,
+        "a > 0 and b > 6",
+    )?);
     let b2 = num_blocks - max_val_of_b as usize - 1;
 
     // Sort asc Limit: TopN-pruner.

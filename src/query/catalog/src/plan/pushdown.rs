@@ -42,6 +42,7 @@ pub struct PrewhereInfo {
     /// columns of remain reading stage.
     pub remain_columns: Projection,
     /// filter for prewhere
+    /// Assumption: expression's data type must be `DataType::Boolean`.
     pub filter: RemoteExpr<String>,
 }
 
@@ -52,8 +53,8 @@ pub struct PushDownInfo {
     /// It represents the columns to be read from the source.
     pub projection: Option<Projection>,
     /// Optional filter expression plan
-    /// split_conjunctions by `and` operator
-    pub filters: Vec<RemoteExpr<String>>,
+    /// Assumption: expression's data type must be `DataType::Boolean`.
+    pub filter: Option<RemoteExpr<String>>,
     /// Optional prewhere information
     /// used for prewhere optimization
     pub prewhere: Option<PrewhereInfo>,

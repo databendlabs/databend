@@ -311,10 +311,14 @@ impl Domain {
             Domain::Number(NumberDomain::UInt64(SimpleDomain { min, max })) if min == max => {
                 Some(Scalar::Number(NumberScalar::UInt64(*min)))
             }
-            Domain::Number(NumberDomain::Float32(SimpleDomain { min, max })) if min == max => {
+            Domain::Number(NumberDomain::Float32(SimpleDomain { min, max }))
+                if min == max && !min.is_nan() =>
+            {
                 Some(Scalar::Number(NumberScalar::Float32(*min)))
             }
-            Domain::Number(NumberDomain::Float64(SimpleDomain { min, max })) if min == max => {
+            Domain::Number(NumberDomain::Float64(SimpleDomain { min, max }))
+                if min == max && !min.is_nan() =>
+            {
                 Some(Scalar::Number(NumberScalar::Float64(*min)))
             }
             Domain::Boolean(BooleanDomain {
