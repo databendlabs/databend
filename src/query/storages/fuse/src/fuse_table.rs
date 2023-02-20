@@ -325,7 +325,7 @@ impl Table for FuseTable {
         true
     }
 
-    fn support_delete_mark(&self) -> bool {
+    fn support_merge_on_read(&self) -> bool {
         false
     }
 

@@ -108,7 +108,7 @@ pub trait Table: Sync + Send {
         false
     }
 
-    fn support_delete_mark(&self) -> bool {
+    fn support_merge_on_read(&self) -> bool {
         false
     }
 

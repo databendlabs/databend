@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -66,10 +67,13 @@ impl Interpreter for DeleteInterpreter {
         let db_name = self.plan.database_name.as_str();
         let tbl_name = self.plan.table_name.as_str();
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
+        let conf = GlobalConfig::instance();
+        let support_merge_on_read =
+            tbl.support_merge_on_read() && conf.query.internal_merge_on_read_mutation;
 
-        let (filter, col_indices) = if let Some(mut scalar) = &self.plan.selection {
+        let (filter, col_indices) = if let Some(mut scalar) = self.plan.selection.clone() {
             let col_indices = scalar.used_columns().into_iter().collect();
-            if tbl.support_delete_mark() {
+            if support_merge_on_read {
                 scalar = ScalarExpr::AndExpr(AndExpr {
                     left: Box::new(ScalarExpr::BoundColumnRef(BoundColumnRef {
                         column: ColumnBinding {

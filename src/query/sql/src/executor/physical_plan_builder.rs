@@ -22,6 +22,7 @@ use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_function;
@@ -185,13 +186,12 @@ impl PhysicalPlanBuilder {
                 let table_entry = metadata.table(scan.table_index);
                 let table = table_entry.table();
                 let table_schema = table.schema();
+                let conf = GlobalConfig::instance();
+                let support_merge_on_read =
+                    table.support_merge_on_read() && conf.query.internal_merge_on_read_mutation;
 
-                let push_downs = self.push_downs(
-                    scan,
-                    &table_schema,
-                    has_inner_column,
-                    table.support_delete_mark(),
-                )?;
+                let push_downs =
+                    self.push_downs(scan, &table_schema, has_inner_column, support_merge_on_read)?;
 
                 let source = table
                     .read_plan_with_catalog(
@@ -651,7 +651,7 @@ impl PhysicalPlanBuilder {
         scan: &Scan,
         table_schema: &TableSchema,
         has_inner_column: bool,
-        support_delete_mark: bool,
+        support_merge_on_read: bool,
     ) -> Result<PushDownInfo> {
         let metadata = self.metadata.read().clone();
         let projection =
@@ -689,7 +689,7 @@ impl PhysicalPlanBuilder {
 
         let prewhere_info = scan.prewhere.as_ref().map_or_else(
             || -> Result<Option<PrewhereInfo>> {
-                if support_delete_mark {
+                if support_merge_on_read {
                     let filter = ScalarExpr::BoundColumnRef(BoundColumnRef {
                         column: ColumnBinding {
                             database_name: None,
@@ -756,7 +756,7 @@ impl PhysicalPlanBuilder {
                         })
                     })
                     .expect("there should be at least one predicate in prewhere");
-                if support_delete_mark {
+                if support_merge_on_read {
                     predicate = ScalarExpr::AndExpr(AndExpr {
                         left: Box::new(ScalarExpr::BoundColumnRef(BoundColumnRef {
                             column: ColumnBinding {
