@@ -44,6 +44,7 @@ impl HashJoinState for JoinHashTable {
         } else {
             let data_block = DataBlock::concat(buffer.as_slice())?;
             buffer.clear();
+            drop(buffer);
             self.add_build_block(data_block)
         }
     }
