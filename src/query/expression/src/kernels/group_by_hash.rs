@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::fmt::Debug;
-use std::hash::Hash;
 use std::iter::TrustedLen;
 use std::marker::PhantomData;
 use std::ops::Not;
@@ -27,6 +26,7 @@ use common_io::prelude::FormatSettings;
 use micromarshal::Marshal;
 use primitive_types::U256;
 use primitive_types::U512;
+use common_hashtable::FastHash;
 
 use crate::types::boolean::BooleanType;
 use crate::types::nullable::NullableColumn;
@@ -52,7 +52,7 @@ pub enum KeysState {
 }
 
 pub trait HashMethod: Clone {
-    type HashKey: ?Sized + Eq + Hash + Debug;
+    type HashKey: ?Sized + Eq + FastHash + Debug;
 
     type HashKeyIter<'a>: Iterator<Item = &'a Self::HashKey> + TrustedLen
     where Self: 'a;

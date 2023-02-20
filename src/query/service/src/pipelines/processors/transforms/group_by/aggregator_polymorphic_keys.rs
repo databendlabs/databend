@@ -513,7 +513,6 @@ impl<Method> PolymorphicKeysHelper<PartitionedHashMethod<Method>> for Partitione
 where
     Self: HashMethod<HashKey = Method::HashKey>,
     Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
-    Method::HashKey: FastHash,
 {
     // Partitioned cannot be recursive
     const SUPPORT_PARTITIONED: bool = false;
