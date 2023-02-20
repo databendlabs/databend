@@ -1,5 +1,5 @@
 statement ok
-DROP CATALOG IF EXISTS 'ctl';
+DROP CATALOG IF EXISTS ctl;
 
 query T
 SHOW CATALOGS;
@@ -8,7 +8,7 @@ default
 
 
 statement ok
-CREATE CATALOG ctl TYPE=ICEBERG CONNECTION=( URL='s3://bucket/path/to/iceberg'  ACCESS_KEY_ID='<access_key_id>' SECRET_ACCESS_KEY='<access_key_id>' ENDPOINT_URL='https://example.com' );
+CREATE CATALOG ctl TYPE=ICEBERG CONNECTION=( URL='fs://tmp' );
 
 query T
 SHOW CATALOGS LIKE 'ctl';
@@ -16,4 +16,4 @@ SHOW CATALOGS LIKE 'ctl';
 ctl
 
 statement ok
-DROP CATALOG IF EXISTS 'ctl';
+DROP CATALOG IF EXISTS ctl;
