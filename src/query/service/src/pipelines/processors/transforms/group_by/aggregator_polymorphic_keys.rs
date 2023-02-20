@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::marker::PhantomData;
+use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -30,6 +31,8 @@ use common_expression::HashMethodSingleString;
 use common_expression::KeysState;
 use common_hashtable::FastHash;
 use common_hashtable::HashMap;
+use common_hashtable::HashtableEntryMutRefLike;
+use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 use common_hashtable::LookupHashMap;
 use common_hashtable::PartitionedHashMap;
@@ -37,6 +40,7 @@ use common_hashtable::ShortStringHashMap;
 use common_hashtable::StringHashMap;
 use primitive_types::U256;
 use primitive_types::U512;
+use tracing::info;
 
 use super::aggregator_keys_builder::LargeFixedKeysColumnBuilder;
 use super::aggregator_keys_iter::LargeFixedKeysColumnIter;
@@ -478,17 +482,50 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
 }
 
 #[derive(Clone)]
-pub struct PartitionedHashMethod<Method: HashMethod + Send> {
+pub struct PartitionedHashMethod<Method: HashMethodBounds> {
     pub(crate) method: Method,
 }
 
-impl<Method: HashMethod + Send> PartitionedHashMethod<Method> {
+impl<Method: HashMethodBounds> PartitionedHashMethod<Method> {
     pub fn create(method: Method) -> PartitionedHashMethod<Method> {
         PartitionedHashMethod::<Method> { method }
     }
+
+    pub fn convert_hashtable<T>(
+        method: &Method,
+        hashtable: Method::HashTable<T>,
+    ) -> Result<<Self as PolymorphicKeysHelper<PartitionedHashMethod<Method>>>::HashTable<T>>
+    where
+        T: Copy + Send + Sync + 'static,
+        Self: PolymorphicKeysHelper<PartitionedHashMethod<Method>>,
+    {
+        let instant = Instant::now();
+        let partitioned_method = Self::create(method.clone());
+        let mut partitioned_hashtable = partitioned_method.create_hash_table()?;
+
+        unsafe {
+            for item in hashtable.iter() {
+                match partitioned_hashtable.insert_and_entry(item.key()) {
+                    Ok(mut entry) => {
+                        *entry.get_mut() = *item.get();
+                    }
+                    Err(mut entry) => {
+                        *entry.get_mut() = *item.get();
+                    }
+                };
+            }
+        }
+
+        info!(
+            "Convert to Partitioned HashTable elapsed: {:?}",
+            instant.elapsed()
+        );
+
+        Ok(partitioned_hashtable)
+    }
 }
 
-impl<Method: HashMethod + Send> HashMethod for PartitionedHashMethod<Method> {
+impl<Method: HashMethodBounds> HashMethod for PartitionedHashMethod<Method> {
     type HashKey = Method::HashKey;
     type HashKeyIter<'a> = Method::HashKeyIter<'a> where Self: 'a;
 
