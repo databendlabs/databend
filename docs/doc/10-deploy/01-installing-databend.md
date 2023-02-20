@@ -12,14 +12,36 @@ import TabItem from '@theme/TabItem';
 
 <Tabs groupId="distributions">
 
-<TabItem value="deb" label="Ubuntu/Debian">
+<TabItem value="deb-old" label="Ubuntu/Debian(old)">
 
 ```shell
-sudo curl -L -o /etc/apt/sources.list.d/datafuselabs.sources https://repo.databend.rs/deb/datafuselabs.sources
 
-sudo apt update
+curl -L -o /usr/share/keyrings/datafuselabs-keyring.gpg https://repo.databend.rs/deb/datafuselabs.gpg
+curl -L -o /etc/apt/sources.list.d/datafuselabs.list https://repo.databend.rs/deb/datafuselabs.list
 
-sudo apt install databend
+apt update
+
+apt install databend
+```
+
+</TabItem>
+
+<TabItem value="deb-new" label="Ubuntu/Debian(new)">
+
+:::caution
+DEB822 Source Format
+
+Supported by:
+  * Ubuntu Jammy (22.04) and later
+  * Debian Bookworm(12) and later
+:::
+
+```shell
+curl -L -o /etc/apt/sources.list.d/datafuselabs.sources https://repo.databend.rs/deb/datafuselabs.sources
+
+apt update
+
+apt install databend
 ```
 
 </TabItem>
