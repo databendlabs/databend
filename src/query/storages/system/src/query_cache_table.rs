@@ -25,21 +25,21 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 
+use crate::table::AsyncSystemTable;
 use crate::SyncOneBlockSystemTable;
-use crate::SyncSystemTable;
 
 pub struct QueryCacheTable {
     table_info: TableInfo,
 }
 
-impl SyncSystemTable for QueryCacheTable {
+impl AsyncSystemTable for QueryCacheTable {
     const NAME: &'static str = "system.query_cache";
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
     }
 
-    fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+    async fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         Ok(DataBlock::empty())
     }
 }
@@ -48,7 +48,9 @@ impl QueryCacheTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("query_id", TableDataType::String),
-            TableField::new("value", TableDataType::String),
+            TableField::new("sql", TableDataType::String),
+            TableField::new("tenant", TableDataType::String),
+            TableField::new("partitions_sha", TableDataType::String),
         ]);
 
         let table_info = TableInfo {
