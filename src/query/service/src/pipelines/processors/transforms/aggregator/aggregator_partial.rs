@@ -19,7 +19,6 @@ use common_expression::types::string::StringColumnBuilder;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::DataBlock;
-use common_expression::HashMethod;
 use common_functions::aggregates::StateAddr;
 use common_functions::aggregates::StateAddrs;
 use common_hashtable::HashtableEntryMutRefLike;
@@ -29,20 +28,18 @@ use common_hashtable::HashtableLike;
 use super::estimated_key_size;
 use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
+use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
-use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::processors::AggregatorParams;
 
-pub struct PartialAggregator<const HAS_AGG: bool, Method>
-where Method: HashMethod + PolymorphicKeysHelper<Method>
-{
+pub struct PartialAggregator<const HAS_AGG: bool, Method: HashMethodBounds> {
     pub states_dropped: bool,
 
     pub area: Option<Area>,
     pub area_holder: Option<ArenaHolder>,
     pub method: Method,
-    pub hash_table: Method::HashTable,
+    pub hash_table: Method::HashTable<usize>,
     pub params: Arc<AggregatorParams>,
     pub generated: bool,
     pub input_rows: usize,
@@ -50,9 +47,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method>
     pub two_level_mode: bool,
 }
 
-impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
-    PartialAggregator<HAS_AGG, Method>
-{
+impl<const HAS_AGG: bool, Method: HashMethodBounds> PartialAggregator<HAS_AGG, Method> {
     pub fn create(
         method: Method,
         params: Arc<AggregatorParams>,
@@ -74,7 +69,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     }
 
     #[inline(always)]
-    fn lookup_key(keys_iter: Method::HashKeyIter<'_>, hashtable: &mut Method::HashTable) {
+    fn lookup_key(keys_iter: Method::HashKeyIter<'_>, hashtable: &mut Method::HashTable<usize>) {
         unsafe {
             for key in keys_iter {
                 let _ = hashtable.insert_and_entry(key);
@@ -88,7 +83,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         area: &mut Area,
         params: &Arc<AggregatorParams>,
         keys_iter: Method::HashKeyIter<'_>,
-        hashtable: &mut Method::HashTable,
+        hashtable: &mut Method::HashTable<usize>,
     ) -> StateAddrs {
         let mut places = Vec::with_capacity(keys_iter.size_hint().0);
 
@@ -231,7 +226,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     }
 }
 
-impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
+impl<const HAS_AGG: bool, Method: HashMethodBounds> Aggregator
     for PartialAggregator<HAS_AGG, Method>
 {
     const NAME: &'static str = "GroupByPartialTransform";
@@ -267,9 +262,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     }
 }
 
-impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>>
-    PartialAggregator<HAS_AGG, Method>
-{
+impl<const HAS_AGG: bool, Method: HashMethodBounds> PartialAggregator<HAS_AGG, Method> {
     pub fn drop_states(&mut self) {
         if !self.states_dropped {
             let aggregator_params = self.params.as_ref();
@@ -305,9 +298,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>>
     }
 }
 
-impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>> Drop
-    for PartialAggregator<HAS_AGG, Method>
-{
+impl<const HAS_AGG: bool, Method: HashMethodBounds> Drop for PartialAggregator<HAS_AGG, Method> {
     fn drop(&mut self) {
         self.drop_states();
     }

@@ -15,8 +15,6 @@
 use common_ast::ast::FormatTreeNode;
 use common_catalog::plan::PartStatistics;
 use common_exception::Result;
-use common_expression::ConstantFolder;
-use common_expression::FunctionContext;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_profile::ProfSpanSetRef;
 use itertools::Itertools;
@@ -99,19 +97,13 @@ fn table_scan_to_format_tree(
         .source
         .push_downs
         .as_ref()
-        .map_or("".to_string(), |extras| {
+        .and_then(|extras| {
             extras
-                .filters
-                .iter()
-                .map(|f| {
-                    let expr = f.as_expr(&BUILTIN_FUNCTIONS);
-                    let (new_expr, _) =
-                        ConstantFolder::fold(&expr, FunctionContext::default(), &BUILTIN_FUNCTIONS);
-                    new_expr.sql_display()
-                })
-                .collect::<Vec<_>>()
-                .join(", ")
-        });
+                .filter
+                .as_ref()
+                .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+        })
+        .unwrap_or_default();
 
     let limit = plan
         .source

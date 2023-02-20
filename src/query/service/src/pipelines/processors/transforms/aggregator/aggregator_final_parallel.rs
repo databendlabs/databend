@@ -24,7 +24,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
-use common_expression::HashMethod;
 use common_functions::aggregates::StateAddr;
 use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableEntryRefLike;
@@ -37,15 +36,13 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_info::Aggreg
 use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
+use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
-use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
 
-pub struct ParallelFinalAggregator<const HAS_AGG: bool, Method>
-where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
-{
+pub struct ParallelFinalAggregator<const HAS_AGG: bool, Method: HashMethodBounds> {
     method: Method,
     query_ctx: Arc<QueryContext>,
     params: Arc<AggregatorParams>,
@@ -53,9 +50,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
     generated: bool,
 }
 
-impl<Method, const HAS_AGG: bool> ParallelFinalAggregator<HAS_AGG, Method>
-where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
-{
+impl<Method: HashMethodBounds, const HAS_AGG: bool> ParallelFinalAggregator<HAS_AGG, Method> {
     pub fn create(
         ctx: Arc<QueryContext>,
         method: Method,
@@ -71,8 +66,8 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
     }
 }
 
-impl<Method, const HAS_AGG: bool> Aggregator for ParallelFinalAggregator<HAS_AGG, Method>
-where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
+impl<Method: HashMethodBounds, const HAS_AGG: bool> Aggregator
+    for ParallelFinalAggregator<HAS_AGG, Method>
 {
     const NAME: &'static str = "GroupByFinalTransform";
 
@@ -143,13 +138,11 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
     }
 }
 
-pub struct BucketAggregator<const HAS_AGG: bool, Method>
-where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
-{
+pub struct BucketAggregator<const HAS_AGG: bool, Method: HashMethodBounds> {
     area: Area,
     method: Method,
     params: Arc<AggregatorParams>,
-    hash_table: Method::HashTable,
+    hash_table: Method::HashTable<usize>,
     state_holders: Vec<Option<ArenaHolder>>,
 
     pub(crate) reach_limit: bool,
@@ -157,9 +150,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
     temp_place: StateAddr,
 }
 
-impl<const HAS_AGG: bool, Method> BucketAggregator<HAS_AGG, Method>
-where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
-{
+impl<const HAS_AGG: bool, Method: HashMethodBounds> BucketAggregator<HAS_AGG, Method> {
     pub fn create(method: Method, params: Arc<AggregatorParams>) -> Result<Self> {
         let mut area = Area::create();
         let hash_table = method.create_hash_table()?;
@@ -179,7 +170,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
         })
     }
 
-    fn merge_partial_hashstates(&mut self, hashtable: &mut Method::HashTable) -> Result<()> {
+    fn merge_partial_hashstates(&mut self, hashtable: &mut Method::HashTable<usize>) -> Result<()> {
         // Note: We can't swap the ptr here, there maybe some bugs if the original hashtable
         // if self.hash_table.len() == 0 {
         //     std::mem::swap(&mut self.hash_table, hashtable);
@@ -239,7 +230,10 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
         for mut data_block in blocks {
             if let Some(mut meta) = data_block.take_meta() {
                 if let Some(info) = meta.as_mut_any().downcast_mut::<AggregateHashStateInfo>() {
-                    let hashtable = info.hash_state.downcast_mut::<Method::HashTable>().unwrap();
+                    let hashtable = info
+                        .hash_state
+                        .downcast_mut::<Method::HashTable<usize>>()
+                        .unwrap();
                     self.state_holders.push(info.state_holder.take());
                     self.merge_partial_hashstates(hashtable)?;
                     continue;
@@ -446,9 +440,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
     }
 }
 
-impl<const HAS_AGG: bool, Method> Drop for BucketAggregator<HAS_AGG, Method>
-where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
-{
+impl<const HAS_AGG: bool, Method: HashMethodBounds> Drop for BucketAggregator<HAS_AGG, Method> {
     fn drop(&mut self) {
         self.drop_states();
     }

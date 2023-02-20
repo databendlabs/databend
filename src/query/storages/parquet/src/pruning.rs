@@ -302,28 +302,15 @@ type ColumnRangePruners = Vec<(usize, Arc<dyn RangePruner + Send + Sync>)>;
 pub fn build_column_page_pruners(
     func_ctx: FunctionContext,
     schema: &TableSchemaRef,
-    filters: &[Expr<String>],
+    filter: &Expr<String>,
 ) -> Result<ColumnRangePruners> {
-    let mut pruner_per_col: HashMap<String, Vec<Expr<String>>> = HashMap::new();
-    for expr in filters {
-        let columns = expr.column_refs();
-        if columns.len() != 1 {
-            continue;
-        }
-        let (col_name, _) = columns.iter().next().unwrap();
-        pruner_per_col
-            .entry(col_name.to_string())
-            .and_modify(|f| f.push(expr.clone()))
-            .or_insert_with(|| vec![expr.clone()]);
+    let mut results = vec![];
+    for (column, _) in filter.column_refs() {
+        let col_idx = schema.index_of(&column)?;
+        let range_prunner = RangePrunerCreator::try_create(func_ctx, schema, Some(filter))?;
+        results.push((col_idx, range_prunner));
     }
-    pruner_per_col
-        .iter()
-        .map(|(k, v)| {
-            let filter = RangePrunerCreator::try_create(func_ctx, schema, Some(v))?;
-            let col_idx = schema.index_of(k)?;
-            Ok((col_idx, filter))
-        })
-        .collect()
+    Ok(results)
 }
 
 /// Filter pages by filter expression.
@@ -723,12 +710,9 @@ mod tests {
                 func_name: "gt".to_string(),
                 return_type: Box::new(DataType::Boolean),
             });
-            let filters = vec![filter.as_expr_with_col_name()?];
-            let pruner = RangePrunerCreator::try_create(
-                FunctionContext::default(),
-                &schema,
-                Some(&filters),
-            )?;
+            let filter = filter.as_expr_with_col_name()?;
+            let pruner =
+                RangePrunerCreator::try_create(FunctionContext::default(), &schema, Some(&filter))?;
             assert!(!pruner.should_keep(&row_group_stats[0]));
         }
 
@@ -755,12 +739,9 @@ mod tests {
                 func_name: "lt".to_string(),
                 return_type: Box::new(DataType::Boolean),
             });
-            let filters = vec![filter.as_expr_with_col_name()?];
-            let pruner = RangePrunerCreator::try_create(
-                FunctionContext::default(),
-                &schema,
-                Some(&filters),
-            )?;
+            let filter = filter.as_expr_with_col_name()?;
+            let pruner =
+                RangePrunerCreator::try_create(FunctionContext::default(), &schema, Some(&filter))?;
             assert!(!pruner.should_keep(&row_group_stats[0]));
         }
 
@@ -787,12 +768,9 @@ mod tests {
                 func_name: "lte".to_string(),
                 return_type: Box::new(DataType::Boolean),
             });
-            let filters = vec![filter.as_expr_with_col_name()?];
-            let pruner = RangePrunerCreator::try_create(
-                FunctionContext::default(),
-                &schema,
-                Some(&filters),
-            )?;
+            let filter = filter.as_expr_with_col_name()?;
+            let pruner =
+                RangePrunerCreator::try_create(FunctionContext::default(), &schema, Some(&filter))?;
             assert!(pruner.should_keep(&row_group_stats[0]));
         }
 
@@ -829,8 +807,8 @@ mod tests {
                 func_name: "gt".to_string(),
                 return_type: Box::new(DataType::Boolean),
             });
-            let filters = vec![filter.as_expr_with_col_name()?];
-            let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filters)?;
+            let filter = filter.as_expr_with_col_name()?;
+            let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filter)?;
             let row_selection = filter_pages(&mut reader, &schema, rg, &pruners)?;
 
             assert_eq!(Vec::<Interval>::new(), row_selection);
@@ -859,8 +837,8 @@ mod tests {
                 func_name: "lte".to_string(),
                 return_type: Box::new(DataType::Boolean),
             });
-            let filters = vec![filter.as_expr_with_col_name()?];
-            let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filters)?;
+            let filter = filter.as_expr_with_col_name()?;
+            let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filter)?;
             let row_selection = filter_pages(&mut reader, &schema, rg, &pruners)?;
 
             assert_eq!(vec![Interval::new(0, 7)], row_selection);
@@ -889,8 +867,8 @@ mod tests {
                 func_name: "gt".to_string(),
                 return_type: Box::new(DataType::Boolean),
             });
-            let filters = vec![filter.as_expr_with_col_name()?];
-            let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filters)?;
+            let filter = filter.as_expr_with_col_name()?;
+            let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filter)?;
             let row_selection = filter_pages(&mut reader, &schema, rg, &pruners)?;
 
             assert_eq!(vec![Interval::new(7, 2)], row_selection);
@@ -919,8 +897,8 @@ mod tests {
                 func_name: "lte".to_string(),
                 return_type: Box::new(DataType::Boolean),
             });
-            let filters = vec![filter.as_expr_with_col_name()?];
-            let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filters)?;
+            let filter = filter.as_expr_with_col_name()?;
+            let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filter)?;
             let row_selection = filter_pages(&mut reader, &schema, rg, &pruners)?;
 
             assert_eq!(vec![Interval::new(0, 9)], row_selection);

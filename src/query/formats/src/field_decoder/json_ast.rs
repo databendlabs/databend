@@ -178,7 +178,15 @@ impl FieldJsonAstDecoder {
                 column.builder.push(days);
                 Ok(())
             }
-            _ => Err(ErrorCode::BadBytes("Incorrect boolean value")),
+            Value::Number(number) => match number.as_i64() {
+                Some(n) => {
+                    let n = check_date(n)?;
+                    column.builder.push(n);
+                    Ok(())
+                }
+                None => Err(ErrorCode::BadArguments("Incorrect date value")),
+            },
+            _ => Err(ErrorCode::BadBytes("Incorrect date value")),
         }
     }
 
@@ -204,7 +212,7 @@ impl FieldJsonAstDecoder {
                     "Incorrect timestamp value, must be i64",
                 )),
             },
-            _ => Err(ErrorCode::BadBytes("Incorrect boolean value")),
+            _ => Err(ErrorCode::BadBytes("Incorrect timestamp value")),
         }
     }
 

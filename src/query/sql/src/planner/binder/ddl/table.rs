@@ -1040,7 +1040,7 @@ impl Binder {
         for cluster_by in cluster_by.iter() {
             let (cluster_key, _) = scalar_binder.bind(cluster_by).await?;
             let expr = cluster_key.as_expr_with_col_index()?;
-            if is_expr_non_deterministic(&expr) {
+            if !expr.is_deterministic() {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Cluster by expression `{:#}` is not deterministic",
                     cluster_by
@@ -1057,17 +1057,5 @@ impl Binder {
         }
 
         Ok(cluster_keys)
-    }
-}
-
-fn is_expr_non_deterministic(expr: &common_expression::Expr) -> bool {
-    match expr {
-        common_expression::Expr::Constant { .. } => false,
-        common_expression::Expr::ColumnRef { .. } => false,
-        common_expression::Expr::Cast { expr, .. } => is_expr_non_deterministic(expr),
-        common_expression::Expr::FunctionCall { function, args, .. } => {
-            function.signature.property.non_deterministic
-                || args.iter().any(is_expr_non_deterministic)
-        }
     }
 }

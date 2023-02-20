@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::fmt::Debug;
-use std::hash::Hash;
 use std::iter::TrustedLen;
 use std::marker::PhantomData;
 use std::ops::Not;
@@ -22,6 +21,7 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_hashtable::FastHash;
 use common_io::prelude::BinaryWrite;
 use common_io::prelude::FormatSettings;
 use micromarshal::Marshal;
@@ -51,8 +51,8 @@ pub enum KeysState {
     U512(Vec<U512>),
 }
 
-pub trait HashMethod: Clone {
-    type HashKey: ?Sized + Eq + Hash + Debug;
+pub trait HashMethod: Clone + Sync + Send + 'static {
+    type HashKey: ?Sized + Eq + FastHash + Debug;
 
     type HashKeyIter<'a>: Iterator<Item = &'a Self::HashKey> + TrustedLen
     where Self: 'a;

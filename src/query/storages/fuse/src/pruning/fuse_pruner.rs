@@ -83,19 +83,15 @@ impl FusePruner {
     ) -> Result<Self> {
         let func_ctx = ctx.get_function_context()?;
 
-        let filter_exprs = push_down.as_ref().map(|extra| {
-            extra
-                .filters
-                .iter()
-                .map(|f| f.as_expr(&BUILTIN_FUNCTIONS))
-                .collect::<Vec<_>>()
-        });
+        let filter_expr = push_down
+            .as_ref()
+            .and_then(|extra| extra.filter.as_ref().map(|f| f.as_expr(&BUILTIN_FUNCTIONS)));
 
         // Limit prunner.
         // if there are ordering/filter clause, ignore limit, even it has been pushed down
         let limit = push_down
             .as_ref()
-            .filter(|p| p.order_by.is_empty() && p.filters.is_empty())
+            .filter(|p| p.order_by.is_empty() && p.filter.is_none())
             .and_then(|p| p.limit);
         // prepare the limiter. in case that limit is none, an unlimited limiter will be returned
         let limit_pruner = LimiterPrunerCreator::create(limit);
@@ -103,22 +99,18 @@ impl FusePruner {
         // Range filter.
         // if filter_expression is none, an dummy pruner will be returned, which prunes nothing
         let range_pruner =
-            RangePrunerCreator::try_create(func_ctx, &table_schema, filter_exprs.as_deref())?;
+            RangePrunerCreator::try_create(func_ctx, &table_schema, filter_expr.as_ref())?;
 
         // Bloom pruner.
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
-        let bloom_pruner = BloomPrunerCreator::create(
-            func_ctx,
-            &table_schema,
-            dal.clone(),
-            filter_exprs.as_deref(),
-        )?;
+        let bloom_pruner =
+            BloomPrunerCreator::create(func_ctx, &table_schema, dal.clone(), filter_expr.as_ref())?;
 
         // Page pruner, used in native format
         let page_pruner = PagePrunerCreator::try_create(
             func_ctx,
             &table_schema,
-            filter_exprs.as_deref(),
+            filter_expr.as_ref(),
             cluster_key_meta,
             cluster_keys,
         )?;
@@ -189,7 +181,7 @@ impl FusePruner {
         let push_down = self.push_down.clone();
         if push_down
             .as_ref()
-            .filter(|p| !p.order_by.is_empty() && p.limit.is_some() && p.filters.is_empty())
+            .filter(|p| !p.order_by.is_empty() && p.limit.is_some() && p.filter.is_none())
             .is_some()
         {
             let schema = self.table_schema.clone();
