@@ -23,7 +23,7 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::filter_helper::FilterHelpers;
+use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::BlockMetaInfo;
@@ -259,14 +259,11 @@ impl Processor for ParquetDeleteSource {
                 let func_ctx = self.ctx.get_function_context()?;
                 let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
 
-                let res = evaluator
+                let predicates = evaluator
                     .run(&self.filter)
-                    .map_err(|e| e.add_message("eval filter failed:"))?;
-                let predicates = FilterHelpers::cast_to_nonull_boolean(&res).ok_or_else(|| {
-                    ErrorCode::BadArguments(
-                        "Result of filter expression cannot be converted to boolean.",
-                    )
-                })?;
+                    .map_err(|e| e.add_message("eval filter failed:"))?
+                    .try_downcast::<BooleanType>()
+                    .unwrap();
 
                 let affect_rows = match &predicates {
                     Value::Scalar(v) => {

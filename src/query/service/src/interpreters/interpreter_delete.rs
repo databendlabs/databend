@@ -95,8 +95,6 @@ impl Interpreter for DeleteInterpreter {
                     "Delete must have deterministic predicate",
                 ));
             }
-            .as_expr_with_col_name()?
-            .as_remote_expr();
             (Some(filter), col_indices)
         } else {
             if self.plan.input_expr.is_some() {

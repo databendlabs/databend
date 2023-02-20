@@ -719,43 +719,6 @@ impl PhysicalPlanBuilder {
                 }
             },
             |prewhere| {
-                let predicate = if prewhere.predicates.is_empty() {
-                    None
-                } else {
-                    let mut scalar = if support_delete_mark {
-                        ScalarExpr::AndExpr(AndExpr {
-                            left: Box::new(ScalarExpr::BoundColumnRef(BoundColumnRef {
-                                column: ColumnBinding {
-                                    database_name: None,
-                                    table_name: None,
-                                    column_name: "_row_exists".to_string(),
-                                    index: prewhere.prewhere_columns.len(),
-                                    data_type: Box::new(DataType::Boolean),
-                                    visibility: Visibility::Visible,
-                                },
-                            })),
-                            right: Box::new(prewhere.predicates[0].clone()),
-                            return_type: Box::new(DataType::Boolean),
-                        })
-                    } else {
-                        prewhere.predicates[0].clone()
-                    };
-                    for predicate in prewhere.predicates.iter().skip(1) {
-                        scalar = ScalarExpr::AndExpr(AndExpr {
-                            left: Box::new(scalar),
-                            right: Box::new(predicate.clone()),
-                            return_type: Box::new(DataType::Boolean),
-                        });
-                    }
-
-                    Some(scalar)
-                };
-
-                assert!(
-                    predicate.is_some(),
-                    "There should be at least one predicate in prewhere"
-                );
-
                 let remain_columns = scan
                     .columns
                     .difference(&prewhere.prewhere_columns)
@@ -781,7 +744,7 @@ impl PhysicalPlanBuilder {
                     has_inner_column,
                 );
 
-                let predicate = prewhere
+                let mut predicate = prewhere
                     .predicates
                     .iter()
                     .cloned()
@@ -793,6 +756,22 @@ impl PhysicalPlanBuilder {
                         })
                     })
                     .expect("there should be at least one predicate in prewhere");
+                if support_delete_mark {
+                    predicate = ScalarExpr::AndExpr(AndExpr {
+                        left: Box::new(ScalarExpr::BoundColumnRef(BoundColumnRef {
+                            column: ColumnBinding {
+                                database_name: None,
+                                table_name: None,
+                                column_name: "_row_exists".to_string(),
+                                index: prewhere.prewhere_columns.len(),
+                                data_type: Box::new(DataType::Boolean),
+                                visibility: Visibility::Visible,
+                            },
+                        })),
+                        right: Box::new(predicate),
+                        return_type: Box::new(DataType::Boolean),
+                    });
+                }
                 let expr = cast_expr_to_non_null_boolean(predicate.as_expr_with_col_name()?)?;
                 let (filter, _) = ConstantFolder::fold(
                     &expr,

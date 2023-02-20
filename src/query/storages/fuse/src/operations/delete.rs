@@ -215,7 +215,7 @@ impl FuseTable {
         let projection = Projection::Columns(col_indices.clone());
         self.mutation_block_pruning(
             ctx.clone(),
-            vec![filter_expr.clone()],
+            Some(filter_expr.clone()),
             projection.clone(),
             &snapshot,
         )
