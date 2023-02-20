@@ -3136,6 +3136,7 @@ dependencies = [
  "once_cell",
  "opendal",
  "opensrv-mysql",
+ "ordered-float 3.4.0",
  "p256",
  "parking_lot 0.12.1",
  "petgraph",

@@ -15,6 +15,7 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -60,6 +61,7 @@ use crate::with_number_type;
 use crate::BlockEntry;
 use crate::Column;
 use crate::FromData;
+use crate::Scalar;
 use crate::TypeDeserializerImpl;
 use crate::Value;
 use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
@@ -435,6 +437,44 @@ impl TableSchema {
         });
 
         field_column_ids
+    }
+
+    pub fn field_leaf_default_values(
+        &self,
+        default_values: &[Scalar],
+    ) -> HashMap<ColumnId, Scalar> {
+        fn collect_leaf_default_values(
+            default_value: &Scalar,
+            leaf_default_values: &mut Vec<Scalar>,
+        ) {
+            match default_value {
+                Scalar::Tuple(s) => {
+                    s.iter().for_each(|default_val| {
+                        collect_leaf_default_values(default_val, leaf_default_values)
+                    });
+                }
+                _ => {
+                    leaf_default_values.push(default_value.to_owned());
+                }
+            }
+        }
+
+        let mut leaf_default_value_map = HashMap::with_capacity(self.num_fields());
+        let leaf_field_column_ids = self.field_leaf_column_ids();
+        for (default_value, field_column_ids) in default_values.iter().zip_eq(leaf_field_column_ids)
+        {
+            let mut leaf_default_values = Vec::with_capacity(field_column_ids.len());
+            collect_leaf_default_values(default_value, &mut leaf_default_values);
+
+            field_column_ids
+                .iter()
+                .zip_eq(leaf_default_values)
+                .for_each(|(col_id, default_value)| {
+                    leaf_default_value_map.insert(*col_id, default_value);
+                });
+        }
+
+        leaf_default_value_map
     }
 
     #[inline]
