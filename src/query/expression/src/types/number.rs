@@ -549,8 +549,10 @@ impl<T: Number> SimpleDomain<T> {
     }
 
     pub fn overflow_cast_with_minmax<U: Number>(&self, min: U, max: U) -> (SimpleDomain<U>, bool) {
-        let (min, min_overflowing) = overflow_cast_with_minmax::<T, U>(self.min, min, max, min);
-        let (max, max_overflowing) = overflow_cast_with_minmax::<T, U>(self.max, min, max, max);
+        let (min, min_overflowing) =
+            overflow_cast_with_minmax::<T, U>(self.min, min, max).unwrap_or((min, true));
+        let (max, max_overflowing) =
+            overflow_cast_with_minmax::<T, U>(self.max, min, max).unwrap_or((max, true));
 
         (
             SimpleDomain { min, max },
@@ -559,20 +561,15 @@ impl<T: Number> SimpleDomain<T> {
     }
 }
 
-fn overflow_cast_with_minmax<T: Number, U: Number>(
-    src: T,
-    min: U,
-    max: U,
-    fallback: U,
-) -> (U, bool) {
+fn overflow_cast_with_minmax<T: Number, U: Number>(src: T, min: U, max: U) -> Option<(U, bool)> {
     let dest_min: T = num_traits::cast(min).unwrap_or(T::MIN);
     let dest_max: T = num_traits::cast(max).unwrap_or(T::MAX);
     let src_clamp: T = src.clamp(dest_min, dest_max);
     let overflowing = src != src_clamp;
 
     // It will have errors if the src type is Inf/NaN
-    let dest: U = num_traits::cast(src_clamp).unwrap_or(fallback);
-    (dest, overflowing)
+    let dest: U = num_traits::cast(src_clamp)?;
+    Some((dest, overflowing))
 }
 
 #[macro_export]

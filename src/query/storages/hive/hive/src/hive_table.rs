@@ -249,11 +249,7 @@ impl HiveTable {
                 .as_ref()
                 .map(|f| {
                     let expr = f.as_expr(&BUILTIN_FUNCTIONS);
-                    let mut cols = HashSet::new();
-                    for (k, _) in expr.column_refs() {
-                        cols.insert(k);
-                    }
-                    cols
+                    expr.column_refs().keys().cloned().collect::<HashSet<_>>()
                 })
                 .unwrap_or_default();
 

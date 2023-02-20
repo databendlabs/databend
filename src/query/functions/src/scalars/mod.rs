@@ -77,13 +77,6 @@ fn register_auto_cast_rules(registry: &mut FunctionRegistry) {
     registry.register_default_cast_rules(CAST_FROM_VARIANT_RULES());
     registry.register_auto_try_cast_rules(CAST_FROM_VARIANT_RULES());
 
-    for data_type in ALL_INTEGER_TYPES {
-        registry.register_additional_cast_rules("is_true", vec![(
-            DataType::Number(*data_type),
-            DataType::Boolean,
-        )]);
-    }
-
     for func_name in ["and", "or", "not", "xor"] {
         for data_type in ALL_INTEGER_TYPES {
             registry.register_additional_cast_rules(func_name, [(
