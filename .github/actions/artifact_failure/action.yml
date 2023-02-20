@@ -10,6 +10,9 @@ runs:
     - name: pack failure artifacts
       shell: bash
       run: |
+        killall databend-query || true
+        killall databend-meta || true
+
         tar --exclude='target' \
             --exclude='website' \
             --exclude='docs' \
