@@ -23,6 +23,7 @@ pub mod transform_sort_merge;
 pub mod transform_sort_partial;
 
 pub use transform::*;
+pub use transform_accumulating::*;
 pub use transform_block_compact::*;
 pub use transform_compact::*;
 pub use transform_multi_sort_merge::*;

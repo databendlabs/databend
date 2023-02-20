@@ -149,7 +149,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
     area: Area,
     method: Method,
     params: Arc<AggregatorParams>,
-    hash_table: Method::HashTable,
+    hash_table: Method::HashTable<usize>,
     state_holders: Vec<Option<ArenaHolder>>,
 
     pub(crate) reach_limit: bool,
@@ -179,7 +179,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
         })
     }
 
-    fn merge_partial_hashstates(&mut self, hashtable: &mut Method::HashTable) -> Result<()> {
+    fn merge_partial_hashstates(&mut self, hashtable: &mut Method::HashTable<usize>) -> Result<()> {
         // Note: We can't swap the ptr here, there maybe some bugs if the original hashtable
         // if self.hash_table.len() == 0 {
         //     std::mem::swap(&mut self.hash_table, hashtable);
@@ -239,7 +239,10 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
         for mut data_block in blocks {
             if let Some(mut meta) = data_block.take_meta() {
                 if let Some(info) = meta.as_mut_any().downcast_mut::<AggregateHashStateInfo>() {
-                    let hashtable = info.hash_state.downcast_mut::<Method::HashTable>().unwrap();
+                    let hashtable = info
+                        .hash_state
+                        .downcast_mut::<Method::HashTable<usize>>()
+                        .unwrap();
                     self.state_holders.push(info.state_holder.take());
                     self.merge_partial_hashstates(hashtable)?;
                     continue;
