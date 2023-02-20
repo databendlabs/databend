@@ -45,7 +45,7 @@ impl IcebergDatabase {
     /// create an void database naming `default`
     ///
     /// *for flatten catalogs only*
-    pub fn create_database_ommited_default(ctl_name: &str, db_root: DataOperator) -> Self {
+    pub fn create_database_omitted_default(ctl_name: &str, db_root: DataOperator) -> Self {
         let info = DatabaseInfo {
             ident: DatabaseIdent { db_id: 0, seq: 0 },
             name_ident: DatabaseNameIdent {

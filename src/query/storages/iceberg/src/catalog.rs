@@ -106,7 +106,7 @@ impl IcebergCatalog {
             // is flatten catalog, return `default` catalog
             // with an operator points to it's root
             return Ok(vec![Arc::new(
-                IcebergDatabase::create_database_ommited_default(&self.name, self.operator.clone()),
+                IcebergDatabase::create_database_omitted_default(&self.name, self.operator.clone()),
             )]);
         }
         let operator = self.operator.operator();
@@ -142,7 +142,7 @@ impl Catalog for IcebergCatalog {
                 )));
             }
             let tbl: Arc<dyn Database> = Arc::new(
-                IcebergDatabase::create_database_ommited_default(&self.name, self.operator.clone()),
+                IcebergDatabase::create_database_omitted_default(&self.name, self.operator.clone()),
             );
             return Ok(tbl);
         }
