@@ -760,28 +760,28 @@ impl_register_arith_functions!(register_sub_functions, "subtract", signed_ident)
 fn register_real_time_functions(registry: &mut FunctionRegistry) {
     registry.register_0_arg_core::<TimestampType, _, _>(
         "now",
-        FunctionProperty::default(),
+        FunctionProperty::default().non_deterministic(),
         || FunctionDomain::Full,
         |_| Value::Scalar(Utc::now().timestamp_micros()),
     );
 
     registry.register_0_arg_core::<DateType, _, _>(
         "today",
-        FunctionProperty::default(),
+        FunctionProperty::default().non_deterministic(),
         || FunctionDomain::Full,
         |_| Value::Scalar(today_date()),
     );
 
     registry.register_0_arg_core::<DateType, _, _>(
         "yesterday",
-        FunctionProperty::default(),
+        FunctionProperty::default().non_deterministic(),
         || FunctionDomain::Full,
         |_| Value::Scalar(today_date() - 1),
     );
 
     registry.register_0_arg_core::<DateType, _, _>(
         "tomorrow",
-        FunctionProperty::default(),
+        FunctionProperty::default().non_deterministic(),
         || FunctionDomain::Full,
         |_| Value::Scalar(today_date() + 1),
     );

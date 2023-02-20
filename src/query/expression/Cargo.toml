@@ -19,6 +19,7 @@ common-io = { path = "../../common/io" }
 # Github dependencies
 
 # Crates.io dependencies
+base64 = "0.13.0"
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 comfy-table = "6"

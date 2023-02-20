@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_expression::types::number::*;
-use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
@@ -31,29 +30,20 @@ pub fn test_pass() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("kernel-pass.txt").unwrap();
 
-    for filter in vec![
-        BooleanType::from_data(vec![true, false, false, false, true]),
-        BooleanType::from_data_with_validity(vec![true, true, false, true, true], vec![
-            false, true, true, false, false,
-        ]),
-        StringType::from_data(vec!["a", "b", "", "", "c"]),
-        Int32Type::from_data(vec![0, 1, 2, 3, 0]),
-    ] {
-        run_filter(
-            &mut file,
-            filter,
-            &new_block(&[
-                Int32Type::from_data(vec![0i32, 1, 2, 3, -4]),
-                UInt8Type::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
-                    false, true, false, false, false,
-                ]),
-                Column::Null { len: 5 },
-                StringType::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
-                    false, true, true, false, false,
-                ]),
+    run_filter(
+        &mut file,
+        vec![true, false, false, false, true],
+        &new_block(&[
+            Int32Type::from_data(vec![0i32, 1, 2, 3, -4]),
+            UInt8Type::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
+                false, true, false, false, false,
             ]),
-        );
-    }
+            Column::Null { len: 5 },
+            StringType::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
+                false, true, true, false, false,
+            ]),
+        ]),
+    );
 
     run_concat(&mut file, &[
         new_block(&[

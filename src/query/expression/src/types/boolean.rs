@@ -175,7 +175,7 @@ impl ArgType for BooleanType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BooleanDomain {
     pub has_false: bool,
     pub has_true: bool,

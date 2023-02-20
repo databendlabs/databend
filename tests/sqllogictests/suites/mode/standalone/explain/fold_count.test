@@ -44,7 +44,7 @@ EvalScalar
         ├── aggregate functions: [count()]
         ├── estimated rows: 1.00
         └── Filter
-            ├── filters: [gt(t.number (#0), to_uint64(10))]
+            ├── filters: [gt(t.number (#0), 10)]
             ├── estimated rows: 989.89
             └── TableScan
                 ├── table: default.default.t

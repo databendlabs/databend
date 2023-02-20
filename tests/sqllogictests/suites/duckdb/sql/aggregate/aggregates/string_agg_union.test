@@ -17,4 +17,3 @@ WITH my_data as (
         FROM my_data
         GROUP BY
             dummy
-
