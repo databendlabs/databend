@@ -37,6 +37,7 @@ pub struct WriteResultCacheSink {
     partitions_shas: Vec<String>,
 
     meta_mgr: ResultCacheMetaManager,
+    meta_key: String,
     cache_writer: ResultCacheWriter,
 }
 
@@ -77,7 +78,9 @@ impl AsyncMpscSink for WriteResultCacheSink {
             num_rows: self.cache_writer.num_rows(),
             location,
         };
-        self.meta_mgr.set(value, MatchSeq::GE(0), expire_at).await?;
+        self.meta_mgr
+            .set(self.meta_key.clone(), value, MatchSeq::GE(0), expire_at)
+            .await?;
         Ok(())
     }
 }
@@ -107,7 +110,8 @@ impl WriteResultCacheSink {
             WriteResultCacheSink {
                 sql,
                 partitions_shas,
-                meta_mgr: ResultCacheMetaManager::create(kv_store, meta_key, ttl),
+                meta_mgr: ResultCacheMetaManager::create(kv_store, ttl),
+                meta_key,
                 cache_writer,
             },
         ))))

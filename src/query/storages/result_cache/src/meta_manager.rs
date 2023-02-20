@@ -25,23 +25,28 @@ use common_meta_types::UpsertKV;
 
 use crate::common::ResultCacheValue;
 
-pub(super) struct ResultCacheMetaManager {
-    key: String,
+pub struct ResultCacheMetaManager {
     ttl: u64,
     inner: Arc<MetaStore>,
 }
 
 impl ResultCacheMetaManager {
-    pub fn create(inner: Arc<MetaStore>, key: String, ttl: u64) -> Self {
-        Self { key, ttl, inner }
+    pub fn create(inner: Arc<MetaStore>, ttl: u64) -> Self {
+        Self { ttl, inner }
     }
 
-    pub async fn set(&self, value: ResultCacheValue, seq: MatchSeq, expire_at: u64) -> Result<()> {
+    pub async fn set(
+        &self,
+        key: String,
+        value: ResultCacheValue,
+        seq: MatchSeq,
+        expire_at: u64,
+    ) -> Result<()> {
         let value = serde_json::to_vec(&value)?;
         let _ = self
             .inner
             .upsert_kv(UpsertKV {
-                key: self.key.clone(),
+                key,
                 seq,
                 value: Operation::Update(value),
                 value_meta: Some(KVMeta {
@@ -52,8 +57,8 @@ impl ResultCacheMetaManager {
         Ok(())
     }
 
-    pub async fn get(&self) -> Result<Option<ResultCacheValue>> {
-        let raw = self.inner.get_kv(&self.key).await?;
+    pub async fn get(&self, key: String) -> Result<Option<ResultCacheValue>> {
+        let raw = self.inner.get_kv(&key).await?;
         match raw {
             None => Ok(None),
             Some(SeqV { data, .. }) => {
@@ -61,6 +66,19 @@ impl ResultCacheMetaManager {
                 Ok(Some(value))
             }
         }
+    }
+
+    pub async fn list(&self, prefix: &str) -> Result<Vec<ResultCacheValue>> {
+        let result = self.inner.prefix_list_kv(prefix).await?;
+
+        let mut r = vec![];
+        for (_key, val) in result {
+            let u = serde_json::from_slice::<ResultCacheValue>(&val.data)?;
+
+            r.push(u);
+        }
+
+        Ok(r)
     }
 
     pub fn get_ttl(&self) -> u64 {

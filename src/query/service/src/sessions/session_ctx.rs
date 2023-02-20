@@ -18,11 +18,14 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
 
+use common_ast::ast::DatabaseEngine::Default;
 use common_config::GlobalConfig;
 use common_exception::Result;
+use common_hashtable::HashMap;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_settings::Settings;
+use dashmap::DashMap;
 use futures::channel::oneshot::Sender;
 use parking_lot::RwLock;
 
@@ -51,6 +54,9 @@ pub struct SessionContext {
     client_host: RwLock<Option<SocketAddr>>,
     io_shutdown_tx: RwLock<Option<Sender<Sender<()>>>>,
     query_context_shared: RwLock<Weak<QueryContextShared>>,
+    // We store `query_id -> query_result_cache_key` to session context, so that we can fetch
+    // query result through previous query_id easily.
+    query_ids_results: RwLock<Vec<(String, String)>>,
 }
 
 impl SessionContext {
@@ -67,6 +73,7 @@ impl SessionContext {
             current_database: RwLock::new("default".to_string()),
             io_shutdown_tx: Default::default(),
             query_context_shared: Default::default(),
+            query_ids_results: Default::default(),
         }))
     }
 
@@ -211,5 +218,20 @@ impl SessionContext {
     pub fn set_query_context_shared(&self, ctx: Weak<QueryContextShared>) {
         let mut lock = self.query_context_shared.write();
         *lock = ctx
+    }
+
+    pub fn get_query_result_cache_key(&self, query_id: &str) -> Option<String> {
+        let lock = self.query_ids_results.read();
+        for (qid, result_cache_key) in &*lock.iter().rev() {
+            if qid.eq_ignore_ascii_case(query_id) {
+                return Ok(result_cache_key.clone());
+            }
+        }
+        None
+    }
+
+    pub fn update_query_ids_results(&self, key: String, value: String) {
+        let mut lock = self.query_ids_results.write();
+        *lock.push((key, value))
     }
 }

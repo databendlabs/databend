@@ -27,6 +27,7 @@ use crate::meta_manager::ResultCacheMetaManager;
 
 pub struct ResultCacheReader {
     meta_mgr: ResultCacheMetaManager,
+    meta_key: String,
 
     operator: Operator,
     /// To ensure the cache is valid.
@@ -49,7 +50,8 @@ impl ResultCacheReader {
         let partitions_shas = ctx.get_partitions_shas();
 
         Self {
-            meta_mgr: ResultCacheMetaManager::create(kv_store, meta_key, 0),
+            meta_mgr: ResultCacheMetaManager::create(kv_store, 0),
+            meta_key,
             partitions_shas,
             operator: DataOperator::instance().operator(),
             tolerate_inconsistent,
@@ -57,7 +59,7 @@ impl ResultCacheReader {
     }
 
     pub async fn try_read_cached_result(&self) -> Result<Option<Vec<DataBlock>>> {
-        match self.meta_mgr.get().await? {
+        match self.meta_mgr.get(self.meta_key.clone()).await? {
             Some(value) => {
                 if self.tolerate_inconsistent || value.partitions_shas == self.partitions_shas {
                     if value.num_rows == 0 {
