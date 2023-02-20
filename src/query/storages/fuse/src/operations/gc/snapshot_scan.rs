@@ -38,7 +38,7 @@ use crate::operations::gc::mini_meta::MiniSnapshot;
 pub struct SnapshotCollector<'a> {
     operator: Operator,
     chunk_size: usize,
-    root_snapshot: &'a TableSnapshot,
+    root_snapshot: &'a Arc<TableSnapshot>,
     ctx: &'a Arc<dyn TableContext>,
     data_metrics: &'a StorageMetrics,
 }
@@ -46,10 +46,7 @@ pub struct SnapshotCollector<'a> {
 impl SnapshotCollector<'_> {
     // scan the snapshot path and rm the orphan snapshot files, return a set of segments that
     // should be kept, which will be used in the next stage of orphan data GC.
-    async fn collect_snapshots(
-        &self,
-        snapshot_path: String,
-    ) -> Result<(HashSet<LocationDigest>, HashSet<SnapshotId>)> {
+    async fn collect_snapshots(&self, snapshot_path: String) -> Result<HashSet<LocationDigest>> {
         // list all the files, open the snapshot files and chain them from the root snapshot,
         // those not chained, and have timestamps out of retention interval, should be removed.
         // segments that referenced by the chained snapshots should be kept.
@@ -61,28 +58,30 @@ impl SnapshotCollector<'_> {
 
         let chunk_size = self.chunk_size;
 
-        // get the stream of snapshot metas
+        // 1. get the stream of snapshot metas
         let snapshot_file_metas =
             Files::list_files::<MiniMeta>(self.operator.clone(), snapshot_path);
 
         // chunk the stream by setting
         let mut meta_chunks = snapshot_file_metas.chunks(chunk_size).boxed();
+
         let format = 0; // TODO
 
-        // process the chunks
+        // 2. process the chunks
         let snapshots_io = SnapshotsIO::create(self.ctx.clone(), self.operator.clone(), format);
         let root = &self.root_snapshot;
-        let mut segment_should_keep = HashSet::new();
-        let mut orphan_snapshots = HashSet::new();
+        let mut segment_should_keep: HashSet<LocationDigest> = HashSet::new();
         let mut mini_snapshots = Vec::new();
-        let base_timestamp = root.timestamp;
 
-        let retention_interval = Duration::hours(ctx.get_settings().get_retention_period()? as i64);
+        let base_timestamp = root.timestamp;
+        let retention_interval =
+            Duration::hours(self.ctx.get_settings().get_retention_period()? as i64);
         let retention_point = base_timestamp.map(|s| s - retention_interval);
 
         let start = Instant::now();
+        let mut file_scanned = 0;
         while let Some(file_paths) = meta_chunks.next().await {
-            // read chunk of snapshot file path
+            // 2.1 read chunk of snapshot file paths
             let (file_paths, size_sum) = file_paths.into_iter().try_fold(
                 (Vec::new(), 0),
                 |(mut file_paths, mut sum), entry| {
@@ -93,47 +92,67 @@ impl SnapshotCollector<'_> {
                 },
             )?;
 
-            if lite.timestamp < retention_point {}
-            // read them in as MiniSnapshot
+            // 2.2 load them in as MiniSnapshot
             let mut snapshots = snapshots_io
                 .read_snapshots_stream_new::<MiniSnapshot>(&file_paths)
                 .await?
                 .into_iter()
                 .collect::<Result<Vec<_>>>()?;
+
             mini_snapshots.append(&mut snapshots);
 
-            // report status
+            // 2.3 report status (TODO we do not need the size)
+            file_scanned += file_paths.len();
             let status = format!(
                 "gc orphans: scanned snapshot files:{}, size:{} bytes, elapsed:{} sec",
-                file_paths.len(),
+                file_scanned,
                 size_sum,
                 start.elapsed().as_secs(),
             );
             self.data_metrics.set_status(&status);
         }
+
+        // try release some memory
         mini_snapshots.shrink_to_fit();
 
-        let (chained, orphan) = Self::chain_snapshots(mini_snapshots, &root);
+        let (chained, orphan) = Self::chain_snapshots(mini_snapshots, self.root_snapshot.clone());
+
         for mini_snapshot in chained.into_iter() {
             segment_should_keep.extend(mini_snapshot.segment_digests);
         }
-        for mini_snapshot in orphan.into_iter() {
-            orphan_snapshots.insert(mini_snapshot.id);
-        }
-        // TODO for orphan gc, we can remove orphan snapshot first
-        Ok((segment_should_keep, orphan_snapshots))
+
+        // collect orphans that are out of retention interval
+        let orphan_tobe_deleted = orphan
+            .into_iter()
+            .filter_map(|v| {
+                if v.timestamp < retention_point {
+                    Some(v.path.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let files = Files::create(self.ctx.clone(), self.operator.clone());
+        files.remove_file_in_batch(orphan_tobe_deleted);
+
+        Ok(segment_should_keep)
     }
 
     pub fn chain_snapshots(
         snapshot_lites: Vec<MiniSnapshot>,
-        root_snapshot: &TableSnapshot,
+        root_snapshot: Arc<TableSnapshot>,
     ) -> (Vec<MiniSnapshot>, Vec<MiniSnapshot>) {
         let mut snapshot_map = HashMap::new();
         let mut chained_snapshot_lites = vec![];
+        let root_snapshot_id = root_snapshot.snapshot_id.clone();
         for snapshot_lite in snapshot_lites.into_iter() {
             snapshot_map.insert(snapshot_lite.snapshot_id(), snapshot_lite);
         }
-        // let root_snapshot_lite = MiniSnapshot::from(root_snapshot);
+
+        // TODO, pass in this path?
+        let root_snapshot_path = "";
+        let root_snapshot_lite = MiniSnapshot::from((root_snapshot_path.to_owned(), root_snapshot));
         let mut prev_snapshot_id_tuple = root_snapshot_lite.prev_snapshot_id();
         chained_snapshot_lites.push(root_snapshot_lite);
         while let Some((prev_snapshot_id, _)) = prev_snapshot_id_tuple {
@@ -149,7 +168,7 @@ impl SnapshotCollector<'_> {
             }
         }
         // remove root from orphan list
-        snapshot_map.remove(&root_snapshot.snapshot_id);
+        snapshot_map.remove(&root_snapshot_id);
         (chained_snapshot_lites, snapshot_map.into_values().collect())
     }
 }

@@ -62,6 +62,7 @@ impl<T: AsRef<str>> From<T> for LocationDigest {
 
 pub struct MiniSnapshot {
     pub id: SnapshotId,
+    pub timestamp: Option<DateTime<Utc>>,
     _version: FormatVersion,
     _prev_id: Option<SnapshotId>,
     pub segment_digests: HashSet<LocationDigest>,
