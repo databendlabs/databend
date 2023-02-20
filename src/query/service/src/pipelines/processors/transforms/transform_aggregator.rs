@@ -141,7 +141,7 @@ impl<TAggregator: Aggregator + PartitionedAggregatorLike + 'static>
             input_data_block: None,
         });
 
-        if TAggregator::SUPPORT_TWO_LEVEL
+        if TAggregator::SUPPORT_PARTITION
             && transform_params.aggregator_params.has_distinct_combinator()
         {
             Ok(Box::new(transformer.convert_to_two_level_consume()?))
@@ -225,7 +225,7 @@ impl<TAggregator: Aggregator + PartitionedAggregatorLike + 'static>
     #[inline(always)]
     fn consume_event(&mut self) -> Result<Event> {
         if let AggregatorTransform::ConsumeData(state) = self {
-            if TAggregator::SUPPORT_TWO_LEVEL {
+            if TAggregator::SUPPORT_PARTITION {
                 let cardinality = state.inner.get_state_cardinality();
 
                 if cardinality >= state.two_level_threshold {

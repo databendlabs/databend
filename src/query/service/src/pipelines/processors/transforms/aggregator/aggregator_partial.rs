@@ -42,7 +42,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method>
     pub area: Option<Area>,
     pub area_holder: Option<ArenaHolder>,
     pub method: Method,
-    pub hash_table: Method::HashTable,
+    pub hash_table: Method::HashTable<usize>,
     pub params: Arc<AggregatorParams>,
     pub generated: bool,
     pub input_rows: usize,
@@ -74,7 +74,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     }
 
     #[inline(always)]
-    fn lookup_key(keys_iter: Method::HashKeyIter<'_>, hashtable: &mut Method::HashTable) {
+    fn lookup_key(keys_iter: Method::HashKeyIter<'_>, hashtable: &mut Method::HashTable<usize>) {
         unsafe {
             for key in keys_iter {
                 let _ = hashtable.insert_and_entry(key);
@@ -88,7 +88,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         area: &mut Area,
         params: &Arc<AggregatorParams>,
         keys_iter: Method::HashKeyIter<'_>,
-        hashtable: &mut Method::HashTable,
+        hashtable: &mut Method::HashTable<usize>,
     ) -> StateAddrs {
         let mut places = Vec::with_capacity(keys_iter.size_hint().0);
 

@@ -44,7 +44,7 @@ use crate::pipelines::processors::AggregatorParams;
 pub trait PartitionedAggregatorLike
 where Self: Aggregator + Send
 {
-    const SUPPORT_TWO_LEVEL: bool;
+    const SUPPORT_PARTITION: bool;
 
     type PartitionedAggregator: Aggregator;
 
@@ -72,7 +72,7 @@ where
     Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
     Method::HashKey: FastHash,
 {
-    const SUPPORT_TWO_LEVEL: bool = Method::SUPPORT_TWO_LEVEL;
+    const SUPPORT_PARTITION: bool = Method::SUPPORT_PARTITIONED;
 
     type PartitionedAggregator = PartialAggregator<HAS_AGG, PartitionedHashMethod<Method>>;
 
@@ -245,7 +245,7 @@ where
     Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
     Method::HashKey: FastHash,
 {
-    const SUPPORT_TWO_LEVEL: bool = false;
+    const SUPPORT_PARTITION: bool = false;
     type PartitionedAggregator = ParallelFinalAggregator<HAS_AGG, PartitionedHashMethod<Method>>;
 }
 
