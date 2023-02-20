@@ -608,14 +608,14 @@ impl Column {
             Column::Number(col) => Column::Number(col.slice(range)),
             Column::Decimal(col) => Column::Decimal(col.slice(range)),
             Column::Boolean(col) => {
-                Column::Boolean(col.clone().slice(range.start, range.end - range.start))
+                Column::Boolean(col.clone().sliced(range.start, range.end - range.start))
             }
             Column::String(col) => Column::String(col.slice(range)),
             Column::Timestamp(col) => {
-                Column::Timestamp(col.clone().slice(range.start, range.end - range.start))
+                Column::Timestamp(col.clone().sliced(range.start, range.end - range.start))
             }
             Column::Date(col) => {
-                Column::Date(col.clone().slice(range.start, range.end - range.start))
+                Column::Date(col.clone().sliced(range.start, range.end - range.start))
             }
             Column::Array(col) => Column::Array(Box::new(col.slice(range))),
             Column::Nullable(col) => Column::Nullable(Box::new(col.slice(range))),
