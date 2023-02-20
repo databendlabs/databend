@@ -20,7 +20,6 @@ use std::ops::Range;
 use std::time::Instant;
 
 use common_arrow::arrow::array::Array;
-use common_arrow::arrow::datatypes::DataType;
 use common_arrow::native::read::reader::NativeReader;
 use common_arrow::native::read::NativeReadBuf;
 use common_catalog::plan::PartInfoPtr;

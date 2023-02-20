@@ -224,7 +224,7 @@ impl Processor for ParquetDeleteSource {
         if matches!(self.state, State::FilterData(..)) {
             return Ok(Event::Sync);
         }
-        return Ok(Event::Async);
+        Ok(Event::Async)
     }
 
     fn process(&mut self) -> Result<()> {
