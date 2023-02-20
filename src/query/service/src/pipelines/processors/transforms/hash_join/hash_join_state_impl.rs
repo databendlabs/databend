@@ -40,7 +40,7 @@ impl HashJoinState for JoinHashTable {
         let buffer_row_size = buffer.iter().fold(0, |acc, x| acc + x.num_rows());
         if buffer_row_size < data_block_size_limit as usize {
             buffer.push(input);
-            return Ok(());
+            Ok(())
         } else {
             let data_block = DataBlock::concat(buffer.as_slice())?;
             buffer.clear();
