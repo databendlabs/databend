@@ -325,6 +325,10 @@ impl Table for FuseTable {
         true
     }
 
+    fn support_delete_mark(&self) -> bool {
+        false
+    }
+
     fn cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
         let table_meta = Arc::new(self.clone());
         if let Some((_, order)) = &self.cluster_key_meta {
@@ -552,7 +556,7 @@ impl Table for FuseTable {
         col_indices: Vec<usize>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        self.do_delete(ctx, filter, col_indices, pipeline).await
+        self.do_delete2(ctx, filter, col_indices, pipeline).await
     }
 
     async fn update(

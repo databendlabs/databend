@@ -28,6 +28,8 @@ pub const INF_BYTES_LONG: &str = "Infinity";
 pub const DEFAULT_BLOCK_BUFFER_SIZE: usize = 100 * 1024 * 1024;
 // The size of the I/O read/write block index buffer by default.
 pub const DEFAULT_BLOCK_INDEX_BUFFER_SIZE: usize = 300 * 1024;
+// The size of the I/O read/write delete mark buffer by default.
+pub const DEFAULT_BLOCK_DELETE_MARK_SIZE: usize = 1000 * 1000;
 // The max number of a block by default.
 pub const DEFAULT_BLOCK_MAX_ROWS: usize = 1000 * 1000;
 // The min number of a block by default.

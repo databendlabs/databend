@@ -47,16 +47,26 @@ type CachedReader = InMemoryItemCacheReader<Bitmap, DeleteMetaLoader>;
 
 #[async_trait::async_trait]
 pub trait DeleteMarkReader {
-    async fn read_delete_mark(&self, dal: Operator, length: u64) -> Result<Arc<Bitmap>>;
+    async fn read_delete_mark(
+        &self,
+        dal: Operator,
+        size: u64,
+        num_rows: usize,
+    ) -> Result<Arc<Bitmap>>;
 }
 
 #[async_trait::async_trait]
 impl DeleteMarkReader for Location {
-    async fn read_delete_mark(&self, dal: Operator, length: u64) -> Result<Arc<Bitmap>> {
+    async fn read_delete_mark(
+        &self,
+        dal: Operator,
+        size: u64,
+        num_rows: usize,
+    ) -> Result<Arc<Bitmap>> {
         let (path, ver) = &self;
         let mask_version = DeleteMaskVersion::try_from(*ver)?;
         if matches!(mask_version, DeleteMaskVersion::V0(_)) {
-            let res = load_delete_mark(dal, path, length).await?;
+            let res = load_delete_mark(dal, path, size, num_rows).await?;
             Ok(res)
         } else {
             unreachable!()
@@ -66,9 +76,14 @@ impl DeleteMarkReader for Location {
 
 /// load delete mark data
 #[tracing::instrument(level = "debug", skip_all)]
-pub async fn load_delete_mark(dal: Operator, path: &str, length: u64) -> Result<Arc<Bitmap>> {
+pub async fn load_delete_mark(
+    dal: Operator,
+    path: &str,
+    size: u64,
+    num_rows: usize,
+) -> Result<Arc<Bitmap>> {
     // 1. load delete mark meta
-    let delete_mark_meta = load_mark_meta(dal.clone(), path, length).await?;
+    let delete_mark_meta = load_mark_meta(dal.clone(), path, size).await?;
     let file_meta = &delete_mark_meta.0;
     if file_meta.row_groups.len() != 1 {
         return Err(ErrorCode::StorageOther(format!(
@@ -81,7 +96,7 @@ pub async fn load_delete_mark(dal: Operator, path: &str, length: u64) -> Result<
     let index_column_chunk_metas = file_meta.row_groups[0].columns();
     assert_eq!(index_column_chunk_metas.len(), 1);
     let column_meta = &index_column_chunk_metas[0];
-    let marks = load_delete_mark_data(column_meta, path, &dal).await?;
+    let marks = load_delete_mark_data(column_meta, path, &dal, num_rows).await?;
 
     Ok(marks)
 }
@@ -92,12 +107,14 @@ async fn load_delete_mark_data<'a>(
     col_chunk_meta: &'a ColumnChunkMetaData,
     path: &'a str,
     dal: &'a Operator,
+    num_rows: usize,
 ) -> Result<Arc<Bitmap>> {
     let storage_runtime = GlobalIORuntime::instance();
     let bytes = {
         let meta = col_chunk_meta.metadata();
         let location = path.to_string();
         let loader = DeleteMetaLoader {
+            num_rows,
             offset: meta.data_page_offset as u64,
             len: meta.total_compressed_size as u64,
             cache_key: location.clone(),
@@ -122,7 +139,7 @@ async fn load_delete_mark_data<'a>(
 /// Loads index meta data
 /// read data from cache, or populate cache items if possible
 #[tracing::instrument(level = "debug", skip_all)]
-async fn load_mark_meta(dal: Operator, path: &str, length: u64) -> Result<Arc<DeleteMarkMeta>> {
+async fn load_mark_meta(dal: Operator, path: &str, size: u64) -> Result<Arc<DeleteMarkMeta>> {
     let path_owned = path.to_owned();
     async move {
         let reader = MetaReaders::delete_mark_meta_reader(dal);
@@ -132,7 +149,7 @@ async fn load_mark_meta(dal: Operator, path: &str, length: u64) -> Result<Arc<De
 
         let load_params = LoadParams {
             location: path_owned,
-            len_hint: Some(length),
+            len_hint: Some(size),
             ver: version,
         };
 
@@ -143,6 +160,7 @@ async fn load_mark_meta(dal: Operator, path: &str, length: u64) -> Result<Arc<De
 }
 
 pub struct DeleteMetaLoader {
+    pub num_rows: usize,
     pub offset: u64,
     pub len: u64,
     pub cache_key: String,
@@ -177,8 +195,13 @@ impl Loader<Bitmap> for DeleteMetaLoader {
         let column_type = self.column_descriptor.descriptor.primitive_type.clone();
         let filed_name = self.column_descriptor.path_in_schema[0].to_owned();
         let field = ArrowField::new(filed_name, DataType::Boolean, false);
-        let mut array_iter =
-            column_iter_to_arrays(vec![decompressor], vec![&column_type], field, None, 1)?;
+        let mut array_iter = column_iter_to_arrays(
+            vec![decompressor],
+            vec![&column_type],
+            field,
+            None,
+            self.num_rows,
+        )?;
         if let Some(array) = array_iter.next() {
             let array = array?;
             let col =

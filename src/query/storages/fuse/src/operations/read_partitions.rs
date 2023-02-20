@@ -356,7 +356,10 @@ impl FuseTable {
             (stat.min.clone(), stat.max.clone())
         });
 
-        let delete_mark = meta.delete_mask_location.clone().map(|(loc, _)| loc);
+        let delete_mark = meta
+            .delete_mask_location
+            .clone()
+            .map(|loc| (loc, meta.delete_mark_size));
 
         FusePartInfo::create(
             location,
@@ -398,7 +401,10 @@ impl FuseTable {
             (stat.min.clone(), stat.max.clone())
         });
 
-        let delete_mark = meta.delete_mask_location.clone().map(|(loc, _)| loc);
+        let delete_mark = meta
+            .delete_mask_location
+            .clone()
+            .map(|loc| (loc, meta.delete_mark_size));
 
         // TODO
         // row_count should be a hint value of  LIMIT,

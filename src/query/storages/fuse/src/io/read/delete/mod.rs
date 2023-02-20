@@ -13,3 +13,5 @@
 // limitations under the License.
 
 mod delete_mark_reader;
+
+pub use delete_mark_reader::DeleteMarkReader;
