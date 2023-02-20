@@ -1169,6 +1169,10 @@ pub struct QueryConfig {
     #[clap(long)]
     pub internal_enable_sandbox_tenant: bool,
 
+    /// Experiment config options, DO NOT USE IT IN PRODUCTION ENV
+    #[clap(long)]
+    pub internal_merge_on_read_mutation: bool,
+
     // ----- the following options/args are all deprecated               ----
     // ----- and turned into Option<T>, to help user migrate the configs ----
     /// OBSOLETED: Table disk cache size (mb).
@@ -1275,6 +1279,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             share_endpoint_auth_token_file: self.share_endpoint_auth_token_file,
             tenant_quota: self.quota,
             internal_enable_sandbox_tenant: self.internal_enable_sandbox_tenant,
+            internal_merge_on_read_mutation: self.internal_merge_on_read_mutation,
         })
     }
 }
@@ -1328,6 +1333,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,
             quota: inner.tenant_quota,
             internal_enable_sandbox_tenant: inner.internal_enable_sandbox_tenant,
+            internal_merge_on_read_mutation: false,
             // obsoleted config entries
             table_disk_cache_mb_size: None,
             table_meta_cache_enabled: None,
