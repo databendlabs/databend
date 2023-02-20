@@ -187,27 +187,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_combine_nullable_2_arg::<ArrayType<GenericType<0>>, UInt64Type, GenericType<0>, _, _>(
-        "get",
-        FunctionProperty::default(),
-        |domain, _| FunctionDomain::Domain(NullableDomain {
-            has_null: true,
-            value: domain.as_ref().map(|domain| Box::new(domain.clone()))
-        }),
-        vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, UInt64Type, NullableType<GenericType<0>>>(
-            |arr, idx, output, _| {
-                if idx == 0 {
-                    output.push_null();
-                } else {
-                    match arr.index(idx as usize - 1) {
-                        Some(item) => output.push(item),
-                        None => output.push_null(),
-                    }
-                }
-            }
-        ),
-    );
-
     registry.register_2_arg_core::<NullType, NullType, NullType, _, _>(
         "array_indexof",
         FunctionProperty::default(),

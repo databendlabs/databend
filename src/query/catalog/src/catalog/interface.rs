@@ -22,8 +22,8 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
-use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::RenameDatabaseReply;
@@ -114,7 +114,8 @@ pub trait Catalog: DynClone + Send + Sync {
 
     async fn create_table(&self, req: CreateTableReq) -> Result<()>;
 
-    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply>;
+    async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply>;
+
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply>;
 
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply>;

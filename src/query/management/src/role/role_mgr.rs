@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
-use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_kvapi::kvapi;
@@ -37,7 +36,10 @@ pub struct RoleMgr {
 }
 
 impl RoleMgr {
-    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: &str) -> Result<Self> {
+    pub fn create(
+        kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
+        tenant: &str,
+    ) -> Result<Self, ErrorCode> {
         if tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
                 "Tenant can not empty(while role mgr create)",
@@ -54,7 +56,7 @@ impl RoleMgr {
         &self,
         role_info: &RoleInfo,
         seq: MatchSeq,
-    ) -> common_exception::Result<u64> {
+    ) -> Result<u64, ErrorCode> {
         let key = self.make_role_key(role_info.identity());
         let value = serde_json::to_vec(&role_info)?;
 
@@ -98,7 +100,7 @@ impl RoleApi for RoleMgr {
         Ok(res.seq)
     }
 
-    async fn get_role(&self, role: &String, seq: MatchSeq) -> Result<SeqV<RoleInfo>> {
+    async fn get_role(&self, role: &String, seq: MatchSeq) -> Result<SeqV<RoleInfo>, ErrorCode> {
         let key = self.make_role_key(role);
         let res = self.kv_api.get_kv(&key).await?;
         let seq_value =
@@ -110,7 +112,7 @@ impl RoleApi for RoleMgr {
         }
     }
 
-    async fn get_roles(&self) -> Result<Vec<SeqV<RoleInfo>>> {
+    async fn get_roles(&self) -> Result<Vec<SeqV<RoleInfo>>, ErrorCode> {
         let role_prefix = self.role_prefix.clone();
         let kv_api = self.kv_api.clone();
         let values = kv_api.prefix_list_kv(role_prefix.as_str()).await?;
@@ -131,8 +133,15 @@ impl RoleApi for RoleMgr {
     /// It fetch the role that matches the specified seq number, update it in place, then write it back with the seq it sees.
     ///
     /// Seq number ensures there is no other write happens between get and set.
-    async fn update_role_with<F>(&self, role: &String, seq: MatchSeq, f: F) -> Result<Option<u64>>
-    where F: FnOnce(&mut RoleInfo) + Send {
+    async fn update_role_with<F>(
+        &self,
+        role: &String,
+        seq: MatchSeq,
+        f: F,
+    ) -> Result<Option<u64>, ErrorCode>
+    where
+        F: FnOnce(&mut RoleInfo) + Send,
+    {
         let SeqV {
             seq,
             data: mut role_info,
@@ -147,7 +156,7 @@ impl RoleApi for RoleMgr {
         Ok(Some(seq))
     }
 
-    async fn drop_role(&self, role: String, seq: MatchSeq) -> Result<()> {
+    async fn drop_role(&self, role: String, seq: MatchSeq) -> Result<(), ErrorCode> {
         let key = self.make_role_key(&role);
         let kv_api = self.kv_api.clone();
         let res = kv_api

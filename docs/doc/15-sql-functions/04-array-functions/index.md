@@ -2,23 +2,25 @@
 title: 'Array Functions'
 ---
 
-| Function                             | Description                                                                            | Example                               | Result    |
-|--------------------------------------|----------------------------------------------------------------------------------------|---------------------------------------|-----------|
-| **get(array, index)**                | Get item from an array by index(**1-based**)                                           | **get([1, 2], 2)**                    | 2         |
-| **length(array)**                    | Output the length of an array                                                          | **length([1, 2])**                    | 2         |
-| **array_concat(array1, array2)**     | Concat two arrays                                                                      | **array_concat([1, 2], [3, 4]**       | [1,2,3,4] |
-| **array_contains(array, item)**      | Check if array has some item                                                           | **array_contains([1, 2], 1)**         | 1         |
-| **array_indexof(array, item)**       | Returns the index(**1-based**) of the element if the list contains the element         | **array_indexof([1, 2, 9], 9)**       | 3         |
-| **array_slice(array, start[, end])** | Extract a sublist using slice conventions(index **1-based**)                           | **array_slice([1, 21, 32, 4], 2, 3)** | [21,32]   |
-| **array_sort(array)**                | Sort an array                                                                          | **array_sort([1, 4, 3, 2])**          | [1,2,3,4] |
-| **array_<aggr\>(array)**            | Aggregate the array using aggr name(currently support: sum, count, avg, min, max, any) | **array_sum([1, 2, 3, 4]**            | 10        |
-| **array_unique(array)**              | Counts the unique elements of an array other than NULL                                 | **array_unique([1, 2, 3, 3, 4])**     | 4         |
-| **array_distinct(array)**            | Removes all duplicates and NULLs from an array. Does not preserve the original order   | **array_distinct([1, 2, 2, 4])**      | [1,2,4]   |
-| **array_prepend(item, array)**       | Prepend item into an array                                                             | **array_prepend(1, [3, 4])**          | [1,3,4]   |
-| **array_append(array, item)**        | Append item into an array                                                              | **array_append([3, 4], 5)**           | [3,4,5]   |
-| **array_remove_first(array)**        | Remove the first element from an array                                                 | **array_remove_first([1, 2, 3])**     | [2,3]     |
-| **array_remove_last(array)**         | Remove the last element from an array                                                  | **array_remove_last([1, 2, 3])**      | [1,2]     |
+| Function                             | Description                                                                                  | Example                               | Result    |
+|--------------------------------------|----------------------------------------------------------------------------------------------|---------------------------------------|-----------|
+| **GET(array, index)**                | Returns an element from the array by index (1-based)                                         | **GET([1, 2], 2)**                    | 2         |
+| **LENGTH(array)**                    | Returns the length of the array                                                              | **LENGTH([1, 2])**                    | 2         |
+| **ARRAY_CONCAT(array1, array2)**     | Concats two arrays                                                                           | **ARRAY_CONCAT([1, 2], [3, 4]**       | [1,2,3,4] |
+| **ARRAY_CONTAINS(array, item)**      | Checks if the array contains a specific element                                              | **ARRAY_CONTAINS([1, 2], 1)**         | 1         |
+| **ARRAY_INDEXOF(array, item)**       | Returns the index(1-based) of an element if the array contains the element                   | **ARRAY_INDEXOF([1, 2, 9], 9)**       | 3         |
+| **ARRAY_SLICE(array, start[, end])** | Extracts a slice from the array by index (1-based)                                           | **ARRAY_SLICE([1, 21, 32, 4], 2, 3)** | [21,32]   |
+| **ARRAY_SORT(array)**                | Sorts elements in the array in ascending order                                               | **ARRAY_SORT([1, 4, 3, 2])**          | [1,2,3,4] |
+| **ARRAY_<aggr\>(array)**             | Aggregates elements in the array with an aggregate function (sum, count, avg, min, max, any) | **ARRAY_SUM([1, 2, 3, 4]**            | 10        |
+| **ARRAY_UNIQUE(array)**              | Counts unique elements in the array (except NULL)                                            | **ARRAY_UNIQUE([1, 2, 3, 3, 4])**     | 4         |
+| **ARRAY_DISTINCT(array)**            | Removes all duplicates and NULLs from the array without preserving the original order        | **ARRAY_DISTINCT([1, 2, 2, 4])**      | [1,2,4]   |
+| **ARRAY_PREPEND(item, array)**       | Prepends an element to the array                                                             | **ARRAY_PREPEND(1, [3, 4])**          | [1,3,4]   |
+| **ARRAY_APPEND(array, item)**        | Appends an element to the array                                                              | **ARRAY_APPEND([3, 4], 5)**           | [3,4,5]   |
+| **ARRAY_REMOVE_FIRST(array)**        | Removes the first element from the array                                                     | **ARRAY_REMOVE_FIRST([1, 2, 3])**     | [2,3]     |
+| **ARRAY_REMOVE_LAST(array)**         | Removes the last element from the array                                                      | **ARRAY_REMOVE_LAST([1, 2, 3])**      | [1,2]     |
 
-Note that **array_sort** function have two additional optional arguments.
-The second optional argument is the sort order, ASC and DESC are supported, the default value is ASC.
-The third optional argument is the position of the NULL value, NULLS FIRST and NULLS LAST are supported, the default is NULLS FIRST.
+:::note
+**ARRAY_SORT(array)** can accept two optional parameters, `order` and `nullposition`, which can be specified through the syntax **ARRAY_SORT(array, order, nullposition)**.
+   - `order` specifies the sorting order as either ascending (ASC) or descending (DESC). Defaults to ASC.
+   - `nullposition` determines the position of NULL values in the sorting result, at the beginning (NULLS FIRST) or at the end (NULLS LAST) of the sorting output. Defaults to NULLS FIRST.
+:::

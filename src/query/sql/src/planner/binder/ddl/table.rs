@@ -51,13 +51,14 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_schema_type;
 use common_expression::infer_table_schema;
-use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
+use common_expression::ConstantFolder;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_storage::DataOperator;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
@@ -78,6 +79,7 @@ use crate::planner::semantic::TypeChecker;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
+use crate::plans::CastExpr;
 use crate::plans::CreateTablePlanV2;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropTableClusterKeyPlan;
@@ -98,6 +100,7 @@ use crate::plans::UndropTablePlan;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::Planner;
+use crate::ScalarExpr;
 use crate::SelectBuilder;
 
 impl Binder {
@@ -904,15 +907,27 @@ impl Binder {
             fields.push(TableField::new(&name, schema_data_type.clone()));
             fields_default_expr.push({
                 if let Some(default_expr) = &column.default_expr {
-                    let (_expr, expr_type) = scalar_binder.bind(default_expr).await?;
-                    let data_type = DataType::from(&schema_data_type);
-                    if common_super_type(data_type.clone(), expr_type.clone()).is_none() {
+                    let (expr, _) = scalar_binder.bind(default_expr).await?;
+                    let is_try = schema_data_type.is_nullable();
+                    let cast_expr_to_field_type = ScalarExpr::CastExpr(CastExpr {
+                        is_try,
+                        from_type: Box::new(expr.data_type()),
+                        target_type: Box::new(DataType::from(&schema_data_type)),
+                        argument: Box::new(expr),
+                    })
+                    .as_expr_with_col_index()?;
+                    let (fold_to_constant, _) = ConstantFolder::fold(
+                        &cast_expr_to_field_type,
+                        self.ctx.get_function_context()?,
+                        &BUILTIN_FUNCTIONS,
+                    );
+                    if let common_expression::Expr::Constant { .. } = fold_to_constant {
+                        Some(default_expr.to_string())
+                    } else {
                         return Err(ErrorCode::SemanticError(format!(
-                            "column {name} is of type {} but default expression is of type {}",
-                            data_type, expr_type
+                            "default expression {cast_expr_to_field_type} is not a valid constant",
                         )));
                     }
-                    Some(default_expr.to_string())
                 } else {
                     None
                 }

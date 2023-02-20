@@ -305,7 +305,6 @@ where F: Fn(&str, Vec<u8>) -> Result<Vec<u8>, anyhow::Error>
 
     fn proc_log_entry(&self, log_entry: LogEntry) -> Result<Option<LogEntry>, anyhow::Error> {
         match log_entry.cmd {
-            Cmd::IncrSeq { .. } => Ok(None),
             Cmd::AddNode { .. } => Ok(None),
             Cmd::RemoveNode { .. } => Ok(None),
             Cmd::UpsertKV(ups) => {

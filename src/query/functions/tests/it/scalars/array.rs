@@ -49,6 +49,8 @@ fn test_array() {
 
 fn test_create(file: &mut impl Write) {
     run_ast(file, "[]", &[]);
+    run_ast(file, "['a', 1]", &[]);
+    run_ast(file, "[-1, true]", &[]);
     run_ast(file, "[NULL, 8, -10]", &[]);
     run_ast(file, "[['a', 'b'], []]", &[]);
     run_ast(file, r#"['a', 1, parse_json('{"foo":"bar"}')]"#, &[]);
@@ -168,6 +170,7 @@ fn test_array_concat(file: &mut impl Write) {
     run_ast(file, "array_concat([], [1,2])", &[]);
     run_ast(file, "array_concat([false, true], [])", &[]);
     run_ast(file, "array_concat([false, true], [1,2])", &[]);
+    run_ast(file, "array_concat([false, true], [true, false])", &[]);
     run_ast(file, "array_concat([1,2,3], ['s', null])", &[]);
 
     let columns = [
@@ -218,7 +221,11 @@ fn test_array_indexof(file: &mut impl Write) {
     run_ast(file, "array_indexof([false, true], null)", &[]);
     run_ast(file, "array_indexof([false, true], 0)", &[]);
     run_ast(file, "array_indexof([1,2,3,'s'], 's')", &[]);
-    run_ast(file, "array_indexof([1,'x',null,'x'], 'x')", &[]);
+    run_ast(
+        file,
+        "array_indexof([1::VARIANT,'x'::VARIANT,null::VARIANT,'x'::VARIANT], 'x'::VARIANT)",
+        &[],
+    );
 
     let columns = [
         ("int8_col", Int8Type::from_data(vec![1i8, 2, 7, 8])),

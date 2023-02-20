@@ -303,12 +303,12 @@ Limit
             ├── estimated rows: 50.00
             └── HashJoin
                 ├── join type: RIGHT OUTER
-                ├── build keys: [TRY_CAST(y.a (#1) AS UInt64 NULL)]
+                ├── build keys: [CAST(y.a (#1) AS UInt64 NULL)]
                 ├── probe keys: [x.a (#0)]
                 ├── filters: []
                 ├── estimated rows: 50.00
                 ├── Exchange(Build)
-                │   ├── exchange type: Hash(TRY_CAST(y.a (#1) AS UInt64 NULL))
+                │   ├── exchange type: Hash(CAST(y.a (#1) AS UInt64 NULL))
                 │   └── TableScan
                 │       ├── table: default.system.numbers
                 │       ├── read rows: 5

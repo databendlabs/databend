@@ -15,9 +15,12 @@
 pub mod port;
 pub mod processor;
 
+mod duplicate_processor;
 mod port_trigger;
 mod resize_processor;
+mod shuffle_processor;
 
+pub use duplicate_processor::DuplicateProcessor;
 pub use port::connect;
 pub use port_trigger::DirectedEdge;
 pub use port_trigger::UpdateList;
@@ -25,3 +28,4 @@ pub use port_trigger::UpdateTrigger;
 pub use processor::Processor;
 pub use resize_processor::create_resize_item;
 pub use resize_processor::ResizeProcessor;
+pub use shuffle_processor::ShuffleProcessor;

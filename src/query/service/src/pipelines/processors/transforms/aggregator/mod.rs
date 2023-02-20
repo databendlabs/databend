@@ -14,7 +14,6 @@
 
 mod aggregate_hashstate_info;
 mod aggregate_info;
-mod aggregator_final;
 mod aggregator_final_parallel;
 mod aggregator_params;
 mod aggregator_partial;
@@ -34,5 +33,4 @@ pub use aggregator_partitioned::PartitionedAggregator;
 pub use aggregator_partitioned::PartitionedAggregatorLike;
 pub use aggregator_single_key::FinalSingleStateAggregator;
 pub use aggregator_single_key::PartialSingleStateAggregator;
-pub use aggregator_single_key::SingleStateAggregator;
 pub use utils::*;

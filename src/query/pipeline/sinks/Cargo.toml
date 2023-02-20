@@ -20,3 +20,6 @@ common-pipeline-core = { path = "../core" }
 
 async-channel = "1.7.1"
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
+
+[dev-dependencies]
+tokio = { workspace = true }

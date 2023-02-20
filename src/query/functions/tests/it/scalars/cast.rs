@@ -143,7 +143,11 @@ fn test_cast_to_variant(file: &mut impl Write, is_try: bool) {
         &[],
     );
     run_ast(file, format!("{prefix}CAST([0, 1, 2] AS VARIANT)"), &[]);
-    run_ast(file, format!("{prefix}CAST([0, 'a'] AS VARIANT)"), &[]);
+    run_ast(
+        file,
+        format!("{prefix}CAST([0::VARIANT, 'a'::VARIANT] AS VARIANT)"),
+        &[],
+    );
     run_ast(
         file,
         format!("{prefix}CAST(to_timestamp(1000000) AS VARIANT)"),
@@ -343,6 +347,12 @@ fn test_cast_between_number_and_string(file: &mut impl Write, is_try: bool) {
             "0",
             "1",
             "9223372036854775807",
+        ]),
+    )]);
+    run_ast(file, format!("{prefix}CAST(str AS INT64)"), &[(
+        "str",
+        StringType::from_data_with_validity(vec!["foo", "foo", "0", "0"], vec![
+            true, false, true, false,
         ]),
     )]);
 

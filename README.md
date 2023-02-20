@@ -1,4 +1,4 @@
-<h1 align="center">The Future of Cloud Data Analysis</h1>
+<h1 align="center">The Future of Cloud Data Analytics</h1>
 
 <div align="center">
 
@@ -42,7 +42,7 @@
 </div>
 </div>
 
-<img src="https://user-images.githubusercontent.com/172204/218997620-2bbdbbfe-9351-421e-bf6e-6cc5e0f3881b.svg" alt="databend" />
+<img src="https://user-images.githubusercontent.com/172204/219559279-ab7a11a4-9437-4a0a-85e8-cedf9ba0e24b.svg" alt="databend" />
 
 ## What is Databend?
 
@@ -162,6 +162,7 @@ docker run --net=host  datafuselabs/databend
 - [How to Drop a Table](https://databend.rs/doc/sql-commands/ddl/table/ddl-drop-table)
 - [How to Rename a Table](https://databend.rs/doc/sql-commands/ddl/table/ddl-rename-table)
 - [How to Truncate a Table](https://databend.rs/doc/sql-commands/ddl/table/ddl-truncate-table)
+- [How to Add/Drop Table Column](https://databend.rs/doc/sql-commands/ddl/table/alter-table-column)
 
 ### Managing Views
 
@@ -209,7 +210,6 @@ For general help in using Databend, please refer to the official documentation. 
 - [Slack](https://link.databend.rs/join-slack) (For live discussion with the Community)
 - [GitHub](https://github.com/datafuselabs/databend) (Feature/Bug reports, Contributions)
 - [Twitter](https://twitter.com/Datafuse_Labs) (Get the news fast)
-- [Weekly](https://weekly.databend.rs/) (A weekly newsletter about Databend)
 - [I'm feeling lucky](https://link.databend.rs/i-m-feeling-lucky) (Pick up a good first issue now!)
 
 ## Roadmap
