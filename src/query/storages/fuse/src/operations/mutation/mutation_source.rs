@@ -45,6 +45,7 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
+use crate::FuseStorageFormat;
 use crate::MergeIOReadResult;
 
 pub enum MutationAction {
@@ -81,6 +82,7 @@ pub struct MutationSource {
     block_reader: Arc<BlockReader>,
     remain_reader: Arc<Option<BlockReader>>,
     operators: Vec<BlockOperator>,
+    storage_format: FuseStorageFormat,
     action: MutationAction,
 
     index: BlockMetaIndex,
@@ -97,6 +99,7 @@ impl MutationSource {
         block_reader: Arc<BlockReader>,
         remain_reader: Arc<Option<BlockReader>>,
         operators: Vec<BlockOperator>,
+        storage_format: FuseStorageFormat,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(MutationSource {
@@ -111,6 +114,7 @@ impl MutationSource {
             action,
             index: BlockMetaIndex::default(),
             origin_stats: None,
+            storage_format,
         })))
     }
 }
@@ -171,9 +175,11 @@ impl Processor for MutationSource {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::FilterData(part, read_res) => {
                 let chunks = read_res.columns_chunks()?;
-                let mut data_block = self
-                    .block_reader
-                    .deserialize_parquet_chunks(part.clone(), chunks)?;
+                let mut data_block = self.block_reader.deserialize_chunks(
+                    part.clone(),
+                    chunks,
+                    &self.storage_format,
+                )?;
                 let num_rows = data_block.num_rows();
 
                 if let Some(filter) = self.filter.as_ref() {
@@ -274,7 +280,8 @@ impl Processor for MutationSource {
             } => {
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
                     let chunks = merged_io_read_result.columns_chunks()?;
-                    let remain_block = remain_reader.deserialize_parquet_chunks(part, chunks)?;
+                    let remain_block =
+                        remain_reader.deserialize_chunks(part, chunks, &self.storage_format)?;
 
                     match self.action {
                         MutationAction::Deletion => {
