@@ -65,11 +65,7 @@ error:
   --> SQL:1:5
   |
 1 | 'a' and 1
-  |     ^^^ no overload satisfies `and(String, UInt8)`
-
-has tried possible overloads:
-  and(Boolean, Boolean) :: Boolean                 : unable to unify `String` with `Boolean`
-  and(Boolean NULL, Boolean NULL) :: Boolean NULL  : unable to unify `String` with `Boolean`
+  |     ^^^ unable to parse string to type `BOOLEAN` while evaluating function `to_boolean("a")`
 
 
 
@@ -77,11 +73,7 @@ error:
   --> SQL:1:5
   |
 1 | NOT NOT 'a'
-  |     ^^^ no overload satisfies `not(String)`
-
-has tried possible overloads:
-  not(Boolean) :: Boolean            : unable to unify `String` with `Boolean`
-  not(Boolean NULL) :: Boolean NULL  : unable to unify `String` with `Boolean`
+  |     ^^^ unable to parse string to type `BOOLEAN` while evaluating function `to_boolean("a")`
 
 
 

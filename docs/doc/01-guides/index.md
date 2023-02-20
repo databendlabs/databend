@@ -57,6 +57,7 @@ These tutorials are intended to help you get started with Databend:
 * [How to Drop a Table](../14-sql-commands/00-ddl/20-table/20-ddl-drop-table.md)
 * [How to Rename a Table](../14-sql-commands/00-ddl/20-table/30-ddl-rename-table.md)
 * [How to Truncate a Table](../14-sql-commands/00-ddl/20-table/40-ddl-truncate-table.md)
+* [How to Add/Drop Table Column](../14-sql-commands/00-ddl/20-table/90-alter-table-column.md)
 
 ## Managing Views
 

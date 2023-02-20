@@ -1394,8 +1394,16 @@ impl<'a> TypeChecker<'a> {
             let box (mut scalar, scalar_data_type) = self.resolve(&expr, None).await?;
             if scalar_data_type != *data_type {
                 // Make comparison scalar type keep consistent
-                let coercion_type = common_super_type(scalar_data_type, *data_type.clone())
-                    .ok_or_else(|| ErrorCode::Internal("Cannot find common super type"))?;
+                let coercion_type = common_super_type(
+                    scalar_data_type.clone(),
+                    *data_type.clone(),
+                    &BUILTIN_FUNCTIONS.default_cast_rules,
+                )
+                .ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "Subquery type {scalar_data_type} and expression {data_type} cannot be matched"
+                    ))
+                })?;
                 scalar = wrap_cast_if_needed(&scalar, &coercion_type);
                 data_type = Box::new(coercion_type);
             }

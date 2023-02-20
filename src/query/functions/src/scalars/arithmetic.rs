@@ -12,19 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(unused_comparisons)]
+#![allow(clippy::absurd_extreme_comparisons)]
 
-use common_expression::types::boolean::BooleanDomain;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::nullable::NullableDomain;
 use common_expression::types::number::F64;
 use common_expression::types::number::*;
 use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::BooleanType;
 use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
-use common_expression::types::ALL_INTEGER_TYPES;
 use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::utils::arithmetics_type::ResultTypeOfBinary;
 use common_expression::utils::arithmetics_type::ResultTypeOfUnary;
@@ -34,7 +31,6 @@ use common_expression::values::ValueRef;
 use common_expression::vectorize_1_arg;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
-use common_expression::with_integer_mapped_type;
 use common_expression::with_number_mapped_type;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
@@ -44,7 +40,6 @@ use num_traits::AsPrimitive;
 
 use super::arithmetic_modulo::vectorize_modulo;
 
-#[allow(clippy::absurd_extreme_comparisons)]
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("plus", &["add"]);
     registry.register_aliases("minus", &["subtract", "neg", "negate"]);
@@ -231,6 +226,56 @@ pub fn register(registry: &mut FunctionRegistry) {
         }
     }
 
+    for dest_type in ALL_NUMERICS_TYPES {
+        with_number_mapped_type!(|DEST_TYPE| match dest_type {
+            NumberDataType::DEST_TYPE => {
+                let name = format!("to_{dest_type}").to_lowercase();
+                registry
+                    .register_passthrough_nullable_1_arg::<StringType, NumberType<DEST_TYPE>, _, _>(
+                        &name,
+                        FunctionProperty::default(),
+                        |_| FunctionDomain::MayThrow,
+                        vectorize_with_builder_1_arg::<StringType, NumberType<DEST_TYPE>>(
+                            move |val, output, ctx| {
+                                let str_val = String::from_utf8_lossy(val);
+                                match str_val.parse::<DEST_TYPE>() {
+                                    Ok(new_val) => output.push(new_val),
+                                    Err(e) => {
+                                        ctx.set_error(
+                                            output.len(),
+                                            format!(
+                                                "unable to parse string to type `{dest_type}` because {e}",
+                                            ),
+                                        );
+                                        output.push(DEST_TYPE::default());
+                                    }
+                                };
+                            },
+                        ),
+                    );
+
+                let name = format!("try_to_{dest_type}").to_lowercase();
+                registry
+                    .register_combine_nullable_1_arg::<StringType, NumberType<DEST_TYPE>, _, _>(
+                        &name,
+                        FunctionProperty::default(),
+                        |_| FunctionDomain::Full,
+                        vectorize_with_builder_1_arg::<
+                            StringType,
+                            NullableType<NumberType<DEST_TYPE>>,
+                        >(|val, output, _| {
+                            let str_val = String::from_utf8_lossy(val);
+                            if let Ok(new_val) = str_val.parse::<DEST_TYPE>() {
+                                output.push(new_val);
+                            } else {
+                                output.push_null();
+                            }
+                        }),
+                    );
+            }
+        });
+    }
+
     for src_type in ALL_NUMERICS_TYPES {
         for dest_type in ALL_NUMERICS_TYPES {
             with_number_mapped_type!(|SRC_TYPE| match src_type {
@@ -407,132 +452,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                         }
                     },
                 );
-            }
-        });
-    }
-
-    for src_type in ALL_INTEGER_TYPES {
-        with_integer_mapped_type!(|NUM_TYPE| match src_type {
-            NumberDataType::NUM_TYPE => {
-                registry.register_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
-                    "to_boolean",
-                    FunctionProperty::default(),
-                    |domain| {
-                        FunctionDomain::Domain(BooleanDomain {
-                            has_false: domain.min <= 0 && domain.max >= 0,
-                            has_true: !(domain.min == 0 && domain.max == 0),
-                        })
-                    },
-                    |val, _| val != 0,
-                );
-
-                registry
-                    .register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
-                        "try_to_boolean",
-                        FunctionProperty::default(),
-                        |domain| {
-                            FunctionDomain::Domain(NullableDomain {
-                                has_null: false,
-                                value: Some(Box::new(BooleanDomain {
-                                    has_false: domain.min <= 0 && domain.max >= 0,
-                                    has_true: !(domain.min == 0 && domain.max == 0),
-                                })),
-                            })
-                        },
-                        vectorize_with_builder_1_arg::<
-                            NumberType<NUM_TYPE>,
-                            NullableType<BooleanType>,
-                        >(|val, output, _| {
-                            output.builder.push(val != 0);
-                            output.validity.push(true);
-                        }),
-                    );
-
-                let name = format!("to_{src_type}").to_lowercase();
-                registry.register_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
-                    &name,
-                    FunctionProperty::default(),
-                    |domain| {
-                        FunctionDomain::Domain(SimpleDomain {
-                            min: if domain.has_false { 0 } else { 1 },
-                            max: if domain.has_true { 1 } else { 0 },
-                        })
-                    },
-                    |val, _| NUM_TYPE::from(val),
-                );
-
-                let name = format!("try_to_{src_type}").to_lowercase();
-                registry
-                    .register_combine_nullable_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
-                        &name,
-                        FunctionProperty::default(),
-                        |domain| {
-                            FunctionDomain::Domain(NullableDomain {
-                                has_null: false,
-                                value: Some(Box::new(SimpleDomain {
-                                    min: if domain.has_false { 0 } else { 1 },
-                                    max: if domain.has_true { 1 } else { 0 },
-                                })),
-                            })
-                        },
-                        vectorize_with_builder_1_arg::<
-                            BooleanType,
-                            NullableType<NumberType<NUM_TYPE>>,
-                        >(|val, output, _| {
-                            output.push(NUM_TYPE::from(val));
-                        }),
-                    );
-            }
-            _ => unreachable!(),
-        });
-    }
-
-    for dest_type in ALL_NUMERICS_TYPES {
-        with_number_mapped_type!(|DEST_TYPE| match dest_type {
-            NumberDataType::DEST_TYPE => {
-                let name = format!("to_{dest_type}").to_lowercase();
-                registry
-                    .register_passthrough_nullable_1_arg::<StringType, NumberType<DEST_TYPE>, _, _>(
-                        &name,
-                        FunctionProperty::default(),
-                        |_| FunctionDomain::MayThrow,
-                        vectorize_with_builder_1_arg::<StringType, NumberType<DEST_TYPE>>(
-                            move |val, output, ctx| {
-                                let str_val = String::from_utf8_lossy(val);
-                                match str_val.parse::<DEST_TYPE>() {
-                                    Ok(new_val) => output.push(new_val),
-                                    Err(e) => {
-                                        ctx.set_error(
-                                            output.len(),
-                                            format!(
-                                                "unable to parse string to type `{dest_type}` because {e}",
-                                            ),
-                                        );
-                                        output.push(DEST_TYPE::default());
-                                    }
-                                };
-                            },
-                        ),
-                    );
-
-                let name = format!("try_to_{dest_type}").to_lowercase();
-                registry
-                    .register_combine_nullable_1_arg::<StringType, NumberType<DEST_TYPE>, _, _>(
-                        &name,
-                        FunctionProperty::default(),
-                        |_| FunctionDomain::Full,
-                        vectorize_with_builder_1_arg::<
-                            StringType,
-                            NullableType<NumberType<DEST_TYPE>>,
-                        >(|val, output, _| {
-                            let str_val = String::from_utf8_lossy(val);
-                            if let Ok(new_val) = str_val.parse::<DEST_TYPE>() {
-                                output.push(new_val);
-                            } else {
-                                output.push_null();
-                            }
-                        }),
-                    );
             }
         });
     }

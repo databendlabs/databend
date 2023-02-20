@@ -18,7 +18,6 @@ use common_catalog::catalog::CatalogManager;
 use common_config::GlobalConfig;
 use common_config::InnerConfig;
 use common_exception::Result;
-use common_storage::CacheOperator;
 use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
 use common_tracing::QueryLogger;
@@ -53,7 +52,6 @@ impl GlobalServices {
         ClusterDiscovery::init(config.clone()).await?;
 
         DataOperator::init(&config.storage).await?;
-        CacheOperator::init(&config.storage.cache).await?;
 
         ShareTableConfig::init(
             &config.query.share_endpoint_address,

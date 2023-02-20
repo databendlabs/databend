@@ -449,7 +449,7 @@ drop table if exists othertype
 statement ok
 CREATE TABLE othertype (x TEXT)
 
-statement ok
+statement error 1001
 SELECT * FROM (onecolumn AS a JOIN othertype AS b USING(x))
 
 statement error 1065

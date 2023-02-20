@@ -165,8 +165,8 @@ dependencies = [
 
 [[package]]
 name = "arrow2"
-version = "0.15.0"
-source = "git+https://github.com/jorgecarleitao/arrow2?rev=211be21#211be21991c29c235253a19413f43a76a367955f"
+version = "0.16.0"
+source = "git+https://github.com/jorgecarleitao/arrow2?rev=ac28bc9#ac28bc91ff87867f2d8f1cf1fbe6008af32d53ce"
 dependencies = [
  "ahash 0.8.2",
  "arrow-format",
@@ -188,9 +188,11 @@ dependencies = [
  "itertools",
  "json-deserializer",
  "lexical-core",
+ "lz4",
  "multiversion",
  "num-traits",
  "parquet2",
+ "rand 0.8.5",
  "regex",
  "regex-syntax",
  "rustc_version",
@@ -1339,7 +1341,6 @@ dependencies = [
  "common-grpc",
  "common-hive-meta-store",
  "common-meta-app",
- "common-meta-types",
  "common-storage",
  "common-tracing",
  "common-users",
@@ -1372,6 +1373,8 @@ dependencies = [
  "bincode 2.0.0-rc.2",
  "codespan-reporting 0.11.1 (git+https://github.com/brendanzab/codespan?rev=c84116f5)",
  "common-arrow",
+ "common-meta-stoerr",
+ "common-meta-types",
  "opendal",
  "paste",
  "prost",
@@ -1612,13 +1615,16 @@ dependencies = [
  "common-expression",
  "common-meta-app",
  "common-meta-kvapi",
+ "common-meta-stoerr",
  "common-meta-types",
  "common-proto-conv",
  "common-protos",
  "common-tracing",
  "enumflags2",
  "maplit",
+ "serde",
  "serde_json",
+ "thiserror",
  "tonic",
  "tracing",
 ]
@@ -1653,6 +1659,7 @@ dependencies = [
 name = "common-meta-client"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "common-arrow",
  "common-base",
  "common-building",
@@ -1747,7 +1754,6 @@ dependencies = [
  "anyhow",
  "byteorder",
  "common-base",
- "common-exception",
  "common-meta-stoerr",
  "common-meta-types",
  "common-tracing",
@@ -1767,7 +1773,6 @@ name = "common-meta-stoerr"
 version = "0.1.0"
 dependencies = [
  "anyerror",
- "common-exception",
  "prost",
  "serde",
  "serde_json",
@@ -1795,7 +1800,6 @@ dependencies = [
  "anyerror",
  "anyhow",
  "common-building",
- "common-exception",
  "common-meta-stoerr",
  "derive_more",
  "num-derive",
@@ -1856,6 +1860,7 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-pipeline-core",
+ "tokio",
 ]
 
 [[package]]
@@ -3009,7 +3014,6 @@ dependencies = [
  "common-arrow",
  "common-base",
  "common-building",
- "common-exception",
  "common-grpc",
  "common-http",
  "common-meta-api",
@@ -6019,6 +6023,7 @@ dependencies = [
  "serde",
  "snap",
  "streaming-decompression",
+ "xxhash-rust",
  "zstd 0.12.1+zstd.1.5.2",
 ]
 
@@ -7941,11 +7946,12 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 [[package]]
 name = "strawboat"
 version = "0.1.0"
-source = "git+https://github.com/sundy-li/strawboat?rev=24bd7f6#24bd7f6513c8301e20bf71959ff98ee094090a16"
+source = "git+https://github.com/sundy-li/strawboat?rev=d3b33bd#d3b33bd8f6a6b5fe0e0e16b1d084cc97ddcf5939"
 dependencies = [
  "arrow2",
  "bytemuck",
  "lz4",
+ "parquet2",
  "serde",
  "serde_json",
  "snap",
@@ -9294,6 +9300,12 @@ source = "git+https://github.com/datafuse-extras/xorfilter?tag=databend-alpha.4#
 dependencies = [
  "cbordata",
 ]
+
+[[package]]
+name = "xxhash-rust"
+version = "0.8.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "735a71d46c4d68d71d4b24d03fdc2b98e38cea81730595801db779c04fe80d70"
 
 [[package]]
 name = "xz2"

@@ -15,7 +15,6 @@
 use std::fmt::Display;
 
 use anyerror::AnyError;
-use common_exception::ErrorCode;
 
 /// Error raised by meta service client.
 #[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -32,11 +31,5 @@ impl MetaHandshakeError {
             msg: msg.to_string(),
             source: AnyError::new(source),
         }
-    }
-}
-
-impl From<MetaHandshakeError> for ErrorCode {
-    fn from(e: MetaHandshakeError) -> Self {
-        ErrorCode::MetaServiceError(e.to_string())
     }
 }

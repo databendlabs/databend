@@ -38,6 +38,7 @@ tracing = "0.1.36"
 common-exception = { path = "../../common/exception" }
 common-meta-app = { path = "../app" }
 
+anyhow = { workspace = true }
 rand = "0.8.5"
 
 [build-dependencies]

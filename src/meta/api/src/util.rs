@@ -14,6 +14,13 @@
 
 use std::fmt::Display;
 
+use common_meta_app::app_error::AppError;
+use common_meta_app::app_error::ShareHasNoGrantedDatabase;
+use common_meta_app::app_error::UnknownDatabase;
+use common_meta_app::app_error::UnknownShare;
+use common_meta_app::app_error::UnknownShareAccounts;
+use common_meta_app::app_error::UnknownShareId;
+use common_meta_app::app_error::UnknownTable;
 use common_meta_app::schema::DatabaseId;
 use common_meta_app::schema::DatabaseIdToName;
 use common_meta_app::schema::DatabaseMeta;
@@ -22,20 +29,13 @@ use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::*;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::errors::app_error::AppError;
-use common_meta_types::errors::app_error::ShareHasNoGrantedDatabase;
-use common_meta_types::errors::app_error::UnknownDatabase;
-use common_meta_types::errors::app_error::UnknownShare;
-use common_meta_types::errors::app_error::UnknownShareAccounts;
-use common_meta_types::errors::app_error::UnknownShareId;
-use common_meta_types::errors::app_error::UnknownTable;
 use common_meta_types::txn_condition::Target;
 use common_meta_types::txn_op::Request;
 use common_meta_types::ConditionResult;
 use common_meta_types::InvalidArgument;
 use common_meta_types::InvalidReply;
-use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
+use common_meta_types::MetaError;
 use common_meta_types::MetaNetworkError;
 use common_meta_types::Operation;
 use common_meta_types::TxnCondition;
@@ -49,6 +49,8 @@ use enumflags2::BitFlags;
 use tracing::debug;
 use ConditionResult::Eq;
 
+use crate::kv_app_error::KVAppError;
+use crate::reply::txn_reply_to_api_result;
 use crate::Id;
 
 pub const TXN_MAX_RETRY_TIMES: u32 = 10;
@@ -62,7 +64,7 @@ pub const TXN_MAX_RETRY_TIMES: u32 = 10;
 /// It returns (seq, `u64` value).
 /// If not found, (0,0) is returned.
 pub async fn get_u64_value<T: kvapi::Key>(
-    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     key: &T,
 ) -> Result<(u64, u64), KVAppError> {
     let res = kv_api.get_kv(&key.to_string_key()).await?;
@@ -78,7 +80,7 @@ pub async fn get_u64_value<T: kvapi::Key>(
 ///
 /// It returns seq number and the data.
 pub async fn get_struct_value<K, T>(
-    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     k: &K,
 ) -> Result<(u64, Option<T>), KVAppError>
 where
@@ -98,7 +100,7 @@ where
 /// It returns a vec of structured key(such as DatabaseNameIdent), such as:
 /// all the `db_name` with prefix `__fd_database/<tenant>/`.
 pub async fn list_keys<K: kvapi::Key>(
-    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     key: &K,
 ) -> Result<Vec<K>, KVAppError> {
     let res = kv_api.prefix_list_kv(&key.to_string_key()).await?;
@@ -126,9 +128,9 @@ pub async fn list_keys<K: kvapi::Key>(
 ///
 /// It returns a vec of structured key(such as DatabaseNameIdent) and a vec of `u64`.
 pub async fn list_u64_value<K: kvapi::Key>(
-    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     key: &K,
-) -> Result<(Vec<K>, Vec<u64>), KVAppError> {
+) -> Result<(Vec<K>, Vec<u64>), MetaError> {
     let res = kv_api.prefix_list_kv(&key.to_string_key()).await?;
 
     let n = res.len();
@@ -172,7 +174,7 @@ pub fn deserialize_u64(v: &[u8]) -> Result<Id, MetaNetworkError> {
 /// Ids are categorized by generators.
 /// Ids may not be consecutive.
 pub async fn fetch_id<T: kvapi::Key>(
-    kv_api: &impl kvapi::KVApi<Error = KVAppError>,
+    kv_api: &impl kvapi::KVApi<Error = MetaError>,
     generator: T,
 ) -> Result<u64, KVAppError> {
     let res = kv_api
@@ -224,12 +226,11 @@ where
 }
 
 pub async fn send_txn(
-    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     txn_req: TxnRequest,
 ) -> Result<(bool, Vec<TxnOpResponse>), KVAppError> {
     let tx_reply = kv_api.transaction(txn_req).await?;
-    let res: Result<_, KVAppError> = tx_reply.into();
-    let (succ, responses) = res?;
+    let (succ, responses) = txn_reply_to_api_result(tx_reply)?;
     Ok((succ, responses))
 }
 
@@ -319,7 +320,7 @@ pub fn table_has_to_exist(
 
 // Return (share_id_seq, share_id, share_meta_seq, share_meta)
 pub async fn get_share_or_err(
-    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     name_key: &ShareNameIdent,
     msg: impl Display,
 ) -> Result<(u64, u64, u64, ShareMeta), KVAppError> {
@@ -333,7 +334,7 @@ pub async fn get_share_or_err(
 
 /// Returns (share_meta_seq, share_meta)
 pub async fn get_share_meta_by_id_or_err(
-    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     share_id: u64,
     msg: impl Display,
 ) -> Result<(u64, ShareMeta), KVAppError> {
@@ -381,7 +382,7 @@ fn share_has_to_exist(
 
 /// Returns (share_account_meta_seq, share_account_meta)
 pub async fn get_share_account_meta_or_err(
-    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     name_key: &ShareAccountNameIdent,
     msg: impl Display,
 ) -> Result<(u64, ShareAccountMeta), KVAppError> {
@@ -421,7 +422,7 @@ fn share_account_meta_has_to_exist(
 
 /// Returns (share_meta_seq, share_meta)
 pub async fn get_share_id_to_name_or_err(
-    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     share_id: u64,
     msg: impl Display,
 ) -> Result<(u64, ShareNameIdent), KVAppError> {
@@ -458,7 +459,7 @@ pub fn get_share_database_id_and_privilege(
 
 // Return true if all the database data has been removed.
 pub async fn is_all_db_data_removed(
-    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     db_id: u64,
 ) -> Result<bool, KVAppError> {
     let dbid = DatabaseId { db_id };
@@ -486,7 +487,7 @@ pub async fn is_all_db_data_removed(
 // When the database needs to be removed, add `TxnCondition` into `condition`
 //    and `TxnOp` into the `if_then`.
 pub async fn is_db_need_to_be_remove<F>(
-    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     db_id: u64,
     mut f: F,
     condition: &mut Vec<TxnCondition>,
@@ -523,7 +524,7 @@ where
 }
 
 pub async fn get_object_shared_by_share_ids(
-    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     object: &ShareGrantObject,
 ) -> Result<(u64, ObjectSharedByShareIds), KVAppError> {
     let (seq, share_ids): (u64, Option<ObjectSharedByShareIds>) =

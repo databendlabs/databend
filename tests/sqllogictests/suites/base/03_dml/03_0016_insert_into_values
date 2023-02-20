@@ -56,6 +56,20 @@ statement error 1303
 insert into st1 values ('a', 'b')
 
 statement ok
+create table if not exists ts1(a timestamp)
+
+statement ok
+insert into ts1 values (1676620596564)
+
+query T
+select * from ts1
+----
+2023-02-17 07:56:36.564000
+
+statement ok
+drop table ts1
+
+statement ok
 drop table st1
 
 statement ok

@@ -24,7 +24,9 @@ use crate::pipe::PipeItem;
 use crate::processors::port::InputPort;
 use crate::processors::port::OutputPort;
 use crate::processors::processor::ProcessorPtr;
+use crate::processors::DuplicateProcessor;
 use crate::processors::ResizeProcessor;
+use crate::processors::ShuffleProcessor;
 use crate::SinkPipeBuilder;
 use crate::SourcePipeBuilder;
 use crate::TransformPipeBuilder;
@@ -207,6 +209,85 @@ impl Pipeline {
                     ]));
                 Ok(())
             }
+        }
+    }
+
+    /// Duplite a pipe input to two outputs.
+    ///
+    /// If `force_finish_together` enabled, once one output is finished, the other output will be finished too.
+    pub fn duplicate(&mut self, force_finish_together: bool) -> Result<()> {
+        match self.pipes.last() {
+            Some(pipe) if pipe.output_length > 0 => {
+                let mut items = Vec::with_capacity(pipe.output_length);
+                for _ in 0..pipe.output_length {
+                    let input = InputPort::create();
+                    let output1 = OutputPort::create();
+                    let output2 = OutputPort::create();
+                    let processor = DuplicateProcessor::create(
+                        input.clone(),
+                        output1.clone(),
+                        output2.clone(),
+                        force_finish_together,
+                    );
+                    items.push(PipeItem::create(
+                        ProcessorPtr::create(Box::new(processor)),
+                        vec![input],
+                        vec![output1, output2],
+                    ));
+                }
+                self.pipes.push(Pipe::create(
+                    pipe.output_length,
+                    pipe.output_length * 2,
+                    items,
+                ));
+                Ok(())
+            }
+            _ => Err(ErrorCode::Internal("Cannot duplicate empty pipe.")),
+        }
+    }
+
+    /// Used to re-order the input data according to the rule.
+    ///
+    /// `rule` is a vector of [usize], each element is the index of the output port.
+    ///
+    /// For example, if the rule is `[1, 2, 0]`, the data flow will be:
+    ///
+    /// - input 0 -> output 1
+    /// - input 1 -> output 2
+    /// - input 2 -> output 0
+    pub fn reorder_inputs(&mut self, rule: Vec<usize>) {
+        match self.pipes.last() {
+            Some(pipe) if pipe.output_length > 1 => {
+                debug_assert!({
+                    let mut sorted = rule.clone();
+                    sorted.sort();
+                    let expected = (0..rule.len()).collect::<Vec<_>>();
+                    sorted == expected
+                });
+
+                let mut inputs = Vec::with_capacity(pipe.output_length);
+                let mut outputs = Vec::with_capacity(pipe.output_length);
+                for _ in 0..pipe.output_length {
+                    inputs.push(InputPort::create());
+                    outputs.push(OutputPort::create());
+                }
+                let mut channel = Vec::with_capacity(pipe.output_length);
+                for (i, input) in inputs.iter().enumerate() {
+                    let input = input.clone();
+                    let output = outputs[rule[i]].clone();
+                    channel.push((input, output));
+                }
+                let processor = ShuffleProcessor::create(channel);
+                self.pipes
+                    .push(Pipe::create(inputs.len(), outputs.len(), vec![
+                        PipeItem::create(
+                            ProcessorPtr::create(Box::new(processor)),
+                            inputs,
+                            outputs,
+                        ),
+                    ]));
+            }
+            _ => {}
         }
     }
 

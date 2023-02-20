@@ -17,9 +17,10 @@ mkdir -p ~/.nvm
 export NVM_DIR="$HOME/.nvm"
 # This loads nvm
 [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
+[ -s ~/.nvm/nvm.sh ] && source ~/.nvm/nvm.sh
 
 nvm install
 nvm use
 
-npm install
-npm start
+yarn install
+yarn start

@@ -17,16 +17,16 @@ use std::sync::Arc;
 use common_base::base::escape_for_key;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_api::reply::txn_reply_to_api_result;
 use common_meta_api::txn_cond_seq;
 use common_meta_api::txn_op_del;
 use common_meta_api::txn_op_put;
+use common_meta_app::app_error::TxnRetryMaxTimes;
 use common_meta_app::principal::StageFile;
 use common_meta_app::principal::UserStageInfo;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::errors::app_error::TxnRetryMaxTimes;
 use common_meta_types::ConditionResult::Eq;
-use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::MetaError;
@@ -44,13 +44,13 @@ static STAGE_FILE_API_KEY_PREFIX: &str = "__fd_stage_files";
 const TXN_MAX_RETRY_TIMES: u32 = 10;
 
 pub struct StageMgr {
-    kv_api: Arc<dyn kvapi::KVApi<Error = KVAppError>>,
+    kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
     stage_prefix: String,
     stage_file_prefix: String,
 }
 
 impl StageMgr {
-    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = KVAppError>>, tenant: &str) -> Result<Self> {
+    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: &str) -> Result<Self> {
         if tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
                 "Tenant can not empty(while role mgr create)",
@@ -146,8 +146,7 @@ impl StageApi for StageMgr {
                 else_then: vec![],
             };
             let tx_reply = self.kv_api.transaction(txn_req).await?;
-            let res: Result<_, MetaError> = tx_reply.into();
-            let (succ, _) = res?;
+            let (succ, _) = txn_reply_to_api_result(tx_reply)?;
 
             if succ {
                 return Ok(());
@@ -208,9 +207,9 @@ impl StageApi for StageMgr {
                 ],
                 else_then: vec![],
             };
+
             let tx_reply = self.kv_api.transaction(txn_req).await?;
-            let res: Result<_, MetaError> = tx_reply.into();
-            let (succ, _) = res?;
+            let (succ, _) = txn_reply_to_api_result(tx_reply)?;
 
             if succ {
                 return Ok(0);
@@ -275,8 +274,7 @@ impl StageApi for StageMgr {
                 else_then: vec![],
             };
             let tx_reply = self.kv_api.transaction(txn_req).await?;
-            let res: Result<_, MetaError> = tx_reply.into();
-            let (succ, _) = res?;
+            let (succ, _) = txn_reply_to_api_result(tx_reply)?;
 
             if succ {
                 return Ok(());

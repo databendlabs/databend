@@ -20,12 +20,14 @@ use std::sync::Arc;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::decimal::*;
 use common_expression::types::number::*;
 use common_expression::types::*;
 use common_expression::with_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
+use ethnum::i256;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_scalar_state::need_manual_drop_state;
@@ -210,6 +212,30 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                             )
                         }
                     })
+                }
+                DataType::Decimal(DecimalDataType::Decimal128(s)) => {
+                    let decimal_size = DecimalSize {
+                        precision: s.precision,
+                        scale: s.scale,
+                    };
+                    type State = ScalarState<DecimalType<i128>, CMP>;
+                    AggregateMinMaxAnyFunction::<DecimalType<i128>, CMP, State>::try_create(
+                        display_name,
+                        DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
+                        need_drop,
+                    )
+                }
+                DataType::Decimal(DecimalDataType::Decimal256(s)) => {
+                    let decimal_size = DecimalSize {
+                        precision: s.precision,
+                        scale: s.scale,
+                    };
+                    type State = ScalarState<DecimalType<i256>, CMP>;
+                    AggregateMinMaxAnyFunction::<DecimalType<i256>, CMP, State>::try_create(
+                        display_name,
+                        DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
+                        need_drop,
+                    )
                 }
                 _ => {
                     type State = ScalarState<AnyType, CMP>;

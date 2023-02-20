@@ -37,7 +37,7 @@ use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::DbIdList;
 use common_meta_app::schema::DbIdListKey;
 use common_meta_app::schema::DropDatabaseReq;
-use common_meta_app::schema::DropTableReq;
+use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
@@ -74,13 +74,14 @@ use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::Key;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::GCDroppedDataReq;
-use common_meta_types::KVAppError;
 use common_meta_types::MatchSeq;
+use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use tracing::debug;
 use tracing::info;
 
 use crate::is_all_db_data_removed;
+use crate::kv_app_error::KVAppError;
 use crate::serialize_struct;
 use crate::testing::get_kv_data;
 use crate::SchemaApi;
@@ -175,7 +176,7 @@ fn calc_and_compare_drop_on_table_result(result: Vec<Arc<TableInfo>>, expected: 
 }
 
 async fn upsert_test_data(
-    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     key: &impl kvapi::Key,
     value: Vec<u8>,
 ) -> Result<u64, KVAppError> {
@@ -193,7 +194,7 @@ async fn upsert_test_data(
 }
 
 async fn delete_test_data(
-    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     key: &impl kvapi::Key,
 ) -> Result<(), KVAppError> {
     let _res = kv_api
@@ -213,7 +214,7 @@ impl SchemaApiTestSuite {
     pub async fn test_single_node<B, MT>(b: B) -> anyhow::Result<()>
     where
         B: kvapi::ApiBuilder<MT>,
-        MT: ShareApi + kvapi::AsKVApi<Error = KVAppError> + SchemaApi,
+        MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi,
     {
         let suite = SchemaApiTestSuite {};
 
@@ -253,7 +254,6 @@ impl SchemaApiTestSuite {
         suite
             .table_drop_out_of_retention_time_history(&b.build().await)
             .await?;
-        suite.drop_table_by_id(&b.build().await).await?;
         suite.get_table_by_id(&b.build().await).await?;
         suite.get_table_copied_file(&b.build().await).await?;
         suite.truncate_table(&b.build().await).await?;
@@ -321,7 +321,7 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn database_and_table_rename<MT: SchemaApi + kvapi::AsKVApi<Error = KVAppError>>(
+    async fn database_and_table_rename<MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>>(
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -637,7 +637,7 @@ impl SchemaApiTestSuite {
 
     #[tracing::instrument(level = "debug", skip_all)]
     async fn database_create_from_share_and_drop<
-        MT: ShareApi + kvapi::AsKVApi<Error = KVAppError> + SchemaApi,
+        MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi,
     >(
         &self,
         mt: &MT,
@@ -1454,27 +1454,6 @@ impl SchemaApiTestSuite {
             }
         }
 
-        info!("--- drop table on unknown db");
-        {
-            // casually create a drop table plan
-            // should be not vulnerable?
-            let plan = DropTableReq {
-                if_exists: false,
-                name_ident: TableNameIdent {
-                    tenant: tenant.into(),
-                    db_name: db_name.into(),
-                    table_name: tbl_name.into(),
-                },
-            };
-
-            let got = mt.drop_table(plan).await;
-            debug!("--- drop table on unknown database got: {:?}", got);
-
-            assert!(got.is_err());
-            let code = ErrorCode::from(got.unwrap_err()).code();
-            assert_eq!(unknown_database_code, code);
-        }
-
         info!("--- prepare db");
         {
             let plan = CreateDatabaseReq {
@@ -1640,19 +1619,17 @@ impl SchemaApiTestSuite {
         let tb_count = mt.count_tables(Self::req_count_table(tenant)).await?;
         assert_eq!(expected_tb_count, tb_count.count);
 
+        let tb_info = mt.get_table((tenant, db_name, tbl_name).into()).await?;
+        let tb_id = tb_info.ident.table_id;
         info!("--- drop table");
         {
             info!("--- drop table with if_exists = false");
             {
-                let plan = DropTableReq {
+                let plan = DropTableByIdReq {
                     if_exists: false,
-                    name_ident: TableNameIdent {
-                        tenant: tenant.to_string(),
-                        db_name: db_name.to_string(),
-                        table_name: tbl_name.to_string(),
-                    },
+                    tb_id,
                 };
-                mt.drop_table(plan.clone()).await?;
+                mt.drop_table_by_id(plan.clone()).await?;
 
                 info!("--- get table after drop");
                 {
@@ -1671,15 +1648,11 @@ impl SchemaApiTestSuite {
 
             info!("--- drop table with if_exists = false again, error");
             {
-                let plan = DropTableReq {
+                let plan = DropTableByIdReq {
                     if_exists: false,
-                    name_ident: TableNameIdent {
-                        tenant: tenant.to_string(),
-                        db_name: db_name.to_string(),
-                        table_name: tbl_name.to_string(),
-                    },
+                    tb_id,
                 };
-                let res = mt.drop_table(plan.clone()).await;
+                let res = mt.drop_table_by_id(plan).await;
                 let err = res.unwrap_err();
                 assert_eq!(
                     ErrorCode::UnknownTable("").code(),
@@ -1691,15 +1664,11 @@ impl SchemaApiTestSuite {
 
             info!("--- drop table with if_exists = true again, ok");
             {
-                let plan = DropTableReq {
+                let plan = DropTableByIdReq {
                     if_exists: true,
-                    name_ident: TableNameIdent {
-                        tenant: tenant.to_string(),
-                        db_name: db_name.to_string(),
-                        table_name: tbl_name.to_string(),
-                    },
+                    tb_id,
                 };
-                mt.drop_table(plan.clone()).await?;
+                mt.drop_table_by_id(plan.clone()).await?;
             }
 
             expected_tb_count -= 1;
@@ -2238,7 +2207,7 @@ impl SchemaApiTestSuite {
 
     #[tracing::instrument(level = "debug", skip_all)]
     async fn database_drop_out_of_retention_time_history<
-        MT: SchemaApi + kvapi::AsKVApi<Error = KVAppError>,
+        MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>,
     >(
         self,
         mt: &MT,
@@ -2301,7 +2270,7 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn create_out_of_retention_time_db<MT: SchemaApi + kvapi::AsKVApi<Error = KVAppError>>(
+    async fn create_out_of_retention_time_db<MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>>(
         self,
         mt: &MT,
         db_name: DatabaseNameIdent,
@@ -2339,7 +2308,7 @@ impl SchemaApiTestSuite {
 
     #[tracing::instrument(level = "debug", skip_all)]
     async fn database_gc_out_of_retention_time<
-        MT: SchemaApi + kvapi::AsKVApi<Error = KVAppError>,
+        MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>,
     >(
         self,
         mt: &MT,
@@ -2424,7 +2393,7 @@ impl SchemaApiTestSuite {
 
     #[tracing::instrument(level = "debug", skip_all)]
     async fn create_out_of_retention_time_table<
-        MT: SchemaApi + kvapi::AsKVApi<Error = KVAppError>,
+        MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>,
     >(
         self,
         mt: &MT,
@@ -2477,7 +2446,7 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn table_gc_out_of_retention_time<MT: SchemaApi + kvapi::AsKVApi<Error = KVAppError>>(
+    async fn table_gc_out_of_retention_time<MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>>(
         self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -2612,7 +2581,7 @@ impl SchemaApiTestSuite {
 
     #[tracing::instrument(level = "debug", skip_all)]
     async fn table_drop_out_of_retention_time_history<
-        MT: SchemaApi + kvapi::AsKVApi<Error = KVAppError>,
+        MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>,
     >(
         self,
         mt: &MT,
@@ -2791,7 +2760,8 @@ impl SchemaApiTestSuite {
                 non_drop_on_cnt: 1,
             }]);
         }
-
+        let tb_info = mt.get_table((tenant, db_name, tbl_name).into()).await?;
+        let tb_id = tb_info.ident.table_id;
         expected_tb_count += 1;
         // check table count
         info!("--- check table count of tenant1");
@@ -2802,9 +2772,9 @@ impl SchemaApiTestSuite {
         {
             // first drop table
             let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
-            mt.drop_table(DropTableReq {
+            mt.drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
-                name_ident: tbl_name_ident.clone(),
+                tb_id,
             })
             .await?;
             let cur_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
@@ -2856,9 +2826,9 @@ impl SchemaApiTestSuite {
         {
             // first drop table
             let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
-            mt.drop_table(DropTableReq {
+            mt.drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
-                name_ident: tbl_name_ident.clone(),
+                tb_id,
             })
             .await?;
             let cur_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
@@ -2912,9 +2882,10 @@ impl SchemaApiTestSuite {
 
             // then drop table
             let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
-            mt.drop_table(DropTableReq {
+            let tb_info = mt.get_table((tenant, db_name, tbl_name).into()).await?;
+            mt.drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
-                name_ident: tbl_name_ident.clone(),
+                tb_id: tb_info.ident.table_id,
             })
             .await?;
             let cur_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
@@ -3010,14 +2981,16 @@ impl SchemaApiTestSuite {
                 },
             ]);
 
+            let new_tb_info = mt.get_table((tenant, db_name, new_tbl_name).into()).await?;
+
             // then drop drop table2
-            let drop_plan = DropTableReq {
+            let drop_plan = DropTableByIdReq {
                 if_exists: false,
-                name_ident: new_tbl_name_ident.clone(),
+                tb_id: new_tb_info.ident.table_id,
             };
 
             let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
-            mt.drop_table(drop_plan.clone()).await?;
+            mt.drop_table_by_id(drop_plan.clone()).await?;
             let cur_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
             assert!(old_db.ident.seq < cur_db.ident.seq);
 
@@ -3082,143 +3055,6 @@ impl SchemaApiTestSuite {
             ]);
         }
 
-        Ok(())
-    }
-
-    #[tracing::instrument(level = "debug", skip_all)]
-    async fn drop_table_by_id<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
-        let tenant = "tenant1";
-        let db_name = "db1";
-        let tbl_name = "tb2";
-
-        let tbl_name_ident = TableNameIdent {
-            tenant: tenant.to_string(),
-            db_name: db_name.to_string(),
-            table_name: tbl_name.to_string(),
-        };
-
-        let schema = || {
-            Arc::new(TableSchema::new(vec![TableField::new(
-                "number",
-                TableDataType::Number(NumberDataType::UInt64),
-            )]))
-        };
-
-        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
-
-        let table_meta = |created_on| TableMeta {
-            schema: schema(),
-            engine: "JSON".to_string(),
-            options: options(),
-            created_on,
-            ..TableMeta::default()
-        };
-
-        info!("--- prepare db");
-        {
-            let plan = CreateDatabaseReq {
-                if_not_exists: false,
-                name_ident: DatabaseNameIdent {
-                    tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
-                },
-                meta: DatabaseMeta {
-                    engine: "".to_string(),
-                    ..DatabaseMeta::default()
-                },
-            };
-
-            let res = mt.create_database(plan).await?;
-            info!("create database res: {:?}", res);
-
-            assert_eq!(1, res.db_id, "first database id is 1");
-        }
-
-        info!("--- create and get table");
-        {
-            let created_on = Utc::now();
-
-            let req = CreateTableReq {
-                if_not_exists: false,
-                name_ident: TableNameIdent {
-                    tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
-                },
-                table_meta: table_meta(created_on),
-            };
-
-            let _tb_ident_2 = {
-                let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
-                let res = mt.create_table(req.clone()).await?;
-                let cur_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
-                assert!(old_db.ident.seq < cur_db.ident.seq);
-                assert!(res.table_id >= 1, "table id >= 1");
-                let tb_id = res.table_id;
-
-                let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
-                let seq = got.ident.seq;
-
-                let ident = TableIdent::new(tb_id, seq);
-
-                let want = TableInfo {
-                    ident,
-                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
-                    name: tbl_name.into(),
-                    meta: table_meta(created_on),
-                    tenant: tenant.to_string(),
-                    ..Default::default()
-                };
-                assert_meta_eq_without_updated!(want, got.as_ref().clone(), "get created table");
-                ident
-            };
-        }
-
-        info!("--- drop_table_by_id ");
-        {
-            let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
-
-            info!("--- drop_table_by_id ");
-            {
-                // Get table count.
-                info!("--- check table count of tenant1");
-                let tb_count = mt.count_tables(Self::req_count_table(tenant)).await?;
-                let mut expected_tb_count = tb_count.count;
-
-                // Check drop succeed and db_ident moves forward.
-                let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
-                let got = mt.drop_table_by_id(table.ident.table_id).await;
-                assert!(got.is_ok());
-                let cur_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
-                assert!(old_db.ident.seq < cur_db.ident.seq);
-
-                // Check table count.
-                info!("--- check table count of tenant1");
-                let tb_count = mt.count_tables(Self::req_count_table(tenant)).await?;
-                expected_tb_count -= 1;
-                assert_eq!(expected_tb_count, tb_count.count);
-
-                let res = mt
-                    .get_table_history(ListTableReq::new(tenant, db_name))
-                    .await?;
-                calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
-                    name: tbl_name.to_string(),
-                    desc: tbl_name_ident.to_string(),
-                    drop_on_cnt: 1,
-                    non_drop_on_cnt: 0,
-                }]);
-            }
-
-            info!("--- drop_table_by_id again with same table_id");
-            {
-                let got = mt.drop_table_by_id(table.ident.table_id).await;
-                assert!(got.is_err());
-                assert_eq!(
-                    ErrorCode::UnknownTableId("").code(),
-                    ErrorCode::from(got.unwrap_err()).code()
-                );
-            }
-        }
         Ok(())
     }
 
@@ -3544,9 +3380,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    async fn get_tables_from_share<
-        MT: ShareApi + kvapi::AsKVApi<Error = KVAppError> + SchemaApi,
-    >(
+    async fn get_tables_from_share<MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi>(
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {

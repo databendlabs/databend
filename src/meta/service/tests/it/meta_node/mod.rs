@@ -17,4 +17,3 @@ pub(crate) mod meta_node_kv_api_expire;
 pub(crate) mod meta_node_lifecycle;
 pub(crate) mod meta_node_replication;
 pub(crate) mod meta_node_request_forwarding;
-pub(crate) mod meta_node_seq_api;

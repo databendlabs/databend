@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::exception::Result;
 use common_meta_types::NodeInfo;
 
 #[test]
-fn test_node_info_ip_port() -> Result<()> {
+fn test_node_info_ip_port() -> anyhow::Result<()> {
     let n = NodeInfo {
         id: "".to_string(),
         cpu_nums: 1,

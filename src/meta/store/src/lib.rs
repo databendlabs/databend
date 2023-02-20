@@ -26,7 +26,6 @@ use common_meta_kvapi::kvapi::ListKVReply;
 use common_meta_kvapi::kvapi::MGetKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::KVAppError;
 use common_meta_types::MetaError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
@@ -69,37 +68,37 @@ impl MetaStore {
 
 #[async_trait::async_trait]
 impl kvapi::KVApi for MetaStore {
-    type Error = KVAppError;
+    type Error = MetaError;
 
-    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, KVAppError> {
+    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, MetaError> {
         match self {
             MetaStore::L(x) => x.upsert_kv(act).await,
             MetaStore::R(x) => x.upsert_kv(act).await,
         }
     }
 
-    async fn get_kv(&self, key: &str) -> Result<GetKVReply, KVAppError> {
+    async fn get_kv(&self, key: &str) -> Result<GetKVReply, MetaError> {
         match self {
             MetaStore::L(x) => x.get_kv(key).await,
             MetaStore::R(x) => x.get_kv(key).await,
         }
     }
 
-    async fn mget_kv(&self, key: &[String]) -> Result<MGetKVReply, KVAppError> {
+    async fn mget_kv(&self, key: &[String]) -> Result<MGetKVReply, MetaError> {
         match self {
             MetaStore::L(x) => x.mget_kv(key).await,
             MetaStore::R(x) => x.mget_kv(key).await,
         }
     }
 
-    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, KVAppError> {
+    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, MetaError> {
         match self {
             MetaStore::L(x) => x.prefix_list_kv(prefix).await,
             MetaStore::R(x) => x.prefix_list_kv(prefix).await,
         }
     }
 
-    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, KVAppError> {
+    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError> {
         match self {
             MetaStore::L(x) => x.transaction(txn).await,
             MetaStore::R(x) => x.transaction(txn).await,
@@ -112,7 +111,7 @@ impl MetaStoreProvider {
         MetaStoreProvider { rpc_conf }
     }
 
-    pub async fn create_meta_store(&self) -> Result<MetaStore, KVAppError> {
+    pub async fn create_meta_store(&self) -> Result<MetaStore, MetaError> {
         if self.rpc_conf.local_mode() {
             info!(
                 conf = debug(&self.rpc_conf),

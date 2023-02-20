@@ -85,20 +85,6 @@ impl MetaServiceImpl {
         })?;
         Ok(claim)
     }
-
-    async fn execute_txn(&self, req: TxnRequest) -> TxnReply {
-        let ret = self.meta_node.transaction(req).await;
-        network_metrics::incr_request_result(ret.is_ok());
-
-        match ret {
-            Ok(resp) => resp,
-            Err(err) => TxnReply {
-                success: false,
-                error: serde_json::to_string(&err).expect("fail to serialize"),
-                responses: vec![],
-            },
-        }
-    }
 }
 
 #[async_trait::async_trait]
@@ -214,7 +200,22 @@ impl MetaService for MetaServiceImpl {
 
         info!("Receive txn_request: {}", request);
 
-        let body = self.execute_txn(request).await;
+        let ret = self.meta_node.transaction(request).await;
+        network_metrics::incr_request_result(ret.is_ok());
+
+        let body = match ret {
+            Ok(resp) => TxnReply {
+                success: resp.success,
+                error: "".to_string(),
+                responses: resp.responses,
+            },
+            Err(err) => TxnReply {
+                success: false,
+                error: serde_json::to_string(&err).expect("fail to serialize"),
+                responses: vec![],
+            },
+        };
+
         network_metrics::incr_sent_bytes(body.encoded_len() as u64);
 
         Ok(Response::new(body))

@@ -35,7 +35,6 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_info::Aggreg
 use crate::pipelines::processors::transforms::aggregator::aggregator_final_parallel::ParallelFinalAggregator;
 use crate::pipelines::processors::transforms::aggregator::AggregateHashStateInfo;
 use crate::pipelines::processors::transforms::aggregator::PartialAggregator;
-use crate::pipelines::processors::transforms::aggregator::SingleStateAggregator;
 use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
@@ -238,16 +237,6 @@ where
 
         Ok(data_blocks)
     }
-}
-
-impl PartitionedAggregatorLike for SingleStateAggregator<true> {
-    const SUPPORT_TWO_LEVEL: bool = false;
-    type PartitionedAggregator = SingleStateAggregator<true>;
-}
-
-impl PartitionedAggregatorLike for SingleStateAggregator<false> {
-    const SUPPORT_TWO_LEVEL: bool = false;
-    type PartitionedAggregator = SingleStateAggregator<false>;
 }
 
 impl<Method, const HAS_AGG: bool> PartitionedAggregatorLike

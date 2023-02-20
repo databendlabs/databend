@@ -37,17 +37,17 @@ select contains(col1, 3), contains(col2, 'x'), contains(col3, '2021-01-01') from
 1 1 0
 
 query T
-select array_concat(col1, col5) from t
+select array_concat(col1::Array(VARIANT), col5::Array(VARIANT)) from t
 ----
 ['1','2','3','3','[1,2]','[]','[null]']
 
 query T
-select array_concat(col1, col2) from t;
+select array_concat(col1::Array(VARIANT), col2::Array(VARIANT)) from t;
 ----
 ['1','2','3','3','"x"','"x"','"y"','"z"']
 
 query T
-select array_concat(col5, col2) from t;
+select array_concat(col5::Array(VARIANT), col2::Array(VARIANT)) from t;
 ----
 ['[1,2]','[]','[null]','"x"','"x"','"y"','"z"']
 
@@ -57,9 +57,9 @@ select array_concat(col4, col3) from t;
 ['2023-01-01 02:00:01.000000','2022-02-02 00:00:00.000000']
 
 query IIIIII
-select array_indexof(col1,'2'), array_indexof(col1,2), array_indexof(col2,'x'), array_indexof(col3,'2022-02-02'), array_indexof(col4,'2023-01-01 02:00:02'), array_indexof(col5,[NULL]) from t
+select array_indexof(col1, 2), array_indexof(col1,2), array_indexof(col2,'x'), array_indexof(col3,'2022-02-02'::DATE), array_indexof(col4,'2023-01-01 02:00:02'::TIMESTAMP), array_indexof(col5,[NULL]) from t
 ----
-0 2 1 1 0 3
+2 2 1 1 0 3
 
 query I
 select array_indexof([1,2,null,2,null], null)
@@ -77,12 +77,12 @@ select array_remove_last(col1), array_remove_last(col2), array_remove_last(col3)
 [1,2,3] ['x','x','y'] []
 
 query TTT
-select array_prepend(0, col1), array_prepend('a', col2), array_prepend('2022-01-01', col3) from t
+select array_prepend(0, col1), array_prepend('a', col2), array_prepend('2022-01-01'::DATE, col3) from t
 ----
 [0,1,2,3,3] ['a','x','x','y','z'] ['2022-01-01','2022-02-02']
 
 query TTT
-select array_append(col1, 4), array_append(col2, 'z'), array_append(col3, '2022-03-03') from t
+select array_append(col1, 4), array_append(col2, 'z'), array_append(col3, '2022-03-03'::DATE) from t
 ----
 [1,2,3,3,4] ['x','x','y','z','z'] ['2022-02-02','2022-03-03']
 

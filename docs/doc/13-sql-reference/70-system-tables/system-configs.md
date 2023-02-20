@@ -38,7 +38,6 @@ mysql> SELECT * FROM system.configs;
 | query   | rpc_tls_query_server_root_ca_cert      |                                |             |
 | query   | rpc_tls_query_service_domain_name      | localhost                      |             |
 | query   | table_engine_memory_enabled            | true                           |             |
-| query   | database_engine_github_enabled         | true                           |             |
 | query   | wait_timeout_mills                     | 5000                           |             |
 | query   | max_query_log_size                     | 10000                          |             |
 | query   | management_mode                        | false                          |             |

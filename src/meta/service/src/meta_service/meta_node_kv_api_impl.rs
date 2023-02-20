@@ -24,8 +24,8 @@ use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_raft_store::applied_state::AppliedState;
 use common_meta_types::Cmd;
-use common_meta_types::KVAppError;
 use common_meta_types::LogEntry;
+use common_meta_types::MetaAPIError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKV;
@@ -40,9 +40,9 @@ use crate::meta_service::MetaNode;
 /// E.g. Read is not guaranteed to see a write.
 #[async_trait]
 impl kvapi::KVApi for MetaNode {
-    type Error = KVAppError;
+    type Error = MetaAPIError;
 
-    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, KVAppError> {
+    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, Self::Error> {
         let ent = LogEntry::new(Cmd::UpsertKV(UpsertKV {
             key: act.key,
             seq: act.seq,
@@ -60,7 +60,7 @@ impl kvapi::KVApi for MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn get_kv(&self, key: &str) -> Result<GetKVReply, KVAppError> {
+    async fn get_kv(&self, key: &str) -> Result<GetKVReply, Self::Error> {
         let res = self
             .consistent_read(GetKVReq {
                 key: key.to_string(),
@@ -71,7 +71,7 @@ impl kvapi::KVApi for MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, KVAppError> {
+    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, Self::Error> {
         let res = self
             .consistent_read(MGetKVReq {
                 keys: keys.to_vec(),
@@ -82,7 +82,7 @@ impl kvapi::KVApi for MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, KVAppError> {
+    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, Self::Error> {
         let res = self
             .consistent_read(ListKVReq {
                 prefix: prefix.to_string(),
@@ -93,7 +93,7 @@ impl kvapi::KVApi for MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self, txn))]
-    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, KVAppError> {
+    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {
         info!("MetaNode::transaction(): {}", txn);
         let ent = LogEntry::new(Cmd::Transaction(txn));
         let rst = self.write(ent).await?;

@@ -17,8 +17,8 @@ use std::sync::Arc;
 use common_base::base::mask_string;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
+use common_config::Config;
 use common_config::GlobalConfig;
-use common_config::QueryConfig;
 use common_exception::Result;
 use common_expression::types::StringType;
 use common_expression::utils::FromData;
@@ -55,8 +55,7 @@ impl SyncSystemTable for ConfigsTable {
         let mut descs: Vec<String> = vec![];
 
         let query_config = config.query;
-        let query_config_value =
-            Self::remove_obsolete_query_configs(serde_json::to_value(query_config)?);
+        let query_config_value = Self::remove_obsolete_configs(serde_json::to_value(query_config)?);
 
         ConfigsTable::extract_config(
             &mut names,
@@ -282,10 +281,10 @@ impl ConfigsTable {
         descs.push(desc);
     }
 
-    fn remove_obsolete_query_configs(config_json: JsonValue) -> JsonValue {
+    fn remove_obsolete_configs(config_json: JsonValue) -> JsonValue {
         match config_json {
             Value::Object(mut config_json_obj) => {
-                for key in QueryConfig::obsoleted_option_keys().iter() {
+                for key in Config::obsoleted_option_keys().iter() {
                     config_json_obj.remove(*key);
                 }
                 JsonValue::Object(config_json_obj)
