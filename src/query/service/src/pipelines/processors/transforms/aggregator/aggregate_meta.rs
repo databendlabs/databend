@@ -1,0 +1,82 @@
+use std::any::Any;
+use std::fmt::Debug;
+use std::fmt::Formatter;
+
+use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoPtr;
+
+use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
+use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
+use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
+
+pub enum AggregateMeta<Method: HashMethodBounds, V: Send + Sync + 'static> {
+    HashTable(Method::HashTable<V>),
+    PartitionedHashTable(
+        <PartitionedHashMethod<Method> as PolymorphicKeysHelper<
+                PartitionedHashMethod<Method>,
+            >>::HashTable<V>,
+    ),
+}
+
+impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V> {
+    pub fn create_hash_table(v: Method::HashTable<V>) -> BlockMetaInfoPtr {
+        Box::new(AggregateMeta::<Method, V>::HashTable(v))
+    }
+}
+
+impl<Method: HashMethodBounds, V: Send + Sync + 'static> serde::Serialize
+    for AggregateMeta<Method, V>
+{
+    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
+    where S: serde::Serializer {
+        unreachable!("AggregateMeta does not support exchanging between multiple nodes")
+    }
+}
+
+impl<'de, Method: HashMethodBounds, V: Send + Sync + 'static> serde::Deserialize<'de>
+    for AggregateMeta<Method, V>
+{
+    fn deserialize<D>(_: D) -> Result<Self, D::Error>
+    where D: serde::Deserializer<'de> {
+        unreachable!("AggregateMeta does not support exchanging between multiple nodes")
+    }
+}
+
+impl<Method: HashMethodBounds, V: Send + Sync + 'static> Debug for AggregateMeta<Method, V> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AggregateMeta::HashTable(_) => f.debug_struct("AggregateMeta::HashTable").finish(),
+            AggregateMeta::PartitionedHashTable(_) => f
+                .debug_struct("AggregateMeta::PartitionedHashTable")
+                .finish(),
+        }
+    }
+}
+
+impl<Method: HashMethodBounds, V: Send + Sync + 'static> BlockMetaInfo
+    for AggregateMeta<Method, V>
+{
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn typetag_deserialize(&self) {
+        unimplemented!("AggregateMeta does not support exchanging between multiple nodes")
+    }
+
+    fn typetag_name(&self) -> &'static str {
+        unimplemented!("AggregateMeta does not support exchanging between multiple nodes")
+    }
+
+    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
+        unimplemented!("Unimplemented equals for AggregateMeta")
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        unimplemented!("Unimplemented clone for AggregateMeta")
+    }
+}
