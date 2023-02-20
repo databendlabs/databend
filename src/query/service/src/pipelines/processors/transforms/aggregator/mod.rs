@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod aggregate_group_by;
 mod aggregate_hashstate_info;
 mod aggregate_info;
 mod aggregate_meta;
