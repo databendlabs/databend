@@ -143,6 +143,7 @@ uuid = { version = "1.1.2", features = ["serde", "v4"] }
 
 [dev-dependencies]
 common-meta-embedded = { path = "../../meta/embedded" }
+ordered-float = { workspace = true }
 
 base64 = "0.13.0"
 criterion = "0.4"
