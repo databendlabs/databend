@@ -53,10 +53,10 @@ use crate::io::BlockReader;
 use crate::io::DeleteMarkReader;
 use crate::io::ReadSettings;
 use crate::io::TableMetaLocationGenerator;
-use crate::io::UncompressedBuffer;
 use crate::operations::mutation::refactor::Mutation;
 use crate::operations::mutation::refactor::MutationPartInfo;
 use crate::operations::mutation::refactor::MutationSourceMeta;
+use crate::FuseStorageFormat;
 use crate::FuseTable;
 use crate::MergeIOReadResult;
 
@@ -87,26 +87,24 @@ pub struct MutationSource {
     dal: Operator,
     ctx: Arc<dyn TableContext>,
     filter: Arc<Expr>,
+    storage_format: FuseStorageFormat,
 
     output: Arc<OutputPort>,
-
-    uncompressed_buffer: Arc<UncompressedBuffer>,
 
     batch_size: usize,
     read_datas: Vec<ReadDataInfo>,
 }
 
 impl MutationSource {
-    #![allow(clippy::too_many_arguments)]
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         table: &FuseTable,
         filter: Arc<Expr>,
         block_reader: Arc<BlockReader>,
+        storage_format: FuseStorageFormat,
     ) -> Result<ProcessorPtr> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
-        let buffer_size = ctx.get_settings().get_parquet_uncompressed_buffer_size()? as usize;
         Ok(ProcessorPtr::create(Box::new(MutationSource {
             state: State::ReadData,
             block_reader,
@@ -115,9 +113,9 @@ impl MutationSource {
             ctx: ctx.clone(),
             filter,
             output,
-            uncompressed_buffer: UncompressedBuffer::new(buffer_size),
             batch_size,
             read_datas: vec![],
+            storage_format,
         })))
     }
 }
@@ -168,15 +166,11 @@ impl Processor for MutationSource {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::FilterData(mark, ReadDataInfo { part, index, chunk }) => {
-                let columns_chunks = chunk.columns_chunks()?;
-                let part = FusePartInfo::from_part(&part)?;
-                let mut data_block = self.block_reader.deserialize_parquet_chunks_with_buffer(
-                    &part.location,
-                    part.nums_rows,
-                    &part.compression,
-                    &part.columns_meta,
-                    columns_chunks,
-                    Some(self.uncompressed_buffer.clone()),
+                let chunks = chunk.columns_chunks()?;
+                let mut data_block = self.block_reader.deserialize_chunks(
+                    part.clone(),
+                    chunks,
+                    &self.storage_format,
                 )?;
 
                 let num_rows = data_block.num_rows();
