@@ -23,7 +23,7 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::Processor;
 
 pub trait ExchangeSorting: Send + Sync + 'static {
-    fn block_number(&self, data_block: &DataBlock) -> Result<usize>;
+    fn block_number(&self, data_block: &DataBlock) -> Result<isize>;
 }
 
 // N input one output
@@ -33,7 +33,7 @@ pub struct TransformExchangeSorting {
     sorting: Arc<dyn ExchangeSorting>,
 
     buffer_len: usize,
-    buffer: Vec<Option<(usize, DataBlock)>>,
+    buffer: Vec<Option<(isize, DataBlock)>>,
 }
 
 impl TransformExchangeSorting {
@@ -117,7 +117,7 @@ impl Processor for TransformExchangeSorting {
 
         if !unready_inputs {
             let mut min_index = 0;
-            let mut min_value = usize::MAX;
+            let mut min_value = isize::MAX;
             for (index, buffer) in self.buffer.iter().enumerate() {
                 if let Some((block_number, _)) = buffer {
                     if *block_number < min_value {

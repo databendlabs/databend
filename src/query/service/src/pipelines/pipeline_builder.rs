@@ -56,7 +56,9 @@ use common_sql::ColumnBinding;
 use common_sql::IndexType;
 
 use super::processors::ProfileWrapper;
+use crate::api::ExchangeSorting;
 use crate::pipelines::processors::transforms::efficiently_memory_final_aggregator;
+use crate::pipelines::processors::transforms::AggregateExchangeSorting;
 use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
 use crate::pipelines::processors::transforms::TransformLeftJoin;
@@ -90,6 +92,7 @@ pub struct PipelineBuilder {
 
     enable_profiling: bool,
     prof_span_set: ProfSpanSetRef,
+    exchange_sorting: Option<Arc<dyn ExchangeSorting>>,
 }
 
 impl PipelineBuilder {
@@ -104,6 +107,7 @@ impl PipelineBuilder {
             pipelines: vec![],
             main_pipeline: Pipeline::create(),
             prof_span_set,
+            exchange_sorting: None,
         }
     }
 
@@ -122,6 +126,7 @@ impl PipelineBuilder {
             main_pipeline: self.main_pipeline,
             sources_pipelines: self.pipelines,
             prof_span_set: self.prof_span_set,
+            exchange_sorting: self.exchange_sorting,
         })
     }
 
@@ -386,6 +391,8 @@ impl PipelineBuilder {
                 Ok(ProcessorPtr::create(transform))
             }
         })?;
+
+        self.exchange_sorting = Some(AggregateExchangeSorting::create());
 
         Ok(())
     }

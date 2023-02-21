@@ -32,6 +32,7 @@ mod transform_resort_addon;
 mod transform_right_join;
 mod transform_right_semi_anti_join;
 
+pub use aggregator::AggregateExchangeSorting;
 pub use aggregator::AggregatorParams;
 pub use aggregator::AggregatorTransformParams;
 use common_pipeline_transforms::processors::transforms::transform;

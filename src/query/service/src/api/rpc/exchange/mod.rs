@@ -32,3 +32,4 @@ pub use data_exchange::DataExchange;
 pub use data_exchange::MergeExchange;
 pub use data_exchange::ShuffleDataExchange;
 pub use exchange_manager::DataExchangeManager;
+pub use exchange_sorting::ExchangeSorting;
