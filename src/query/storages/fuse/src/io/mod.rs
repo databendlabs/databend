@@ -24,6 +24,7 @@ pub use locations::TableMetaLocationGenerator;
 pub use read::BlockReader;
 pub use read::BloomBlockFilterReader;
 pub use read::DeleteMarkReader;
+pub use read::DeleteMarkSyncReader;
 pub use read::MergeIOReadResult;
 pub use read::MetaReaders;
 pub use read::NativeReaderExt;

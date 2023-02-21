@@ -16,6 +16,7 @@ pub mod fuse_source;
 mod native_data_source;
 mod native_data_source_deserializer;
 mod native_data_source_reader;
+// TODO rename this to parquet_data_source_meta
 mod parquet_data_source;
 mod parquet_data_source_deserializer;
 mod parquet_data_source_reader;

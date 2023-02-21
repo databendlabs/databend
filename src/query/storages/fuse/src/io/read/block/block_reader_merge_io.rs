@@ -51,9 +51,11 @@ pub struct MergeIOReadResult {
     block_path: String,
     columns_chunk_offsets: HashMap<ColumnId, (usize, Range<usize>)>,
     owner_memory: OwnerMemory,
-    pub cached_column_data: CachedColumnData,
-    pub cached_column_array: CachedColumnArray,
+
     table_data_cache: Option<TableDataCache>,
+
+    pub(super) cached_column_data: CachedColumnData,
+    pub(super) cached_column_array: CachedColumnArray,
 }
 
 pub enum DataItem<'a> {
