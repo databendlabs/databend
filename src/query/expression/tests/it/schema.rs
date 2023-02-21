@@ -17,6 +17,8 @@ use std::collections::BTreeMap;
 use common_exception::Result;
 use common_expression::create_test_complex_schema;
 use common_expression::types::NumberDataType;
+use common_expression::ColumnId;
+use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
@@ -177,6 +179,63 @@ fn test_schema_from_simple_type() -> Result<()> {
         schema.to_leaf_column_ids()
     );
 
+    Ok(())
+}
+
+#[test]
+fn test_field_leaf_default_values() -> Result<()> {
+    let b1 = TableDataType::Tuple {
+        fields_name: vec!["b11".to_string(), "b12".to_string()],
+        fields_type: vec![TableDataType::Boolean, TableDataType::String],
+    };
+    let b = TableDataType::Tuple {
+        fields_name: vec!["b1".to_string(), "b2".to_string()],
+        fields_type: vec![b1, TableDataType::Number(NumberDataType::Int64)],
+    };
+    let fields = vec![
+        TableField::new("a", TableDataType::Number(NumberDataType::UInt64)),
+        TableField::new("b", b),
+        TableField::new("c", TableDataType::Number(NumberDataType::UInt64)),
+    ];
+    let schema = TableSchema::new(fields);
+
+    let default_values = vec![
+        Scalar::Number(common_expression::types::number::NumberScalar::UInt64(1)),
+        Scalar::Tuple(vec![
+            Scalar::Tuple(vec![
+                Scalar::Boolean(true),
+                Scalar::String(vec!['a', 'b'].iter().map(|c| *c as u8).collect::<Vec<_>>()),
+            ]),
+            Scalar::Number(common_expression::types::number::NumberScalar::Int64(2)),
+        ]),
+        Scalar::Number(common_expression::types::number::NumberScalar::UInt64(10)),
+    ];
+
+    let leaf_default_values = schema.field_leaf_default_values(&default_values);
+    let expected_leaf_default_values: Vec<(ColumnId, Scalar)> = vec![
+        (
+            0,
+            Scalar::Number(common_expression::types::number::NumberScalar::UInt64(1)),
+        ),
+        (1, Scalar::Boolean(true)),
+        (
+            2,
+            Scalar::String(vec!['a', 'b'].iter().map(|c| *c as u8).collect::<Vec<_>>()),
+        ),
+        (
+            3,
+            Scalar::Number(common_expression::types::number::NumberScalar::Int64(2)),
+        ),
+        (
+            4,
+            Scalar::Number(common_expression::types::number::NumberScalar::UInt64(10)),
+        ),
+    ];
+    expected_leaf_default_values
+        .iter()
+        .for_each(|(col_id, default_value)| {
+            assert_eq!(leaf_default_values.get(col_id).unwrap(), default_value)
+        });
     Ok(())
 }
 

@@ -97,7 +97,7 @@ pub async fn do_deletion(
     let settings = ctx.get_settings();
     let mut pipeline = common_pipeline_core::Pipeline::create();
     fuse_table
-        .delete(ctx.clone(), filter, col_indices, &mut pipeline)
+        .delete(ctx.clone(), filter, col_indices, &mut pipeline, false)
         .await?;
 
     if !pipeline.is_empty() {

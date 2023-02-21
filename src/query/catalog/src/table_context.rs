@@ -84,6 +84,8 @@ pub trait TableContext: Send + Sync {
     fn get_partition(&self) -> Option<PartInfoPtr>;
     fn get_partitions(&self, num: usize) -> Vec<PartInfoPtr>;
     fn set_partitions(&self, partitions: Partitions) -> Result<()>;
+    fn set_paritions_sha(&self, sha: String);
+    fn get_partitions_sha(&self) -> Option<String>;
 
     fn attach_query_str(&self, kind: String, query: &str);
     fn get_query_str(&self) -> String;

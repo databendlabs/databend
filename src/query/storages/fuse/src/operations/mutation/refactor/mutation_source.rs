@@ -26,8 +26,6 @@ use common_exception::Result;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
-use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoPtr;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
@@ -44,8 +42,6 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use opendal::Operator;
-use serde::Deserializer;
-use serde::Serializer;
 use storages_common_blocks::blocks_to_parquet;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::Location;
@@ -58,70 +54,12 @@ use crate::io::DeleteMarkReader;
 use crate::io::ReadSettings;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::UncompressedBuffer;
-use crate::operations::mutation::MutationPartInfo;
+use crate::operations::mutation::refactor::Mutation;
+use crate::operations::mutation::refactor::MutationPartInfo;
+use crate::operations::mutation::refactor::MutationSourceMeta;
 use crate::FuseTable;
 use crate::MergeIOReadResult;
 
-#[derive(Clone, Debug)]
-pub enum Mutation {
-    DoNothing,
-    Replaced(Location, u64),
-    Deleted,
-}
-
-#[derive(Clone, Debug)]
-pub struct MutationSourceMeta {
-    pub index: BlockMetaIndex,
-    pub op: Mutation,
-}
-
-impl serde::Serialize for MutationSourceMeta {
-    fn serialize<S>(&self, _: S) -> common_exception::Result<S::Ok, S::Error>
-    where S: Serializer {
-        unimplemented!("Unimplemented serialize MutationSourceMeta")
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for MutationSourceMeta {
-    fn deserialize<D>(_: D) -> common_exception::Result<Self, D::Error>
-    where D: Deserializer<'de> {
-        unimplemented!("Unimplemented deserialize MutationSourceMeta")
-    }
-}
-
-#[typetag::serde(name = "mutation_transform_meta")]
-impl BlockMetaInfo for MutationSourceMeta {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        Box::new(self.clone())
-    }
-
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals MutationSourceMeta")
-    }
-}
-
-impl MutationSourceMeta {
-    pub fn create(index: BlockMetaIndex, op: Mutation) -> BlockMetaInfoPtr {
-        Box::new(MutationSourceMeta { index, op })
-    }
-
-    pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&MutationSourceMeta> {
-        match info.as_any().downcast_ref::<MutationSourceMeta>() {
-            Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::Internal(
-                "Cannot downcast from BlockMetaInfo to MutationSourceMeta.",
-            )),
-        }
-    }
-}
 enum State {
     ReadData,
     ReadMark(ReadDataInfo),
@@ -142,7 +80,7 @@ struct ReadDataInfo {
     chunk: MergeIOReadResult,
 }
 
-pub struct ParquetDeleteSource {
+pub struct MutationSource {
     state: State,
     block_reader: Arc<BlockReader>,
     location_gen: TableMetaLocationGenerator,
@@ -158,7 +96,7 @@ pub struct ParquetDeleteSource {
     read_datas: Vec<ReadDataInfo>,
 }
 
-impl ParquetDeleteSource {
+impl MutationSource {
     #![allow(clippy::too_many_arguments)]
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
@@ -169,7 +107,7 @@ impl ParquetDeleteSource {
     ) -> Result<ProcessorPtr> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
         let buffer_size = ctx.get_settings().get_parquet_uncompressed_buffer_size()? as usize;
-        Ok(ProcessorPtr::create(Box::new(ParquetDeleteSource {
+        Ok(ProcessorPtr::create(Box::new(MutationSource {
             state: State::ReadData,
             block_reader,
             location_gen: table.meta_location_generator().clone(),
@@ -185,7 +123,7 @@ impl ParquetDeleteSource {
 }
 
 #[async_trait::async_trait]
-impl Processor for ParquetDeleteSource {
+impl Processor for MutationSource {
     fn name(&self) -> String {
         String::from("DeserializeDataTransform")
     }

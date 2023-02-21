@@ -15,9 +15,10 @@
 use std::sync::Arc;
 
 use common_catalog::catalog::CatalogManager;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_app::schema::CatalogType;
+use common_meta_app::schema::CatalogOption;
 use common_sql::plans::CreateCatalogPlan;
 use common_storages_fuse::TableContext;
 
@@ -46,26 +47,18 @@ impl Interpreter for CreateCatalogInterpreter {
 
     #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog_type = self.plan.meta.catalog_type;
-        match catalog_type {
-            CatalogType::Default => {
-                let err = ErrorCode::CatalogNotSupported(
-                    "Creating default catalog is not allowed!".to_string(),
-                );
-                return Err(err);
-            }
-            CatalogType::Hive => {
-                if !cfg!(feature = "hive") {
-                    let err = ErrorCode::CatalogNotSupported(
-                        "Hive catalog support is not enabled in your databend-query distribution."
-                            .to_string(),
-                    );
-                    return Err(err);
-                }
+        if let CatalogOption::Iceberg(opt) = &self.plan.meta.catalog_option {
+            if !opt.storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
+                return Err(ErrorCode::CatalogNotSupported(
+                    "Accessing insecure storage in not allowed by configuration",
+                ));
             }
         }
+
         let catalog_manager = CatalogManager::instance();
-        catalog_manager.create_user_defined_catalog(self.plan.clone().into())?;
+        catalog_manager
+            .create_user_defined_catalog(self.plan.clone().into())
+            .await?;
 
         Ok(PipelineBuildResult::create())
     }

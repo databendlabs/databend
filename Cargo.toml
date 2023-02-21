@@ -53,6 +53,7 @@ members = [
     "src/query/storages/fuse",
     "src/query/storages/hive/hive",
     "src/query/storages/hive/hive-meta-store",
+    "src/query/storages/iceberg",
     "src/query/storages/information-schema",
     "src/query/storages/memory",
     "src/query/storages/null",
@@ -62,6 +63,7 @@ members = [
     "src/query/storages/system",
     "src/query/storages/view",
     "src/query/storages/parquet",
+    "src/query/storages/result_cache",
     "src/query/users",
     # databend-query
     "src/query/service",

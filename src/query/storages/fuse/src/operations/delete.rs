@@ -46,8 +46,7 @@ use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::TableSnapshot;
 
-use super::mutation::MutationSerializeTransform;
-use super::mutation::ParquetDeleteSource;
+use crate::operations::mutation::refactor;
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSink;
@@ -145,107 +144,6 @@ impl FuseTable {
         })?;
 
         self.try_add_mutation_transform(ctx.clone(), snapshot.segments.clone(), pipeline)?;
-
-        pipeline.add_sink(|input| {
-            MutationSink::try_create(self, ctx.clone(), snapshot.clone(), input)
-        })?;
-        Ok(())
-    }
-
-    pub async fn do_delete2(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        filter: Option<RemoteExpr<String>>,
-        col_indices: Vec<usize>,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        let snapshot_opt = self.read_table_snapshot().await?;
-
-        // check if table is empty
-        let snapshot = if let Some(val) = snapshot_opt {
-            val
-        } else {
-            // no snapshot, no deletion
-            return Ok(());
-        };
-
-        if snapshot.summary.row_count == 0 {
-            // empty snapshot, no deletion
-            return Ok(());
-        }
-
-        let scan_progress = ctx.get_scan_progress();
-        // check if unconditional deletion
-        if filter.is_none() {
-            let progress_values = ProgressValues {
-                rows: snapshot.summary.row_count as usize,
-                bytes: snapshot.summary.uncompressed_byte_size as usize,
-            };
-            scan_progress.incr(&progress_values);
-            // deleting the whole table... just a truncate
-            let purge = false;
-            return self.do_truncate(ctx.clone(), purge).await;
-        }
-
-        let filter_expr = filter.unwrap();
-        if col_indices.is_empty() {
-            // here the situation: filter_expr is not null, but col_indices in empty, which
-            // indicates the expr being evaluated is unrelated to the value of rows:
-            //   e.g.
-            //       `delete from t where 1 = 1`, `delete from t where now()`,
-            //       or `delete from t where RANDOM()::INT::BOOLEAN`
-            // if the `filter_expr` is of "constant" nullary :
-            //   for the whole block, whether all of the rows should be kept or dropped,
-            //   we can just return from here, without accessing the block data
-            if self.try_eval_const(ctx.clone(), &self.schema(), &filter_expr)? {
-                let progress_values = ProgressValues {
-                    rows: snapshot.summary.row_count as usize,
-                    bytes: snapshot.summary.uncompressed_byte_size as usize,
-                };
-                scan_progress.incr(&progress_values);
-
-                // deleting the whole table... just a truncate
-                let purge = false;
-                return self.do_truncate(ctx.clone(), purge).await;
-            }
-            // do nothing.
-            return Ok(());
-        }
-
-        let projection = Projection::Columns(col_indices.clone());
-        self.mutation_block_pruning(
-            ctx.clone(),
-            Some(filter_expr.clone()),
-            projection.clone(),
-            &snapshot,
-        )
-        .await?;
-        let block_reader = self.create_block_reader(projection, ctx.clone())?;
-
-        let mut schema = block_reader.schema().as_ref().to_owned();
-        schema.add_columns(&[TableField::new("_row_exists", TableDataType::Boolean)])?;
-        let filter = Arc::new(
-            filter_expr
-                .as_expr(&BUILTIN_FUNCTIONS)
-                .project_column_ref(|name| schema.index_of(name).unwrap()),
-        );
-
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        // Add source pipe.
-        pipeline.add_source(
-            |output| {
-                ParquetDeleteSource::try_create(
-                    ctx.clone(),
-                    output,
-                    self,
-                    filter.clone(),
-                    block_reader.clone(),
-                )
-            },
-            max_threads,
-        )?;
-
-        self.try_add_mutation_transform2(ctx.clone(), snapshot.segments.clone(), pipeline)?;
 
         pipeline.add_sink(|input| {
             MutationSink::try_create(self, ctx.clone(), snapshot.clone(), input)
@@ -351,6 +249,7 @@ impl FuseTable {
                     block_reader.clone(),
                     remain_reader.clone(),
                     ops.clone(),
+                    self.storage_format,
                 )
             },
             max_threads,
@@ -442,44 +341,6 @@ impl FuseTable {
         }
     }
 
-    pub fn try_add_mutation_transform2(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        base_segments: Vec<Location>,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        if pipeline.is_empty() {
-            return Err(ErrorCode::Internal("The pipeline is empty."));
-        }
-
-        match pipeline.output_len() {
-            0 => Err(ErrorCode::Internal("The output of the last pipe is 0.")),
-            last_pipe_size => {
-                let mut inputs_port = Vec::with_capacity(last_pipe_size);
-                for _ in 0..last_pipe_size {
-                    inputs_port.push(InputPort::create());
-                }
-                let output_port = OutputPort::create();
-                pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
-                    MutationSerializeTransform::try_create(
-                        ctx,
-                        self.schema(),
-                        inputs_port.clone(),
-                        output_port.clone(),
-                        self.get_operator(),
-                        self.meta_location_generator().clone(),
-                        base_segments,
-                        self.get_block_compact_thresholds(),
-                    )?,
-                    inputs_port,
-                    vec![output_port],
-                )]));
-
-                Ok(())
-            }
-        }
-    }
-
     pub fn cluster_stats_gen(&self, ctx: Arc<dyn TableContext>) -> Result<ClusterStatsGenerator> {
         if self.cluster_key_meta.is_none() {
             return Ok(ClusterStatsGenerator::default());
@@ -536,5 +397,193 @@ impl FuseTable {
         (0..self.table_info.schema().fields().len())
             .into_iter()
             .collect::<Vec<FieldIndex>>()
+    }
+
+    pub async fn do_delete2(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        filter: Option<RemoteExpr<String>>,
+        col_indices: Vec<usize>,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        let snapshot_opt = self.read_table_snapshot().await?;
+
+        // check if table is empty
+        let snapshot = if let Some(val) = snapshot_opt {
+            val
+        } else {
+            // no snapshot, no deletion
+            return Ok(());
+        };
+
+        if snapshot.summary.row_count == 0 {
+            // empty snapshot, no deletion
+            return Ok(());
+        }
+
+        let scan_progress = ctx.get_scan_progress();
+        // check if unconditional deletion
+        if filter.is_none() {
+            let progress_values = ProgressValues {
+                rows: snapshot.summary.row_count as usize,
+                bytes: snapshot.summary.uncompressed_byte_size as usize,
+            };
+            scan_progress.incr(&progress_values);
+            // deleting the whole table... just a truncate
+            let purge = false;
+            return self.do_truncate(ctx.clone(), purge).await;
+        }
+
+        let filter_expr = filter.unwrap();
+        if col_indices.is_empty() {
+            // here the situation: filter_expr is not null, but col_indices in empty, which
+            // indicates the expr being evaluated is unrelated to the value of rows:
+            //   e.g.
+            //       `delete from t where 1 = 1`, `delete from t where now()`,
+            //       or `delete from t where RANDOM()::INT::BOOLEAN`
+            // if the `filter_expr` is of "constant" nullary :
+            //   for the whole block, whether all of the rows should be kept or dropped,
+            //   we can just return from here, without accessing the block data
+            if self.try_eval_const(ctx.clone(), &self.schema(), &filter_expr)? {
+                let progress_values = ProgressValues {
+                    rows: snapshot.summary.row_count as usize,
+                    bytes: snapshot.summary.uncompressed_byte_size as usize,
+                };
+                scan_progress.incr(&progress_values);
+
+                // deleting the whole table... just a truncate
+                let purge = false;
+                return self.do_truncate(ctx.clone(), purge).await;
+            }
+            // do nothing.
+            return Ok(());
+        }
+
+        let projection = Projection::Columns(col_indices.clone());
+        self.mutation_block_pruning(
+            ctx.clone(),
+            Some(filter_expr.clone()),
+            projection.clone(),
+            &snapshot,
+        )
+        .await?;
+        let block_reader = self.create_block_reader(projection, ctx.clone())?;
+
+        let mut schema = block_reader.schema().as_ref().to_owned();
+        schema.add_columns(&[TableField::new("_row_exists", TableDataType::Boolean)])?;
+        let filter = Arc::new(
+            filter_expr
+                .as_expr(&BUILTIN_FUNCTIONS)
+                .project_column_ref(|name| schema.index_of(name).unwrap()),
+        );
+
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        // Add source pipe.
+        pipeline.add_source(
+            |output| {
+                refactor::MutationSource::try_create(
+                    ctx.clone(),
+                    output,
+                    self,
+                    filter.clone(),
+                    block_reader.clone(),
+                )
+            },
+            max_threads,
+        )?;
+
+        self.try_add_mutation_transform2(ctx.clone(), snapshot.segments.clone(), pipeline)?;
+
+        pipeline.add_sink(|input| {
+            MutationSink::try_create(self, ctx.clone(), snapshot.clone(), input)
+        })?;
+        Ok(())
+    }
+
+    pub async fn mutation_block_pruning2(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        filter: Option<RemoteExpr<String>>,
+        projection: Projection,
+        base_snapshot: &TableSnapshot,
+    ) -> Result<()> {
+        let push_down = Some(PushDownInfo {
+            projection: Some(projection),
+            filter,
+            ..PushDownInfo::default()
+        });
+
+        let segment_locations = base_snapshot.segments.clone();
+        let pruner = FusePruner::create(
+            &ctx,
+            self.operator.clone(),
+            self.table_info.schema(),
+            &push_down,
+        )?;
+        let block_metas = pruner.pruning(segment_locations).await?;
+
+        let range_block_metas = block_metas
+            .clone()
+            .into_iter()
+            .map(|(a, b)| (a.range, b))
+            .collect::<Vec<_>>();
+
+        let (_, inner_parts) = self.read_partitions_with_metas(
+            self.table_info.schema(),
+            None,
+            &range_block_metas,
+            base_snapshot.summary.block_count as usize,
+            PruningStatistics::default(),
+        )?;
+
+        let parts = Partitions::create(
+            PartitionsShuffleKind::Mod,
+            block_metas
+                .into_iter()
+                .zip(inner_parts.partitions.into_iter())
+                .map(|((index, _), inner_part)| {
+                    refactor::MutationPartInfo::create(index, inner_part)
+                })
+                .collect(),
+        );
+        ctx.set_partitions(parts)
+    }
+
+    pub fn try_add_mutation_transform2(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        base_segments: Vec<Location>,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        if pipeline.is_empty() {
+            return Err(ErrorCode::Internal("The pipeline is empty."));
+        }
+
+        match pipeline.output_len() {
+            0 => Err(ErrorCode::Internal("The output of the last pipe is 0.")),
+            last_pipe_size => {
+                let mut inputs_port = Vec::with_capacity(last_pipe_size);
+                for _ in 0..last_pipe_size {
+                    inputs_port.push(InputPort::create());
+                }
+                let output_port = OutputPort::create();
+                pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
+                    refactor::MutationTransform::try_create(
+                        ctx,
+                        self.schema(),
+                        inputs_port.clone(),
+                        output_port.clone(),
+                        self.get_operator(),
+                        self.meta_location_generator().clone(),
+                        base_segments,
+                        self.get_block_compact_thresholds(),
+                    )?,
+                    inputs_port,
+                    vec![output_port],
+                )]));
+
+                Ok(())
+            }
+        }
     }
 }

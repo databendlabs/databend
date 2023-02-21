@@ -374,7 +374,7 @@ impl Processor for CompactTransform {
 
                         meta_stats.push(meta.col_stats.clone());
                         let settings = ReadSettings::from_ctx(&self.ctx)?;
-
+                        let storage_format = self.write_settings.storage_format;
                         // read block in parallel.
                         task_futures.push(async move {
                             // Perf
@@ -384,7 +384,7 @@ impl Processor for CompactTransform {
                             }
 
                             block_reader
-                                .read_parquet_by_meta(&settings, meta.as_ref())
+                                .read_by_meta(&settings, meta.as_ref(), &storage_format)
                                 .await
                         });
                     }
