@@ -48,6 +48,10 @@ impl Files {
             }
         }
 
+        if pathes.len() > 0 {
+            bo.remove(mem::take(&mut pathes)).await?;
+        }
+
         Ok(())
     }
 }
