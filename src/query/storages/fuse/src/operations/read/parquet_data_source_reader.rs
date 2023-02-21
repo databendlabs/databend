@@ -101,11 +101,7 @@ impl SyncSource for ReadParquetDataSource<true> {
                 let mut delete_mark = None;
                 if let Some((location, meta_size)) = &fuse_part.delete_mark {
                     delete_mark = location
-                        .sync_read_delete_mark(
-                            self.block_reader.operator.clone(),
-                            *meta_size,
-                            fuse_part.nums_rows, // TODO is it correct to use part.num_row?
-                        )?
+                        .sync_read_delete_mark(self.block_reader.operator.clone(), *meta_size)?
                         .into();
                 };
 
@@ -183,11 +179,7 @@ impl Processor for ReadParquetDataSource<false> {
                         let delete_mark = if let Some((location, meta_size)) = &part.delete_mark {
                             Some(
                                 location
-                                    .read_delete_mark(
-                                        block_reader.operator.clone(),
-                                        *meta_size,
-                                        part.nums_rows, // TODO is it correct to use part.num_row?
-                                    )
+                                    .read_delete_mark(block_reader.operator.clone(), *meta_size)
                                     .await?,
                             )
                         } else {

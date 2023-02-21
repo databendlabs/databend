@@ -47,26 +47,16 @@ type CachedReader = InMemoryItemCacheReader<Bitmap, DeleteMetaLoader>;
 
 #[async_trait::async_trait]
 pub trait DeleteMarkReader {
-    async fn read_delete_mark(
-        &self,
-        dal: Operator,
-        size: u64,
-        num_rows: usize,
-    ) -> Result<Arc<Bitmap>>;
+    async fn read_delete_mark(&self, dal: Operator, size: u64) -> Result<Arc<Bitmap>>;
 }
 
 #[async_trait::async_trait]
 impl DeleteMarkReader for Location {
-    async fn read_delete_mark(
-        &self,
-        dal: Operator,
-        size: u64,
-        num_rows: usize,
-    ) -> Result<Arc<Bitmap>> {
+    async fn read_delete_mark(&self, dal: Operator, size: u64) -> Result<Arc<Bitmap>> {
         let (path, ver) = &self;
         let mask_version = DeleteMaskVersion::try_from(*ver)?;
         if matches!(mask_version, DeleteMaskVersion::V0(_)) {
-            let res = load_delete_mark(dal, path, size, num_rows).await?;
+            let res = load_delete_mark(dal, path, size).await?;
             Ok(res)
         } else {
             unreachable!()
@@ -76,12 +66,7 @@ impl DeleteMarkReader for Location {
 
 /// load delete mark data
 #[tracing::instrument(level = "debug", skip_all)]
-pub async fn load_delete_mark(
-    dal: Operator,
-    path: &str,
-    size: u64,
-    num_rows: usize,
-) -> Result<Arc<Bitmap>> {
+pub async fn load_delete_mark(dal: Operator, path: &str, size: u64) -> Result<Arc<Bitmap>> {
     // 1. load delete mark meta
     let delete_mark_meta = load_mark_meta(dal.clone(), path, size).await?;
     let file_meta = &delete_mark_meta.0;
@@ -96,7 +81,8 @@ pub async fn load_delete_mark(
     let index_column_chunk_metas = file_meta.row_groups[0].columns();
     assert_eq!(index_column_chunk_metas.len(), 1);
     let column_meta = &index_column_chunk_metas[0];
-    let marks = load_delete_mark_data(column_meta, path, &dal, num_rows).await?;
+    let num_rows = column_meta.num_values();
+    let marks = load_delete_mark_data(column_meta, path, &dal, num_rows as usize).await?;
 
     Ok(marks)
 }

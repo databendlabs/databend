@@ -40,25 +40,15 @@ use crate::io::read::delete::delete_mark_reader::DeleteMetaLoader;
 
 // TODO 1. code duplication 2. cache
 pub trait DeleteMarkSyncReader {
-    fn sync_read_delete_mark(
-        &self,
-        dal: Operator,
-        size: u64,
-        num_rows: usize,
-    ) -> Result<Arc<Bitmap>>;
+    fn sync_read_delete_mark(&self, dal: Operator, size: u64) -> Result<Arc<Bitmap>>;
 }
 
 impl DeleteMarkSyncReader for Location {
-    fn sync_read_delete_mark(
-        &self,
-        dal: Operator,
-        size: u64,
-        num_rows: usize,
-    ) -> Result<Arc<Bitmap>> {
+    fn sync_read_delete_mark(&self, dal: Operator, size: u64) -> Result<Arc<Bitmap>> {
         let (path, ver) = &self;
         let mask_version = DeleteMaskVersion::try_from(*ver)?;
         if matches!(mask_version, DeleteMaskVersion::V0(_)) {
-            let res = sync_load_delete_mark(dal, path, size, num_rows)?;
+            let res = sync_load_delete_mark(dal, path, size)?;
             Ok(res)
         } else {
             unreachable!()
@@ -68,12 +58,7 @@ impl DeleteMarkSyncReader for Location {
 
 /// load delete mark data
 #[tracing::instrument(level = "debug", skip_all)]
-fn sync_load_delete_mark(
-    dal: Operator,
-    path: &str,
-    size: u64,
-    num_rows: usize,
-) -> Result<Arc<Bitmap>> {
+fn sync_load_delete_mark(dal: Operator, path: &str, size: u64) -> Result<Arc<Bitmap>> {
     // 1. load delete mark meta
     let delete_mark_meta = sync_load_mark_meta(dal.clone(), path, size)?;
     let file_meta = &delete_mark_meta.0;
@@ -88,6 +73,7 @@ fn sync_load_delete_mark(
     let index_column_chunk_metas = file_meta.row_groups[0].columns();
     assert_eq!(index_column_chunk_metas.len(), 1);
     let column_meta = &index_column_chunk_metas[0];
+    let num_rows = column_meta.num_values() as usize;
     let marks = sync_load_delete_mark_data(column_meta, path, &dal, num_rows)?;
 
     Ok(marks)

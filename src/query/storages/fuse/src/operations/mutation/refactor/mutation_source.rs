@@ -55,8 +55,8 @@ use crate::io::ReadSettings;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::UncompressedBuffer;
 use crate::operations::mutation::refactor::Mutation;
-use crate::operations::mutation::refactor::MutationPartInfo;
 use crate::operations::mutation::refactor::MutationSourceMeta;
+use crate::operations::mutation::MutationPartInfo as NotInReactorModMutationPartInfo;
 use crate::FuseTable;
 use crate::MergeIOReadResult;
 
@@ -265,6 +265,11 @@ impl Processor for MutationSource {
                     let mut part_indices = Vec::with_capacity(parts.len());
 
                     for part in &parts {
+                        // @zhyass
+                        // to make `delete` stmt work,
+                        // `refactor::NutationPartInfo` is temporarily replaced with the non-refactored one
+                        // please change this as you planned
+                        use crate::operations::mutation::MutationPartInfo;
                         let part = MutationPartInfo::from_part(part)?;
                         let inner_part = part.inner_part.clone();
 
@@ -301,9 +306,7 @@ impl Processor for MutationSource {
             State::ReadMark(read_res) => {
                 let fuse_part = FusePartInfo::from_part(&read_res.part)?;
                 let mark = if let Some((location, length)) = &fuse_part.delete_mark {
-                    let mark = location
-                        .read_delete_mark(self.dal.clone(), *length, fuse_part.nums_rows)
-                        .await?;
+                    let mark = location.read_delete_mark(self.dal.clone(), *length).await?;
                     Some(mark)
                 } else {
                     None
