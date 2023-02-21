@@ -1154,6 +1154,9 @@ pub struct QueryConfig {
     #[clap(long, default_value = "0")]
     pub async_insert_stale_timeout: u64,
 
+    #[clap(long, default_value = "auto")]
+    pub default_storage_format: String,
+
     #[clap(skip)]
     users: Vec<UserConfig>,
 
@@ -1268,6 +1271,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             async_insert_max_data_size: self.async_insert_max_data_size,
             async_insert_busy_timeout: self.async_insert_busy_timeout,
             async_insert_stale_timeout: self.async_insert_stale_timeout,
+            default_storage_format: self.default_storage_format,
             idm: InnerIDMConfig {
                 users: users_to_inner(self.users)?,
             },
@@ -1323,6 +1327,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             async_insert_max_data_size: inner.async_insert_max_data_size,
             async_insert_busy_timeout: inner.async_insert_busy_timeout,
             async_insert_stale_timeout: inner.async_insert_stale_timeout,
+            default_storage_format: inner.default_storage_format,
             users: users_from_inner(inner.idm.users),
             share_endpoint_address: inner.share_endpoint_address,
             share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,

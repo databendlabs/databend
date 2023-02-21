@@ -30,6 +30,7 @@ use common_catalog::table::CompactTarget;
 use common_catalog::table::NavigationDescriptor;
 use common_catalog::table_context::TableContext;
 use common_catalog::table_mutator::TableMutator;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
@@ -122,6 +123,7 @@ impl FuseTable {
             }
         }?;
 
+        let config = GlobalConfig::instance();
         let data_metrics = Arc::new(StorageMetrics::default());
         operator = operator.layer(StorageMetricsLayer::new(data_metrics.clone()));
 
@@ -129,7 +131,7 @@ impl FuseTable {
             .options()
             .get(OPT_KEY_STORAGE_FORMAT)
             .cloned()
-            .unwrap_or_default();
+            .unwrap_or_else(|| config.query.default_storage_format.clone());
 
         let table_compression = table_info
             .options()
@@ -300,7 +302,7 @@ impl FuseTable {
     }
 
     pub fn compression_from_str(str: &str, schema: Scheme) -> Result<TableCompression> {
-        if str.is_empty() {
+        if str.is_empty() || str == "auto" {
             if matches!(schema, Scheme::Fs) {
                 Ok(TableCompression::LZ4)
             } else {
@@ -634,7 +636,7 @@ impl FuseStorageFormat {
         match s.to_lowercase().as_str() {
             "parquet" => Ok(FuseStorageFormat::Parquet),
             "native" => Ok(FuseStorageFormat::Native),
-            "" => {
+            "" | "auto" => {
                 if matches!(schema, opendal::Scheme::Fs) {
                     Ok(FuseStorageFormat::Native)
                 } else {

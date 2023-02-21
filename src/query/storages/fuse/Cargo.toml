@@ -15,6 +15,7 @@ test = false
 common-arrow = { path = "../../../common/arrow" }
 common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
+common-config = { path = "../../config" }
 common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
 common-functions = { path = "../../functions" }
