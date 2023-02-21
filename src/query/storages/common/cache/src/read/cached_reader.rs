@@ -23,6 +23,7 @@ use parking_lot::RwLock;
 use super::loader::LoadParams;
 use crate::metrics::metrics_inc_cache_miss_load_millisecond;
 use crate::providers::ImMemoryCache;
+use crate::read::loader::SyncLoader;
 use crate::CacheAccessor;
 use crate::Loader;
 use crate::NamedCache;
@@ -37,7 +38,6 @@ pub type CacheHolder<V, S, M> = Arc<RwLock<ImMemoryCache<V, S, M>>>;
 
 impl<V, L, S, M> CachedReader<L, NamedCache<CacheHolder<V, S, M>>>
 where
-    L: Loader<V> + Sync,
     S: BuildHasher,
     M: CountableMeter<String, Arc<V>>,
 {
@@ -45,6 +45,17 @@ where
         Self { cache, loader }
     }
 
+    pub fn name(&self) -> &str {
+        self.cache.as_ref().map(|c| c.name()).unwrap_or("")
+    }
+}
+
+impl<V, L, S, M> CachedReader<L, NamedCache<CacheHolder<V, S, M>>>
+where
+    L: Loader<V> + Sync,
+    S: BuildHasher,
+    M: CountableMeter<String, Arc<V>>,
+{
     /// Load the object at `location`, uses/populates the cache if possible/necessary.
     pub async fn read(&self, params: &LoadParams) -> Result<Arc<V>> {
         match &self.cache {
@@ -74,8 +85,41 @@ where
             }
         }
     }
+}
 
-    pub fn name(&self) -> &str {
-        self.cache.as_ref().map(|c| c.name()).unwrap_or("")
+impl<V, L, S, M> CachedReader<L, NamedCache<CacheHolder<V, S, M>>>
+where
+    L: SyncLoader<V> + Sync,
+    S: BuildHasher,
+    M: CountableMeter<String, Arc<V>>,
+{
+    /// Load the object at `location`, uses/populates the cache if possible/necessary.
+    pub fn sync_read(&self, params: &LoadParams) -> Result<Arc<V>> {
+        match &self.cache {
+            None => Ok(Arc::new(self.loader.sync_load(params)?)),
+            Some(cache) => {
+                let cache_key = self.loader.cache_key(params);
+                match cache.get(cache_key.as_str()) {
+                    Some(item) => Ok(item),
+                    None => {
+                        let start = Instant::now();
+
+                        let v = self.loader.sync_load(params)?;
+                        let item = Arc::new(v);
+
+                        // Perf.
+                        {
+                            metrics_inc_cache_miss_load_millisecond(
+                                start.elapsed().as_millis() as u64,
+                                cache.name(),
+                            );
+                        }
+
+                        cache.put(cache_key, item.clone());
+                        Ok(item)
+                    }
+                }
+            }
+        }
     }
 }

@@ -56,7 +56,6 @@ use crate::io::TableMetaLocationGenerator;
 use crate::io::UncompressedBuffer;
 use crate::operations::mutation::refactor::Mutation;
 use crate::operations::mutation::refactor::MutationSourceMeta;
-use crate::operations::mutation::MutationPartInfo as NotInReactorModMutationPartInfo;
 use crate::FuseTable;
 use crate::MergeIOReadResult;
 
