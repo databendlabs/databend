@@ -30,10 +30,10 @@ use common_pipeline_core::processors::Processor;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
-use crate::io::MergeIOReadResult;
 use crate::io::UncompressedBuffer;
 use crate::metrics::metrics_inc_remote_io_deserialize_milliseconds;
 use crate::operations::read::parquet_data_source::DataSourceMeta;
+use crate::operations::read::parquet_data_source_reader::ParquetReadResult;
 
 pub struct DeserializeDataTransform {
     scan_progress: Arc<Progress>,
@@ -43,7 +43,7 @@ pub struct DeserializeDataTransform {
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
     parts: Vec<PartInfoPtr>,
-    chunks: Vec<MergeIOReadResult>,
+    chunks: Vec<ParquetReadResult>,
     uncompressed_buffer: Arc<UncompressedBuffer>,
 }
 
@@ -133,13 +133,20 @@ impl Processor for DeserializeDataTransform {
     fn process(&mut self) -> Result<()> {
         let part = self.parts.pop();
         let chunks = self.chunks.pop();
-        if let Some((part, read_res)) = part.zip(chunks) {
+        if let Some((
+            part,
+            ParquetReadResult {
+                merge_io_result,
+                delete_mark,
+            },
+        )) = part.zip(chunks)
+        {
             let start = Instant::now();
 
-            let columns_chunks = read_res.columns_chunks()?;
+            let columns_chunks = merge_io_result.columns_chunks()?;
             let part = FusePartInfo::from_part(&part)?;
 
-            let data_block = self.block_reader.deserialize_parquet_chunks_with_buffer(
+            let mut data_block = self.block_reader.deserialize_parquet_chunks_with_buffer(
                 &part.location,
                 part.nums_rows,
                 &part.compression,
@@ -147,6 +154,10 @@ impl Processor for DeserializeDataTransform {
                 columns_chunks,
                 Some(self.uncompressed_buffer.clone()),
             )?;
+
+            if let Some(delete_mark) = delete_mark {
+                data_block = data_block.filter_with_bitmap(delete_mark.as_ref())?;
+            }
 
             // Perf.
             {

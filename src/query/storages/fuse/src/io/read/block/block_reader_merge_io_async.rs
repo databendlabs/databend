@@ -52,7 +52,7 @@ impl BlockReader {
                 OwnerMemory::create(vec![]),
                 raw_ranges.len(),
                 object.path().to_string(),
-                CacheManager::instance().get_table_data_cache(),
+                None,
             );
             return Ok(read_res);
         }
@@ -101,6 +101,7 @@ impl BlockReader {
             metrics_inc_remote_io_read_milliseconds(start.elapsed().as_millis() as u64);
         }
 
+        // Unwrap the fetched data
         for (raw_idx, raw_range) in &raw_ranges {
             let column_range = raw_range.start..raw_range.end;
 
@@ -173,9 +174,11 @@ impl BlockReader {
         let object = self.operator.object(location);
 
         let mut merge_io_read_res = Self::merge_io_read(settings, object, ranges).await?;
-        // TODO set
+
+        // combine with the cached
         merge_io_read_res.cached_column_data = cached_column_data;
         merge_io_read_res.cached_column_array = cached_column_array;
+
         Ok(merge_io_read_res)
     }
 

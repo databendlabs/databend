@@ -22,7 +22,6 @@ use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
-use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_function;
@@ -59,19 +58,16 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::AggregateMode;
 use crate::plans::AndExpr;
-use crate::plans::BoundColumnRef;
 use crate::plans::Exchange;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::Scan;
 use crate::BaseTableColumn;
-use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
 use crate::IndexType;
 use crate::Metadata;
 use crate::MetadataRef;
-use crate::Visibility;
 use crate::DUMMY_COLUMN_INDEX;
 use crate::DUMMY_TABLE_INDEX;
 
@@ -186,12 +182,8 @@ impl PhysicalPlanBuilder {
                 let table_entry = metadata.table(scan.table_index);
                 let table = table_entry.table();
                 let table_schema = table.schema();
-                let conf = GlobalConfig::instance();
-                let support_merge_on_read =
-                    table.support_merge_on_read() && conf.query.internal_merge_on_read_mutation;
 
-                let push_downs =
-                    self.push_downs(scan, &table_schema, has_inner_column, support_merge_on_read)?;
+                let push_downs = self.push_downs(scan, &table_schema, has_inner_column)?;
 
                 let source = table
                     .read_plan_with_catalog(
@@ -651,7 +643,6 @@ impl PhysicalPlanBuilder {
         scan: &Scan,
         table_schema: &TableSchema,
         has_inner_column: bool,
-        support_merge_on_read: bool,
     ) -> Result<PushDownInfo> {
         let metadata = self.metadata.read().clone();
         let projection =
@@ -687,38 +678,10 @@ impl PhysicalPlanBuilder {
             })
             .transpose()?;
 
-        let prewhere_info = scan.prewhere.as_ref().map_or_else(
-            || -> Result<Option<PrewhereInfo>> {
-                if support_merge_on_read {
-                    let filter = ScalarExpr::BoundColumnRef(BoundColumnRef {
-                        column: ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            column_name: "_row_exists".to_string(),
-                            index: 0,
-                            data_type: Box::new(DataType::Boolean),
-                            visibility: Visibility::Visible,
-                        },
-                    })
-                    .as_expr_with_col_name()?
-                    .as_remote_expr();
-                    let remain_columns = Self::build_projection(
-                        &metadata,
-                        table_schema,
-                        &scan.columns,
-                        has_inner_column,
-                    );
-                    Ok(Some(PrewhereInfo {
-                        output_columns: Projection::Columns(vec![]),
-                        prewhere_columns: Projection::Columns(vec![]),
-                        remain_columns,
-                        filter,
-                    }))
-                } else {
-                    Ok(None)
-                }
-            },
-            |prewhere| {
+        let prewhere_info = scan
+            .prewhere
+            .as_ref()
+            .map(|prewhere| -> Result<PrewhereInfo> {
                 let remain_columns = scan
                     .columns
                     .difference(&prewhere.prewhere_columns)
@@ -744,7 +707,7 @@ impl PhysicalPlanBuilder {
                     has_inner_column,
                 );
 
-                let mut predicate = prewhere
+                let predicate = prewhere
                     .predicates
                     .iter()
                     .cloned()
@@ -756,22 +719,6 @@ impl PhysicalPlanBuilder {
                         })
                     })
                     .expect("there should be at least one predicate in prewhere");
-                if support_merge_on_read {
-                    predicate = ScalarExpr::AndExpr(AndExpr {
-                        left: Box::new(ScalarExpr::BoundColumnRef(BoundColumnRef {
-                            column: ColumnBinding {
-                                database_name: None,
-                                table_name: None,
-                                column_name: "_row_exists".to_string(),
-                                index: prewhere.prewhere_columns.len(),
-                                data_type: Box::new(DataType::Boolean),
-                                visibility: Visibility::Visible,
-                            },
-                        })),
-                        right: Box::new(predicate),
-                        return_type: Box::new(DataType::Boolean),
-                    });
-                }
                 let expr = cast_expr_to_non_null_boolean(predicate.as_expr_with_col_name()?)?;
                 let (filter, _) = ConstantFolder::fold(
                     &expr,
@@ -780,14 +727,14 @@ impl PhysicalPlanBuilder {
                 );
                 let filter = filter.as_remote_expr();
 
-                Ok(Some(PrewhereInfo {
+                Ok::<PrewhereInfo, ErrorCode>(PrewhereInfo {
                     output_columns,
                     prewhere_columns,
                     remain_columns,
                     filter,
-                }))
-            },
-        )?;
+                })
+            })
+            .transpose()?;
 
         let order_by = scan
             .order_by

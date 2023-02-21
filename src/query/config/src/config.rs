@@ -1339,7 +1339,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,
             quota: inner.tenant_quota,
             internal_enable_sandbox_tenant: inner.internal_enable_sandbox_tenant,
-            internal_merge_on_read_mutation: false,
+            internal_merge_on_read_mutation: inner.internal_merge_on_read_mutation,
             // obsoleted config entries
             table_disk_cache_mb_size: None,
             table_meta_cache_enabled: None,

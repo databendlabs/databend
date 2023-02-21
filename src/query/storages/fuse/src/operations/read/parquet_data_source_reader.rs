@@ -15,9 +15,11 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_arrow::arrow::bitmap::Bitmap;
 use common_base::base::tokio;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::OutputPort;
@@ -29,9 +31,16 @@ use common_pipeline_sources::SyncSourcer;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
+use crate::io::DeleteMarkReader;
+use crate::io::DeleteMarkSyncReader;
 use crate::io::ReadSettings;
 use crate::operations::read::parquet_data_source::DataSourceMeta;
 use crate::MergeIOReadResult;
+
+pub struct ParquetReadResult {
+    pub merge_io_result: MergeIOReadResult,
+    pub delete_mark: Option<Arc<Bitmap>>,
+}
 
 pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     finished: bool,
@@ -40,7 +49,7 @@ pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     block_reader: Arc<BlockReader>,
 
     output: Arc<OutputPort>,
-    output_data: Option<(Vec<PartInfoPtr>, Vec<MergeIOReadResult>)>,
+    output_data: Option<(Vec<PartInfoPtr>, Vec<ParquetReadResult>)>,
 }
 
 impl ReadParquetDataSource<true> {
@@ -87,13 +96,30 @@ impl SyncSource for ReadParquetDataSource<true> {
     fn generate(&mut self) -> Result<Option<DataBlock>> {
         match self.ctx.get_partition() {
             None => Ok(None),
-            Some(part) => Ok(Some(DataBlock::empty_with_meta(DataSourceMeta::create(
-                vec![part.clone()],
-                vec![self.block_reader.sync_read_columns_data_by_merge_io(
-                    &ReadSettings::from_ctx(&self.ctx)?,
-                    part,
-                )?],
-            )))),
+            Some(part) => {
+                let fuse_part = FusePartInfo::from_part(&part)?;
+                let mut delete_mark = None;
+                if let Some((location, meta_size)) = &fuse_part.delete_mark {
+                    delete_mark = location
+                        .sync_read_delete_mark(
+                            self.block_reader.operator.clone(),
+                            *meta_size,
+                            fuse_part.nums_rows, // TODO is it correct to use part.num_row?
+                        )?
+                        .into();
+                };
+
+                Ok(Some(DataBlock::empty_with_meta(DataSourceMeta::create(
+                    vec![part.clone()],
+                    vec![ParquetReadResult {
+                        merge_io_result: self.block_reader.sync_read_columns_data_by_merge_io(
+                            &ReadSettings::from_ctx(&self.ctx)?,
+                            part,
+                        )?,
+                        delete_mark,
+                    }],
+                ))))
+            }
         }
     }
 }
@@ -146,13 +172,32 @@ impl Processor for ReadParquetDataSource<false> {
                     tokio::spawn(async move {
                         let part = FusePartInfo::from_part(&part)?;
 
-                        block_reader
+                        let merge_io_result = block_reader
                             .read_columns_data_by_merge_io(
                                 &settings,
                                 &part.location,
                                 &part.columns_meta,
                             )
-                            .await
+                            .await?;
+
+                        let delete_mark = if let Some((location, meta_size)) = &part.delete_mark {
+                            Some(
+                                location
+                                    .read_delete_mark(
+                                        block_reader.operator.clone(),
+                                        *meta_size,
+                                        part.nums_rows, // TODO is it correct to use part.num_row?
+                                    )
+                                    .await?,
+                            )
+                        } else {
+                            None
+                        };
+
+                        Ok::<_, ErrorCode>(ParquetReadResult {
+                            merge_io_result,
+                            delete_mark,
+                        })
                     })
                     .await
                     .unwrap()

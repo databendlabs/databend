@@ -23,15 +23,15 @@ use common_expression::BlockMetaInfoPtr;
 use serde::Deserializer;
 use serde::Serializer;
 
-use crate::io::MergeIOReadResult;
+use crate::operations::read::parquet_data_source_reader::ParquetReadResult;
 
 pub struct DataSourceMeta {
     pub part: Vec<PartInfoPtr>,
-    pub data: Vec<MergeIOReadResult>,
+    pub data: Vec<ParquetReadResult>,
 }
 
 impl DataSourceMeta {
-    pub fn create(part: Vec<PartInfoPtr>, data: Vec<MergeIOReadResult>) -> BlockMetaInfoPtr {
+    pub fn create(part: Vec<PartInfoPtr>, data: Vec<ParquetReadResult>) -> BlockMetaInfoPtr {
         Box::new(DataSourceMeta { part, data })
     }
 }

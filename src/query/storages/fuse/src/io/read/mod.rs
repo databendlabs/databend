@@ -26,6 +26,7 @@ pub use block::UncompressedBuffer;
 pub use bloom::BloomBlockFilterReader;
 pub use bloom::InRuntime;
 pub use delete::DeleteMarkReader;
+pub use delete::DeleteMarkSyncReader;
 pub use meta::MetaReaders;
 pub use meta::SegmentInfoReader;
 pub use meta::TableSnapshotReader;

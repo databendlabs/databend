@@ -37,11 +37,13 @@ use storages_common_cache_manager::CacheManager;
 use storages_common_cache_manager::SizedColumnArray;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::Compression;
+use storages_common_table_meta::meta::Location;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::read::block::decompressor::BuffedBasicDecompressor;
 use crate::io::BlockReader;
+use crate::io::DeleteMarkReader;
 use crate::io::UncompressedBuffer;
 use crate::metrics::*;
 
@@ -182,6 +184,23 @@ impl BlockReader {
             }
         }
         data_block
+    }
+
+    pub async fn apply_deletion_mask(
+        &self,
+        data_block: DataBlock,
+        deletion_mark: &Option<(Location, u64)>,
+        num_rows: usize,
+    ) -> Result<DataBlock> {
+        // apply deletion mask if necessary
+        if let Some((delete_marker_location, meta_size)) = deletion_mark {
+            let mask = delete_marker_location
+                .read_delete_mark(self.operator.clone(), *meta_size, num_rows)
+                .await?;
+            data_block.filter_with_bitmap(mask.as_ref())
+        } else {
+            Ok(data_block)
+        }
     }
 
     fn chunks_to_parquet_array_iter<'a>(
