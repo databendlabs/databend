@@ -237,8 +237,9 @@ pub trait Table: Sync + Send {
         filter: Option<RemoteExpr<String>>,
         col_indices: Vec<usize>,
         pipeline: &mut Pipeline,
+        support_merge_on_read: bool,
     ) -> Result<()> {
-        let (_, _, _, _) = (ctx, filter, col_indices, pipeline);
+        let (_, _, _, _, _) = (ctx, filter, col_indices, pipeline, support_merge_on_read);
 
         Err(ErrorCode::Unimplemented(format!(
             "table {}, engine type {}, does not support DELETE FROM",

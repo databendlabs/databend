@@ -33,10 +33,10 @@ use storages_common_table_meta::meta::Statistics;
 use crate::io::try_join_futures_with_vec;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::mutation::parquet_delete_source::Mutation;
+use crate::operations::mutation::refactor::Mutation;
+use crate::operations::mutation::refactor::MutationSourceMeta;
 use crate::operations::mutation::AbortOperation;
 use crate::operations::mutation::MutationSinkMeta;
-use crate::operations::mutation::MutationSourceMeta;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
@@ -69,7 +69,7 @@ enum State {
     },
 }
 
-pub struct MutationSerializeTransform {
+pub struct MutationTransform {
     state: State,
     ctx: Arc<dyn TableContext>,
     schema: TableSchemaRef,
@@ -87,7 +87,7 @@ pub struct MutationSerializeTransform {
     output_data: Option<DataBlock>,
 }
 
-impl MutationSerializeTransform {
+impl MutationTransform {
     #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
@@ -99,7 +99,7 @@ impl MutationSerializeTransform {
         base_segments: Vec<Location>,
         thresholds: BlockThresholds,
     ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Box::new(MutationSerializeTransform {
+        Ok(ProcessorPtr::create(Box::new(MutationTransform {
             state: State::None,
             ctx,
             schema,
@@ -173,9 +173,9 @@ impl MutationSerializeTransform {
 }
 
 #[async_trait::async_trait]
-impl Processor for MutationSerializeTransform {
+impl Processor for MutationTransform {
     fn name(&self) -> String {
-        "MutationSerializeTransform".to_string()
+        "MutationTransform".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

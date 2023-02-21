@@ -555,8 +555,13 @@ impl Table for FuseTable {
         filter: Option<RemoteExpr<String>>,
         col_indices: Vec<usize>,
         pipeline: &mut Pipeline,
+        support_merge_on_read: bool,
     ) -> Result<()> {
-        self.do_delete2(ctx, filter, col_indices, pipeline).await
+        if support_merge_on_read {
+            self.do_delete2(ctx, filter, col_indices, pipeline).await
+        } else {
+            self.do_delete(ctx, filter, col_indices, pipeline).await
+        }
     }
 
     async fn update(
