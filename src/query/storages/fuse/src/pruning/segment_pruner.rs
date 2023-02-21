@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::OwnedSemaphorePermit;
-use common_base::runtime::RESUE_RUNTIME;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
@@ -82,8 +81,9 @@ impl SegmentPruner {
 
         // Run tasks and collect the results.
         let pruning_semaphore = self.pruning_ctx.pruning_semaphore.clone();
-        let runtime = RESUE_RUNTIME.pull();
-        let handlers = runtime
+        let handlers = self
+            .pruning_ctx
+            .prune_runtime
             .try_spawn_batch_with_owned_semaphore(pruning_semaphore, pruning_tasks)
             .await?;
         let joint = future::try_join_all(handlers)

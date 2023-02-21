@@ -19,7 +19,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_base::base::tokio::sync::OwnedSemaphorePermit;
-use common_base::runtime::RESUE_RUNTIME;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures_util::future;
@@ -159,8 +158,9 @@ impl BlockPruner {
 
         let start = Instant::now();
 
-        let runtime = RESUE_RUNTIME.pull();
-        let join_handlers = runtime
+        let join_handlers = self
+            .pruning_ctx
+            .prune_runtime
             .try_spawn_batch_with_owned_semaphore(pruning_semaphore.clone(), pruning_tasks)
             .await?;
 

@@ -15,6 +15,9 @@
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::Semaphore;
+use common_base::base::Reusable;
+use common_base::runtime::Runtime;
+use common_base::runtime::RESUE_RUNTIME;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -51,6 +54,7 @@ pub struct PruningContext {
     pub page_pruner: Arc<dyn PagePruner + Send + Sync>,
 
     pub pruning_stats: Arc<FusePruningStatistics>,
+    pub prune_runtime: Reusable<'static, Arc<Runtime>>,
 }
 
 pub struct FusePruner {
@@ -131,6 +135,8 @@ impl FusePruner {
         let pruning_semaphore = Arc::new(Semaphore::new(max_concurrency));
         let pruning_stats = Arc::new(FusePruningStatistics::default());
 
+        let prune_runtime = RESUE_RUNTIME.pull();
+
         let pruning_ctx = Arc::new(PruningContext {
             ctx: ctx.clone(),
             dal,
@@ -140,6 +146,7 @@ impl FusePruner {
             bloom_pruner,
             page_pruner,
             pruning_stats,
+            prune_runtime,
         });
 
         Ok(FusePruner {
