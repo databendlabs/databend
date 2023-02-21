@@ -20,7 +20,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_function;
 use common_expression::DataBlock;
-use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::FunctionContext;
 use common_expression::SortColumnDescription;
@@ -214,17 +213,10 @@ impl PipelineBuilder {
         }
 
         let mut projections = Vec::with_capacity(result_columns.len());
-        let mut result_fields = Vec::with_capacity(result_columns.len());
 
         for column_binding in result_columns {
             let index = column_binding.index;
-            let name = column_binding.column_name.clone();
-            let data_type = input_schema
-                .field_with_name(index.to_string().as_str())?
-                .data_type()
-                .clone();
             projections.push(input_schema.index_of(index.to_string().as_str())?);
-            result_fields.push(DataField::new(name.as_str(), data_type.clone()));
         }
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(CompoundBlockOperator::create(
