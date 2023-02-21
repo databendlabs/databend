@@ -445,36 +445,42 @@ impl TableSchema {
     ) -> HashMap<ColumnId, Scalar> {
         fn collect_leaf_default_values(
             default_value: &Scalar,
-            leaf_default_values: &mut Vec<Scalar>,
+            column_ids: &[ColumnId],
+            index: &mut usize,
+            leaf_default_values: &mut HashMap<ColumnId, Scalar>,
         ) {
             match default_value {
                 Scalar::Tuple(s) => {
                     s.iter().for_each(|default_val| {
-                        collect_leaf_default_values(default_val, leaf_default_values)
+                        collect_leaf_default_values(
+                            default_val,
+                            column_ids,
+                            index,
+                            leaf_default_values,
+                        )
                     });
                 }
                 _ => {
-                    leaf_default_values.push(default_value.to_owned());
+                    leaf_default_values.insert(column_ids[*index], default_value.to_owned());
+                    *index += 1;
                 }
             }
         }
 
-        let mut leaf_default_value_map = HashMap::with_capacity(self.num_fields());
+        let mut leaf_default_values = HashMap::with_capacity(self.num_fields());
         let leaf_field_column_ids = self.field_leaf_column_ids();
         for (default_value, field_column_ids) in default_values.iter().zip_eq(leaf_field_column_ids)
         {
-            let mut leaf_default_values = Vec::with_capacity(field_column_ids.len());
-            collect_leaf_default_values(default_value, &mut leaf_default_values);
-
-            field_column_ids
-                .iter()
-                .zip_eq(leaf_default_values)
-                .for_each(|(col_id, default_value)| {
-                    leaf_default_value_map.insert(*col_id, default_value);
-                });
+            let mut index = 0;
+            collect_leaf_default_values(
+                default_value,
+                &field_column_ids,
+                &mut index,
+                &mut leaf_default_values,
+            );
         }
 
-        leaf_default_value_map
+        leaf_default_values
     }
 
     #[inline]
