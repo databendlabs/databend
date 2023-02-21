@@ -140,8 +140,7 @@ mod tests {
     use std::mem::drop;
 
     use crate::base::Pool;
-    use crate::Pool;
-    use crate::Reusable;
+    use crate::base::Reusable;
 
     #[test]
     fn detach() {
