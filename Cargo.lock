@@ -3130,6 +3130,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
+ "socket2",
  "state",
  "storages-common-blocks",
  "storages-common-cache",

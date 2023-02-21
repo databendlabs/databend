@@ -128,7 +128,8 @@ async fn main_entrypoint() -> Result<()> {
     {
         let hostname = conf.query.mysql_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.mysql_handler_port);
-        let mut handler = MySQLHandler::create()?;
+        let tcp_keepalive_timeout_secs = conf.query.mysql_handler_tcp_keepalive_timeout_secs;
+        let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs)?;
         let listening = handler.start(listening.parse()?).await?;
         shutdown_handle.add_service(handler);
 
