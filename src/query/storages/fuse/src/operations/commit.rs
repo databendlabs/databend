@@ -275,6 +275,7 @@ impl FuseTable {
         let stats = if let Some(snapshot) = &previous {
             let mut summary = snapshot.summary.clone();
             let mut fill_default_values = false;
+            // check if need to fill default value in statistics
             for column_id in statistics.col_stats.keys() {
                 if !summary.col_stats.contains_key(column_id) {
                     fill_default_values = true;
@@ -291,12 +292,17 @@ impl FuseTable {
                     .iter()
                     .for_each(|(col_id, default_value)| {
                         if !summary.col_stats.contains_key(col_id) {
+                            let (null_count, distinct_of_values) = if default_value.is_null() {
+                                (summary.row_count, Some(0))
+                            } else {
+                                (0, Some(1))
+                            };
                             let col_stat = ColumnStatistics {
                                 min: default_value.to_owned(),
                                 max: default_value.to_owned(),
-                                null_count: summary.row_count,
+                                null_count,
                                 in_memory_size: 0,
-                                distinct_of_values: None,
+                                distinct_of_values,
                             };
                             summary.col_stats.insert(*col_id, col_stat);
                         }
