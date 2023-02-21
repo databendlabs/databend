@@ -17,6 +17,7 @@ mod mutation_part;
 mod mutation_source;
 mod mutation_transform;
 
+pub use mutation_meta::DeleteMarkInfo;
 pub use mutation_meta::Mutation;
 pub use mutation_meta::MutationSourceMeta;
 pub use mutation_part::MutationPartInfo;

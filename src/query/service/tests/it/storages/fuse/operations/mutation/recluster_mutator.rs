@@ -65,6 +65,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
             0,
             None,
             0,
+            0,
             meta::Compression::Lz4Raw,
         ));
         let segment = SegmentInfo::new(vec![test_block_meta], Statistics::default());

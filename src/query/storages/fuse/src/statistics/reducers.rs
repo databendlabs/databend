@@ -118,6 +118,7 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
 pub fn merge_statistics(l: &Statistics, r: &Statistics) -> Result<Statistics> {
     let s = Statistics {
         row_count: l.row_count + r.row_count,
+        delete_row_count: l.delete_row_count + r.delete_row_count,
         block_count: l.block_count + r.block_count,
         perfect_block_count: l.perfect_block_count + r.perfect_block_count,
         uncompressed_byte_size: l.uncompressed_byte_size + r.uncompressed_byte_size,
@@ -130,6 +131,7 @@ pub fn merge_statistics(l: &Statistics, r: &Statistics) -> Result<Statistics> {
 
 pub fn merge_statistics_mut(l: &mut Statistics, r: &Statistics) -> Result<()> {
     l.row_count += r.row_count;
+    l.delete_row_count += r.delete_row_count;
     l.block_count += r.block_count;
     l.uncompressed_byte_size += r.uncompressed_byte_size;
     l.compressed_byte_size += r.compressed_byte_size;
@@ -151,6 +153,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
     thresholds: BlockThresholds,
 ) -> Result<Statistics> {
     let mut row_count: u64 = 0;
+    let mut delete_row_count: u64 = 0;
     let mut block_count: u64 = 0;
     let mut uncompressed_byte_size: u64 = 0;
     let mut compressed_byte_size: u64 = 0;
@@ -160,6 +163,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
     block_metas.iter().for_each(|b| {
         let b = b.borrow();
         row_count += b.row_count;
+        delete_row_count += b.delete_row_count;
         block_count += 1;
         uncompressed_byte_size += b.block_size;
         compressed_byte_size += b.file_size;
@@ -177,6 +181,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
 
     Ok(Statistics {
         row_count,
+        delete_row_count,
         block_count,
         perfect_block_count,
         uncompressed_byte_size,

@@ -218,6 +218,7 @@ impl Processor for SerializeDataTransform {
                     index_size,
                     None,
                     0,
+                    0,
                     self.table_compression.into(),
                 ));
 

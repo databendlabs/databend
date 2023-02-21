@@ -52,6 +52,7 @@ use crate::io::BlockReader;
 use crate::io::DeleteMarkReader;
 use crate::io::ReadSettings;
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::mutation::refactor::DeleteMarkInfo;
 use crate::operations::mutation::refactor::Mutation;
 use crate::operations::mutation::refactor::MutationPartInfo;
 use crate::operations::mutation::refactor::MutationSourceMeta;
@@ -67,6 +68,7 @@ enum State {
         location: Location,
         size: u64,
         data: Vec<u8>,
+        count: u64,
     },
     Output(BlockMetaIndex, Mutation),
     Finish,
@@ -225,6 +227,7 @@ impl Processor for MutationSource {
 
                     let filter_res = predicates.into_column().unwrap().not();
                     let res = delete_mark.map_or(filter_res.clone(), |v| v.bitand(&filter_res));
+                    let count = res.unset_bits() as u64;
                     let mark_block = DataBlock::new(
                         vec![BlockEntry {
                             data_type: DataType::Boolean,
@@ -248,6 +251,7 @@ impl Processor for MutationSource {
                         location,
                         size,
                         data,
+                        count,
                     }
                 }
             }
@@ -323,9 +327,17 @@ impl Processor for MutationSource {
                 location,
                 size,
                 data,
+                count,
             } => {
                 write_data(&data, &self.dal, &location.0).await?;
-                self.state = State::Output(block_index, Mutation::Replaced(location, size));
+                self.state = State::Output(
+                    block_index,
+                    Mutation::Replaced(DeleteMarkInfo {
+                        location,
+                        size,
+                        count,
+                    }),
+                );
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }

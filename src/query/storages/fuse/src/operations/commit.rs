@@ -378,7 +378,7 @@ impl FuseTable {
         let stats = &snapshot.summary;
         // update statistics
         new_table_meta.statistics = TableStatistics {
-            number_of_rows: stats.row_count,
+            number_of_rows: stats.row_count - stats.delete_row_count,
             data_bytes: stats.uncompressed_byte_size,
             compressed_data_bytes: stats.compressed_byte_size,
             index_data_bytes: stats.index_size,

@@ -33,6 +33,7 @@ use storages_common_table_meta::meta::Statistics;
 use crate::io::try_join_futures_with_vec;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::mutation::refactor::DeleteMarkInfo;
 use crate::operations::mutation::refactor::Mutation;
 use crate::operations::mutation::refactor::MutationSourceMeta;
 use crate::operations::mutation::AbortOperation;
@@ -45,7 +46,7 @@ use crate::pipelines::processors::Processor;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
 
-type MutationMap = HashMap<usize, (Vec<(usize, Location, u64)>, Vec<usize>)>;
+type MutationMap = HashMap<usize, (Vec<(usize, DeleteMarkInfo)>, Vec<usize>)>;
 
 struct SerializedData {
     data: Vec<u8>,
@@ -233,12 +234,12 @@ impl Processor for MutationTransform {
                     .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?;
                 let meta = MutationSourceMeta::from_meta(&input_meta)?;
                 match &meta.op {
-                    Mutation::Replaced(loc, size) => {
+                    Mutation::Replaced(info) => {
                         self.input_metas
                             .entry(meta.index.segment_idx)
-                            .and_modify(|v| v.0.push((meta.index.block_idx, loc.clone(), *size)))
-                            .or_insert((vec![(meta.index.block_idx, loc.clone(), *size)], vec![]));
-                        self.abort_operation.add_delete(loc.0.clone());
+                            .and_modify(|v| v.0.push((meta.index.block_idx, info.clone())))
+                            .or_insert((vec![(meta.index.block_idx, info.clone())], vec![]));
+                        self.abort_operation.add_delete(info.location.0.clone());
                     }
                     Mutation::Deleted => {
                         self.input_metas
@@ -267,10 +268,11 @@ impl Processor for MutationTransform {
                                 .enumerate(),
                         );
 
-                        for (idx, delete_mask_location, delete_mark_size) in replaced {
+                        for (idx, info) in replaced {
                             let mut meta = block_editor.get(idx).unwrap().as_ref().clone();
-                            meta.delete_mask_location = Some(delete_mask_location.clone());
-                            meta.delete_mark_size = *delete_mark_size;
+                            meta.delete_mask_location = Some(info.location.clone());
+                            meta.delete_mark_size = info.size;
+                            meta.delete_row_count = info.count;
                             block_editor.insert(*idx, Arc::new(meta));
                         }
                         for idx in deleted {

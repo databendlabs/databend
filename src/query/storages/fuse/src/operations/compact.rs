@@ -123,6 +123,11 @@ impl FuseTable {
             return Ok(false);
         }
 
+        // Todo(zhyass): compact support merge on read.
+        if options.base_snapshot.summary.delete_row_count > 0 {
+            return Ok(false);
+        }
+
         let thresholds = self.get_block_compact_thresholds();
 
         let mut mutator = BlockCompactMutator::new(ctx.clone(), options, self.operator.clone());

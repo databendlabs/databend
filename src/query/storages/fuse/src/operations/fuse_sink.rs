@@ -258,6 +258,7 @@ impl Processor for FuseTableSink {
 
                 let segment_info = SegmentInfo::new(acc.blocks_metas, Statistics {
                     row_count: acc.summary_row_count,
+                    delete_row_count: 0,
                     block_count: acc.summary_block_count,
                     perfect_block_count: acc.perfect_block_count,
                     uncompressed_byte_size: acc.in_memory_size,

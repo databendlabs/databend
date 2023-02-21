@@ -48,7 +48,6 @@ use futures_util::TryStreamExt;
 use rand::thread_rng;
 use rand::Rng;
 use storages_common_cache::LoadParams;
-use storages_common_table_meta::meta;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
@@ -688,15 +687,12 @@ impl CompactSegmentTestFixture {
                 block_statistics.block_file_location = block_meta.location.0.clone();
 
                 collected_blocks.push(block_meta.clone());
-                stats_acc.add_with_block_meta(
-                    block_meta,
-                    block_statistics,
-                    meta::Compression::Lz4Raw,
-                )?;
+                stats_acc.add_with_block_meta(block_meta)?;
             }
             let col_stats = stats_acc.summary()?;
             let segment_info = SegmentInfo::new(stats_acc.blocks_metas, Statistics {
                 row_count: stats_acc.summary_row_count,
+                delete_row_count: stats_acc.summary_delete_count,
                 block_count: stats_acc.summary_block_count,
                 perfect_block_count: stats_acc.perfect_block_count,
                 uncompressed_byte_size: stats_acc.in_memory_size,

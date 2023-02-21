@@ -460,7 +460,7 @@ impl FuseTable {
         }
 
         let projection = Projection::Columns(col_indices.clone());
-        self.mutation_block_pruning(
+        self.mutation_block_pruning2(
             ctx.clone(),
             Some(filter_expr.clone()),
             projection.clone(),

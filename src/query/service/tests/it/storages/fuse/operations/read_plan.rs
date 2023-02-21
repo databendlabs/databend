@@ -99,6 +99,7 @@ fn test_to_partitions() -> Result<()> {
         bloom_filter_size,
         None,
         0,
+        0,
         meta::Compression::Lz4Raw,
     ));
 

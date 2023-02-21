@@ -24,9 +24,16 @@ use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::Location;
 
 #[derive(Clone, Debug)]
+pub struct DeleteMarkInfo {
+    pub(crate) location: Location,
+    pub(crate) size: u64,
+    pub(crate) count: u64,
+}
+
+#[derive(Clone, Debug)]
 pub enum Mutation {
     DoNothing,
-    Replaced(Location, u64),
+    Replaced(DeleteMarkInfo),
     Deleted,
 }
 

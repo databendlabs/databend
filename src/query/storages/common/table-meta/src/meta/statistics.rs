@@ -52,6 +52,7 @@ pub struct ClusterStatistics {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct Statistics {
     pub row_count: u64,
+    pub delete_row_count: u64,
     pub block_count: u64,
     pub perfect_block_count: u64,
 
@@ -117,6 +118,7 @@ impl Statistics {
             .collect();
         Self {
             row_count: v0.row_count,
+            delete_row_count: 0,
             block_count: v0.block_count,
             perfect_block_count: v0.perfect_block_count,
             uncompressed_byte_size: v0.uncompressed_byte_size,

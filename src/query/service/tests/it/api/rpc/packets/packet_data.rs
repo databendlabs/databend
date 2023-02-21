@@ -39,6 +39,7 @@ async fn test_precommit_ser_and_deser() -> Result<()> {
         4,
         None,
         0,
+        0,
         Compression::Lz4Raw,
     );
     let segment_info = SegmentInfo::new(vec![Arc::new(block_meta)], Statistics::default());
