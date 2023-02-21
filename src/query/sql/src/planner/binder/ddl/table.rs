@@ -445,13 +445,10 @@ impl Binder {
             options.insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
 
             let config = GlobalConfig::instance();
-            let is_blocking_fs = match storage_params
-                .as_ref()
-                .unwrap_or_else(|| &config.storage.params)
-            {
-                StorageParams::Fs(_) => true,
-                _ => false,
-            };
+            let is_blocking_fs = matches!(
+                storage_params.as_ref().unwrap_or(&config.storage.params),
+                StorageParams::Fs(_)
+            );
 
             // we should persist the storage format and compression type instead of using the default value in fuse table
             if !options.contains_key(OPT_KEY_STORAGE_FORMAT) {
