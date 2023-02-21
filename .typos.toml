@@ -13,5 +13,6 @@
 [files]
 extend-exclude = [
     "scripts/benchmark/",
+    "benchmark/",
     "tests/",
 ]
