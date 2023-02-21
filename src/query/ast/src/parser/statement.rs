@@ -214,6 +214,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         |(_, _, _, catalog)| Statement::ShowCreateCatalog(ShowCreateCatalogStmt { catalog }),
     );
     // TODO: support `COMMENT` in create catalog
+    // TODO: use a more specific option struct instead of BTreeMap
     let create_catalog = map(
         rule! {
             CREATE ~ CATALOG ~ ( IF ~ NOT ~ EXISTS )?
@@ -226,7 +227,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 if_not_exists: opt_if_not_exists.is_some(),
                 catalog_name: catalog.to_string(),
                 catalog_type: ty,
-                options,
+                catalog_options: options,
             })
         },
     );
@@ -1717,6 +1718,7 @@ pub fn catalog_type(i: Input) -> IResult<CatalogType> {
     let catalog_type = alt((
         value(CatalogType::Default, rule! {DEFAULT}),
         value(CatalogType::Hive, rule! {HIVE}),
+        value(CatalogType::Iceberg, rule! {ICEBERG}),
     ));
     map(rule! { ^#catalog_type }, |catalog_type| catalog_type)(i)
 }
