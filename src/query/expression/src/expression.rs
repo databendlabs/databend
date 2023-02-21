@@ -411,6 +411,18 @@ impl<Index: ColumnIndex> Expr<Index> {
             },
         }
     }
+
+    pub fn is_deterministic(&self) -> bool {
+        match self {
+            Expr::Constant { .. } => true,
+            Expr::ColumnRef { .. } => true,
+            Expr::Cast { expr, .. } => expr.is_deterministic(),
+            Expr::FunctionCall { function, args, .. } => {
+                !function.signature.property.non_deterministic
+                    && args.iter().all(|arg| arg.is_deterministic())
+            }
+        }
+    }
 }
 
 impl<Index: ColumnIndex> RemoteExpr<Index> {

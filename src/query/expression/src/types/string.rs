@@ -196,7 +196,7 @@ impl StringColumn {
         let offsets = self
             .offsets
             .clone()
-            .slice(range.start, range.end - range.start + 1);
+            .sliced(range.start, range.end - range.start + 1);
         StringColumn {
             data: self.data.clone(),
             offsets,

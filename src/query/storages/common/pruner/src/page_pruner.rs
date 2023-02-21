@@ -67,7 +67,7 @@ impl PagePrunerCreator {
     pub fn try_create<'a>(
         func_ctx: FunctionContext,
         schema: &'a TableSchemaRef,
-        filter_expr: Option<&'a [Expr<String>]>,
+        filter_expr: Option<&'a Expr<String>>,
         cluster_key_meta: Option<ClusterKey>,
         cluster_keys: Vec<RemoteExpr<String>>,
     ) -> Result<Arc<dyn PagePruner + Send + Sync>> {
@@ -83,7 +83,7 @@ impl PagePrunerCreator {
         let cluster_key_meta = cluster_key_meta.unwrap();
 
         Ok(match filter_expr {
-            Some(exprs) if !exprs.is_empty() => {
+            Some(expr) => {
                 let cluster_keys = cluster_keys
                     .iter()
                     .map(|expr| match expr {
@@ -96,7 +96,7 @@ impl PagePrunerCreator {
                     func_ctx,
                     cluster_key_meta.0,
                     cluster_keys,
-                    exprs,
+                    expr,
                     schema.clone(),
                 )?;
                 match page_filter.try_apply_const() {

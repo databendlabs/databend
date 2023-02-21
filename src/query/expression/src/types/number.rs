@@ -155,7 +155,7 @@ impl<Num: Number> ValueType for NumberType<Num> {
     }
 
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
-        col.clone().slice(range.start, range.end - range.start)
+        col.clone().sliced(range.start, range.end - range.start)
     }
 
     fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a> {
@@ -453,7 +453,7 @@ impl NumberColumn {
 
         crate::with_number_type!(|NUM_TYPE| match self {
             NumberColumn::NUM_TYPE(col) => {
-                NumberColumn::NUM_TYPE(col.clone().slice(range.start, range.end - range.start))
+                NumberColumn::NUM_TYPE(col.clone().sliced(range.start, range.end - range.start))
             }
         })
     }
@@ -549,8 +549,11 @@ impl<T: Number> SimpleDomain<T> {
     }
 
     pub fn overflow_cast_with_minmax<U: Number>(&self, min: U, max: U) -> (SimpleDomain<U>, bool) {
-        let (min, min_overflowing) = overflow_cast_with_minmax::<T, U>(self.min, min, max);
-        let (max, max_overflowing) = overflow_cast_with_minmax::<T, U>(self.max, min, max);
+        let (min, min_overflowing) =
+            overflow_cast_with_minmax::<T, U>(self.min, min, max).unwrap_or((min, true));
+        let (max, max_overflowing) =
+            overflow_cast_with_minmax::<T, U>(self.max, min, max).unwrap_or((max, true));
+
         (
             SimpleDomain { min, max },
             min_overflowing || max_overflowing,
@@ -558,16 +561,15 @@ impl<T: Number> SimpleDomain<T> {
     }
 }
 
-fn overflow_cast_with_minmax<T: Number, U: Number>(src: T, min: U, max: U) -> (U, bool) {
+fn overflow_cast_with_minmax<T: Number, U: Number>(src: T, min: U, max: U) -> Option<(U, bool)> {
     let dest_min: T = num_traits::cast(min).unwrap_or(T::MIN);
     let dest_max: T = num_traits::cast(max).unwrap_or(T::MAX);
     let src_clamp: T = src.clamp(dest_min, dest_max);
     let overflowing = src != src_clamp;
-    // The number must be within the range that `U` can represent after clamping, therefore
-    // it's safe to unwrap.
-    let dest: U = num_traits::cast(src_clamp).unwrap();
 
-    (dest, overflowing)
+    // It will have errors if the src type is Inf/NaN
+    let dest: U = num_traits::cast(src_clamp)?;
+    Some((dest, overflowing))
 }
 
 #[macro_export]

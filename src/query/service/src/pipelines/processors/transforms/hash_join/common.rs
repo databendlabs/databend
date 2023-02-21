@@ -15,13 +15,12 @@
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::arrow::constant_bitmap;
 use common_expression::arrow::or_validities;
-use common_expression::filter_helper::FilterHelpers;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::AnyType;
+use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::Column;
@@ -32,6 +31,7 @@ use common_expression::Scalar;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_hashtable::HashtableLike;
+use common_sql::executor::cast_expr_to_non_null_boolean;
 
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
@@ -190,14 +190,16 @@ impl JoinHashTable {
         merged_block: &DataBlock,
         filter: &Expr,
     ) -> Result<(Option<Bitmap>, bool, bool)> {
-        let func_ctx = self.ctx.get_function_context()?;
-        // `predicate_column` contains a column, which is a boolean column.
-        let evaluator = Evaluator::new(merged_block, func_ctx, &BUILTIN_FUNCTIONS);
-        let filter_vector: Value<AnyType> = evaluator.run(filter)?;
-        let predict_boolean_nonull = FilterHelpers::cast_to_nonull_boolean(&filter_vector)
-            .ok_or_else(|| ErrorCode::Internal("Cannot get the boolean column"))?;
+        let filter = cast_expr_to_non_null_boolean(filter.clone())?;
 
-        match predict_boolean_nonull {
+        let func_ctx = self.ctx.get_function_context()?;
+        let evaluator = Evaluator::new(merged_block, func_ctx, &BUILTIN_FUNCTIONS);
+        let predicates = evaluator
+            .run_auto_type(&filter)?
+            .try_downcast::<BooleanType>()
+            .unwrap();
+
+        match predicates {
             Value::Scalar(v) => Ok((None, v, !v)),
             Value::Column(s) => {
                 let count_zeros = s.unset_bits();
@@ -215,7 +217,7 @@ impl JoinHashTable {
         let func_ctx = self.ctx.get_function_context()?;
         let evaluator = Evaluator::new(merged_block, func_ctx, &BUILTIN_FUNCTIONS);
 
-        let filter_vector: Value<AnyType> = evaluator.run(filter)?;
+        let filter_vector: Value<AnyType> = evaluator.run_auto_type(filter)?;
         let filter_vector =
             filter_vector.convert_to_full_column(filter.data_type(), merged_block.num_rows());
 

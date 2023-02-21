@@ -38,6 +38,7 @@ fn test_boolean() {
     test_not(file);
     test_or(file);
     test_xor(file);
+    test_is_true(file);
 }
 
 fn test_and(file: &mut impl Write) {
@@ -109,4 +110,21 @@ fn test_or(file: &mut impl Write) {
 fn test_xor(file: &mut impl Write) {
     run_ast(file, "true XOR false", &[]);
     run_ast(file, "null XOR false", &[]);
+}
+
+fn test_is_true(file: &mut impl Write) {
+    run_ast(file, "is_true(null)", &[]);
+    run_ast(file, "is_true(false)", &[]);
+    run_ast(file, "is_true(true)", &[]);
+
+    run_ast(file, "is_true(col)", &[(
+        "col",
+        BooleanType::from_data(vec![true, false]),
+    )]);
+    run_ast(file, "is_true(col)", &[(
+        "col",
+        BooleanType::from_data_with_validity(vec![true, false, true, false], vec![
+            true, true, false, false,
+        ]),
+    )]);
 }

@@ -1045,6 +1045,9 @@ pub struct QueryConfig {
     #[clap(long, default_value = "3307")]
     pub mysql_handler_port: u16,
 
+    #[clap(long, default_value = "120")]
+    pub mysql_handler_tcp_keepalive_timeout_secs: u64,
+
     #[clap(long, default_value = "256")]
     pub max_active_sessions: u64,
 
@@ -1172,6 +1175,10 @@ pub struct QueryConfig {
     #[clap(long)]
     pub internal_enable_sandbox_tenant: bool,
 
+    /// Experiment config options, DO NOT USE IT IN PRODUCTION ENV
+    #[clap(long)]
+    pub internal_merge_on_read_mutation: bool,
+
     // ----- the following options/args are all deprecated               ----
     // ----- and turned into Option<T>, to help user migrate the configs ----
     /// OBSOLETED: Table disk cache size (mb).
@@ -1241,6 +1248,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             num_cpus: self.num_cpus,
             mysql_handler_host: self.mysql_handler_host,
             mysql_handler_port: self.mysql_handler_port,
+            mysql_handler_tcp_keepalive_timeout_secs: self.mysql_handler_tcp_keepalive_timeout_secs,
             max_active_sessions: self.max_active_sessions,
             max_server_memory_usage: self.max_server_memory_usage,
             max_memory_limit_enabled: self.max_memory_limit_enabled,
@@ -1279,6 +1287,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             share_endpoint_auth_token_file: self.share_endpoint_auth_token_file,
             tenant_quota: self.quota,
             internal_enable_sandbox_tenant: self.internal_enable_sandbox_tenant,
+            internal_merge_on_read_mutation: self.internal_merge_on_read_mutation,
         })
     }
 }
@@ -1292,6 +1301,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             num_cpus: inner.num_cpus,
             mysql_handler_host: inner.mysql_handler_host,
             mysql_handler_port: inner.mysql_handler_port,
+            mysql_handler_tcp_keepalive_timeout_secs: inner
+                .mysql_handler_tcp_keepalive_timeout_secs,
             max_active_sessions: inner.max_active_sessions,
             max_server_memory_usage: inner.max_server_memory_usage,
             max_memory_limit_enabled: inner.max_memory_limit_enabled,
@@ -1333,6 +1344,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,
             quota: inner.tenant_quota,
             internal_enable_sandbox_tenant: inner.internal_enable_sandbox_tenant,
+            internal_merge_on_read_mutation: false,
             // obsoleted config entries
             table_disk_cache_mb_size: None,
             table_meta_cache_enabled: None,
