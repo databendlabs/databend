@@ -117,7 +117,7 @@ impl Binder {
             with_history,
         } = stmt;
 
-        let database = self.check_database_exist(database).await?;
+        let database = self.check_database_exist(catalog, database).await?;
 
         let mut select_builder = if stmt.with_history {
             SelectBuilder::from("system.tables_with_history")
@@ -251,7 +251,7 @@ impl Binder {
     ) -> Result<Plan> {
         let ShowTablesStatusStmt { database, limit } = stmt;
 
-        let database = self.check_database_exist(database).await?;
+        let database = self.check_database_exist(&None, database).await?;
 
         let select_cols = "name AS Name, engine AS Engine, 0 AS Version, \
         NULL AS Row_format, num_rows AS Rows, NULL AS Avg_row_length, data_size AS Data_length, \
@@ -289,13 +289,21 @@ impl Binder {
         self.bind_statement(bind_context, &stmt).await
     }
 
-    async fn check_database_exist(&mut self, database: &Option<Identifier>) -> Result<String> {
+    async fn check_database_exist(
+        &mut self,
+        catalog: &Option<Identifier>,
+        database: &Option<Identifier>,
+    ) -> Result<String> {
+        let ctl_name = match catalog {
+            Some(ctl) => ctl.to_string(),
+            None => self.ctx.get_current_catalog(),
+        };
         match database {
             None => Ok(self.ctx.get_current_database()),
             Some(ident) => {
                 let database = normalize_identifier(ident, &self.name_resolution_ctx).name;
                 self.ctx
-                    .get_catalog(&self.ctx.get_current_catalog())?
+                    .get_catalog(&ctl_name)?
                     .get_database(&self.ctx.get_tenant(), &database)
                     .await?;
                 Ok(database)

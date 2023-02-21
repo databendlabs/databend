@@ -68,6 +68,7 @@ common-storage = { path = "../../common/storage" }
 common-storages-factory = { path = "../storages/factory" }
 common-storages-fuse = { path = "../storages/fuse" }
 common-storages-hive = { path = "../storages/hive/hive", optional = true }
+common-storages-iceberg = { path = "../storages/iceberg" }
 common-storages-information-schema = { path = "../storages/information-schema" }
 common-storages-memory = { path = "../storages/memory" }
 common-storages-null = { path = "../storages/null" }

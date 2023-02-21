@@ -380,9 +380,9 @@ dependencies = [
 
 [[package]]
 name = "atomic-waker"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "065374052e7df7ee4047b1160cca5e1467a12351a40b3da123c870ba0b8eda2a"
+checksum = "debc29dde2e69f9e47506b525f639ed42300fc014a3e007832592448fa8e4599"
 
 [[package]]
 name = "atty"
@@ -2061,6 +2061,7 @@ dependencies = [
  "tonic",
  "tracing",
  "typetag",
+ "url",
  "uuid",
 ]
 
@@ -2180,6 +2181,27 @@ dependencies = [
  "storages-common-table-meta",
  "tracing",
  "typetag",
+]
+
+[[package]]
+name = "common-storages-iceberg"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "common-catalog",
+ "common-exception",
+ "common-expression",
+ "common-meta-app",
+ "common-meta-types",
+ "common-storage",
+ "futures",
+ "iceberg-rs",
+ "itertools",
+ "opendal",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -3082,6 +3104,7 @@ dependencies = [
  "common-storages-factory",
  "common-storages-fuse",
  "common-storages-hive",
+ "common-storages-iceberg",
  "common-storages-information-schema",
  "common-storages-memory",
  "common-storages-null",
@@ -4040,9 +4063,9 @@ dependencies = [
 
 [[package]]
 name = "glob"
-version = "0.3.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
+checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
 
 [[package]]
 name = "globiter"
@@ -4470,6 +4493,21 @@ checksum = "0703ae284fc167426161c2e3f1da3ea71d94b21bedbcc9494e92b28e334e3dca"
 dependencies = [
  "cxx",
  "cxx-build",
+]
+
+[[package]]
+name = "iceberg-rs"
+version = "0.1.2"
+source = "git+https://github.com/clslaid/iceberg-rs?branch=feat/v1/manifests#4b1587945d58c2decbd28b40b73ece038c6d6c1c"
+dependencies = [
+ "anyhow",
+ "lazy_static",
+ "regex",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "thiserror",
+ "uuid",
 ]
 
 [[package]]
@@ -8242,9 +8280,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.24.2"
+version = "1.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "597a12a59981d9e3c38d216785b0c37399f6e415e8d0712047620f189371b0bb"
+checksum = "c8e00990ebabbe4c14c08aca901caed183ecd5c09562a12c824bb53d3c3fd3af"
 dependencies = [
  "autocfg",
  "bytes",

@@ -53,7 +53,7 @@ pub struct CreateCatalogStmt {
     pub if_not_exists: bool,
     pub catalog_name: String,
     pub catalog_type: CatalogType,
-    pub options: BTreeMap<String, String>,
+    pub catalog_options: BTreeMap<String, String>,
 }
 
 impl Display for CreateCatalogStmt {
@@ -65,7 +65,7 @@ impl Display for CreateCatalogStmt {
         write!(f, " {}", self.catalog_name)?;
         write!(f, " TYPE='{}'", self.catalog_type)?;
         write!(f, " CONNECTION = (")?;
-        for (k, v) in self.options.iter() {
+        for (k, v) in self.catalog_options.iter() {
             write!(f, " {}='{}'", k, v)?;
         }
         write!(f, " )")
