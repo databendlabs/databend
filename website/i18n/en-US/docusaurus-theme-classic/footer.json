@@ -48,7 +48,7 @@
     "description": "The label of footer link with label=GitHub linking to https://github.com/datafuselabs/databend"
   },
   "copyright": {
-    "message": "Copyright © 2022 Datafuse Labs, Inc. Built with Docusaurus. <br><br> <img src=\"https://www.datocms-assets.com/31049/1618983297-powered-by-vercel.svg\">",
+    "message": "Copyright © 2023 Datafuse Labs, Inc. Built with Docusaurus. <br><br> <img src=\"https://www.datocms-assets.com/31049/1618983297-powered-by-vercel.svg\">",
     "description": "The footer copyright"
   }
 }

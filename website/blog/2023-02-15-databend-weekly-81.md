@@ -15,7 +15,7 @@ authors:
 
 Check out what we've done this week to make Databend even better for you.
 
-### Accepted RFCs :flight_departure:
+### Accepted RFCs :airplane_departure:
 
 - rfc: query result cache ([#10014](https://github.com/datafuselabs/databend/pull/10014))
 
@@ -31,7 +31,7 @@ Check out what we've done this week to make Databend even better for you.
 - alter table add/drop column SQL support ([#9851](https://github.com/datafuselabs/databend/pull/9851))
 - new table function `infer_schema` ([#9936](https://github.com/datafuselabs/databend/pull/9936))
 - add privilege check for select ([#9924](https://github.com/datafuselabs/databend/pull/9924))
-- improve signed numeric keys ([#9987](https://github.com/datafuselabs/databend/pull/9987))
+- improve signed numeric keys ([#9978](https://github.com/datafuselabs/databend/pull/9978))
 - support to parse jwt metadata and add multiple identity issuer configuration ([#9971](https://github.com/datafuselabs/databend/pull/9971))
 - support create file format ([#10009](https://github.com/datafuselabs/databend/pull/10009))
 
