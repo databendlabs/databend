@@ -48,7 +48,7 @@ impl Files {
             }
         }
 
-        if pathes.len() > 0 {
+        if !pathes.is_empty() {
             bo.remove(mem::take(&mut pathes)).await?;
         }
 
