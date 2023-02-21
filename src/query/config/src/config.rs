@@ -262,13 +262,7 @@ impl From<InnerStorageConfig> for StorageConfig {
             storage_num_cpus: inner.num_cpus,
             storage_type: "".to_string(),
             allow_insecure: inner.allow_insecure,
-            fs: Default::default(),
-            gcs: Default::default(),
-            s3: Default::default(),
-            oss: Default::default(),
-            azblob: Default::default(),
-            hdfs: Default::default(),
-            obs: Default::default(),
+            ..Default::default()
         };
 
         match inner.params {
@@ -1141,7 +1135,7 @@ pub struct QueryConfig {
     #[clap(long, default_value_t)]
     pub jwt_key_file: String,
 
-    /// If there are multiple trusted jwt provider put it into additonal_jwt_key_files configuration
+    /// If there are multiple trusted jwt provider put it into additional_jwt_key_files configuration
     #[clap(skip)]
     pub jwt_key_files: Vec<String>,
 

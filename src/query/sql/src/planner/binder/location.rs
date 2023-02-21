@@ -27,9 +27,11 @@ use common_meta_app::storage::StorageIpfsConfig;
 use common_meta_app::storage::StorageOssConfig;
 use common_meta_app::storage::StorageParams;
 use common_meta_app::storage::StorageS3Config;
+use common_meta_app::storage::StorageWebhdfsConfig;
 use common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
 use common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
 use common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
+use common_meta_app::storage::STORAGE_WEBHDFS_DEFAULT_ENDPOINT;
 use opendal::Scheme;
 use percent_encoding::percent_decode_str;
 
@@ -264,6 +266,30 @@ fn parse_hdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
     Ok(sp)
 }
 
+fn parse_webhdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
+    let endpoint_url = l
+        .connection
+        .get("endpoint_url")
+        .cloned()
+        .unwrap_or(STORAGE_WEBHDFS_DEFAULT_ENDPOINT.to_string());
+    let endpoint_url = secure_omission(endpoint_url);
+
+    let root = format!("{}/{}", l.name, l.path);
+
+    let delegation = l.connection.get("delegation").cloned().unwrap_or_default();
+
+    let sp = StorageParams::Webhdfs(StorageWebhdfsConfig {
+        // use http://127.0.0.1:9870 by default
+        endpoint_url,
+        root,
+        delegation,
+    });
+
+    l.connection.check()?;
+
+    Ok(sp)
+}
+
 /// parse_uri_location will parse given UriLocation into StorageParams and Path.
 pub fn parse_uri_location(l: &mut UriLocation) -> Result<(StorageParams, String)> {
     // Path endswith `/` means it's a directory, otherwise it's a file.
@@ -321,6 +347,7 @@ pub fn parse_uri_location(l: &mut UriLocation) -> Result<(StorageParams, String)
             let cfg = StorageFsConfig { root };
             StorageParams::Fs(cfg)
         }
+        Scheme::Webhdfs => parse_webhdfs_params(l)?,
         v => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
