@@ -4523,7 +4523,7 @@ dependencies = [
 [[package]]
 name = "iceberg-rs"
 version = "0.1.2"
-source = "git+https://github.com/clslaid/iceberg-rs?branch=feat/v1/manifests#4b1587945d58c2decbd28b40b73ece038c6d6c1c"
+source = "git+https://github.com/datafuse-extras/iceberg-rs#af2e3273d088dac23ae0ef2e5bc221719b276772"
 dependencies = [
  "anyhow",
  "lazy_static",
