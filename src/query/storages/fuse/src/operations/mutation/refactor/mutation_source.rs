@@ -17,7 +17,6 @@ use std::ops::BitAnd;
 use std::ops::Not;
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
 use common_base::base::tokio;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
@@ -53,16 +52,16 @@ use crate::io::BlockReader;
 use crate::io::DeleteMarkReader;
 use crate::io::ReadSettings;
 use crate::io::TableMetaLocationGenerator;
-use crate::io::UncompressedBuffer;
 use crate::operations::mutation::refactor::Mutation;
+use crate::operations::mutation::refactor::MutationPartInfo;
 use crate::operations::mutation::refactor::MutationSourceMeta;
+use crate::operations::read::ParquetReadResult;
+use crate::FuseStorageFormat;
 use crate::FuseTable;
-use crate::MergeIOReadResult;
 
 enum State {
     ReadData,
-    ReadMark(ReadDataInfo),
-    FilterData(Option<Arc<Bitmap>>, ReadDataInfo),
+    FilterData(ReadDataInfo),
     SerializeMark {
         block_index: BlockMetaIndex,
         location: Location,
@@ -76,7 +75,7 @@ enum State {
 struct ReadDataInfo {
     part: PartInfoPtr,
     index: BlockMetaIndex,
-    chunk: MergeIOReadResult,
+    chunk: ParquetReadResult,
 }
 
 pub struct MutationSource {
@@ -86,26 +85,24 @@ pub struct MutationSource {
     dal: Operator,
     ctx: Arc<dyn TableContext>,
     filter: Arc<Expr>,
+    storage_format: FuseStorageFormat,
 
     output: Arc<OutputPort>,
-
-    uncompressed_buffer: Arc<UncompressedBuffer>,
 
     batch_size: usize,
     read_datas: Vec<ReadDataInfo>,
 }
 
 impl MutationSource {
-    #![allow(clippy::too_many_arguments)]
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         table: &FuseTable,
         filter: Arc<Expr>,
         block_reader: Arc<BlockReader>,
+        storage_format: FuseStorageFormat,
     ) -> Result<ProcessorPtr> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
-        let buffer_size = ctx.get_settings().get_parquet_uncompressed_buffer_size()? as usize;
         Ok(ProcessorPtr::create(Box::new(MutationSource {
             state: State::ReadData,
             block_reader,
@@ -114,9 +111,9 @@ impl MutationSource {
             ctx: ctx.clone(),
             filter,
             output,
-            uncompressed_buffer: UncompressedBuffer::new(buffer_size),
             batch_size,
             read_datas: vec![],
+            storage_format,
         })))
     }
 }
@@ -148,7 +145,7 @@ impl Processor for MutationSource {
         if matches!(self.state, State::Output(_, _)) {
             if let State::Output(index, op) = std::mem::replace(&mut self.state, State::Finish) {
                 self.state = if let Some(data) = self.read_datas.pop() {
-                    State::ReadMark(data)
+                    State::FilterData(data)
                 } else {
                     State::ReadData
                 };
@@ -166,20 +163,24 @@ impl Processor for MutationSource {
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
-            State::FilterData(mark, ReadDataInfo { part, index, chunk }) => {
-                let columns_chunks = chunk.columns_chunks()?;
-                let part = FusePartInfo::from_part(&part)?;
-                let mut data_block = self.block_reader.deserialize_parquet_chunks_with_buffer(
-                    &part.location,
-                    part.nums_rows,
-                    &part.compression,
-                    &part.columns_meta,
-                    columns_chunks,
-                    Some(self.uncompressed_buffer.clone()),
+            State::FilterData(ReadDataInfo {
+                part,
+                index,
+                chunk:
+                    ParquetReadResult {
+                        merge_io_result,
+                        delete_mark,
+                    },
+            }) => {
+                let chunks = merge_io_result.columns_chunks()?;
+                let mut data_block = self.block_reader.deserialize_chunks(
+                    part.clone(),
+                    chunks,
+                    &self.storage_format,
                 )?;
 
                 let num_rows = data_block.num_rows();
-                let (num_exists_rows, entry) = mark.as_deref().map_or(
+                let (num_exists_rows, entry) = delete_mark.as_deref().map_or(
                     (num_rows, BlockEntry {
                         data_type: DataType::Boolean,
                         value: Value::Scalar(Scalar::Boolean(true)),
@@ -223,7 +224,7 @@ impl Processor for MutationSource {
                     let location = self.location_gen.gen_delete_mark_location();
 
                     let filter_res = predicates.into_column().unwrap().not();
-                    let res = mark.map_or(filter_res.clone(), |v| v.bitand(&filter_res));
+                    let res = delete_mark.map_or(filter_res.clone(), |v| v.bitand(&filter_res));
                     let mark_block = DataBlock::new(
                         vec![BlockEntry {
                             data_type: DataType::Boolean,
@@ -264,11 +265,6 @@ impl Processor for MutationSource {
                     let mut part_indices = Vec::with_capacity(parts.len());
 
                     for part in &parts {
-                        // @zhyass
-                        // to make `delete` stmt work,
-                        // `refactor::NutationPartInfo` is temporarily replaced with the non-refactored one
-                        // please change this as you planned
-                        use crate::operations::mutation::MutationPartInfo;
                         let part = MutationPartInfo::from_part(part)?;
                         let inner_part = part.inner_part.clone();
 
@@ -279,13 +275,33 @@ impl Processor for MutationSource {
                         chunks.push(async move {
                             tokio::spawn(async move {
                                 let fuse_part = FusePartInfo::from_part(&inner_part)?;
-                                block_reader
+
+                                let merge_io_result = block_reader
                                     .read_columns_data_by_merge_io(
                                         &settings,
                                         &fuse_part.location,
                                         &fuse_part.columns_meta,
                                     )
-                                    .await
+                                    .await?;
+
+                                let delete_mark =
+                                    if let Some((location, meta_size)) = &fuse_part.delete_mark {
+                                        Some(
+                                            location
+                                                .read_delete_mark(
+                                                    block_reader.operator.clone(),
+                                                    *meta_size,
+                                                )
+                                                .await?,
+                                        )
+                                    } else {
+                                        None
+                                    };
+
+                                Ok::<_, ErrorCode>(ParquetReadResult {
+                                    merge_io_result,
+                                    delete_mark,
+                                })
                             })
                             .await
                             .unwrap()
@@ -299,18 +315,8 @@ impl Processor for MutationSource {
                             acc
                         },
                     );
-                    self.state = State::ReadMark(self.read_datas.pop().unwrap());
+                    self.state = State::FilterData(self.read_datas.pop().unwrap());
                 }
-            }
-            State::ReadMark(read_res) => {
-                let fuse_part = FusePartInfo::from_part(&read_res.part)?;
-                let mark = if let Some((location, length)) = &fuse_part.delete_mark {
-                    let mark = location.read_delete_mark(self.dal.clone(), *length).await?;
-                    Some(mark)
-                } else {
-                    None
-                };
-                self.state = State::FilterData(mark, read_res);
             }
             State::SerializeMark {
                 block_index,

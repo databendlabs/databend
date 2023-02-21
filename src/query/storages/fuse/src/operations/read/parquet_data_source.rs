@@ -23,7 +23,7 @@ use common_expression::BlockMetaInfoPtr;
 use serde::Deserializer;
 use serde::Serializer;
 
-use crate::operations::read::parquet_data_source_reader::ParquetReadResult;
+use crate::operations::read::ParquetReadResult;
 
 pub struct DataSourceMeta {
     pub part: Vec<PartInfoPtr>,
