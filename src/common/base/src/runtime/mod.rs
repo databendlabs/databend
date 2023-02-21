@@ -23,6 +23,7 @@ mod thread_pool;
 pub use catch_unwind::catch_unwind;
 pub use catch_unwind::CatchUnwindFuture;
 pub use global_runtime::GlobalIORuntime;
+pub use global_runtime::RESUE_RUNTIME;
 pub use runtime::Dropper;
 pub use runtime::Runtime;
 pub use runtime::TrySpawn;

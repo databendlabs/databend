@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_base::base::tokio::sync::OwnedSemaphorePermit;
+use common_base::runtime::RESUE_RUNTIME;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures_util::future;
@@ -62,7 +63,6 @@ impl BlockPruner {
         segment_info: &SegmentInfo,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
-        let pruning_runtime = &self.pruning_ctx.pruning_runtime;
         let pruning_semaphore = &self.pruning_ctx.pruning_semaphore;
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
         let range_pruner = self.pruning_ctx.range_pruner.clone();
@@ -159,7 +159,8 @@ impl BlockPruner {
 
         let start = Instant::now();
 
-        let join_handlers = pruning_runtime
+        let runtime = RESUE_RUNTIME.pull();
+        let join_handlers = runtime
             .try_spawn_batch_with_owned_semaphore(pruning_semaphore.clone(), pruning_tasks)
             .await?;
 

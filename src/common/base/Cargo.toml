@@ -29,6 +29,7 @@ common-exception = { path = "../exception" }
 async-channel = "1.7.1"
 async-trait = "0.1.57"
 bytesize = "1.1.0"
+ctor = "0.1.26"
 ctrlc = { version = "3.2.3", features = ["termination"] }
 enquote = "1.1.0"
 futures = "0.3.24"

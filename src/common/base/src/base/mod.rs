@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod net;
+mod object_pool;
 mod profiling;
 mod progress;
 mod select;
@@ -25,6 +26,8 @@ mod uniq_id;
 
 pub use net::get_free_tcp_port;
 pub use net::get_free_udp_port;
+pub use object_pool::Pool;
+pub use object_pool::Reusable;
 pub use profiling::Profiling;
 pub use progress::Progress;
 pub use progress::ProgressValues;

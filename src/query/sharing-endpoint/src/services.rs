@@ -28,6 +28,7 @@ impl SharingServices {
         GlobalInstance::init_production();
 
         GlobalIORuntime::init(config.storage.num_cpus as usize)?;
+
         SharingAccessor::init(&config).await
     }
 }
