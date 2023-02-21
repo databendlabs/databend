@@ -181,7 +181,7 @@ mod tests {
     #[test]
     fn e2e() {
         let pool = Pool::new(10);
-        for i in 0..10 {
+        for _i in 0..10 {
             pool.attach(vec![]);
         }
         let mut objects = VecDeque::new();
