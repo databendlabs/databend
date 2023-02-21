@@ -149,13 +149,12 @@ impl Interpreter for SelectInterpreterV2 {
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
     #[tracing::instrument(level = "debug", name = "select_interpreter_v2_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        // 0. Need to build pipeline first to get the partitions.
+        let mut build_res = self.build_pipeline().await?;
         // Only single table query can use result cache now. Multi-tables query will be supported later.
         if self.ctx.get_settings().get_enable_query_result_cache()?
             && self.metadata.read().tables().len() == 1
         {
-            // 0. Need to build pipeline first to get the partitions.
-            let mut build_res = self.build_pipeline().await?;
-
             // 1. Try to get result from cache.
             let kv_store = UserApiProvider::instance().get_meta_store_client();
             let cache_reader = ResultCacheReader::create(
@@ -165,15 +164,24 @@ impl Interpreter for SelectInterpreterV2 {
                     .get_settings()
                     .get_tolerate_inconsistent_result_cache()?,
             );
-            if let Some(blocks) = cache_reader.try_read_cached_result().await? {
-                // 2. If found, return the result directly.
-                return PipelineBuildResult::from_blocks(blocks);
+
+            // 2. Check the cache.
+            match cache_reader.try_read_cached_result().await {
+                Ok(Some(blocks)) => {
+                    // 2.1 If found, return the result directly.
+                    return PipelineBuildResult::from_blocks(blocks);
+                }
+                Ok(None) => {
+                    // 2.2 If not found result in cache, add pipelines to write the result to cache.
+                    self.add_result_cache(&mut build_res.main_pipeline, kv_store)?;
+                    return Ok(build_res);
+                }
+                Err(e) => {
+                    // 2.3 If an error occurs, turn back to the normal pipeline.
+                    tracing::error!("Failed to read query result cache. {}", e);
+                }
             }
-            // 3. If not found result in cache, build the pipeline and add a transform to write the result to cache.
-            self.add_result_cache(&mut build_res.main_pipeline, kv_store)?;
-            Ok(build_res)
-        } else {
-            Ok(self.build_pipeline().await?)
         }
+        Ok(build_res)
     }
 }
