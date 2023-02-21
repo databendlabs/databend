@@ -25,8 +25,8 @@ enum HashTable<Method: HashMethodBounds> {
     HashTable(Method::HashTable<()>),
     PartitionedHashTable(
         <PartitionedHashMethod<Method> as PolymorphicKeysHelper<
-                PartitionedHashMethod<Method>,
-            >>::HashTable<()>,
+            PartitionedHashMethod<Method>,
+        >>::HashTable<()>,
     ),
 }
 
@@ -147,4 +147,12 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
             },
         )))
     }
+}
+
+struct TransformMergeGroupBy {
+
+}
+
+struct TransformFinalGroupBy {
+
 }

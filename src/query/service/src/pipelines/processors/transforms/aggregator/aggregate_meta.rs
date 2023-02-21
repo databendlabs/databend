@@ -102,10 +102,24 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> BlockMetaInfo
     }
 
     fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals for AggregateMeta")
+        match self {
+            AggregateMeta::HashTable(_) => {
+                unimplemented!("Unimplemented equals for AggregateMeta::HashTable")
+            }
+            AggregateMeta::PartitionedHashTable(_) => {
+                unimplemented!("Unimplemented equals for AggregateMeta::PartitionedHashTable")
+            }
+        }
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unimplemented!("Unimplemented clone for AggregateMeta")
+        match self {
+            AggregateMeta::HashTable(_) => {
+                unimplemented!("Unimplemented clone for AggregateMeta::HashTable")
+            }
+            AggregateMeta::PartitionedHashTable(_) => {
+                unimplemented!("Unimplemented clone for AggregateMeta::PartitionedHashTable")
+            }
+        }
     }
 }

@@ -89,6 +89,8 @@ storages-common-table-meta = { path = "../storages/common/table-meta" }
 # Github dependencies
 
 # Crates.io dependencies
+inventory = "0.3.3"
+erased-serde = "0.3.24"
 ahash = { version = "0.8.2", features = ["no-rng"] }
 aho-corasick = { version = "0.7.20" }
 async-channel = "1.7.1"
