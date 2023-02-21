@@ -41,7 +41,7 @@ pub fn write_block(
         FuseStorageFormat::Parquet => {
             let result =
                 blocks_to_parquet(schema, vec![block], buf, write_settings.table_compression)?;
-            let meta = util::column_metas(&result.1, schema)?;
+            let meta = util::column_parquet_metas(&result.1, schema)?;
             Ok((result.0, meta))
         }
         FuseStorageFormat::Native => {

@@ -17,13 +17,12 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_arrow::arrow::chunk::Chunk;
+use common_arrow::arrow::compute;
 use common_arrow::arrow::datatypes::Field;
-use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
-use common_arrow::arrow::io::parquet::read::ArrayIter;
-use common_arrow::parquet::compression::Compression as ParquetCompression;
+use common_arrow::native::read::column_iter_to_arrays;
+use common_arrow::native::read::reader::NativeReader;
+use common_arrow::native::read::ArrayIter;
 use common_arrow::parquet::metadata::ColumnDescriptor;
-use common_arrow::parquet::read::PageMetaData;
-use common_arrow::parquet::read::PageReader;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -40,14 +39,13 @@ use super::block_reader_deserialize::DeserializedArray;
 use super::block_reader_deserialize::FieldDeserializationContext;
 use crate::fuse_part::FusePartInfo;
 use crate::io::read::block::block_reader_merge_io::DataItem;
-use crate::io::read::block::decompressor::BuffedBasicDecompressor;
 use crate::io::BlockReader;
 use crate::io::UncompressedBuffer;
 use crate::metrics::*;
 
 impl BlockReader {
-    /// Deserialize column chunks data from parquet format to DataBlock.
-    pub(super) fn deserialize_parquet_chunks(
+    /// Deserialize column chunks data from native format to DataBlock.
+    pub(super) fn deserialize_native_chunks(
         &self,
         part: PartInfoPtr,
         chunks: HashMap<ColumnId, DataItem>,
@@ -59,7 +57,7 @@ impl BlockReader {
             return self.build_default_values_block(part.nums_rows);
         }
 
-        let deserialized_res = self.deserialize_parquet_chunks_with_buffer(
+        let deserialized_res = self.deserialize_native_chunks_with_buffer(
             &part.location,
             part.nums_rows,
             &part.compression,
@@ -76,14 +74,8 @@ impl BlockReader {
         deserialized_res
     }
 
-    pub fn build_default_values_block(&self, num_rows: usize) -> Result<DataBlock> {
-        let data_schema = self.data_schema();
-        let default_vals = self.default_vals.clone();
-        DataBlock::create_with_default_value(&data_schema, &default_vals, num_rows)
-    }
-
-    /// Deserialize column chunks data from parquet format to DataBlock with a uncompressed buffer.
-    pub(crate) fn deserialize_parquet_chunks_with_buffer(
+    /// Deserialize column chunks data from native format to DataBlock with a uncompressed buffer.
+    pub(super) fn deserialize_native_chunks_with_buffer(
         &self,
         block_path: &str,
         num_rows: usize,
@@ -106,8 +98,9 @@ impl BlockReader {
             compression,
             uncompressed_buffer: &uncompressed_buffer,
         };
+
         for column_node in &self.project_column_nodes {
-            match self.deserialize_field(&field_deserialization_ctx, column_node)? {
+            match self.deserialize_native_field(&field_deserialization_ctx, column_node)? {
                 None => {
                     need_to_fill_default_val = true;
                     need_default_vals.push(true);
@@ -170,65 +163,38 @@ impl BlockReader {
         data_block
     }
 
-    fn chunks_to_parquet_array_iter<'a>(
+    fn chunks_to_native_array_iter<'a>(
+        column_node: &ColumnNode,
         metas: Vec<&ColumnMeta>,
         chunks: Vec<&'a [u8]>,
-        rows: usize,
-        column_descriptors: Vec<&ColumnDescriptor>,
+        column_descriptors: Vec<ColumnDescriptor>,
         field: Field,
-        compression: &Compression,
-        uncompressed_buffer: Arc<UncompressedBuffer>,
     ) -> Result<ArrayIter<'a>> {
-        let columns = metas
-            .iter()
-            .zip(chunks.into_iter().zip(column_descriptors.iter()))
-            .map(|(meta, (chunk, column_descriptor))| {
-                let meta = meta.as_parquet().unwrap();
+        let is_nested = column_node.is_nested;
 
-                let page_meta_data = PageMetaData {
-                    column_start: meta.offset,
-                    num_values: meta.num_values as i64,
-                    compression: Self::to_parquet_compression(compression)?,
-                    descriptor: column_descriptor.descriptor.clone(),
-                };
-                let pages = PageReader::new_with_page_meta(
-                    chunk,
-                    page_meta_data,
-                    Arc::new(|_, _| true),
-                    vec![],
-                    usize::MAX,
-                );
-
-                Ok(BuffedBasicDecompressor::new(
-                    pages,
-                    uncompressed_buffer.clone(),
-                ))
+        let readers = chunks
+            .into_iter()
+            .zip(metas.into_iter())
+            .map(|(chunk, meta)| {
+                let meta = meta.as_native().unwrap();
+                let cursor = std::io::Cursor::new(chunk);
+                NativeReader::new(cursor, meta.pages.clone(), vec![])
             })
-            .collect::<Result<Vec<_>>>()?;
-
-        let types = column_descriptors
-            .iter()
-            .map(|column_descriptor| &column_descriptor.descriptor.primitive_type)
             .collect::<Vec<_>>();
 
-        Ok(column_iter_to_arrays(
-            columns,
-            types,
-            field,
-            Some(rows),
-            rows,
-        )?)
+        match column_iter_to_arrays(readers, column_descriptors, field, is_nested) {
+            Ok(array_iter) => Ok(array_iter),
+            Err(err) => Err(err.into()),
+        }
     }
 
-    fn deserialize_field<'a>(
+    fn deserialize_native_field<'a>(
         &self,
         deserialization_context: &'a FieldDeserializationContext,
         column: &ColumnNode,
     ) -> Result<Option<DeserializedArray<'a>>> {
         let indices = &column.leaf_indices;
         let column_chunks = deserialization_context.column_chunks;
-        let compression = deserialization_context.compression;
-        let uncompressed_buffer = deserialization_context.uncompressed_buffer;
         // column passed in may be a compound field (with sub leaves),
         // or a leaf column of compound field
         let is_nested = column.has_children();
@@ -248,7 +214,7 @@ impl BlockReader {
                                 &self.parquet_schema_descriptor.columns()[*leaf_index];
                             field_column_metas.push(column_meta);
                             field_column_data.push(*data);
-                            field_column_descriptors.push(column_descriptor);
+                            field_column_descriptors.push(column_descriptor.clone());
                             field_uncompressed_size += data.len();
                         }
                         DataItem::ColumnArray(column_array) => {
@@ -263,36 +229,27 @@ impl BlockReader {
                         }
                     }
                 } else {
-                    // TODO more context info for error message
-                    // no raw data of given column id, it is unexpected
                     return Err(ErrorCode::StorageOther("unexpected: column data not found"));
                 }
             } else {
-                // no column meta of given colmun id
                 break;
             }
         }
 
-        let num_rows = deserialization_context.num_rows;
         if !field_column_metas.is_empty() {
-            let field_name = column.field.name.to_owned();
-            let mut array_iter = Self::chunks_to_parquet_array_iter(
+            let array_iter = Self::chunks_to_native_array_iter(
+                column,
                 field_column_metas,
                 field_column_data,
-                num_rows,
                 field_column_descriptors,
                 column.field.clone(),
-                compression,
-                uncompressed_buffer
-                    .clone()
-                    .unwrap_or_else(|| UncompressedBuffer::new(0)),
             )?;
-            let array = array_iter.next().transpose()?.ok_or_else(|| {
-                ErrorCode::StorageOther(format!(
-                    "unexpected deserialization error, no array found for field {field_name} "
-                ))
-            })?;
-
+            let mut arrays = vec![];
+            for array in array_iter {
+                arrays.push(array?);
+            }
+            let arrays = arrays.iter().map(|c| c.as_ref()).collect::<Vec<_>>();
+            let array = compute::concatenate::concatenate(&arrays)?;
             // mark the array
             if is_nested {
                 // the array is not intended to be cached
@@ -309,35 +266,6 @@ impl BlockReader {
             }
         } else {
             Ok(None)
-        }
-    }
-
-    fn to_parquet_compression(meta_compression: &Compression) -> Result<ParquetCompression> {
-        match meta_compression {
-            Compression::Lz4 => {
-                let err_msg = r#"Deprecated compression algorithm [Lz4] detected.
-
-                                        The Legacy compression algorithm [Lz4] is no longer supported.
-                                        To migrate data from old format, please consider re-create the table,
-                                        by using an old compatible version [v0.8.25-nightly … v0.7.12-nightly].
-
-                                        - Bring up the compatible version of databend-query
-                                        - re-create the table
-                                           Suppose the name of table is T
-                                            ~~~
-                                            create table tmp_t as select * from T;
-                                            drop table T all;
-                                            alter table tmp_t rename to T;
-                                            ~~~
-                                        Please note that the history of table T WILL BE LOST.
-                                       "#;
-                Err(ErrorCode::StorageOther(err_msg))
-            }
-            Compression::Lz4Raw => Ok(ParquetCompression::Lz4Raw),
-            Compression::Snappy => Ok(ParquetCompression::Snappy),
-            Compression::Zstd => Ok(ParquetCompression::Zstd),
-            Compression::Gzip => Ok(ParquetCompression::Gzip),
-            Compression::None => Ok(ParquetCompression::Uncompressed),
         }
     }
 }
