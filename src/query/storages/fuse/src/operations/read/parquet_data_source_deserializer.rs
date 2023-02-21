@@ -33,7 +33,7 @@ use crate::io::BlockReader;
 use crate::io::UncompressedBuffer;
 use crate::metrics::metrics_inc_remote_io_deserialize_milliseconds;
 use crate::operations::read::parquet_data_source::DataSourceMeta;
-use crate::operations::read::parquet_data_source_reader::ParquetReadResult;
+use crate::operations::read::ParquetReadResult;
 
 pub struct DeserializeDataTransform {
     scan_progress: Arc<Progress>,
