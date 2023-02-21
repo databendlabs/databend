@@ -356,6 +356,14 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn set_paritions_sha(&self, _sha: String) {
+        todo!()
+    }
+
+    fn get_partitions_sha(&self) -> Option<String> {
+        todo!()
+    }
+
     fn attach_query_str(&self, _kind: String, _query: &str) {
         todo!()
     }

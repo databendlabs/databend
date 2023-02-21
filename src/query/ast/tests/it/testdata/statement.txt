@@ -1016,7 +1016,7 @@ CreateCatalog(
         if_not_exists: false,
         catalog_name: "ctl",
         catalog_type: Hive,
-        options: {
+        catalog_options: {
             "thrift_protocol": "binary",
             "url": "<hive-meta-store>",
         },

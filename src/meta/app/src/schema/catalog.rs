@@ -12,16 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::fmt::Display;
 
 use chrono::DateTime;
 use chrono::Utc;
 
+use crate::storage::StorageParams;
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum CatalogType {
     Default = 1,
     Hive = 2,
+    Iceberg = 3,
 }
 
 impl Display for CatalogType {
@@ -29,14 +31,32 @@ impl Display for CatalogType {
         match self {
             CatalogType::Default => write!(f, "DEFAULT"),
             CatalogType::Hive => write!(f, "HIVE"),
+            CatalogType::Iceberg => write!(f, "ICEBERG"),
         }
     }
 }
 
+/// Option for creating a iceberg catalog
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct IcebergCatalogOption {
+    pub storage_params: Box<StorageParams>,
+    /// is the remote iceberg storage storing
+    /// tables directly in the root directory
+    pub flatten: bool,
+}
+
+/// different options for creating catalogs
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CatalogOption {
+    // hms_address
+    Hive(String),
+    // Uri location for iceberg
+    Iceberg(IcebergCatalogOption),
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CatalogMeta {
-    pub catalog_type: CatalogType,
-    pub options: BTreeMap<String, String>,
+    pub catalog_option: CatalogOption,
     pub created_on: DateTime<Utc>,
 }
 
