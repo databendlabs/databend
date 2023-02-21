@@ -62,10 +62,10 @@ impl Debug for Pipeline {
     }
 }
 
-pub type InitCallback = Arc<Box<dyn Fn() -> Result<()> + Send + Sync + 'static>>;
+pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 
 pub type FinishedCallback =
-    Arc<Box<dyn Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>>;
+    Box<dyn FnOnce(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>;
 
 impl Pipeline {
     pub fn create() -> Pipeline {
@@ -291,49 +291,45 @@ impl Pipeline {
         }
     }
 
-    pub fn set_on_init<F: Fn() -> Result<()> + Send + Sync + 'static>(&mut self, f: F) {
-        if let Some(on_init) = &self.on_init {
-            let old_on_init = on_init.clone();
-
-            self.on_init = Some(Arc::new(Box::new(move || {
+    pub fn set_on_init<F: FnOnce() -> Result<()> + Send + Sync + 'static>(&mut self, f: F) {
+        if let Some(old_on_init) = self.on_init.take() {
+            self.on_init = Some(Box::new(move || {
                 old_on_init()?;
                 f()
-            })));
+            }));
 
             return;
         }
 
-        self.on_init = Some(Arc::new(Box::new(f)));
+        self.on_init = Some(Box::new(f));
     }
 
-    pub fn set_on_finished<F: Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>(
+    pub fn set_on_finished<F: FnOnce(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>(
         &mut self,
         f: F,
     ) {
-        if let Some(on_finished) = &self.on_finished {
-            let old_finished = on_finished.clone();
-
-            self.on_finished = Some(Arc::new(Box::new(move |may_error| {
-                old_finished(may_error)?;
+        if let Some(on_finished) = self.on_finished.take() {
+            self.on_finished = Some(Box::new(move |may_error| {
+                on_finished(may_error)?;
                 f(may_error)
-            })));
+            }));
 
             return;
         }
 
-        self.on_finished = Some(Arc::new(Box::new(f)));
+        self.on_finished = Some(Box::new(f));
     }
 
     pub fn take_on_init(&mut self) -> InitCallback {
         match self.on_init.take() {
-            None => Arc::new(Box::new(|| Ok(()))),
+            None => Box::new(|| Ok(())),
             Some(on_init) => on_init,
         }
     }
 
     pub fn take_on_finished(&mut self) -> FinishedCallback {
         match self.on_finished.take() {
-            None => Arc::new(Box::new(|_may_error| Ok(()))),
+            None => Box::new(|_may_error| Ok(())),
             Some(on_finished) => on_finished,
         }
     }
