@@ -12,7 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cache_writer;
-mod transform;
+#![feature(type_alias_impl_trait)]
 
-pub use transform::TransformWriteResultCache;
+mod common;
+mod meta_manager;
+mod read;
+mod write;
+
+pub use read::ResultCacheReader;
+pub use write::WriteResultCacheSink;

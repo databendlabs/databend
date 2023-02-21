@@ -464,6 +464,46 @@ impl Settings {
                 desc: "Enable generating bushy join plan in optimizer",
                 possible_values: None,
             },
+            SettingValue {
+                default_value: UserSettingValue::UInt64(0),
+                user_setting: UserSetting::create(
+                    "enable_query_result_cache",
+                    UserSettingValue::UInt64(0),
+                ),
+                level: ScopeLevel::Session,
+                desc: "Enable the cache result of each query. It's disabled by default.",
+                possible_values: None,
+            },
+            SettingValue {
+                default_value: UserSettingValue::UInt64(1048576), // 1MB
+                user_setting: UserSetting::create(
+                    "max_result_cache_bytes",
+                    UserSettingValue::UInt64(1048576),
+                ),
+                level: ScopeLevel::Session,
+                desc: "The maximum bytes of the result cache for one query, default: 1048576 bytes (1MB).",
+                possible_values: None,
+            },
+            SettingValue {
+                default_value: UserSettingValue::UInt64(300), // seconds
+                user_setting: UserSetting::create(
+                    "result_cache_ttl",
+                    UserSettingValue::UInt64(300),
+                ),
+                level: ScopeLevel::Session,
+                desc: "Time-to-live of query result cache, default: 300 seconds (5 minutes).",
+                possible_values: None,
+            },
+            SettingValue {
+                default_value: UserSettingValue::UInt64(0),
+                user_setting: UserSetting::create(
+                    "tolerate_inconsistent_result_cache",
+                    UserSettingValue::UInt64(0),
+                ),
+                level: ScopeLevel::Session,
+                desc: "Tolerate inconsistent result cache. It's disabled by default.",
+                possible_values: None,
+            },
         ];
 
         let settings: Arc<DashMap<String, SettingValue>> = Arc::new(DashMap::default());
@@ -787,6 +827,26 @@ impl Settings {
         let key = "sandbox_tenant";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
+    }
+
+    pub fn get_enable_query_result_cache(&self) -> Result<bool> {
+        let key = "enable_query_result_cache";
+        self.try_get_u64(key).map(|v| v != 0)
+    }
+
+    pub fn get_max_result_cache_bytes(&self) -> Result<usize> {
+        let key = "max_result_cache_bytes";
+        self.try_get_u64(key).map(|v| v as usize)
+    }
+
+    pub fn get_result_cache_ttl(&self) -> Result<u64> {
+        let key = "result_cache_ttl";
+        self.try_get_u64(key)
+    }
+
+    pub fn get_tolerate_inconsistent_result_cache(&self) -> Result<bool> {
+        let key = "tolerate_inconsistent_result_cache";
+        self.try_get_u64(key).map(|v| v != 0)
     }
 
     pub fn has_setting(&self, key: &str) -> bool {
