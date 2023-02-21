@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cache_writer;
-mod transform;
+mod reader;
 
-pub use transform::TransformWriteResultCache;
+pub use reader::ResultCacheReader;
