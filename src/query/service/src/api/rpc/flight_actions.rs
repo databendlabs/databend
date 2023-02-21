@@ -44,7 +44,7 @@ impl TryInto<Vec<u8>> for InitQueryFragmentsPlan {
     fn try_into(self) -> Result<Vec<u8>, Self::Error> {
         serde_json::to_vec(&self).map_err_to_code(
             ErrorCode::Internal,
-            || "Logical error: cannot serialize PrepareExecutor.",
+            || "Logical error: cannot serialize InitQueryFragmentsPlan.",
         )
     }
 }

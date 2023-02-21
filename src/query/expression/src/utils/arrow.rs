@@ -60,14 +60,17 @@ pub fn constant_bitmap(value: bool, len: usize) -> MutableBitmap {
 }
 
 pub fn buffer_into_mut<T: Clone>(mut buffer: Buffer<T>) -> Vec<T> {
-    buffer
-        .get_mut()
-        .map(std::mem::take)
-        .unwrap_or_else(|| buffer.to_vec())
+    unsafe {
+        buffer
+            .get_mut()
+            .map(std::mem::take)
+            .unwrap_or_else(|| buffer.to_vec())
+    }
 }
 
 pub fn serialize_column(col: &Column) -> Vec<u8> {
     let mut buffer = Vec::new();
+
     let schema = Schema::from(vec![col.arrow_field()]);
     let mut writer = FileWriter::new(&mut buffer, schema, None, IpcWriteOptions::default());
     writer.start().unwrap();
@@ -78,15 +81,18 @@ pub fn serialize_column(col: &Column) -> Vec<u8> {
         )
         .unwrap();
     writer.finish().unwrap();
+
     buffer
 }
 
 pub fn deserialize_column(bytes: &[u8]) -> Option<Column> {
     let mut cursor = Cursor::new(bytes);
+
     let metadata = read_file_metadata(&mut cursor).ok()?;
     let f = metadata.schema.fields[0].clone();
     let table_type = TableDataType::from(&f);
     let data_type = (&table_type).into();
+
     let mut reader = FileReader::new(cursor, metadata, None, None);
     let col = reader.next()?.ok()?.into_arrays().remove(0);
 
@@ -101,15 +107,6 @@ pub fn column_to_arrow_array(column: &BlockEntry, num_rows: usize) -> Box<dyn Ar
             builder.build().as_arrow()
         }
         Value::Column(c) => c.as_arrow(),
-    }
-}
-
-pub fn combine_validities(lhs: Option<&Bitmap>, rhs: Option<&Bitmap>) -> Option<Bitmap> {
-    match (lhs, rhs) {
-        (Some(lhs), None) => Some(lhs.clone()),
-        (None, Some(rhs)) => Some(rhs.clone()),
-        (None, None) => None,
-        (Some(lhs), Some(rhs)) => Some(lhs & rhs),
     }
 }
 

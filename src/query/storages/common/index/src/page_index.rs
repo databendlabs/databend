@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::type_check::check_function;
 use common_expression::types::DataType;
 use common_expression::ConstantFolder;
 use common_expression::DataField;
@@ -50,18 +49,9 @@ impl PageIndex {
         func_ctx: FunctionContext,
         cluster_key_id: u32,
         cluster_keys: Vec<String>,
-        exprs: &[Expr<String>],
+        expr: &Expr<String>,
         schema: TableSchemaRef,
     ) -> Result<Self> {
-        let conjunction = exprs
-            .iter()
-            .cloned()
-            .reduce(|lhs, rhs| {
-                check_function(None, "and", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS).unwrap()
-            })
-            .unwrap();
-
-        let (new_expr, _) = ConstantFolder::fold(&conjunction, func_ctx, &BUILTIN_FUNCTIONS);
         let data_schema: DataSchemaRef = Arc::new((&schema).into());
         let cluster_key_fields = cluster_keys
             .iter()
@@ -69,8 +59,8 @@ impl PageIndex {
             .collect::<Vec<_>>();
 
         Ok(Self {
-            column_refs: new_expr.column_refs(),
-            expr: new_expr,
+            column_refs: expr.column_refs(),
+            expr: expr.clone(),
             cluster_key_fields,
             cluster_key_id,
             func_ctx,

@@ -17,15 +17,12 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::type_check::check_function;
 use common_expression::ColumnId;
-use common_expression::ConstantFolder;
 use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
 use opendal::Operator;
 use storages_common_index::BloomIndex;
 use storages_common_index::FilterEvalResult;
@@ -68,31 +65,10 @@ impl BloomPrunerCreator {
         func_ctx: FunctionContext,
         schema: &TableSchemaRef,
         dal: Operator,
-        filter_expr: Option<&[Expr<String>]>,
+        filter_expr: Option<&Expr<String>>,
     ) -> Result<Option<Arc<dyn BloomPruner + Send + Sync>>> {
         if let Some(expr) = filter_expr {
-            if expr.is_empty() {
-                return Ok(None);
-            }
-
-            // Check if there were applicable filter conditions.
-            let expr: Expr<String> = expr
-                .iter()
-                .cloned()
-                .reduce(|lhs, rhs| {
-                    check_function(None, "and", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS).unwrap()
-                })
-                .unwrap();
-
-            let (optimized_expr, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
-            let point_query_cols = BloomIndex::find_eq_columns(&optimized_expr)?;
-
-            tracing::debug!(
-                "Bloom filter expr {:?}, optimized {:?}, point_query_cols: {:?}",
-                expr.sql_display(),
-                optimized_expr.sql_display(),
-                point_query_cols
-            );
+            let point_query_cols = BloomIndex::find_eq_columns(expr)?;
 
             if !point_query_cols.is_empty() {
                 // convert to filter column names
@@ -111,7 +87,7 @@ impl BloomPrunerCreator {
                 let creator = BloomPrunerCreator {
                     func_ctx,
                     index_fields: filter_fields,
-                    filter_expression: optimized_expr,
+                    filter_expression: expr.clone(),
                     scalar_map,
                     dal,
                     data_schema: schema.clone(),

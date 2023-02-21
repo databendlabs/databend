@@ -119,13 +119,13 @@ select count(*) = 0 from t
 statement ok
 insert into t values (1),(2),(NULL)
 
-statement ok
+statement error 1002
 delete from t where now()
 
 query B
 select count(*) = 0 from t
 ----
-1
+0
 
 
 

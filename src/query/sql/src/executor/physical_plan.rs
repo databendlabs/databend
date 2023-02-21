@@ -68,6 +68,8 @@ pub struct Filter {
     pub plan_id: u32,
 
     pub input: Box<PhysicalPlan>,
+
+    // Assumption: expression's data type must be `DataType::Boolean`.
     pub predicates: Vec<RemoteExpr>,
 
     /// Only used for explain
