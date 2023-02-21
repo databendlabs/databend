@@ -54,12 +54,7 @@ pub static RESUE_RUNTIME: ReusableRuntimePool = reuse_runtime_pool();
 
 fn reuse_runtime_pool() -> ReusableRuntimePool {
     let thread_num = num_cpus::get().clamp(2, 64);
-    let pool = Pool::new(4, || {
-        Arc::new(
-            Runtime::with_worker_threads(thread_num, Some("ReusableRuntime-Worker".to_owned()))
-                .unwrap(),
-        )
-    });
+    let pool = Pool::new(4);
 
     ReusableRuntimePool { thread_num, pool }
 }
