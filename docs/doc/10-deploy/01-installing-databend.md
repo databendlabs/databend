@@ -48,6 +48,13 @@ sudo apt install databend
 
 </Tabs>
 
+:::tip
+To run databend:
+
+* `sudo systemctl start databend-meta`
+* `sudo systemctl start databend-query`
+:::
+
 
 ## Docker
 

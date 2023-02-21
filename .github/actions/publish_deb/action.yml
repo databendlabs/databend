@@ -1,4 +1,4 @@
-name: Publish Repository
+name: Publish Deb
 description: Publish repository for debian/ubuntu
 inputs:
   version:
@@ -30,7 +30,7 @@ runs:
 
     - name: Add Packages
       shell: bash
-      working-directory: scripts/deb
+      working-directory: scripts/distribution/deb
       run: |
         version=${{ inputs.version }}
         deb_version=${version/-/.}
@@ -49,7 +49,7 @@ runs:
 
     - name: Publish to S3
       shell: bash
-      working-directory: scripts/deb
+      working-directory: scripts/distribution/deb
       run: |
         aws s3 sync --delete --no-progress dists s3://repo.databend.rs/deb/dists
         aws s3 sync --delete --no-progress pool s3://repo.databend.rs/deb/pool
