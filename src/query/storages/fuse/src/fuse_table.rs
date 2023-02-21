@@ -137,7 +137,7 @@ impl FuseTable {
             .options()
             .get(OPT_KEY_TABLE_COMPRESSION)
             .cloned()
-            .unwrap_or_default();
+            .unwrap_or_default(|| config.query.default_compression.clone());
 
         let part_prefix = table_info.meta.part_prefix.clone();
 

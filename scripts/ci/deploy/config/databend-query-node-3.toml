@@ -33,7 +33,7 @@ cluster_id = "test_cluster"
 
 table_engine_memory_enabled = true
 default_storage_format = 'parquet'
-
+default_compression = 'zstd'
 
 [log]
 
