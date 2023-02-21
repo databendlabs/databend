@@ -42,4 +42,4 @@ pub use mutation::SegmentCompactionState;
 pub use mutation::SegmentCompactor;
 pub use operation_log::AppendOperationLogEntry;
 pub use operation_log::TableOperationLog;
-pub use util::column_metas;
+pub use util::column_parquet_metas;
