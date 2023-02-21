@@ -194,6 +194,7 @@ impl Column {
         match &columns[0] {
             Column::Null { .. } => Column::Null { len: result_size },
             Column::EmptyArray { .. } => Column::EmptyArray { len: result_size },
+            Column::EmptyMap { .. } => Column::EmptyMap { len: result_size },
             Column::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
                 NumberColumn::NUM_TYPE(_) => {
                     let builder = NumberType::<NUM_TYPE>::create_builder(result_size, &[]);
@@ -235,7 +236,7 @@ impl Column {
                 let builder = DateType::create_builder(result_size, &[]);
                 Self::take_block_value_types::<DateType>(columns, builder, indices)
             }
-            Column::Array(column) => {
+            Column::Array(column) | Column::Map(column) => {
                 let mut offsets = Vec::with_capacity(result_size + 1);
                 offsets.push(0);
                 let builder = ColumnBuilder::from_column(

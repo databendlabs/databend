@@ -39,6 +39,7 @@ macro_rules! with_simple_no_number_mapped_type {
                 Timestamp => TimestampType,
                 Null => NullType,
                 EmptyArray => EmptyArrayType,
+                EmptyMap => EmptyMapType,
                 Date => DateType,
             ],
             $($tail)*

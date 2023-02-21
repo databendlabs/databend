@@ -42,6 +42,7 @@ pub trait FieldEncoderRowBased {
         match &column {
             Column::Null { .. } => self.write_null(out_buf),
             Column::EmptyArray { .. } => self.write_empty_array(out_buf),
+            Column::EmptyMap { .. } => self.write_empty_map(out_buf),
             Column::Boolean(c) => self.write_bool(c, row_index, out_buf),
             Column::Number(col) => match col {
                 NumberColumn::UInt8(c) => self.write_int(c, row_index, out_buf),
@@ -61,6 +62,7 @@ pub trait FieldEncoderRowBased {
             Column::String(c) => self.write_string(c, row_index, out_buf, raw),
             Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf, raw),
             Column::Array(box c) => self.write_array(c, row_index, out_buf, raw),
+            Column::Map(box c) => self.write_map(c, row_index, out_buf, raw),
             Column::Tuple { fields, .. } => self.write_tuple(fields, row_index, out_buf, raw),
             Column::Variant(c) => self.write_variant(c, row_index, out_buf, raw),
         }
@@ -83,6 +85,11 @@ pub trait FieldEncoderRowBased {
     fn write_empty_array(&self, out_buf: &mut Vec<u8>) {
         out_buf.extend_from_slice(b"[");
         out_buf.extend_from_slice(b"]");
+    }
+
+    fn write_empty_map(&self, out_buf: &mut Vec<u8>) {
+        out_buf.extend_from_slice(b"{");
+        out_buf.extend_from_slice(b"}");
     }
 
     fn write_nullable<T: ValueType>(
@@ -170,6 +177,14 @@ pub trait FieldEncoderRowBased {
     }
 
     fn write_array<T: ValueType>(
+        &self,
+        column: &ArrayColumn<T>,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+        raw: bool,
+    );
+
+    fn write_map<T: ValueType>(
         &self,
         column: &ArrayColumn<T>,
         row_index: usize,

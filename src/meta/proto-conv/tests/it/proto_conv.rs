@@ -218,11 +218,21 @@ pub(crate) fn new_latest_schema() -> TableSchema {
                 scale: 3,
             })),
         ),
-        ce::TableField::new(
+        TableField::new(
             "decimal256",
             TableDataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
                 precision: 46,
                 scale: 6,
+            })),
+        ),
+        TableField::new(
+            "map",
+            TableDataType::Map(Box::new(TableDataType::Tuple {
+                fields_name: vec!["key".to_string(), "val".to_string()],
+                fields_type: vec![
+                    TableDataType::String,
+                    TableDataType::Number(NumberDataType::Int64),
+                ],
             })),
         ),
     ];
