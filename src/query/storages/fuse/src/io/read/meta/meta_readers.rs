@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::parquet::read::read_metadata;
 use common_arrow::parquet::read::read_metadata_async;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -21,6 +22,7 @@ use opendal::Operator;
 use storages_common_cache::InMemoryItemCacheReader;
 use storages_common_cache::LoadParams;
 use storages_common_cache::Loader;
+use storages_common_cache::SyncLoader;
 use storages_common_cache_manager::BloomIndexMeta;
 use storages_common_cache_manager::CacheManager;
 use storages_common_cache_manager::DeleteMarkMeta;
@@ -115,12 +117,7 @@ impl Loader<SegmentInfo> for LoaderWrapper<(Operator, TableSchemaRef)> {
 #[async_trait::async_trait]
 impl Loader<BloomIndexMeta> for LoaderWrapper<Operator> {
     async fn load(&self, params: &LoadParams) -> Result<BloomIndexMeta> {
-        let object = self.0.object(&params.location);
-        let mut reader = if let Some(len) = params.len_hint {
-            object.range_reader(0..len).await?
-        } else {
-            object.reader().await?
-        };
+        let mut reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
         let meta = read_metadata_async(&mut reader).await.map_err(|err| {
             ErrorCode::Internal(format!(
                 "read bloom index meta failed, {}, {:?}",
@@ -134,12 +131,7 @@ impl Loader<BloomIndexMeta> for LoaderWrapper<Operator> {
 #[async_trait::async_trait]
 impl Loader<DeleteMarkMeta> for LoaderWrapper<Operator> {
     async fn load(&self, params: &LoadParams) -> Result<DeleteMarkMeta> {
-        let object = self.0.object(&params.location);
-        let mut reader = if let Some(len) = params.len_hint {
-            object.range_reader(0..len).await?
-        } else {
-            object.reader().await?
-        };
+        let mut reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
         let meta = read_metadata_async(&mut reader).await.map_err(|err| {
             ErrorCode::Internal(format!(
                 "read delete mark meta failed, {}, {:?}",
@@ -150,18 +142,30 @@ impl Loader<DeleteMarkMeta> for LoaderWrapper<Operator> {
     }
 }
 
-async fn bytes_reader(op: &Operator, path: &str, len: Option<u64>) -> Result<ObjectReader> {
+impl SyncLoader<DeleteMarkMeta> for LoaderWrapper<Operator> {
+    fn sync_load(&self, params: &LoadParams) -> Result<DeleteMarkMeta> {
+        let object = self.0.object(&params.location);
+        let mut reader = if let Some(len) = params.len_hint {
+            object.blocking_range_reader(0..len)?
+        } else {
+            object.blocking_reader()?
+        };
+        let meta = read_metadata(&mut reader).map_err(|err| {
+            ErrorCode::Internal(format!(
+                "read delete mark meta failed, {}, {:?}",
+                params.location, err
+            ))
+        })?;
+        Ok(DeleteMarkMeta(meta))
+    }
+}
+
+async fn bytes_reader(op: &Operator, path: &str, len_hint: Option<u64>) -> Result<ObjectReader> {
     let object = op.object(path);
-
-    let len = match len {
-        Some(l) => l,
-        None => {
-            // TODO why do we need the content length (extra HEAD http req)? here we just need to read ALL the content
-            let meta = object.metadata().await?;
-            meta.content_length()
-        }
+    let reader = if let Some(len) = len_hint {
+        object.range_reader(0..len).await?
+    } else {
+        object.reader().await?
     };
-
-    let reader = object.range_reader(0..len).await?;
     Ok(reader)
 }

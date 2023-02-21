@@ -291,7 +291,6 @@ impl Processor for MutationSource {
                                                 .read_delete_mark(
                                                     block_reader.operator.clone(),
                                                     *meta_size,
-                                                    fuse_part.nums_rows,
                                                 )
                                                 .await?,
                                         )

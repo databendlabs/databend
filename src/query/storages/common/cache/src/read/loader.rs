@@ -34,3 +34,13 @@ pub trait Loader<T> {
         params.location.clone()
     }
 }
+
+pub trait SyncLoader<T> {
+    /// Loads object of type T, located by [params][LoadParams].
+    fn sync_load(&self, params: &LoadParams) -> Result<T>;
+
+    /// the [CacheKey] returns will be used as the key of cached item.
+    fn cache_key(&self, params: &LoadParams) -> CacheKey {
+        params.location.clone()
+    }
+}
