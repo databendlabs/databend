@@ -326,7 +326,7 @@ impl Table for FuseTable {
     }
 
     fn support_merge_on_read(&self) -> bool {
-        false
+        matches!(self.storage_format, FuseStorageFormat::Parquet)
     }
 
     fn cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
