@@ -2118,7 +2118,6 @@ dependencies = [
  "common-arrow",
  "common-base",
  "common-catalog",
- "common-config",
  "common-exception",
  "common-expression",
  "common-functions",

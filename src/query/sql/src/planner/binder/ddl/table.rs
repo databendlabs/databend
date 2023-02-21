@@ -47,6 +47,7 @@ use common_ast::parser::tokenize_sql;
 use common_ast::walk_expr_mut;
 use common_ast::Backtrace;
 use common_ast::Dialect;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_schema_type;
@@ -59,11 +60,14 @@ use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_meta_app::storage::StorageParams;
 use common_storage::DataOperator;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
 use storages_common_table_meta::table::is_reserved_opt_key;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use tracing::debug;
 
 use crate::binder::location::parse_uri_location;
@@ -439,6 +443,50 @@ impl Binder {
                 .await?;
             let db_id = db.get_db_info().ident.db_id;
             options.insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
+
+            let config = GlobalConfig::instance();
+            let is_blocking_fs = match storage_params
+                .as_ref()
+                .unwrap_or_else(|| &config.storage.params)
+            {
+                StorageParams::Fs(_) => true,
+                _ => false,
+            };
+
+            // we should persist the storage format and compression type instead of using the default value in fuse table
+            if !options.contains_key(OPT_KEY_STORAGE_FORMAT) {
+                let default_storage_format = match config.query.default_storage_format.as_str() {
+                    "" | "auto" => {
+                        if is_blocking_fs {
+                            "native"
+                        } else {
+                            "parquet"
+                        }
+                    }
+                    _ => config.query.default_storage_format.as_str(),
+                };
+                options.insert(
+                    OPT_KEY_STORAGE_FORMAT.to_owned(),
+                    default_storage_format.to_owned(),
+                );
+            }
+
+            if !options.contains_key(OPT_KEY_TABLE_COMPRESSION) {
+                let default_compression = match config.query.default_compression.as_str() {
+                    "" | "auto" => {
+                        if is_blocking_fs {
+                            "lz4"
+                        } else {
+                            "zstd"
+                        }
+                    }
+                    _ => config.query.default_compression.as_str(),
+                };
+                options.insert(
+                    OPT_KEY_TABLE_COMPRESSION.to_owned(),
+                    default_compression.to_owned(),
+                );
+            }
         }
 
         let cluster_key = {
