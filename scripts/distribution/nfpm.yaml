@@ -58,5 +58,5 @@ contents:
       mode: 0755
 
 scripts:
-  preinstall: ${path}/package-scripts/preinstall.sh
-  postinstall: ${path}/package-scripts/postinstall.sh
+  preinstall: ${path}/scripts/preinstall.sh
+  postinstall: ${path}/scripts/postinstall.sh
