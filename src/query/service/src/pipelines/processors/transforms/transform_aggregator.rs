@@ -31,39 +31,6 @@ use crate::sessions::QueryContext;
 pub struct TransformAggregator;
 
 impl TransformAggregator {
-    pub fn try_create_final(
-        ctx: Arc<QueryContext>,
-        transform_params: AggregatorTransformParams,
-    ) -> Result<Box<dyn Processor>> {
-        let aggregator_params = transform_params.aggregator_params.clone();
-
-        if aggregator_params.group_columns.is_empty() {
-            return FinalSingleStateAggregator::try_create(
-                transform_params.transform_input_port,
-                transform_params.transform_output_port,
-                &aggregator_params,
-            );
-        }
-
-        match aggregator_params.aggregate_functions.is_empty() {
-            true => with_mappedhash_method!(|T| match transform_params.method.clone() {
-                HashMethodKind::T(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    ParallelFinalAggregator::<false, T>::create(ctx, method, aggregator_params)?,
-                ),
-            }),
-
-            false => with_mappedhash_method!(|T| match transform_params.method.clone() {
-                HashMethodKind::T(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    ParallelFinalAggregator::<true, T>::create(ctx, method, aggregator_params)?,
-                ),
-            }),
-        }
-    }
-
     pub fn try_create_partial(
         transform_params: AggregatorTransformParams,
         ctx: Arc<QueryContext>,

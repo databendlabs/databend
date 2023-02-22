@@ -30,7 +30,6 @@ use tracing::info;
 
 use super::estimated_key_size;
 use crate::pipelines::processors::transforms::aggregator::aggregate_info::AggregateInfo;
-use crate::pipelines::processors::transforms::aggregator::aggregator_final_parallel::ParallelFinalAggregator;
 use crate::pipelines::processors::transforms::aggregator::AggregateHashStateInfo;
 use crate::pipelines::processors::transforms::aggregator::PartialAggregator;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
@@ -234,13 +233,6 @@ impl<Method: HashMethodBounds, const HAS_AGG: bool> PartitionedAggregatorLike
 
         Ok(data_blocks)
     }
-}
-
-impl<Method: HashMethodBounds, const HAS_AGG: bool> PartitionedAggregatorLike
-    for ParallelFinalAggregator<HAS_AGG, Method>
-{
-    const SUPPORT_PARTITION: bool = false;
-    type PartitionedAggregator = ParallelFinalAggregator<HAS_AGG, PartitionedHashMethod<Method>>;
 }
 
 // Example: PartitionedAggregator<PartialAggregator<HAS_AGG, Method>> ->

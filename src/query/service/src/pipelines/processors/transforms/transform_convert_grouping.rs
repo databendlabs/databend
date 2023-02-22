@@ -335,13 +335,13 @@ impl<Method: HashMethodBounds> Processor for TransformConvertGrouping<Method> {
                 }
 
                 all_inputs_is_finished = false;
-                if self.inputs[index].bucket >= self.working_bucket {
+                if self.inputs[index].bucket > self.working_bucket {
                     continue;
                 }
 
-                self.inputs[index].port.set_need_data();
                 if !self.inputs[index].port.has_data() {
                     all_port_prepared_data = false;
+                    self.inputs[index].port.set_need_data();
                     continue;
                 }
 
@@ -351,6 +351,7 @@ impl<Method: HashMethodBounds> Processor for TransformConvertGrouping<Method> {
 
                 if self.inputs[index].bucket <= self.working_bucket {
                     all_port_prepared_data = false;
+                    self.inputs[index].port.set_need_data();
                     continue;
                 }
             }
