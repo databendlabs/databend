@@ -112,7 +112,9 @@ impl Settings {
         let mut num_cpus = num_cpus::get() as u64;
 
         if conf.storage.params.is_fs() {
-            num_cpus = std::thread::available_parallelism() as u64;
+            if let Ok(n) = std::thread::available_parallelism() {
+                num_cpus = n.get() as u64;
+            }
             #[cfg(target_arch = "x86_64")]
             {
                 if num_cpus >= 32 {
