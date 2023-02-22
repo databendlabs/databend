@@ -32,10 +32,12 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
+use common_sql::field_default_value;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
 use storages_common_table_meta::meta::ClusterKey;
+use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
@@ -231,6 +233,7 @@ impl FuseTable {
         } else {
             Self::merge_table_operations(
                 self.table_info.meta.schema.as_ref(),
+                ctx.clone(),
                 prev,
                 prev_version,
                 segments,
@@ -261,6 +264,7 @@ impl FuseTable {
 
     fn merge_table_operations(
         schema: &TableSchema,
+        ctx: Arc<dyn TableContext>,
         previous: Option<Arc<TableSnapshot>>,
         prev_version: u64,
         mut new_segments: Vec<Location>,
@@ -269,8 +273,43 @@ impl FuseTable {
     ) -> Result<TableSnapshot> {
         // 1. merge stats with previous snapshot, if any
         let stats = if let Some(snapshot) = &previous {
-            let summary = &snapshot.summary;
-            merge_statistics(&statistics, summary)?
+            let mut summary = snapshot.summary.clone();
+            let mut fill_default_values = false;
+            // check if need to fill default value in statistics
+            for column_id in statistics.col_stats.keys() {
+                if !summary.col_stats.contains_key(column_id) {
+                    fill_default_values = true;
+                    break;
+                }
+            }
+            if fill_default_values {
+                let mut default_values = Vec::with_capacity(schema.num_fields());
+                for field in schema.fields() {
+                    default_values.push(field_default_value(ctx.clone(), field)?);
+                }
+                let leaf_default_values = schema.field_leaf_default_values(&default_values);
+                leaf_default_values
+                    .iter()
+                    .for_each(|(col_id, default_value)| {
+                        if !summary.col_stats.contains_key(col_id) {
+                            let (null_count, distinct_of_values) = if default_value.is_null() {
+                                (summary.row_count, Some(0))
+                            } else {
+                                (0, Some(1))
+                            };
+                            let col_stat = ColumnStatistics {
+                                min: default_value.to_owned(),
+                                max: default_value.to_owned(),
+                                null_count,
+                                in_memory_size: 0,
+                                distinct_of_values,
+                            };
+                            summary.col_stats.insert(*col_id, col_stat);
+                        }
+                    });
+            }
+
+            merge_statistics(&statistics, &summary)?
         } else {
             statistics
         };

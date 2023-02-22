@@ -68,11 +68,13 @@ common-storage = { path = "../../common/storage" }
 common-storages-factory = { path = "../storages/factory" }
 common-storages-fuse = { path = "../storages/fuse" }
 common-storages-hive = { path = "../storages/hive/hive", optional = true }
+common-storages-iceberg = { path = "../storages/iceberg" }
 common-storages-information-schema = { path = "../storages/information-schema" }
 common-storages-memory = { path = "../storages/memory" }
 common-storages-null = { path = "../storages/null" }
 common-storages-parquet = { path = "../storages/parquet" }
 common-storages-random = { path = "../storages/random" }
+common-storages-result-cache = { path = "../storages/result_cache" }
 common-storages-share = { path = "../storages/share" }
 common-storages-stage = { path = "../storages/stage" }
 common-storages-system = { path = "../storages/system" }
@@ -129,6 +131,7 @@ semver = "1.0.14"
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_urlencoded = "0.7.1"
+socket2 = "0.4.7"
 state = "0.5"
 tempfile = { version = "3.3.0", optional = true }
 thrift = { package = "databend-thrift", version = "0.17.0", optional = true }
@@ -142,6 +145,7 @@ uuid = { version = "1.1.2", features = ["serde", "v4"] }
 
 [dev-dependencies]
 common-meta-embedded = { path = "../../meta/embedded" }
+ordered-float = { workspace = true }
 
 base64 = "0.13.0"
 criterion = "0.4"

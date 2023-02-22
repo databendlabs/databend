@@ -475,6 +475,8 @@ pub enum TokenKind {
     HIVE,
     #[token("HOUR", ignore(ascii_case))]
     HOUR,
+    #[token("ICEBERG", ignore(ascii_case))]
+    ICEBERG,
     #[token("INTERSECT", ignore(ascii_case))]
     INTERSECT,
     #[token("IDENTIFIED", ignore(ascii_case))]

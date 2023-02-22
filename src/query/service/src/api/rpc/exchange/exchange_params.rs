@@ -21,6 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
 
+use crate::api::rpc::exchange::exchange_sorting::ExchangeSorting;
 use crate::api::rpc::flight_scatter::FlightScatter;
 
 #[derive(Clone)]
@@ -38,6 +39,7 @@ pub struct ShuffleExchangeParams {
     pub schema: DataSchemaRef,
     pub destination_ids: Vec<String>,
     pub shuffle_scatter: Arc<Box<dyn FlightScatter>>,
+    pub exchange_sorting: Option<Arc<dyn ExchangeSorting>>,
 }
 
 #[derive(Clone)]
@@ -46,6 +48,7 @@ pub struct MergeExchangeParams {
     pub fragment_id: usize,
     pub destination_id: String,
     pub schema: DataSchemaRef,
+    pub exchange_sorting: Option<Arc<dyn ExchangeSorting>>,
 }
 
 pub enum ExchangeParams {

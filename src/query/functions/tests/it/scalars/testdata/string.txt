@@ -165,9 +165,9 @@ output         : 5
 
 ast            : octet_length(NULL)
 raw expr       : octet_length(NULL)
-checked expr   : length<Array(Nothing) NULL>(CAST(NULL AS Array(Nothing) NULL))
+checked expr   : length<Variant NULL>(CAST(NULL AS Variant NULL))
 optimized expr : NULL
-output type    : UInt8 NULL
+output type    : UInt32 NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -1872,11 +1872,7 @@ error:
   --> SQL:1:1
   |
 1 | bin(e)
-  | ^^^^^^ no overload satisfies `bin(String)`
-
-has tried possible overloads:
-  bin(Int64) :: String            : unable to unify `String` with `Int64`
-  bin(Int64 NULL) :: String NULL  : unable to unify `String` with `Int64`
+  | ^^^^^^ unable to parse string to type `Int64` because invalid digit found in string while evaluating function `to_int64("abc")`
 
 
 
@@ -1984,11 +1980,7 @@ error:
   --> SQL:1:1
   |
 1 | oct(e)
-  | ^^^^^^ no overload satisfies `oct(String)`
-
-has tried possible overloads:
-  oct(Int64) :: String            : unable to unify `String` with `Int64`
-  oct(Int64 NULL) :: String NULL  : unable to unify `String` with `Int64`
+  | ^^^^^^ unable to parse string to type `Int64` because invalid digit found in string while evaluating function `to_int64("abc")`
 
 
 
@@ -2087,10 +2079,10 @@ error:
   | ^^^^^^ no overload satisfies `hex(Float64)`
 
 has tried possible overloads:
-  hex(Int64) :: String             : unable to unify `Float64` with `Int64`
-  hex(Int64 NULL) :: String NULL   : unable to unify `Float64` with `Int64`
   hex(String) :: String            : unable to unify `Float64` with `String`
   hex(String NULL) :: String NULL  : unable to unify `Float64` with `String`
+  hex(Int64) :: String             : unable to unify `Float64` with `Int64`
+  hex(Int64 NULL) :: String NULL   : unable to unify `Float64` with `Int64`
 
 
 

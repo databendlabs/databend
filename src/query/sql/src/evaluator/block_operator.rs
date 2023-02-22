@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::types::BooleanType;
+use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
@@ -57,9 +59,11 @@ impl BlockOperator {
             }
 
             BlockOperator::Filter { expr } => {
+                assert_eq!(expr.data_type(), &DataType::Boolean);
+
                 let evaluator = Evaluator::new(&input, *func_ctx, &BUILTIN_FUNCTIONS);
-                let filter = evaluator.run(expr)?;
-                input.filter(&filter)
+                let filter = evaluator.run(expr)?.try_downcast::<BooleanType>().unwrap();
+                input.filter_boolean_value(&filter)
             }
 
             BlockOperator::Project { projection } => {

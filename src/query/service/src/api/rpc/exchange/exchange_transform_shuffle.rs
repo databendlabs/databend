@@ -33,6 +33,8 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
 
 use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
+use crate::api::rpc::exchange::exchange_sorting::ExchangeSorting;
+use crate::api::rpc::exchange::exchange_sorting::TransformExchangeSorting;
 use crate::api::rpc::exchange::exchange_transform_scatter::ScatterTransform;
 
 pub struct ExchangeShuffleMeta {
@@ -292,6 +294,21 @@ pub fn exchange_shuffle(params: &ShuffleExchangeParams, pipeline: &mut Pipeline)
         ))
     })?;
 
+    if let Some(exchange_sorting) = &params.exchange_sorting {
+        let output_len = pipeline.output_len();
+        let sorting = ShuffleExchangeSorting::create(exchange_sorting.clone());
+
+        let transform = TransformExchangeSorting::create(output_len, sorting);
+
+        let output = transform.get_output();
+        let inputs = transform.get_inputs();
+        pipeline.add_pipe(Pipe::create(output_len, 1, vec![PipeItem::create(
+            ProcessorPtr::create(Box::new(transform)),
+            inputs,
+            vec![output],
+        )]));
+    }
+
     let output_len = pipeline.output_len();
     let new_output_len = params.destination_ids.len();
     let transform = ExchangeShuffleTransform::create(output_len, new_output_len);
@@ -303,4 +320,31 @@ pub fn exchange_shuffle(params: &ShuffleExchangeParams, pipeline: &mut Pipeline)
     ]));
 
     Ok(())
+}
+
+struct ShuffleExchangeSorting {
+    inner: Arc<dyn ExchangeSorting>,
+}
+
+impl ShuffleExchangeSorting {
+    pub fn create(inner: Arc<dyn ExchangeSorting>) -> Arc<dyn ExchangeSorting> {
+        Arc::new(ShuffleExchangeSorting { inner })
+    }
+}
+
+impl ExchangeSorting for ShuffleExchangeSorting {
+    fn block_number(&self, data_block: &DataBlock) -> Result<usize> {
+        let block_meta = data_block.get_meta();
+        let shuffle_meta = block_meta
+            .and_then(|meta| meta.as_any().downcast_ref::<ExchangeShuffleMeta>())
+            .unwrap();
+
+        for block in &shuffle_meta.blocks {
+            if !block.is_empty() {
+                return self.inner.block_number(block);
+            }
+        }
+
+        Ok(0)
+    }
 }

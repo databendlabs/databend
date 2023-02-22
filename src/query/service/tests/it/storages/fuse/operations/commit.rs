@@ -356,6 +356,14 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn add_partitions_sha(&self, _sha: String) {
+        todo!()
+    }
+
+    fn get_partitions_shas(&self) -> Vec<String> {
+        todo!()
+    }
+
     fn attach_query_str(&self, _kind: String, _query: &str) {
         todo!()
     }

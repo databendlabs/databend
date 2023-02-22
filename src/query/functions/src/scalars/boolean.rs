@@ -12,14 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(unused_comparisons)]
+#![allow(clippy::absurd_extreme_comparisons)]
+
 use common_expression::error_to_null;
 use common_expression::types::boolean::BooleanDomain;
+use common_expression::types::nullable::NullableColumn;
 use common_expression::types::nullable::NullableDomain;
 use common_expression::types::BooleanType;
 use common_expression::types::NullableType;
+use common_expression::types::NumberDataType;
+use common_expression::types::NumberType;
+use common_expression::types::SimpleDomain;
 use common_expression::types::StringType;
+use common_expression::types::ALL_INTEGER_TYPES;
 use common_expression::vectorize_2_arg;
 use common_expression::vectorize_with_builder_1_arg;
+use common_expression::with_integer_mapped_type;
 use common_expression::EvalContext;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
@@ -235,6 +244,108 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| FunctionDomain::Full,
         error_to_null(eval_string_to_boolean),
     );
+
+    registry.register_1_arg_core::<BooleanType, BooleanType, _, _>(
+        "is_true",
+        FunctionProperty::default(),
+        |domain| FunctionDomain::Domain(*domain),
+        |val, _| val.to_owned(),
+    );
+
+    registry.register_1_arg_core::<NullableType<BooleanType>, BooleanType, _, _>(
+        "is_true",
+        FunctionProperty::default(),
+        |domain| {
+            FunctionDomain::Domain(BooleanDomain {
+                has_false: domain.has_null
+                    || domain.value.as_ref().map(|v| v.has_false).unwrap_or(false),
+                has_true: domain.value.as_ref().map(|v| v.has_true).unwrap_or(false),
+            })
+        },
+        |val, _| match val {
+            ValueRef::Scalar(None) => Value::Scalar(false),
+            ValueRef::Scalar(Some(scalar)) => Value::Scalar(scalar),
+            ValueRef::Column(NullableColumn { column, validity }) => {
+                Value::Column((&column) & (&validity))
+            }
+        },
+    );
+
+    for src_type in ALL_INTEGER_TYPES {
+        with_integer_mapped_type!(|NUM_TYPE| match src_type {
+            NumberDataType::NUM_TYPE => {
+                registry.register_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
+                    "to_boolean",
+                    FunctionProperty::default(),
+                    |domain| {
+                        FunctionDomain::Domain(BooleanDomain {
+                            has_false: domain.min <= 0 && domain.max >= 0,
+                            has_true: !(domain.min == 0 && domain.max == 0),
+                        })
+                    },
+                    |val, _| val != 0,
+                );
+
+                registry
+                    .register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
+                        "try_to_boolean",
+                        FunctionProperty::default(),
+                        |domain| {
+                            FunctionDomain::Domain(NullableDomain {
+                                has_null: false,
+                                value: Some(Box::new(BooleanDomain {
+                                    has_false: domain.min <= 0 && domain.max >= 0,
+                                    has_true: !(domain.min == 0 && domain.max == 0),
+                                })),
+                            })
+                        },
+                        vectorize_with_builder_1_arg::<
+                            NumberType<NUM_TYPE>,
+                            NullableType<BooleanType>,
+                        >(|val, output, _| {
+                            output.builder.push(val != 0);
+                            output.validity.push(true);
+                        }),
+                    );
+
+                let name = format!("to_{src_type}").to_lowercase();
+                registry.register_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
+                    &name,
+                    FunctionProperty::default(),
+                    |domain| {
+                        FunctionDomain::Domain(SimpleDomain {
+                            min: if domain.has_false { 0 } else { 1 },
+                            max: if domain.has_true { 1 } else { 0 },
+                        })
+                    },
+                    |val, _| NUM_TYPE::from(val),
+                );
+
+                let name = format!("try_to_{src_type}").to_lowercase();
+                registry
+                    .register_combine_nullable_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
+                        &name,
+                        FunctionProperty::default(),
+                        |domain| {
+                            FunctionDomain::Domain(NullableDomain {
+                                has_null: false,
+                                value: Some(Box::new(SimpleDomain {
+                                    min: if domain.has_false { 0 } else { 1 },
+                                    max: if domain.has_true { 1 } else { 0 },
+                                })),
+                            })
+                        },
+                        vectorize_with_builder_1_arg::<
+                            BooleanType,
+                            NullableType<NumberType<NUM_TYPE>>,
+                        >(|val, output, _| {
+                            output.push(NUM_TYPE::from(val));
+                        }),
+                    );
+            }
+            _ => unreachable!(),
+        });
+    }
 }
 
 fn eval_boolean_to_string(val: ValueRef<BooleanType>, ctx: &mut EvalContext) -> Value<StringType> {

@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
@@ -25,7 +26,7 @@ use serde::Serializer;
 
 use crate::io::NativeReaderExt;
 
-pub type DataChunks = Vec<(usize, NativeReader<Box<dyn NativeReaderExt>>)>;
+pub type DataChunks = BTreeMap<usize, Vec<NativeReader<Box<dyn NativeReaderExt>>>>;
 
 pub struct NativeDataSourceMeta {
     pub part: Vec<PartInfoPtr>,

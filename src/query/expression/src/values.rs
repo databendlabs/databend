@@ -225,6 +225,10 @@ impl Value<AnyType> {
             Value::Column(c) => c.clone(),
         }
     }
+
+    pub fn try_downcast<T: ValueType>(&self) -> Option<Value<T>> {
+        Some(self.as_ref().try_downcast::<T>()?.to_owned())
+    }
 }
 
 impl<'a> ValueRef<'a, AnyType> {
@@ -604,14 +608,14 @@ impl Column {
             Column::Number(col) => Column::Number(col.slice(range)),
             Column::Decimal(col) => Column::Decimal(col.slice(range)),
             Column::Boolean(col) => {
-                Column::Boolean(col.clone().slice(range.start, range.end - range.start))
+                Column::Boolean(col.clone().sliced(range.start, range.end - range.start))
             }
             Column::String(col) => Column::String(col.slice(range)),
             Column::Timestamp(col) => {
-                Column::Timestamp(col.clone().slice(range.start, range.end - range.start))
+                Column::Timestamp(col.clone().sliced(range.start, range.end - range.start))
             }
             Column::Date(col) => {
-                Column::Date(col.clone().slice(range.start, range.end - range.start))
+                Column::Date(col.clone().sliced(range.start, range.end - range.start))
             }
             Column::Array(col) => Column::Array(Box::new(col.slice(range))),
             Column::Nullable(col) => Column::Nullable(Box::new(col.slice(range))),
@@ -1300,10 +1304,14 @@ impl Column {
     }
 }
 
+/// Serialize a column to a base64 string.
+/// Because we may use serde::json/bincode to serialize the column, so we wrap it into string
 impl Serialize for Column {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
-        serializer.serialize_bytes(&serialize_column(self))
+        let bytes = serialize_column(self);
+        let base64_str = base64::encode(bytes);
+        serializer.serialize_str(&base64_str)
     }
 }
 
@@ -1319,15 +1327,16 @@ impl<'de> Deserialize<'de> for Column {
                 formatter.write_str("an arrow chunk with exactly one column")
             }
 
-            fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
             where E: serde::de::Error {
-                let column = deserialize_column(value)
+                let bytes = base64::decode(v).unwrap();
+                let column = deserialize_column(&bytes)
                     .expect("expecting an arrow chunk with exactly one column");
                 Ok(column)
             }
         }
 
-        deserializer.deserialize_bytes(ColumnVisitor)
+        deserializer.deserialize_string(ColumnVisitor)
     }
 }
 

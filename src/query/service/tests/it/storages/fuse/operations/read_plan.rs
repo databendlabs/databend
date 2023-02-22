@@ -60,6 +60,7 @@ fn test_to_partitions() -> Result<()> {
 
     let col_nodes_gen = |field_index| ColumnNode {
         field: ArrowField::new("".to_string(), ArrowType::Int64, false),
+        is_nested: false,
         leaf_indices: vec![field_index],
         leaf_column_ids: vec![field_index as ColumnId],
         children: None,
@@ -138,7 +139,7 @@ fn test_to_partitions() -> Result<()> {
     // kick off
     let push_down = Some(PushDownInfo {
         projection: Some(proj),
-        filters: vec![],
+        filter: None,
         limit: None,
         order_by: vec![],
         prewhere: None,
@@ -179,7 +180,7 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
         let proj = Projection::Columns(vec![]);
         let push_downs = PushDownInfo {
             projection: Some(proj),
-            filters: vec![],
+            filter: None,
             prewhere: None,
             limit: None,
             order_by: vec![],

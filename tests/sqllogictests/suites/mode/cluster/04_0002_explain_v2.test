@@ -19,7 +19,7 @@ explain select t1.a from t1 where a > 0;
 Exchange
 ├── exchange type: Merge
 └── Filter
-    ├── filters: [gt(t1.a (#0), to_int32(0))]
+    ├── filters: [gt(t1.a (#0), 0)]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
@@ -37,7 +37,7 @@ explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a an
 Exchange
 ├── exchange type: Merge
 └── Filter
-    ├── filters: [or(gt(t1.a (#0), to_int32(3)), and(gt(t2.a (#2), to_int32(5)), gt(t1.a (#0), to_int32(1))))]
+    ├── filters: [or(gt(t1.a (#0), 3), and(gt(t2.a (#2), 5), gt(t1.a (#0), 1)))]
     ├── estimated rows: 0.00
     └── HashJoin
         ├── join type: INNER
@@ -48,7 +48,7 @@ Exchange
         ├── Exchange(Build)
         │   ├── exchange type: Hash(t2.a (#2))
         │   └── Filter
-        │       ├── filters: [or(gt(t2.a (#2), to_int32(3)), gt(t2.a (#2), to_int32(1)))]
+        │       ├── filters: [or(gt(t2.a (#2), 3), gt(t2.a (#2), 1))]
         │       ├── estimated rows: 0.00
         │       └── TableScan
         │           ├── table: default.default.t2
@@ -61,7 +61,7 @@ Exchange
         └── Exchange(Probe)
             ├── exchange type: Hash(t1.a (#0))
             └── Filter
-                ├── filters: [or(gt(t1.a (#0), to_int32(3)), gt(t1.a (#0), to_int32(1)))]
+                ├── filters: [or(gt(t1.a (#0), 3), gt(t1.a (#0), 1))]
                 ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.default.t1
@@ -303,12 +303,12 @@ Limit
             ├── estimated rows: 50.00
             └── HashJoin
                 ├── join type: RIGHT OUTER
-                ├── build keys: [TRY_CAST(y.a (#1) AS UInt64 NULL)]
+                ├── build keys: [CAST(y.a (#1) AS UInt64 NULL)]
                 ├── probe keys: [x.a (#0)]
                 ├── filters: []
                 ├── estimated rows: 50.00
                 ├── Exchange(Build)
-                │   ├── exchange type: Hash(TRY_CAST(y.a (#1) AS UInt64 NULL))
+                │   ├── exchange type: Hash(CAST(y.a (#1) AS UInt64 NULL))
                 │   └── TableScan
                 │       ├── table: default.system.numbers
                 │       ├── read rows: 5

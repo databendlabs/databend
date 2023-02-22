@@ -32,8 +32,31 @@ contents:
     dst: /etc/databend/databend-meta.toml
     type: config
 
+  # Systemd
+  - src: ${path}/systemd/databend-query.service
+    dst: /lib/systemd/system/databend-query.service
+  - src: ${path}/systemd/databend-meta.service
+    dst: /lib/systemd/system/databend-meta.service
+  - src: ${path}/systemd/databend-query.default
+    dst: /etc/default/databend-query
+  - src: ${path}/systemd/databend-meta.default
+    dst: /etc/default/databend-meta
+
   # Docs
   - src: ${path}/readme.txt
     dst: /usr/share/doc/databend/readme.txt
     file_info:
       mode: 0644
+
+  - dst: /var/lib/databend
+    type: dir
+    file_info:
+      mode: 0750
+  - dst: /var/log/databend
+    type: dir
+    file_info:
+      mode: 0755
+
+scripts:
+  preinstall: ${path}/scripts/preinstall.sh
+  postinstall: ${path}/scripts/postinstall.sh

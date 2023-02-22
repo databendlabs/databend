@@ -37,12 +37,11 @@ impl TransformAggregator {
     ) -> Result<Box<dyn Processor>> {
         let aggregator_params = transform_params.aggregator_params.clone();
 
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
         if aggregator_params.group_columns.is_empty() {
-            return AggregatorTransform::create(
-                ctx,
-                transform_params,
-                FinalSingleStateAggregator::try_create(&aggregator_params, max_threads)?,
+            return FinalSingleStateAggregator::try_create(
+                transform_params.transform_input_port,
+                transform_params.transform_output_port,
+                &aggregator_params,
             );
         }
 
@@ -72,12 +71,11 @@ impl TransformAggregator {
     ) -> Result<Box<dyn Processor>> {
         let aggregator_params = transform_params.aggregator_params.clone();
 
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
         if aggregator_params.group_columns.is_empty() {
-            return AggregatorTransform::create(
-                ctx,
-                transform_params,
-                PartialSingleStateAggregator::try_create(&aggregator_params, max_threads)?,
+            return PartialSingleStateAggregator::try_create(
+                transform_params.transform_input_port,
+                transform_params.transform_output_port,
+                &transform_params.aggregator_params,
             );
         }
 
@@ -143,7 +141,7 @@ impl<TAggregator: Aggregator + PartitionedAggregatorLike + 'static>
             input_data_block: None,
         });
 
-        if TAggregator::SUPPORT_TWO_LEVEL
+        if TAggregator::SUPPORT_PARTITION
             && transform_params.aggregator_params.has_distinct_combinator()
         {
             Ok(Box::new(transformer.convert_to_two_level_consume()?))
@@ -227,7 +225,7 @@ impl<TAggregator: Aggregator + PartitionedAggregatorLike + 'static>
     #[inline(always)]
     fn consume_event(&mut self) -> Result<Event> {
         if let AggregatorTransform::ConsumeData(state) = self {
-            if TAggregator::SUPPORT_TWO_LEVEL {
+            if TAggregator::SUPPORT_PARTITION {
                 let cardinality = state.inner.get_state_cardinality();
 
                 if cardinality >= state.two_level_threshold {

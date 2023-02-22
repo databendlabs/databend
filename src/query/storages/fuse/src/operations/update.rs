@@ -175,7 +175,7 @@ impl FuseTable {
 
         let block_reader = self.create_block_reader(projection.clone(), ctx.clone())?;
         let remain_reader = Arc::new(remain_reader);
-        let (filter_expr, filters) = if let Some(remote_expr) = filter {
+        let (filter_expr, filter) = if let Some(remote_expr) = filter {
             let schema = block_reader.schema();
             (
                 Arc::new(Some(
@@ -183,13 +183,13 @@ impl FuseTable {
                         .as_expr(&BUILTIN_FUNCTIONS)
                         .project_column_ref(|name| schema.index_of(name).unwrap()),
                 )),
-                vec![remote_expr],
+                Some(remote_expr),
             )
         } else {
-            (Arc::new(None), vec![])
+            (Arc::new(None), None)
         };
 
-        self.mutation_block_pruning(ctx.clone(), filters, projection, base_snapshot)
+        self.mutation_block_pruning(ctx.clone(), filter, projection, base_snapshot)
             .await?;
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -204,6 +204,7 @@ impl FuseTable {
                     block_reader.clone(),
                     remain_reader.clone(),
                     ops.clone(),
+                    self.storage_format,
                 )
             },
             max_threads,

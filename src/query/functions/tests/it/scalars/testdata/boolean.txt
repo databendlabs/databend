@@ -65,11 +65,7 @@ error:
   --> SQL:1:5
   |
 1 | 'a' and 1
-  |     ^^^ no overload satisfies `and(String, UInt8)`
-
-has tried possible overloads:
-  and(Boolean, Boolean) :: Boolean                 : unable to unify `String` with `Boolean`
-  and(Boolean NULL, Boolean NULL) :: Boolean NULL  : unable to unify `String` with `Boolean`
+  |     ^^^ unable to parse string to type `BOOLEAN` while evaluating function `to_boolean("a")`
 
 
 
@@ -77,11 +73,7 @@ error:
   --> SQL:1:5
   |
 1 | NOT NOT 'a'
-  |     ^^^ no overload satisfies `not(String)`
-
-has tried possible overloads:
-  not(Boolean) :: Boolean            : unable to unify `String` with `Boolean`
-  not(Boolean NULL) :: Boolean NULL  : unable to unify `String` with `Boolean`
+  |     ^^^ unable to parse string to type `BOOLEAN` while evaluating function `to_boolean("a")`
 
 
 
@@ -714,5 +706,76 @@ optimized expr : NULL
 output type    : Boolean NULL
 output domain  : {NULL}
 output         : NULL
+
+
+ast            : is_true(null)
+raw expr       : is_true(NULL)
+checked expr   : is_true<Boolean NULL>(CAST(NULL AS Boolean NULL))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : is_true(false)
+raw expr       : is_true(false)
+checked expr   : is_true<Boolean>(false)
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : is_true(true)
+raw expr       : is_true(true)
+checked expr   : is_true<Boolean>(true)
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : is_true(col)
+raw expr       : is_true(col::Boolean)
+checked expr   : is_true<Boolean>(col)
+evaluation:
++--------+---------------+---------------+
+|        | col           | Output        |
++--------+---------------+---------------+
+| Type   | Boolean       | Boolean       |
+| Domain | {FALSE, TRUE} | {FALSE, TRUE} |
+| Row 0  | true          | true          |
+| Row 1  | false         | false         |
++--------+---------------+---------------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| col    | Boolean([0b______01]) |
+| Output | Boolean([0b______01]) |
++--------+-----------------------+
+
+
+ast            : is_true(col)
+raw expr       : is_true(col::Boolean NULL)
+checked expr   : is_true<Boolean NULL>(col)
+evaluation:
++--------+------------------------+---------------+
+|        | col                    | Output        |
++--------+------------------------+---------------+
+| Type   | Boolean NULL           | Boolean       |
+| Domain | {FALSE, TRUE} ∪ {NULL} | {FALSE, TRUE} |
+| Row 0  | true                   | true          |
+| Row 1  | false                  | false         |
+| Row 2  | NULL                   | false         |
+| Row 3  | NULL                   | false         |
++--------+------------------------+---------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| col    | NullableColumn { column: Boolean([0b____0101]), validity: [0b____0011] } |
+| Output | Boolean([0b____0001])                                                    |
++--------+--------------------------------------------------------------------------+
 
 

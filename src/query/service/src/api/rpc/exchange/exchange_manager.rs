@@ -612,6 +612,7 @@ impl FragmentCoordinator {
             None => Err(ErrorCode::Internal("Cannot find data exchange.")),
             Some(DataExchange::Merge(exchange)) => {
                 Ok(ExchangeParams::MergeExchange(MergeExchangeParams {
+                    exchange_sorting: None,
                     schema: self.physical_plan.output_schema()?,
                     fragment_id: self.fragment_id,
                     query_id: info.query_id.to_string(),
@@ -620,6 +621,7 @@ impl FragmentCoordinator {
             }
             Some(DataExchange::Broadcast(exchange)) => {
                 Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
+                    exchange_sorting: None,
                     schema: self.physical_plan.output_schema()?,
                     fragment_id: self.fragment_id,
                     query_id: info.query_id.to_string(),
@@ -632,6 +634,7 @@ impl FragmentCoordinator {
             }
             Some(DataExchange::ShuffleDataExchange(exchange)) => {
                 Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
+                    exchange_sorting: None,
                     schema: self.physical_plan.output_schema()?,
                     fragment_id: self.fragment_id,
                     query_id: info.query_id.to_string(),

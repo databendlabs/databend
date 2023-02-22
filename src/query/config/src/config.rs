@@ -1045,6 +1045,9 @@ pub struct QueryConfig {
     #[clap(long, default_value = "3307")]
     pub mysql_handler_port: u16,
 
+    #[clap(long, default_value = "120")]
+    pub mysql_handler_tcp_keepalive_timeout_secs: u64,
+
     #[clap(long, default_value = "256")]
     pub max_active_sessions: u64,
 
@@ -1154,6 +1157,12 @@ pub struct QueryConfig {
     #[clap(long, default_value = "0")]
     pub async_insert_stale_timeout: u64,
 
+    #[clap(long, default_value = "auto")]
+    pub default_storage_format: String,
+
+    #[clap(long, default_value = "auto")]
+    pub default_compression: String,
+
     #[clap(skip)]
     users: Vec<UserConfig>,
 
@@ -1168,6 +1177,10 @@ pub struct QueryConfig {
 
     #[clap(long)]
     pub internal_enable_sandbox_tenant: bool,
+
+    /// Experiment config options, DO NOT USE IT IN PRODUCTION ENV
+    #[clap(long)]
+    pub internal_merge_on_read_mutation: bool,
 
     // ----- the following options/args are all deprecated               ----
     // ----- and turned into Option<T>, to help user migrate the configs ----
@@ -1238,6 +1251,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             num_cpus: self.num_cpus,
             mysql_handler_host: self.mysql_handler_host,
             mysql_handler_port: self.mysql_handler_port,
+            mysql_handler_tcp_keepalive_timeout_secs: self.mysql_handler_tcp_keepalive_timeout_secs,
             max_active_sessions: self.max_active_sessions,
             max_server_memory_usage: self.max_server_memory_usage,
             max_memory_limit_enabled: self.max_memory_limit_enabled,
@@ -1268,6 +1282,8 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             async_insert_max_data_size: self.async_insert_max_data_size,
             async_insert_busy_timeout: self.async_insert_busy_timeout,
             async_insert_stale_timeout: self.async_insert_stale_timeout,
+            default_storage_format: self.default_storage_format,
+            default_compression: self.default_compression,
             idm: InnerIDMConfig {
                 users: users_to_inner(self.users)?,
             },
@@ -1275,6 +1291,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             share_endpoint_auth_token_file: self.share_endpoint_auth_token_file,
             tenant_quota: self.quota,
             internal_enable_sandbox_tenant: self.internal_enable_sandbox_tenant,
+            internal_merge_on_read_mutation: self.internal_merge_on_read_mutation,
         })
     }
 }
@@ -1288,6 +1305,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             num_cpus: inner.num_cpus,
             mysql_handler_host: inner.mysql_handler_host,
             mysql_handler_port: inner.mysql_handler_port,
+            mysql_handler_tcp_keepalive_timeout_secs: inner
+                .mysql_handler_tcp_keepalive_timeout_secs,
             max_active_sessions: inner.max_active_sessions,
             max_server_memory_usage: inner.max_server_memory_usage,
             max_memory_limit_enabled: inner.max_memory_limit_enabled,
@@ -1323,11 +1342,15 @@ impl From<InnerQueryConfig> for QueryConfig {
             async_insert_max_data_size: inner.async_insert_max_data_size,
             async_insert_busy_timeout: inner.async_insert_busy_timeout,
             async_insert_stale_timeout: inner.async_insert_stale_timeout,
+            default_storage_format: inner.default_storage_format,
+            default_compression: inner.default_compression,
+
             users: users_from_inner(inner.idm.users),
             share_endpoint_address: inner.share_endpoint_address,
             share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,
             quota: inner.tenant_quota,
             internal_enable_sandbox_tenant: inner.internal_enable_sandbox_tenant,
+            internal_merge_on_read_mutation: false,
             // obsoleted config entries
             table_disk_cache_mb_size: None,
             table_meta_cache_enabled: None,

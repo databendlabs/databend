@@ -126,15 +126,10 @@ impl Loader<BloomIndexMeta> for LoaderWrapper<Operator> {
 async fn bytes_reader(op: &Operator, path: &str, len: Option<u64>) -> Result<ObjectReader> {
     let object = op.object(path);
 
-    let len = match len {
-        Some(l) => l,
-        None => {
-            // TODO why do we need the content length (extra HEAD http req)? here we just need to read ALL the content
-            let meta = object.metadata().await?;
-            meta.content_length()
-        }
+    let reader = match len {
+        Some(l) => object.range_reader(0..l).await?,
+        None => object.range_reader(0..).await?,
     };
 
-    let reader = object.range_reader(0..len).await?;
     Ok(reader)
 }

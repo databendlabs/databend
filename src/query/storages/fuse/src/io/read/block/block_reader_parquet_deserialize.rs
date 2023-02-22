@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_arrow::arrow::array::Array;
 use common_arrow::arrow::chunk::Chunk;
 use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
@@ -34,10 +33,11 @@ use common_storage::ColumnNode;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::TableDataCacheKey;
 use storages_common_cache_manager::CacheManager;
-use storages_common_cache_manager::SizedColumnArray;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::Compression;
 
+use super::block_reader_deserialize::DeserializedArray;
+use super::block_reader_deserialize::FieldDeserializationContext;
 use crate::fuse_part::FusePartInfo;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::read::block::decompressor::BuffedBasicDecompressor;
@@ -45,23 +45,9 @@ use crate::io::BlockReader;
 use crate::io::UncompressedBuffer;
 use crate::metrics::*;
 
-enum DeserializedArray<'a> {
-    Cached(&'a Arc<SizedColumnArray>),
-    Deserialized((ColumnId, Box<dyn Array>, usize)),
-    NoNeedToCache(Box<dyn Array>),
-}
-
-pub struct FieldDeserializationContext<'a> {
-    column_metas: &'a HashMap<ColumnId, ColumnMeta>,
-    column_chunks: &'a HashMap<ColumnId, DataItem<'a>>,
-    num_rows: usize,
-    compression: &'a Compression,
-    uncompressed_buffer: &'a Option<Arc<UncompressedBuffer>>,
-}
-
 impl BlockReader {
     /// Deserialize column chunks data from parquet format to DataBlock.
-    pub fn deserialize_parquet_chunks(
+    pub(super) fn deserialize_parquet_chunks(
         &self,
         part: PartInfoPtr,
         chunks: HashMap<ColumnId, DataItem>,
@@ -97,7 +83,7 @@ impl BlockReader {
     }
 
     /// Deserialize column chunks data from parquet format to DataBlock with a uncompressed buffer.
-    pub fn deserialize_parquet_chunks_with_buffer(
+    pub(crate) fn deserialize_parquet_chunks_with_buffer(
         &self,
         block_path: &str,
         num_rows: usize,
@@ -110,8 +96,7 @@ impl BlockReader {
             return self.build_default_values_block(num_rows);
         }
 
-        let fields = self.projection.project_column_nodes(&self.column_nodes)?;
-        let mut need_default_vals = Vec::with_capacity(fields.len());
+        let mut need_default_vals = Vec::with_capacity(self.project_column_nodes.len());
         let mut need_to_fill_default_val = false;
         let mut deserialized_column_arrays = Vec::with_capacity(self.projection.len());
         let field_deserialization_ctx = FieldDeserializationContext {
@@ -121,8 +106,8 @@ impl BlockReader {
             compression,
             uncompressed_buffer: &uncompressed_buffer,
         };
-        for column in &fields {
-            match self.deserialize_field(&field_deserialization_ctx, column)? {
+        for column_node in &self.project_column_nodes {
+            match self.deserialize_field(&field_deserialization_ctx, column_node)? {
                 None => {
                     need_to_fill_default_val = true;
                     need_default_vals.push(true);

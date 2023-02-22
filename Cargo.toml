@@ -53,6 +53,7 @@ members = [
     "src/query/storages/fuse",
     "src/query/storages/hive/hive",
     "src/query/storages/hive/hive-meta-store",
+    "src/query/storages/iceberg",
     "src/query/storages/information-schema",
     "src/query/storages/memory",
     "src/query/storages/null",
@@ -62,6 +63,7 @@ members = [
     "src/query/storages/system",
     "src/query/storages/view",
     "src/query/storages/parquet",
+    "src/query/storages/result_cache",
     "src/query/users",
     # databend-query
     "src/query/service",
@@ -88,7 +90,7 @@ members = [
 # databend maintains:
 openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.7.4-alpha.3" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
-opendal = { version = "0.27.1" }
+opendal = { version = "0.28.0" }
 ordered-float = { version = "3.4.0", default-features = false }
 
 # type helper
@@ -170,7 +172,7 @@ rpath = false
 # For example:
 # arrow-format = { git = "https://github.com/datafuse-extras/arrow-format", rev = "78dacc1" }
 
-arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "211be21" }
+arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "615300b" }
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "ed0e1ff" }
 limits-rs = { git = "https://github.com/datafuse-extras/limits-rs", rev = "abfcf7b" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "bc49d03" }

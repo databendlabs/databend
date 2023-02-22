@@ -96,3 +96,22 @@ It shows that:
 - query-0.8.80 is compatible with meta-0.8.35 upto the latest version;
 
 <img src="/img/deploy/compatibility.excalidraw.png"/>
+
+
+Query versions that are compatible with a specific meta:
+
+| Meta version range: | Query version range: |
+| :--                 | :--                  |
+| [0.8.30, 0.8.35):   | [0.7.59, 0.8.79]     |
+| [0.8.35, 0.9.22):   | [0.7.59, +∞)         |
+| [0.9.23, 0.9.41):   | [0.8.80, +∞)         |
+| [0.9.41, 0.9.42):   | [0.8.80, +∞)         |
+| [0.9.42, +∞):       | [0.9.41, +∞)         |
+
+Meta versions that are compatible with a specific query:
+
+| Query version range: | Meta version range: |
+| :--                  | :--                 |
+| 0.7.59, 0.8.79):     | [0.8.30, 0.9.22]    |
+| 0.8.80, 0.9.41):     | [0.8.35, +∞)        |
+| 0.9.41, +∞):         | [0.8.35, +∞)        |

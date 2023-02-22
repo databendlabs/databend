@@ -19,6 +19,8 @@ use std::sync::atomic::Ordering;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::BooleanType;
+use common_expression::types::DataType;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
@@ -108,6 +110,8 @@ impl JoinHashTable {
         match &self.hash_join_desc.other_predicate {
             None => Ok(probed_blocks),
             Some(other_predicate) => {
+                assert_eq!(other_predicate.data_type(), &DataType::Boolean);
+
                 let func_ctx = self.ctx.get_function_context()?;
                 let mut filtered_blocks = Vec::with_capacity(probed_blocks.len());
 
@@ -119,8 +123,11 @@ impl JoinHashTable {
                     }
 
                     let evaluator = Evaluator::new(&probed_block, func_ctx, &BUILTIN_FUNCTIONS);
-                    let predicate = evaluator.run(other_predicate)?;
-                    let res = probed_block.filter(&predicate)?;
+                    let predicate = evaluator
+                        .run(other_predicate)?
+                        .try_downcast::<BooleanType>()
+                        .unwrap();
+                    let res = probed_block.filter_boolean_value(&predicate)?;
                     if !res.is_empty() {
                         filtered_blocks.push(res);
                     }

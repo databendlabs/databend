@@ -401,7 +401,7 @@ impl<'a> Evaluator<'a> {
                         .unwrap();
                     Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
                         column: new_col.column,
-                        validity: bitmap::or(&col.validity, &new_col.validity),
+                        validity: bitmap::and(&col.validity, &new_col.validity),
                     }))))
                 }
                 other => unreachable!("source: {}", other),
@@ -605,6 +605,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         let mut old_domain = None;
         for _ in 0..MAX_ITERATIONS {
             let (new_expr, domain) = self.fold_once(&old_expr);
+
             if new_expr == old_expr {
                 return (new_expr, domain);
             }

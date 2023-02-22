@@ -121,7 +121,6 @@ def grammar_fuzzer(
     max_expansion_trials: int = 100,
     log: bool = False,
 ) -> str:
-
     term = start_symbol
     expansion_trials = 0
 

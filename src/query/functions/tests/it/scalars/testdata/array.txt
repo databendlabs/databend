@@ -7,22 +7,23 @@ output domain  : []
 output         : []
 
 
-ast            : ['a', 1]
-raw expr       : array("a", 1_u8)
-checked expr   : array<T0=String><T0, T0>("a", to_string<UInt8>(1_u8))
-optimized expr : ["a", "1"]
-output type    : Array(String)
-output domain  : [{"1"..="a"}]
-output         : ["a", "1"]
+error: 
+  --> SQL:1:1
+  |
+1 | ['a', 1]
+  | ^^^^^^^^ unable to parse string to type `UInt8` because invalid digit found in string while evaluating function `to_uint8("a")`
 
 
-ast            : [-1, true]
-raw expr       : array(minus(1_u8), true)
-checked expr   : array<T0=Int16><T0, T0>(minus<UInt8>(1_u8), to_int16<Boolean>(true))
-optimized expr : [-1, 1]
-output type    : Array(Int16)
-output domain  : [{-1..=1}]
-output         : [-1, 1]
+
+error: 
+  --> SQL:1:1
+  |
+1 | [-1, true]
+  | ^^^^^^^^^^ no overload satisfies `array(Int16, Boolean)`
+
+has tried possible overloads:
+  array(T0, T0) :: Array(T0)  : unable to find a common super type for `Int16` and `Boolean`
+
 
 
 ast            : [NULL, 8, -10]
@@ -50,7 +51,7 @@ error:
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `array(String, UInt8, Variant)`
 
 has tried possible overloads:
-  array(T0, T0, T0) :: Array(T0)  : unable to find a common super type for `String` and `Variant`
+  array(T0, T0, T0) :: Array(T0)  : unable to find a common super type for `UInt8` and `Variant`
 
 
 
@@ -103,16 +104,7 @@ error:
   --> SQL:1:7
   |
 1 | [1, 2]['a']
-  |       ^^^^^ no overload satisfies `get(Array(UInt8), String)`
-
-has tried possible overloads:
-  get(Array(Nothing) NULL, UInt64 NULL) :: NULL     : unable to unify `Array(UInt8)` with `Array(Nothing)`
-  get(Array(T0 NULL), UInt64) :: T0 NULL            : unable to unify `String` with `UInt64`
-  get(Array(T0 NULL) NULL, UInt64 NULL) :: T0 NULL  : unable to unify `String` with `UInt64`
-  get(Array(T0), UInt64) :: T0 NULL                 : unable to unify `String` with `UInt64`
-  get(Array(T0) NULL, UInt64 NULL) :: T0 NULL       : unable to unify `String` with `UInt64`
-  get(Variant NULL, UInt64 NULL) :: Variant NULL    : unable to unify `Array(UInt8)` with `Variant`
-  get(Variant NULL, String NULL) :: Variant NULL    : unable to unify `Array(UInt8)` with `Variant`
+  |       ^^^^^ unable to parse string to type `UInt64` because invalid digit found in string while evaluating function `to_uint64("a")`
 
 
 
@@ -478,28 +470,15 @@ evaluation (internal):
 +--------------+---------------------------------------------------------------------------+
 
 
-ast            : nullable_col in (1, '9', 3, 10, 12, true, [1,2,3])
-raw expr       : contains(array(1_u8, "9", 3_u8, 10_u8, 12_u8, true), nullable_col::Int64 NULL)
-checked expr   : contains<T0=Variant NULL><Array(T0), T0>(CAST(array<T0=String><T0, T0, T0, T0, T0, T0>(to_string<UInt8>(1_u8), "9", to_string<UInt8>(3_u8), to_string<UInt8>(10_u8), to_string<UInt8>(12_u8), to_string<Boolean>(true)) AS Array(Variant NULL)), CAST(nullable_col AS Variant NULL))
-optimized expr : contains<T0=Variant NULL><Array(T0), T0>(["1", "9", "3", "10", "12", "true"], CAST(nullable_col AS Variant NULL))
-evaluation:
-+--------+-------------------+---------------+
-|        | nullable_col      | Output        |
-+--------+-------------------+---------------+
-| Type   | Int64 NULL        | Boolean       |
-| Domain | {9..=12} ∪ {NULL} | {FALSE, TRUE} |
-| Row 0  | 9                 | false         |
-| Row 1  | 10                | false         |
-| Row 2  | NULL              | false         |
-| Row 3  | NULL              | false         |
-+--------+-------------------+---------------+
-evaluation (internal):
-+--------------+---------------------------------------------------------------------------+
-| Column       | Data                                                                      |
-+--------------+---------------------------------------------------------------------------+
-| nullable_col | NullableColumn { column: Int64([9, 10, 11, 12]), validity: [0b____0011] } |
-| Output       | Boolean([0b____0000])                                                     |
-+--------------+---------------------------------------------------------------------------+
+error: 
+  --> SQL:1:14
+  |
+1 | nullable_col in (1, '9', 3, 10, 12, true, [1,2,3])
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `array(UInt8, String, UInt8, UInt8, UInt8, Boolean)`
+
+has tried possible overloads:
+  array(T0, T0, T0, T0, T0, T0) :: Array(T0)  : unable to find a common super type for `UInt8` and `Boolean`
+
 
 
 ast            : array_remove_first([])
@@ -691,12 +670,7 @@ error:
   --> SQL:1:1
   |
 1 | array_concat([1,2,3], ['s', null])
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `array_concat(Array(UInt8), Array(String NULL))`
-
-has tried possible overloads:
-  array_concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing)  : unable to unify `Array(UInt8)` with `Array(Nothing)`
-  array_concat(Array(T0), Array(T0)) :: Array(T0)                           : unable to find a common super type for `UInt8` and `String NULL`
-  array_concat(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL            : unable to find a common super type for `UInt8` and `String NULL`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `UInt8` because invalid digit found in string while evaluating function `to_uint8("s")`
 
 
 
@@ -908,13 +882,12 @@ has tried possible overloads:
 
 
 
-ast            : array_indexof([1,2,3,'s'], 's')
-raw expr       : array_indexof(array(1_u8, 2_u8, 3_u8, "s"), "s")
-checked expr   : array_indexof<T0=String><Array(T0), T0>(array<T0=String><T0, T0, T0, T0>(to_string<UInt8>(1_u8), to_string<UInt8>(2_u8), to_string<UInt8>(3_u8), "s"), "s")
-optimized expr : 4_u64
-output type    : UInt64
-output domain  : {4..=4}
-output         : 4
+error: 
+  --> SQL:1:15
+  |
+1 | array_indexof([1,2,3,'s'], 's')
+  |               ^^^^^^^^^^^ unable to parse string to type `UInt8` because invalid digit found in string while evaluating function `to_uint8("s")`
+
 
 
 ast            : array_indexof([1::VARIANT,'x'::VARIANT,null::VARIANT,'x'::VARIANT], 'x'::VARIANT)
@@ -1779,22 +1752,23 @@ output domain  : [{0..=9.32}]
 output         : [0, 1.2, 3.4, 5.6, 7.8, 9.32]
 
 
-ast            : array_sort(['x', 0, 1.2, 3.4, 5.6, 7.8])
-raw expr       : array_sort_asc_null_first(array("x", 0_u8, 1.2_f64, 3.4_f64, 5.6_f64, 7.8_f64))
-checked expr   : array_sort_asc_null_first<T0=String><Array(T0)>(array<T0=String><T0, T0, T0, T0, T0, T0>("x", to_string<UInt8>(0_u8), to_string<Float64>(1.2_f64), to_string<Float64>(3.4_f64), to_string<Float64>(5.6_f64), to_string<Float64>(7.8_f64)))
-optimized expr : ["0", "1.2", "3.4", "5.6", "7.8", "x"]
-output type    : Array(String)
-output domain  : [{"0"..="x"}]
-output         : ["0", "1.2", "3.4", "5.6", "7.8", "x"]
+error: 
+  --> SQL:1:12
+  |
+1 | array_sort(['x', 0, 1.2, 3.4, 5.6, 7.8])
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `Float64` because invalid float literal while evaluating function `to_float64("x")`
 
 
-ast            : array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'DESC', 'NULLS FIRST')
-raw expr       : array_sort_desc_null_first(array(1.2_f64, NULL, 3.4_f64, 5.6_f64, "2.2", NULL))
-checked expr   : array_sort_desc_null_first<T0=String NULL><Array(T0)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_f64 AS String NULL), CAST(NULL AS String NULL), CAST(3.4_f64 AS String NULL), CAST(5.6_f64 AS String NULL), CAST("2.2" AS String NULL), CAST(NULL AS String NULL)))
-optimized expr : [NULL, NULL, "5.6", "3.4", "2.2", "1.2"]
-output type    : Array(String NULL)
-output domain  : [{""..="5.6"} ∪ {NULL}]
-output         : [NULL, NULL, "5.6", "3.4", "2.2", "1.2"]
+
+error: 
+  --> SQL:1:12
+  |
+1 | array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'DESC', 'NULLS FIRST')
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `array(Float64, NULL, Float64, Float64, String, NULL)`
+
+has tried possible overloads:
+  array(T0, T0, T0, T0, T0, T0) :: Array(T0)  : unable to find a common super type for `Float64 NULL` and `String`
+
 
 
 ast            : array_sort([], 'DESC', 'NULLS FIRST')
@@ -1806,13 +1780,15 @@ output domain  : []
 output         : []
 
 
-ast            : array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'DESC', 'NULLS LAST')
-raw expr       : array_sort_desc_null_last(array(1.2_f64, NULL, 3.4_f64, 5.6_f64, "2.2", NULL))
-checked expr   : array_sort_desc_null_last<T0=String NULL><Array(T0)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_f64 AS String NULL), CAST(NULL AS String NULL), CAST(3.4_f64 AS String NULL), CAST(5.6_f64 AS String NULL), CAST("2.2" AS String NULL), CAST(NULL AS String NULL)))
-optimized expr : ["5.6", "3.4", "2.2", "1.2", NULL, NULL]
-output type    : Array(String NULL)
-output domain  : [{""..="5.6"} ∪ {NULL}]
-output         : ["5.6", "3.4", "2.2", "1.2", NULL, NULL]
+error: 
+  --> SQL:1:12
+  |
+1 | array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'DESC', 'NULLS LAST')
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `array(Float64, NULL, Float64, Float64, String, NULL)`
+
+has tried possible overloads:
+  array(T0, T0, T0, T0, T0, T0) :: Array(T0)  : unable to find a common super type for `Float64 NULL` and `String`
+
 
 
 ast            : array_sort([], 'DESC', 'NULLS LAST')
@@ -1824,13 +1800,15 @@ output domain  : []
 output         : []
 
 
-ast            : array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'ASC', 'NULLS FIRST')
-raw expr       : array_sort_asc_null_first(array(1.2_f64, NULL, 3.4_f64, 5.6_f64, "2.2", NULL))
-checked expr   : array_sort_asc_null_first<T0=String NULL><Array(T0)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_f64 AS String NULL), CAST(NULL AS String NULL), CAST(3.4_f64 AS String NULL), CAST(5.6_f64 AS String NULL), CAST("2.2" AS String NULL), CAST(NULL AS String NULL)))
-optimized expr : [NULL, NULL, "1.2", "2.2", "3.4", "5.6"]
-output type    : Array(String NULL)
-output domain  : [{""..="5.6"} ∪ {NULL}]
-output         : [NULL, NULL, "1.2", "2.2", "3.4", "5.6"]
+error: 
+  --> SQL:1:12
+  |
+1 | array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'ASC', 'NULLS FIRST')
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `array(Float64, NULL, Float64, Float64, String, NULL)`
+
+has tried possible overloads:
+  array(T0, T0, T0, T0, T0, T0) :: Array(T0)  : unable to find a common super type for `Float64 NULL` and `String`
+
 
 
 ast            : array_sort([], 'ASC', 'NULLS FIRST')

@@ -48,7 +48,15 @@ impl ToReadDataSourcePlan for dyn Table {
         catalog: String,
         push_downs: Option<PushDownInfo>,
     ) -> Result<DataSourcePlan> {
-        let (statistics, parts) = self.read_partitions(ctx, push_downs.clone()).await?;
+        let (statistics, parts) = self
+            .read_partitions(ctx.clone(), push_downs.clone())
+            .await?;
+
+        // We need the partition sha256 to specify the result cache.
+        if ctx.get_settings().get_enable_query_result_cache()? {
+            let sha = parts.compute_sha256()?;
+            ctx.add_partitions_sha(sha);
+        }
 
         let source_info = self.get_data_source_info();
 

@@ -22,11 +22,9 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::filter_helper::FilterHelpers;
-use common_expression::types::AnyType;
+use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
-use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::Expr;
@@ -45,6 +43,7 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
+use crate::FuseStorageFormat;
 use crate::MergeIOReadResult;
 
 pub enum MutationAction {
@@ -58,13 +57,13 @@ enum State {
     ReadRemain {
         part: PartInfoPtr,
         data_block: DataBlock,
-        filter: Value<AnyType>,
+        filter: Value<BooleanType>,
     },
     MergeRemain {
         part: PartInfoPtr,
         merged_io_read_result: MergeIOReadResult,
         data_block: DataBlock,
-        filter: Value<AnyType>,
+        filter: Value<BooleanType>,
     },
     PerformOperator(DataBlock),
     Output(Option<PartInfoPtr>, DataBlock),
@@ -81,6 +80,7 @@ pub struct MutationSource {
     block_reader: Arc<BlockReader>,
     remain_reader: Arc<Option<BlockReader>>,
     operators: Vec<BlockOperator>,
+    storage_format: FuseStorageFormat,
     action: MutationAction,
 
     index: BlockMetaIndex,
@@ -97,6 +97,7 @@ impl MutationSource {
         block_reader: Arc<BlockReader>,
         remain_reader: Arc<Option<BlockReader>>,
         operators: Vec<BlockOperator>,
+        storage_format: FuseStorageFormat,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(MutationSource {
@@ -111,6 +112,7 @@ impl MutationSource {
             action,
             index: BlockMetaIndex::default(),
             origin_stats: None,
+            storage_format,
         })))
     }
 }
@@ -171,24 +173,24 @@ impl Processor for MutationSource {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::FilterData(part, read_res) => {
                 let chunks = read_res.columns_chunks()?;
-                let mut data_block = self
-                    .block_reader
-                    .deserialize_parquet_chunks(part.clone(), chunks)?;
+                let mut data_block = self.block_reader.deserialize_chunks(
+                    part.clone(),
+                    chunks,
+                    &self.storage_format,
+                )?;
                 let num_rows = data_block.num_rows();
 
                 if let Some(filter) = self.filter.as_ref() {
+                    assert_eq!(filter.data_type(), &DataType::Boolean);
+
                     let func_ctx = self.ctx.get_function_context()?;
                     let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
 
-                    let res = evaluator
+                    let predicates = evaluator
                         .run(filter)
-                        .map_err(|e| e.add_message("eval filter failed:"))?;
-                    let predicates =
-                        FilterHelpers::cast_to_nonull_boolean(&res).ok_or_else(|| {
-                            ErrorCode::BadArguments(
-                                "Result of filter expression cannot be converted to boolean.",
-                            )
-                        })?;
+                        .map_err(|e| e.add_message("eval filter failed:"))?
+                        .try_downcast::<BooleanType>()
+                        .unwrap();
 
                     let affect_rows = match &predicates {
                         Value::Scalar(v) => {
@@ -222,33 +224,31 @@ impl Processor for MutationSource {
                                     );
                                 } else {
                                     let predicate_col = predicates.into_column().unwrap();
-                                    let filter =
-                                        Value::Column(Column::Boolean(predicate_col.not()));
-                                    data_block = data_block.filter(&filter)?;
+                                    let filter = predicate_col.not();
+                                    data_block = data_block.filter_with_bitmap(&filter)?;
                                     if self.remain_reader.is_none() {
                                         self.state = State::PerformOperator(data_block);
                                     } else {
                                         self.state = State::ReadRemain {
                                             part,
                                             data_block,
-                                            filter,
+                                            filter: Value::Column(filter),
                                         }
                                     }
                                 }
                             }
                             MutationAction::Update => {
-                                let filter = Value::upcast(predicates);
                                 if self.remain_reader.is_none() {
                                     data_block.add_column(BlockEntry {
                                         data_type: DataType::Boolean,
-                                        value: filter,
+                                        value: Value::upcast(predicates),
                                     });
                                     self.state = State::PerformOperator(data_block);
                                 } else {
                                     self.state = State::ReadRemain {
                                         part,
                                         data_block,
-                                        filter,
+                                        filter: predicates,
                                     };
                                 }
                             }
@@ -274,11 +274,12 @@ impl Processor for MutationSource {
             } => {
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
                     let chunks = merged_io_read_result.columns_chunks()?;
-                    let remain_block = remain_reader.deserialize_parquet_chunks(part, chunks)?;
+                    let remain_block =
+                        remain_reader.deserialize_chunks(part, chunks, &self.storage_format)?;
 
                     match self.action {
                         MutationAction::Deletion => {
-                            let remain_block = remain_block.filter(&filter)?;
+                            let remain_block = remain_block.filter_boolean_value(&filter)?;
                             for col in remain_block.columns() {
                                 data_block.add_column(col.clone());
                             }
@@ -289,7 +290,7 @@ impl Processor for MutationSource {
                             }
                             data_block.add_column(BlockEntry {
                                 data_type: DataType::Boolean,
-                                value: filter,
+                                value: Value::upcast(filter),
                             });
                         }
                     }

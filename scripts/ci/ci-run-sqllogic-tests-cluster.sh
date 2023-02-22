@@ -4,6 +4,8 @@
 
 set -e
 
+export STORAGE_ALLOW_INSECURE=true
+
 echo "Starting Cluster databend-query"
 ./scripts/ci/deploy/databend-query-cluster-3-nodes.sh
 

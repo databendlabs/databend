@@ -17,8 +17,6 @@ use std::fmt;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_base::runtime::ThreadPool;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::Column;
@@ -80,22 +78,6 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     }
     // TODO append the value into the column builder
     fn merge_result(&self, _place: StateAddr, _builder: &mut ColumnBuilder) -> Result<()>;
-
-    fn support_merge_parallel(&self) -> bool {
-        false
-    }
-
-    fn merge_parallel(
-        &self,
-        _pool: &mut ThreadPool,
-        _place: StateAddr,
-        _rhs: StateAddr,
-    ) -> Result<()> {
-        Err(ErrorCode::Unimplemented(format!(
-            "merge_parallel is not implemented for {}",
-            self.name()
-        )))
-    }
 
     // std::mem::needs_drop::<State>
     // if true will call drop_state

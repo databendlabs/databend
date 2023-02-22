@@ -14,6 +14,11 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check;
+use common_expression::types::DataType;
+use common_expression::ColumnIndex;
+use common_expression::Expr;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
@@ -44,5 +49,27 @@ pub fn decode_field_name(field_name: &str) -> Result<(String, IndexType)> {
         None => Err(ErrorCode::Internal(format!(
             "Invalid field name: {field_name}"
         ))),
+    }
+}
+
+/// Wrap the expreesion into `is_true(try_cast(<expr> as boolean))` to make sure the expression
+/// will always return a boolean value.
+pub fn cast_expr_to_non_null_boolean<Index: ColumnIndex>(expr: Expr<Index>) -> Result<Expr<Index>> {
+    if expr.data_type() == &DataType::Boolean {
+        Ok(expr)
+    } else {
+        type_check::check_function(
+            None,
+            "is_true",
+            &[],
+            &[type_check::check_cast(
+                None,
+                true,
+                expr,
+                &DataType::Boolean,
+                &BUILTIN_FUNCTIONS,
+            )?],
+            &BUILTIN_FUNCTIONS,
+        )
     }
 }
