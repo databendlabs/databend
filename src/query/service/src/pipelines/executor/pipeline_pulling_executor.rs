@@ -29,7 +29,6 @@ use common_pipeline_sinks::Sink;
 use common_pipeline_sinks::Sinker;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
-use tracing::error;
 use tracing::warn;
 
 use crate::pipelines::executor::executor_settings::ExecutorSettings;
@@ -154,7 +153,7 @@ impl PipelinePullingExecutor {
         let threads_executor = self.executor.clone();
         let thread_function = Self::thread_function(state, threads_executor);
         #[allow(unused_mut)]
-            let mut thread_name = Some(String::from("PullingExecutor"));
+        let mut thread_name = Some(String::from("PullingExecutor"));
 
         #[cfg(debug_assertions)]
         {
@@ -184,8 +183,9 @@ impl PipelinePullingExecutor {
     }
 
     pub fn pull_data(&mut self) -> Result<Option<DataBlock>> {
+        let mut need_check_graph_status = false;
+
         loop {
-            let mut need_check_graph_status = false;
             return match self.receiver.recv_timeout(Duration::from_millis(100)) {
                 Ok(data_block) => Ok(Some(data_block)),
                 Err(RecvTimeoutError::Timeout) => {
