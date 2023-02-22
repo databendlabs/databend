@@ -95,8 +95,6 @@ impl Processor for TransformExchangeSorting {
             }
 
             all_inputs_finished = false;
-
-            input.set_need_data();
             if self.buffer[index].is_none() {
                 if input.has_data() {
                     let data_block = input.pull_data().unwrap()?;
@@ -106,6 +104,7 @@ impl Processor for TransformExchangeSorting {
                     continue;
                 }
 
+                input.set_need_data();
                 unready_inputs = true;
             }
         }

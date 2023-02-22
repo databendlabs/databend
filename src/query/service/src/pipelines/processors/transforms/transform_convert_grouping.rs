@@ -172,9 +172,8 @@ impl<Method: HashMethodBounds> TransformConvertGrouping<Method> {
                 continue;
             }
 
-            self.inputs[index].port.set_need_data();
-
             if !self.inputs[index].port.has_data() {
+                self.inputs[index].port.set_need_data();
                 self.initialized_all_inputs = false;
                 continue;
             }
@@ -183,6 +182,7 @@ impl<Method: HashMethodBounds> TransformConvertGrouping<Method> {
             self.inputs[index].bucket = self.add_bucket(data_block);
 
             if self.inputs[index].bucket <= SINGLE_LEVEL_BUCKET_NUM {
+                self.inputs[index].port.set_need_data();
                 self.initialized_all_inputs = false;
             }
         }
