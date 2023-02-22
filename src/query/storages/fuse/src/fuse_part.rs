@@ -26,6 +26,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
 use common_expression::Scalar;
+use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::Compression;
 
@@ -40,8 +41,7 @@ pub struct FusePartInfo {
     pub compression: Compression,
 
     pub sort_min_max: Option<(Scalar, Scalar)>,
-    /// page range in the file
-    pub range: Option<Range<usize>>,
+    pub block_meta_index: Option<BlockMetaIndex>,
 }
 
 #[typetag::serde(name = "fuse")]
@@ -72,7 +72,8 @@ impl FusePartInfo {
         columns_meta: HashMap<ColumnId, ColumnMeta>,
         compression: Compression,
         sort_min_max: Option<(Scalar, Scalar)>,
-        range: Option<Range<usize>>,
+        // range: Option<Range<usize>>,
+        block_meta_index: Option<BlockMetaIndex>,
     ) -> Arc<Box<dyn PartInfo>> {
         Arc::new(Box::new(FusePartInfo {
             location,
@@ -81,7 +82,8 @@ impl FusePartInfo {
             nums_rows: rows_count as usize,
             compression,
             sort_min_max,
-            range,
+            // range,
+            block_meta_index,
         }))
     }
 
@@ -92,5 +94,15 @@ impl FusePartInfo {
                 "Cannot downcast from PartInfo to FusePartInfo.",
             )),
         }
+    }
+
+    pub fn range(&self) -> Option<&Range<usize>> {
+        self.block_meta_index
+            .as_ref()
+            .and_then(|meta| meta.range.as_ref())
+    }
+
+    pub fn block_meta_index(&self) -> Option<&BlockMetaIndex> {
+        self.block_meta_index.as_ref()
     }
 }

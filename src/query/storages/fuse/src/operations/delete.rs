@@ -277,7 +277,7 @@ impl FuseTable {
         let range_block_metas = block_metas
             .clone()
             .into_iter()
-            .map(|(a, b)| (a.range, b))
+            .map(|(a, b)| (Some(a), b))
             .collect::<Vec<_>>();
 
         let (_, inner_parts) = self.read_partitions_with_metas(

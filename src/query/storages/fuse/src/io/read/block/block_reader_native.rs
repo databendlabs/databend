@@ -72,7 +72,7 @@ impl BlockReader {
                 self.operator.object(&part.location),
                 index,
                 metas,
-                &part.range,
+                part.range(),
             ));
 
             // Perf
@@ -108,7 +108,7 @@ impl BlockReader {
         o: Object,
         index: usize,
         metas: Vec<ColumnMeta>,
-        range: &Option<Range<usize>>,
+        range: Option<&Range<usize>>,
     ) -> Result<(usize, Vec<NativeReader<Reader>>)> {
         let mut native_readers = Vec::with_capacity(metas.len());
         for meta in metas {
@@ -144,7 +144,7 @@ impl BlockReader {
                 .cloned()
                 .collect::<Vec<_>>();
 
-            let readers = Self::sync_read_native_column(op.object(&location), metas, &part.range)?;
+            let readers = Self::sync_read_native_column(op.object(&location), metas, part.range())?;
             results.insert(index, readers);
         }
 
@@ -154,7 +154,7 @@ impl BlockReader {
     pub fn sync_read_native_column(
         o: Object,
         metas: Vec<ColumnMeta>,
-        range: &Option<Range<usize>>,
+        range: Option<&Range<usize>>,
     ) -> Result<Vec<NativeReader<Reader>>> {
         let mut native_readers = Vec::with_capacity(metas.len());
         for meta in metas {
