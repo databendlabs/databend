@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_base::base::Semaphore;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::TopK;
 use common_catalog::table_context::TableContext;
@@ -55,8 +54,6 @@ pub fn build_fuse_native_source_pipeline(
         );
     }
 
-    let mut max_io_paralles = max_io_requests;
-
     match block_reader.support_blocking_api() {
         true => {
             pipeline.add_source(
@@ -74,13 +71,9 @@ pub fn build_fuse_native_source_pipeline(
                 max_io_requests,
             )?;
             pipeline.resize(max_threads)?;
-
-            // No need to limit the paralles, because data is already readed.
-            max_io_paralles = 1024;
         }
     };
 
-    let io_permit = Arc::new(Semaphore::new(max_io_paralles as isize));
     pipeline.add_transform(|transform_input, transform_output| {
         NativeDeserializeDataTransform::create(
             ctx.clone(),
@@ -89,7 +82,6 @@ pub fn build_fuse_native_source_pipeline(
             topk.clone(),
             transform_input,
             transform_output,
-            io_permit.clone(),
         )
     })?;
 

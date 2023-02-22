@@ -25,7 +25,6 @@ use common_arrow::native::read::ArrayIter;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
-use common_base::base::Semaphore;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::PushDownInfo;
@@ -87,8 +86,6 @@ pub struct NativeDeserializeDataTransform {
     array_iters: BTreeMap<usize, ArrayIter<'static>>,
     // The Page numbers of each ArrayIter can skip.
     array_skip_pages: BTreeMap<usize, usize>,
-
-    io_permit: Arc<Semaphore>,
 }
 
 impl NativeDeserializeDataTransform {
@@ -99,7 +96,6 @@ impl NativeDeserializeDataTransform {
         top_k: Option<TopK>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        io_permit: Arc<Semaphore>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
 
@@ -174,8 +170,6 @@ impl NativeDeserializeDataTransform {
                 inited: false,
                 array_iters: BTreeMap::new(),
                 array_skip_pages: BTreeMap::new(),
-
-                io_permit,
             },
         )))
     }
@@ -340,12 +334,6 @@ impl NativeDeserializeDataTransform {
             Err(err) => Err(err.into()),
         }
     }
-
-    #[inline]
-    fn io_task<F, T>(sem: Arc<Semaphore>, mut f: F) -> T
-    where F: FnMut() -> T {
-        f()
-    }
 }
 
 impl Processor for NativeDeserializeDataTransform {
@@ -457,7 +445,7 @@ impl Processor for NativeDeserializeDataTransform {
             if self.prewhere_columns.len() > 1 {
                 if let Some((top_k, sorter, index)) = self.top_k.as_mut() {
                     if let Some(mut array_iter) = self.array_iters.remove(index) {
-                        match Self::io_task(Arc::clone(&self.io_permit), || array_iter.next()) {
+                        match array_iter.next() {
                             Some(array) => {
                                 let array = array?;
                                 self.read_columns.push(*index);
@@ -487,8 +475,7 @@ impl Processor for NativeDeserializeDataTransform {
                 if let Some(mut array_iter) = self.array_iters.remove(index) {
                     let skip_pages = self.array_skip_pages.get(index).unwrap();
 
-                    match Self::io_task(Arc::clone(&self.io_permit), || array_iter.nth(*skip_pages))
-                    {
+                    match array_iter.nth(*skip_pages) {
                         Some(array) => {
                             self.read_columns.push(*index);
                             arrays.push((*index, array?));
@@ -566,8 +553,7 @@ impl Processor for NativeDeserializeDataTransform {
                 if let Some(mut array_iter) = self.array_iters.remove(index) {
                     let skip_pages = self.array_skip_pages.get(index).unwrap();
 
-                    match Self::io_task(Arc::clone(&self.io_permit), || array_iter.nth(*skip_pages))
-                    {
+                    match array_iter.nth(*skip_pages) {
                         Some(array) => {
                             self.read_columns.push(*index);
                             arrays.push((*index, array?));

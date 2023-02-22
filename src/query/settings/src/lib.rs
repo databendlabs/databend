@@ -266,13 +266,13 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
-                default_value: UserSettingValue::UInt64(100000),
+                default_value: UserSettingValue::UInt64(20000),
                 user_setting: UserSetting::create(
                     "group_by_two_level_threshold",
-                    UserSettingValue::UInt64(100000),
+                    UserSettingValue::UInt64(20000),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The threshold of keys to open two-level aggregation, default value: 100000.",
+                desc: "The threshold of keys to open two-level aggregation, default value: 20000.",
                 possible_values: None,
             },
             SettingValue {
