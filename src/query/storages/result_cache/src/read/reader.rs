@@ -59,7 +59,15 @@ impl ResultCacheReader {
     }
 
     pub async fn try_read_cached_result(&self) -> Result<Option<Vec<DataBlock>>> {
-        match self.meta_mgr.get(self.meta_key.clone()).await? {
+        self.try_read_cached_result_with_meta_key(self.meta_key.clone())
+            .await
+    }
+
+    pub async fn try_read_cached_result_with_meta_key(
+        &self,
+        meta_key: String,
+    ) -> Result<Option<Vec<DataBlock>>> {
+        match self.meta_mgr.get(meta_key).await? {
             Some(value) => {
                 if self.tolerate_inconsistent || value.partitions_shas == self.partitions_shas {
                     if value.num_rows == 0 {

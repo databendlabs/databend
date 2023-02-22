@@ -20,6 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::MetaId;
 use common_storages_fuse::table_functions::InferSchemaTable;
+use common_storages_result_cache::ResultScan;
 use parking_lot::RwLock;
 
 use crate::catalogs::SYS_TBL_FUC_ID_END;
@@ -151,6 +152,11 @@ impl TableFunctionFactory {
         creators.insert(
             "read_parquet".to_string(),
             (next_id(), Arc::new(create_disabled_table_function)),
+        );
+
+        creators.insert(
+            "result_scan".to_string(),
+            (next_id(), Arc::new(ResultScan::create)),
         );
 
         TableFunctionFactory {

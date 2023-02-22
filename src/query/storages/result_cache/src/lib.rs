@@ -25,5 +25,5 @@ pub use common::gen_result_cache_meta_key;
 pub use common::RESULT_CACHE_PREFIX;
 pub use meta_manager::ResultCacheMetaManager;
 pub use read::ResultCacheReader;
-pub use write::TransformWriteResultCache;
+pub use result_scan::ResultScan;
 pub use write::WriteResultCacheSink;

@@ -53,7 +53,7 @@ pub struct SessionContext {
     query_context_shared: RwLock<Weak<QueryContextShared>>,
     // We store `query_id -> query_result_cache_key` to session context, so that we can fetch
     // query result through previous query_id easily.
-    query_ids_results: RwLock<Vec<(String, String)>>,
+    query_ids_results: RwLock<Vec<(String, Option<String>)>>,
 }
 
 impl SessionContext {
@@ -221,14 +221,40 @@ impl SessionContext {
         let lock = self.query_ids_results.read();
         for (qid, result_cache_key) in (*lock).iter().rev() {
             if qid.eq_ignore_ascii_case(query_id) {
-                return Some(result_cache_key.clone());
+                return result_cache_key.clone();
             }
         }
         None
     }
 
-    pub fn update_query_ids_results(&self, key: String, value: String) {
+    pub fn update_query_ids_results(&self, query_id: String, value: Option<String>) {
         let mut lock = self.query_ids_results.write();
-        (*lock).push((key, value))
+        // Here we use reverse iteration, as it is not common to modify elements from earlier.
+        for (idx, (qid, _)) in (*lock).iter().rev().enumerate() {
+            if qid.eq_ignore_ascii_case(&query_id) {
+                // update value iff value is some.
+                if let Some(v) = value {
+                    (*lock)[idx] = (query_id, Some(v))
+                }
+                return;
+            }
+        }
+        lock.push((query_id, value))
+    }
+
+    pub fn get_last_query_id(&self, index: i32) -> String {
+        let lock = self.query_ids_results.read();
+        let query_ids_len = lock.len();
+        let idx = if index < 0 {
+            query_ids_len as i32 + index
+        } else {
+            index
+        };
+
+        if idx < 0 || idx > (query_ids_len - 1) as i32 {
+            return "".to_string();
+        }
+
+        (*lock)[idx as usize].0.clone()
     }
 }

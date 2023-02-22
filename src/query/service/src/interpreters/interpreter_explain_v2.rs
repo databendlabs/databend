@@ -255,7 +255,7 @@ impl ExplainInterpreter {
             complete_executor.execute()?;
         } else {
             let mut pulling_executor =
-                PipelinePullingExecutor::from_pipelines(self.ctx.clone(), build_res, settings)?;
+                PipelinePullingExecutor::from_pipelines(build_res, settings)?;
             pulling_executor.start();
             while (pulling_executor.pull_data()?).is_some() {}
         }

@@ -33,6 +33,7 @@ use crate::common::ResultCacheValue;
 use crate::meta_manager::ResultCacheMetaManager;
 
 pub struct WriteResultCacheSink {
+    ctx: Arc<dyn TableContext>,
     sql: String,
     partitions_shas: Vec<String>,
 
@@ -81,6 +82,8 @@ impl AsyncMpscSink for WriteResultCacheSink {
         self.meta_mgr
             .set(self.meta_key.clone(), value, MatchSeq::GE(0), expire_at)
             .await?;
+        self.ctx
+            .set_query_id_result_cache(self.ctx.get_id(), self.meta_key.clone());
         Ok(())
     }
 }
@@ -108,6 +111,7 @@ impl WriteResultCacheSink {
         Ok(ProcessorPtr::create(Box::new(AsyncMpscSinker::create(
             inputs,
             WriteResultCacheSink {
+                ctx,
                 sql,
                 partitions_shas,
                 meta_mgr: ResultCacheMetaManager::create(kv_store, ttl),

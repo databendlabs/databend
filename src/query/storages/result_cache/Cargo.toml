@@ -19,7 +19,9 @@ common-meta-store = { path = "../../../meta/store" }
 common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../../pipeline/core" }
 common-pipeline-sinks = { path = "../../pipeline/sinks" }
+common-pipeline-sources = { path = "../../pipeline/sources" }
 common-storage = { path = "../../../common/storage" }
+common-storages-fuse = { path = "../fuse" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 opendal = { workspace = true }

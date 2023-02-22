@@ -359,7 +359,7 @@ impl Session {
 
     pub fn update_query_ids_results(self: &Arc<Self>, query_id: String, result_cache_key: String) {
         self.session_ctx
-            .update_query_ids_results(query_id, result_cache_key)
+            .update_query_ids_results(query_id, Some(result_cache_key))
     }
 }
 
