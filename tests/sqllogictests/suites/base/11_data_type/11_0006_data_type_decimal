@@ -137,3 +137,30 @@ query I
 SELECT ANY(CAST(2.34 AS DECIMAL(6, 2)))
 ----
 2.34
+
+## insert
+
+statement ok
+drop table if exists t_decimal_4_2;
+
+statement ok
+create table t_decimal_4_2(a Decimal(4,2));
+
+statement ok
+insert into t_decimal_4_2 values (1.1), (0.1), (1.0), (1.1e1), (1.1e-1);
+
+statement error 1065
+insert into t_decimal_4_2 values (1.1.1);
+
+## overflow
+statement error 1001
+insert into t_decimal_4_2 values (11111);
+
+query I
+select * from t_decimal_4_2;
+----
+1.10
+0.10
+1.00
+11.00
+0.11
