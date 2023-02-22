@@ -45,6 +45,7 @@ use crate::api::rpc::flight_scatter_broadcast::BroadcastFlightScatter;
 use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
 use crate::api::rpc::Packet;
 use crate::api::DataExchange;
+use crate::api::ExchangeSorting;
 use crate::api::FlightClient;
 use crate::api::FragmentPlanPacket;
 use crate::api::InitNodesChannelPacket;
@@ -484,8 +485,9 @@ impl QueryCoordinator {
                 return Ok(fragment_coordinator.pipeline_build_res.unwrap());
             }
 
-            let exchange_params = fragment_coordinator.create_exchange_params(info)?;
             let mut build_res = fragment_coordinator.pipeline_build_res.unwrap();
+            let exchange_params = fragment_coordinator
+                .create_exchange_params(info, build_res.exchange_sorting.clone())?;
 
             let data_exchange = fragment_coordinator.data_exchange.as_ref().unwrap();
 
@@ -529,7 +531,14 @@ impl QueryCoordinator {
 
         let mut params = Vec::with_capacity(self.fragments_coordinator.len());
         for coordinator in self.fragments_coordinator.values() {
-            params.push(coordinator.create_exchange_params(info)?);
+            params.push(
+                coordinator.create_exchange_params(
+                    info,
+                    coordinator
+                        .pipeline_build_res
+                        .and_then(|x| x.exchange_sorting.clone()),
+                )?,
+            );
         }
 
         for ((_, coordinator), params) in self.fragments_coordinator.iter_mut().zip(params) {
@@ -607,12 +616,16 @@ impl FragmentCoordinator {
         })
     }
 
-    pub fn create_exchange_params(&self, info: &QueryInfo) -> Result<ExchangeParams> {
+    pub fn create_exchange_params(
+        &self,
+        info: &QueryInfo,
+        exchange_sorting: Option<Arc<dyn ExchangeSorting>>,
+    ) -> Result<ExchangeParams> {
         match &self.data_exchange {
             None => Err(ErrorCode::Internal("Cannot find data exchange.")),
             Some(DataExchange::Merge(exchange)) => {
                 Ok(ExchangeParams::MergeExchange(MergeExchangeParams {
-                    exchange_sorting: None,
+                    exchange_sorting,
                     schema: self.physical_plan.output_schema()?,
                     fragment_id: self.fragment_id,
                     query_id: info.query_id.to_string(),
@@ -621,7 +634,7 @@ impl FragmentCoordinator {
             }
             Some(DataExchange::Broadcast(exchange)) => {
                 Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
-                    exchange_sorting: None,
+                    exchange_sorting,
                     schema: self.physical_plan.output_schema()?,
                     fragment_id: self.fragment_id,
                     query_id: info.query_id.to_string(),
@@ -634,7 +647,7 @@ impl FragmentCoordinator {
             }
             Some(DataExchange::ShuffleDataExchange(exchange)) => {
                 Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
-                    exchange_sorting: None,
+                    exchange_sorting,
                     schema: self.physical_plan.output_schema()?,
                     fragment_id: self.fragment_id,
                     query_id: info.query_id.to_string(),
