@@ -18,9 +18,9 @@ use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
-use std::sync::RwLock;
 
 use common_exception::Result;
+use parking_lot::RwLock;
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
 use sha2::Digest;
@@ -190,11 +190,10 @@ impl StealablePartitions {
     }
 
     pub fn steal_one(&self, idx: usize) -> Option<PartInfoPtr> {
-        if self.partitions.read().unwrap().is_empty() {
+        let mut partitions = self.partitions.write();
+        if partitions.is_empty() {
             return self.ctx.get_partition();
         }
-
-        let mut partitions = self.partitions.write().unwrap();
 
         let idx = if idx >= partitions.len() {
             idx % partitions.len()
@@ -203,19 +202,20 @@ impl StealablePartitions {
         };
 
         for step in 0..partitions.len() {
-            if !partitions[idx + step].is_empty() {
-                return partitions[idx + step].pop_front();
+            let index = (idx + step) % partitions.len();
+            if !partitions[index].is_empty() {
+                return partitions[index].pop_front();
             }
         }
         return None;
     }
 
     pub fn steal(&self, idx: usize, max_size: usize) -> Vec<PartInfoPtr> {
-        if self.partitions.read().unwrap().is_empty() {
+        let mut partitions = self.partitions.write();
+        if partitions.is_empty() {
             return self.ctx.get_partitions(max_size);
         }
 
-        let mut partitions = self.partitions.write().unwrap();
         let idx = if idx >= partitions.len() {
             idx % partitions.len()
         } else {
@@ -223,8 +223,10 @@ impl StealablePartitions {
         };
 
         for step in 0..partitions.len() {
-            if !partitions[idx + step].is_empty() {
-                let ps = &mut partitions[idx + step];
+            let index = (idx + step) % partitions.len();
+
+            if !partitions[index].is_empty() {
+                let ps = &mut partitions[index];
                 let size = ps.len().min(max_size);
                 return ps.drain(..size).collect();
             }
