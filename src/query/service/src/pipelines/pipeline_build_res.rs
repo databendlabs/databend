@@ -28,8 +28,6 @@ pub struct PipelineBuildResult {
     /// Set of profiling spans for the query.
     /// Will be empty if profiling is disabled.
     pub prof_span_set: ProfSpanSetRef,
-    /// If cache the pipeline output.
-    pub cache_result: bool,
 }
 
 impl PipelineBuildResult {
@@ -38,7 +36,6 @@ impl PipelineBuildResult {
             main_pipeline: Pipeline::create(),
             sources_pipelines: vec![],
             prof_span_set: ProfSpanSetRef::default(),
-            cache_result: false,
         }
     }
 
@@ -57,7 +54,6 @@ impl PipelineBuildResult {
             main_pipeline,
             sources_pipelines: vec![],
             prof_span_set: ProfSpanSetRef::default(),
-            cache_result: false,
         })
     }
 

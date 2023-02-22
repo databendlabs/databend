@@ -122,7 +122,6 @@ impl PipelineBuilder {
             main_pipeline: self.main_pipeline,
             sources_pipelines: self.pipelines,
             prof_span_set: self.prof_span_set,
-            cache_result: false,
         })
     }
 
