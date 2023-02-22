@@ -32,6 +32,10 @@ use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableInfo;
 use common_storage::ColumnNodes;
 use opendal::Operator;
+use sha2::Digest;
+use sha2::Sha256;
+use storages_common_cache::CacheAccessor;
+use storages_common_cache_manager::CachedObject;
 use storages_common_index::Index;
 use storages_common_index::RangeIndex;
 use storages_common_table_meta::meta::BlockMeta;
@@ -108,6 +112,24 @@ impl FuseTable {
             segments_location.len()
         );
 
+        type CacheItem = (PartStatistics, Partitions);
+
+        let cache_key = format!(
+            "{:x}",
+            Sha256::digest(format!("{:?}_{:?}", segments_location, push_downs))
+        );
+
+        if let Some(cache) = CacheItem::cache() {
+            if let Some(data) = cache.get(&cache_key) {
+                info!(
+                    "prune snapshot block from cache, final block numbers:{}, cost:{}",
+                    data.1.len(),
+                    start.elapsed().as_secs()
+                );
+                return Ok((data.0.clone(), data.1.clone()));
+            }
+        }
+
         let pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
             FusePruner::create(&ctx, dal, table_info.schema(), &push_downs)?
         } else {
@@ -135,13 +157,19 @@ impl FuseTable {
             .into_iter()
             .map(|(block_meta_index, block_meta)| (block_meta_index.range, block_meta))
             .collect::<Vec<_>>();
-        self.read_partitions_with_metas(
+
+        let result = self.read_partitions_with_metas(
             table_info.schema(),
             push_downs,
             &block_metas,
             summary,
             pruning_stats,
-        )
+        )?;
+
+        if let Some(cache) = CacheItem::cache() {
+            cache.put(cache_key, Arc::new(result.clone()));
+        }
+        Ok(result)
     }
 
     pub fn read_partitions_with_metas(

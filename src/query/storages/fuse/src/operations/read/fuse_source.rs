@@ -13,7 +13,6 @@
 //  limitations under the License.
 
 use std::sync::Arc;
-use std::sync::Barrier;
 
 use common_base::base::Semaphore;
 use common_catalog::plan::DataSourcePlan;
@@ -69,7 +68,7 @@ pub fn build_fuse_native_source_pipeline(
         }
     };
 
-    let io_permit = Arc::new(Semaphore::new(max_io_requests as isize));
+    let io_permit = Arc::new(Semaphore::new(max_io_paralles as isize));
     pipeline.add_transform(|transform_input, transform_output| {
         NativeDeserializeDataTransform::create(
             ctx.clone(),

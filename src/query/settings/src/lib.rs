@@ -109,10 +109,10 @@ impl Settings {
 
     pub fn default_settings(tenant: &str, conf: Arc<InnerConfig>) -> Result<Arc<Settings>> {
         let memory_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
-        let mut num_cpus = num_cpus::get();
+        let mut num_cpus = num_cpus::get() as u64;
 
         if conf.storage.params.is_fs() {
-            num_cpus = num_cpus::get_physical();
+            num_cpus = num_cpus::get_physical() as u64;
         }
 
         if conf.query.num_cpus != 0 {

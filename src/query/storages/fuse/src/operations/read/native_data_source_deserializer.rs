@@ -17,8 +17,6 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::sync::Barrier;
-use std::sync::Condvar;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::native::read::column_iter_to_arrays;
