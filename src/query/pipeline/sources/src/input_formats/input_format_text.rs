@@ -295,7 +295,7 @@ impl<T: InputFormatTextBase> InputFormat for T {
         let mut infos = vec![];
         for path in files {
             let obj = op.object(path);
-            let size = obj.metadata().await?.content_length() as usize;
+            let size = obj.stat().await?.content_length() as usize;
             let compress_alg = InputContext::get_compression_alg_copy(
                 stage_info.file_format_options.compression,
                 path,

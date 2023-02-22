@@ -28,6 +28,7 @@ use common_exception::Result;
 use futures::stream::StreamExt;
 use futures_util::future;
 use futures_util::TryStreamExt;
+use opendal::ObjectMetakey;
 use opendal::ObjectMode;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
@@ -296,12 +297,15 @@ impl SnapshotsIO {
         let mut file_list = vec![];
         let mut ds = data_accessor.object(prefix).list().await?;
         while let Some(de) = ds.try_next().await? {
-            match de.mode().await? {
+            let meta = de
+                .metadata(ObjectMetakey::Mode | ObjectMetakey::LastModified)
+                .await?;
+            match meta.mode() {
                 ObjectMode::FILE => match exclude_file {
                     Some(path) if de.path() == path => continue,
                     _ => {
                         let location = de.path().to_string();
-                        let modified = de.last_modified().await?;
+                        let modified = meta.last_modified();
                         file_list.push((location, modified));
                     }
                 },

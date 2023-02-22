@@ -151,10 +151,7 @@ impl Interpreter for SelectInterpreterV2 {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         // 0. Need to build pipeline first to get the partitions.
         let mut build_res = self.build_pipeline().await?;
-        // Only single table query can use result cache now. Multi-tables query will be supported later.
-        if self.ctx.get_settings().get_enable_query_result_cache()?
-            && self.metadata.read().tables().len() == 1
-        {
+        if self.ctx.get_settings().get_enable_query_result_cache()? {
             // 1. Try to get result from cache.
             let kv_store = UserApiProvider::instance().get_meta_store_client();
             let cache_reader = ResultCacheReader::create(
