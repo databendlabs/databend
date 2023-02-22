@@ -1,0 +1,89 @@
+{
+  "format-version" : 1,
+  "table-uuid" : "bf530b84-8e0a-4949-b2c4-b50f02a1334f",
+  "location" : "s3://testbucket/iceberg_data/iceberg_ctl/iceberg_db/iceberg_tbl",
+  "last-updated-ms" : 1672980884490,
+  "last-column-id" : 2,
+  "schema" : {
+    "type" : "struct",
+    "schema-id" : 0,
+    "fields" : [ {
+      "id" : 1,
+      "name" : "id",
+      "required" : false,
+      "type" : "int"
+    }, {
+      "id" : 2,
+      "name" : "data",
+      "required" : false,
+      "type" : "string"
+    } ]
+  },
+  "current-schema-id" : 0,
+  "schemas" : [ {
+    "type" : "struct",
+    "schema-id" : 0,
+    "fields" : [ {
+      "id" : 1,
+      "name" : "id",
+      "required" : false,
+      "type" : "int"
+    }, {
+      "id" : 2,
+      "name" : "data",
+      "required" : false,
+      "type" : "string"
+    } ]
+  } ],
+  "partition-spec" : [ ],
+  "default-spec-id" : 0,
+  "partition-specs" : [ {
+    "spec-id" : 0,
+    "fields" : [ ]
+  } ],
+  "last-partition-id" : 999,
+  "default-sort-order-id" : 0,
+  "sort-orders" : [ {
+    "order-id" : 0,
+    "fields" : [ ]
+  } ],
+  "properties" : {
+    "owner" : "root"
+  },
+  "current-snapshot-id" : 8380191719297762539,
+  "refs" : {
+    "main" : {
+      "snapshot-id" : 8380191719297762539,
+      "type" : "branch"
+    }
+  },
+  "snapshots" : [ {
+    "snapshot-id" : 8380191719297762539,
+    "timestamp-ms" : 1672980884490,
+    "summary" : {
+      "operation" : "append",
+      "spark.app.id" : "local-1672980515314",
+      "added-data-files" : "3",
+      "added-records" : "3",
+      "added-files-size" : "1857",
+      "changed-partition-count" : "1",
+      "total-records" : "3",
+      "total-files-size" : "1857",
+      "total-data-files" : "3",
+      "total-delete-files" : "0",
+      "total-position-deletes" : "0",
+      "total-equality-deletes" : "0"
+    },
+    "manifest-list" : "s3://testbucket/iceberg_data/iceberg_ctl/iceberg_db/iceberg_tbl/metadata/snap-8380191719297762539-1-b51968b3-8837-4c13-a9ec-74d71bac3565.avro",
+    "schema-id" : 0
+  } ],
+  "statistics" : [ ],
+  "snapshot-log" : [ {
+    "timestamp-ms" : 1672980884490,
+    "snapshot-id" : 8380191719297762539
+  } ],
+  "metadata-log" : [ {
+    "timestamp-ms" : 1672980637554,
+    "metadata-file" : "s3://testbucket/iceberg_data/iceberg_ctl/iceberg_db/iceberg_tbl/metadata/00000-74d4bfd7-0dee-46ab-85c5-ef90df8b2c20.metadata.json"
+  } ]
+}

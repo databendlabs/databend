@@ -25,18 +25,18 @@ use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use opendal::Operator;
-use storages_common_blocks::blocks_to_parquet;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ClusterStatistics;
 use storages_common_table_meta::table::TableCompression;
 
+use crate::io::write_block;
 use crate::io::write_data;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::WriteSettings;
 use crate::operations::mutation::Mutation;
 use crate::operations::mutation::MutationTransformMeta;
 use crate::operations::mutation::SerializeDataMeta;
-use crate::operations::util;
 use crate::operations::BloomIndexState;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
@@ -65,6 +65,7 @@ pub struct SerializeDataTransform {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
+    write_settings: WriteSettings,
 
     location_gen: TableMetaLocationGenerator,
     dal: Operator,
@@ -92,6 +93,7 @@ impl SerializeDataTransform {
             output_data: None,
             location_gen: table.meta_location_generator().clone(),
             dal: table.get_operator(),
+            write_settings: table.get_write_settings(),
             cluster_stats_gen,
             schema: table.schema(),
             index: BlockMetaIndex::default(),
@@ -188,13 +190,9 @@ impl Processor for SerializeDataTransform {
                 // serialize data block.
                 let mut block_data = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
                 let schema = self.schema.clone();
-                let (file_size, meta_data) = blocks_to_parquet(
-                    &schema,
-                    vec![block],
-                    &mut block_data,
-                    self.table_compression,
-                )?;
-                let col_metas = util::column_metas(&meta_data, &schema)?;
+
+                let (file_size, col_metas) =
+                    write_block(&self.write_settings, &schema, block, &mut block_data)?;
 
                 let (index_data, index_location, index_size) =
                     if let Some(bloom_index_state) = bloom_index_state {

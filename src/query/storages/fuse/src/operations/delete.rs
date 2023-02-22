@@ -246,6 +246,7 @@ impl FuseTable {
                     block_reader.clone(),
                     remain_reader.clone(),
                     ops.clone(),
+                    self.storage_format,
                 )
             },
             max_threads,

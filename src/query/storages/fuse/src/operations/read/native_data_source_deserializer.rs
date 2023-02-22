@@ -612,8 +612,8 @@ impl Processor for NativeDeserializeDataTransform {
             } else {
                 block
             };
-            let block = block.resort(&self.src_schema, &self.output_schema)?;
 
+            let block = block.resort(&self.src_schema, &self.output_schema)?;
             // Step 7: Add the block to output data
             self.add_block(block)?;
         }
