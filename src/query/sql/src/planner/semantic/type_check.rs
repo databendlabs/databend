@@ -1649,6 +1649,18 @@ impl<'a> TypeChecker<'a> {
                     -1
                 } else {
                     match args[0] {
+                        Expr::BinaryOp {
+                            op, left, right, ..
+                        } => {
+                            if let Expr::Literal {span:_, lit:Literal::Integer(l)} = **left
+                                && let Expr::Literal {span:_, lit:Literal::Integer(r)} = **right {
+                                match op {
+                                    BinaryOperator::Plus => (l + r) as i32,
+                                    BinaryOperator::Minus => (l - r) as i32,
+                                    _ => -1,
+                                }
+                            } else {-1}
+                        }
                         Expr::UnaryOp { op, expr, .. } => {
                             if let Expr::Literal {
                                 span: _,
@@ -1671,6 +1683,7 @@ impl<'a> TypeChecker<'a> {
                         _ => -1,
                     }
                 };
+                println!("index: {index}");
                 let query_id = self.ctx.get_last_query_id(index);
                 Some(
                     self.resolve(
