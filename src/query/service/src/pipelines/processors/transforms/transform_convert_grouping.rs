@@ -179,8 +179,12 @@ impl<Method: HashMethodBounds> TransformConvertGrouping<Method> {
                 continue;
             }
 
-            self.inputs[index].bucket =
-                self.add_bucket(self.inputs[index].port.pull_data().unwrap()?);
+            let data_block = self.inputs[index].port.pull_data().unwrap()?;
+            self.inputs[index].bucket = self.add_bucket(data_block);
+
+            if self.inputs[index].bucket <= SINGLE_LEVEL_BUCKET_NUM {
+                self.initialized_all_inputs = false;
+            }
         }
 
         Ok(self.initialized_all_inputs)

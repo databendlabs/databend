@@ -433,29 +433,6 @@ impl PipelineBuilder {
         }
 
         efficiently_memory_final_aggregator(params, &mut self.main_pipeline)
-        // if self.enable_memory_efficient_aggregator(&params) {
-        //     return ;
-        // }
-        //
-        // self.main_pipeline.resize(1)?;
-        // self.main_pipeline.add_transform(|input, output| {
-        //     let transform = TransformAggregator::try_create_final(
-        //         self.ctx.clone(),
-        //         AggregatorTransformParams::try_create(input, output, &params)?,
-        //     )?;
-        //
-        //     if self.enable_profiling {
-        //         Ok(ProcessorPtr::create(ProfileWrapper::create(
-        //             transform,
-        //             aggregate.plan_id,
-        //             self.prof_span_set.clone(),
-        //         )))
-        //     } else {
-        //         Ok(ProcessorPtr::create(transform))
-        //     }
-        // })?;
-        //
-        // Ok(())
     }
 
     pub fn build_aggregator_params(
