@@ -498,6 +498,12 @@ impl DecimalDataType {
         }
     }
 
+    pub fn default_scalar(&self) -> DecimalScalar {
+        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+            DecimalDataType::DECIMAL_TYPE(size) => DecimalScalar::DECIMAL_TYPE(0.into(), *size),
+        })
+    }
+
     pub fn size(&self) -> DecimalSize {
         crate::with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalDataType::DECIMAL_TYPE(size) => *size,
