@@ -228,7 +228,7 @@ impl<TAggregator: Aggregator + PartitionedAggregatorLike + 'static>
             if TAggregator::SUPPORT_PARTITION {
                 let cardinality = state.inner.get_state_cardinality();
 
-                static TWOL_LEVEL_BYTES_THRESHOLD: usize = 50_000_000;
+                static TWOL_LEVEL_BYTES_THRESHOLD: usize = 5_000_000;
 
                 if cardinality >= state.two_level_threshold
                     || state.inner.get_state_bytes() >= TWOL_LEVEL_BYTES_THRESHOLD

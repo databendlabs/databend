@@ -62,7 +62,7 @@ impl FuseTable {
             Some(snapshot) => {
                 let settings = ctx.get_settings();
 
-                if settings.get_enable_distributed_eval_index()? {
+                if settings.get_enable_distributed_eval_index()? && !ctx.get_cluster().is_empty() {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for segment_location in &snapshot.segments {
                         segments.push(FuseLazyPartInfo::create(segment_location.clone()))

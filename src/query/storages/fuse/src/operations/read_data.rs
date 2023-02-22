@@ -111,7 +111,6 @@ impl FuseTable {
                 })?;
 
                 query_ctx.set_partitions(partitions)?;
-
                 Ok(())
             });
         }

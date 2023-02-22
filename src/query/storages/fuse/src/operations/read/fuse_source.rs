@@ -43,6 +43,18 @@ pub fn build_fuse_native_source_pipeline(
         max_threads = std::cmp::min(max_threads, MAX_SOURCE_PARALLE_FOR_TOPK);
     }
 
+    // If the data is too small, don't need to use too much parallelism.
+    if plan.statistics.pruning_stats.blocks_bloom_pruning_after > 0 {
+        max_io_requests = std::cmp::min(
+            max_io_requests,
+            plan.statistics.pruning_stats.blocks_bloom_pruning_after,
+        );
+        max_threads = std::cmp::min(
+            max_threads,
+            plan.statistics.pruning_stats.blocks_bloom_pruning_after,
+        );
+    }
+
     let mut max_io_paralles = max_io_requests;
 
     match block_reader.support_blocking_api() {
