@@ -112,7 +112,14 @@ impl Settings {
         let mut num_cpus = num_cpus::get() as u64;
 
         if conf.storage.params.is_fs() {
-            num_cpus = num_cpus::get_physical() as u64;
+            num_cpus = std::thread::available_parallelism() as u64;
+            #[cfg(target_arch = "x86_64")]
+            {
+                if num_cpus >= 32 {
+                    num_cpus = num_cpus / 2;
+                }
+            }
+            // Detect CGROUPS ?
         }
 
         if conf.query.num_cpus != 0 {

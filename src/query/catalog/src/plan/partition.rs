@@ -74,11 +74,24 @@ pub enum PartitionsShuffleKind {
 pub struct Partitions {
     pub kind: PartitionsShuffleKind,
     pub partitions: Vec<PartInfoPtr>,
+    pub is_lazy: bool,
 }
 
 impl Partitions {
+    pub fn create_lazy(kind: PartitionsShuffleKind, partitions: Vec<PartInfoPtr>) -> Self {
+        Partitions {
+            kind,
+            partitions,
+            is_lazy: true,
+        }
+    }
+
     pub fn create(kind: PartitionsShuffleKind, partitions: Vec<PartInfoPtr>) -> Self {
-        Partitions { kind, partitions }
+        Partitions {
+            kind,
+            partitions,
+            is_lazy: false,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -153,6 +166,7 @@ impl Default for Partitions {
         Self {
             kind: PartitionsShuffleKind::Seq,
             partitions: vec![],
+            is_lazy: false,
         }
     }
 }
