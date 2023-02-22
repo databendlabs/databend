@@ -318,6 +318,38 @@ statement ok
 create table t(c1 decimal(38,2))
 
 statement ok
+insert into t(c1) select CAST(2.34 AS DECIMAL(6, 2))
+
+statement ok
+insert into t(c1) select CAST(-2.34 AS DECIMAL(6, 2))
+
+statement ok
+insert into t(c1) select CAST(0 AS DECIMAL(6, 2))
+
+query I
+select * from t order by c1 desc;
+----
+2.34
+0.00
+-2.34
+
+query I
+select * from t order by c1 asc;
+----
+-2.34
+0.00
+2.34
+
+statement error 1067
+select * from t order by c1 asc limit 0,2
+
+query I
+select * from t order by c1 asc limit 1,2;
+----
+0.00
+2.34
+
+statement ok
 create table t1(c0 int, c1 decimal(39,2))
 
 statement ok

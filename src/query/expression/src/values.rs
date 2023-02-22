@@ -1572,6 +1572,9 @@ impl ColumnBuilder {
             (ColumnBuilder::Number(builder), Column::Number(column)) => {
                 builder.append_column(column);
             }
+            (ColumnBuilder::Decimal(builder), Column::Decimal(column)) => {
+                builder.append_column(column);
+            }
             (ColumnBuilder::Boolean(builder), Column::Boolean(other)) => {
                 append_bitmap(builder, other);
             }
