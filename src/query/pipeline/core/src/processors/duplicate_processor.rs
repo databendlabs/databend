@@ -84,10 +84,15 @@ impl Processor for DuplicateProcessor {
             return Ok(Event::NeedConsume);
         }
 
+        self.input.set_need_data();
         if self.input.has_data() {
             let block = self.input.pull_data().unwrap();
-            self.output1.push_data(block.clone());
-            self.output2.push_data(block);
+            if !is_finished1 {
+                self.output1.push_data(block.clone());
+            }
+            if !is_finished2 {
+                self.output2.push_data(block);
+            }
             return Ok(Event::NeedConsume);
         }
 

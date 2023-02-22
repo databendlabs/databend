@@ -36,10 +36,10 @@ use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::pipeline::Pipeline;
 
-pub type InitCallback = Arc<Box<dyn Fn() -> Result<()> + Send + Sync + 'static>>;
+pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 
 pub type FinishedCallback =
-    Arc<Box<dyn Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>>;
+    Box<dyn FnOnce(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>;
 
 pub struct PipelineExecutor {
     threads_num: usize,
@@ -47,8 +47,8 @@ pub struct PipelineExecutor {
     workers_condvar: Arc<WorkersCondvar>,
     pub async_runtime: Arc<Runtime>,
     pub global_tasks_queue: Arc<ExecutorTasksQueue>,
-    on_init_callback: InitCallback,
-    on_finished_callback: FinishedCallback,
+    on_init_callback: Mutex<Option<InitCallback>>,
+    on_finished_callback: Mutex<Option<FinishedCallback>>,
     settings: ExecutorSettings,
     finished_notify: Notify,
     finished_error: Mutex<Option<ErrorCode>>,
@@ -67,8 +67,8 @@ impl PipelineExecutor {
         Self::try_create(
             RunningGraph::create(pipeline)?,
             threads_num,
-            on_init_callback,
-            on_finished_callback,
+            Mutex::new(Some(on_init_callback)),
+            Mutex::new(Some(on_finished_callback)),
             settings,
         )
     }
@@ -87,34 +87,40 @@ impl PipelineExecutor {
             .max()
             .unwrap_or(0);
 
-        let on_init_callbacks = pipelines
-            .iter_mut()
-            .map(|x| x.take_on_init())
-            .collect::<Vec<_>>();
+        let on_init_callback = {
+            let pipelines_callback = pipelines
+                .iter_mut()
+                .map(|x| x.take_on_init())
+                .collect::<Vec<_>>();
 
-        let on_finished_callbacks = pipelines
-            .iter_mut()
-            .map(|x| x.take_on_finished())
-            .collect::<Vec<_>>();
+            pipelines_callback.into_iter().reduce(|left, right| {
+                Box::new(move || {
+                    left()?;
+                    right()
+                })
+            })
+        };
+
+        let on_finished_callback = {
+            let pipelines_callback = pipelines
+                .iter_mut()
+                .map(|x| x.take_on_finished())
+                .collect::<Vec<_>>();
+
+            pipelines_callback.into_iter().reduce(|left, right| {
+                Box::new(move |arg| {
+                    left(arg)?;
+                    right(arg)
+                })
+            })
+        };
 
         assert_ne!(threads_num, 0, "Pipeline max threads cannot equals zero.");
         Self::try_create(
             RunningGraph::from_pipelines(pipelines)?,
             threads_num,
-            Arc::new(Box::new(move || {
-                for on_init_callback in &on_init_callbacks {
-                    on_init_callback()?;
-                }
-
-                Ok(())
-            })),
-            Arc::new(Box::new(move |may_error| {
-                for on_finished_callback in &on_finished_callbacks {
-                    on_finished_callback(may_error)?;
-                }
-
-                Ok(())
-            })),
+            Mutex::new(on_init_callback),
+            Mutex::new(on_finished_callback),
             settings,
         )
     }
@@ -122,8 +128,8 @@ impl PipelineExecutor {
     fn try_create(
         graph: RunningGraph,
         threads_num: usize,
-        on_init_callback: InitCallback,
-        on_finished_callback: FinishedCallback,
+        on_init_callback: Mutex<Option<InitCallback>>,
+        on_finished_callback: Mutex<Option<FinishedCallback>>,
         settings: ExecutorSettings,
     ) -> Result<Arc<PipelineExecutor>> {
         let workers_condvar = WorkersCondvar::create(threads_num);
@@ -141,6 +147,16 @@ impl PipelineExecutor {
             finished_notify: Notify::new(),
             finished_error: Mutex::new(None),
         }))
+    }
+
+    fn on_finished(&self, error: &Option<ErrorCode>) -> Result<()> {
+        let mut guard = self.on_finished_callback.lock();
+        if let Some(on_finished_callback) = guard.take() {
+            drop(guard);
+            (on_finished_callback)(error)?;
+        }
+
+        Ok(())
     }
 
     pub fn finish(&self, cause: Option<ErrorCode>) {
@@ -177,7 +193,8 @@ impl PipelineExecutor {
                 if let Some(error) = finished_error_guard.as_ref() {
                     let may_error = Some(error.clone());
                     drop(finished_error_guard);
-                    (self.on_finished_callback)(&may_error)?;
+
+                    self.on_finished(&may_error)?;
                     return Err(may_error.unwrap());
                 }
             }
@@ -185,20 +202,26 @@ impl PipelineExecutor {
             // We will ignore the abort query error, because returned by finished_error if abort query.
             if matches!(&thread_res, Err(error) if error.code() != ErrorCode::ABORTED_QUERY) {
                 let may_error = Some(thread_res.unwrap_err());
-                (self.on_finished_callback)(&may_error)?;
+                self.on_finished(&may_error)?;
                 return Err(may_error.unwrap());
             }
         }
 
-        (self.on_finished_callback)(&None)?;
+        self.on_finished(&None)?;
         Ok(())
     }
 
     fn init(self: &Arc<Self>) -> Result<()> {
         unsafe {
             // TODO: the on init callback cannot be killed.
-            if let Err(cause) = (self.on_init_callback)() {
-                return Err(cause.add_message_back("(while in query pipeline init)"));
+            {
+                let mut guard = self.on_init_callback.lock();
+                if let Some(callback) = guard.take() {
+                    drop(guard);
+                    if let Err(cause) = callback() {
+                        return Err(cause.add_message_back("(while in query pipeline init)"));
+                    }
+                }
             }
 
             let mut init_schedule_queue = self.graph.init_schedule_queue()?;

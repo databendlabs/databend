@@ -30,10 +30,11 @@ async fn test_shuffle_output_finish() -> Result<()> {
     let output1 = OutputPort::create();
     let output2 = OutputPort::create();
 
-    let mut processor = ShuffleProcessor::create(vec![
-        (input1.clone(), output1.clone()),
-        (input2.clone(), output2.clone()),
-    ]);
+    let mut processor = ShuffleProcessor::create(
+        vec![input1.clone(), input2.clone()],
+        vec![output1.clone(), output2.clone()],
+        vec![0, 1],
+    );
 
     let upstream_output1 = OutputPort::create();
     let upstream_output2 = OutputPort::create();
@@ -67,12 +68,21 @@ async fn test_shuffle_processor() -> Result<()> {
     let output3 = OutputPort::create();
     let output4 = OutputPort::create();
 
-    let mut processor = ShuffleProcessor::create(vec![
-        (input1.clone(), output1.clone()),
-        (input2.clone(), output3.clone()),
-        (input3.clone(), output2.clone()),
-        (input4.clone(), output4.clone()),
-    ]);
+    let mut processor = ShuffleProcessor::create(
+        vec![
+            input1.clone(),
+            input2.clone(),
+            input3.clone(),
+            input4.clone(),
+        ],
+        vec![
+            output1.clone(),
+            output2.clone(),
+            output3.clone(),
+            output4.clone(),
+        ],
+        vec![0, 2, 1, 3],
+    );
 
     let upstream_output1 = OutputPort::create();
     let upstream_output2 = OutputPort::create();
@@ -112,7 +122,7 @@ async fn test_shuffle_processor() -> Result<()> {
     upstream_output3.push_data(Ok(block3));
     upstream_output4.push_data(Ok(block4));
 
-    assert!(matches!(processor.event()?, Event::NeedConsume));
+    assert!(matches!(processor.event()?, Event::NeedData));
 
     let out1 = downstream_input1.pull_data().unwrap()?;
     let out2 = downstream_input2.pull_data().unwrap()?;

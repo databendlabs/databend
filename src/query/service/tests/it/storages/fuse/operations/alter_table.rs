@@ -16,12 +16,15 @@ use std::collections::HashSet;
 
 use common_base::base::tokio;
 use common_exception::Result;
+use common_expression::types::Float64Type;
 use common_expression::types::Int32Type;
 use common_expression::types::NumberDataType;
 use common_expression::types::UInt64Type;
+use common_expression::Column;
 use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::FromData;
+use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
@@ -36,6 +39,7 @@ use databend_query::interpreters::DropTableColumnInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactory;
 use futures_util::TryStreamExt;
+use ordered_float::OrderedFloat;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -46,7 +50,8 @@ use crate::storages::fuse::table_test_fixture::TestFixture;
 
 async fn check_segment_column_ids(
     fixture: &TestFixture,
-    expected_column_ids: Vec<ColumnId>,
+    expected_column_ids: Option<Vec<ColumnId>>,
+    expected_column_min_max: Option<Vec<(ColumnId, (Scalar, Scalar))>>,
 ) -> Result<()> {
     let catalog = fixture.ctx().get_catalog("default")?;
     // get the latest tbl
@@ -73,33 +78,45 @@ async fn check_segment_column_ids(
     };
 
     let snapshot = snapshot_reader.read(&params).await?;
-    let expected_column_ids =
-        HashSet::<ColumnId>::from_iter(expected_column_ids.clone().iter().cloned());
-    for (seg_loc, _) in &snapshot.segments {
-        let segment_reader = MetaReaders::segment_info_reader(
-            fuse_table.get_operator(),
-            TestFixture::default_table_schema(),
-        );
-        let params = LoadParams {
-            location: seg_loc.clone(),
-            len_hint: None,
-            ver: SegmentInfo::VERSION,
-        };
-        let segment_info = segment_reader.read(&params).await?;
-        segment_info.blocks.iter().for_each(|block_meta| {
-            assert_eq!(
-                HashSet::from_iter(
-                    block_meta
-                        .col_stats
-                        .keys()
-                        .cloned()
-                        .collect::<Vec<ColumnId>>()
-                        .iter()
-                        .cloned()
-                ),
-                expected_column_ids,
+    if let Some(expected_column_min_max) = expected_column_min_max {
+        for (column_id, (min, max)) in expected_column_min_max {
+            if let Some(stat) = snapshot.summary.col_stats.get(&column_id) {
+                assert_eq!(min, stat.min);
+                assert_eq!(max, stat.max);
+            }
+        }
+    }
+
+    if let Some(expected_column_ids) = expected_column_ids {
+        let expected_column_ids =
+            HashSet::<ColumnId>::from_iter(expected_column_ids.clone().iter().cloned());
+        for (seg_loc, _) in &snapshot.segments {
+            let segment_reader = MetaReaders::segment_info_reader(
+                fuse_table.get_operator(),
+                TestFixture::default_table_schema(),
             );
-        });
+            let params = LoadParams {
+                location: seg_loc.clone(),
+                len_hint: None,
+                ver: SegmentInfo::VERSION,
+            };
+            let segment_info = segment_reader.read(&params).await?;
+
+            segment_info.blocks.iter().for_each(|block_meta| {
+                assert_eq!(
+                    HashSet::from_iter(
+                        block_meta
+                            .col_stats
+                            .keys()
+                            .cloned()
+                            .collect::<Vec<ColumnId>>()
+                            .iter()
+                            .cloned()
+                    ),
+                    expected_column_ids,
+                );
+            });
+        }
     }
 
     Ok(())
@@ -128,7 +145,7 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
     // check column ids
     // the table contains two fields: id int32, t tuple(int32, int32)
     let expected_leaf_column_ids = vec![0, 1, 2];
-    check_segment_column_ids(&fixture, expected_leaf_column_ids).await?;
+    check_segment_column_ids(&fixture, Some(expected_leaf_column_ids), None).await?;
 
     // drop a column
     let drop_table_column_plan = DropTableColumnPlan {
@@ -140,11 +157,17 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
     let interpreter = DropTableColumnInterpreter::try_create(ctx.clone(), drop_table_column_plan)?;
     interpreter.execute(ctx.clone()).await?;
 
-    // add a column
-    let fields = vec![TableField::new(
-        "b",
-        TableDataType::Number(NumberDataType::UInt64),
-    )];
+    // add a column of uint64 with default value `(1,15.0)`
+    let fields = vec![
+        TableField::new("b", TableDataType::Tuple {
+            fields_name: vec!["b1".to_string(), "b2".to_string()],
+            fields_type: vec![
+                TableDataType::Number(NumberDataType::UInt64),
+                TableDataType::Number(NumberDataType::Float64),
+            ],
+        })
+        .with_default_expr(Some("(1,15.0)".to_string())),
+    ];
     let schema = TableSchemaRefExt::create(fields);
 
     let add_table_column_plan = AddTableColumnPlan {
@@ -161,9 +184,14 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
     // insert values for new schema
     let block = {
         let column0 = Int32Type::from_data(vec![1, 2]);
-        let column2 = UInt64Type::from_data(vec![3, 4]);
+        let column3 = UInt64Type::from_data(vec![3, 4]);
+        let column4 = Float64Type::from_data(vec![13.0, 14.0]);
+        let tuple_column = Column::Tuple {
+            fields: vec![column3, column4],
+            len: 2,
+        };
 
-        DataBlock::new_from_columns(vec![column0, column2])
+        DataBlock::new_from_columns(vec![column0, tuple_column])
     };
 
     // get the latest tbl
@@ -181,6 +209,33 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
         .append_commit_blocks(table.clone(), vec![block], false, true)
         .await?;
 
+    // verify statistics min and max value
+    check_segment_column_ids(
+        &fixture,
+        None,
+        Some(vec![
+            (
+                3,
+                (
+                    Scalar::Number(common_expression::types::number::NumberScalar::UInt64(1)),
+                    Scalar::Number(common_expression::types::number::NumberScalar::UInt64(4)),
+                ),
+            ),
+            (
+                4,
+                (
+                    Scalar::Number(common_expression::types::number::NumberScalar::Float64(
+                        OrderedFloat(13.0),
+                    )),
+                    Scalar::Number(common_expression::types::number::NumberScalar::Float64(
+                        OrderedFloat(15.0),
+                    )),
+                ),
+            ),
+        ]),
+    )
+    .await?;
+
     // do compact
     let query = format!("optimize table {db_name}.{tbl_name} compact");
     let mut planner = Planner::new(ctx.clone());
@@ -190,9 +245,33 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
     let data_stream = interpreter.execute(ctx.clone()).await?;
     let _ = data_stream.try_collect::<Vec<_>>().await;
 
-    // verify statistics has only [0,3]
-    let expected_column_ids = vec![0, 3];
-    check_segment_column_ids(&fixture, expected_column_ids).await?;
+    // verify statistics and min\max values
+    let expected_column_ids = vec![0, 3, 4];
+    check_segment_column_ids(
+        &fixture,
+        Some(expected_column_ids),
+        Some(vec![
+            (
+                3,
+                (
+                    Scalar::Number(common_expression::types::number::NumberScalar::UInt64(1)),
+                    Scalar::Number(common_expression::types::number::NumberScalar::UInt64(4)),
+                ),
+            ),
+            (
+                4,
+                (
+                    Scalar::Number(common_expression::types::number::NumberScalar::Float64(
+                        OrderedFloat(13.0),
+                    )),
+                    Scalar::Number(common_expression::types::number::NumberScalar::Float64(
+                        OrderedFloat(15.0),
+                    )),
+                ),
+            ),
+        ]),
+    )
+    .await?;
 
     Ok(())
 }

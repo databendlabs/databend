@@ -104,7 +104,15 @@ impl PipelinePullingExecutor {
             ));
         }
 
-        pipeline.add_sink(|input| Ok(ProcessorPtr::create(PullingSink::create(tx.clone(), input))))
+        pipeline
+            .add_sink(|input| Ok(ProcessorPtr::create(PullingSink::create(tx.clone(), input))))?;
+
+        pipeline.set_on_finished(move |_may_error| {
+            drop(tx);
+            Ok(())
+        });
+
+        Ok(())
     }
 
     pub fn try_create(
@@ -114,6 +122,7 @@ impl PipelinePullingExecutor {
         let (sender, receiver) = std::sync::mpsc::sync_channel(pipeline.output_len());
 
         Self::wrap_pipeline(&mut pipeline, sender)?;
+
         let executor = PipelineExecutor::create(pipeline, settings)?;
         Ok(PipelinePullingExecutor {
             receiver,
@@ -128,6 +137,7 @@ impl PipelinePullingExecutor {
     ) -> Result<PipelinePullingExecutor> {
         let mut main_pipeline = build_res.main_pipeline;
         let (sender, receiver) = std::sync::mpsc::sync_channel(main_pipeline.output_len());
+
         Self::wrap_pipeline(&mut main_pipeline, sender)?;
 
         let mut pipelines = build_res.sources_pipelines;

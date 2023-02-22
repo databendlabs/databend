@@ -1,0 +1,27 @@
+[package]
+name = "common-storages-iceberg"
+version = { workspace = true }
+edition = "2021"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+common-catalog = { path = "../../catalog" }
+common-exception = { path = "../../../common/exception" }
+common-expression = { path = "../../expression" }
+common-meta-app = { path = "../../../meta/app" }
+common-meta-types = { path = "../../../meta/types" }
+common-storage = { path = "../../../common/storage" }
+
+async-trait = "0.1"
+chrono = { workspace = true }
+futures = "0.3"
+iceberg-rs = { git = "https://github.com/datafuse-extras/iceberg-rs" }
+itertools = "0.10"
+opendal = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tracing = "0.1"
