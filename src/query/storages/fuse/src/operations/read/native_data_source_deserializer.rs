@@ -341,9 +341,9 @@ impl NativeDeserializeDataTransform {
         }
     }
 
+    #[inline]
     fn io_task<F, T>(sem: Arc<Semaphore>, mut f: F) -> T
     where F: FnMut() -> T {
-        let _guard = sem.access();
         f()
     }
 }

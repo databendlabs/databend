@@ -60,7 +60,7 @@ impl FuseTable {
             Ok(std::cmp::max(max_threads, max_io_requests))
         } else {
             // For blocking fs, we don't want this to be too large
-            Ok(std::cmp::max(max_threads, max_io_requests).clamp(1, 48))
+            Ok(std::cmp::min(max_threads, max_io_requests).clamp(1, 48))
         }
     }
 
