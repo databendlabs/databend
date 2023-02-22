@@ -109,24 +109,23 @@ impl Settings {
 
     pub fn default_settings(tenant: &str, conf: Arc<InnerConfig>) -> Result<Arc<Settings>> {
         let memory_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
-        let mut num_cpus = num_cpus::get() as u64;
+        let mut num_cpus = num_cpus::get();
+
+        if conf.storage.params.is_fs() {
+            num_cpus = num_cpus::get_physical();
+        }
+
         if conf.query.num_cpus != 0 {
             num_cpus = conf.query.num_cpus;
         }
-        if num_cpus == 0 {
-            num_cpus = 16;
-        }
+        num_cpus = num_cpus.clamp(1, 96);
 
         let mut default_max_memory_usage = 1024 * memory_info.total * 80 / 100;
         if conf.query.max_server_memory_usage != 0 {
             default_max_memory_usage = conf.query.max_server_memory_usage;
         }
 
-        let default_max_storage_io_requests = if conf.storage.params.is_fs() {
-            num_cpus
-        } else {
-            64
-        };
+        let default_max_storage_io_requests = if conf.storage.params.is_fs() { 48 } else { 64 };
 
         let values = vec![
             // max_block_size
