@@ -18,11 +18,8 @@ impl AggregateExchangeSorting {
 impl ExchangeSorting for AggregateExchangeSorting {
     fn block_number(&self, data_block: &DataBlock) -> Result<isize> {
         match data_block.get_meta() {
-            None => Err(ErrorCode::Internal(
-                "Internal error, AggregateExchangeSorting only recv AggregateInfo",
-            )),
-            Some(block_meta_info) => match block_meta_info.as_any().downcast_ref::<AggregateInfo>()
-            {
+            None => Ok(-1),
+            Some(block_meta_info) => match block_meta_info.as_any().downcast_ref::<AggregateInfo>() {
                 None => Err(ErrorCode::Internal(
                     "Internal error, AggregateExchangeSorting only recv AggregateInfo",
                 )),
