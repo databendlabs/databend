@@ -184,7 +184,7 @@ impl FromToProto for StorageWebhdfsConfig {
             root: self.root.clone(),
             delegation: self.delegation.clone(),
 
-            username: String::new(), // reverved for future use
+            username: String::new(), // reserved for future use
             password: String::new(), // reserved for future use
         })
     }
