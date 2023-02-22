@@ -120,7 +120,7 @@ impl Settings {
             #[cfg(target_arch = "x86_64")]
             {
                 if num_cpus >= 32 {
-                    num_cpus = num_cpus / 2;
+                    num_cpus /= 2;
                 }
             }
             // Detect CGROUPS ?

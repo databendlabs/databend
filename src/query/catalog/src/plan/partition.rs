@@ -175,6 +175,8 @@ impl Default for Partitions {
     }
 }
 
+/// StealablePartitions is used for cache affinity
+/// that is, the same partition is always routed to the same executor as possible.
 #[derive(Clone)]
 pub struct StealablePartitions {
     pub partitions: Arc<RwLock<Vec<VecDeque<PartInfoPtr>>>>,
@@ -207,7 +209,7 @@ impl StealablePartitions {
                 return partitions[index].pop_front();
             }
         }
-        return None;
+        None
     }
 
     pub fn steal(&self, idx: usize, max_size: usize) -> Vec<PartInfoPtr> {
@@ -231,6 +233,6 @@ impl StealablePartitions {
                 return ps.drain(..size).collect();
             }
         }
-        return vec![];
+        vec![]
     }
 }

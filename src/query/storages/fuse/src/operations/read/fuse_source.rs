@@ -41,12 +41,6 @@ pub fn build_fuse_native_source_pipeline(
     topk: Option<TopK>,
     mut max_io_requests: usize,
 ) -> Result<()> {
-    if topk.is_some() {
-        const MAX_SOURCE_PARALLE_FOR_TOPK: usize = 16;
-        max_io_requests = std::cmp::min(max_io_requests, MAX_SOURCE_PARALLE_FOR_TOPK);
-        max_threads = std::cmp::min(max_threads, MAX_SOURCE_PARALLE_FOR_TOPK);
-    }
-
     (max_threads, max_io_requests) = ajust_threads_and_request(max_threads, max_io_requests, plan);
 
     let mut source_builder = SourcePipeBuilder::create();
@@ -117,28 +111,48 @@ pub fn build_fuse_parquet_source_pipeline(
 ) -> Result<()> {
     (max_threads, max_io_requests) = ajust_threads_and_request(max_threads, max_io_requests, plan);
 
+    let mut source_builder = SourcePipeBuilder::create();
+
     match block_reader.support_blocking_api() {
         true => {
-            pipeline.add_source(
-                |output| {
-                    ReadParquetDataSource::<true>::create(ctx.clone(), output, block_reader.clone())
-                },
-                max_threads,
-            )?;
-        }
-        false => {
-            info!("read block data adjust max io requests:{}", max_io_requests);
-            pipeline.add_source(
-                |output| {
-                    ReadParquetDataSource::<false>::create(
+            let partitions = dispatch_partitions(ctx.clone(), max_threads);
+            let partitions = StealablePartitions::new(partitions, ctx.clone());
+
+            for i in 0..max_threads {
+                let output = OutputPort::create();
+                source_builder.add_source(
+                    output.clone(),
+                    ReadParquetDataSource::<true>::create(
+                        i,
                         ctx.clone(),
                         output,
                         block_reader.clone(),
-                    )
-                },
-                max_io_requests,
-            )?;
+                        partitions.clone(),
+                    )?,
+                );
+            }
+            pipeline.add_pipe(source_builder.finalize());
+        }
+        false => {
+            info!("read block data adjust max io requests:{}", max_io_requests);
 
+            let partitions = dispatch_partitions(ctx.clone(), max_io_requests);
+            let partitions = StealablePartitions::new(partitions, ctx.clone());
+
+            for i in 0..max_io_requests {
+                let output = OutputPort::create();
+                source_builder.add_source(
+                    output.clone(),
+                    ReadParquetDataSource::<false>::create(
+                        i,
+                        ctx.clone(),
+                        output,
+                        block_reader.clone(),
+                        partitions.clone(),
+                    )?,
+                );
+            }
+            pipeline.add_pipe(source_builder.finalize());
             pipeline.resize(std::cmp::min(max_threads, max_io_requests))?;
 
             info!(
