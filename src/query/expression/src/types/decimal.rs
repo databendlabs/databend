@@ -197,9 +197,14 @@ pub trait Decimal:
     + Send
     + 'static
 {
+    fn zero() -> Self;
     fn one() -> Self;
+    fn minus_one() -> Self;
+
     // 10**scale
     fn e(n: u32) -> Self;
+
+    fn mem_size() -> usize;
 
     fn checked_add(self, rhs: Self) -> Option<Self>;
     fn checked_sub(self, rhs: Self) -> Option<Self>;
@@ -212,6 +217,8 @@ pub trait Decimal:
     fn max_for_precision(precision: u8) -> Self;
 
     fn from_float(value: f64) -> Self;
+    fn from_u64(value: u64) -> Self;
+    fn from_i64(value: i64) -> Self;
 
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)>;
     fn try_downcast_builder<'a>(builder: &'a mut ColumnBuilder) -> Option<&'a mut Vec<Self>>;
@@ -230,8 +237,20 @@ pub trait Decimal:
 }
 
 impl Decimal for i128 {
+    fn zero() -> Self {
+        0_i128
+    }
+
     fn one() -> Self {
         1_i128
+    }
+
+    fn minus_one() -> Self {
+        -1_i128
+    }
+
+    fn mem_size() -> usize {
+        16
     }
 
     fn e(n: u32) -> Self {
@@ -269,6 +288,14 @@ impl Decimal for i128 {
     }
 
     fn from_float(value: f64) -> Self {
+        value.to_i128().unwrap()
+    }
+
+    fn from_u64(value: u64) -> Self {
+        value.to_i128().unwrap()
+    }
+
+    fn from_i64(value: i64) -> Self {
         value.to_i128().unwrap()
     }
 
@@ -329,12 +356,24 @@ impl Decimal for i128 {
 }
 
 impl Decimal for i256 {
+    fn zero() -> Self {
+        i256::ZERO
+    }
+
     fn one() -> Self {
         i256::ONE
     }
 
+    fn minus_one() -> Self {
+        i256::MINUS_ONE
+    }
+
     fn e(n: u32) -> Self {
         (i256::ONE * 10).pow(n)
+    }
+
+    fn mem_size() -> usize {
+        32
     }
 
     fn checked_add(self, rhs: Self) -> Option<Self> {
@@ -368,6 +407,14 @@ impl Decimal for i256 {
     }
 
     fn from_float(value: f64) -> Self {
+        i256::from(value.to_i128().unwrap())
+    }
+
+    fn from_u64(value: u64) -> Self {
+        i256::from(value.to_i128().unwrap())
+    }
+
+    fn from_i64(value: i64) -> Self {
         i256::from(value.to_i128().unwrap())
     }
 
@@ -449,6 +496,12 @@ impl DecimalDataType {
         } else {
             Ok(DecimalDataType::Decimal256(size))
         }
+    }
+
+    pub fn size(&self) -> DecimalSize {
+        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+            DecimalDataType::DECIMAL_TYPE(size) => *size,
+        })
     }
 
     pub fn scale(&self) -> u8 {
