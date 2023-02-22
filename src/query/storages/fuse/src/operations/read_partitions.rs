@@ -75,7 +75,7 @@ impl FuseTable {
                             snapshot.segments.len(),
                             snapshot.segments.len(),
                         ),
-                        Partitions::create(PartitionsShuffleKind::Mod, segments),
+                        Partitions::create(PartitionsShuffleKind::Mod, segments, true),
                     ));
                 }
 
@@ -275,7 +275,7 @@ impl FuseTable {
         limit: usize,
     ) -> (PartStatistics, Partitions) {
         let mut statistics = PartStatistics::default_exact();
-        let mut partitions = Partitions::create(PartitionsShuffleKind::Mod, vec![]);
+        let mut partitions = Partitions::create_nolazy(PartitionsShuffleKind::Mod, vec![]);
 
         if limit == 0 {
             return (statistics, partitions);

@@ -82,15 +82,19 @@ pub struct Partitions {
 }
 
 impl Partitions {
-    pub fn create_lazy(kind: PartitionsShuffleKind, partitions: Vec<PartInfoPtr>) -> Self {
+    pub fn create(
+        kind: PartitionsShuffleKind,
+        partitions: Vec<PartInfoPtr>,
+        is_lazy: bool,
+    ) -> Self {
         Partitions {
             kind,
             partitions,
-            is_lazy: true,
+            is_lazy,
         }
     }
 
-    pub fn create(kind: PartitionsShuffleKind, partitions: Vec<PartInfoPtr>) -> Self {
+    pub fn create_nolazy(kind: PartitionsShuffleKind, partitions: Vec<PartInfoPtr>) -> Self {
         Partitions {
             kind,
             partitions,
@@ -142,14 +146,14 @@ impl Partitions {
             let parts = partitions[begin..end].to_vec();
             executor_part.insert(
                 executor.clone(),
-                Partitions::create(PartitionsShuffleKind::Seq, parts.to_vec()),
+                Partitions::create(PartitionsShuffleKind::Seq, parts.to_vec(), self.is_lazy),
             );
             if end == num_parts && idx < num_executors - 1 {
                 // reach here only when num_executors > num_parts
                 executors_sorted[(idx + 1)..].iter().for_each(|executor| {
                     executor_part.insert(
                         executor.clone(),
-                        Partitions::create(PartitionsShuffleKind::Seq, vec![]),
+                        Partitions::create(PartitionsShuffleKind::Seq, vec![], self.is_lazy),
                     );
                 });
                 break;
