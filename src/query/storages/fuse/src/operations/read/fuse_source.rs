@@ -166,7 +166,7 @@ pub fn dispatch_partitions(
     let mut results = vec![VecDeque::new(); max_streams];
 
     const BATCH_SIZE: usize = 64;
-    let partitions = Vec::with_capacity(BATCH_SIZE);
+    let mut partitions = Vec::with_capacity(BATCH_SIZE);
     loop {
         let p = ctx.get_partitions(BATCH_SIZE);
         if p.is_empty() {
