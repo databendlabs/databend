@@ -172,35 +172,12 @@ jobs:
       - name: Get target
         id: target
         run: echo 'target=${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}' >> $GITHUB_OUTPUT
-      - name: Setup Build Tool
-        uses: ./.github/actions/setup_build_tool
+      - name: Build Release
+        uses: ./.github/actions/build_linux
         with:
-          image: ${{ steps.target.outputs.target }}
-      - name: Set musl rustflags
-        if: matrix.platform == 'musl'
-        run: |
-          flags="-C link-arg=-Wl,--compress-debug-sections=zlib-gabi"
-          echo "RUSTFLAGS=${flags}" >> $GITHUB_ENV
-      - name: Set musl_x86_64 rustflags
-        if: matrix.platform == 'musl' && matrix.arch == 'x86_64'
-        run: |
-          flags="-C target-feature=+sse4.2,link-arg=-Wl,--compress-debug-sections=zlib-gabi"
-          echo "RUSTFLAGS=${flags}" >> $GITHUB_ENV
-      - name: Set gnu_x86_64 rustflags
-        if: matrix.platform == 'gnu' && matrix.arch == 'x86_64'
-        run: |
-          flags="-C target-feature=+sse4.2"
-          echo "RUSTFLAGS=${flags}" >> $GITHUB_ENV
-      - name: Build Binary
-        run: |
-          cargo build --release --target=${{ steps.target.outputs.target }}
-      - name: Copyobj zlib for gnu binaries
-        if: matrix.platform == 'gnu'
-        run: |
-          target=${{ steps.target.outputs.target }}
-          build-tool /usr/bin/${{ matrix.arch }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${target}/release/databend-query
-          build-tool /usr/bin/${{ matrix.arch }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${target}/release/databend-meta
-          build-tool /usr/bin/${{ matrix.arch }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${target}/release/databend-metactl
+          profile: release
+          target: ${{ steps.target.outputs.target }}
+          upload: false
       - name: Pack binaries
         run: |
           target=${{ steps.target.outputs.target }}
@@ -208,7 +185,7 @@ jobs:
           mkdir -p release/${target}/{bin,configs,systemd}
           cp ./target/${target}/release/databend-* release/${target}/bin/
           rm -f release/${target}/bin/*.d
-          cp ./scripts/ci/deploy/systemd/databend-* release/${target}/systemd/
+          cp ./scripts/distribution/systemd/databend-* release/${target}/systemd/
           cp ./scripts/distribution/configs/databend-* release/${target}/configs/
           cp ./scripts/distribution/release-readme.txt release/${target}/readme.txt
           cp -r ./scripts/distribution/local-start-stop-scripts release/${target}/scripts
@@ -276,7 +253,7 @@ jobs:
           mkdir -p release/${target}/{bin,configs,systemd}
           cp ./target/${target}/release/databend-* release/${target}/bin/
           rm -f release/${target}/bin/*.d
-          cp ./scripts/ci/deploy/systemd/databend-* release/${target}/systemd/
+          cp ./scripts/distribution/systemd/databend-* release/${target}/systemd/
           cp ./scripts/distribution/configs/databend-* release/${target}/configs/
           cp ./scripts/distribution/release-readme.txt release/${target}/readme.txt
           cp -r ./scripts/distribution/local-start-stop-scripts release/${target}/scripts
