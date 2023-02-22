@@ -485,9 +485,14 @@ impl QueryCoordinator {
                 return Ok(fragment_coordinator.pipeline_build_res.unwrap());
             }
 
+            let exchange_params = fragment_coordinator.create_exchange_params(
+                info,
+                fragment_coordinator
+                    .pipeline_build_res
+                    .as_ref()
+                    .and_then(|x| x.exchange_sorting.clone()),
+            )?;
             let mut build_res = fragment_coordinator.pipeline_build_res.unwrap();
-            let exchange_params = fragment_coordinator
-                .create_exchange_params(info, build_res.exchange_sorting.clone())?;
 
             let data_exchange = fragment_coordinator.data_exchange.as_ref().unwrap();
 
@@ -536,6 +541,7 @@ impl QueryCoordinator {
                     info,
                     coordinator
                         .pipeline_build_res
+                        .as_ref()
                         .and_then(|x| x.exchange_sorting.clone()),
                 )?,
             );
