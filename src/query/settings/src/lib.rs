@@ -35,6 +35,7 @@ use common_meta_types::MatchSeq;
 use common_users::UserApiProvider;
 use dashmap::DashMap;
 use itertools::Itertools;
+use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 
 #[derive(Clone)]
 pub enum ScopeLevel {
@@ -438,6 +439,16 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
+                default_value: UserSettingValue::String(OPT_KEY_SNAPSHOT_LOCATION.to_string()),
+                user_setting: UserSetting::create(
+                    "hide_options_in_show_create_table",
+                    UserSettingValue::String(OPT_KEY_SNAPSHOT_LOCATION.to_string()),
+                ),
+                level: ScopeLevel::Session,
+                desc: "The list of options that needs to be ignored when executing show create table.",
+                possible_values: None,
+            },
+            SettingValue {
                 default_value: UserSettingValue::String("".to_string()),
                 user_setting: UserSetting::create(
                     "sandbox_tenant",
@@ -825,6 +836,12 @@ impl Settings {
 
     pub fn get_sandbox_tenant(&self) -> Result<String> {
         let key = "sandbox_tenant";
+        self.check_and_get_setting_value(key)
+            .and_then(|v| v.user_setting.value.as_string())
+    }
+
+    pub fn get_hide_options_in_show_create_table(&self) -> Result<String> {
+        let key = "hide_options_in_show_create_table";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
     }

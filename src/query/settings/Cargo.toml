@@ -19,6 +19,7 @@ common-exception = { path = "../../common/exception" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-types = { path = "../../meta/types" }
 common-users = { path = "../users" }
+storages-common-table-meta = { path = "../storages/common/table-meta" }
 
 dashmap = "5.4"
 futures = "0.3.24"
