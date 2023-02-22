@@ -27,7 +27,6 @@ use common_pipeline_sinks::AsyncMpscSinker;
 use common_storage::DataOperator;
 
 use super::writer::ResultCacheWriter;
-use crate::common::gen_common_key;
 use crate::common::gen_result_cache_dir;
 use crate::common::gen_result_cache_meta_key;
 use crate::common::ResultCacheValue;
@@ -86,6 +85,7 @@ impl AsyncMpscSink for WriteResultCacheSink {
 impl WriteResultCacheSink {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
+        key: &str,
         inputs: Vec<Arc<InputPort>>,
         kv_store: Arc<MetaStore>,
     ) -> Result<ProcessorPtr> {
@@ -96,9 +96,8 @@ impl WriteResultCacheSink {
         let sql = ctx.get_query_str();
         let partitions_shas = ctx.get_partitions_shas();
 
-        let key = gen_common_key(&sql);
-        let meta_key = gen_result_cache_meta_key(&tenant, &key);
-        let location = gen_result_cache_dir(&key);
+        let meta_key = gen_result_cache_meta_key(&tenant, key);
+        let location = gen_result_cache_dir(key);
 
         let operator = DataOperator::instance().operator();
         let cache_writer = ResultCacheWriter::create(location, operator, max_bytes);

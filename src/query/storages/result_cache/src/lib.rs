@@ -19,5 +19,6 @@ mod meta_manager;
 mod read;
 mod write;
 
+pub use common::gen_result_cache_key;
 pub use read::ResultCacheReader;
 pub use write::WriteResultCacheSink;
