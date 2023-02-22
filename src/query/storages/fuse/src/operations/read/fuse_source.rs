@@ -164,7 +164,16 @@ pub fn dispatch_partitions(
     max_streams: usize,
 ) -> Vec<VecDeque<PartInfoPtr>> {
     let mut results = vec![VecDeque::new(); max_streams];
-    let partitions = ctx.get_partitions(usize::MAX);
+
+    const BATCH_SIZE: usize = 64;
+    let partitions = Vec::with_capacity(BATCH_SIZE);
+    loop {
+        let p = ctx.get_partitions(BATCH_SIZE);
+        if p.is_empty() {
+            break;
+        }
+        partitions.extend(p);
+    }
 
     // that means the partition is lazy
     if partitions.is_empty() {
