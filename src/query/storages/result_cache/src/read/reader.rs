@@ -58,6 +58,10 @@ impl ResultCacheReader {
         }
     }
 
+    pub fn get_meta_key(&self) -> String {
+        self.meta_key.clone()
+    }
+
     pub async fn try_read_cached_result(&self) -> Result<Option<Vec<DataBlock>>> {
         self.try_read_cached_result_with_meta_key(self.meta_key.clone())
             .await

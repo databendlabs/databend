@@ -31,6 +31,7 @@ use common_meta_app::schema::TableMeta;
 use common_storages_result_cache::ResultCacheMetaManager;
 use common_storages_result_cache::RESULT_CACHE_PREFIX;
 use common_users::UserApiProvider;
+use itertools::Itertools;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -65,15 +66,25 @@ impl AsyncSystemTable for QueryCacheTable {
             sql_vec.push(x.sql.as_str());
             result_size_vec.push(x.result_size as u64);
             num_rows_vec.push(x.num_rows as u64);
-            partitions_sha_vec.push(x.partitions_sha.as_str());
+            partitions_sha_vec.push(x.partitions_shas.clone());
             locations_vec.push(x.location.as_str());
         });
+
+        let partitions_sha_vec: Vec<String> = partitions_sha_vec
+            .into_iter()
+            .map(|part| part.into_iter().join(", "))
+            .collect();
 
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(sql_vec),
             UInt64Type::from_data(result_size_vec),
             UInt64Type::from_data(num_rows_vec),
-            StringType::from_data(partitions_sha_vec),
+            StringType::from_data(
+                partitions_sha_vec
+                    .iter()
+                    .map(|part_sha| part_sha.as_str())
+                    .collect::<Vec<_>>(),
+            ),
             StringType::from_data(locations_vec),
         ]))
     }
@@ -85,7 +96,10 @@ impl QueryCacheTable {
             TableField::new("sql", TableDataType::String),
             TableField::new("result_size", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("num_rows", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new("partitions_sha", TableDataType::String),
+            TableField::new(
+                "partitions_sha",
+                TableDataType::Array(Box::new(TableDataType::String)),
+            ),
             TableField::new("locations", TableDataType::String),
         ]);
 

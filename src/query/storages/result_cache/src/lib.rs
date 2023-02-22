@@ -17,7 +17,6 @@
 mod common;
 mod meta_manager;
 mod read;
-mod result_scan;
 mod write;
 
 pub use common::gen_result_cache_key;
@@ -25,5 +24,4 @@ pub use common::gen_result_cache_meta_key;
 pub use common::RESULT_CACHE_PREFIX;
 pub use meta_manager::ResultCacheMetaManager;
 pub use read::ResultCacheReader;
-pub use result_scan::ResultScan;
 pub use write::WriteResultCacheSink;
