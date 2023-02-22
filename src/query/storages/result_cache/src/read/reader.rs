@@ -31,7 +31,7 @@ pub struct ResultCacheReader {
 
     operator: Operator,
     /// To ensure the cache is valid.
-    partitions_sha: String,
+    partitions_shas: Vec<String>,
 
     /// If true, the cache will be used even if it is inconsistent.
     /// In another word, `partitions_sha` will not be checked.
@@ -48,11 +48,11 @@ impl ResultCacheReader {
         let tenant = ctx.get_tenant();
         let key = gen_common_key(&sql);
         let meta_key = gen_result_cache_meta_key(&tenant, &key);
-        let partitions_sha = ctx.get_partitions_sha().unwrap();
+        let partitions_shas = ctx.get_partitions_shas();
 
         Self {
             meta_mgr: ResultCacheMetaManager::create(kv_store, meta_key, 0),
-            partitions_sha,
+            partitions_shas,
             operator: DataOperator::instance().operator(),
             tolerate_inconsistent,
         }
@@ -61,7 +61,7 @@ impl ResultCacheReader {
     pub async fn try_read_cached_result(&self) -> Result<Option<Vec<DataBlock>>> {
         match self.meta_mgr.get().await? {
             Some(value) => {
-                if self.tolerate_inconsistent || value.partitions_sha == self.partitions_sha {
+                if self.tolerate_inconsistent || value.partitions_shas == self.partitions_shas {
                     if value.num_rows == 0 {
                         Ok(Some(vec![DataBlock::empty()]))
                     } else {

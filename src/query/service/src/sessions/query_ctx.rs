@@ -73,7 +73,6 @@ use crate::storages::Table;
 pub struct QueryContext {
     version: String,
     partition_queue: Arc<RwLock<VecDeque<PartInfoPtr>>>,
-    partitions_sha: Arc<RwLock<Option<String>>>,
     shared: Arc<QueryContextShared>,
     fragment_id: Arc<AtomicUsize>,
 }
@@ -88,7 +87,6 @@ impl QueryContext {
 
         Arc::new(QueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            partitions_sha: Arc::new(RwLock::new(None)),
             version: format!("DatabendQuery {}", *DATABEND_COMMIT_VERSION),
             shared,
             fragment_id: Arc::new(AtomicUsize::new(0)),
@@ -279,13 +277,13 @@ impl TableContext for QueryContext {
         Ok(())
     }
 
-    fn set_paritions_sha(&self, s: String) {
-        let mut sha = self.partitions_sha.write();
-        *sha = Some(s);
+    fn add_partitions_sha(&self, s: String) {
+        let mut shas = self.shared.partitions_shas.write();
+        shas.push(s);
     }
 
-    fn get_partitions_sha(&self) -> Option<String> {
-        let sha = self.partitions_sha.read();
+    fn get_partitions_shas(&self) -> Vec<String> {
+        let sha = self.shared.partitions_shas.read();
         sha.clone()
     }
 
