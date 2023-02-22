@@ -468,6 +468,10 @@ impl ClientFlightExchange {
     }
 
     pub async fn close_input(&self) {
+        // Close local channel first.
+        // NOTE: this is very important. When we open the local channel while pushing closing input, it may cause distributed deadlock.
+        self.request_rx.close();
+
         // Notify remote not to send messages.
         // We send it directly to the network channel avoid response channel is closed
         if let Some(network_tx) = self.network_tx.upgrade() {
@@ -535,6 +539,10 @@ impl ServerFlightExchange {
     }
 
     pub async fn close_input(&self) {
+        // Close local channel first.
+        // NOTE: this is very important. When we open the local channel while pushing closing input, it may cause distributed deadlock.
+        self.request_rx.close();
+
         // Notify remote not to send messages.
         // We send it directly to the network channel avoid response channel is closed
         if let Some(network_tx) = self.network_tx.upgrade() {
