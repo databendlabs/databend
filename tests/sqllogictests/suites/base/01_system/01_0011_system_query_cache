@@ -22,7 +22,7 @@ SELECT * FROM t1;
 query T
 SELECT sql FROM system.query_cache;
 ----
-SELECT * FROM t1
+SELECT * FROM t1;
 
 statement ok
 SET enable_query_result_cache = 0;

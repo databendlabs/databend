@@ -1644,30 +1644,32 @@ impl<'a> TypeChecker<'a> {
             }
 
             ("last_query_id", args) => {
+                println!("args: {} value: {:?}", args.len(), args);
                 let index = if args.len() != 1 {
                     -1
-                } else if let Expr::Literal {
-                    span: _,
-                    lit: Literal::Integer(i),
-                } = args[0]
-                {
-                    *i as i32
-                } else if let Expr::UnaryOp { span: _, op, expr } = args[0] {
-                    if let Expr::Literal {
-                        span: _,
-                        lit: Literal::Integer(i),
-                    } = **expr
-                    {
-                        match op {
-                            UnaryOperator::Plus => i as i32,
-                            UnaryOperator::Minus => -(i as i32),
-                            UnaryOperator::Not => -1,
-                        }
-                    } else {
-                        -1
-                    }
                 } else {
-                    -1
+                    match args[0] {
+                        Expr::UnaryOp { op, expr, .. } => {
+                            if let Expr::Literal {
+                                span: _,
+                                lit: Literal::Integer(i),
+                            } = **expr
+                            {
+                                match op {
+                                    UnaryOperator::Plus => i as i32,
+                                    UnaryOperator::Minus => -(i as i32),
+                                    UnaryOperator::Not => -1,
+                                }
+                            } else {
+                                -1
+                            }
+                        }
+                        Expr::Literal {
+                            lit: Literal::Integer(i),
+                            ..
+                        } => *i as i32,
+                        _ => -1,
+                    }
                 };
                 let query_id = self.ctx.get_last_query_id(index);
                 Some(
