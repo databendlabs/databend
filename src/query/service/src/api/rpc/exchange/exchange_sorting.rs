@@ -128,6 +128,7 @@ impl Processor for TransformExchangeSorting {
             }
 
             if let Some((_, block)) = self.buffer[min_index].take() {
+                self.buffer_len -= 1;
                 self.output.push_data(Ok(block));
                 return Ok(Event::NeedConsume);
             }

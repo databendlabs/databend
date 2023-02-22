@@ -35,6 +35,7 @@ mod transform_right_semi_anti_join;
 pub use aggregator::AggregateExchangeSorting;
 pub use aggregator::AggregatorParams;
 pub use aggregator::AggregatorTransformParams;
+pub use aggregator::FinalSingleStateAggregator;
 use common_pipeline_transforms::processors::transforms::transform;
 use common_pipeline_transforms::processors::transforms::transform_block_compact;
 use common_pipeline_transforms::processors::transforms::transform_compact;

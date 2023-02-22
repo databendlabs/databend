@@ -59,6 +59,7 @@ use super::processors::ProfileWrapper;
 use crate::api::ExchangeSorting;
 use crate::pipelines::processors::transforms::efficiently_memory_final_aggregator;
 use crate::pipelines::processors::transforms::AggregateExchangeSorting;
+use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
 use crate::pipelines::processors::transforms::TransformLeftJoin;
@@ -414,29 +415,47 @@ impl PipelineBuilder {
             aggregate.limit,
         )?;
 
-        if self.enable_memory_efficient_aggregator(&params) {
-            return efficiently_memory_final_aggregator(params, &mut self.main_pipeline);
+        if params.group_columns.is_empty() {
+            self.main_pipeline.resize(1)?;
+            return self.main_pipeline.add_transform(|input, output| {
+                let transform = FinalSingleStateAggregator::try_create(input, output, &params)?;
+
+                if self.enable_profiling {
+                    Ok(ProcessorPtr::create(ProfileWrapper::create(
+                        transform,
+                        aggregate.plan_id,
+                        self.prof_span_set.clone(),
+                    )))
+                } else {
+                    Ok(ProcessorPtr::create(transform))
+                }
+            });
         }
 
-        self.main_pipeline.resize(1)?;
-        self.main_pipeline.add_transform(|input, output| {
-            let transform = TransformAggregator::try_create_final(
-                self.ctx.clone(),
-                AggregatorTransformParams::try_create(input, output, &params)?,
-            )?;
-
-            if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProfileWrapper::create(
-                    transform,
-                    aggregate.plan_id,
-                    self.prof_span_set.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(transform))
-            }
-        })?;
-
-        Ok(())
+        efficiently_memory_final_aggregator(params, &mut self.main_pipeline)
+        // if self.enable_memory_efficient_aggregator(&params) {
+        //     return ;
+        // }
+        //
+        // self.main_pipeline.resize(1)?;
+        // self.main_pipeline.add_transform(|input, output| {
+        //     let transform = TransformAggregator::try_create_final(
+        //         self.ctx.clone(),
+        //         AggregatorTransformParams::try_create(input, output, &params)?,
+        //     )?;
+        //
+        //     if self.enable_profiling {
+        //         Ok(ProcessorPtr::create(ProfileWrapper::create(
+        //             transform,
+        //             aggregate.plan_id,
+        //             self.prof_span_set.clone(),
+        //         )))
+        //     } else {
+        //         Ok(ProcessorPtr::create(transform))
+        //     }
+        // })?;
+        //
+        // Ok(())
     }
 
     pub fn build_aggregator_params(
