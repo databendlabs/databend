@@ -27,6 +27,7 @@ use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_storage::DataOperator;
 use opendal::ObjectLister;
+use opendal::ObjectMetakey;
 use opendal::ObjectMode;
 
 use crate::table::IcebergTable;
@@ -103,7 +104,7 @@ impl Database for IcebergDatabase {
         let op = self.db_root.operator();
         // check existence first
         let tbl_obj = op.object(&path);
-        if !tbl_obj.mode().await?.is_dir() {
+        if !tbl_obj.stat().await?.mode().is_dir() {
             return Err(ErrorCode::UnknownTable(format!(
                 "table {table_name} does not exist or is not a valid table"
             )));
@@ -128,7 +129,8 @@ impl Database for IcebergDatabase {
         let mut lister: ObjectLister = op.object("/").list().await?;
         while let Some(page) = lister.next_page().await? {
             for entry in page {
-                if entry.mode().await? != ObjectMode::DIR {
+                let meta = entry.metadata(ObjectMetakey::Mode).await?;
+                if meta.mode() != ObjectMode::DIR {
                     continue;
                 }
                 let tbl_name = entry.name().trim_end_matches('/');
