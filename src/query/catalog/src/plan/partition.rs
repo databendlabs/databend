@@ -14,14 +14,18 @@
 
 use std::any::Any;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
+use std::sync::RwLock;
 
 use common_exception::Result;
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
 use sha2::Digest;
+
+use crate::table_context::TableContext;
 
 #[typetag::serde(tag = "type")]
 pub trait PartInfo: Send + Sync {
@@ -168,5 +172,63 @@ impl Default for Partitions {
             partitions: vec![],
             is_lazy: false,
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct StealablePartitions {
+    pub partitions: Arc<RwLock<Vec<VecDeque<PartInfoPtr>>>>,
+    pub ctx: Arc<dyn TableContext>,
+}
+
+impl StealablePartitions {
+    pub fn new(partitions: Vec<VecDeque<PartInfoPtr>>, ctx: Arc<dyn TableContext>) -> Self {
+        StealablePartitions {
+            partitions: Arc::new(RwLock::new(partitions)),
+            ctx,
+        }
+    }
+
+    pub fn steal_one(&self, idx: usize) -> Option<PartInfoPtr> {
+        if self.partitions.read().unwrap().is_empty() {
+            return self.ctx.get_partition();
+        }
+
+        let mut partitions = self.partitions.write().unwrap();
+
+        let idx = if idx >= partitions.len() {
+            idx % partitions.len()
+        } else {
+            idx
+        };
+
+        for step in 0..partitions.len() {
+            if !partitions[idx + step].is_empty() {
+                return partitions[idx + step].pop_front();
+            }
+        }
+        return None;
+    }
+
+    pub fn steal(&self, idx: usize, max_size: usize) -> Vec<PartInfoPtr> {
+        if self.partitions.read().unwrap().is_empty() {
+            return self.ctx.get_partitions(max_size);
+        }
+
+        let mut partitions = self.partitions.write().unwrap();
+        let idx = if idx >= partitions.len() {
+            idx % partitions.len()
+        } else {
+            idx
+        };
+
+        for step in 0..partitions.len() {
+            if !partitions[idx + step].is_empty() {
+                let ps = &mut partitions[idx + step];
+                let size = ps.len().min(max_size);
+                return ps.drain(..size).collect();
+            }
+        }
+        return vec![];
     }
 }

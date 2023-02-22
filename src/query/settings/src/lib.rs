@@ -115,6 +115,8 @@ impl Settings {
             if let Ok(n) = std::thread::available_parallelism() {
                 num_cpus = n.get() as u64;
             }
+
+            // Most of x86_64 CPUs have 2-way Hyper-Threading
             #[cfg(target_arch = "x86_64")]
             {
                 if num_cpus >= 32 {

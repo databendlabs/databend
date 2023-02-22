@@ -50,6 +50,7 @@ pub fn build_fuse_source_pipeline(
             ctx,
             pipeline,
             block_reader,
+            plan,
             max_threads,
             max_io_requests,
         ),

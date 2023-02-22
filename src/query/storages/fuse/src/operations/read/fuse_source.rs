@@ -12,13 +12,18 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::PartInfoPtr;
+use common_catalog::plan::StealablePartitions;
 use common_catalog::plan::TopK;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
+use common_pipeline_core::SourcePipeBuilder;
 use tracing::info;
 
 use crate::io::BlockReader;
@@ -42,34 +47,48 @@ pub fn build_fuse_native_source_pipeline(
         max_threads = std::cmp::min(max_threads, MAX_SOURCE_PARALLE_FOR_TOPK);
     }
 
-    // If the data is too small, don't need to use too much parallelism.
-    if plan.statistics.pruning_stats.blocks_bloom_pruning_after > 0 {
-        max_io_requests = std::cmp::min(
-            max_io_requests,
-            plan.statistics.pruning_stats.blocks_bloom_pruning_after,
-        );
-        max_threads = std::cmp::min(
-            max_threads,
-            plan.statistics.pruning_stats.blocks_bloom_pruning_after,
-        );
-    }
+    (max_threads, max_io_requests) = ajust_threads_and_request(max_threads, max_io_requests, plan);
+
+    let mut source_builder = SourcePipeBuilder::create();
 
     match block_reader.support_blocking_api() {
         true => {
-            pipeline.add_source(
-                |output| {
-                    ReadNativeDataSource::<true>::create(ctx.clone(), output, block_reader.clone())
-                },
-                max_threads,
-            )?;
+            let partitions = dispatch_partitions(ctx.clone(), max_threads);
+            let partitions = StealablePartitions::new(partitions, ctx.clone());
+
+            for i in 0..max_threads {
+                let output = OutputPort::create();
+                source_builder.add_source(
+                    output.clone(),
+                    ReadNativeDataSource::<true>::create(
+                        i,
+                        ctx.clone(),
+                        output,
+                        block_reader.clone(),
+                        partitions.clone(),
+                    )?,
+                );
+            }
+            pipeline.add_pipe(source_builder.finalize());
         }
         false => {
-            pipeline.add_source(
-                |output| {
-                    ReadNativeDataSource::<false>::create(ctx.clone(), output, block_reader.clone())
-                },
-                max_io_requests,
-            )?;
+            let partitions = dispatch_partitions(ctx.clone(), max_io_requests);
+            let partitions = StealablePartitions::new(partitions, ctx.clone());
+
+            for i in 0..max_io_requests {
+                let output = OutputPort::create();
+                source_builder.add_source(
+                    output.clone(),
+                    ReadNativeDataSource::<false>::create(
+                        i,
+                        ctx.clone(),
+                        output,
+                        block_reader.clone(),
+                        partitions.clone(),
+                    )?,
+                );
+            }
+            pipeline.add_pipe(source_builder.finalize());
             pipeline.resize(max_threads)?;
         }
     };
@@ -92,9 +111,12 @@ pub fn build_fuse_parquet_source_pipeline(
     ctx: Arc<dyn TableContext>,
     pipeline: &mut Pipeline,
     block_reader: Arc<BlockReader>,
-    max_threads: usize,
-    max_io_requests: usize,
+    plan: &DataSourcePlan,
+    mut max_threads: usize,
+    mut max_io_requests: usize,
 ) -> Result<()> {
+    (max_threads, max_io_requests) = ajust_threads_and_request(max_threads, max_io_requests, plan);
+
     match block_reader.support_blocking_api() {
         true => {
             pipeline.add_source(
@@ -135,4 +157,36 @@ pub fn build_fuse_parquet_source_pipeline(
             transform_output,
         )
     })
+}
+
+pub fn dispatch_partitions(
+    ctx: Arc<dyn TableContext>,
+    max_streams: usize,
+) -> Vec<VecDeque<PartInfoPtr>> {
+    let mut results = vec![VecDeque::new(); max_streams];
+    let partitions = ctx.get_partitions(usize::MAX);
+
+    // that means the partition is lazy
+    if partitions.is_empty() {
+        return results;
+    }
+
+    for (i, part) in partitions.iter().enumerate() {
+        results[i % max_streams].push_back(part.clone());
+    }
+    results
+}
+
+pub fn ajust_threads_and_request(
+    mut max_threads: usize,
+    mut max_io_requests: usize,
+    plan: &DataSourcePlan,
+) -> (usize, usize) {
+    if !plan.parts.is_lazy {
+        let block_nums = plan.parts.partitions.len();
+
+        max_threads = std::cmp::min(max_threads, block_nums);
+        max_io_requests = std::cmp::min(max_io_requests, block_nums);
+    }
+    (max_threads, max_io_requests)
 }
