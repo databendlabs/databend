@@ -119,18 +119,26 @@ impl Interpreter for ShowCreateTableInterpreter {
         let settings = self.ctx.get_settings();
         let hide_options_in_show_create_table = settings
             .get_hide_options_in_show_create_table()
-            .and_then(|raw_list|
-                Ok(raw_list.split(',').map(|x| x.to_string().to_uppercase()).collect::<HashSet<String>>()))
+            .and_then(|raw_list| {
+                Ok(raw_list
+                    .split(',')
+                    .map(|x| x.to_string().to_uppercase())
+                    .collect::<HashSet<String>>())
+            })
             .unwrap_or(HashSet::new());
 
-        debug!("Show hide_options_in_show_create_table: {:?}", hide_options_in_show_create_table);
+        debug!(
+            "Show hide_options_in_show_create_table: {:?}",
+            hide_options_in_show_create_table
+        );
 
         table_create_sql.push_str({
             let mut opts = table_info.options().iter().collect::<Vec<_>>();
             opts.sort_by_key(|(k, _)| *k);
             opts.iter()
                 .filter(|(k, _)| {
-                    !is_internal_opt_key(k) && !hide_options_in_show_create_table.contains(k.to_uppercase().as_str())
+                    !is_internal_opt_key(k)
+                        && !hide_options_in_show_create_table.contains(k.to_uppercase().as_str())
                 })
                 .map(|(k, v)| format!(" {}='{}'", k.to_uppercase(), v))
                 .collect::<Vec<_>>()
