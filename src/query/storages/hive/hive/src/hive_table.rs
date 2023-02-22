@@ -774,10 +774,7 @@ async fn do_list_files_from_dir(
     let mut all_dirs = vec![];
     while let Some(de) = m.try_next().await? {
         let meta = de
-            .metadata({
-                use ObjectMetakey::*;
-                Mode | ContentLength
-            })
+            .metadata(ObjectMetakey::Mode | ObjectMetakey::ContentLength)
             .await?;
 
         let path = de.path();

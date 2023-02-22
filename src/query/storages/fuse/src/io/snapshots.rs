@@ -298,11 +298,7 @@ impl SnapshotsIO {
         let mut ds = data_accessor.object(prefix).list().await?;
         while let Some(de) = ds.try_next().await? {
             let meta = de
-                .metadata({
-                    use ObjectMetakey::*;
-
-                    Mode | LastModified
-                })
+                .metadata(ObjectMetakey::Mode | ObjectMetakey::LastModified)
                 .await?;
             match meta.mode() {
                 ObjectMode::FILE => match exclude_file {

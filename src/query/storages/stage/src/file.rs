@@ -76,9 +76,11 @@ pub async fn list_file(op: &Operator, path: &str) -> Result<Vec<StageFileInfo>> 
 pub async fn stat_file(o: Object) -> Result<Option<StageFileInfo>> {
     let meta = o
         .metadata({
-            use ObjectMetakey::*;
-
-            Mode | ContentLength | ContentMd5 | LastModified | Etag
+            ObjectMetakey::Mode
+                | ObjectMetakey::ContentLength
+                | ObjectMetakey::ContentMd5
+                | ObjectMetakey::LastModified
+                | ObjectMetakey::Etag
         })
         .await?;
 
