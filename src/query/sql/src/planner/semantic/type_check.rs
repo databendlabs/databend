@@ -1644,7 +1644,6 @@ impl<'a> TypeChecker<'a> {
             }
 
             ("last_query_id", args) => {
-                println!("args: {} value: {:?}", args.len(), args);
                 let index = if args.len() != 1 {
                     -1
                 } else {
@@ -1683,7 +1682,6 @@ impl<'a> TypeChecker<'a> {
                         _ => -1,
                     }
                 };
-                println!("index: {index}");
                 let query_id = self.ctx.get_last_query_id(index);
                 Some(
                     self.resolve(
