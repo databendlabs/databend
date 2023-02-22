@@ -206,7 +206,7 @@ pub fn ajust_threads_and_request(
     plan: &DataSourcePlan,
 ) -> (usize, usize) {
     if !plan.parts.is_lazy {
-        let block_nums = plan.parts.partitions.len();
+        let block_nums = plan.parts.partitions.len().max(1);
 
         max_threads = std::cmp::min(max_threads, block_nums);
         max_io_requests = std::cmp::min(max_io_requests, block_nums);
