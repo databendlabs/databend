@@ -56,7 +56,6 @@ pub struct BlockEntry {
 pub trait BlockMetaInfo: Debug + Send + Sync {
     fn as_any(&self) -> &dyn Any;
     fn as_mut_any(&mut self) -> &mut dyn Any;
-
     #[allow(clippy::borrowed_box)]
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool;
 
@@ -313,6 +312,11 @@ impl DataBlock {
     #[inline]
     pub fn get_meta(&self) -> Option<&BlockMetaInfoPtr> {
         self.meta.as_ref()
+    }
+
+    #[inline]
+    pub fn get_meta_owned(self) -> Option<BlockMetaInfoPtr> {
+        self.meta
     }
 
     pub fn from_arrow_chunk<A: AsRef<dyn Array>>(

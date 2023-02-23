@@ -18,7 +18,7 @@ use crate::FuseStorageFormat;
 use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::DEFAULT_ROW_PER_PAGE;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct WriteSettings {
     pub storage_format: FuseStorageFormat,
     pub table_compression: TableCompression,

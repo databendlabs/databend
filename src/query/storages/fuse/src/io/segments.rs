@@ -66,7 +66,7 @@ impl SegmentsIO {
         reader.read(&load_params).await
     }
 
-    // Read all segments information from s3 in concurrency.
+    // Read all segments information from s3 in concurrently.
     #[tracing::instrument(level = "debug", skip_all)]
     pub async fn read_segments(
         &self,

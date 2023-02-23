@@ -181,6 +181,7 @@ impl FuseTable {
 
         let func_ctx = ctx.get_function_context()?;
         if !operators.is_empty() {
+            // TODO WHY?
             pipeline.add_transform(move |input, output| {
                 Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                     input,

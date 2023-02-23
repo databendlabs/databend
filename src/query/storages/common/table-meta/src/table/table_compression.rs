@@ -18,7 +18,7 @@ use common_exception::ErrorCode;
 
 use crate::meta;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum TableCompression {
     None,
     LZ4,

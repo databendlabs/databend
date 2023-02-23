@@ -19,12 +19,14 @@ mod compact;
 mod delete;
 mod fuse_sink;
 mod gc;
+mod merge_into;
 mod mutation;
 mod navigate;
 mod operation_log;
 mod read_data;
 mod read_partitions;
 mod recluster;
+mod replace;
 mod truncate;
 mod update;
 

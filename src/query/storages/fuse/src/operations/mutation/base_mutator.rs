@@ -42,6 +42,7 @@ pub struct Replacement {
 }
 
 pub type SegmentIndex = usize;
+pub type BlockIndex = usize;
 
 #[derive(Clone)]
 pub struct BaseMutator {

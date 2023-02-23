@@ -631,6 +631,8 @@ pub enum TokenKind {
     REGEXP,
     #[token("RENAME", ignore(ascii_case))]
     RENAME,
+    #[token("REPLACE", ignore(ascii_case))]
+    REPLACE,
     #[token("ROW_TAG", ignore(ascii_case))]
     ROW_TAG,
     #[token("GRANT", ignore(ascii_case))]
