@@ -18,6 +18,8 @@ env:
   BUILD_PROFILE: release
   TARGET: x86_64-unknown-linux-gnu
   CARGO_INCREMENTAL: 0
+  # Remove this env after rust 1.68 has been released.
+  CARGO_UNSTABLE_SPARSE_REGISTRY: true
 
 jobs:
   build:
