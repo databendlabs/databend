@@ -244,8 +244,7 @@ pub trait FieldDecoderRowBased: FieldDecoder {
                     );
                     return Err(ErrorCode::BadBytes(msg));
                 }
-                let micros = t.timestamp_micros();
-                micros
+                t.timestamp_micros()
             }
             Err(_) => {
                 buffer_readr
