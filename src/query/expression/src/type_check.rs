@@ -317,17 +317,10 @@ impl Substitution {
             }),
             DataType::Nullable(box ty) => Ok(DataType::Nullable(Box::new(self.apply(ty)?))),
             DataType::Array(box ty) => Ok(DataType::Array(Box::new(self.apply(ty)?))),
-            DataType::Map(box ty) => match ty {
-                DataType::Tuple(fields_ty) => {
-                    let fields_ty = fields_ty
-                        .into_iter()
-                        .map(|field_ty| self.apply(field_ty))
-                        .collect::<Result<_>>()?;
-                    let inner_ty = DataType::Tuple(fields_ty);
-                    Ok(DataType::Map(Box::new(inner_ty)))
-                }
-                _ => unreachable!(),
-            },
+            DataType::Map(box ty) => {
+                let inner_ty = self.apply(ty)?;
+                Ok(DataType::Map(Box::new(inner_ty)))
+            }
             DataType::Tuple(fields_ty) => {
                 let fields_ty = fields_ty
                     .into_iter()

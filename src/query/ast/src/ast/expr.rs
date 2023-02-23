@@ -262,14 +262,15 @@ pub enum TypeName {
     Date,
     Timestamp,
     String,
-    Array {
-        item_type: Option<Box<TypeName>>,
+    Array(Box<TypeName>),
+    Map {
+        key_type: Box<TypeName>,
+        val_type: Box<TypeName>,
     },
     Tuple {
         fields_name: Option<Vec<String>>,
         fields_type: Vec<TypeName>,
     },
-    Object,
     Variant,
     Nullable(Box<TypeName>),
 }
@@ -570,11 +571,11 @@ impl Display for TypeName {
             TypeName::String => {
                 write!(f, "STRING")?;
             }
-            TypeName::Array { item_type } => {
-                write!(f, "ARRAY")?;
-                if let Some(item_type) = item_type {
-                    write!(f, "({})", *item_type)?;
-                }
+            TypeName::Array(ty) => {
+                write!(f, "ARRAY({})", ty)?;
+            }
+            TypeName::Map { key_type, val_type } => {
+                write!(f, "MAP({}, {})", key_type, val_type)?;
             }
             TypeName::Tuple {
                 fields_name,
@@ -603,9 +604,6 @@ impl Display for TypeName {
                     }
                 }
                 write!(f, ")")?;
-            }
-            TypeName::Object => {
-                write!(f, "OBJECT")?;
             }
             TypeName::Variant => {
                 write!(f, "VARIANT")?;

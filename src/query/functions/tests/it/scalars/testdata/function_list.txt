@@ -1269,8 +1269,8 @@ ltrim(String) :: String
 ltrim(String NULL) :: String NULL
 map(Array(Nothing), Array(Nothing)) :: Map(Nothing)
 map(Array(Nothing) NULL, Array(Nothing) NULL) :: Map(Nothing) NULL
-map(Array(T0), Array(T1)) :: Map(Tuple(T0, T1))
-map(Array(T0) NULL, Array(T1) NULL) :: Map(Tuple(T0, T1)) NULL
+map(Array(T0), Array(T1)) :: Map(T0, T1)
+map(Array(T0) NULL, Array(T1) NULL) :: Map(T0, T1) NULL
 md5(String) :: String
 md5(String NULL) :: String NULL
 minus(UInt8) :: Int16

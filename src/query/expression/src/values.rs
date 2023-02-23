@@ -945,11 +945,25 @@ impl Column {
             Column::Map(col) => {
                 let offsets: Buffer<i32> =
                     col.offsets.iter().map(|offset| *offset as i32).collect();
+                let values = match (&arrow_type, &col.values) {
+                    (ArrowType::Map(inner_field, _), Column::Tuple { fields, .. }) => {
+                        let inner_type = inner_field.data_type.clone();
+                        Box::new(
+                            common_arrow::arrow::array::StructArray::try_new(
+                                inner_type,
+                                fields.iter().map(|field| field.as_arrow()).collect(),
+                                None,
+                            )
+                            .unwrap(),
+                        )
+                    }
+                    (_, _) => unreachable!(),
+                };
                 Box::new(
                     common_arrow::arrow::array::MapArray::try_new(
                         arrow_type,
                         unsafe { OffsetsBuffer::new_unchecked(offsets) },
-                        col.values.as_arrow(),
+                        values,
                         None,
                     )
                     .unwrap(),
@@ -1575,7 +1589,7 @@ impl ColumnBuilder {
             DataType::Map(ty) => {
                 let mut offsets = Vec::with_capacity(capacity + 1);
                 offsets.push(0);
-                ColumnBuilder::Array(Box::new(ArrayColumnBuilder {
+                ColumnBuilder::Map(Box::new(ArrayColumnBuilder {
                     builder: Self::with_capacity(ty, 0),
                     offsets,
                 }))

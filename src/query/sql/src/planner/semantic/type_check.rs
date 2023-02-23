@@ -2405,9 +2405,33 @@ impl<'a> TypeChecker<'a> {
             TypeName::String => TableDataType::String,
             TypeName::Timestamp => TableDataType::Timestamp,
             TypeName::Date => TableDataType::Date,
-            TypeName::Array {
-                item_type: Some(item_type),
-            } => TableDataType::Array(Box::new(Self::resolve_type_name(item_type)?)),
+            TypeName::Array(item_type) => {
+                TableDataType::Array(Box::new(Self::resolve_type_name(item_type)?))
+            }
+            TypeName::Map { key_type, val_type } => {
+                let key_type = Self::resolve_type_name(key_type)?;
+                match key_type {
+                    TableDataType::Boolean
+                    | TableDataType::String
+                    | TableDataType::Number(_)
+                    | TableDataType::Decimal(_)
+                    | TableDataType::Timestamp
+                    | TableDataType::Date => {
+                        let val_type = Self::resolve_type_name(val_type)?;
+                        let inner_type = TableDataType::Tuple {
+                            fields_name: vec!["key".to_string(), "value".to_string()],
+                            fields_type: vec![key_type, val_type],
+                        };
+                        TableDataType::Map(Box::new(inner_type))
+                    }
+                    _ => {
+                        return Err(ErrorCode::Internal(format!(
+                            "Invalid Map key type \'{:?}\'",
+                            key_type
+                        )));
+                    }
+                }
+            }
             TypeName::Tuple {
                 fields_type,
                 fields_name,
@@ -2428,12 +2452,6 @@ impl<'a> TypeChecker<'a> {
                 TableDataType::Nullable(Box::new(Self::resolve_type_name(inner_type)?))
             }
             TypeName::Variant => TableDataType::Variant,
-            name => {
-                return Err(ErrorCode::Internal(format!(
-                    "Invalid type name \'{:?}\'",
-                    name
-                )));
-            }
         };
 
         Ok(data_type)

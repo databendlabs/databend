@@ -1184,9 +1184,14 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         },
     );
     let ty_array = map(
-        rule! { ARRAY ~ ( "(" ~ #type_name ~ ")" )? },
-        |(_, opt_item_type)| TypeName::Array {
-            item_type: opt_item_type.map(|(_, opt_item_type, _)| Box::new(opt_item_type)),
+        rule! { ARRAY ~ "(" ~ #type_name ~ ")" },
+        |(_, _, item_type, _)| TypeName::Array(Box::new(item_type)),
+    );
+    let ty_map = map(
+        rule! { MAP ~ "(" ~ #type_name ~ "," ~ #type_name ~ ")" },
+        |(_, _, key_type, _, val_type, _)| TypeName::Map {
+            key_type: Box::new(key_type),
+            val_type: Box::new(val_type),
         },
     );
     let ty_nullable = map(
@@ -1226,7 +1231,6 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         TypeName::String,
         rule! { ( STRING | VARCHAR | CHAR | CHARACTER | TEXT  ) ~ ( "(" ~ #literal_u64 ~ ")" )? },
     );
-    let ty_object = value(TypeName::Object, rule! { OBJECT | MAP });
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
     map(
         rule! {
@@ -1243,11 +1247,11 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_float64
             | #ty_decimal
             | #ty_array
+            | #ty_map
             | #ty_tuple
             | #ty_date
             | #ty_datetime
             | #ty_string
-            | #ty_object
             | #ty_variant
             | #ty_nullable
             ) ~ NULL? : "type name"

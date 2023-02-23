@@ -31,6 +31,7 @@ use common_expression::ArrayDeserializer;
 use common_expression::BooleanDeserializer;
 use common_expression::DateDeserializer;
 use common_expression::DecimalDeserializer;
+use common_expression::MapDeserializer;
 use common_expression::NullDeserializer;
 use common_expression::NullableDeserializer;
 use common_expression::NumberDeserializer;
@@ -128,6 +129,7 @@ impl FastFieldDecoderValues {
             TypeDeserializerImpl::Timestamp(c) => self.read_timestamp(c, reader, positions),
             TypeDeserializerImpl::String(c) => self.read_string(c, reader, positions),
             TypeDeserializerImpl::Array(c) => self.read_array(c, reader, positions),
+            TypeDeserializerImpl::Map(c) => self.read_map(c, reader, positions),
             TypeDeserializerImpl::Struct(c) => self.read_struct(c, reader, positions),
             TypeDeserializerImpl::Variant(c) => self.read_variant(c, reader, positions),
         }
@@ -302,6 +304,35 @@ where {
             }
             let _ = reader.ignore_white_spaces();
             self.read_field(column.inner.as_mut(), reader, positions)?;
+            idx += 1;
+        }
+
+        column.add_offset(idx);
+        Ok(())
+    }
+
+    fn read_map<R: AsRef<[u8]>>(
+        &self,
+        column: &mut MapDeserializer,
+        reader: &mut Cursor<R>,
+        positions: &mut VecDeque<usize>,
+    ) -> Result<()> {
+        reader.must_ignore_byte(b'{')?;
+        let mut idx = 0;
+        loop {
+            let _ = reader.ignore_white_spaces();
+            if reader.ignore_byte(b'}') {
+                break;
+            }
+            if idx != 0 {
+                reader.must_ignore_byte(b',')?;
+            }
+            let _ = reader.ignore_white_spaces();
+            self.read_field(column.key.as_mut(), reader, positions)?;
+            let _ = reader.ignore_white_spaces();
+            reader.must_ignore_byte(b':')?;
+            let _ = reader.ignore_white_spaces();
+            self.read_field(column.value.as_mut(), reader, positions)?;
             idx += 1;
         }
 

@@ -17,6 +17,7 @@ use std::io::Cursor;
 
 use common_exception::Result;
 use common_expression::ArrayDeserializer;
+use common_expression::MapDeserializer;
 use common_expression::StringDeserializer;
 use common_expression::StructDeserializer;
 use common_io::constants::FALSE_BYTES_NUM;
@@ -112,6 +113,34 @@ impl FieldDecoderRowBased for FieldDecoderTSV {
             }
             let _ = reader.ignore_white_spaces();
             self.read_field(column.inner.as_mut(), reader, false)?;
+            idx += 1;
+        }
+        column.add_offset(idx);
+        Ok(())
+    }
+
+    fn read_map<R: AsRef<[u8]>>(
+        &self,
+        column: &mut MapDeserializer,
+        reader: &mut Cursor<R>,
+        _raw: bool,
+    ) -> Result<()> {
+        reader.must_ignore_byte(b'{')?;
+        let mut idx = 0;
+        loop {
+            let _ = reader.ignore_white_spaces();
+            if reader.ignore_byte(b'}') {
+                break;
+            }
+            if idx != 0 {
+                reader.must_ignore_byte(b',')?;
+            }
+            let _ = reader.ignore_white_spaces();
+            self.read_field(column.key.as_mut(), reader, false)?;
+            let _ = reader.ignore_white_spaces();
+            reader.must_ignore_byte(b':')?;
+            let _ = reader.ignore_white_spaces();
+            self.read_field(column.value.as_mut(), reader, false)?;
             idx += 1;
         }
         column.add_offset(idx);

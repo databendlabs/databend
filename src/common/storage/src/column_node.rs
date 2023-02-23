@@ -86,6 +86,19 @@ impl ColumnNodes {
                     Some(child_column_nodes),
                 )
             }
+            ArrowType::Map(inner_field, _) => {
+                let mut child_column_nodes = Vec::with_capacity(1);
+                let mut child_leaf_ids = Vec::with_capacity(1);
+                let child_column_node = Self::traverse_fields_dfs(inner_field, true, leaf_id);
+                child_leaf_ids.extend(child_column_node.leaf_indices.clone());
+                child_column_nodes.push(child_column_node);
+                ColumnNode::new(
+                    field.clone(),
+                    true,
+                    child_leaf_ids,
+                    Some(child_column_nodes),
+                )
+            }
             _ => {
                 let column_node = ColumnNode::new(field.clone(), is_nested, vec![*leaf_id], None);
                 *leaf_id += 1;
