@@ -641,11 +641,11 @@ mod tests {
         let _ = env_logger::try_init();
 
         let content = fs::read(format!(
-            "{}/tests/data/ontime.csv",
+            "{}/tests/data/ontime_200.csv",
             env::current_dir()?.to_string_lossy()
         ))?;
         let compressed_content = fs::read(format!(
-            "{}/tests/data/ontime.csv.gz",
+            "{}/tests/data/ontime_200.csv.gz",
             env::current_dir()?.to_string_lossy()
         ))?;
 
@@ -665,11 +665,11 @@ mod tests {
         let _ = env_logger::try_init();
 
         let content = fs::read(format!(
-            "{}/tests/data/ontime.csv",
+            "{}/tests/data/ontime_200.csv",
             env::current_dir()?.to_string_lossy()
         ))?;
         let compressed_content = fs::read(format!(
-            "{}/tests/data/ontime.csv.bz2",
+            "{}/tests/data/ontime_200.csv.bz2",
             env::current_dir()?.to_string_lossy()
         ))?;
 
@@ -688,11 +688,11 @@ mod tests {
         let _ = env_logger::try_init();
 
         let content = fs::read(format!(
-            "{}/tests/data/ontime.csv",
+            "{}/tests/data/ontime_200.csv",
             env::current_dir()?.to_string_lossy()
         ))?;
         let compressed_content = fs::read(format!(
-            "{}/tests/data/ontime.csv.zst",
+            "{}/tests/data/ontime_200.csv.zst",
             env::current_dir()?.to_string_lossy()
         ))?;
 
