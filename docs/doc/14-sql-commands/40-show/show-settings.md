@@ -34,7 +34,7 @@ SHOW SETTINGS;
 | format_quote                    |             |             | SESSION | The quote char for format. default value is "": use default of the format.                                        | String |
 | format_record_delimiter         |             |             | SESSION | Format record_delimiter, default value is "": use default of the format.                                          | String |
 | format_skip_header              | 0           | 0           | SESSION | Whether to skip the input header, default value: 0.                                                               | UInt64 |
-| group_by_two_level_threshold    | 10000       | 10000       | SESSION | The threshold of keys to open two-level aggregation, default value: 10000.                                        | UInt64 |
+| group_by_two_level_threshold    | 100000      | 100000      | SESSION | The threshold of keys to open two-level aggregation, default value: 10000.                                        | UInt64 |
 | input_read_buffer_size          | 1048576     | 1048576     | SESSION | The size of buffer in bytes for input with format. By default, it is 1MB.                                         | UInt64 |
 | load_file_metadata_expire_hours | 168         | 168         | SESSION | How many hours will the COPY file metadata expired in the metasrv, default value: 24*7=7days                      | UInt64 |
 | max_block_size                  | 65536       | 65536       | SESSION | Maximum block size for reading, default value: 65536.                                                             | UInt64 |

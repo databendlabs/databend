@@ -110,23 +110,33 @@ impl Settings {
     pub fn default_settings(tenant: &str, conf: Arc<InnerConfig>) -> Result<Arc<Settings>> {
         let memory_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
         let mut num_cpus = num_cpus::get() as u64;
+
+        if conf.storage.params.is_fs() {
+            if let Ok(n) = std::thread::available_parallelism() {
+                num_cpus = n.get() as u64;
+            }
+
+            // Most of x86_64 CPUs have 2-way Hyper-Threading
+            #[cfg(target_arch = "x86_64")]
+            {
+                if num_cpus >= 32 {
+                    num_cpus /= 2;
+                }
+            }
+            // Detect CGROUPS ?
+        }
+
         if conf.query.num_cpus != 0 {
             num_cpus = conf.query.num_cpus;
         }
-        if num_cpus == 0 {
-            num_cpus = 16;
-        }
+        num_cpus = num_cpus.clamp(1, 96);
 
         let mut default_max_memory_usage = 1024 * memory_info.total * 80 / 100;
         if conf.query.max_server_memory_usage != 0 {
             default_max_memory_usage = conf.query.max_server_memory_usage;
         }
 
-        let default_max_storage_io_requests = if conf.storage.params.is_fs() {
-            num_cpus
-        } else {
-            64
-        };
+        let default_max_storage_io_requests = if conf.storage.params.is_fs() { 48 } else { 64 };
 
         let values = vec![
             // max_block_size
@@ -267,13 +277,13 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
-                default_value: UserSettingValue::UInt64(10000),
+                default_value: UserSettingValue::UInt64(20000),
                 user_setting: UserSetting::create(
                     "group_by_two_level_threshold",
-                    UserSettingValue::UInt64(10000),
+                    UserSettingValue::UInt64(20000),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The threshold of keys to open two-level aggregation, default value: 10000.",
+                desc: "The threshold of keys to open two-level aggregation, default value: 20000.",
                 possible_values: None,
             },
             SettingValue {
