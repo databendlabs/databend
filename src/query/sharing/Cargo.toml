@@ -26,3 +26,10 @@ reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { version = "1" }
+
+[package.metadata.cargo-machete]
+ignored = [
+    "backon",
+    "base64",
+    "thiserror",
+]

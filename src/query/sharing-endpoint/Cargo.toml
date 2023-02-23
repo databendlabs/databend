@@ -30,3 +30,11 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serfig = "0.0.3"
 thiserror = { version = "1" }
+
+[package.metadata.cargo-machete]
+ignored = [
+    "anyhow",
+    "common-meta-types",
+    "once_cell",
+    "thiserror",
+]

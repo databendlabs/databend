@@ -27,3 +27,9 @@ semver = "1.0.10"
 
 [dev-dependencies]
 rand = "0.8.5"
+
+[package.metadata.cargo-machete]
+ignored = [
+    "libc",
+    "semver",
+]

@@ -28,3 +28,12 @@ walkdir = "2.3.2"
 heapsize_ = { package = "heapsize", version = "0.4.2", optional = true }
 
 [dev-dependencies]
+
+[package.metadata.cargo-machete]
+ignored = [
+    "crc32fast",
+    "hex",
+    "siphasher",
+    "tracing",
+    "walkdir",
+]

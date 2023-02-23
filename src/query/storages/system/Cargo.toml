@@ -53,3 +53,16 @@ walkdir = "2.3.2"
 
 [build-dependencies]
 common-building = { path = "../../../common/building" }
+
+[package.metadata.cargo-machete]
+ignored = [
+    "backon",
+    "common-formats",
+    "common-meta-types",
+    "common-pipeline-sinks",
+    "common-pipeline-transforms",
+    "common-storage",
+    "futures",
+    "opendal",
+    "uuid",
+]

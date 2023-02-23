@@ -41,3 +41,9 @@ tracing = "0.1.36"
 [dev-dependencies]
 pretty_assertions = "1.3.0"
 wiremock = "0.5.14"
+
+[package.metadata.cargo-machete]
+ignored = [
+    "common-meta-api",
+    "once_cell",
+]
