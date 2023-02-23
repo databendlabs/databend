@@ -76,7 +76,6 @@ const config = {
     ],
     plugins: [
         'docusaurus-plugin-sass',
-        './src/plugins/pxToVw',
         './src/plugins/globalSassVarInject',
         [
             '@docusaurus/plugin-content-docs',
@@ -121,11 +120,6 @@ const config = {
                     },
                     { to: '/blog', label: 'Blog', position: 'right' }, // or position: 'right'
                     {
-                        href: 'https://github.com/datafuselabs/databend',
-                        label: 'GitHub',
-                        position: 'right',
-                    },
-                    {
                         type: 'localeDropdown',
                         position: 'right',
                         dropdownItemsAfter: [
@@ -138,21 +132,7 @@ const config = {
                 ],
             },
             footer: {
-                style: 'dark',
                 links: [
-                    {
-                        title: 'GET STARTED',
-                        items: [
-                            {
-                                label: 'What is Databend',
-                                to: '/doc'
-                            },
-                            {
-                                label: 'Quick Start',
-                                to: '/doc/guides'
-                            },
-                        ]
-                    },
                     {
                         title: 'RESOURCES',
                         items: [
