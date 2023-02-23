@@ -26,7 +26,7 @@ const community = [
   {
     'icon':'Youtube',
     'title': 'Youtube',
-    'link': 'https://www.youtube.com/@databend8089'
+    'link': 'https://www.youtube.com/@Datafuse_Labs'
   },
 ]
 
