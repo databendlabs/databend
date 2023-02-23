@@ -9,6 +9,7 @@ on:
       - "website/**"
       - "**.md"
       - "docker/**"
+      - "scripts/setup/**"
       - ".devcontainer/**"
 
 concurrency:
