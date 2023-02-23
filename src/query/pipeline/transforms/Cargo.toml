@@ -18,4 +18,4 @@ match-template = "0.0.1"
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 
 [package.metadata.cargo-machete]
-ignore = ["match-template"]
+ignored = ["match-template"]
