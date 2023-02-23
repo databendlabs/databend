@@ -38,7 +38,6 @@ use common_storages_fuse::operations::SegmentCompactionState;
 use common_storages_fuse::operations::SegmentCompactor;
 use common_storages_fuse::statistics::gen_columns_statistics;
 use common_storages_fuse::statistics::reducers::merge_statistics_mut;
-use common_storages_fuse::statistics::BlockStatistics;
 use common_storages_fuse::statistics::StatisticsAccumulator;
 use common_storages_fuse::FuseStorageFormat;
 use common_storages_fuse::FuseTable;
@@ -48,7 +47,6 @@ use futures_util::TryStreamExt;
 use rand::thread_rng;
 use rand::Rng;
 use storages_common_cache::LoadParams;
-use storages_common_table_meta::meta;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
@@ -680,19 +678,12 @@ impl CompactSegmentTestFixture {
                 let block = block?;
                 let col_stats = gen_columns_statistics(&block, None, &schema)?;
 
-                let mut block_statistics =
-                    BlockStatistics::from(&block, "".to_owned(), None, None, &schema)?;
                 let block_meta = block_writer
                     .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
                     .await?;
-                block_statistics.block_file_location = block_meta.location.0.clone();
 
                 collected_blocks.push(block_meta.clone());
-                stats_acc.add_with_block_meta(
-                    block_meta,
-                    block_statistics,
-                    meta::Compression::Lz4Raw,
-                )?;
+                stats_acc.add_with_block_meta(block_meta);
             }
             let col_stats = stats_acc.summary()?;
             let segment_info = SegmentInfo::new(stats_acc.blocks_metas, Statistics {

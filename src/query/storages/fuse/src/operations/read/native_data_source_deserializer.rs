@@ -222,9 +222,6 @@ impl NativeDeserializeDataTransform {
         if let Some((_, sorter, _)) = &mut self.top_k {
             if let Some(next_part) = self.parts.front() {
                 let next_part = next_part.as_any().downcast_ref::<FusePartInfo>().unwrap();
-                if next_part.sort_min_max.is_none() {
-                    return;
-                }
                 if let Some(sort_min_max) = &next_part.sort_min_max {
                     self.topn_finish = sorter.never_match(sort_min_max);
                 }
