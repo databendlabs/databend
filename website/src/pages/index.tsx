@@ -84,18 +84,6 @@ function HomepageHeader() {
                   Open source quickstart
               </Link>
             </div>
-            <hr/>
-            <div className={clsx('cloud-banner', styles.cloudBanner)}>
-              <div style={{textAlign:'center'}}>
-              <h5>🎉 Databend Cloud is now available.</h5>
-              <p>No Operations Required, Ready-to-Use. Register Now and Get $200 Discount.</p>
-              </div>
-              <Link
-              className={clsx("button", styles.Button, styles.White)}
-              to="/doc/cloud">
-               🚀 Start your trial
-            </Link>
-            </div>
             <div className={clsx('community', styles.Community)}>
               <h6>Join our growing community</h6>
               <div className={clsx('community-group', styles.CommunityGroup)}>
@@ -108,7 +96,18 @@ function HomepageHeader() {
                 })}
               </div>
             </div>
-
+            <hr/>
+            <div className={clsx('cloud-banner', styles.cloudBanner)}>
+              <div style={{textAlign:'center'}}>
+              <h5>🎉 Databend Cloud is now available.</h5>
+              <p>No Operations Required, Ready-to-Use. Register Now and Get $200 Discount.</p>
+              </div>
+              <Link
+              className={clsx("button", styles.Button, styles.White)}
+              to="/doc/cloud">
+               🚀 Start your trial
+            </Link>
+            </div>
           </div>
         </section>
       </>
