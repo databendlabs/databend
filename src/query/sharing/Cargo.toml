@@ -12,8 +12,6 @@ doctest = false
 [dependencies]
 anyhow = { workspace = true }
 async-trait = "0.1"
-backon = "0.4"
-base64 = "0.13.0"
 bytes = "1"
 common-auth = { path = "../../common/auth" }
 common-config = { path = "../config" }
@@ -25,11 +23,3 @@ opendal = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-thiserror = { version = "1" }
-
-[package.metadata.cargo-machete]
-ignored = [
-    "backon",
-    "base64",
-    "thiserror",
-]

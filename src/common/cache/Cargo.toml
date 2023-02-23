@@ -17,23 +17,9 @@ amortized = ["ritelinked/ahash-amortized", "ritelinked/inline-more-amortized"]
 [dependencies]
 
 # Crates.io dependencies
-crc32fast = "1.3.2"
-hex = "0.4.3"
 ritelinked = { version = "0.3.2", default-features = false, features = ["ahash", "inline-more"] }
-siphasher = "0.3.10"
-tracing = "0.1.36"
-walkdir = "2.3.2"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 heapsize_ = { package = "heapsize", version = "0.4.2", optional = true }
 
 [dev-dependencies]
-
-[package.metadata.cargo-machete]
-ignored = [
-    "crc32fast",
-    "hex",
-    "siphasher",
-    "tracing",
-    "walkdir",
-]
