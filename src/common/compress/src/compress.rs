@@ -126,18 +126,6 @@ impl From<CompressAlgorithm> for DecompressCodec {
     }
 }
 
-/// DecompressDecoder contains all decoders that opendal supports.
-///
-/// # Example
-///
-/// Please use `CompressAlgorithm.into()` to create a new decoder
-///
-/// ```
-/// use opendal::raw::CompressAlgorithm;
-/// use opendal::raw::DecompressCodec;
-///
-/// let de: DecompressCodec = CompressAlgorithm::Zstd.into();
-/// ```
 #[derive(Debug)]
 pub enum DecompressCodec {
     /// Decoder for [`CompressAlgorithm::Brotli`]
