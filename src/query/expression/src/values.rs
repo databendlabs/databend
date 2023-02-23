@@ -999,12 +999,16 @@ impl Column {
             ArrowDataType::Null => Column::Null {
                 len: arrow_col.len(),
             },
-            ArrowDataType::Extension(name, _, _) if name == "EmptyArray" => Column::EmptyArray {
-                len: arrow_col.len(),
-            },
-            ArrowDataType::Extension(name, _, _) if name == "EmptyMap" => Column::EmptyMap {
-                len: arrow_col.len(),
-            },
+            ArrowDataType::Extension(name, _, _) if name == ARROW_EXT_TYPE_EMPTY_ARRAY => {
+                Column::EmptyArray {
+                    len: arrow_col.len(),
+                }
+            }
+            ArrowDataType::Extension(name, _, _) if name == ARROW_EXT_TYPE_EMPTY_MAP => {
+                Column::EmptyMap {
+                    len: arrow_col.len(),
+                }
+            }
             ArrowDataType::UInt8 => Column::Number(NumberColumn::UInt8(
                 arrow_col
                     .as_any()
@@ -1196,7 +1200,7 @@ impl Column {
                     .values()
                     .clone(),
             ),
-            ArrowDataType::Extension(name, _, None) if name == "Variant" => {
+            ArrowDataType::Extension(name, _, None) if name == ARROW_EXT_TYPE_VARIANT => {
                 let arrow_col = arrow_col
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()

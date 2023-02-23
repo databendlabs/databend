@@ -414,18 +414,7 @@ pub fn unify(
             unify(src_ty, dest_ty, auto_cast_rules)
         }
         (DataType::Map(box src_ty), DataType::Map(box dest_ty)) => match (src_ty, dest_ty) {
-            (DataType::Tuple(src_tys), DataType::Tuple(dest_tys)) => {
-                let substs = src_tys
-                    .iter()
-                    .zip(dest_tys)
-                    .map(|(src_ty, dest_ty)| unify(src_ty, dest_ty, auto_cast_rules))
-                    .collect::<Result<Vec<_>>>()?;
-                let subst = substs
-                    .into_iter()
-                    .try_reduce(|subst1, subst2| subst1.merge(subst2, auto_cast_rules))?
-                    .unwrap_or_else(Substitution::empty);
-                Ok(subst)
-            }
+            (DataType::Tuple(_), DataType::Tuple(_)) => unify(src_ty, dest_ty, auto_cast_rules),
             (_, _) => unreachable!(),
         },
         (DataType::Tuple(src_tys), DataType::Tuple(dest_tys))
@@ -474,10 +463,9 @@ pub fn can_auto_cast_to(
             can_auto_cast_to(src_ty, dest_ty, auto_cast_rules)
         }
         (DataType::Map(box src_ty), DataType::Map(box dest_ty)) => match (src_ty, dest_ty) {
-            (DataType::Tuple(src_tys), DataType::Tuple(dest_tys)) => src_tys
-                .iter()
-                .zip(dest_tys)
-                .all(|(src_ty, dest_ty)| can_auto_cast_to(src_ty, dest_ty, auto_cast_rules)),
+            (DataType::Tuple(_), DataType::Tuple(_)) => {
+                can_auto_cast_to(src_ty, dest_ty, auto_cast_rules)
+            }
             (_, _) => unreachable!(),
         },
         (DataType::Tuple(src_tys), DataType::Tuple(dest_tys))
@@ -516,18 +504,9 @@ pub fn common_super_type(
         ))),
         (DataType::EmptyMap, ty @ DataType::Map(_))
         | (ty @ DataType::Map(_), DataType::EmptyMap) => Some(ty),
-        (DataType::Map(box ty1), DataType::Map(box ty2)) => match (ty1, ty2) {
-            (DataType::Tuple(tys1), DataType::Tuple(tys2)) => {
-                let tys = tys1
-                    .into_iter()
-                    .zip(tys2)
-                    .map(|(ty1, ty2)| common_super_type(ty1, ty2, auto_cast_rules))
-                    .collect::<Option<Vec<_>>>()?;
-                let inner_ty = DataType::Tuple(tys);
-                Some(DataType::Map(Box::new(inner_ty)))
-            }
-            (_, _) => unreachable!(),
-        },
+        (DataType::Map(box ty1), DataType::Map(box ty2)) => Some(DataType::Map(Box::new(
+            common_super_type(ty1, ty2, auto_cast_rules)?,
+        ))),
         (DataType::Tuple(tys1), DataType::Tuple(tys2)) if tys1.len() == tys2.len() => {
             let tys = tys1
                 .into_iter()

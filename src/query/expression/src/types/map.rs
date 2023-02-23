@@ -19,6 +19,7 @@ use common_arrow::arrow::trusted_len::TrustedLen;
 
 use super::ArrayType;
 use crate::property::Domain;
+use crate::types::array::ArrayColumn;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
@@ -330,7 +331,7 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
     }
 
     fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column> {
-        <MapInternal<K, V> as ValueType>::try_downcast_column(col)
+        ArrayColumn::try_downcast(col.as_map()?)
     }
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
