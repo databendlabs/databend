@@ -56,7 +56,7 @@ impl SingletonType {
                 let guard = LOCAL.wait().read();
                 let v: &T = guard
                     .get(&thread_name)
-                    .unwrap_or_else(|| panic!("thread {thread_name} is not initiated, don't worry if we are in dropping"))
+                    .unwrap_or_else(|| panic!("thread {thread_name} is not initiated. If test is passed, please ignore this panic, it's expected. Otherwise, test must have been set up incorrectly, please check your test code again."))
                     .get();
                 v.clone()
             }
@@ -75,7 +75,7 @@ impl SingletonType {
                 let guard = LOCAL.wait().read();
                 guard
                     .get(&thread_name)
-                    .unwrap_or_else(|| panic!("thread {thread_name} is not initiated, don't worry if we are in dropping"))
+                    .unwrap_or_else(|| panic!("thread {thread_name} is not initiated. If test is passed, please ignore this panic, it's expected. Otherwise, test must have been set up incorrectly, please check your test code again."))
                     .set(value)
             }
         }

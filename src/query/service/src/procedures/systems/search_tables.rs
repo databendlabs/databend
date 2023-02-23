@@ -70,6 +70,7 @@ impl OneBlockProcedure for SearchTablesProcedure {
                 *bind_context,
                 *s_expr,
                 metadata,
+                None,
                 false,
             )?;
             interpreter.execute(ctx.clone()).await

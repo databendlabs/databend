@@ -390,6 +390,43 @@ impl RunningGraph {
             }
         }
     }
+
+    pub fn format_graph_nodes(&self) -> String {
+        pub struct NodeDisplay {
+            id: usize,
+            name: String,
+            state: String,
+        }
+
+        impl Debug for NodeDisplay {
+            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct("Node")
+                    .field("name", &self.name)
+                    .field("id", &self.id)
+                    .field("state", &self.state)
+                    .finish()
+            }
+        }
+
+        let mut nodes_display = Vec::with_capacity(self.0.graph.node_count());
+
+        for node_index in self.0.graph.node_indices() {
+            unsafe {
+                let state = self.0.graph[node_index].state.lock().unwrap();
+                nodes_display.push(NodeDisplay {
+                    id: self.0.graph[node_index].processor.id().index(),
+                    name: self.0.graph[node_index].processor.name(),
+                    state: String::from(match *state {
+                        State::Idle => "Idle",
+                        State::Processing => "Processing",
+                        State::Finished => "Finished",
+                    }),
+                });
+            }
+        }
+
+        format!("{:?}", nodes_display)
+    }
 }
 
 impl Debug for Node {

@@ -21,7 +21,6 @@ use common_meta_store::MetaStore;
 use common_storage::DataOperator;
 use opendal::Operator;
 
-use crate::common::gen_common_key;
 use crate::common::gen_result_cache_meta_key;
 use crate::common::read_blocks_from_buffer;
 use crate::meta_manager::ResultCacheMetaManager;
@@ -41,13 +40,12 @@ pub struct ResultCacheReader {
 impl ResultCacheReader {
     pub fn create(
         ctx: Arc<dyn TableContext>,
+        key: &str,
         kv_store: Arc<MetaStore>,
         tolerate_inconsistent: bool,
     ) -> Self {
-        let sql = ctx.get_query_str();
         let tenant = ctx.get_tenant();
-        let key = gen_common_key(&sql);
-        let meta_key = gen_result_cache_meta_key(&tenant, &key);
+        let meta_key = gen_result_cache_meta_key(&tenant, key);
         let partitions_shas = ctx.get_partitions_shas();
 
         Self {
