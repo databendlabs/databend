@@ -11,7 +11,7 @@ edition = { workspace = true }
 async-compression = { package = "async-compression-issue-150-workaround", version = "0.3.15-issue-150", features = [
     "futures-io",
     "all-algorithms",
-], optional = true }
+] }
 bytes = "1"
 futures = "0.3"
 log = "0.4"
