@@ -3,8 +3,8 @@ set -e
 
 # Add databend:databend user & group
 id --user databend >/dev/null 2>&1 ||
-    useradd --system --shell /sbin/nologin --home-dir /var/lib/databend --user-group \
-        --comment "Databend cloud data analytics" databend
+	useradd --system --shell /sbin/nologin --home-dir /var/lib/databend --user-group \
+		--comment "Databend cloud data analytics" databend
 
 # Create default Databend data directory
 mkdir -p /var/lib/databend
