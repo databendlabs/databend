@@ -27,7 +27,6 @@ use common_pipeline_sinks::AsyncMpscSinker;
 use common_storage::DataOperator;
 
 use super::writer::ResultCacheWriter;
-use crate::common::gen_common_key;
 use crate::common::gen_result_cache_dir;
 use crate::common::gen_result_cache_meta_key;
 use crate::common::ResultCacheValue;
@@ -35,7 +34,7 @@ use crate::meta_manager::ResultCacheMetaManager;
 
 pub struct WriteResultCacheSink {
     sql: String,
-    partitions_sha: String,
+    partitions_shas: Vec<String>,
 
     meta_mgr: ResultCacheMetaManager,
     cache_writer: ResultCacheWriter,
@@ -73,7 +72,7 @@ impl AsyncMpscSink for WriteResultCacheSink {
             sql: self.sql.clone(),
             query_time: now,
             ttl,
-            partitions_sha: self.partitions_sha.clone(),
+            partitions_shas: self.partitions_shas.clone(),
             result_size: self.cache_writer.current_bytes(),
             num_rows: self.cache_writer.num_rows(),
             location,
@@ -86,6 +85,7 @@ impl AsyncMpscSink for WriteResultCacheSink {
 impl WriteResultCacheSink {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
+        key: &str,
         inputs: Vec<Arc<InputPort>>,
         kv_store: Arc<MetaStore>,
     ) -> Result<ProcessorPtr> {
@@ -94,11 +94,10 @@ impl WriteResultCacheSink {
         let ttl = settings.get_result_cache_ttl()?;
         let tenant = ctx.get_tenant();
         let sql = ctx.get_query_str();
-        let partitions_sha = ctx.get_partitions_sha().unwrap();
+        let partitions_shas = ctx.get_partitions_shas();
 
-        let key = gen_common_key(&sql);
-        let meta_key = gen_result_cache_meta_key(&tenant, &key);
-        let location = gen_result_cache_dir(&key);
+        let meta_key = gen_result_cache_meta_key(&tenant, key);
+        let location = gen_result_cache_dir(key);
 
         let operator = DataOperator::instance().operator();
         let cache_writer = ResultCacheWriter::create(location, operator, max_bytes);
@@ -107,7 +106,7 @@ impl WriteResultCacheSink {
             inputs,
             WriteResultCacheSink {
                 sql,
-                partitions_sha,
+                partitions_shas,
                 meta_mgr: ResultCacheMetaManager::create(kv_store, meta_key, ttl),
                 cache_writer,
             },

@@ -34,8 +34,7 @@ use super::versioned_reader::VersionedReader;
 
 pub type TableSnapshotStatisticsReader =
     InMemoryItemCacheReader<TableSnapshotStatistics, LoaderWrapper<Operator>>;
-pub type BloomIndexFileMetaDataReader =
-    InMemoryItemCacheReader<BloomIndexMeta, LoaderWrapper<Operator>>;
+pub type BloomIndexMetaReader = InMemoryItemCacheReader<BloomIndexMeta, LoaderWrapper<Operator>>;
 pub type TableSnapshotReader = InMemoryItemCacheReader<TableSnapshot, LoaderWrapper<Operator>>;
 pub type SegmentInfoReader =
     InMemoryItemCacheReader<SegmentInfo, LoaderWrapper<(Operator, TableSchemaRef)>>;
@@ -64,8 +63,8 @@ impl MetaReaders {
         )
     }
 
-    pub fn file_meta_data_reader(dal: Operator) -> BloomIndexFileMetaDataReader {
-        BloomIndexFileMetaDataReader::new(
+    pub fn bloom_index_meta_reader(dal: Operator) -> BloomIndexMetaReader {
+        BloomIndexMetaReader::new(
             CacheManager::instance().get_bloom_index_meta_cache(),
             LoaderWrapper(dal),
         )
@@ -107,12 +106,7 @@ impl Loader<SegmentInfo> for LoaderWrapper<(Operator, TableSchemaRef)> {
 #[async_trait::async_trait]
 impl Loader<BloomIndexMeta> for LoaderWrapper<Operator> {
     async fn load(&self, params: &LoadParams) -> Result<BloomIndexMeta> {
-        let object = self.0.object(&params.location);
-        let mut reader = if let Some(len) = params.len_hint {
-            object.range_reader(0..len).await?
-        } else {
-            object.reader().await?
-        };
+        let mut reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
         let meta = read_metadata_async(&mut reader).await.map_err(|err| {
             ErrorCode::Internal(format!(
                 "read file meta failed, {}, {:?}",
@@ -123,18 +117,12 @@ impl Loader<BloomIndexMeta> for LoaderWrapper<Operator> {
     }
 }
 
-async fn bytes_reader(op: &Operator, path: &str, len: Option<u64>) -> Result<ObjectReader> {
+async fn bytes_reader(op: &Operator, path: &str, len_hint: Option<u64>) -> Result<ObjectReader> {
     let object = op.object(path);
-
-    let len = match len {
-        Some(l) => l,
-        None => {
-            // TODO why do we need the content length (extra HEAD http req)? here we just need to read ALL the content
-            let meta = object.metadata().await?;
-            meta.content_length()
-        }
+    let reader = if let Some(len) = len_hint {
+        object.range_reader(0..len).await?
+    } else {
+        object.reader().await?
     };
-
-    let reader = object.range_reader(0..len).await?;
     Ok(reader)
 }

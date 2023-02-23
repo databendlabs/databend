@@ -1,3 +1,28 @@
+statement ok
+drop table if exists t;
+
+##  p in [1, 76]; s in [0, p]
+statement ok
+create table t (a Decimal(76, 76), b Decimal(76, 0));
+
+statement ok
+drop table t;
+
+statement error 1049
+create table t (a Decimal(77, 0));
+
+statement ok
+drop table t;
+
+statement error 1049
+create table t (a Decimal(1, 2));
+
+statement ok
+drop table t;
+
+statement error 1049
+create table t (a Decimal(0, 0));
+
 query I
 select 1::Decimal(17, 3), 2::Decimal(19, 4), 3::Decimal(20, 5), cast(10 as Decimal(7, 2));
 ----
@@ -137,3 +162,147 @@ query I
 SELECT ANY(CAST(2.34 AS DECIMAL(6, 2)))
 ----
 2.34
+
+## insert
+
+statement ok
+drop table if exists t_decimal_4_2;
+
+statement ok
+create table t_decimal_4_2(a Decimal(4,2));
+
+## illegal
+statement error 1065
+insert into t_decimal_4_2 values (1.1.1);
+
+statement error 1303
+insert into t_decimal_4_2 values (.);
+
+statement error 1303
+insert into t_decimal_4_2 values (+);
+
+statement error 1303
+insert into t_decimal_4_2 values (-);
+
+statement error 1303
+insert into t_decimal_4_2 values ();
+
+statement error 1065
+insert into t_decimal_4_2 values (a);
+
+query I
+select * from t_decimal_4_2;
+----
+
+## overflow
+statement error 1001
+insert into t_decimal_4_2 values (11111);
+
+statement error 1001
+insert into t_decimal_4_2 values (1e4);
+
+query I
+select count(*) from t_decimal_4_2;
+----
+0
+
+statement ok
+truncate table t_decimal_4_2;
+
+statement ok
+insert into t_decimal_4_2 values
+(0), (000000), (0.000000), (0e1), (0.), (.0), (.00),
+(-0), (-000000), (-0.000000), (-0e1), (-0.), (-.0), (-.00),
+(+0), (+000000), (+0.000000), (+0e1), (+0.), (+.0), (+.00);
+
+query I
+select * from t_decimal_4_2;
+----
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+
+statement ok
+truncate table t_decimal_4_2;
+
+statement ok
+insert into t_decimal_4_2 values
+(1.1), (0.1), (1.0),
+(1.1e1), (1.1e-1),
+(.1), (1.), (0.), (.0),
+(10.00);
+
+query I
+select * from t_decimal_4_2;
+----
+1.10
+0.10
+1.00
+11.00
+0.11
+0.10
+1.00
+0.00
+0.00
+10.00
+
+statement ok
+truncate table t_decimal_4_2
+
+statement ok
+insert into t_decimal_4_2 values (+1.1), (+0.1), (+.0), (+1.1e+1), (+1e-1) ;
+
+query I
+select * from t_decimal_4_2;
+----
+1.10
+0.10
+0.00
+11.00
+0.10
+
+statement ok
+truncate table t_decimal_4_2
+
+statement ok
+insert into t_decimal_4_2 values (-1.1), (-0.1), (-1.1e+1), (-1e-1) ;
+
+query I
+select * from t_decimal_4_2;
+----
+-1.10
+-0.10
+-11.00
+-0.10
+
+statement ok
+truncate table t_decimal_4_2
+
+## cut
+statement ok
+insert into t_decimal_4_2 values (1.1111), (0.011111e3), (111e-3) ;
+
+query I
+select * from t_decimal_4_2;
+----
+1.11
+11.11
+0.11

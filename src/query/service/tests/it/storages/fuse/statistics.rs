@@ -46,12 +46,10 @@ use common_storages_fuse::FuseStorageFormat;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
 use databend_query::storages::fuse::statistics::reducers;
-use databend_query::storages::fuse::statistics::BlockStatistics;
 use databend_query::storages::fuse::statistics::ClusterStatsGenerator;
 use databend_query::storages::fuse::statistics::StatisticsAccumulator;
 use opendal::Operator;
 use rand::Rng;
-use storages_common_table_meta::meta;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ClusterStatistics;
 use storages_common_table_meta::meta::ColumnStatistics;
@@ -240,13 +238,11 @@ async fn test_accumulator() -> common_exception::Result<()> {
     for item in blocks {
         let block = item?;
         let col_stats = gen_columns_statistics(&block, None, &schema)?;
-        let block_statistics =
-            BlockStatistics::from(&block, "does_not_matter".to_owned(), None, None, &schema)?;
         let block_writer = BlockWriter::new(&operator, &loc_generator);
         let block_meta = block_writer
             .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
             .await?;
-        stats_acc.add_with_block_meta(block_meta, block_statistics, meta::Compression::Lz4Raw)?;
+        stats_acc.add_with_block_meta(block_meta);
     }
 
     assert_eq!(10, stats_acc.blocks_statistics.len());

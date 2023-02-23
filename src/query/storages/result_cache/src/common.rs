@@ -23,7 +23,7 @@ use sha2::Sha256;
 const RESULT_CACHE_PREFIX: &str = "_result_cache";
 
 #[inline(always)]
-pub(crate) fn gen_common_key(raw: &str) -> String {
+pub fn gen_result_cache_key(raw: &str) -> String {
     format!("{:x}", Sha256::digest(raw))
 }
 
@@ -39,7 +39,7 @@ pub(crate) fn gen_result_cache_dir(key: &str) -> String {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub(crate) struct ResultCacheValue {
-    /// The query SQL.
+    /// The original query SQL.
     pub sql: String,
     /// The query time.
     pub query_time: u64,
@@ -49,8 +49,8 @@ pub(crate) struct ResultCacheValue {
     pub result_size: usize,
     /// The number of rows in the result cache.
     pub num_rows: usize,
-    /// The sha256 of the partitions.
-    pub partitions_sha: String,
+    /// The sha256 of the partitions for each table in the query.
+    pub partitions_shas: Vec<String>,
     /// The location of the result cache file.
     pub location: String,
 }

@@ -50,6 +50,7 @@ use common_pipeline_sources::SyncSourcer;
 use common_storage::init_operator;
 use common_storage::DataOperator;
 use futures::TryStreamExt;
+use opendal::ObjectMetakey;
 use opendal::ObjectMode;
 use opendal::Operator;
 use storages_common_index::RangeIndex;
@@ -772,15 +773,20 @@ async fn do_list_files_from_dir(
     let mut all_files = vec![];
     let mut all_dirs = vec![];
     while let Some(de) = m.try_next().await? {
+        let meta = de
+            .metadata(ObjectMetakey::Mode | ObjectMetakey::ContentLength)
+            .await?;
+
         let path = de.path();
         let file_offset = path.rfind('/').unwrap_or_default() + 1;
         if path[file_offset..].starts_with('.') || path[file_offset..].starts_with('_') {
             continue;
         }
-        match de.mode().await? {
+
+        match meta.mode() {
             ObjectMode::FILE => {
                 let filename = path.to_string();
-                let length = de.content_length().await?;
+                let length = meta.content_length();
                 all_files.push(HiveFileInfo::create(filename, length));
             }
             ObjectMode::DIR => {
