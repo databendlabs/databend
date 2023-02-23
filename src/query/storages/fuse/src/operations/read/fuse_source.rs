@@ -66,7 +66,7 @@ pub fn build_fuse_native_source_pipeline(
             pipeline.add_pipe(source_builder.finalize());
         }
         false => {
-            let partitions = dispatch_partitions(ctx.clone(), max_io_requests);
+            let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
             let partitions = StealablePartitions::new(partitions, ctx.clone());
 
             for i in 0..max_io_requests {
@@ -115,7 +115,7 @@ pub fn build_fuse_parquet_source_pipeline(
 
     match block_reader.support_blocking_api() {
         true => {
-            let partitions = dispatch_partitions(ctx.clone(), max_threads);
+            let partitions = dispatch_partitions(ctx.clone(), plan, max_threads);
             let partitions = StealablePartitions::new(partitions, ctx.clone());
 
             for i in 0..max_threads {
@@ -136,7 +136,7 @@ pub fn build_fuse_parquet_source_pipeline(
         false => {
             info!("read block data adjust max io requests:{}", max_io_requests);
 
-            let partitions = dispatch_partitions(ctx.clone(), max_io_requests);
+            let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
             let partitions = StealablePartitions::new(partitions, ctx.clone());
 
             for i in 0..max_io_requests {
