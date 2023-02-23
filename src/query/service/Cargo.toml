@@ -39,6 +39,7 @@ common-arrow = { path = "../../common/arrow" }
 common-ast = { path = "../ast" }
 common-base = { path = "../../common/base" }
 common-catalog = { path = "../catalog" }
+common-compress = { path = "../../common/compress" }
 common-config = { path = "../config" }
 common-exception = { path = "../../common/exception" }
 common-expression = { path = "../expression" }
@@ -49,7 +50,6 @@ common-hashtable = { path = "../../common/hashtable" }
 common-hive-meta-store = { path = "../storages/hive/hive-meta-store", optional = true }
 common-http = { path = "../../common/http" }
 common-io = { path = "../../common/io" }
-common-compress = { path = "../../common/compress" }
 common-jsonb = { path = "../../common/jsonb" }
 common-management = { path = "../management" }
 common-meta-api = { path = "../../meta/api" }
