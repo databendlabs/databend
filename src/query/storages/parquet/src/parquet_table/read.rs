@@ -78,7 +78,7 @@ impl ParquetTable {
         let top_k = plan
             .push_downs
             .as_ref()
-            .map(|p| p.top_k(&table_schema, RangeIndex::supported_type))
+            .map(|p| p.top_k(&table_schema, None, RangeIndex::supported_type))
             .unwrap_or_default();
 
         // Build prewhere info.

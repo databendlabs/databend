@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::TopK;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
@@ -30,6 +31,7 @@ pub fn build_fuse_source_pipeline(
     storage_format: FuseStorageFormat,
     block_reader: Arc<BlockReader>,
     plan: &DataSourcePlan,
+    top_k: Option<TopK>,
     max_io_requests: usize,
 ) -> Result<()> {
     let max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -41,12 +43,14 @@ pub fn build_fuse_source_pipeline(
             block_reader,
             max_threads,
             plan,
+            top_k,
             max_io_requests,
         ),
         FuseStorageFormat::Parquet => build_fuse_parquet_source_pipeline(
             ctx,
             pipeline,
             block_reader,
+            plan,
             max_threads,
             max_io_requests,
         ),
