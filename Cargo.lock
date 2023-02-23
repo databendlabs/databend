@@ -3176,6 +3176,7 @@ dependencies = [
  "rand 0.8.5",
  "regex",
  "reqwest",
+ "scopeguard",
  "semver",
  "serde",
  "serde_json",
