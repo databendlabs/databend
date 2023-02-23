@@ -1644,6 +1644,9 @@ impl<'a> TypeChecker<'a> {
             }
 
             ("last_query_id", args) => {
+                // last_query_id(index) returns query_id in current session by index
+                // index support literal(eg: -1, -2, 2) and simple binary op(eg: 1+1, 3-1)
+                // if index out of range, returns none.
                 let index = if args.len() != 1 {
                     -1
                 } else {

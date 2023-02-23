@@ -20,7 +20,7 @@ use common_io::prelude::serialize_into_buf;
 use sha2::Digest;
 use sha2::Sha256;
 
-pub const RESULT_CACHE_PREFIX: &str = "_result_cache";
+const RESULT_CACHE_PREFIX: &str = "_result_cache";
 
 #[inline(always)]
 pub fn gen_result_cache_key(raw: &str) -> String {
@@ -30,6 +30,11 @@ pub fn gen_result_cache_key(raw: &str) -> String {
 #[inline(always)]
 pub fn gen_result_cache_meta_key(tenant: &str, key: &str) -> String {
     format!("{RESULT_CACHE_PREFIX}/{tenant}/{key}")
+}
+
+#[inline(always)]
+pub fn gen_result_cache_prefix(tenant: &str) -> String {
+    format!("{RESULT_CACHE_PREFIX}/{tenant}/")
 }
 
 #[inline(always)]

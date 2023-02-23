@@ -69,7 +69,6 @@ impl ResultCacheWriter {
     }
 
     pub fn num_rows(&self) -> usize {
-        println!("number rows: {}", self.num_rows);
         self.num_rows
     }
 }

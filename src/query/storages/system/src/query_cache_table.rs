@@ -28,8 +28,8 @@ use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_storages_result_cache::gen_result_cache_prefix;
 use common_storages_result_cache::ResultCacheMetaManager;
-use common_storages_result_cache::RESULT_CACHE_PREFIX;
 use common_users::UserApiProvider;
 use itertools::Itertools;
 
@@ -52,7 +52,7 @@ impl AsyncSystemTable for QueryCacheTable {
         let meta_client = UserApiProvider::instance().get_meta_store_client();
         let result_cache_mgr = ResultCacheMetaManager::create(meta_client, 0);
         let tenant = ctx.get_tenant();
-        let prefix = self.gen_result_cache_prefix(&tenant);
+        let prefix = gen_result_cache_prefix(&tenant);
 
         let cached_values = result_cache_mgr.list(prefix.as_str()).await?;
 
@@ -60,14 +60,14 @@ impl AsyncSystemTable for QueryCacheTable {
         let mut result_size_vec = Vec::with_capacity(cached_values.len());
         let mut num_rows_vec = Vec::with_capacity(cached_values.len());
         let mut partitions_sha_vec = Vec::with_capacity(cached_values.len());
-        let mut locations_vec = Vec::with_capacity(cached_values.len());
+        let mut location_vec = Vec::with_capacity(cached_values.len());
 
         cached_values.iter().for_each(|x| {
             sql_vec.push(x.sql.as_str());
             result_size_vec.push(x.result_size as u64);
             num_rows_vec.push(x.num_rows as u64);
             partitions_sha_vec.push(x.partitions_shas.clone());
-            locations_vec.push(x.location.as_str());
+            location_vec.push(x.location.as_str());
         });
 
         let partitions_sha_vec: Vec<String> = partitions_sha_vec
@@ -85,7 +85,7 @@ impl AsyncSystemTable for QueryCacheTable {
                     .map(|part_sha| part_sha.as_str())
                     .collect::<Vec<_>>(),
             ),
-            StringType::from_data(locations_vec),
+            StringType::from_data(location_vec),
         ]))
     }
 }
@@ -100,7 +100,7 @@ impl QueryCacheTable {
                 "partitions_sha",
                 TableDataType::Array(Box::new(TableDataType::String)),
             ),
-            TableField::new("locations", TableDataType::String),
+            TableField::new("location", TableDataType::String),
         ]);
 
         let table_info = TableInfo {
@@ -116,10 +116,5 @@ impl QueryCacheTable {
         };
 
         AsyncOneBlockSystemTable::create(QueryCacheTable { table_info })
-    }
-
-    #[inline(always)]
-    fn gen_result_cache_prefix(&self, tenant: &str) -> String {
-        format!("{RESULT_CACHE_PREFIX}/{tenant}/")
     }
 }
