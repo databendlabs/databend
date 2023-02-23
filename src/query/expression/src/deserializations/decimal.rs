@@ -96,25 +96,7 @@ impl<T: Decimal> TypeDeserializer for DecimalDeserializer<T> {
     }
 
     fn de_json(&mut self, value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {
-        match value {
-            serde_json::Value::Number(n) => {
-                if n.is_i64() {
-                    self.values.push(T::from_i64(n.as_i64().unwrap()));
-                    Ok(())
-                } else if n.is_u64() {
-                    self.values.push(T::from_u64(n.as_u64().unwrap()));
-                    Ok(())
-                } else {
-                    Err(parse_error("Incorrect json value for decimal"))
-                }
-            }
-            serde_json::Value::String(s) => {
-                let (n, _) = read_decimal_with_size::<T>(s.as_bytes(), self.size, true)?;
-                self.values.push(n);
-                Ok(())
-            }
-            _ => Err(ErrorCode::from("Incorrect json value for decimal")),
-        }
+        self.de_json_inner(value)
     }
 
     fn append_data_value(&mut self, value: Scalar, _format: &FormatSettings) -> Result<()> {
