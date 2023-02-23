@@ -9,6 +9,9 @@ CLUSTER_ID ?= "test"
 
 CARGO_TARGET_DIR ?= $(CURDIR)/target
 
+# Remove this env after rust 1.68 has been released.
+export CARGO_UNSTABLE_SPARSE_REGISTRY = true
+
 # Setup dev toolchain
 setup:
 	bash ./scripts/setup/dev_setup.sh
@@ -20,7 +23,7 @@ lint:
 	cargo fmt --all
 	cargo clippy --workspace --all-targets -- -D warnings
 	# Check unused deps(make setup to install)
-	cargo -Z sparse-registry machete
+	cargo machete
 
 	# Cargo.toml file formatter(make setup to install)
 	taplo fmt
