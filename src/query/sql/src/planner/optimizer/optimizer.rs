@@ -63,6 +63,7 @@ pub fn optimize(
             bind_context,
             metadata,
             rewrite_kind,
+            formatted_ast,
             ignore_result,
         } => Ok(Plan::Query {
             s_expr: Box::new(optimize_query(
@@ -75,6 +76,7 @@ pub fn optimize(
             bind_context,
             metadata,
             rewrite_kind,
+            formatted_ast,
             ignore_result,
         }),
         Plan::Explain { kind, plan } => match kind {

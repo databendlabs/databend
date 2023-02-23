@@ -289,7 +289,7 @@ impl FuseTable {
             PruningStatistics::default(),
         )?;
 
-        let parts = Partitions::create(
+        let parts = Partitions::create_nolazy(
             PartitionsShuffleKind::Mod,
             block_metas
                 .into_iter()

@@ -56,6 +56,7 @@ use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
 use common_storage::DataOperator;
 use futures::TryStreamExt;
+use opendal::ObjectMetakey;
 
 use crate::database::IcebergDatabase;
 
@@ -114,7 +115,8 @@ impl IcebergCatalog {
         let mut dbs = vec![];
         let mut ls = root.list().await?;
         while let Some(dir) = ls.try_next().await? {
-            if !dir.mode().await?.is_dir() {
+            let meta = dir.metadata(ObjectMetakey::Mode).await?;
+            if !meta.mode().is_dir() {
                 continue;
             }
             let db_name = dir.name().strip_suffix('/').unwrap_or_default();

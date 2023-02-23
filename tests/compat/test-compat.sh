@@ -212,37 +212,22 @@ run_test() {
 
 	echo " === Run metasrv related test: 05_ddl"
 
-	$sqllogictests --handlers mysql --run_dir 05_ddl
+        if [ "$query_ver" = "current" ]; then
+            # Only run test on mysql handler
+            $sqllogictests --handlers mysql --run_dir 05_ddl
+        else
+            (
+                # download suites into ./old_suite
+                download_test_suite $query_ver
+            )
 
-	# if [ "$query_ver" = "current" ]; then
-	#     # Only run test on mysql handler
-	#     $sqllogictests --handlers mysql --run_dir 05_ddl
-	# else
-	#     (
-	#         # download suites into ./old_suite
-	#         download_test_suite $query_ver
-	#     )
-	#     # logictest dir include all suites and scripts fit old query
-	#     cd "old_suite/tests/logictest" || exit
+            # Replace suites
+            rm -rf "tests/sqllogictests/suites"
+            mv "old_suite/tests/sqllogictests/suites" "tests/sqllogictests/suites"
 
-	#     # old logic test use NoneType is only support by python3.10
-	#     sed -i "/^from types.*/d" http_runner.py
-	#     sed -i "/^from types.*/d" mysql_runner.py
-	#     sed -i "s/NoneType/type(None)/g" http_runner.py
-	#     sed -i "s/NoneType/type(None)/g" mysql_runner.py
-
-	#     # logictest pattern argument change after v0.7.140
-	#     # old logic test does not support pattern filter
-	#     mv suites/base/05_ddl .
-	#     rm -fr suites/*
-	#     mv 05_ddl suites/
-	#     # FIXME:(everpcpc) sometimes old logic test fails but we can't time travel back to fix it.
-	#     #       Confirm the test always pass then delete this workaround in
-	#     #       comment:
-	#     # python3 main.py || true
-	#     python3 main.py
-	#     cd -
-	# fi
+            $sqllogictests --handlers mysql --run_dir 05_ddl
+            cd -
+        fi
 }
 
 # -- main --

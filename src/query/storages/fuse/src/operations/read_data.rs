@@ -22,6 +22,8 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
+use storages_common_index::Index;
+use storages_common_index::RangeIndex;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::io::BlockReader;
@@ -53,7 +55,13 @@ impl FuseTable {
     fn adjust_io_request(&self, ctx: &Arc<dyn TableContext>) -> Result<usize> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
-        Ok(std::cmp::max(max_threads, max_io_requests))
+
+        if !self.operator.metadata().can_blocking() {
+            Ok(std::cmp::max(max_threads, max_io_requests))
+        } else {
+            // For blocking fs, we don't want this to be too large
+            Ok(std::cmp::min(max_threads, max_io_requests).clamp(1, 48))
+        }
     }
 
     #[inline]
@@ -103,7 +111,6 @@ impl FuseTable {
                 })?;
 
                 query_ctx.set_partitions(partitions)?;
-
                 Ok(())
             });
         }
@@ -111,12 +118,21 @@ impl FuseTable {
         let block_reader = self.build_block_reader(plan, ctx.clone())?;
         let max_io_requests = self.adjust_io_request(&ctx)?;
 
+        let topk = plan.push_downs.as_ref().and_then(|x| {
+            x.top_k(
+                plan.schema().as_ref(),
+                self.cluster_key_str(),
+                RangeIndex::supported_type,
+            )
+        });
+
         build_fuse_source_pipeline(
             ctx,
             pipeline,
             self.storage_format,
             block_reader,
             plan,
+            topk,
             max_io_requests,
         )
     }

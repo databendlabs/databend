@@ -85,8 +85,10 @@ impl StageTable {
             for file in files {
                 // Here we add the path to the file: /path/to/path/file1.
                 let new_path = Path::new(path).join(file).to_string_lossy().to_string();
-                let info = stat_file(&op, &new_path).await?;
-                res.push(info);
+
+                if let Some(info) = stat_file(op.object(&new_path)).await? {
+                    res.push(info);
+                }
             }
             res
         } else {
@@ -168,7 +170,7 @@ impl Table for StageTable {
             .collect::<Vec<_>>();
         Ok((
             PartStatistics::default(),
-            Partitions::create(PartitionsShuffleKind::Seq, partitions),
+            Partitions::create_nolazy(PartitionsShuffleKind::Seq, partitions),
         ))
     }
 

@@ -162,4 +162,4 @@ Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
 mysql>
 ```
 
-> This method is also avaible with `--net=host`.
+> This method is also available with `--net=host`.

@@ -33,6 +33,7 @@ use std::ops::Range;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
+use ethnum::i256;
 use ordered_float::OrderedFloat;
 use serde::Deserialize;
 use serde::Serialize;
@@ -55,6 +56,7 @@ pub use self::timestamp::TimestampType;
 pub use self::variant::VariantType;
 use crate::deserializations::ArrayDeserializer;
 use crate::deserializations::DateDeserializer;
+use crate::deserializations::DecimalDeserializer;
 use crate::deserializations::NullableDeserializer;
 use crate::deserializations::NumberDeserializer;
 use crate::deserializations::TimestampDeserializer;
@@ -229,7 +231,14 @@ impl DataType {
             DataType::Variant => VariantDeserializer::with_capacity(capacity).into(),
             DataType::Array(ty) => ArrayDeserializer::with_capacity(capacity, ty).into(),
             DataType::Tuple(types) => TupleDeserializer::with_capacity(capacity, types).into(),
-
+            DataType::Decimal(types) => match types {
+                DecimalDataType::Decimal128(_) => {
+                    DecimalDeserializer::<i128>::with_capacity(types, capacity).into()
+                }
+                DecimalDataType::Decimal256(_) => {
+                    DecimalDeserializer::<i256>::with_capacity(types, capacity).into()
+                }
+            },
             _ => unimplemented!(),
         }
     }
@@ -280,6 +289,7 @@ impl DataType {
                 NumberDataType::Float32 => NumberScalar::Float32(OrderedFloat(0.0)),
                 NumberDataType::Float64 => NumberScalar::Float64(OrderedFloat(0.0)),
             }),
+            DataType::Decimal(ty) => Scalar::Decimal(ty.default_scalar()),
             DataType::Timestamp => Scalar::Timestamp(0),
             DataType::Date => Scalar::Date(0),
             DataType::Nullable(_) => Scalar::Null,

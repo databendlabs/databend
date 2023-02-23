@@ -79,7 +79,7 @@ impl InputFormat for InputFormatParquet {
         let mut infos = vec![];
         for path in files {
             let obj = op.object(path);
-            let size = obj.metadata().await?.content_length() as usize;
+            let size = obj.stat().await?.content_length() as usize;
             let mut reader = obj.reader().await?;
             let mut file_meta = read_metadata_async(&mut reader).await?;
             let row_groups = mem::take(&mut file_meta.row_groups);

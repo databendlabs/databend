@@ -746,14 +746,25 @@ fn display_decimal_128(num: i128, scale: u8) -> String {
         write!(buf, "{}", num).unwrap();
     } else {
         let pow_scale = 10_i128.pow(scale as u32);
-        write!(
-            buf,
-            "{}.{:0>width$}",
-            num / pow_scale,
-            (num % pow_scale).abs(),
-            width = scale as usize
-        )
-        .unwrap();
+        if num >= 0 {
+            write!(
+                buf,
+                "{}.{:0>width$}",
+                num / pow_scale,
+                (num % pow_scale).abs(),
+                width = scale as usize
+            )
+            .unwrap();
+        } else {
+            write!(
+                buf,
+                "-{}.{:0>width$}",
+                -num / pow_scale,
+                (num % pow_scale).abs(),
+                width = scale as usize
+            )
+            .unwrap();
+        }
     }
     buf
 }
@@ -764,14 +775,26 @@ fn display_decimal_256(num: i256, scale: u8) -> String {
         write!(buf, "{}", num).unwrap();
     } else {
         let pow_scale = i256::from(10).pow(scale as u32);
-        write!(
-            buf,
-            "{}.{:0>width$}",
-            num / pow_scale,
-            num % pow_scale,
-            width = scale as usize
-        )
-        .unwrap();
+        // -1/10 = 0
+        if num >= 0 {
+            write!(
+                buf,
+                "{}.{:0>width$}",
+                num / pow_scale,
+                num % pow_scale,
+                width = scale as usize
+            )
+            .unwrap();
+        } else {
+            write!(
+                buf,
+                "-{}.{:0>width$}",
+                -num / pow_scale,
+                num % pow_scale,
+                width = scale as usize
+            )
+            .unwrap();
+        }
     }
     buf
 }

@@ -55,7 +55,7 @@ impl ToReadDataSourcePlan for dyn Table {
         // We need the partition sha256 to specify the result cache.
         if ctx.get_settings().get_enable_query_result_cache()? {
             let sha = parts.compute_sha256()?;
-            ctx.set_paritions_sha(sha);
+            ctx.add_partitions_sha(sha);
         }
 
         let source_info = self.get_data_source_info();
