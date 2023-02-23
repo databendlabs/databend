@@ -123,7 +123,7 @@ impl IcebergTable {
             }
         }
         // try Spark's way
-        // Spark will arange all files with a sequencial number
+        // Spark will arange all files with a sequential number
         // in such case, we just need to find the file with largest alphabetical name.
         let meta_dir = tbl_root.object("metadata/");
         let files = meta_dir.list().await.map_err(|e| {

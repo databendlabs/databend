@@ -63,7 +63,7 @@ impl AsyncMpscSink for WriteResultCacheSink {
         // 1. Write the result cache to the storage.
         let location = self.cache_writer.write_to_storage().await?;
 
-        // 2. Set result calue key-value pair to meta.
+        // 2. Set result value key-value pair to meta.
         let now = SeqV::<()>::now_ms() / 1000;
         let ttl = self.meta_mgr.get_ttl();
         let expire_at = now + ttl;
