@@ -34,3 +34,6 @@ tonic-build = "0.8.0"
 [dev-dependencies]
 anyhow = { workspace = true }
 regex = "1.6.0"
+
+[package.metadata.cargo-machete]
+ignored = ["num-derive", "prost"]

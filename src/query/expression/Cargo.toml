@@ -39,7 +39,6 @@ micromarshal = "0.2.1"
 num-traits = "0.2.15"
 once_cell = "1.15.0"
 ordered-float = { workspace = true, features = ["serde", "rand"] }
-parking_lot = "0.12.1"
 primitive-types = "0.12.0"
 rand = { version = "0.8.5", features = ["small_rng"] }
 rust_decimal = "1.26"

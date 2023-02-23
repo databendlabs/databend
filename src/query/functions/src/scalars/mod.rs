@@ -240,7 +240,7 @@ pub const GENERAL_CAST_RULES: AutoCastRules = &[
 
 /// The rules for automatic casting from string to other types. For example, they are
 /// used to allow `add_hours('2023-01-01 00:00:00', '1')`. But they should be disabled
-/// for comparision functions, because `1 < '1'` should be an error.
+/// for comparison functions, because `1 < '1'` should be an error.
 pub const CAST_FROM_STRING_RULES: AutoCastRules = &[
     (DataType::String, DataType::Number(NumberDataType::UInt8)),
     (DataType::String, DataType::Number(NumberDataType::UInt16)),
