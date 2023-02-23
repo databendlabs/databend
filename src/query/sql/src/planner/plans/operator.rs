@@ -34,6 +34,7 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::RuleID;
+use crate::plans::runtime_filter_source::RuntimeFilterSource;
 use crate::plans::Exchange;
 
 pub trait Operator {
@@ -79,6 +80,7 @@ pub enum RelOp {
     Exchange,
     UnionAll,
     DummyTableScan,
+    RuntimeFilterSource,
 
     // Pattern
     Pattern,
@@ -97,6 +99,7 @@ pub enum RelOperator {
     Exchange(Exchange),
     UnionAll(UnionAll),
     DummyTableScan(DummyTableScan),
+    RuntimeFilterSource(RuntimeFilterSource),
 
     Pattern(PatternPlan),
 }
@@ -115,6 +118,7 @@ impl Operator for RelOperator {
             RelOperator::Exchange(rel_op) => rel_op.rel_op(),
             RelOperator::UnionAll(rel_op) => rel_op.rel_op(),
             RelOperator::DummyTableScan(rel_op) => rel_op.rel_op(),
+            RelOperator::RuntimeFilterSource(rel_op) => rel_op.rel_op(),
         }
     }
 
@@ -131,6 +135,7 @@ impl Operator for RelOperator {
             RelOperator::Exchange(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::UnionAll(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::DummyTableScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::RuntimeFilterSource(rel_op) => rel_op.derive_relational_prop(rel_expr),
         }
     }
 
@@ -147,6 +152,7 @@ impl Operator for RelOperator {
             RelOperator::Exchange(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::UnionAll(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::DummyTableScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::RuntimeFilterSource(rel_op) => rel_op.derive_physical_prop(rel_expr),
         }
     }
 
@@ -189,6 +195,9 @@ impl Operator for RelOperator {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
             RelOperator::DummyTableScan(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::RuntimeFilterSource(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
         }
