@@ -47,7 +47,7 @@ PRESIGN DOWNLOAD @my_stage/books.csv
 To download the file with the pre-signed URL and save it as `books.csv`, execute the following command:
 
 ```bash
-curl '<pre-signed-url>' -o books.csv  
+curl <presigned-url> -o books.csv  
 ```
 
 This example generates the pre-signed URL that expires in 7,200 seconds (2 hours):
@@ -67,5 +67,5 @@ PRESIGN UPLOAD @my_stage/books.csv
 To upload the file `books.csv` with the pre-signed URL, execute the following command:
 
 ```bash
-curl -X PUT -T books.csv '<presign-url>'
+curl -X PUT -T books.csv <presigned-url>
 ```

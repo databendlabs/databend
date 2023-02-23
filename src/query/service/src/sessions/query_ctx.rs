@@ -283,8 +283,10 @@ impl TableContext for QueryContext {
     }
 
     fn get_partitions_shas(&self) -> Vec<String> {
-        let sha = self.shared.partitions_shas.read();
-        sha.clone()
+        let mut sha = self.shared.partitions_shas.read().clone();
+        // Sort to make sure the SHAs are stable for the same query.
+        sha.sort();
+        sha
     }
 
     fn attach_query_str(&self, kind: String, query: &str) {

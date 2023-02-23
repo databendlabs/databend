@@ -23,7 +23,7 @@ use sha2::Sha256;
 const RESULT_CACHE_PREFIX: &str = "_result_cache";
 
 #[inline(always)]
-pub(crate) fn gen_common_key(raw: &str) -> String {
+pub fn gen_result_cache_key(raw: &str) -> String {
     format!("{:x}", Sha256::digest(raw))
 }
 
