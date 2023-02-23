@@ -38,3 +38,9 @@ regex = "1.6.0"
 [[bench]]
 name = "bench"
 harness = false
+
+[package.metadata.cargo-machete]
+ignored = [
+    "common-functions",
+    "common-meta-types",
+]

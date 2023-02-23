@@ -167,3 +167,18 @@ wiremock = "0.5.14"
 
 [build-dependencies]
 common-building = { path = "../../common/building" }
+
+[package.metadata.cargo-machete]
+ignored = [
+    "ahash",
+    "async-recursion",
+    "backon",
+    "bstr",
+    "common-hive-meta-store",
+    "common-storages-memory",
+    "common-storages-random",
+    "match-template",
+    "semver",
+    "state",
+    "thrift",
+]

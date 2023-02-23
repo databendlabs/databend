@@ -12,7 +12,7 @@ doctest = false
 test = false
 
 [package.metadata.cargo-machete]
-ignored = ["xorfilter-rs", "match-template"]
+ignored = ["xorfilter-rs", "match-template", "common-catalog"]
 
 [dependencies]
 common-catalog = { path = "../../../catalog" }
