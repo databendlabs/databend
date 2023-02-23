@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_base::base::tokio;
 use common_catalog::plan::PartInfoPtr;
+use common_catalog::plan::StealablePartitions;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -32,49 +33,56 @@ use crate::operations::read::native_data_source::DataChunks;
 use crate::operations::read::native_data_source::NativeDataSourceMeta;
 
 pub struct ReadNativeDataSource<const BLOCKING_IO: bool> {
+    id: usize,
     finished: bool,
     batch_size: usize,
-    ctx: Arc<dyn TableContext>,
     block_reader: Arc<BlockReader>,
 
     output: Arc<OutputPort>,
     output_data: Option<(Vec<PartInfoPtr>, Vec<DataChunks>)>,
+    partitions: StealablePartitions,
 }
 
 impl ReadNativeDataSource<true> {
     pub fn create(
+        id: usize,
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         block_reader: Arc<BlockReader>,
+        partitions: StealablePartitions,
     ) -> Result<ProcessorPtr> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
         SyncSourcer::create(ctx.clone(), output.clone(), ReadNativeDataSource::<true> {
-            ctx,
+            id,
             output,
             batch_size,
             block_reader,
             finished: false,
             output_data: None,
+            partitions,
         })
     }
 }
 
 impl ReadNativeDataSource<false> {
     pub fn create(
+        id: usize,
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         block_reader: Arc<BlockReader>,
+        partitions: StealablePartitions,
     ) -> Result<ProcessorPtr> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
         Ok(ProcessorPtr::create(Box::new(ReadNativeDataSource::<
             false,
         > {
-            ctx,
+            id,
             output,
             batch_size,
             block_reader,
             finished: false,
             output_data: None,
+            partitions,
         })))
     }
 }
@@ -83,7 +91,7 @@ impl SyncSource for ReadNativeDataSource<true> {
     const NAME: &'static str = "SyncReadNativeDataSource";
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
-        match self.ctx.get_partition() {
+        match self.partitions.steal_one(self.id) {
             None => Ok(None),
             Some(part) => Ok(Some(DataBlock::empty_with_meta(
                 NativeDataSourceMeta::create(vec![part.clone()], vec![
@@ -128,7 +136,7 @@ impl Processor for ReadNativeDataSource<false> {
     }
 
     async fn async_process(&mut self) -> Result<()> {
-        let parts = self.ctx.get_partitions(self.batch_size);
+        let parts = self.partitions.steal(self.id, self.batch_size);
 
         if !parts.is_empty() {
             let mut chunks = Vec::with_capacity(parts.len());

@@ -51,6 +51,10 @@ where Self: Aggregator + Send
         0
     }
 
+    fn get_state_bytes(&self) -> usize {
+        0
+    }
+
     fn convert_partitioned(self) -> Result<PartitionedAggregator<Self>> {
         Err(ErrorCode::Unimplemented(format!(
             "Partitioned aggregator is unimplemented for {}",
@@ -75,6 +79,10 @@ impl<Method: HashMethodBounds, const HAS_AGG: bool> PartitionedAggregatorLike
 
     fn get_state_cardinality(&self) -> usize {
         self.hash_table.len()
+    }
+
+    fn get_state_bytes(&self) -> usize {
+        self.hash_table.bytes_len()
     }
 
     // PartialAggregator<HAS_AGG, Method> -> PartitionedAggregator<PartialAggregator<HAS_AGG, Method>>

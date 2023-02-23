@@ -75,7 +75,12 @@ pub struct TopK {
 }
 
 impl PushDownInfo {
-    pub fn top_k(&self, schema: &TableSchema, support: fn(&DataType) -> bool) -> Option<TopK> {
+    pub fn top_k(
+        &self,
+        schema: &TableSchema,
+        cluster_key: Option<&String>,
+        support: fn(&DataType) -> bool,
+    ) -> Option<TopK> {
         if !self.order_by.is_empty() && self.limit.is_some() {
             let order = &self.order_by[0];
             let limit = self.limit.unwrap();
@@ -91,6 +96,14 @@ impl PushDownInfo {
                 let data_type: DataType = field.data_type().into();
                 if !support(&data_type) {
                     return None;
+                }
+
+                // Only do topk in storage for cluster key.
+
+                if let Some(cluster_key) = cluster_key.as_ref() {
+                    if !cluster_key.contains(id) {
+                        return None;
+                    }
                 }
 
                 let leaf_fields = schema.leaf_fields();

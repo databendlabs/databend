@@ -228,7 +228,11 @@ impl<TAggregator: Aggregator + PartitionedAggregatorLike + 'static>
             if TAggregator::SUPPORT_PARTITION {
                 let cardinality = state.inner.get_state_cardinality();
 
-                if cardinality >= state.two_level_threshold {
+                static TWOL_LEVEL_BYTES_THRESHOLD: usize = 5_000_000;
+
+                if cardinality >= state.two_level_threshold
+                    || state.inner.get_state_bytes() >= TWOL_LEVEL_BYTES_THRESHOLD
+                {
                     let mut temp_state = AggregatorTransform::Finished;
                     std::mem::swap(self, &mut temp_state);
                     temp_state = temp_state.convert_to_two_level_consume()?;

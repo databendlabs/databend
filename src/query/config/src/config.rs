@@ -1795,6 +1795,9 @@ pub struct CacheConfig {
     )]
     pub table_bloom_index_filter_count: u64,
 
+    #[clap(long = "cache-table-prune-partitions-count", default_value = "256")]
+    pub table_prune_partitions_count: u64,
+
     /// Type of data cache storage
     #[clap(long = "cache-data-cache-storage", value_enum, default_value_t)]
     pub data_cache_storage: CacheStorageTypeConfig,
@@ -1938,6 +1941,7 @@ mod cache_config_converters {
                 enable_table_index_bloom: value.enable_table_bloom_index_cache,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
+                table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.try_into()?,
                 table_data_cache_population_queue_size: value
                     .table_data_cache_population_queue_size,
@@ -1957,6 +1961,7 @@ mod cache_config_converters {
                 enable_table_bloom_index_cache: value.enable_table_index_bloom,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
+                table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.into(),
                 table_data_cache_population_queue_size: value
                     .table_data_cache_population_queue_size,

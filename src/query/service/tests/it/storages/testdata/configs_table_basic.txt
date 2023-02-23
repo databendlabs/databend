@@ -16,6 +16,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | "cache"   | "table_meta_segment_count"                 | "10240"                          | ""       |
 | "cache"   | "table_meta_snapshot_count"                | "256"                            | ""       |
 | "cache"   | "table_meta_statistic_count"               | "256"                            | ""       |
+| "cache"   | "table_prune_partitions_count"             | "256"                            | ""       |
 | "log"     | "dir"                                      | "./.databend/logs"               | ""       |
 | "log"     | "file.dir"                                 | "./.databend/logs"               | ""       |
 | "log"     | "file.format"                              | "text"                           | ""       |
