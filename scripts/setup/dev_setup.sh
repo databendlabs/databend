@@ -143,7 +143,6 @@ function install_protobuf {
 		curl -LO $PB_REL/download/v3.15.8/protoc-3.15.8-linux-${arch}.zip
 		unzip protoc-3.15.8-linux-${arch}.zip -d protoc-3.15.8
 		sudo cp protoc-3.15.8/bin/protoc /usr/local/bin/
-		sudo chmod +x /usr/local/bin/protoc
 		sudo rm -rf protoc-3.15.8*
 		sudo chmod +x /usr/local/bin/protoc
 		;;
