@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::TableSchemaRef;
 use common_meta_store::MetaStore;
 use common_meta_types::MatchSeq;
 use common_meta_types::SeqV;
@@ -63,7 +64,7 @@ impl AsyncMpscSink for WriteResultCacheSink {
         // 1. Write the result cache to the storage.
         let location = self.cache_writer.write_to_storage().await?;
 
-        // 2. Set result calue key-value pair to meta.
+        // 2. Set result cache key-value pair to meta.
         let now = SeqV::<()>::now_ms() / 1000;
         let ttl = self.meta_mgr.get_ttl();
         let expire_at = now + ttl;
@@ -86,6 +87,7 @@ impl WriteResultCacheSink {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         key: &str,
+        schema: TableSchemaRef,
         inputs: Vec<Arc<InputPort>>,
         kv_store: Arc<MetaStore>,
     ) -> Result<ProcessorPtr> {
@@ -100,7 +102,7 @@ impl WriteResultCacheSink {
         let location = gen_result_cache_dir(key);
 
         let operator = DataOperator::instance().operator();
-        let cache_writer = ResultCacheWriter::create(location, operator, max_bytes);
+        let cache_writer = ResultCacheWriter::create(schema, location, operator, max_bytes);
 
         Ok(ProcessorPtr::create(Box::new(AsyncMpscSinker::create(
             inputs,

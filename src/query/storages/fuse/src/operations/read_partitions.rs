@@ -190,7 +190,7 @@ impl FuseTable {
             .map(|p| {
                 p.top_k(
                     self.schema().as_ref(),
-                    self.clusetr_key_str(),
+                    self.cluster_key_str(),
                     RangeIndex::supported_type,
                 )
             })

@@ -15,7 +15,9 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::infer_table_schema;
 use common_expression::DataSchemaRef;
+use common_expression::TableSchemaRef;
 use common_meta_store::MetaStore;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
@@ -84,6 +86,7 @@ impl SelectInterpreterV2 {
     fn add_result_cache(
         &self,
         key: &str,
+        schema: TableSchemaRef,
         pipeline: &mut Pipeline,
         kv_store: Arc<MetaStore>,
     ) -> Result<()> {
@@ -133,7 +136,13 @@ impl SelectInterpreterV2 {
             sink_inputs.push(InputPort::create());
         }
         items.push(PipeItem::create(
-            WriteResultCacheSink::try_create(self.ctx.clone(), key, sink_inputs.clone(), kv_store)?,
+            WriteResultCacheSink::try_create(
+                self.ctx.clone(),
+                key,
+                schema,
+                sink_inputs.clone(),
+                kv_store,
+            )?,
             sink_inputs,
             vec![],
         ));
@@ -181,7 +190,8 @@ impl Interpreter for SelectInterpreterV2 {
                 }
                 Ok(None) => {
                     // 2.2 If not found result in cache, add pipelines to write the result to cache.
-                    self.add_result_cache(&key, &mut build_res.main_pipeline, kv_store)?;
+                    let schema = infer_table_schema(&self.schema())?;
+                    self.add_result_cache(&key, schema, &mut build_res.main_pipeline, kv_store)?;
                     return Ok(build_res);
                 }
                 Err(e) => {

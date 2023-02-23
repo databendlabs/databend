@@ -40,16 +40,16 @@ impl Files {
         // ranked problems. So let's write them by hand.
         let bo = self.operator.batch();
 
-        let mut pathes = Vec::with_capacity(1000);
+        let mut paths = Vec::with_capacity(1000);
         for path in iter {
-            pathes.push(path);
-            if pathes.len() >= 1000 {
-                bo.remove(mem::take(&mut pathes)).await?;
+            paths.push(path);
+            if paths.len() >= 1000 {
+                bo.remove(mem::take(&mut paths)).await?;
             }
         }
 
-        if !pathes.is_empty() {
-            bo.remove(mem::take(&mut pathes)).await?;
+        if !paths.is_empty() {
+            bo.remove(mem::take(&mut paths)).await?;
         }
 
         Ok(())
