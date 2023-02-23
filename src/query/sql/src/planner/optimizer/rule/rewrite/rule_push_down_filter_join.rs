@@ -19,12 +19,9 @@ use common_functions::scalars::BUILTIN_FUNCTIONS;
 use crate::binder::JoinPredicate;
 use crate::optimizer::rule::rewrite::filter_join::convert_mark_to_semi_join;
 use crate::optimizer::rule::rewrite::filter_join::convert_outer_to_inner_join;
-use crate::optimizer::rule::rewrite::filter_join::create_runtime_filters;
 use crate::optimizer::rule::rewrite::filter_join::remove_nullable;
 use crate::optimizer::rule::rewrite::filter_join::rewrite_predicates;
 use crate::optimizer::rule::rewrite::filter_join::try_derive_predicates;
-use crate::optimizer::rule::rewrite::filter_join::wrap_filter_to_probe;
-use crate::optimizer::rule::rewrite::filter_join::wrap_runtime_filter_source_to_build;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;
@@ -106,18 +103,7 @@ impl Rule for RulePushDownFilterJoin {
             filter.predicates = new_predicates;
             s_expr = SExpr::create_unary(filter.into(), s_expr.child(0)?.clone())
         }
-        // Second, check if join type is inner join, if so creates runtime filters for join node
-        if join.join_type == JoinType::Inner {
-            let runtime_filter_result = create_runtime_filters(&mut join)?;
-            // Add a filter node to probe side, the predicates contain runtime filter info
-            wrap_filter_to_probe(&mut s_expr, runtime_filter_result.predicates)?;
-            // Add RuntimeFilterSource node to build side
-            wrap_runtime_filter_source_to_build(
-                &mut s_expr,
-                runtime_filter_result.runtime_filters,
-            )?;
-        }
-        // Third, check if can convert mark join to semi join
+        // Second, check if can convert mark join to semi join
         s_expr = convert_mark_to_semi_join(&s_expr)?;
         let filter: Filter = s_expr.plan().clone().try_into()?;
         if filter.predicates.is_empty() {

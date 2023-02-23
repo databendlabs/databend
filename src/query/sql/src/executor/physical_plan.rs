@@ -483,9 +483,7 @@ impl DistributedInsertSelect {
 // Build runtime predicate data from join build side
 // Then pass it to runtime filter on join probe side
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct RuntimeFilterSource {
-
-}
+pub struct RuntimeFilterSource {}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum PhysicalPlan {

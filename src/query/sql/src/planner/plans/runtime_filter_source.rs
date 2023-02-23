@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
@@ -33,16 +36,13 @@ pub struct RuntimeFilterId {
 
 impl RuntimeFilterId {
     pub fn new(id: IndexType) -> Self {
-        RuntimeFilterId {
-            id: "rf_" + id.to_string(),
-        }
+        RuntimeFilterId { id: id.to_string() }
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RuntimeFilterSource {
-    // Will be initialized by join's runtime_filters
-    pub runtime_filters: HashMap<RuntimeFilterId, ScalarExpr>,
+    pub runtime_filters: BTreeMap<RuntimeFilterId, ScalarExpr>,
 }
 
 impl Operator for RuntimeFilterSource {

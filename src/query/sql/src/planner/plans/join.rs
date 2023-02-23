@@ -33,7 +33,6 @@ use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::Statistics;
 use crate::optimizer::UniformSampleSet;
-use crate::plans::runtime_filter_source::RuntimeFilterId;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -136,7 +135,6 @@ pub struct Join {
     pub right_conditions: Vec<ScalarExpr>,
     pub non_equi_conditions: Vec<ScalarExpr>,
     pub join_type: JoinType,
-    pub runtime_filters: HashMap<RuntimeFilterId, ScalarExpr>,
     // marker_index is for MarkJoin only.
     pub marker_index: Option<IndexType>,
     pub from_correlated_subquery: bool,
@@ -149,7 +147,6 @@ impl Default for Join {
             right_conditions: Default::default(),
             non_equi_conditions: Default::default(),
             join_type: JoinType::Cross,
-            runtime_filters: Default::default(),
             marker_index: Default::default(),
             from_correlated_subquery: Default::default(),
         }

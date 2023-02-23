@@ -407,3 +407,23 @@ impl TryFrom<RelOperator> for DummyTableScan {
         }
     }
 }
+
+impl From<RuntimeFilterSource> for RelOperator {
+    fn from(value: RuntimeFilterSource) -> Self {
+        Self::RuntimeFilterSource(value)
+    }
+}
+
+impl TryFrom<RelOperator> for RuntimeFilterSource {
+    type Error = ErrorCode;
+
+    fn try_from(value: RelOperator) -> std::result::Result<Self, Self::Error> {
+        if let RelOperator::RuntimeFilterSource(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal(
+                "Cannot downcast RelOperator to RuntimeFilterSource",
+            ))
+        }
+    }
+}

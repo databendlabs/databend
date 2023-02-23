@@ -25,6 +25,8 @@ use super::format::display_memo;
 use super::Memo;
 use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::distributed::optimize_distributed_query;
+use crate::optimizer::heuristic::RuleList;
+use crate::optimizer::runtime_filter::try_add_runtime_filter_nodes;
 use crate::optimizer::util::contains_local_table_scan;
 use crate::optimizer::HeuristicOptimizer;
 use crate::optimizer::SExpr;
@@ -156,6 +158,13 @@ pub fn optimize_query(
     // with reading data from local tales(e.g. system tables).
     let enable_distributed_query =
         opt_ctx.config.enable_distributed_optimization && !contains_local_table_scan;
+    // Add runtime filter related nodes after cbo
+    // Because cbo may change join order and we don't want to
+    // break optimizer due to new added nodes by runtime filter.
+    // Currently, we only support standalone.
+    if !enable_distributed_query {
+        try_add_runtime_filter_nodes(&mut result)?;
+    }
     if enable_distributed_query {
         result = optimize_distributed_query(ctx.clone(), &result)?;
     }
