@@ -234,6 +234,19 @@ pub trait Decimal:
     fn to_column(value: Vec<Self>, size: DecimalSize) -> DecimalColumn {
         Self::to_column_from_buffer(value.into(), size)
     }
+
+    fn with_size(&self, size: DecimalSize) -> Option<Self> {
+        let multiplier = Self::e(size.scale as u32);
+        let min_for_precision = Self::min_for_precision(size.precision);
+        let max_for_precision = Self::max_for_precision(size.precision);
+        self.checked_mul(multiplier).and_then(|v| {
+            if v > max_for_precision || v < min_for_precision {
+                None
+            } else {
+                Some(v)
+            }
+        })
+    }
 }
 
 impl Decimal for i128 {

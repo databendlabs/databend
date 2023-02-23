@@ -47,10 +47,18 @@ impl<T: Decimal> DecimalDeserializer<T> {
         match value {
             serde_json::Value::Number(n) => {
                 if n.is_i64() {
-                    self.values.push(T::from_i64(n.as_i64().unwrap()));
+                    self.values.push(
+                        T::from_i64(n.as_i64().unwrap())
+                            .with_size(self.size)
+                            .ok_or_else(overflow_error)?,
+                    );
                     Ok(())
                 } else if n.is_u64() {
-                    self.values.push(T::from_u64(n.as_u64().unwrap()));
+                    self.values.push(
+                        T::from_u64(n.as_u64().unwrap())
+                            .with_size(self.size)
+                            .ok_or_else(overflow_error)?,
+                    );
                     Ok(())
                 } else {
                     Err(parse_error("Incorrect json value for decimal"))
