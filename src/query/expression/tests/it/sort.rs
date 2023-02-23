@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::vec;
 
 use common_exception::Result;
+use common_expression::types::decimal::*;
 use common_expression::types::number::*;
 use common_expression::types::StringType;
 use common_expression::Column;
@@ -96,6 +97,87 @@ fn test_block_sort() -> Result<()> {
 
     for (sort_descs, limit, expected) in test_cases {
         let res = DataBlock::sort(&block, &sort_descs, limit)?;
+
+        for (entry, expect) in res.columns().iter().zip(expected.iter()) {
+            assert_eq!(
+                entry.value.as_column().unwrap(),
+                expect,
+                "the column after sort is wrong, expect: {:?}, got: {:?}",
+                expect,
+                entry.value
+            );
+        }
+    }
+
+    let decimal_block = new_block(&[
+        Decimal128Type::from_data(vec![6i128, 4, 3, 2, 1, 1, 7]),
+        StringType::from_data(vec!["b1", "b2", "b3", "b4", "b5", "b6", "b7"]),
+    ]);
+
+    // test cast:
+    // - sort descriptions
+    // - limit
+    // - expected cols
+    let test_cases: Vec<(Vec<SortColumnDescription>, Option<usize>, Vec<Column>)> = vec![
+        (
+            vec![SortColumnDescription {
+                offset: 0,
+                asc: true,
+                nulls_first: false,
+            }],
+            None,
+            vec![
+                Decimal128Type::from_data(vec![1_i128, 1, 2, 3, 4, 6, 7]),
+                StringType::from_data(vec!["b5", "b6", "b4", "b3", "b2", "b1", "b7"]),
+            ],
+        ),
+        (
+            vec![SortColumnDescription {
+                offset: 0,
+                asc: true,
+                nulls_first: false,
+            }],
+            Some(4),
+            vec![
+                Decimal128Type::from_data(vec![1_i128, 1, 2, 3]),
+                StringType::from_data(vec!["b5", "b6", "b4", "b3"]),
+            ],
+        ),
+        (
+            vec![SortColumnDescription {
+                offset: 1,
+                asc: false,
+                nulls_first: false,
+            }],
+            None,
+            vec![
+                Decimal128Type::from_data(vec![7_i128, 1, 1, 2, 3, 4, 6]),
+                StringType::from_data(vec!["b7", "b6", "b5", "b4", "b3", "b2", "b1"]),
+            ],
+        ),
+        (
+            vec![
+                SortColumnDescription {
+                    offset: 0,
+                    asc: true,
+                    nulls_first: false,
+                },
+                SortColumnDescription {
+                    offset: 1,
+                    asc: false,
+                    nulls_first: false,
+                },
+            ],
+            None,
+            vec![
+                Decimal128Type::from_data(vec![1_i128, 1, 2, 3, 4, 6, 7]),
+                StringType::from_data(vec!["b6", "b5", "b4", "b3", "b2", "b1", "b7"]),
+            ],
+        ),
+    ];
+
+    for (sort_descs, limit, expected) in test_cases {
+        let res = DataBlock::sort(&decimal_block, &sort_descs, limit)?;
 
         for (entry, expect) in res.columns().iter().zip(expected.iter()) {
             assert_eq!(

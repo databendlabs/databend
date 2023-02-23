@@ -1330,14 +1330,12 @@ impl From<&DataType> for ArrowDataType {
             DataType::Number(ty) => with_number_type!(|TYPE| match ty {
                 NumberDataType::TYPE => ArrowDataType::TYPE,
             }),
-            DataType::Decimal(ty) => match ty {
-                DecimalDataType::Decimal128(s) => {
-                    ArrowDataType::Decimal(s.precision.into(), s.scale.into())
-                }
-                DecimalDataType::Decimal256(s) => {
-                    ArrowDataType::Decimal256(s.precision.into(), s.scale.into())
-                }
-            },
+            DataType::Decimal(DecimalDataType::Decimal128(s)) => {
+                ArrowDataType::Decimal(s.precision.into(), s.scale.into())
+            }
+            DataType::Decimal(DecimalDataType::Decimal256(s)) => {
+                ArrowDataType::Decimal256(s.precision.into(), s.scale.into())
+            }
             DataType::Timestamp => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
             DataType::Date => ArrowDataType::Date32,
             DataType::Nullable(ty) => ty.as_ref().into(),

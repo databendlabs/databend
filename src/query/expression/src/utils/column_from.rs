@@ -14,6 +14,9 @@
 
 use std::iter::Iterator;
 
+use ethnum::i256;
+
+use crate::types::decimal::*;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::*;
 use crate::types::*;
@@ -124,6 +127,24 @@ impl<D: AsRef<[f64]>> FromData<D, [Vec<f64>; 0]> for Float64Type {
     fn from_data(d: D) -> Column {
         Float64Type::upcast_column(Float64Type::column_from_iter(
             d.as_ref().iter().map(|f| (*f).into()),
+            &[],
+        ))
+    }
+}
+
+impl<D: AsRef<[i128]>> FromData<D, [Vec<i128>; 0]> for Decimal128Type {
+    fn from_data(d: D) -> Column {
+        Decimal128Type::upcast_column(Decimal128Type::column_from_iter(
+            d.as_ref().iter().copied(),
+            &[],
+        ))
+    }
+}
+
+impl<D: AsRef<[i256]>> FromData<D, [Vec<i256>; 0]> for Decimal256Type {
+    fn from_data(d: D) -> Column {
+        Decimal256Type::upcast_column(Decimal256Type::column_from_iter(
+            d.as_ref().iter().copied(),
             &[],
         ))
     }
