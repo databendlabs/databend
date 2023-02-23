@@ -478,8 +478,6 @@ impl Debug for StorageRedisConfig {
     }
 }
 
-pub const STORAGE_WEBHDFS_DEFAULT_ENDPOINT: &str = "http://127.0.0.1:9870";
-
 /// config for WebHDFS Storage Service
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StorageWebhdfsConfig {

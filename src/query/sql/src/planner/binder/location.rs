@@ -31,7 +31,6 @@ use common_meta_app::storage::StorageWebhdfsConfig;
 use common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
 use common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
 use common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
-use common_meta_app::storage::STORAGE_WEBHDFS_DEFAULT_ENDPOINT;
 use opendal::Scheme;
 use percent_encoding::percent_decode_str;
 
@@ -266,20 +265,31 @@ fn parse_hdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
     Ok(sp)
 }
 
+// The FileSystem scheme of WebHDFS is “webhdfs://”. A WebHDFS FileSystem URI has the following format.
+// webhdfs://<HOST>:<HTTP_PORT>/<PATH>
 fn parse_webhdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
-    let endpoint_url = l
+    let is_https = l
         .connection
-        .get("endpoint_url")
-        .cloned()
-        .unwrap_or(STORAGE_WEBHDFS_DEFAULT_ENDPOINT.to_string());
-    let endpoint_url = secure_omission(endpoint_url);
+        .get("https")
+        .unwrap_or(&"false".to_string())
+        .parse()
+        .map_err(|e| {
+            Error::new(
+                ErrorKind::InvalidInput,
+                format!(
+                    "HTTPS should be `TRUE` or `FALSE`, parse error with: {:?}",
+                    e,
+                ),
+            )
+        })?;
+    let prefix = if is_https { "https" } else { "http" };
+    let endpoint_url = format!("{prefix}://{}", l.name);
 
-    let root = format!("{}/{}", l.name, l.path);
+    let root = l.path.clone();
 
     let delegation = l.connection.get("delegation").cloned().unwrap_or_default();
 
     let sp = StorageParams::Webhdfs(StorageWebhdfsConfig {
-        // use http://127.0.0.1:9870 by default
         endpoint_url,
         root,
         delegation,
