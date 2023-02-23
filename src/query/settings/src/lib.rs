@@ -448,6 +448,16 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
+                default_value: UserSettingValue::UInt64(1),
+                user_setting: UserSetting::create(
+                    "hide_options_in_show_create_table",
+                    UserSettingValue::UInt64(1),
+                ),
+                level: ScopeLevel::Session,
+                desc: "Ignore options while rendering the result of show create table.",
+                possible_values: None,
+            },
+            SettingValue {
                 default_value: UserSettingValue::String("".to_string()),
                 user_setting: UserSetting::create(
                     "sandbox_tenant",
@@ -837,6 +847,12 @@ impl Settings {
         let key = "sandbox_tenant";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
+    }
+
+    pub fn get_hide_options_in_show_create_table(&self) -> Result<bool> {
+        let key = "hide_options_in_show_create_table";
+        let v = self.try_get_u64(key)?;
+        Ok(v != 0)
     }
 
     pub fn get_enable_query_result_cache(&self) -> Result<bool> {
