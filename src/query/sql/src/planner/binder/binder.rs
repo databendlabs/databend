@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_ast::ast::format_statement;
 use common_ast::ast::ExplainKind;
 use common_ast::ast::Statement;
 use common_ast::parser::parse_sql;
@@ -92,12 +93,18 @@ impl<'a> Binder {
         let plan = match stmt {
             Statement::Query(query) => {
                 let (s_expr, bind_context) = self.bind_query(bind_context, query).await?;
+                let formatted_ast = if self.ctx.get_settings().get_enable_query_result_cache()? {
+                    Some(format_statement(stmt.clone())?)
+                } else {
+                    None
+                };
                 Plan::Query {
                     s_expr: Box::new(s_expr),
                     metadata: self.metadata.clone(),
                     bind_context: Box::new(bind_context),
                     rewrite_kind: None,
                     ignore_result: query.ignore_result,
+                    formatted_ast,
                 }
             }
 

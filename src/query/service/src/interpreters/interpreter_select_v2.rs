@@ -23,6 +23,7 @@ use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_sql::MetadataRef;
+use common_storages_result_cache::gen_result_cache_key;
 use common_storages_result_cache::ResultCacheReader;
 use common_storages_result_cache::WriteResultCacheSink;
 use common_users::UserApiProvider;
@@ -43,6 +44,7 @@ pub struct SelectInterpreterV2 {
     s_expr: SExpr,
     bind_context: BindContext,
     metadata: MetadataRef,
+    formatted_ast: Option<String>,
     ignore_result: bool,
 }
 
@@ -52,6 +54,7 @@ impl SelectInterpreterV2 {
         bind_context: BindContext,
         s_expr: SExpr,
         metadata: MetadataRef,
+        formatted_ast: Option<String>,
         ignore_result: bool,
     ) -> Result<Self> {
         Ok(SelectInterpreterV2 {
@@ -59,6 +62,7 @@ impl SelectInterpreterV2 {
             s_expr,
             bind_context,
             metadata,
+            formatted_ast,
             ignore_result,
         })
     }
@@ -77,7 +81,12 @@ impl SelectInterpreterV2 {
     }
 
     /// Add pipelines for writing query result cache.
-    fn add_result_cache(&self, pipeline: &mut Pipeline, kv_store: Arc<MetaStore>) -> Result<()> {
+    fn add_result_cache(
+        &self,
+        key: &str,
+        pipeline: &mut Pipeline,
+        kv_store: Arc<MetaStore>,
+    ) -> Result<()> {
         //              ┌─────────┐ 1  ┌─────────┐ 1
         //              │         ├───►│         ├───►Dummy───►Downstream
         // Upstream────►│Duplicate│ 2  │         │ 3
@@ -124,7 +133,7 @@ impl SelectInterpreterV2 {
             sink_inputs.push(InputPort::create());
         }
         items.push(PipeItem::create(
-            WriteResultCacheSink::try_create(self.ctx.clone(), sink_inputs.clone(), kv_store)?,
+            WriteResultCacheSink::try_create(self.ctx.clone(), key, sink_inputs.clone(), kv_store)?,
             sink_inputs,
             vec![],
         ));
@@ -152,10 +161,12 @@ impl Interpreter for SelectInterpreterV2 {
         // 0. Need to build pipeline first to get the partitions.
         let mut build_res = self.build_pipeline().await?;
         if self.ctx.get_settings().get_enable_query_result_cache()? {
+            let key = gen_result_cache_key(self.formatted_ast.as_ref().unwrap());
             // 1. Try to get result from cache.
             let kv_store = UserApiProvider::instance().get_meta_store_client();
             let cache_reader = ResultCacheReader::create(
                 self.ctx.clone(),
+                &key,
                 kv_store.clone(),
                 self.ctx
                     .get_settings()
@@ -170,7 +181,7 @@ impl Interpreter for SelectInterpreterV2 {
                 }
                 Ok(None) => {
                     // 2.2 If not found result in cache, add pipelines to write the result to cache.
-                    self.add_result_cache(&mut build_res.main_pipeline, kv_store)?;
+                    self.add_result_cache(&key, &mut build_res.main_pipeline, kv_store)?;
                     return Ok(build_res);
                 }
                 Err(e) => {
