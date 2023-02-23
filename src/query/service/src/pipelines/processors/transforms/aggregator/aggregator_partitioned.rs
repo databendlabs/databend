@@ -173,6 +173,7 @@ impl<Method: HashMethodBounds, const HAS_AGG: bool> PartitionedAggregatorLike
                     Box::new(table),
                     agg.area_holder.clone(),
                 );
+
                 let block = DataBlock::new_with_meta(vec![], rows, Some(meta));
                 return Ok(vec![block]);
             }
