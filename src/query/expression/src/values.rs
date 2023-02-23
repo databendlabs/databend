@@ -1503,6 +1503,7 @@ impl ColumnBuilder {
             (ColumnBuilder::Null { len }, ScalarRef::Null) => *len += 1,
             (ColumnBuilder::EmptyArray { len }, ScalarRef::EmptyArray) => *len += 1,
             (ColumnBuilder::Number(builder), ScalarRef::Number(value)) => builder.push(value),
+            (ColumnBuilder::Decimal(builder), ScalarRef::Decimal(value)) => builder.push(value),
             (ColumnBuilder::Boolean(builder), ScalarRef::Boolean(value)) => builder.push(value),
             (ColumnBuilder::String(builder), ScalarRef::String(value)) => {
                 builder.put_slice(value);

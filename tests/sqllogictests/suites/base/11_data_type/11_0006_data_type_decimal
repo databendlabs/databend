@@ -315,6 +315,9 @@ statement ok
 drop table if exists t1
 
 statement ok
+drop table if exists t2
+
+statement ok
 create table t(c1 decimal(38,2))
 
 statement ok
@@ -362,7 +365,25 @@ statement error 1002
 select * from t1 order by c1
 
 statement ok
+create table t2(c1 decimal(6,2) null)
+
+statement ok
+insert into t2 values(1.23)
+
+statement ok
+insert into t2 values(null);
+
+query T
+select * from t2 order by c1 asc
+----
+1.23
+NULL
+
+statement ok
 drop table if exists t
 
 statement ok
 drop table if exists t1
+
+statement ok
+drop table if exists t2
