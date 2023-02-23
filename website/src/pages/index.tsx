@@ -9,7 +9,7 @@ import * as icons from "../components/Icons"
 const community = [
   {
     'icon':'Github',
-    'star': '5.3k',
+    'star': '5.3 K',
     'title': 'Github',
     'link': 'https://github.com/datafuselabs/databend'
   },
@@ -29,35 +29,7 @@ const community = [
     'link': 'https://www.youtube.com/@databend8089'
   },
 ]
-function GithubStars({ repo }) {
-  const [stars, setStars] = useState(null);
-  function convertToK(number) {
-    if (number < 1000) {
-      return number.toString();
-    }
-    const k = number / 1000;
-    return k.toFixed(k < 10 ? 1 : 0) + " K";
-  }
-  useEffect(() => {
-    async function fetchStars() {
-      const url = `https://api.github.com/repos/${repo}`;
-      const response = await fetch(url);
-      const data = await response.json();
-      setStars(data.stargazers_count);
-    }
-    fetchStars();
-  }, [repo]);
 
-  return (
-    <div>
-      {stars !== null ? (
-        <span>🌟 {convertToK(stars)} stars</span>
-      ) : (
-        <span>Loading...</span>
-      )}
-    </div>
-  );
-}
 
 function HomepageHeader() {
     const {siteConfig} = useDocusaurusContext();
@@ -90,8 +62,7 @@ function HomepageHeader() {
                 {community.map((item,index)=>{
                   const Icon = icons[item.icon]
                   return <Link to={item.link}>
-                    <div className={clsx('community-item', styles.communityItem)}><div className={clsx('icon', styles.Icon)}><Icon size={24}/></div><h6>{item.title}</h6>{item.star?<span className={clsx('tag', styles.tag)}><GithubStars repo={'datafuselabs/databend'} />
-</span>:''}</div>
+                    <div className={clsx('community-item', styles.communityItem)}><div className={clsx('icon', styles.Icon)}><Icon size={24}/></div><h6>{item.title}</h6>{item.star?<span className={clsx('tag', styles.tag)}>🌟 {item.star}</span>:''}</div>
                   </Link>
                 })}
               </div>
