@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_io::prelude::deserialize_from_slice;
-use common_io::prelude::serialize_into_buf;
 use sha2::Digest;
 use sha2::Sha256;
 
@@ -53,27 +48,4 @@ pub(crate) struct ResultCacheValue {
     pub partitions_shas: Vec<String>,
     /// The location of the result cache file.
     pub location: String,
-}
-
-pub(crate) fn write_blocks_to_buffer(blocks: &[DataBlock], buf: &mut Vec<u8>) -> Result<()> {
-    let columns = blocks
-        .iter()
-        .map(|b| {
-            b.convert_to_full()
-                .columns()
-                .iter()
-                .map(|c| c.value.as_column().unwrap().clone())
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>();
-    serialize_into_buf(buf, &columns)
-}
-
-pub(crate) fn read_blocks_from_buffer(buf: &mut &[u8]) -> Result<Vec<DataBlock>> {
-    let cols: Vec<Vec<Column>> = deserialize_from_slice(buf)?;
-    let blocks = cols
-        .into_iter()
-        .map(DataBlock::new_from_columns)
-        .collect::<Vec<_>>();
-    Ok(blocks)
 }
