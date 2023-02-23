@@ -1331,6 +1331,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-compress"
+version = "0.1.0"
+dependencies = [
+ "async-compression-issue-150-workaround",
+ "bytes",
+ "env_logger 0.10.0",
+ "futures",
+ "log",
+ "pin-project",
+ "rand 0.8.5",
+ "serde",
+ "sha2",
+ "tokio",
+]
+
+[[package]]
 name = "common-config"
 version = "0.1.0"
 dependencies = [
@@ -1875,6 +1891,7 @@ dependencies = [
  "common-arrow",
  "common-base",
  "common-catalog",
+ "common-compress",
  "common-exception",
  "common-expression",
  "common-formats",
@@ -2071,6 +2088,7 @@ name = "common-storage"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-compression-issue-150-workaround",
  "async-stream",
  "async-trait",
  "backon",
@@ -3099,6 +3117,7 @@ dependencies = [
  "common-base",
  "common-building",
  "common-catalog",
+ "common-compress",
  "common-config",
  "common-exception",
  "common-expression",
@@ -5686,7 +5705,6 @@ checksum = "a9c8749ca85b87793fc37762cc5925ebcfd86c0dad8a3815ee40dc110688b918"
 dependencies = [
  "anyhow",
  "async-compat",
- "async-compression-issue-150-workaround",
  "async-trait",
  "backon",
  "base64 0.21.0",
