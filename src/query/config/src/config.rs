@@ -1141,7 +1141,7 @@ pub struct QueryConfig {
     #[clap(long, default_value_t)]
     pub jwt_key_file: String,
 
-    /// If there are multiple trusted jwt provider put it into additonal_jwt_key_files configuration
+    /// If there are multiple trusted jwt provider put it into additional_jwt_key_files configuration
     #[clap(skip)]
     pub jwt_key_files: Vec<String>,
 

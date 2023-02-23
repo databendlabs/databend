@@ -41,7 +41,7 @@ pub fn build_fuse_native_source_pipeline(
     topk: Option<TopK>,
     mut max_io_requests: usize,
 ) -> Result<()> {
-    (max_threads, max_io_requests) = ajust_threads_and_request(max_threads, max_io_requests, plan);
+    (max_threads, max_io_requests) = adjust_threads_and_request(max_threads, max_io_requests, plan);
 
     let mut source_builder = SourcePipeBuilder::create();
 
@@ -109,7 +109,7 @@ pub fn build_fuse_parquet_source_pipeline(
     mut max_threads: usize,
     mut max_io_requests: usize,
 ) -> Result<()> {
-    (max_threads, max_io_requests) = ajust_threads_and_request(max_threads, max_io_requests, plan);
+    (max_threads, max_io_requests) = adjust_threads_and_request(max_threads, max_io_requests, plan);
 
     let mut source_builder = SourcePipeBuilder::create();
 
@@ -206,7 +206,7 @@ pub fn dispatch_partitions(
     results
 }
 
-pub fn ajust_threads_and_request(
+pub fn adjust_threads_and_request(
     mut max_threads: usize,
     mut max_io_requests: usize,
     plan: &DataSourcePlan,

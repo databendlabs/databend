@@ -27,7 +27,7 @@ If we execute the full query pipeline every time, the cost may be every expensiv
 
 ## Detail design
 
-### Lifecyle of query result cache
+### Lifecycle of query result cache
 
 Each result cache has a time-to-live (TTL). Each access to the result cache will refresh the TTL .When the TTL is expired, the result cache will not be used any more.
 
@@ -78,7 +78,7 @@ pub struct ResultCacheValue {
 
 #### Garbage collection
 
-Databend will cache every query result is query result cache is enabled. If the result cache is expired, the cache will not be used any more. To save the disk or object storage space, Databend needs a deamon thread to scan all the query cache periodically and remove the expired ones.
+Databend will cache every query result is query result cache is enabled. If the result cache is expired, the cache will not be used any more. To save the disk or object storage space, Databend needs a daemon thread to scan all the query cache periodically and remove the expired ones.
 
 ### Related configurations
 
