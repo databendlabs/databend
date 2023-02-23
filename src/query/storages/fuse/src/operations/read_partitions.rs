@@ -61,7 +61,6 @@ impl FuseTable {
         match snapshot {
             Some(snapshot) => {
                 let settings = ctx.get_settings();
-
                 if settings.get_enable_distributed_eval_index()? && !ctx.get_cluster().is_empty() {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for segment_location in &snapshot.segments {
@@ -82,6 +81,7 @@ impl FuseTable {
                 let table_info = self.table_info.clone();
                 let segments_location = snapshot.segments.clone();
                 let summary = snapshot.summary.block_count as usize;
+
                 self.prune_snapshot_blocks(
                     ctx.clone(),
                     self.operator.clone(),

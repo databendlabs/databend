@@ -178,13 +178,13 @@ pub fn dispatch_partitions(
     plan: &DataSourcePlan,
     max_streams: usize,
 ) -> Vec<VecDeque<PartInfoPtr>> {
-    let mut results = vec![VecDeque::new(); max_streams];
-
+    let mut results = Vec::with_capacity(max_streams);
     // Lazy part, we can dispatch them now.
     if plan.parts.is_lazy {
         return results;
     }
 
+    results = vec![VecDeque::new(); max_streams];
     const BATCH_SIZE: usize = 64;
     let mut partitions = Vec::with_capacity(BATCH_SIZE);
     loop {

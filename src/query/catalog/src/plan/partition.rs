@@ -213,7 +213,7 @@ impl StealablePartitions {
                 return partitions[index].pop_front();
             }
         }
-        None
+        self.ctx.get_partition()
     }
 
     pub fn steal(&self, idx: usize, max_size: usize) -> Vec<PartInfoPtr> {
@@ -237,6 +237,6 @@ impl StealablePartitions {
                 return ps.drain(..size).collect();
             }
         }
-        vec![]
+        self.ctx.get_partitions(max_size)
     }
 }
