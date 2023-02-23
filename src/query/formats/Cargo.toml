@@ -40,3 +40,10 @@ once_cell = "1.15.0"
 common-arrow = { path = "../../common/arrow" }
 
 pretty_assertions = "1.3.0"
+
+[package.metadata.cargo-machete]
+ignored = [
+    "chrono",
+    "common-meta-types",
+    "once_cell",
+]

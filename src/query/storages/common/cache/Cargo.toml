@@ -32,3 +32,12 @@ walkdir = "2.3.2"
 
 [dev-dependencies]
 tempfile = "3.3.0"
+
+[package.metadata.cargo-machete]
+ignored = [
+    "common-base",
+    "opendal",
+    "ringbuffer",
+    "serde",
+    "serde_json",
+]

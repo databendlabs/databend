@@ -66,3 +66,9 @@ goldenfile = "1.4"
 [[bench]]
 name = "bench"
 harness = false
+
+[package.metadata.cargo-machete]
+ignored = [
+    "chrono-tz",
+    "md-5",
+]
