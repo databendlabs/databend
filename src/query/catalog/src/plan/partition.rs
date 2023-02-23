@@ -213,6 +213,8 @@ impl StealablePartitions {
                 return partitions[index].pop_front();
             }
         }
+
+        drop(partitions);
         self.ctx.get_partition()
     }
 
@@ -237,6 +239,8 @@ impl StealablePartitions {
                 return ps.drain(..size).collect();
             }
         }
+
+        drop(partitions);
         self.ctx.get_partitions(max_size)
     }
 }
