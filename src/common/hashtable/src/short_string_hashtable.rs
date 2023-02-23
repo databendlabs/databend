@@ -37,7 +37,6 @@ use crate::table0::Table0IterMut;
 use crate::table_empty::TableEmpty;
 use crate::table_empty::TableEmptyIter;
 use crate::table_empty::TableEmptyIterMut;
-use crate::utils::sse;
 
 pub struct ShortStringHashtable<K, V, A = MmapAllocator>
 where
@@ -713,7 +712,9 @@ impl PartialEq for FallbackKey {
     fn eq(&self, other: &Self) -> bool {
         if self.hash == other.hash {
             match (self.key, other.key) {
-                (Some(a), Some(b)) => unsafe { sse::memcmp_sse(a.as_ref(), b.as_ref()) },
+                (Some(a), Some(b)) => unsafe {
+                    crate::utils::sse::memcmp_sse(a.as_ref(), b.as_ref())
+                },
                 (None, None) => true,
                 _ => false,
             }
