@@ -145,6 +145,7 @@ function install_protobuf {
 		sudo cp protoc-3.15.8/bin/protoc /usr/local/bin/
 		sudo chmod +x /usr/local/bin/protoc
 		sudo rm -rf protoc-3.15.8*
+		sudo chmod +x /usr/local/bin/protoc
 		;;
 	esac
 }
