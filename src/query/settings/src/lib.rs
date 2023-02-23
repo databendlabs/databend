@@ -35,7 +35,6 @@ use common_meta_types::MatchSeq;
 use common_users::UserApiProvider;
 use dashmap::DashMap;
 use itertools::Itertools;
-use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 
 #[derive(Clone)]
 pub enum ScopeLevel {
@@ -439,13 +438,13 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
-                default_value: UserSettingValue::String(OPT_KEY_SNAPSHOT_LOCATION.to_string()),
+                default_value: UserSettingValue::UInt64(1),
                 user_setting: UserSetting::create(
                     "hide_options_in_show_create_table",
-                    UserSettingValue::String(OPT_KEY_SNAPSHOT_LOCATION.to_string()),
+                    UserSettingValue::UInt64(1),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The list of options that needs to be ignored when executing show create table.",
+                desc: "Ignore options while rendering the result of show create table.",
                 possible_values: None,
             },
             SettingValue {
@@ -840,10 +839,10 @@ impl Settings {
             .and_then(|v| v.user_setting.value.as_string())
     }
 
-    pub fn get_hide_options_in_show_create_table(&self) -> Result<String> {
+    pub fn get_hide_options_in_show_create_table(&self) -> Result<bool> {
         let key = "hide_options_in_show_create_table";
-        self.check_and_get_setting_value(key)
-            .and_then(|v| v.user_setting.value.as_string())
+        let v = self.try_get_u64(key)?;
+        Ok(v != 0)
     }
 
     pub fn get_enable_query_result_cache(&self) -> Result<bool> {

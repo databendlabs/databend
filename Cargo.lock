@@ -1958,7 +1958,6 @@ dependencies = [
  "futures",
  "itertools",
  "num_cpus",
- "storages-common-table-meta",
  "sys-info",
  "tracing",
 ]
