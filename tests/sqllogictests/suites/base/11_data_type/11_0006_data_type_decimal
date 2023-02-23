@@ -315,6 +315,9 @@ statement ok
 drop table if exists t1
 
 statement ok
+drop table if exists desc_decimal
+
+statement ok
 drop table if exists t2
 
 statement ok
@@ -330,24 +333,27 @@ statement ok
 insert into t(c1) select CAST(0 AS DECIMAL(6, 2))
 
 query I
-select * from t order by c1 desc;
+select * from t order by c1 desc
 ----
 2.34
 0.00
 -2.34
 
 query I
-select * from t order by c1 asc;
+select * from t order by c1 asc
 ----
 -2.34
 0.00
 2.34
 
-statement error 1067
+query I
 select * from t order by c1 asc limit 0,2
+----
+-2.34
+0.00
 
 query I
-select * from t order by c1 asc limit 1,2;
+select * from t order by c1 asc limit 1,2
 ----
 0.00
 2.34
@@ -380,6 +386,17 @@ select * from t2 order by c1 asc
 NULL
 
 statement ok
+create table desc_decimal(c1 decimal(4,2), c2 decimal(4,2) null, c3 decimal(39,2), c4 decimal(39,2) null)
+
+query TTTT
+desc desc_decimal
+----
+c1 DECIMAL(4, 2) NO 0.00 (empty)
+c2 DECIMAL(4, 2) YES NULL (empty)
+c3 DECIMAL(39, 2) NO 0.00 (empty)
+c4 DECIMAL(39, 2) YES NULL (empty)
+
+statement ok
 drop table if exists t
 
 statement ok
@@ -387,3 +404,6 @@ drop table if exists t1
 
 statement ok
 drop table if exists t2
+
+statement ok
+drop table if exists desc_decimal
