@@ -56,4 +56,5 @@ ignored = [
     "globiter",
     "once_cell",
     "percent-encoding",
+    "async-compression"
 ]
