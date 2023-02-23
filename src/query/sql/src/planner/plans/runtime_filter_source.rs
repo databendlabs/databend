@@ -23,11 +23,20 @@ use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::IndexType;
 use crate::ScalarExpr;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RuntimeFilterId {
     id: String,
+}
+
+impl RuntimeFilterId {
+    pub fn new(id: IndexType) -> Self {
+        RuntimeFilterId {
+            id: "rf_" + id.to_string(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

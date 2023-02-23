@@ -24,6 +24,7 @@ use crate::optimizer::rule::rewrite::filter_join::remove_nullable;
 use crate::optimizer::rule::rewrite::filter_join::rewrite_predicates;
 use crate::optimizer::rule::rewrite::filter_join::try_derive_predicates;
 use crate::optimizer::rule::rewrite::filter_join::wrap_filter_to_probe;
+use crate::optimizer::rule::rewrite::filter_join::wrap_runtime_filter_source_to_build;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;

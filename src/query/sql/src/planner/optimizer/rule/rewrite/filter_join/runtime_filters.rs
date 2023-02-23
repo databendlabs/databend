@@ -29,6 +29,13 @@ pub struct RuntimeFilterResult {
     pub predicates: Vec<ScalarExpr>,
 }
 pub fn create_runtime_filters(join: &mut Join) -> Result<RuntimeFilterResult> {
+    let mut runtime_filters = HashMap::with_capacity(join.right_conditions.len());
+    for (idx, expr) in join.right_conditions.iter().enumerate() {
+        runtime_filters.insert(RuntimeFilterId::new(idx), expr);
+        let probe_condition = &join.left_conditions[idx];
+        // todo: create a new function to represent predicate for join probe side?
+    }
+
     todo!()
 }
 
