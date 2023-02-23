@@ -12,18 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::BufRead;
 use std::io::Cursor;
 
 use bstr::ByteSlice;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::read_decimal_with_size;
 use common_expression::types::date::check_date;
+use common_expression::types::decimal::Decimal;
 use common_expression::types::number::Number;
 use common_expression::types::timestamp::check_timestamp;
 use common_expression::uniform_date;
 use common_expression::ArrayDeserializer;
 use common_expression::BooleanDeserializer;
 use common_expression::DateDeserializer;
+use common_expression::DecimalDeserializer;
 use common_expression::NullDeserializer;
 use common_expression::NullableDeserializer;
 use common_expression::NumberDeserializer;
@@ -80,6 +84,8 @@ pub trait FieldDecoderRowBased: FieldDecoder {
             TypeDeserializerImpl::UInt64(c) => self.read_int(c, reader, raw),
             TypeDeserializerImpl::Float32(c) => self.read_float(c, reader, raw),
             TypeDeserializerImpl::Float64(c) => self.read_float(c, reader, raw),
+            TypeDeserializerImpl::Decimal128(c) => self.read_decimal(c, reader, raw),
+            TypeDeserializerImpl::Decimal256(c) => self.read_decimal(c, reader, raw),
             TypeDeserializerImpl::Date(c) => self.read_date(c, reader, raw),
             TypeDeserializerImpl::Timestamp(c) => self.read_timestamp(c, reader, raw),
             TypeDeserializerImpl::String(c) => self.read_string(c, reader, raw),
@@ -175,6 +181,19 @@ pub trait FieldDecoderRowBased: FieldDecoder {
     {
         let v: P = reader.read_float_text()?;
         column.builder.push(v.into());
+        Ok(())
+    }
+
+    fn read_decimal<R: AsRef<[u8]>, D: Decimal>(
+        &self,
+        column: &mut DecimalDeserializer<D>,
+        reader: &mut Cursor<R>,
+        _raw: bool,
+    ) -> Result<()> {
+        let buf = reader.remaining_slice();
+        let (n, n_read) = read_decimal_with_size(buf, column.size, false)?;
+        column.values.push(n);
+        reader.consume(n_read);
         Ok(())
     }
 
