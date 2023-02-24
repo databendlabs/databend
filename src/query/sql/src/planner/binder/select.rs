@@ -271,7 +271,10 @@ impl Binder {
             predicates: split_conjunctions(&scalar),
             is_having: false,
         };
-        let new_expr = SExpr::create_unary(filter_plan.into(), child);
+        let mut new_expr = SExpr::create_unary(filter_plan.into(), child);
+        if let ScalarExpr::SubqueryExpr(_) = scalar {
+            new_expr.contain_subquery = true;
+        }
         Ok(new_expr)
     }
 

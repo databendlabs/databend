@@ -102,9 +102,13 @@ impl Binder {
         scalars: &HashMap<IndexType, ScalarItem>,
         child: SExpr,
     ) -> Result<SExpr> {
+        let mut contain_subquery = false;
         let mut scalars = scalars
             .iter()
             .map(|(_, item)| {
+                if let ScalarExpr::SubqueryExpr(_) = item.scalar {
+                    contain_subquery = true;
+                }
                 if bind_context.in_grouping {
                     let mut grouping_checker = GroupingChecker::new(bind_context);
                     let scalar = grouping_checker.resolve(&item.scalar, None)?;
@@ -121,7 +125,8 @@ impl Binder {
         scalars.sort_by_key(|s| s.index);
         let eval_scalar = EvalScalar { items: scalars };
 
-        let new_expr = SExpr::create_unary(eval_scalar.into(), child);
+        let mut new_expr = SExpr::create_unary(eval_scalar.into(), child);
+        new_expr.contain_subquery = contain_subquery;
 
         // Set output columns
         bind_context.columns = columns.to_vec();

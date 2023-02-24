@@ -46,6 +46,9 @@ pub struct SExpr {
     /// A bitmap to record applied rules on current SExpr, to prevent
     /// redundant transformations.
     pub(crate) applied_rules: AppliedRules,
+
+    /// Check if contains subquery, if not, skip subquery optimization
+    pub(crate) contain_subquery: bool,
 }
 
 impl SExpr {
@@ -62,6 +65,7 @@ impl SExpr {
             rel_prop: Arc::new(Mutex::new(rel_prop)),
 
             applied_rules: AppliedRules::default(),
+            contain_subquery: false,
         }
     }
 
@@ -148,12 +152,14 @@ impl SExpr {
     /// Note that this method will keep the `applied_rules` of
     /// current `SExpr` unchanged.
     pub fn replace_children(&self, children: Vec<SExpr>) -> Self {
+        let contain_subquery = children.iter().any(|child| child.contain_subquery);
         Self {
             plan: self.plan.clone(),
             original_group: None,
             rel_prop: Arc::new(Mutex::new(None)),
             applied_rules: self.applied_rules.clone(),
             children,
+            contain_subquery,
         }
     }
 
