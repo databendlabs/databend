@@ -778,11 +778,10 @@ pub fn skip_to_next_row<R: AsRef<[u8]>>(reader: &mut Cursor<R>, mut balance: i32
 
 async fn fill_default_value(
     binder: &mut ScalarBinder<'_>,
-    operators: &mut Vec<BlockOperator>,
+    map_exprs: &mut Vec<Expr>,
     field: &DataField,
     schema: &DataSchema,
 ) -> Result<()> {
-    let mut exprs = Vec::new();
     if let Some(default_expr) = field.default_expr() {
         let tokens = tokenize_sql(default_expr)?;
         let backtrace = Backtrace::new();
@@ -801,7 +800,7 @@ async fn fill_default_value(
         let expr = scalar
             .as_expr_with_col_index()?
             .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());
-        exprs.push(expr);
+        map_exprs.push(expr);
     } else {
         // If field data type is nullable, then we'll fill it with null.
         if field.data_type().is_nullable() {
@@ -810,7 +809,7 @@ async fn fill_default_value(
                 scalar: DataScalar::Null,
                 data_type: field.data_type().clone(),
             };
-            exprs.push(expr);
+            map_exprs.push(expr);
         } else {
             let data_type = field.data_type().clone();
             let default_value = data_type.default_value();
@@ -819,10 +818,9 @@ async fn fill_default_value(
                 scalar: default_value,
                 data_type,
             };
-            exprs.push(expr);
+            map_exprs.push(expr);
         }
     }
-    operators.push(BlockOperator::Map { exprs });
     Ok(())
 }
 
@@ -842,7 +840,6 @@ async fn exprs_to_scalar(
             exprs
         )));
     }
-    let mut operators = Vec::with_capacity(schema_fields_len);
     let mut scalar_binder = ScalarBinder::new(
         bind_context,
         ctx.clone(),
@@ -857,7 +854,7 @@ async fn exprs_to_scalar(
         if let AExpr::ColumnRef { column, .. } = expr {
             if column.name.eq_ignore_ascii_case("default") {
                 let field = schema.field(i);
-                fill_default_value(&mut scalar_binder, &mut operators, field, schema).await?;
+                fill_default_value(&mut scalar_binder, &mut map_exprs, field, schema).await?;
                 continue;
             }
         }
@@ -878,6 +875,7 @@ async fn exprs_to_scalar(
         map_exprs.push(expr);
     }
 
+    let mut operators = Vec::with_capacity(schema_fields_len);
     operators.push(BlockOperator::Map { exprs: map_exprs });
 
     let one_row_chunk = DataBlock::new(

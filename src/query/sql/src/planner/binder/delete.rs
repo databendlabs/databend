@@ -76,9 +76,9 @@ impl<'a> Binder {
                     predicates: vec![scalar],
                     is_having: false,
                 };
-                let mut filter_expr = SExpr::create_unary(filter.into(), table_expr);
+                let filter_expr = SExpr::create_unary(filter.into(), table_expr);
                 let mut rewriter = SubqueryRewriter::new(self.metadata.clone());
-                rewriter.rewrite(&mut filter_expr)?;
+                let filter_expr = rewriter.rewrite(&filter_expr)?;
                 (None, Some(filter_expr))
             } else {
                 (Some(scalar), None)

@@ -72,10 +72,9 @@ use crate::MetadataRef;
 /// Correlated exists subquery -> Marker join
 ///
 /// More information can be found in the paper: Unnesting Arbitrary Queries
-pub fn decorrelate_subquery(metadata: MetadataRef, mut s_expr: SExpr) -> Result<SExpr> {
+pub fn decorrelate_subquery(metadata: MetadataRef, s_expr: SExpr) -> Result<SExpr> {
     let mut rewriter = SubqueryRewriter::new(metadata);
-    rewriter.rewrite(&mut s_expr)?;
-    Ok(s_expr)
+    rewriter.rewrite(&s_expr)
 }
 
 impl SubqueryRewriter {
