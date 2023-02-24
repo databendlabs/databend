@@ -2,16 +2,14 @@
 title: Stage Table Function  
 ---
 
-SQL to query data files located in a stage or an uri.
+Databend supports using standard SQL to query data files located in an internal stage or named external stage.
 
 The schema is automatically detected, same as [infer_schema](infer_schema.md).
 
-
 ## Syntax
 
-Looks like a stage function, except used `@<stage_name>` or `'uri'` instead of using table_function name. 
-
 ```sql
+SELECT <columns> FROM
 {@<stage_name>[/<path>] | '<uri>'} [(
   [ PARTTERN => '<regex_pattern>']
   [ FILE_FORMAT => '<format_name>']
@@ -28,20 +26,20 @@ Looks like a stage function, except used `@<stage_name>` or `'uri'` instead of u
 )]
 ```
 
-where:
+The function parameters are as follows:
 
 ### FILE_FORMAT = '<format_name>'
 
-`<format_name>` is one of
+`<format_name>` should be one of the following:
 
-1. build-in file format,  see [Input & Output File Formats](../../13-sql-reference/75-file-format-options.md).
-2. named file format create by [CREATE FILE FORMAT](../../14-sql-commands/00-ddl/100-file-format/01-ddl-create-file-format.md).
+1. A built-in file format (see [Input & Output File Formats](../../13-sql-reference/75-file-format-options.md).
+2. A named file format created by [CREATE FILE FORMAT](../../14-sql-commands/00-ddl/100-file-format/01-ddl-create-file-format.md).
 
-for named stage, use the format of the stage if not specified.
+If not specified for named stages, the format of the stage should be used.
 
 :::caution
 
-Currently, only supports parquet file format.
+Only parquet file format is currently supported.
 
 :::
 
@@ -50,14 +48,13 @@ Currently, only supports parquet file format.
 A [PCRE2](https://www.pcre.org/current/doc/html/)-based regular expression pattern string, enclosed in single quotes, specifying the file names to match. Click [here](#loading-data-with-pattern-matching) to see an example. For PCRE2 syntax, see http://www.pcre.org/current/doc/html/pcre2syntax.html.
 
 
-### FILES  = ( 'file_name' [ , 'file_name' ... ] )
+### FILES  = ( 'file1' [ , 'file2' ... ] )
 
 Specifies a list of one or more files names (separated by commas) to be read.
 
-
 ### Connection Options for `<uri>` only 
 
-including: 
+These include:
 
 - ENDPOINT_URL
 - AWS_KEY_ID 
@@ -69,22 +66,46 @@ including:
 - REGION
 - ENABLE_VIRTUAL_HOST_STYLE
 
-they are explained [Create Stage](../../14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md).
+They are explained [Create Stage](../../14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md).
 
-## Examples
+## Query Examples
 
-### select from named stage
+### Select from Named Stage
 
-```shell
-SELECT * FROM @my_stage/my_home(pattern => '.*parquet');
+```sql
+-- New stage.
+create stage lake;
+    
+-- Stage the data file into internal stage.
+copy into @lake from (select * from numbers(10)) file_format = (type = PARQUET);
+
+-- Show files in the internal stage.
+list @lake;
++-------------------------------------------------------+------+------------------------------------+-------------------------------+---------+
+| name                                                  | size | md5                                | last_modified                 | creator |
++-------------------------------------------------------+------+------------------------------------+-------------------------------+---------+
+| data_8f414f66-5a94-42ad-ad52-a9076541799e_0_0.parquet |  258 | "7DCC9FFE04EA1F6882AED2CF9640D3D4" | 2023-02-24 09:55:46.000 +0000 | NULL    |
++-------------------------------------------------------+------+------------------------------------+-------------------------------+---------+
+
+-- Query.
+select min(number), max(number) from @lake (pattern => '.*parquet');
+
++-------------+-------------+
+| min(number) | max(number) |
++-------------+-------------+
+|           0 |           9 |
++-------------+-------------+
 ```
 
-### select from uri 
+### Select from URI
 
 `file_format` must be specified.
 
-```shell
-select *  from 's3://testbucket/admin/data/tuple.parquet' 
-(aws_key_id => 'minioadmin', aws_secret_key => 'minioadmin', endpoint_url => 'http://127.0.0.1:9900/', file_format => 'parquet');  
+```sql
+select *  from 's3://bucket/test.parquet' 
+( access_key_id => 'your-access-key-id', 
+  secret_access_key => 'your-secret-access-key',
+  endpoint_url => 'your-object-storage-endpoint',
+  file_format => 'parquet');  
 ```
 
