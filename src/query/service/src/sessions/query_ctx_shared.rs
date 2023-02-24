@@ -336,6 +336,14 @@ impl QueryContextShared {
     }
 }
 
+impl Drop for QueryContextShared {
+    fn drop(&mut self) {
+        self.session
+            .session_ctx
+            .update_query_ids_results(self.init_query_id.read().clone(), None)
+    }
+}
+
 pub fn short_sql(query: &str) -> String {
     use unicode_segmentation::UnicodeSegmentation;
     let query = query.trim_start();

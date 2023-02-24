@@ -99,8 +99,8 @@ impl Planner {
                 let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig {
                     enable_distributed_optimization: !self.ctx.get_cluster().is_empty(),
                 }));
-                let optimized_plan = optimize(self.ctx.clone(), opt_ctx, plan)?;
 
+                let optimized_plan = optimize(self.ctx.clone(), opt_ctx, plan)?;
                 Ok((optimized_plan, metadata.clone(), format))
             }
             .await;

@@ -15,7 +15,9 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::infer_table_schema;
 use common_expression::DataSchemaRef;
+use common_expression::TableSchemaRef;
 use common_meta_store::MetaStore;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
@@ -23,6 +25,7 @@ use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_sql::MetadataRef;
+use common_storages_result_cache::gen_result_cache_key;
 use common_storages_result_cache::ResultCacheReader;
 use common_storages_result_cache::WriteResultCacheSink;
 use common_users::UserApiProvider;
@@ -43,6 +46,7 @@ pub struct SelectInterpreterV2 {
     s_expr: SExpr,
     bind_context: BindContext,
     metadata: MetadataRef,
+    formatted_ast: Option<String>,
     ignore_result: bool,
 }
 
@@ -52,6 +56,7 @@ impl SelectInterpreterV2 {
         bind_context: BindContext,
         s_expr: SExpr,
         metadata: MetadataRef,
+        formatted_ast: Option<String>,
         ignore_result: bool,
     ) -> Result<Self> {
         Ok(SelectInterpreterV2 {
@@ -59,6 +64,7 @@ impl SelectInterpreterV2 {
             s_expr,
             bind_context,
             metadata,
+            formatted_ast,
             ignore_result,
         })
     }
@@ -77,7 +83,13 @@ impl SelectInterpreterV2 {
     }
 
     /// Add pipelines for writing query result cache.
-    fn add_result_cache(&self, pipeline: &mut Pipeline, kv_store: Arc<MetaStore>) -> Result<()> {
+    fn add_result_cache(
+        &self,
+        key: &str,
+        schema: TableSchemaRef,
+        pipeline: &mut Pipeline,
+        kv_store: Arc<MetaStore>,
+    ) -> Result<()> {
         //              ┌─────────┐ 1  ┌─────────┐ 1
         //              │         ├───►│         ├───►Dummy───►Downstream
         // Upstream────►│Duplicate│ 2  │         │ 3
@@ -124,7 +136,13 @@ impl SelectInterpreterV2 {
             sink_inputs.push(InputPort::create());
         }
         items.push(PipeItem::create(
-            WriteResultCacheSink::try_create(self.ctx.clone(), sink_inputs.clone(), kv_store)?,
+            WriteResultCacheSink::try_create(
+                self.ctx.clone(),
+                key,
+                schema,
+                sink_inputs.clone(),
+                kv_store,
+            )?,
             sink_inputs,
             vec![],
         ));
@@ -152,10 +170,12 @@ impl Interpreter for SelectInterpreterV2 {
         // 0. Need to build pipeline first to get the partitions.
         let mut build_res = self.build_pipeline().await?;
         if self.ctx.get_settings().get_enable_query_result_cache()? {
+            let key = gen_result_cache_key(self.formatted_ast.as_ref().unwrap());
             // 1. Try to get result from cache.
             let kv_store = UserApiProvider::instance().get_meta_store_client();
             let cache_reader = ResultCacheReader::create(
                 self.ctx.clone(),
+                &key,
                 kv_store.clone(),
                 self.ctx
                     .get_settings()
@@ -165,12 +185,17 @@ impl Interpreter for SelectInterpreterV2 {
             // 2. Check the cache.
             match cache_reader.try_read_cached_result().await {
                 Ok(Some(blocks)) => {
+                    // 2.0 update query_id -> result_cache_meta_key in session.
+                    self.ctx
+                        .get_current_session()
+                        .update_query_ids_results(self.ctx.get_id(), cache_reader.get_meta_key());
                     // 2.1 If found, return the result directly.
                     return PipelineBuildResult::from_blocks(blocks);
                 }
                 Ok(None) => {
                     // 2.2 If not found result in cache, add pipelines to write the result to cache.
-                    self.add_result_cache(&mut build_res.main_pipeline, kv_store)?;
+                    let schema = infer_table_schema(&self.schema())?;
+                    self.add_result_cache(&key, schema, &mut build_res.main_pipeline, kv_store)?;
                     return Ok(build_res);
                 }
                 Err(e) => {

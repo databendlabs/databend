@@ -11,6 +11,7 @@ header:
     - "tests"
     - "tools"
     - "benchmark"
+    - "src/common/compress/tests"
     # Ignore hidden files
     - ".cargo"
     - ".databend"

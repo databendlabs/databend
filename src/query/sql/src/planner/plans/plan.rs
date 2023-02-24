@@ -102,6 +102,8 @@ pub enum Plan {
         metadata: MetadataRef,
         bind_context: Box<BindContext>,
         rewrite_kind: Option<RewriteKind>,
+        // Use for generate query result cache key.
+        formatted_ast: Option<String>,
         ignore_result: bool,
     },
 

@@ -41,6 +41,7 @@ async fn test_pool() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[derive(Debug)]
 struct BarMgr {}
 
 #[derive(Clone, Debug)]

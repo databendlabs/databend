@@ -56,6 +56,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);
 
         let plan = table.read_plan(ctx.clone(), None).await?;
+
         let stream = table.read_data_block_stream(ctx.clone(), &plan).await?;
         let blocks = stream.try_collect::<Vec<_>>().await?;
         let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();

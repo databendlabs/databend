@@ -21,6 +21,7 @@ use common_base::base::tokio::sync::mpsc::Sender;
 use common_base::runtime::CatchUnwindFuture;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
+use common_compress::CompressAlgorithm;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -29,7 +30,6 @@ use futures::AsyncRead;
 use futures_util::stream::FuturesUnordered;
 use futures_util::AsyncReadExt;
 use futures_util::StreamExt;
-use opendal::raw::CompressAlgorithm;
 
 use crate::input_formats::Aligner;
 use crate::input_formats::BeyondEndReader;

@@ -22,6 +22,7 @@ use std::sync::Mutex;
 
 use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::Progress;
+use common_compress::CompressAlgorithm;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
@@ -36,7 +37,6 @@ use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserStageInfo;
 use common_settings::Settings;
 use dashmap::DashMap;
-use opendal::raw::CompressAlgorithm;
 use opendal::Operator;
 
 use crate::input_formats::impls::InputFormatCSV;

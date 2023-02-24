@@ -536,6 +536,7 @@ jobs:
       - release_packages
       - publish_deb
     steps:
+      - uses: actions/checkout@v3
       - run: |
           status="${{ (contains(needs.*.result, 'failure') && 'failure') || (contains(needs.*.result, 'cancelled') && 'cancelled') || 'success' }}"
           jq -n -f .github/release-report.jq \

@@ -13,11 +13,16 @@
 // limitations under the License.
 
 #![feature(type_alias_impl_trait)]
+#![deny(unused_crate_dependencies)]
 
 mod common;
 mod meta_manager;
 mod read;
 mod write;
 
+pub use common::gen_result_cache_key;
+pub use common::gen_result_cache_meta_key;
+pub use common::gen_result_cache_prefix;
+pub use meta_manager::ResultCacheMetaManager;
 pub use read::ResultCacheReader;
 pub use write::WriteResultCacheSink;

@@ -1,4 +1,3 @@
-#![feature(cursor_remaining)]
 // Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,6 +13,7 @@
 // limitations under the License.
 #![allow(clippy::uninlined_format_args)]
 #![feature(box_patterns)]
+#![feature(cursor_remaining)]
 
 mod clickhouse;
 mod common_settings;

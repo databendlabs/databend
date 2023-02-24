@@ -17,6 +17,7 @@ use common_io::prelude::*;
 mod array;
 mod boolean;
 mod date;
+mod decimal;
 mod null;
 mod nullable;
 mod number;
@@ -29,7 +30,9 @@ pub use array::*;
 pub use boolean::*;
 use common_exception::Result;
 pub use date::*;
+pub use decimal::*;
 use enum_dispatch::enum_dispatch;
+use ethnum::i256;
 pub use null::*;
 pub use nullable::*;
 pub use number::*;
@@ -91,6 +94,8 @@ pub enum TypeDeserializerImpl {
     UInt64(NumberDeserializer<u64, u64>),
     Float32(NumberDeserializer<F32, f32>),
     Float64(NumberDeserializer<F64, f64>),
+    Decimal128(DecimalDeserializer<i128>),
+    Decimal256(DecimalDeserializer<i256>),
 
     Date(DateDeserializer),
     Timestamp(TimestampDeserializer),

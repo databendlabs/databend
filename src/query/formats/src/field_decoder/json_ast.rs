@@ -19,12 +19,14 @@ use chrono_tz::Tz;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::date::check_date;
+use common_expression::types::decimal::Decimal;
 use common_expression::types::number::Number;
 use common_expression::types::timestamp::check_timestamp;
 use common_expression::uniform_date;
 use common_expression::ArrayDeserializer;
 use common_expression::BooleanDeserializer;
 use common_expression::DateDeserializer;
+use common_expression::DecimalDeserializer;
 use common_expression::NullDeserializer;
 use common_expression::NullableDeserializer;
 use common_expression::NumberDeserializer;
@@ -80,6 +82,8 @@ impl FieldJsonAstDecoder {
             TypeDeserializerImpl::UInt64(c) => self.read_int(c, value),
             TypeDeserializerImpl::Float32(c) => self.read_float(c, value),
             TypeDeserializerImpl::Float64(c) => self.read_float(c, value),
+            TypeDeserializerImpl::Decimal128(c) => self.read_decimal(c, value),
+            TypeDeserializerImpl::Decimal256(c) => self.read_decimal(c, value),
             TypeDeserializerImpl::Date(c) => self.read_date(c, value),
             TypeDeserializerImpl::Timestamp(c) => self.read_timestamp(c, value),
             TypeDeserializerImpl::String(c) => self.read_string(c, value),
@@ -155,6 +159,15 @@ impl FieldJsonAstDecoder {
             }
             _ => Err(ErrorCode::BadBytes("Incorrect json value, must be number")),
         }
+    }
+
+    fn read_decimal<D: Decimal>(
+        &self,
+        column: &mut DecimalDeserializer<D>,
+        value: &Value,
+    ) -> Result<()>
+where {
+        column.de_json_inner(value)
     }
 
     fn read_string(&self, column: &mut StringDeserializer, value: &Value) -> Result<()> {

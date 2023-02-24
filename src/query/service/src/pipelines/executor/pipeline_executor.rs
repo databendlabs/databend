@@ -224,7 +224,7 @@ impl PipelineExecutor {
                 }
             }
 
-            let mut init_schedule_queue = self.graph.init_schedule_queue()?;
+            let mut init_schedule_queue = self.graph.init_schedule_queue(self.threads_num)?;
 
             let mut wakeup_worker_id = 0;
             while let Some(proc) = init_schedule_queue.async_queue.pop_front() {

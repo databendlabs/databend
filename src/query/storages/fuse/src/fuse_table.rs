@@ -297,6 +297,10 @@ impl FuseTable {
     pub fn transient(&self) -> bool {
         self.table_info.meta.options.contains_key("TRANSIENT")
     }
+
+    pub fn cluster_key_str(&self) -> Option<&String> {
+        self.cluster_key_meta.as_ref().map(|(_, key)| key)
+    }
 }
 
 #[async_trait::async_trait]
