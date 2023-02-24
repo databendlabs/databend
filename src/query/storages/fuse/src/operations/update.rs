@@ -172,7 +172,7 @@ impl FuseTable {
             pos += 1;
         }
 
-        if exprs.len() > 0 {
+        if !exprs.is_empty() {
             ops.push(BlockOperator::Map { exprs });
         }
         ops.push(BlockOperator::Project {
