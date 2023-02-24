@@ -48,7 +48,6 @@ use futures::AsyncSeek;
 use opendal::Operator;
 use serde::Deserializer;
 use serde::Serializer;
-use similar_asserts::traits::MakeDiff;
 
 use crate::input_formats::input_pipeline::AligningStateTrait;
 use crate::input_formats::input_pipeline::BlockBuilderTrait;
@@ -415,7 +414,7 @@ impl AligningStateTrait for AligningState {
 
 fn get_used_fields(fields: &Vec<Field>, schema: &TableSchemaRef) -> Result<Vec<Field>> {
     let mut read_fields = Vec::with_capacity(fields.len());
-    for f in schema.fields().iter() {
+    for (idx, f) in schema.fields().iter().enumerate() {
         if let Some(m) = fields
             .iter()
             .filter(|c| c.name.eq_ignore_ascii_case(f.name()))
@@ -423,19 +422,15 @@ fn get_used_fields(fields: &Vec<Field>, schema: &TableSchemaRef) -> Result<Vec<F
         {
             let tf = TableField::from(m);
             if tf.data_type().remove_nullable() != f.data_type().remove_nullable() {
-                let pair = (f, m);
-                let diff = pair.make_diff("expected_field", "infer_field");
-                // TODO(xuanwo): return a more accurate error code here.
-                return Err(ErrorCode::Internal(format!(
-                    "parquet schema mismatch, differ: {}",
-                    diff
+                return Err(ErrorCode::TableSchemaMismatch(format!(
+                    "parquet schema mismatch for field {}(start from 0), expect: {:?}, got {:?}",
+                    idx, f, tf
                 )));
             }
 
             read_fields.push(m.clone());
         } else {
-            // TODO(xuanwo): return a more accurate error code here.
-            return Err(ErrorCode::Internal(format!(
+            return Err(ErrorCode::TableSchemaMismatch(format!(
                 "schema field size mismatch, expected to find column: {}",
                 f.name()
             )));
