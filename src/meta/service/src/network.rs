@@ -44,6 +44,7 @@ use crate::raft_client::RaftClient;
 use crate::raft_client::RaftClientApi;
 use crate::store::RaftStore;
 
+#[derive(Debug)]
 struct ChannelManager {}
 
 #[async_trait]
@@ -52,12 +53,14 @@ impl ItemManager for ChannelManager {
     type Item = Channel;
     type Error = tonic::transport::Error;
 
+    #[tracing::instrument(level = "info", err(Debug))]
     async fn build(&self, addr: &Self::Key) -> Result<Channel, tonic::transport::Error> {
         tonic::transport::Endpoint::new(addr.clone())?
             .connect()
             .await
     }
 
+    #[tracing::instrument(level = "debug", err(Debug))]
     async fn check(&self, mut ch: Channel) -> Result<Channel, tonic::transport::Error> {
         futures::future::poll_fn(|cx| ch.poll_ready(cx)).await?;
         Ok(ch)
@@ -129,7 +132,7 @@ impl Network {
         policy.chain(zero)
     }
 
-    #[tracing::instrument(level = "debug", skip(self), fields(id=self.sto.id))]
+    #[tracing::instrument(level = "debug", skip(self), fields(id=self.sto.id), err(Debug))]
     pub async fn make_client(&self, target: &NodeId) -> anyhow::Result<RaftClient> {
         let endpoint = self.sto.get_node_endpoint(target).await?;
         let addr = format!("http://{}", endpoint);
@@ -158,7 +161,7 @@ impl Network {
 
 #[async_trait]
 impl RaftNetwork<LogEntry> for Network {
-    #[tracing::instrument(level = "debug", skip_all, fields(id=self.sto.id, target=target))]
+    #[tracing::instrument(level = "debug", skip_all, fields(id=self.sto.id, target=target), err(Debug))]
     async fn send_append_entries(
         &self,
         target: NodeId,
@@ -206,7 +209,7 @@ impl RaftNetwork<LogEntry> for Network {
         Err(last_err)
     }
 
-    #[tracing::instrument(level = "debug", skip_all, fields(id=self.sto.id, target=target))]
+    #[tracing::instrument(level = "debug", skip_all, fields(id=self.sto.id, target=target), err(Debug))]
     async fn send_install_snapshot(
         &self,
         target: NodeId,
@@ -267,7 +270,7 @@ impl RaftNetwork<LogEntry> for Network {
         Err(last_err)
     }
 
-    #[tracing::instrument(level = "debug", skip_all, fields(id=self.sto.id, target=target))]
+    #[tracing::instrument(level = "debug", skip_all, fields(id=self.sto.id, target=target), err(Debug))]
     async fn send_vote(&self, target: NodeId, rpc: VoteRequest) -> anyhow::Result<VoteResponse> {
         info!("send_vote: target: {} rpc: {}", target, rpc.summary());
 

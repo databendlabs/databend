@@ -686,7 +686,12 @@ impl RaftStoreBare {
             .get_node(node_id)
             .await?
             .map(|n| n.endpoint)
-            .ok_or_else(|| MetaNetworkError::GetNodeAddrError(format!("node id: {}", node_id)))?;
+            .ok_or_else(|| {
+                MetaNetworkError::GetNodeAddrError(format!(
+                    "fail to get endpoint of node_id: {}",
+                    node_id
+                ))
+            })?;
 
         Ok(endpoint)
     }
