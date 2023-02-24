@@ -151,6 +151,7 @@ impl<'a> JoinPredicate<'a> {
 
 pub fn contain_subquery(scalar: &ScalarExpr) -> bool {
     match scalar {
+        ScalarExpr::SubqueryExpr(_) => true,
         ScalarExpr::BoundColumnRef(BoundColumnRef { column }) => {
             // For example: SELECT * FROM c WHERE c_id=(SELECT c_id FROM o WHERE ship='WA' AND bill='FL');
             // predicate `c_id = scalar_subquery_{}` can't be pushed down to the join condition.

@@ -17,6 +17,7 @@ use common_ast::ast::TableReference;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use super::contain_subquery;
 use crate::binder::Binder;
 use crate::binder::ScalarBinder;
 use crate::optimizer::SExpr;
@@ -25,7 +26,6 @@ use crate::plans::DeletePlan;
 use crate::plans::Filter;
 use crate::plans::Plan;
 use crate::BindContext;
-use crate::ScalarExpr;
 
 impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_delete(
@@ -71,15 +71,15 @@ impl<'a> Binder {
 
         let (selection, input_expr) = if let Some(expr) = filter {
             let (scalar, _) = scalar_binder.bind(expr).await?;
-            if let ScalarExpr::SubqueryExpr(_) = scalar {
+            if contain_subquery(&scalar) {
                 let filter = Filter {
                     predicates: vec![scalar],
                     is_having: false,
                 };
-                let filter_expr = SExpr::create_unary(filter.into(), table_expr);
+                let mut filter_expr = SExpr::create_unary(filter.into(), table_expr);
                 let mut rewriter = SubqueryRewriter::new(self.metadata.clone());
-                let rewrote_expr = rewriter.rewrite(&filter_expr)?;
-                (None, Some(rewrote_expr))
+                rewriter.rewrite(&mut filter_expr)?;
+                (None, Some(filter_expr))
             } else {
                 (Some(scalar), None)
             }

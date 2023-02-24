@@ -103,6 +103,12 @@ impl SExpr {
             .ok_or_else(|| ErrorCode::Internal(format!("Invalid children index: {}", n)))
     }
 
+    pub fn child_mut(&mut self, n: usize) -> Result<&mut SExpr> {
+        self.children
+            .get_mut(n)
+            .ok_or_else(|| ErrorCode::Internal(format!("Invalid children index: {}", n)))
+    }
+
     pub fn arity(&self) -> usize {
         self.children.len()
     }

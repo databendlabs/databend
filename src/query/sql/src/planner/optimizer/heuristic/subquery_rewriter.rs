@@ -23,6 +23,7 @@ use common_expression::types::NumberDataType;
 use common_expression::Literal;
 use common_functions::aggregates::AggregateCountFunction;
 
+use crate::binder::contain_subquery;
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBinding;
 use crate::binder::Visibility;
@@ -78,31 +79,39 @@ impl SubqueryRewriter {
         }
     }
 
-    pub fn rewrite(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+    pub fn rewrite(&mut self, s_expr: &mut SExpr) -> Result<()> {
+        let has_subquery = sexpr_has_subquery(s_expr).unwrap_or(false);
+        if !has_subquery {
+            return Ok(());
+        }
+
         match s_expr.plan().clone() {
             RelOperator::EvalScalar(mut plan) => {
-                let mut input = self.rewrite(s_expr.child(0)?)?;
+                self.rewrite(s_expr.child_mut(0)?)?;
 
+                let mut input = s_expr.child(0)?.clone();
                 for item in plan.items.iter_mut() {
                     let res = self.try_rewrite_subquery(&item.scalar, &input, false)?;
                     input = res.1;
                     item.scalar = res.0;
                 }
-
-                Ok(SExpr::create_unary(plan.into(), input))
+                *s_expr.child_mut(0)? = input;
             }
             RelOperator::Filter(mut plan) => {
-                let mut input = self.rewrite(s_expr.child(0)?)?;
+                self.rewrite(s_expr.child_mut(0)?)?;
+
+                let mut input = s_expr.child(0)?.clone();
                 for pred in plan.predicates.iter_mut() {
                     let res = self.try_rewrite_subquery(pred, &input, true)?;
                     input = res.1;
                     *pred = res.0;
                 }
-
-                Ok(SExpr::create_unary(plan.into(), input))
+                *s_expr.child_mut(0)? = input;
             }
             RelOperator::Aggregate(mut plan) => {
-                let mut input = self.rewrite(s_expr.child(0)?)?;
+                self.rewrite(s_expr.child_mut(0)?)?;
+
+                let mut input = s_expr.child(0)?.clone();
 
                 for item in plan.group_items.iter_mut() {
                     let res = self.try_rewrite_subquery(&item.scalar, &input, false)?;
@@ -115,25 +124,23 @@ impl SubqueryRewriter {
                     input = res.1;
                     item.scalar = res.0;
                 }
-
-                Ok(SExpr::create_unary(plan.into(), input))
+                *s_expr.child_mut(0)? = input;
             }
 
-            RelOperator::Join(_) | RelOperator::UnionAll(_) => Ok(SExpr::create_binary(
-                s_expr.plan().clone(),
-                self.rewrite(s_expr.child(0)?)?,
-                self.rewrite(s_expr.child(1)?)?,
-            )),
+            RelOperator::Join(_) | RelOperator::UnionAll(_) => {
+                self.rewrite(s_expr.child_mut(0)?)?;
+                self.rewrite(s_expr.child_mut(1)?)?;
+            }
 
-            RelOperator::Limit(_) | RelOperator::Sort(_) => Ok(SExpr::create_unary(
-                s_expr.plan().clone(),
-                self.rewrite(s_expr.child(0)?)?,
-            )),
+            RelOperator::Limit(_) | RelOperator::Sort(_) => {
+                self.rewrite(s_expr.child_mut(0)?)?;
+            }
 
-            RelOperator::DummyTableScan(_) | RelOperator::Scan(_) => Ok(s_expr.clone()),
+            RelOperator::DummyTableScan(_) | RelOperator::Scan(_) => {}
 
-            _ => Err(ErrorCode::Internal("Invalid plan type")),
+            _ => return Err(ErrorCode::Internal("Invalid plan type")),
         }
+        Ok(())
     }
 
     /// Try to extract subquery from a scalar expression. Returns replaced scalar expression
@@ -246,7 +253,7 @@ impl SubqueryRewriter {
             ScalarExpr::SubqueryExpr(subquery) => {
                 // Rewrite subquery recursively
                 let mut subquery = subquery.clone();
-                subquery.subquery = Box::new(self.rewrite(&subquery.subquery)?);
+                self.rewrite(subquery.subquery.as_mut())?;
 
                 // Check if the subquery is a correlated subquery.
                 // If it is, we'll try to flatten it and rewrite to join.
@@ -557,4 +564,62 @@ pub fn check_child_expr_in_subquery(
             other
         ))),
     }
+}
+
+pub fn sexpr_has_subquery(s_expr: &SExpr) -> Result<bool> {
+    match &s_expr.plan {
+        RelOperator::EvalScalar(plan) => {
+            for e in plan.items.iter() {
+                if contain_subquery(&e.scalar) {
+                    return Ok(true);
+                }
+            }
+            if sexpr_has_subquery(s_expr.child(0)?)? {
+                return Ok(true);
+            }
+        }
+        RelOperator::Filter(plan) => {
+            for pred in plan.predicates.iter() {
+                if contain_subquery(pred) {
+                    return Ok(true);
+                }
+            }
+            if sexpr_has_subquery(s_expr.child(0)?)? {
+                return Ok(true);
+            }
+        }
+        RelOperator::Aggregate(plan) => {
+            for item in plan.group_items.iter() {
+                if contain_subquery(&item.scalar) {
+                    return Ok(true);
+                }
+            }
+
+            for item in plan.aggregate_functions.iter() {
+                if contain_subquery(&item.scalar) {
+                    return Ok(true);
+                }
+            }
+
+            if sexpr_has_subquery(s_expr.child(0)?)? {
+                return Ok(true);
+            }
+        }
+
+        RelOperator::Join(_) | RelOperator::UnionAll(_) => {
+            return Ok(
+                sexpr_has_subquery(s_expr.child(0)?)? || sexpr_has_subquery(s_expr.child(1)?)?
+            );
+        }
+
+        RelOperator::Limit(_) | RelOperator::Sort(_) => {
+            return sexpr_has_subquery(s_expr.child(0)?);
+        }
+
+        RelOperator::DummyTableScan(_) | RelOperator::Scan(_) => return Ok(false),
+
+        _ => {}
+    }
+
+    return Ok(false);
 }
