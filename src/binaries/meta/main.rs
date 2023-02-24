@@ -41,10 +41,13 @@ use databend_meta::version::METASRV_COMMIT_VERSION;
 use databend_meta::version::METASRV_SEMVER;
 use databend_meta::version::MIN_METACLI_SEMVER;
 use tracing::info;
+use tracing::warn;
 
 mod kvapi;
 
 pub use kvapi::KvApiCommand;
+
+use crate::tokio::time::sleep;
 
 #[global_allocator]
 pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
@@ -144,6 +147,20 @@ async fn main() -> anyhow::Result<()> {
             .await?;
 
         info!("Current raft node metrics: {:?}", metrics);
+
+        let leader_id = metrics.current_leader.unwrap();
+
+        for _i in 0..10 {
+            if meta_node.get_node(&leader_id).await?.is_none() {
+                warn!("Leader node is not replicated to local store, wait and try again");
+                sleep(Duration::from_millis(500)).await
+            } else {
+                info!(
+                    "Leader node is replicated to local store. About to register node with grpc-advertise-addr"
+                );
+                break;
+            }
+        }
 
         let node_id = meta_node.sto.id;
         let raft_endpoint = conf.raft_config.raft_api_advertise_host_endpoint();
