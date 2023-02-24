@@ -1445,6 +1445,7 @@ impl<'a> TypeChecker<'a> {
             "ifnull",
             "is_null",
             "coalesce",
+            "last_query_id",
         ]
     }
 
@@ -1642,6 +1643,60 @@ impl<'a> TypeChecker<'a> {
                 )
             }
 
+            ("last_query_id", args) => {
+                // last_query_id(index) returns query_id in current session by index
+                // index support literal(eg: -1, -2, 2) and simple binary op(eg: 1+1, 3-1)
+                // if index out of range, returns none.
+                let index = if args.len() != 1 {
+                    -1
+                } else {
+                    match args[0] {
+                        Expr::BinaryOp {
+                            op, left, right, ..
+                        } => {
+                            if let Expr::Literal {span:_, lit:Literal::Integer(l)} = **left
+                                && let Expr::Literal {span:_, lit:Literal::Integer(r)} = **right {
+                                match op {
+                                    BinaryOperator::Plus => (l + r) as i32,
+                                    BinaryOperator::Minus => (l - r) as i32,
+                                    _ => -1,
+                                }
+                            } else {-1}
+                        }
+                        Expr::UnaryOp { op, expr, .. } => {
+                            if let Expr::Literal {
+                                span: _,
+                                lit: Literal::Integer(i),
+                            } = **expr
+                            {
+                                match op {
+                                    UnaryOperator::Plus => i as i32,
+                                    UnaryOperator::Minus => -(i as i32),
+                                    UnaryOperator::Not => -1,
+                                }
+                            } else {
+                                -1
+                            }
+                        }
+                        Expr::Literal {
+                            lit: Literal::Integer(i),
+                            ..
+                        } => *i as i32,
+                        _ => -1,
+                    }
+                };
+                let query_id = self.ctx.get_last_query_id(index);
+                Some(
+                    self.resolve(
+                        &Expr::Literal {
+                            span,
+                            lit: Literal::String(query_id),
+                        },
+                        None,
+                    )
+                    .await,
+                )
+            }
             _ => None,
         }
     }

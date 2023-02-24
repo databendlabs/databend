@@ -185,6 +185,10 @@ impl Interpreter for SelectInterpreterV2 {
             // 2. Check the cache.
             match cache_reader.try_read_cached_result().await {
                 Ok(Some(blocks)) => {
+                    // 2.0 update query_id -> result_cache_meta_key in session.
+                    self.ctx
+                        .get_current_session()
+                        .update_query_ids_results(self.ctx.get_id(), cache_reader.get_meta_key());
                     // 2.1 If found, return the result directly.
                     return PipelineBuildResult::from_blocks(blocks);
                 }

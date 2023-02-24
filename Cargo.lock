@@ -2326,6 +2326,7 @@ dependencies = [
  "common-pipeline-sources",
  "common-sql",
  "common-storages-fuse",
+ "common-storages-result-cache",
  "common-storages-view",
  "common-users",
  "itertools",

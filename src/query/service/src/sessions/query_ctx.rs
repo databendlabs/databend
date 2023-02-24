@@ -376,6 +376,24 @@ impl TableContext for QueryContext {
         self.shared.get_stage_attachment()
     }
 
+    fn get_last_query_id(&self, index: i32) -> String {
+        self.shared.session.session_ctx.get_last_query_id(index)
+    }
+
+    fn get_result_cache_key(&self, query_id: &str) -> Option<String> {
+        self.shared
+            .session
+            .session_ctx
+            .get_query_result_cache_key(query_id)
+    }
+
+    fn set_query_id_result_cache(&self, query_id: String, result_cache_key: String) {
+        self.shared
+            .session
+            .session_ctx
+            .update_query_ids_results(query_id, Some(result_cache_key))
+    }
+
     fn set_on_error_map(&self, map: Option<HashMap<String, ErrorCode>>) {
         self.shared.set_on_error_map(map);
     }
