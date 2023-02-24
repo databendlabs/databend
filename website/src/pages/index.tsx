@@ -8,19 +8,19 @@ import * as icons from "../components/Icons"
 
 const community = [
   {
-    'icon':'Gitub',
+    'icon':'Github',
     'star': '5.3 K',
     'title': 'GitHub',
     'link': 'https://github.com/datafuselabs/databend'
   },
   {
     'icon':'Slack',
-    'title': 'Join us slack chanel',
+    'title': 'Join us Slack chanel',
     'link': 'https://link.databend.rs/join-slack'
   },
   {
     'icon':'Twitter',
-    'title': 'Follow our twitter',
+    'title': 'Follow us on Twitter',
     'link': 'https://twitter.com/Datafuse_Labs'
   },
   {
@@ -61,8 +61,8 @@ function HomepageHeader() {
               <div className={clsx('community-group', styles.CommunityGroup)}>
                 {community.map((item,index)=>{
                   const Icon = icons[item.icon]
-                  return <Link to={item.link}>
-                    <div className={clsx('community-item', styles.communityItem)}><div className={clsx('icon', styles.Icon)}><Icon size={24}/></div><h6>{item.title}</h6>{item.star?<span className={clsx('tag', styles.tag)}>🌟 {item.star}</span>:''}</div>
+                  return <Link to={item.link} key={index}>
+                    <div className={clsx('community-item', styles.communityItem)}><div className={clsx('icon', styles.Icon)}><Icon size={24}/></div><h6>{item.title}</h6>{item.star?<span className={clsx('tag', styles.tag)}>🌟 {item.star} Stars</span>:''}</div>
                   </Link>
                 })}
               </div>
@@ -71,7 +71,7 @@ function HomepageHeader() {
             <div className={clsx('cloud-banner', styles.cloudBanner)}>
               <div style={{textAlign:'center'}}>
               <h5>🎉 Databend Cloud Now Available</h5>
-              <p>No Operations Required, Ready-to-Use. Register Now and Get $200 Discount.</p>
+              <p>Register now and get $200 discount.</p>
               </div>
               <Link
               className={clsx("button", styles.Button, styles.White)}
