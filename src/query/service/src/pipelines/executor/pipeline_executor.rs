@@ -50,7 +50,7 @@ pub struct PipelineExecutor {
     on_init_callback: Mutex<Option<InitCallback>>,
     on_finished_callback: Mutex<Option<FinishedCallback>>,
     settings: ExecutorSettings,
-    finished_notify: Notify,
+    finished_notify: Arc<Notify>,
     finished_error: Mutex<Option<ErrorCode>>,
 }
 
@@ -144,8 +144,8 @@ impl PipelineExecutor {
             on_finished_callback,
             async_runtime: GlobalIORuntime::instance(),
             settings,
-            finished_notify: Notify::new(),
             finished_error: Mutex::new(None),
+            finished_notify: Arc::new(Notify::new()),
         }))
     }
 
@@ -224,7 +224,7 @@ impl PipelineExecutor {
                 }
             }
 
-            let mut init_schedule_queue = self.graph.init_schedule_queue()?;
+            let mut init_schedule_queue = self.graph.init_schedule_queue(self.threads_num)?;
 
             let mut wakeup_worker_id = 0;
             while let Some(proc) = init_schedule_queue.async_queue.pop_front() {
@@ -252,15 +252,19 @@ impl PipelineExecutor {
 
     fn start_executor_daemon(self: &Arc<Self>) -> Result<()> {
         if !self.settings.max_execute_time.is_zero() {
-            let this = self.clone();
+            // NOTE(wake ref): When runtime scheduling is blocked, holding executor strong ref may cause the executor can not stop.
+            let this = Arc::downgrade(self);
+            let max_execute_time = self.settings.max_execute_time;
+            let finished_notify = self.finished_notify.clone();
             self.async_runtime.spawn(async move {
-                let max_execute_time = this.settings.max_execute_time;
-                let finished_future = Box::pin(this.finished_notify.notified());
+                let finished_future = Box::pin(finished_notify.notified());
                 let max_execute_future = Box::pin(tokio::time::sleep(max_execute_time));
                 if let Either::Left(_) = select(max_execute_future, finished_future).await {
-                    this.finish(Some(ErrorCode::AbortedQuery(
-                        "Aborted query, because the execution time exceeds the maximum execution time limit",
-                    )));
+                    if let Some(executor) = this.upgrade() {
+                        executor.finish(Some(ErrorCode::AbortedQuery(
+                            "Aborted query, because the execution time exceeds the maximum execution time limit",
+                        )));
+                    }
                 }
             });
         }
@@ -345,6 +349,10 @@ impl PipelineExecutor {
         }
 
         Ok(())
+    }
+
+    pub fn format_graph_nodes(&self) -> String {
+        self.graph.format_graph_nodes()
     }
 }
 

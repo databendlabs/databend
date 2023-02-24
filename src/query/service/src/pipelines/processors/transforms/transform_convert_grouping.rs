@@ -23,6 +23,7 @@ use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_expression::HashMethodKind;
+use common_hashtable::hash2bucket;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
@@ -273,7 +274,7 @@ impl<Method: HashMethodBounds> TransformConvertGrouping<Method> {
 
         for key_item in keys_iter.iter() {
             let hash = self.method.get_hash(key_item);
-            indices.push((hash as usize >> (64u32 - BUCKETS_LG2)) as u16);
+            indices.push(hash2bucket::<BUCKETS_LG2, true>(hash as usize) as u16);
         }
 
         DataBlock::scatter(&data_block, &indices, 1 << BUCKETS_LG2)

@@ -1,0 +1,25 @@
+[package]
+name = "common-compress"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+# Temp workaround, should come back to tagged version after https://github.com/Nemo157/async-compression/issues/150 resolved.
+async-compression = { package = "async-compression-issue-150-workaround", version = "0.3.15-issue-150", features = [
+    "futures-io",
+    "all-algorithms",
+] }
+bytes = "1"
+futures = "0.3"
+log = "0.4"
+pin-project = "1"
+serde = { workspace = true }
+
+[dev-dependencies]
+env_logger = "0.10"
+rand = "0.8"
+sha2 = "0.10"
+tokio = { version = "1", features = ["rt", "macros"] }

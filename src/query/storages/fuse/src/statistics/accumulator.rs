@@ -59,50 +59,6 @@ impl StatisticsAccumulator {
         bloom_filter_index_size: u64,
         block_compression: meta::Compression,
     ) -> Result<()> {
-        self.add(
-            file_size,
-            col_metas,
-            block_statistics,
-            bloom_filter_index_location,
-            bloom_filter_index_size,
-            block_compression,
-        )
-    }
-
-    pub fn add_with_block_meta(
-        &mut self,
-        block_meta: BlockMeta,
-        block_statistics: BlockStatistics,
-        block_compression: meta::Compression,
-    ) -> Result<()> {
-        let bloom_filter_index_location = block_meta.bloom_filter_index_location;
-        let bloom_filter_index_size = block_meta.bloom_filter_index_size;
-        let file_size = block_meta.file_size;
-        let col_metas = block_meta.col_metas;
-
-        self.add(
-            file_size,
-            col_metas,
-            block_statistics,
-            bloom_filter_index_location,
-            bloom_filter_index_size,
-            block_compression,
-        )
-    }
-
-    pub fn summary(&self) -> Result<StatisticsOfColumns> {
-        super::reduce_block_statistics(&self.blocks_statistics, None)
-    }
-
-    fn add(
-        &mut self,
-        file_size: u64,
-        column_meta: HashMap<ColumnId, ColumnMeta>,
-        block_statistics: BlockStatistics,
-        bloom_filter_index_location: Option<Location>,
-        bloom_filter_index_size: u64,
-        block_compression: meta::Compression,
-    ) -> Result<()> {
         self.file_size += file_size;
         self.index_size += bloom_filter_index_size;
         self.summary_block_count += 1;
@@ -129,7 +85,7 @@ impl StatisticsAccumulator {
             block_size,
             file_size,
             col_stats,
-            column_meta,
+            col_metas,
             cluster_stats,
             data_location,
             bloom_filter_index_location,
@@ -138,5 +94,27 @@ impl StatisticsAccumulator {
         )));
 
         Ok(())
+    }
+
+    pub fn add_with_block_meta(&mut self, block_meta: BlockMeta) {
+        self.summary_row_count += block_meta.row_count;
+        self.summary_block_count += 1;
+        self.in_memory_size += block_meta.block_size;
+        self.file_size += block_meta.file_size;
+        self.index_size += block_meta.bloom_filter_index_size;
+        self.blocks_statistics.push(block_meta.col_stats.clone());
+
+        if self.thresholds.check_large_enough(
+            block_meta.row_count as usize,
+            block_meta.block_size as usize,
+        ) {
+            self.perfect_block_count += 1;
+        }
+
+        self.blocks_metas.push(Arc::new(block_meta));
+    }
+
+    pub fn summary(&self) -> Result<StatisticsOfColumns> {
+        super::reduce_block_statistics(&self.blocks_statistics, None)
     }
 }

@@ -15,7 +15,10 @@
 #![feature(box_patterns)]
 #![feature(try_blocks)]
 
+extern crate core;
+
 mod common;
+mod decimal;
 mod group_by;
 mod kernel;
 mod serde;

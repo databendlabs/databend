@@ -135,6 +135,16 @@ SELECT * FROM t1 ORDER BY a;
 2
 3
 
+# The cache can also be used even if the case of the SQL statement is different.
+# Because the cache key is generated from AST.
+
+query I
+select * FRoM t1 OrDER bY a; 
+----
+1
+2
+3
+
 query IT
 SELECT * FROM t1, t2 ORDER BY a, b;
 ----

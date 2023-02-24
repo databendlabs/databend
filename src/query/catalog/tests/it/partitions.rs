@@ -62,7 +62,7 @@ fn gen_parts(kind: PartitionsShuffleKind, size: usize) -> Partitions {
         parts.push(TestPartInfo::create(format!("{}", i)));
     }
 
-    Partitions::create(kind, parts)
+    Partitions::create(kind, parts, true)
 }
 
 #[test]

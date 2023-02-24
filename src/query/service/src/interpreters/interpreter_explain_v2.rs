@@ -68,8 +68,13 @@ impl Interpreter for ExplainInterpreter {
                 } => {
                     let ctx = self.ctx.clone();
                     let settings = ctx.get_settings();
-                    settings.set_enable_distributed_eval_index(false)?;
 
+                    let enable_distributed_eval_index =
+                        settings.get_enable_distributed_eval_index()?;
+                    settings.set_enable_distributed_eval_index(false)?;
+                    scopeguard::defer! {
+                        let _ = settings.set_enable_distributed_eval_index(enable_distributed_eval_index);
+                    }
                     let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx);
                     let plan = builder.build(s_expr).await?;
                     self.explain_physical_plan(&plan, metadata)?
@@ -86,7 +91,13 @@ impl Interpreter for ExplainInterpreter {
                 } => {
                     let ctx = self.ctx.clone();
                     let settings = ctx.get_settings();
+
+                    let enable_distributed_eval_index =
+                        settings.get_enable_distributed_eval_index()?;
                     settings.set_enable_distributed_eval_index(false)?;
+                    scopeguard::defer! {
+                        let _ = settings.set_enable_distributed_eval_index(enable_distributed_eval_index);
+                    }
 
                     self.explain_analyze(s_expr, metadata, *ignore_result)
                         .await?
