@@ -18,6 +18,7 @@ pub mod boolean;
 pub mod date;
 pub mod decimal;
 pub mod empty_array;
+pub mod empty_map;
 pub mod generic;
 pub mod map;
 pub mod null;
@@ -44,6 +45,7 @@ pub use self::boolean::BooleanType;
 pub use self::date::DateType;
 pub use self::decimal::DecimalDataType;
 pub use self::empty_array::EmptyArrayType;
+pub use self::empty_map::EmptyMapType;
 pub use self::generic::GenericType;
 pub use self::map::MapType;
 pub use self::null::NullType;
@@ -75,6 +77,7 @@ pub type GenericMap = [DataType];
 pub enum DataType {
     Null,
     EmptyArray,
+    EmptyMap,
     Boolean,
     String,
     Number(NumberDataType),
@@ -230,6 +233,7 @@ impl DataType {
             }
             DataType::Variant => VariantDeserializer::with_capacity(capacity).into(),
             DataType::Array(ty) => ArrayDeserializer::with_capacity(capacity, ty).into(),
+            DataType::Map(_ty) => todo!(),
             DataType::Tuple(types) => TupleDeserializer::with_capacity(capacity, types).into(),
             DataType::Decimal(types) => match types {
                 DecimalDataType::Decimal128(_) => {
@@ -275,6 +279,7 @@ impl DataType {
         match self {
             DataType::Null => Scalar::Null,
             DataType::EmptyArray => Scalar::EmptyArray,
+            DataType::EmptyMap => Scalar::EmptyMap,
             DataType::Boolean => Scalar::Boolean(false),
             DataType::String => Scalar::String(vec![]),
             DataType::Number(num_ty) => Scalar::Number(match num_ty {
@@ -293,11 +298,21 @@ impl DataType {
             DataType::Timestamp => Scalar::Timestamp(0),
             DataType::Date => Scalar::Date(0),
             DataType::Nullable(_) => Scalar::Null,
-            DataType::Array(_) => Scalar::EmptyArray,
+            DataType::Array(ty) => {
+                let builder = ColumnBuilder::with_capacity(ty, 0);
+                let col = builder.build();
+                Scalar::Array(col)
+            }
+            DataType::Map(ty) => {
+                let builder = ColumnBuilder::with_capacity(ty, 0);
+                let col = builder.build();
+                Scalar::Map(col)
+            }
             DataType::Tuple(tys) => {
                 Scalar::Tuple(tys.iter().map(|ty| ty.default_value()).collect())
             }
             DataType::Variant => Scalar::Variant(vec![]),
+
             _ => unimplemented!(),
         }
     }

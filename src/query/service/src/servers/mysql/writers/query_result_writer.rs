@@ -139,6 +139,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
             match field.data_type().remove_nullable() {
                 DataType::Null => Ok(ColumnType::MYSQL_TYPE_NULL),
                 DataType::EmptyArray => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
+                DataType::EmptyMap => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::Boolean => Ok(ColumnType::MYSQL_TYPE_SHORT),
                 DataType::String => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::Number(num_ty) => match num_ty {

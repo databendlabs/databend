@@ -22,6 +22,7 @@ pub use rpc::DataExchange;
 pub use rpc::DataExchangeManager;
 pub use rpc::DataPacket;
 pub use rpc::DatabendQueryFlightService;
+pub use rpc::ExchangeSorting;
 pub use rpc::ExecutePartialQueryPacket;
 pub use rpc::FlightAction;
 pub use rpc::FlightClient;

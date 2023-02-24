@@ -18,6 +18,8 @@ use std::sync::Arc;
 use common_arrow::parquet::metadata::FileMetaData;
 use common_cache::DefaultHashBuilder;
 use common_cache::Meter;
+use common_catalog::plan::PartStatistics;
+use common_catalog::plan::Partitions;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::InMemoryItemCacheHolder;
 use storages_common_cache::NamedCache;
@@ -42,6 +44,8 @@ pub struct BloomIndexMeta(pub FileMetaData);
 pub type BloomIndexMetaCache = NamedCache<InMemoryItemCacheHolder<BloomIndexMeta>>;
 /// In memory object cache of parquet FileMetaData of external parquet files
 pub type FileMetaDataCache = NamedCache<InMemoryItemCacheHolder<FileMetaData>>;
+
+pub type PrunePartitionsCache = NamedCache<InMemoryItemCacheHolder<(PartStatistics, Partitions)>>;
 
 /// In memory object cache of table column array
 pub type ColumnArrayCache =
@@ -87,6 +91,13 @@ impl CachedObject<BloomIndexMeta> for BloomIndexMeta {
     type Cache = BloomIndexMetaCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_bloom_index_meta_cache()
+    }
+}
+
+impl CachedObject<(PartStatistics, Partitions)> for (PartStatistics, Partitions) {
+    type Cache = PrunePartitionsCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_prune_partitions_cache()
     }
 }
 

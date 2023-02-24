@@ -4,6 +4,7 @@ import Link from '@docusaurus/Link';
 import styles from './styles.module.scss';
 import { useState } from 'react';
 const COOKIE_KEY = 'COOKIE_KEY'
+import { Close } from '../Icons';
 
 function CookiesConsent() {
   const [isHidden, setIsHidden] = useState(true);
@@ -35,8 +36,8 @@ function CookiesConsent() {
         <Link href="https://databend.com/privacy/"> Privacy Policy</Link> .
       </p>
       <div className={styles.right}>
-        <button onClick={acceptAll} className={styles.button}>ACCEPT ALL COOKIES</button>
-        <div onClick={closePopup} className={styles.close}>X</div>
+        <button onClick={acceptAll} className={styles.button}>ACCEPT</button>
+        <div onClick={closePopup} className={styles.close}><Close size={24}/></div>
       </div>
     </div>
    }

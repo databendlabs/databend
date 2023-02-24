@@ -30,7 +30,6 @@ use tracing::info;
 
 use super::estimated_key_size;
 use crate::pipelines::processors::transforms::aggregator::aggregate_info::AggregateInfo;
-use crate::pipelines::processors::transforms::aggregator::aggregator_final_parallel::ParallelFinalAggregator;
 use crate::pipelines::processors::transforms::aggregator::AggregateHashStateInfo;
 use crate::pipelines::processors::transforms::aggregator::PartialAggregator;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
@@ -48,6 +47,10 @@ where Self: Aggregator + Send
     type PartitionedAggregator: Aggregator;
 
     fn get_state_cardinality(&self) -> usize {
+        0
+    }
+
+    fn get_state_bytes(&self) -> usize {
         0
     }
 
@@ -75,6 +78,10 @@ impl<Method: HashMethodBounds, const HAS_AGG: bool> PartitionedAggregatorLike
 
     fn get_state_cardinality(&self) -> usize {
         self.hash_table.len()
+    }
+
+    fn get_state_bytes(&self) -> usize {
+        self.hash_table.bytes_len()
     }
 
     // PartialAggregator<HAS_AGG, Method> -> PartitionedAggregator<PartialAggregator<HAS_AGG, Method>>
@@ -165,6 +172,7 @@ impl<Method: HashMethodBounds, const HAS_AGG: bool> PartitionedAggregatorLike
                     Box::new(table),
                     agg.area_holder.clone(),
                 );
+
                 let block = DataBlock::new_with_meta(vec![], rows, Some(meta));
                 return Ok(vec![block]);
             }
@@ -234,13 +242,6 @@ impl<Method: HashMethodBounds, const HAS_AGG: bool> PartitionedAggregatorLike
 
         Ok(data_blocks)
     }
-}
-
-impl<Method: HashMethodBounds, const HAS_AGG: bool> PartitionedAggregatorLike
-    for ParallelFinalAggregator<HAS_AGG, Method>
-{
-    const SUPPORT_PARTITION: bool = false;
-    type PartitionedAggregator = ParallelFinalAggregator<HAS_AGG, PartitionedHashMethod<Method>>;
 }
 
 // Example: PartitionedAggregator<PartialAggregator<HAS_AGG, Method>> ->

@@ -27,6 +27,7 @@ use crate::types::ArrayType;
 use crate::types::BooleanType;
 use crate::types::DateType;
 use crate::types::EmptyArrayType;
+use crate::types::EmptyMapType;
 use crate::types::NullType;
 use crate::types::NullableType;
 use crate::types::NumberType;
@@ -101,6 +102,7 @@ impl Column {
         match &columns[0] {
             Column::Null { .. } => Self::concat_arg_types::<NullType>(columns),
             Column::EmptyArray { .. } => Self::concat_arg_types::<EmptyArrayType>(columns),
+            Column::EmptyMap { .. } => Self::concat_arg_types::<EmptyMapType>(columns),
             Column::Number(col) => with_number_mapped_type!(|NUM_TYPE| match col {
                 NumberColumn::NUM_TYPE(_) => {
                     Self::concat_arg_types::<NumberType<NUM_TYPE>>(columns)
@@ -135,7 +137,7 @@ impl Column {
                 let builder = Vec::with_capacity(capacity);
                 Self::concat_value_types::<DateType>(builder, columns)
             }
-            Column::Array(col) => {
+            Column::Array(col) | Column::Map(col) => {
                 let mut offsets = Vec::with_capacity(capacity + 1);
                 offsets.push(0);
                 let builder = ColumnBuilder::from_column(

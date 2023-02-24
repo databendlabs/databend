@@ -27,6 +27,7 @@ mod boolean;
 mod control;
 mod datetime;
 mod geo;
+mod map;
 mod math;
 mod tuple;
 mod variant;
@@ -60,6 +61,7 @@ fn builtin_functions() -> FunctionRegistry {
     comparison::register(&mut registry);
     datetime::register(&mut registry);
     math::register(&mut registry);
+    map::register(&mut registry);
     string::register(&mut registry);
     string_multi_args::register(&mut registry);
     tuple::register(&mut registry);
@@ -240,7 +242,7 @@ pub const GENERAL_CAST_RULES: AutoCastRules = &[
 
 /// The rules for automatic casting from string to other types. For example, they are
 /// used to allow `add_hours('2023-01-01 00:00:00', '1')`. But they should be disabled
-/// for comparision functions, because `1 < '1'` should be an error.
+/// for comparison functions, because `1 < '1'` should be an error.
 pub const CAST_FROM_STRING_RULES: AutoCastRules = &[
     (DataType::String, DataType::Number(NumberDataType::UInt8)),
     (DataType::String, DataType::Number(NumberDataType::UInt16)),

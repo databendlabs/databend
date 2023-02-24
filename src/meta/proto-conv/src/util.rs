@@ -89,6 +89,10 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (28, "2023-02-13: Add: user.proto/UserDefinedFileFormat"),
     (
         29,
+        "2023-02-23: Add: metadata.proto/DataType EmptyMap types",
+    ),
+    (
+        30,
         "2023-02-21: Add: config.proto/WebhdfsStorageConfig; Modify: user.proto/UserStageInfo::StageStorage",
     ),
     // Dear developer:

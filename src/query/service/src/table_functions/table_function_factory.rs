@@ -62,18 +62,6 @@ where
     }
 }
 
-fn create_disabled_table_function(
-    _database_name: &str,
-    table_func_name: &str,
-    _table_id: u64,
-    _table_args: TableArgs,
-) -> Result<Arc<dyn TableFunction>> {
-    Err(ErrorCode::UnknownFunction(format!(
-        "table function `{}` cannot be called",
-        table_func_name
-    )))
-}
-
 #[derive(Default)]
 pub struct TableFunctionFactory {
     creators: TableFunctionCreators,
@@ -148,10 +136,10 @@ impl TableFunctionFactory {
             (next_id(), Arc::new(InferSchemaTable::create)),
         );
 
-        creators.insert(
-            "read_parquet".to_string(),
-            (next_id(), Arc::new(create_disabled_table_function)),
-        );
+        // creators.insert(
+        //     "read_parquet".to_string(),
+        //     (next_id(), Arc::new(create_disabled_table_function)),
+        // );
 
         TableFunctionFactory {
             creators: RwLock::new(creators),

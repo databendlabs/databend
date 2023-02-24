@@ -69,12 +69,12 @@ set flight_client_timeout = 30;
 
 ## group_by_two_level_threshold
 
-The threshold of keys to open two-level aggregation, default value: 10000.
+The threshold of keys to open two-level aggregation, default value: 20000.
 
 Examples：
 
 ```sql
-set group_by_two_level_threshold = 10000;
+set group_by_two_level_threshold = 20000;
 ```
 
 ## max_block_size

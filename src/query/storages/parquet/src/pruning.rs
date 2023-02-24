@@ -289,7 +289,7 @@ impl PartitionPruner {
                 partitions_scanned,
                 partitions_total,
             ),
-            Partitions::create(partition_kind, partitions),
+            Partitions::create_nolazy(partition_kind, partitions),
         ))
     }
 }

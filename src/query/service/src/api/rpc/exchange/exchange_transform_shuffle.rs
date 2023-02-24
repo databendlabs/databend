@@ -333,7 +333,7 @@ impl ShuffleExchangeSorting {
 }
 
 impl ExchangeSorting for ShuffleExchangeSorting {
-    fn block_number(&self, data_block: &DataBlock) -> Result<usize> {
+    fn block_number(&self, data_block: &DataBlock) -> Result<isize> {
         let block_meta = data_block.get_meta();
         let shuffle_meta = block_meta
             .and_then(|meta| meta.as_any().downcast_ref::<ExchangeShuffleMeta>())

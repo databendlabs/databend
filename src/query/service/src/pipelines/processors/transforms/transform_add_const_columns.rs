@@ -52,7 +52,8 @@ where Self: Transform
         mut const_values: Vec<DataScalar>,
     ) -> Result<ProcessorPtr> {
         let fields = output_schema.fields();
-        let mut ops = Vec::with_capacity(fields.len());
+        let mut exprs = Vec::with_capacity(fields.len());
+
         for f in fields.iter() {
             let expr = if !input_schema.has_field(f.name()) {
                 Expr::Constant {
@@ -70,13 +71,13 @@ where Self: Transform
                     display_name: field.name().clone(),
                 }
             };
-            ops.push(BlockOperator::Map { expr });
+            exprs.push(expr);
         }
 
         let func_ctx = ctx.get_function_context()?;
         let expression_transform = CompoundBlockOperator {
             ctx: func_ctx,
-            operators: ops,
+            operators: vec![BlockOperator::Map { exprs }],
         };
 
         Ok(ProcessorPtr::create(Transformer::create(

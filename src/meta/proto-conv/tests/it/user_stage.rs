@@ -56,19 +56,19 @@ fn test_user_stage_webhdfs_latest() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_user_stage_webhdfs_v29() -> anyhow::Result<()> {
-    // Encoded data of version 29 of common_meta_app::principal::user_stage::UserStageInfo:
+fn test_user_stage_webhdfs_v30() -> anyhow::Result<()> {
+    // Encoded data of version 30 of common_meta_app::principal::user_stage::UserStageInfo:
     // It is generated with common::test_pb_from_to().
-    let user_stage_info_v29 = vec![
+    let user_stage_info_v30 = vec![
         10, 29, 119, 101, 98, 104, 100, 102, 115, 58, 47, 47, 112, 97, 116, 104, 47, 116, 111, 47,
         115, 116, 97, 103, 101, 47, 102, 105, 108, 101, 115, 16, 1, 26, 81, 10, 79, 42, 77, 10, 27,
         104, 116, 116, 112, 115, 58, 47, 47, 119, 101, 98, 104, 100, 102, 115, 46, 101, 120, 97,
         109, 112, 108, 101, 46, 99, 111, 109, 18, 20, 47, 112, 97, 116, 104, 47, 116, 111, 47, 115,
         116, 97, 103, 101, 47, 102, 105, 108, 101, 115, 26, 18, 60, 100, 101, 108, 101, 103, 97,
-        116, 105, 111, 110, 95, 116, 111, 107, 101, 110, 62, 160, 6, 29, 168, 6, 24, 34, 30, 8, 1,
+        116, 105, 111, 110, 95, 116, 111, 107, 101, 110, 62, 160, 6, 30, 168, 6, 24, 34, 30, 8, 1,
         16, 128, 8, 26, 1, 124, 34, 2, 47, 47, 40, 2, 58, 3, 114, 111, 119, 66, 3, 78, 97, 78, 160,
-        6, 29, 168, 6, 24, 42, 10, 10, 3, 32, 197, 24, 16, 142, 8, 24, 1, 50, 4, 116, 101, 115,
-        116, 160, 6, 29, 168, 6, 24,
+        6, 30, 168, 6, 24, 42, 10, 10, 3, 32, 197, 24, 16, 142, 8, 24, 1, 50, 4, 116, 101, 115,
+        116, 160, 6, 30, 168, 6, 24,
     ];
 
     let want = || mt::principal::UserStageInfo {
@@ -104,7 +104,7 @@ fn test_user_stage_webhdfs_v29() -> anyhow::Result<()> {
         comment: "test".to_string(),
         ..Default::default()
     };
-    common::test_load_old(func_name!(), user_stage_info_v29.as_slice(), 29, want())?;
+    common::test_load_old(func_name!(), user_stage_info_v30.as_slice(), 30, want())?;
     common::test_pb_from_to(func_name!(), want())?;
 
     Ok(())

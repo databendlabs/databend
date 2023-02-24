@@ -444,6 +444,16 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn get_last_query_id(&self, _index: i32) -> String {
+        todo!()
+    }
+    fn get_result_cache_key(&self, _query_id: &str) -> Option<String> {
+        todo!()
+    }
+    fn set_query_id_result_cache(&self, _query_id: String, _result_cache_key: String) {
+        todo!()
+    }
+
     fn set_on_error_map(&self, _map: Option<HashMap<String, ErrorCode>>) {
         todo!()
     }

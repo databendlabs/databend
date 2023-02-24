@@ -27,6 +27,9 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::SimpleDomain;
+use crate::types::ArgType;
+use crate::types::DataType;
+use crate::types::GenericMap;
 use crate::types::ValueType;
 use crate::utils::arrow::buffer_into_mut;
 use crate::Column;
@@ -37,6 +40,9 @@ use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecimalType<T: Decimal>(PhantomData<T>);
+
+pub type Decimal128Type = DecimalType<i128>;
+pub type Decimal256Type = DecimalType<i256>;
 
 impl<Num: Decimal> ValueType for DecimalType<Num> {
     type Scalar = Num;
@@ -146,6 +152,38 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
     }
 }
 
+impl<Num: Decimal> ArgType for DecimalType<Num> {
+    fn data_type() -> DataType {
+        Num::data_type()
+    }
+
+    fn full_domain() -> Self::Domain {
+        SimpleDomain {
+            min: Num::MIN,
+            max: Num::MAX,
+        }
+    }
+
+    fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
+        Vec::with_capacity(capacity)
+    }
+
+    fn column_from_vec(vec: Vec<Self::Scalar>, _generics: &GenericMap) -> Self::Column {
+        vec.into()
+    }
+
+    fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
+        iter.collect()
+    }
+
+    fn column_from_ref_iter<'a>(
+        iter: impl Iterator<Item = Self::ScalarRef<'a>>,
+        _: &GenericMap,
+    ) -> Self::Column {
+        iter.collect()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
 pub enum DecimalDataType {
     Decimal128(DecimalSize),
@@ -228,6 +266,9 @@ pub trait Decimal:
     fn upcast_scalar(scalar: Self) -> Scalar;
     fn upcast_column(col: Buffer<Self>) -> Column;
     fn upcast_domain(domain: SimpleDomain<Self>) -> Domain;
+    fn data_type() -> DataType;
+    const MIN: Self;
+    const MAX: Self;
 
     fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn;
 
@@ -262,12 +303,12 @@ impl Decimal for i128 {
         -1_i128
     }
 
-    fn mem_size() -> usize {
-        16
-    }
-
     fn e(n: u32) -> Self {
         10_i128.pow(n)
+    }
+
+    fn mem_size() -> usize {
+        16
     }
 
     fn checked_add(self, rhs: Self) -> Option<Self> {
@@ -363,6 +404,16 @@ impl Decimal for i128 {
         }))
     }
 
+    fn data_type() -> DataType {
+        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
+            precision: MAX_DECIMAL128_PRECISION,
+            scale: 0,
+        }))
+    }
+
+    const MIN: i128 = i128::MIN;
+
+    const MAX: i128 = i128::MAX;
     fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn {
         DecimalColumn::Decimal128(value, size)
     }
@@ -481,6 +532,15 @@ impl Decimal for i256 {
         }))
     }
 
+    fn data_type() -> DataType {
+        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
+            precision: MAX_DECIMAL256_PRECISION,
+            scale: 0,
+        }))
+    }
+
+    const MIN: i256 = i256::MIN;
+    const MAX: i256 = i256::MAX;
     fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn {
         DecimalColumn::Decimal256(value, size)
     }
