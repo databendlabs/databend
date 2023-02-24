@@ -8,9 +8,9 @@ import * as icons from "../components/Icons"
 
 const community = [
   {
-    'icon':'Github',
+    'icon':'Gitub',
     'star': '5.3 K',
-    'title': 'Github',
+    'title': 'GitHub',
     'link': 'https://github.com/datafuselabs/databend'
   },
   {
@@ -25,7 +25,7 @@ const community = [
   },
   {
     'icon':'Youtube',
-    'title': 'Youtube',
+    'title': 'YouTube',
     'link': 'https://www.youtube.com/@Datafuse_Labs'
   },
 ]
@@ -53,7 +53,7 @@ function HomepageHeader() {
                   className={clsx("button", styles.Button)}
                   to="/doc/guides/">
                   <Getstart size={20}/>
-                  Open source quickstart
+                  Tutorials
               </Link>
             </div>
             <div className={clsx('community', styles.Community)}>
@@ -70,7 +70,7 @@ function HomepageHeader() {
             <hr/>
             <div className={clsx('cloud-banner', styles.cloudBanner)}>
               <div style={{textAlign:'center'}}>
-              <h5>🎉 Databend Cloud is now available.</h5>
+              <h5>🎉 Databend Cloud Now Available</h5>
               <p>No Operations Required, Ready-to-Use. Register Now and Get $200 Discount.</p>
               </div>
               <Link
