@@ -26,6 +26,7 @@ use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::IndexType;
+use crate::ScalarExpr;
 
 /// `SExpr` is abbreviation of single expression, which is a tree of relational operators.
 #[derive(Clone, Debug)]
@@ -46,9 +47,6 @@ pub struct SExpr {
     /// A bitmap to record applied rules on current SExpr, to prevent
     /// redundant transformations.
     pub(crate) applied_rules: AppliedRules,
-
-    /// Check if contains subquery, if not, skip subquery optimization
-    pub(crate) contain_subquery: bool,
 }
 
 impl SExpr {
@@ -65,7 +63,6 @@ impl SExpr {
             rel_prop: Arc::new(Mutex::new(rel_prop)),
 
             applied_rules: AppliedRules::default(),
-            contain_subquery: false,
         }
     }
 
@@ -152,14 +149,12 @@ impl SExpr {
     /// Note that this method will keep the `applied_rules` of
     /// current `SExpr` unchanged.
     pub fn replace_children(&self, children: Vec<SExpr>) -> Self {
-        let contain_subquery = children.iter().any(|child| child.contain_subquery);
         Self {
             plan: self.plan.clone(),
             original_group: None,
             rel_prop: Arc::new(Mutex::new(None)),
             applied_rules: self.applied_rules.clone(),
             children,
-            contain_subquery,
         }
     }
 
@@ -171,5 +166,57 @@ impl SExpr {
     /// Check if a rule is applied for current SExpr
     pub(crate) fn applied_rule(&self, rule_id: &RuleID) -> bool {
         self.applied_rules.get(rule_id)
+    }
+
+    /// Check if contain subquery
+    pub(crate) fn contain_subquery(&self) -> bool {
+        if !find_subquery(&self.plan) {
+            for child in self.children.iter() {
+                return child.contain_subquery();
+            }
+        }
+        true
+    }
+}
+
+fn find_subquery(rel_op: &RelOperator) -> bool {
+    match rel_op {
+        RelOperator::Scan(_)
+        | RelOperator::Limit(_)
+        | RelOperator::Exchange(_)
+        | RelOperator::UnionAll(_)
+        | RelOperator::Sort(_)
+        | RelOperator::DummyTableScan(_)
+        | RelOperator::Pattern(_) => false,
+        RelOperator::Join(op) => {
+            op.left_conditions
+                .iter()
+                .any(|expr| matches!(expr, ScalarExpr::SubqueryExpr(_)))
+                || op
+                    .right_conditions
+                    .iter()
+                    .any(|expr| matches!(expr, ScalarExpr::SubqueryExpr(_)))
+                || op
+                    .non_equi_conditions
+                    .iter()
+                    .any(|expr| matches!(expr, ScalarExpr::SubqueryExpr(_)))
+        }
+        RelOperator::EvalScalar(op) => op
+            .items
+            .iter()
+            .any(|expr| matches!(expr.scalar, ScalarExpr::SubqueryExpr(_))),
+        RelOperator::Filter(op) => op
+            .predicates
+            .iter()
+            .any(|expr| matches!(expr, ScalarExpr::SubqueryExpr(_))),
+        RelOperator::Aggregate(op) => {
+            op.group_items
+                .iter()
+                .any(|expr| matches!(expr.scalar, ScalarExpr::SubqueryExpr(_)))
+                || op
+                    .aggregate_functions
+                    .iter()
+                    .any(|expr| matches!(expr.scalar, ScalarExpr::SubqueryExpr(_)))
+        }
     }
 }
