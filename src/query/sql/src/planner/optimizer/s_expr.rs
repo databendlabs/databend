@@ -187,34 +187,43 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         | RelOperator::DummyTableScan(_)
         | RelOperator::Pattern(_) => false,
         RelOperator::Join(op) => {
-            op.left_conditions
-                .iter()
-                .any(|expr| matches!(expr, ScalarExpr::SubqueryExpr(_)))
-                || op
-                    .right_conditions
-                    .iter()
-                    .any(|expr| matches!(expr, ScalarExpr::SubqueryExpr(_)))
-                || op
-                    .non_equi_conditions
-                    .iter()
-                    .any(|expr| matches!(expr, ScalarExpr::SubqueryExpr(_)))
+            op.left_conditions.iter().any(find_subquery_in_expr)
+                || op.right_conditions.iter().any(find_subquery_in_expr)
+                || op.non_equi_conditions.iter().any(find_subquery_in_expr)
         }
         RelOperator::EvalScalar(op) => op
             .items
             .iter()
-            .any(|expr| matches!(expr.scalar, ScalarExpr::SubqueryExpr(_))),
-        RelOperator::Filter(op) => op
-            .predicates
-            .iter()
-            .any(|expr| matches!(expr, ScalarExpr::SubqueryExpr(_))),
+            .any(|expr| find_subquery_in_expr(&expr.scalar)),
+        RelOperator::Filter(op) => op.predicates.iter().any(find_subquery_in_expr),
         RelOperator::Aggregate(op) => {
             op.group_items
                 .iter()
-                .any(|expr| matches!(expr.scalar, ScalarExpr::SubqueryExpr(_)))
+                .any(|expr| find_subquery_in_expr(&expr.scalar))
                 || op
                     .aggregate_functions
                     .iter()
-                    .any(|expr| matches!(expr.scalar, ScalarExpr::SubqueryExpr(_)))
+                    .any(|expr| find_subquery_in_expr(&expr.scalar))
         }
+    }
+}
+
+fn find_subquery_in_expr(expr: &ScalarExpr) -> bool {
+    match expr {
+        ScalarExpr::BoundColumnRef(_) | ScalarExpr::ConstantExpr(_) => false,
+        ScalarExpr::AndExpr(expr) => {
+            find_subquery_in_expr(&expr.left) || find_subquery_in_expr(&expr.right)
+        }
+        ScalarExpr::OrExpr(expr) => {
+            find_subquery_in_expr(&expr.left) || find_subquery_in_expr(&expr.right)
+        }
+        ScalarExpr::NotExpr(expr) => find_subquery_in_expr(&expr.argument),
+        ScalarExpr::ComparisonExpr(expr) => {
+            find_subquery_in_expr(&expr.left) || find_subquery_in_expr(&expr.right)
+        }
+        ScalarExpr::AggregateFunction(expr) => expr.args.iter().any(find_subquery_in_expr),
+        ScalarExpr::FunctionCall(expr) => expr.arguments.iter().any(find_subquery_in_expr),
+        ScalarExpr::CastExpr(expr) => find_subquery_in_expr(&expr.argument),
+        ScalarExpr::SubqueryExpr(_) => true,
     }
 }
