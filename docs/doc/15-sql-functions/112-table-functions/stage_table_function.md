@@ -99,7 +99,13 @@ select min(number), max(number) from @lake (pattern => '.*parquet');
 
 ### Select from URI
 
+The following options are available to select from for the URI: `s3`, `azblob` , `gcs`, `https`, and `ipfs`.
+
+:::caution
+
 `file_format` must be specified.
+
+:::
 
 ```sql
 select *  from 's3://bucket/test.parquet' 
@@ -107,5 +113,16 @@ select *  from 's3://bucket/test.parquet'
   secret_access_key => 'your-secret-access-key',
   endpoint_url => 'your-object-storage-endpoint',
   file_format => 'parquet');  
+```
+
+```sql
+select count(*), author from 'https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.parquet' (file_format => 'parquet')
+group by author;
++----------+---------------------+
+| count(*) | author              |
++----------+---------------------+
+|        1 | Jim Gray            |
+|        1 | Michael Stonebraker |
++----------+---------------------+
 ```
 
