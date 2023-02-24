@@ -5,15 +5,15 @@ slug:  deploying-databend-on-minio
 date: 2023-02-24
 tags: [beginner]
 category: Engineering
-cover_url: beginner-01.png
-image: beginner-01.png
+cover_url: databend-minio-beginner-01.png
+image: databend-minio-beginner-01.png
 authors:
 - name: wubx
   url: https://github.com/wubx
   image_url: https://github.com/wubx.png
 ---
 
-![Alt text](../static/img/blog/beginner-01.png)
+![Alt text](../static/img/blog/databend-minio-beginner-01.png)
 
 In this article, we will discuss how to deploy a single instance of Databend using MinIO for facilitating data analysis. MinIO is an object storage solution that is lightweight and easy to operate. Databend is a modern data warehouse designed for cloud architecture, built with Rust and open-source. It provides rapid elastic scaling and aims to create an on-demand, pay-as-you-go data cloud product experience.
 
@@ -23,7 +23,7 @@ Databend Docs: https://databend.rs
 
 ## Databend Architecture
 
-![](../static/img/blog/beginner-01-1.png)
+![](../static/img/blog/databend-minio-beginner-01-1.png)
 
 Databend is architecturally divided into three layers: Meta Service Layer, Query Layer, and Storage Layer.
 
@@ -86,7 +86,7 @@ export MINIO_ROOT_PASSWORD=minioadmin
 ```
 Use the MinIO Admin web interface to create a "databend" bucket.
 
-![](../static/img/blog/beginner-01-2.png)
+![](../static/img/blog/databend-minio-beginner-01-2.png)
 
 After creating the bucket, the MinIO deployment is complete.
 
@@ -118,7 +118,7 @@ cd databend
 tar zxvf ../databend-$ver-nightly-x86_64-unknown-linux-musl.tar.gz
 ```
 
-![ ](../static/img/blog/beginner-01-3.png)
+![ ](../static/img/blog/databend-minio-beginner-01-3.png)
 
 Databend installation files extracted a directory named "databend". 
 
@@ -160,7 +160,7 @@ To check that Databend is running, you can use the following command:
 ps axu |grep databend
 ```
 
-![](../static/img/blog/beginner-01-4.png)
+![](../static/img/blog/databend-minio-beginner-01-4.png)
 
 To stop Databend, run the following command:
 
