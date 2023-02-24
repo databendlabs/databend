@@ -20,9 +20,11 @@ use super::number::NumberScalar;
 use super::timestamp::timestamp_to_string;
 use crate::date_helper::TzLUT;
 use crate::property::Domain;
+use crate::types::map::KvPair;
 use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::types::string::StringIterator;
+use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
@@ -175,6 +177,7 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
     let value = match scalar {
         ScalarRef::Null => common_jsonb::Value::Null,
         ScalarRef::EmptyArray => common_jsonb::Value::Array(vec![]),
+        ScalarRef::EmptyMap => common_jsonb::Value::Object(common_jsonb::Object::new()),
         ScalarRef::Number(n) => match n {
             NumberScalar::UInt8(n) => n.into(),
             NumberScalar::UInt16(n) => n.into(),
@@ -195,6 +198,29 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
         ScalarRef::Array(col) => {
             let items = cast_scalars_to_variants(col.iter(), tz);
             common_jsonb::build_array(items.iter(), buf).expect("failed to build jsonb array");
+            return;
+        }
+        ScalarRef::Map(col) => {
+            let kv_col = KvPair::<AnyType, AnyType>::try_downcast_column(&col).unwrap();
+            let kvs = kv_col
+                .iter()
+                .map(|(k, v)| {
+                    let key = match k {
+                        ScalarRef::String(v) => unsafe { String::from_utf8_unchecked(v.to_vec()) },
+                        ScalarRef::Number(v) => v.to_string(),
+                        ScalarRef::Decimal(v) => v.to_string(),
+                        ScalarRef::Boolean(v) => v.to_string(),
+                        ScalarRef::Timestamp(v) => timestamp_to_string(v, inner_tz).to_string(),
+                        ScalarRef::Date(v) => date_to_string(v, inner_tz).to_string(),
+                        _ => unreachable!(),
+                    };
+                    let mut val = vec![];
+                    cast_scalar_to_variant(v, tz, &mut val);
+                    (key, val)
+                })
+                .collect::<Vec<_>>();
+            common_jsonb::build_object(kvs.iter().map(|(k, v)| (k, &v[..])), buf)
+                .expect("failed to build jsonb object");
             return;
         }
         ScalarRef::Tuple(fields) => {

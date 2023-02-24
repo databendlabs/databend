@@ -167,19 +167,20 @@ pub fn register(registry: &mut FunctionRegistry) {
                             type T = <(L, R) as ResultTypeOfBinary>::IntDiv;
 
                             registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>,_, _>(
-                            "div",
-                            FunctionProperty::default(),
-                            |_, _| FunctionDomain::MayThrow,
-                            vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
+                                "div",
+                                FunctionProperty::default(),
+                                |_, _| FunctionDomain::MayThrow,
+                                vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>>(
                                     |a, b, output, ctx| {
-                                    let b = (b.as_() : F64);
-                                    if std::intrinsics::unlikely(b == 0.0) {
+                                        let b = (b.as_() : F64);
+                                        if std::intrinsics::unlikely(b == 0.0) {
                                             ctx.set_error(output.len(), "divided by zero");
                                             output.push(T::default());
-                                    } else {
-                                        output.push(((a.as_() : F64) / b).as_() : T);
+                                        } else {
+                                            output.push(((a.as_() : F64) / b).as_() : T);
+                                        }
                                     }
-                                }),
+                                ),
                             );
                         }
 
@@ -197,19 +198,20 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     | NumberDataType::UInt64
                             ) {
                                 registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>,_, _>(
-                                "modulo",
-                                FunctionProperty::default(),
-                                |_, _| FunctionDomain::MayThrow,
-                                vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
+                                    "modulo",
+                                    FunctionProperty::default(),
+                                    |_, _| FunctionDomain::MayThrow,
+                                    vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
                                         |a, b, output, ctx| {
-                                        let b = (b.as_() : F64);
-                                        if std::intrinsics::unlikely(b == 0.0) {
+                                            let b = (b.as_() : F64);
+                                            if std::intrinsics::unlikely(b == 0.0) {
                                                 ctx.set_error(output.len(), "divided by zero");
                                                 output.push(T::default());
-                                        } else {
-                                            output.push(((a.as_() : M) % (b.as_() : M)).as_(): T);
+                                            } else {
+                                                output.push(((a.as_() : M) % (b.as_() : M)).as_(): T);
+                                            }
                                         }
-                                    }),
+                                    ),
                                 );
                             } else {
                                 registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(

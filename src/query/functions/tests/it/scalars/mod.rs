@@ -38,6 +38,7 @@ mod control;
 mod datetime;
 mod geo;
 mod hash;
+mod map;
 mod math;
 mod misc;
 mod other;

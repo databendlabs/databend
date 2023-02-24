@@ -27,6 +27,7 @@ mod boolean;
 mod control;
 mod datetime;
 mod geo;
+mod map;
 mod math;
 mod tuple;
 mod variant;
@@ -60,6 +61,7 @@ fn builtin_functions() -> FunctionRegistry {
     comparison::register(&mut registry);
     datetime::register(&mut registry);
     math::register(&mut registry);
+    map::register(&mut registry);
     string::register(&mut registry);
     string_multi_args::register(&mut registry);
     tuple::register(&mut registry);
