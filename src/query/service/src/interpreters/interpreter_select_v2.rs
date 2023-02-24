@@ -23,7 +23,9 @@ use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
+use common_pipeline_sinks::EmptySink;
 use common_sql::MetadataRef;
 use common_storages_result_cache::gen_result_cache_key;
 use common_storages_result_cache::ResultCacheReader;
@@ -101,6 +103,12 @@ impl SelectInterpreterV2 {
         // Upstream────►│Duplicate│ 4  │         │ 4  │ Result  │
         //              │         ├───►│         ├───►│  Cache  │
         //              └─────────┘    └─────────┘    └─────────┘
+        if self.ignore_result {
+            // If `ignore_result` is true,
+            // the last pipes of the pipeline are `EmptySink` we need to remove them.
+            // `EmptySink` will be added back later.
+            pipeline.pipes.pop();
+        }
 
         // 1. Duplicate the pipes.
         pipeline.duplicate(false)?;
@@ -123,11 +131,20 @@ impl SelectInterpreterV2 {
         for _ in 0..output_len / 2 {
             let input = InputPort::create();
             let output = OutputPort::create();
-            items.push(PipeItem::create(
-                TransformDummy::create(input.clone(), output.clone()),
-                vec![input],
-                vec![output],
-            ));
+            let pipe_item = if self.ignore_result {
+                PipeItem::create(
+                    ProcessorPtr::create(EmptySink::create(input.clone())),
+                    vec![input],
+                    vec![],
+                )
+            } else {
+                PipeItem::create(
+                    TransformDummy::create(input.clone(), output.clone()),
+                    vec![input],
+                    vec![output],
+                )
+            };
+            items.push(pipe_item);
         }
 
         // 4. Add `WriteResultCacheSink` (`AsyncMpscSinker`) to the back half pipes.
@@ -147,8 +164,13 @@ impl SelectInterpreterV2 {
             vec![],
         ));
 
-        pipeline.add_pipe(Pipe::create(output_len, output_len / 2, items));
-
+        let final_input = output_len;
+        let final_output = if self.ignore_result {
+            0
+        } else {
+            output_len / 2
+        };
+        pipeline.add_pipe(Pipe::create(final_input, final_output, items));
         Ok(())
     }
 }

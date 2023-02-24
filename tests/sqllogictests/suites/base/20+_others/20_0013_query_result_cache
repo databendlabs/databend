@@ -38,12 +38,11 @@ SET enable_query_result_cache = 1;
 
 # Write cache
 
+## IGNORE_RESULT will also write cache.
+
 query I
-SELECT * FROM t1 ORDER BY a;
+SELECT * FROM t1 ORDER BY a IGNORE_RESULT;
 ----
-1
-2
-3
 
 query IT
 SELECT * FROM t1, t2 ORDER BY a, b;
@@ -59,13 +58,6 @@ SELECT * FROM t1, t2 ORDER BY a, b;
 3 c
 
 # Read cache
-
-query I
-SELECT * FROM t1 ORDER BY a;
-----
-1
-2
-3
 
 query IT
 SELECT * FROM t1, t2 ORDER BY a, b;
