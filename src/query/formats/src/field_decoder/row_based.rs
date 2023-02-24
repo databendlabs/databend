@@ -232,9 +232,13 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         self.read_string_inner(reader, &mut column.buffer, raw)?;
         let mut buffer_readr = Cursor::new(&column.buffer);
         let pos = buffer_readr.position();
-        let ts_result = buffer_readr.read_timestamp_text(&self.common_settings().timezone);
+        let ts_result = buffer_readr.read_num_text_exact();
         let ts = match ts_result {
-            Ok(t) => {
+            Err(_) => {
+                buffer_readr
+                    .seek(SeekFrom::Start(pos))
+                    .expect("buffer reader seek must success");
+                let t = buffer_readr.read_timestamp_text(&self.common_settings().timezone)?;
                 if !buffer_readr.eof() {
                     let data = column.buffer.to_str().unwrap_or("not utf8");
                     let msg = format!(
@@ -246,12 +250,7 @@ pub trait FieldDecoderRowBased: FieldDecoder {
                 }
                 t.timestamp_micros()
             }
-            Err(_) => {
-                buffer_readr
-                    .seek(SeekFrom::Start(pos))
-                    .expect("buffer reader seek must success");
-                buffer_readr.read_int_text()?
-            }
+            Ok(t) => t,
         };
         check_timestamp(ts)?;
         column.builder.push(ts.as_());
