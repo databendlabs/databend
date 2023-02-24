@@ -22,14 +22,18 @@ use crate::plans::Filter;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::Scan;
+use crate::ColumnEntry;
+use crate::MetadataRef;
+use crate::ScalarExpr;
 
 pub struct RulePushDownFilterScan {
     id: RuleID,
     pattern: SExpr,
+    metadata: MetadataRef,
 }
 
 impl RulePushDownFilterScan {
-    pub fn new() -> Self {
+    pub fn new(metadata: MetadataRef) -> Self {
         Self {
             id: RuleID::PushDownFilterScan,
             // Filter
@@ -47,7 +51,36 @@ impl RulePushDownFilterScan {
                     .into(),
                 ),
             ),
+            metadata,
         }
+    }
+
+    fn find_push_down_predicates(&self, predicates: &[ScalarExpr]) -> Result<Vec<ScalarExpr>> {
+        let mut filtered_predicates = vec![];
+        for predicate in predicates {
+            let used_columns = predicate.used_columns();
+            let metadata = self.metadata.read();
+            let column_entries = metadata.columns();
+            let mut contain_derived_column = false;
+            for column_entry in column_entries {
+                match column_entry {
+                    ColumnEntry::BaseTableColumn(_) => {}
+                    ColumnEntry::DerivedColumn(column) => {
+                        // Don't push down predicate that contains derived column
+                        // Because storage can't know such columns.
+                        if used_columns.contains(&column.column_index) {
+                            contain_derived_column = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            if !contain_derived_column {
+                filtered_predicates.push(predicate.clone());
+            }
+        }
+
+        Ok(filtered_predicates)
     }
 }
 
@@ -64,7 +97,7 @@ impl Rule for RulePushDownFilterScan {
             return Ok(());
         }
 
-        get.push_down_predicates = Some(filter.predicates.clone());
+        get.push_down_predicates = Some(self.find_push_down_predicates(&filter.predicates)?);
 
         let result = SExpr::create_unary(filter.into(), SExpr::create_leaf(get.into()));
         state.add_result(result);
