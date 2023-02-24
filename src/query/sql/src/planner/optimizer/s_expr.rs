@@ -171,9 +171,7 @@ impl SExpr {
     /// Check if contain subquery
     pub(crate) fn contain_subquery(&self) -> bool {
         if !find_subquery(&self.plan) {
-            for child in self.children.iter() {
-                return child.contain_subquery();
-            }
+            return self.children.iter().any(|child| child.contain_subquery());
         }
         true
     }
