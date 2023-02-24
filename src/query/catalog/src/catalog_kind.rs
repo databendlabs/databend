@@ -14,3 +14,4 @@
 
 pub const CATALOG_DEFAULT: &str = "default";
 pub const CATALOG_HIVE: &str = "hive";
+pub const CATALOG_ICEBERG: &str = "iceberg";

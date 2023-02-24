@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_base::base::tokio;
 use common_catalog::plan::PartInfoPtr;
+use common_catalog::plan::StealablePartitions;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -34,50 +35,49 @@ use crate::operations::read::parquet_data_source::DataSourceMeta;
 use crate::MergeIOReadResult;
 
 pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
+    id: usize,
     finished: bool,
-    ctx: Arc<dyn TableContext>,
     batch_size: usize,
     block_reader: Arc<BlockReader>,
 
     output: Arc<OutputPort>,
     output_data: Option<(Vec<PartInfoPtr>, Vec<MergeIOReadResult>)>,
+    partitions: StealablePartitions,
 }
 
-impl ReadParquetDataSource<true> {
+impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
     pub fn create(
+        id: usize,
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         block_reader: Arc<BlockReader>,
+        partitions: StealablePartitions,
     ) -> Result<ProcessorPtr> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
-        SyncSourcer::create(ctx.clone(), output.clone(), ReadParquetDataSource::<true> {
-            ctx,
-            output,
-            batch_size,
-            block_reader,
-            finished: false,
-            output_data: None,
-        })
-    }
-}
 
-impl ReadParquetDataSource<false> {
-    pub fn create(
-        ctx: Arc<dyn TableContext>,
-        output: Arc<OutputPort>,
-        block_reader: Arc<BlockReader>,
-    ) -> Result<ProcessorPtr> {
-        let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
-        Ok(ProcessorPtr::create(Box::new(ReadParquetDataSource::<
-            false,
-        > {
-            ctx,
-            output,
-            batch_size,
-            block_reader,
-            finished: false,
-            output_data: None,
-        })))
+        if BLOCKING_IO {
+            SyncSourcer::create(ctx.clone(), output.clone(), ReadParquetDataSource::<true> {
+                id,
+                output,
+                batch_size,
+                block_reader,
+                finished: false,
+                output_data: None,
+                partitions,
+            })
+        } else {
+            Ok(ProcessorPtr::create(Box::new(ReadParquetDataSource::<
+                false,
+            > {
+                id,
+                output,
+                batch_size,
+                block_reader,
+                finished: false,
+                output_data: None,
+                partitions,
+            })))
+        }
     }
 }
 
@@ -85,12 +85,12 @@ impl SyncSource for ReadParquetDataSource<true> {
     const NAME: &'static str = "SyncReadParquetDataSource";
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
-        match self.ctx.get_partition() {
+        match self.partitions.steal_one(self.id) {
             None => Ok(None),
             Some(part) => Ok(Some(DataBlock::empty_with_meta(DataSourceMeta::create(
                 vec![part.clone()],
                 vec![self.block_reader.sync_read_columns_data_by_merge_io(
-                    &ReadSettings::from_ctx(&self.ctx)?,
+                    &ReadSettings::from_ctx(&self.partitions.ctx)?,
                     part,
                 )?],
             )))),
@@ -133,14 +133,14 @@ impl Processor for ReadParquetDataSource<false> {
     }
 
     async fn async_process(&mut self) -> Result<()> {
-        let parts = self.ctx.get_partitions(self.batch_size);
+        let parts = self.partitions.steal(self.id, self.batch_size);
 
         if !parts.is_empty() {
             let mut chunks = Vec::with_capacity(parts.len());
             for part in &parts {
                 let part = part.clone();
                 let block_reader = self.block_reader.clone();
-                let settings = ReadSettings::from_ctx(&self.ctx)?;
+                let settings = ReadSettings::from_ctx(&self.partitions.ctx)?;
 
                 chunks.push(async move {
                     tokio::spawn(async move {

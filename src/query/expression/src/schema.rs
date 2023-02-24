@@ -15,6 +15,7 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -60,6 +61,7 @@ use crate::with_number_type;
 use crate::BlockEntry;
 use crate::Column;
 use crate::FromData;
+use crate::Scalar;
 use crate::TypeDeserializerImpl;
 use crate::Value;
 use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
@@ -435,6 +437,50 @@ impl TableSchema {
         });
 
         field_column_ids
+    }
+
+    pub fn field_leaf_default_values(
+        &self,
+        default_values: &[Scalar],
+    ) -> HashMap<ColumnId, Scalar> {
+        fn collect_leaf_default_values(
+            default_value: &Scalar,
+            column_ids: &[ColumnId],
+            index: &mut usize,
+            leaf_default_values: &mut HashMap<ColumnId, Scalar>,
+        ) {
+            match default_value {
+                Scalar::Tuple(s) => {
+                    s.iter().for_each(|default_val| {
+                        collect_leaf_default_values(
+                            default_val,
+                            column_ids,
+                            index,
+                            leaf_default_values,
+                        )
+                    });
+                }
+                _ => {
+                    leaf_default_values.insert(column_ids[*index], default_value.to_owned());
+                    *index += 1;
+                }
+            }
+        }
+
+        let mut leaf_default_values = HashMap::with_capacity(self.num_fields());
+        let leaf_field_column_ids = self.field_leaf_column_ids();
+        for (default_value, field_column_ids) in default_values.iter().zip_eq(leaf_field_column_ids)
+        {
+            let mut index = 0;
+            collect_leaf_default_values(
+                default_value,
+                &field_column_ids,
+                &mut index,
+                &mut leaf_default_values,
+            );
+        }
+
+        leaf_default_values
     }
 
     #[inline]
@@ -1284,6 +1330,12 @@ impl From<&DataType> for ArrowDataType {
             DataType::Number(ty) => with_number_type!(|TYPE| match ty {
                 NumberDataType::TYPE => ArrowDataType::TYPE,
             }),
+            DataType::Decimal(DecimalDataType::Decimal128(s)) => {
+                ArrowDataType::Decimal(s.precision.into(), s.scale.into())
+            }
+            DataType::Decimal(DecimalDataType::Decimal256(s)) => {
+                ArrowDataType::Decimal256(s.precision.into(), s.scale.into())
+            }
             DataType::Timestamp => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
             DataType::Date => ArrowDataType::Date32,
             DataType::Nullable(ty) => ty.as_ref().into(),

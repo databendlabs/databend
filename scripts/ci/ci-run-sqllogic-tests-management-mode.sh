@@ -4,6 +4,8 @@
 
 set -e
 
+export STORAGE_ALLOW_INSECURE=true
+
 echo "Starting standalone DatabendQuery and DatabendMeta"
 ./scripts/ci/deploy/databend-query-management-mode.sh
 

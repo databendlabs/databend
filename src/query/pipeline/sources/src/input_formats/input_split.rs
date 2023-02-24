@@ -22,7 +22,7 @@ use std::hash::Hasher;
 use std::sync::Arc;
 
 use common_catalog::plan::PartInfo;
-use opendal::raw::CompressAlgorithm;
+use common_compress::CompressAlgorithm;
 
 #[typetag::serde(tag = "type")]
 pub trait DynData: Send + Sync + 'static {

@@ -19,24 +19,10 @@ use common_catalog::plan::StageFileStatus;
 use common_exception::Result;
 use futures::TryStreamExt;
 use opendal::Object;
+use opendal::ObjectMetadata;
+use opendal::ObjectMetakey;
 use opendal::Operator;
 use tracing::warn;
-
-pub async fn stat_file(op: &Operator, path: &str) -> Result<StageFileInfo> {
-    let meta = op.object(path).metadata().await?;
-
-    Ok(StageFileInfo {
-        path: path.to_string(),
-        size: meta.content_length(),
-        md5: meta.content_md5().map(str::to_string),
-        last_modified: meta
-            .last_modified()
-            .map_or(Utc::now(), |t| Utc.timestamp(t.unix_timestamp(), 0)),
-        etag: meta.etag().map(str::to_string),
-        status: StageFileStatus::NeedCopy,
-        creator: None,
-    })
-}
 
 /// List files from DAL in recursive way.
 ///
@@ -51,10 +37,10 @@ pub async fn list_file(op: &Operator, path: &str) -> Result<Vec<StageFileInfo>> 
     // - If the path itself is a dir, return directly.
     // - Otherwise, return a path suffix by `/`
     // - If other errors happen, we will ignore them by returning None.
-    let dir_path = match op.object(path).metadata().await {
+    let dir_path = match op.object(path).stat().await {
         Ok(meta) if meta.mode().is_dir() => Some(path.to_string()),
         Ok(meta) if !meta.mode().is_dir() => {
-            files.push((path.to_string(), meta));
+            files.push(format_stage_file_info(path.to_string(), &meta));
 
             None
         }
@@ -65,14 +51,12 @@ pub async fn list_file(op: &Operator, path: &str) -> Result<Vec<StageFileInfo>> 
 
     // Check the if this dir valid and list it recursively.
     if let Some(dir) = dir_path {
-        match op.object(&dir).metadata().await {
+        match op.object(&dir).stat().await {
             Ok(_) => {
                 let mut ds = op.object(&dir).scan().await?;
                 while let Some(de) = ds.try_next().await? {
-                    if de.mode().await?.is_file() {
-                        let path = de.path().to_string();
-                        let meta = de.metadata().await?;
-                        files.push((path, meta));
+                    if let Some(fi) = stat_file(de).await? {
+                        files.push(fi)
                     }
                 }
             }
@@ -80,35 +64,43 @@ pub async fn list_file(op: &Operator, path: &str) -> Result<Vec<StageFileInfo>> 
         };
     }
 
-    let results = files
-        .into_iter()
-        .map(|(name, meta)| StageFileInfo {
-            path: name,
-            size: meta.content_length(),
-            md5: meta.content_md5().map(str::to_string),
-            last_modified: meta
-                .last_modified()
-                .map_or(Utc::now(), |t| Utc.timestamp(t.unix_timestamp(), 0)),
-            etag: meta.etag().map(str::to_string),
-            status: StageFileStatus::NeedCopy,
-            creator: None,
-        })
-        .collect::<Vec<StageFileInfo>>();
-
-    Ok(results)
+    Ok(files)
 }
 
-pub async fn get_first_file(op: &Operator, path: &str) -> Result<Option<Object>> {
-    let root_object = op.object(path);
-    let meta = match root_object.metadata().await {
-        Ok(meta) => meta,
-        Err(e) if e.kind() == opendal::ErrorKind::ObjectNotFound => return Ok(None),
-        Err(e) => return Err(e.into()),
-    };
-    if !meta.mode().is_dir() {
-        Ok(Some(root_object))
-    } else {
-        let mut lister = root_object.list().await?;
-        Ok(lister.try_next().await?)
+/// # Behavior
+///
+///
+/// - `Ok(Some(v))` if given object is a file and no error happened.
+/// - `Ok(None)` if given object is not a file.
+/// - `Err(err)` if there is an error happened.
+pub async fn stat_file(o: Object) -> Result<Option<StageFileInfo>> {
+    let meta = o
+        .metadata({
+            ObjectMetakey::Mode
+                | ObjectMetakey::ContentLength
+                | ObjectMetakey::ContentMd5
+                | ObjectMetakey::LastModified
+                | ObjectMetakey::Etag
+        })
+        .await?;
+
+    if !meta.mode().is_file() {
+        return Ok(None);
+    }
+
+    Ok(Some(format_stage_file_info(o.path().to_string(), &meta)))
+}
+
+pub fn format_stage_file_info(path: String, meta: &ObjectMetadata) -> StageFileInfo {
+    StageFileInfo {
+        path,
+        size: meta.content_length(),
+        md5: meta.content_md5().map(str::to_string),
+        last_modified: meta
+            .last_modified()
+            .map_or(Utc::now(), |t| Utc.timestamp(t.unix_timestamp(), 0)),
+        etag: meta.etag().map(str::to_string),
+        status: StageFileStatus::NeedCopy,
+        creator: None,
     }
 }

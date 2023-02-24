@@ -14,13 +14,18 @@
 
 use std::any::Any;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_exception::Result;
+use parking_lot::RwLock;
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
+use sha2::Digest;
+
+use crate::table_context::TableContext;
 
 #[typetag::serde(tag = "type")]
 pub trait PartInfo: Send + Sync {
@@ -73,11 +78,28 @@ pub enum PartitionsShuffleKind {
 pub struct Partitions {
     pub kind: PartitionsShuffleKind,
     pub partitions: Vec<PartInfoPtr>,
+    pub is_lazy: bool,
 }
 
 impl Partitions {
-    pub fn create(kind: PartitionsShuffleKind, partitions: Vec<PartInfoPtr>) -> Self {
-        Partitions { kind, partitions }
+    pub fn create(
+        kind: PartitionsShuffleKind,
+        partitions: Vec<PartInfoPtr>,
+        is_lazy: bool,
+    ) -> Self {
+        Partitions {
+            kind,
+            partitions,
+            is_lazy,
+        }
+    }
+
+    pub fn create_nolazy(kind: PartitionsShuffleKind, partitions: Vec<PartInfoPtr>) -> Self {
+        Partitions {
+            kind,
+            partitions,
+            is_lazy: false,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -124,20 +146,26 @@ impl Partitions {
             let parts = partitions[begin..end].to_vec();
             executor_part.insert(
                 executor.clone(),
-                Partitions::create(PartitionsShuffleKind::Seq, parts.to_vec()),
+                Partitions::create(PartitionsShuffleKind::Seq, parts.to_vec(), self.is_lazy),
             );
             if end == num_parts && idx < num_executors - 1 {
                 // reach here only when num_executors > num_parts
                 executors_sorted[(idx + 1)..].iter().for_each(|executor| {
                     executor_part.insert(
                         executor.clone(),
-                        Partitions::create(PartitionsShuffleKind::Seq, vec![]),
+                        Partitions::create(PartitionsShuffleKind::Seq, vec![], self.is_lazy),
                     );
                 });
                 break;
             }
         }
         Ok(executor_part)
+    }
+
+    pub fn compute_sha256(&self) -> Result<String> {
+        let buf = serde_json::to_vec(&self.partitions)?;
+        let sha = sha2::Sha256::digest(buf);
+        Ok(format!("{:x}", sha))
     }
 }
 
@@ -146,6 +174,73 @@ impl Default for Partitions {
         Self {
             kind: PartitionsShuffleKind::Seq,
             partitions: vec![],
+            is_lazy: false,
         }
+    }
+}
+
+/// StealablePartitions is used for cache affinity
+/// that is, the same partition is always routed to the same executor as possible.
+#[derive(Clone)]
+pub struct StealablePartitions {
+    pub partitions: Arc<RwLock<Vec<VecDeque<PartInfoPtr>>>>,
+    pub ctx: Arc<dyn TableContext>,
+}
+
+impl StealablePartitions {
+    pub fn new(partitions: Vec<VecDeque<PartInfoPtr>>, ctx: Arc<dyn TableContext>) -> Self {
+        StealablePartitions {
+            partitions: Arc::new(RwLock::new(partitions)),
+            ctx,
+        }
+    }
+
+    pub fn steal_one(&self, idx: usize) -> Option<PartInfoPtr> {
+        let mut partitions = self.partitions.write();
+        if partitions.is_empty() {
+            return self.ctx.get_partition();
+        }
+
+        let idx = if idx >= partitions.len() {
+            idx % partitions.len()
+        } else {
+            idx
+        };
+
+        for step in 0..partitions.len() {
+            let index = (idx + step) % partitions.len();
+            if !partitions[index].is_empty() {
+                return partitions[index].pop_front();
+            }
+        }
+
+        drop(partitions);
+        self.ctx.get_partition()
+    }
+
+    pub fn steal(&self, idx: usize, max_size: usize) -> Vec<PartInfoPtr> {
+        let mut partitions = self.partitions.write();
+        if partitions.is_empty() {
+            return self.ctx.get_partitions(max_size);
+        }
+
+        let idx = if idx >= partitions.len() {
+            idx % partitions.len()
+        } else {
+            idx
+        };
+
+        for step in 0..partitions.len() {
+            let index = (idx + step) % partitions.len();
+
+            if !partitions[index].is_empty() {
+                let ps = &mut partitions[index];
+                let size = ps.len().min(max_size);
+                return ps.drain(..size).collect();
+            }
+        }
+
+        drop(partitions);
+        self.ctx.get_partitions(max_size)
     }
 }

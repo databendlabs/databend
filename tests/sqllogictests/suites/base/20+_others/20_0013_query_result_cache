@@ -1,0 +1,203 @@
+statement ok
+DROP DATABASE IF EXISTS db20_13;
+
+statement ok
+CREATE DATABASE db20_13;
+
+statement ok
+USE db20_13;
+
+statement ok
+CREATE TABLE IF NOT EXISTS t1 (a INT);
+
+statement ok
+INSERT INTO t1 VALUES (1), (2), (3);
+
+query I
+SELECT * FROM t1 ORDER BY a;
+----
+1
+2
+3
+
+statement ok
+CREATE TABLE IF NOT EXISTS t2 (b VARCHAR);
+
+statement ok
+INSERT INTO t2 VALUES ('a'), ('b'), ('c');
+
+query I
+SELECT * FROM t2 ORDER BY b;
+----
+a
+b
+c
+
+statement ok
+SET enable_query_result_cache = 1;
+
+# Write cache
+
+query I
+SELECT * FROM t1 ORDER BY a;
+----
+1
+2
+3
+
+query IT
+SELECT * FROM t1, t2 ORDER BY a, b;
+----
+1 a
+1 b
+1 c
+2 a
+2 b
+2 c
+3 a
+3 b
+3 c
+
+# Read cache
+
+query I
+SELECT * FROM t1 ORDER BY a;
+----
+1
+2
+3
+
+query IT
+SELECT * FROM t1, t2 ORDER BY a, b;
+----
+1 a
+1 b
+1 c
+2 a
+2 b
+2 c
+3 a
+3 b
+3 c
+
+# Insert new data
+
+statement ok
+INSERT INTO t1 VALUES (4), (5), (6);
+
+statement ok
+SET enable_query_result_cache = 0;
+
+query I
+SELECT * FROM t1 ORDER BY a;
+----
+1
+2
+3
+4
+5
+6
+
+query IT
+SELECT * FROM t1, t2 ORDER BY a, b;
+----
+1 a
+1 b
+1 c
+2 a
+2 b
+2 c
+3 a
+3 b
+3 c
+4 a
+4 b
+4 c
+5 a
+5 b
+5 c
+6 a
+6 b
+6 c
+
+# tolerate inconsistent result cache
+
+statement ok
+SET enable_query_result_cache = 1;
+
+statement ok
+SET tolerate_inconsistent_result_cache = 1;
+
+query I
+SELECT * FROM t1 ORDER BY a;
+----
+1
+2
+3
+
+# The cache can also be used even if the case of the SQL statement is different.
+# Because the cache key is generated from AST.
+
+query I
+select * FRoM t1 OrDER bY a; 
+----
+1
+2
+3
+
+query IT
+SELECT * FROM t1, t2 ORDER BY a, b;
+----
+1 a
+1 b
+1 c
+2 a
+2 b
+2 c
+3 a
+3 b
+3 c
+
+statement ok
+SET tolerate_inconsistent_result_cache = 0;
+
+query I
+SELECT * FROM t1 ORDER BY a;
+----
+1
+2
+3
+4
+5
+6
+
+query IT
+SELECT * FROM t1, t2 ORDER BY a, b;
+----
+1 a
+1 b
+1 c
+2 a
+2 b
+2 c
+3 a
+3 b
+3 c
+4 a
+4 b
+4 c
+5 a
+5 b
+5 c
+6 a
+6 b
+6 c
+
+statement ok
+DROP TABLE t1;
+
+statement ok
+DROP TABLE t2;
+
+statement ok
+DROP DATABASE db20_13;

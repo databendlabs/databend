@@ -70,6 +70,32 @@ pub struct Scan {
     pub statistics: Statistics,
 }
 
+impl Scan {
+    pub fn prune_columns(&self, columns: ColumnSet, prewhere: Option<Prewhere>) -> Self {
+        let col_stats = self
+            .statistics
+            .col_stats
+            .iter()
+            .filter(|(col, _)| columns.contains(*col))
+            .map(|(col, stat)| (*col, stat.clone()))
+            .collect();
+
+        Scan {
+            table_index: self.table_index,
+            columns,
+            push_down_predicates: self.push_down_predicates.clone(),
+            limit: self.limit,
+            order_by: self.order_by.clone(),
+            statistics: Statistics {
+                statistics: self.statistics.statistics,
+                col_stats,
+                is_accurate: self.statistics.is_accurate,
+            },
+            prewhere,
+        }
+    }
+}
+
 impl PartialEq for Scan {
     fn eq(&self, other: &Self) -> bool {
         self.table_index == other.table_index
@@ -117,6 +143,10 @@ impl Operator for Scan {
 
         let mut column_stats: ColumnStatSet = Default::default();
         for (k, v) in &self.statistics.col_stats {
+            // No need to cal histogram for unused columns
+            if !used_columns.contains(k) {
+                continue;
+            }
             if let Some(col_stat) = v {
                 let min = col_stat.min.clone();
                 let max = col_stat.max.clone();

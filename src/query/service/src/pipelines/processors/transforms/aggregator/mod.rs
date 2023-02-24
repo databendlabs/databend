@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod aggregate_group_by;
+mod aggregate_exchange_sorting;
 mod aggregate_hashstate_info;
 mod aggregate_info;
 mod aggregate_meta;
@@ -23,11 +24,11 @@ mod aggregator_partitioned;
 mod aggregator_single_key;
 mod utils;
 
+pub use aggregate_exchange_sorting::AggregateExchangeSorting;
 pub use aggregate_hashstate_info::AggregateHashStateInfo;
 pub use aggregate_info::AggregateInfo;
 pub use aggregate_info::OverflowInfo;
 pub use aggregator_final_parallel::BucketAggregator;
-pub use aggregator_final_parallel::ParallelFinalAggregator;
 pub use aggregator_params::AggregatorParams;
 pub use aggregator_params::AggregatorTransformParams;
 pub use aggregator_partial::PartialAggregator;

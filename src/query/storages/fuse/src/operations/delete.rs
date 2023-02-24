@@ -246,6 +246,7 @@ impl FuseTable {
                     block_reader.clone(),
                     remain_reader.clone(),
                     ops.clone(),
+                    self.storage_format,
                 )
             },
             max_threads,
@@ -288,7 +289,7 @@ impl FuseTable {
             PruningStatistics::default(),
         )?;
 
-        let parts = Partitions::create(
+        let parts = Partitions::create_nolazy(
             PartitionsShuffleKind::Mod,
             block_metas
                 .into_iter()

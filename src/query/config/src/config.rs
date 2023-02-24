@@ -1045,6 +1045,9 @@ pub struct QueryConfig {
     #[clap(long, default_value = "3307")]
     pub mysql_handler_port: u16,
 
+    #[clap(long, default_value = "120")]
+    pub mysql_handler_tcp_keepalive_timeout_secs: u64,
+
     #[clap(long, default_value = "256")]
     pub max_active_sessions: u64,
 
@@ -1138,7 +1141,7 @@ pub struct QueryConfig {
     #[clap(long, default_value_t)]
     pub jwt_key_file: String,
 
-    /// If there are multiple trusted jwt provider put it into additonal_jwt_key_files configuration
+    /// If there are multiple trusted jwt provider put it into additional_jwt_key_files configuration
     #[clap(skip)]
     pub jwt_key_files: Vec<String>,
 
@@ -1153,6 +1156,12 @@ pub struct QueryConfig {
     /// The maximum timeout in milliseconds since the last insert before inserting collected data.
     #[clap(long, default_value = "0")]
     pub async_insert_stale_timeout: u64,
+
+    #[clap(long, default_value = "auto")]
+    pub default_storage_format: String,
+
+    #[clap(long, default_value = "auto")]
+    pub default_compression: String,
 
     #[clap(skip)]
     users: Vec<UserConfig>,
@@ -1242,6 +1251,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             num_cpus: self.num_cpus,
             mysql_handler_host: self.mysql_handler_host,
             mysql_handler_port: self.mysql_handler_port,
+            mysql_handler_tcp_keepalive_timeout_secs: self.mysql_handler_tcp_keepalive_timeout_secs,
             max_active_sessions: self.max_active_sessions,
             max_server_memory_usage: self.max_server_memory_usage,
             max_memory_limit_enabled: self.max_memory_limit_enabled,
@@ -1272,6 +1282,8 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             async_insert_max_data_size: self.async_insert_max_data_size,
             async_insert_busy_timeout: self.async_insert_busy_timeout,
             async_insert_stale_timeout: self.async_insert_stale_timeout,
+            default_storage_format: self.default_storage_format,
+            default_compression: self.default_compression,
             idm: InnerIDMConfig {
                 users: users_to_inner(self.users)?,
             },
@@ -1293,6 +1305,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             num_cpus: inner.num_cpus,
             mysql_handler_host: inner.mysql_handler_host,
             mysql_handler_port: inner.mysql_handler_port,
+            mysql_handler_tcp_keepalive_timeout_secs: inner
+                .mysql_handler_tcp_keepalive_timeout_secs,
             max_active_sessions: inner.max_active_sessions,
             max_server_memory_usage: inner.max_server_memory_usage,
             max_memory_limit_enabled: inner.max_memory_limit_enabled,
@@ -1328,6 +1342,9 @@ impl From<InnerQueryConfig> for QueryConfig {
             async_insert_max_data_size: inner.async_insert_max_data_size,
             async_insert_busy_timeout: inner.async_insert_busy_timeout,
             async_insert_stale_timeout: inner.async_insert_stale_timeout,
+            default_storage_format: inner.default_storage_format,
+            default_compression: inner.default_compression,
+
             users: users_from_inner(inner.idm.users),
             share_endpoint_address: inner.share_endpoint_address,
             share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,
@@ -1778,6 +1795,9 @@ pub struct CacheConfig {
     )]
     pub table_bloom_index_filter_count: u64,
 
+    #[clap(long = "cache-table-prune-partitions-count", default_value = "256")]
+    pub table_prune_partitions_count: u64,
+
     /// Type of data cache storage
     #[clap(long = "cache-data-cache-storage", value_enum, default_value_t)]
     pub data_cache_storage: CacheStorageTypeConfig,
@@ -1921,6 +1941,7 @@ mod cache_config_converters {
                 enable_table_index_bloom: value.enable_table_bloom_index_cache,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
+                table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.try_into()?,
                 table_data_cache_population_queue_size: value
                     .table_data_cache_population_queue_size,
@@ -1940,6 +1961,7 @@ mod cache_config_converters {
                 enable_table_bloom_index_cache: value.enable_table_index_bloom,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
+                table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.into(),
                 table_data_cache_population_queue_size: value
                     .table_data_cache_population_queue_size,

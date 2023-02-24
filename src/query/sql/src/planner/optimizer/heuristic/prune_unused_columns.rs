@@ -14,16 +14,12 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use itertools::Itertools;
 
 use crate::optimizer::ColumnSet;
-use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::EvalScalar;
 use crate::plans::RelOperator;
-use crate::plans::Scan;
-use crate::plans::Statistics;
 use crate::MetadataRef;
 
 pub struct UnusedColumnPruner {
@@ -69,19 +65,9 @@ impl UnusedColumnPruner {
                     used = used.union(&pw.prewhere_columns).cloned().collect();
                 }
 
-                Ok(SExpr::create_leaf(RelOperator::Scan(Scan {
-                    table_index: p.table_index,
-                    columns: used,
-                    push_down_predicates: p.push_down_predicates.clone(),
-                    limit: p.limit,
-                    order_by: p.order_by.clone(),
-                    statistics: Statistics {
-                        statistics: p.statistics.statistics,
-                        col_stats: p.statistics.col_stats.clone(),
-                        is_accurate: p.statistics.is_accurate,
-                    },
-                    prewhere,
-                })))
+                Ok(SExpr::create_leaf(RelOperator::Scan(
+                    p.prune_columns(used, prewhere),
+                )))
             }
             RelOperator::Join(p) => {
                 // Include columns referenced in left conditions
@@ -149,22 +135,6 @@ impl UnusedColumnPruner {
                             required.insert(c);
                         }
                         used.push(item.clone());
-                    }
-                }
-
-                // Require arbitrary column(which has the smallest column index) for scalar `count(*)`
-                // aggregate to prevent empty input `DataBlock`.
-                let rel_expr = RelExpr::with_s_expr(expr.child(0)?);
-                let rel_prop = rel_expr.derive_relational_prop()?;
-                if rel_prop.used_columns.is_empty()
-                    && required
-                        .intersection(&rel_prop.output_columns)
-                        .next()
-                        .is_none()
-                    && p.group_items.is_empty()
-                {
-                    if let Some(index) = rel_prop.output_columns.iter().sorted().take(1).next() {
-                        required.insert(*index);
                     }
                 }
 

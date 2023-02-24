@@ -80,6 +80,8 @@ pub struct QueryContextShared {
     pub(in crate::sessions) stage_attachment: Arc<RwLock<Option<StageAttachment>>>,
     pub(in crate::sessions) created_time: SystemTime,
     pub(in crate::sessions) on_error_map: Arc<RwLock<Option<HashMap<String, ErrorCode>>>>,
+    /// partitions_sha for each table in the query. Not empty only when enabling query result cache.
+    pub(in crate::sessions) partitions_shas: Arc<RwLock<Vec<String>>>,
 }
 
 impl QueryContextShared {
@@ -110,6 +112,7 @@ impl QueryContextShared {
             stage_attachment: Arc::new(RwLock::new(None)),
             created_time: SystemTime::now(),
             on_error_map: Arc::new(RwLock::new(None)),
+            partitions_shas: Arc::new(RwLock::new(vec![])),
         }))
     }
 
@@ -330,6 +333,14 @@ impl QueryContextShared {
 
     pub fn get_created_time(&self) -> SystemTime {
         self.created_time
+    }
+}
+
+impl Drop for QueryContextShared {
+    fn drop(&mut self) {
+        self.session
+            .session_ctx
+            .update_query_ids_results(self.init_query_id.read().clone(), None)
     }
 }
 
