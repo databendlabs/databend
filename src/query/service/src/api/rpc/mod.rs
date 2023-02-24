@@ -29,6 +29,7 @@ mod request_builder;
 pub use exchange::BroadcastExchange;
 pub use exchange::DataExchange;
 pub use exchange::DataExchangeManager;
+pub use exchange::ExchangeSorting;
 pub use exchange::MergeExchange;
 pub use exchange::ShuffleDataExchange;
 pub use flight_client::ClientFlightExchange;

@@ -41,12 +41,12 @@ use crate::api::DataPacket;
 use crate::api::FragmentData;
 
 pub struct ExchangeSerializeMeta {
-    pub block_number: usize,
+    pub block_number: isize,
     pub packet: Option<DataPacket>,
 }
 
 impl ExchangeSerializeMeta {
-    pub fn create(packet: DataPacket, block_number: usize) -> BlockMetaInfoPtr {
+    pub fn create(packet: DataPacket, block_number: isize) -> BlockMetaInfoPtr {
         Box::new(ExchangeSerializeMeta {
             block_number,
             packet: Some(packet),
