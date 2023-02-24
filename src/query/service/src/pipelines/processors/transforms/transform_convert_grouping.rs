@@ -352,7 +352,6 @@ impl<Method: HashMethodBounds> Processor for TransformConvertGrouping<Method> {
                 if self.inputs[index].bucket <= self.working_bucket {
                     all_port_prepared_data = false;
                     self.inputs[index].port.set_need_data();
-                    continue;
                 }
             }
 
@@ -368,6 +367,13 @@ impl<Method: HashMethodBounds> Processor for TransformConvertGrouping<Method> {
         }
 
         if pushed_data_block || self.try_push_data_block() {
+            return Ok(Event::NeedConsume);
+        }
+
+        if let Some(first_key) = self.buckets_blocks.keys().next().cloned() {
+            let bucket_blocks = self.buckets_blocks.remove(&first_key).unwrap();
+            let meta = ConvertGroupingMetaInfo::create(self.pushing_bucket, bucket_blocks);
+            self.output.push_data(Ok(DataBlock::empty_with_meta(meta)));
             return Ok(Event::NeedConsume);
         }
 
