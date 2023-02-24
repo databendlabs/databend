@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,20 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#![deny(unused_crate_dependencies)]
 
-use common_expression::types::DataType;
+//! This mod provides compress support for BytesWrite and decompress support for BytesRead.
 
-pub trait Index {
-    fn supported_type(data_type: &DataType) -> bool {
-        // we support nullable column but Nulls are not added into the bloom filter.
-        let inner_type = data_type.remove_nullable();
-        matches!(
-            inner_type,
-            DataType::Number(_)
-                | DataType::Date
-                | DataType::Timestamp
-                | DataType::String
-                | DataType::Decimal(_)
-        )
-    }
-}
+mod compress;
+pub use compress::CompressAlgorithm;
+pub use compress::DecompressCodec;
+pub use compress::DecompressDecoder;
+pub use compress::DecompressReader;
+pub use compress::DecompressState;

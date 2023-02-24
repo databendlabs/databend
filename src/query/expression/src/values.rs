@@ -489,6 +489,7 @@ impl PartialOrd for Column {
                 col1.partial_cmp(col2)
             }
             (Column::Number(col1), Column::Number(col2)) => col1.partial_cmp(col2),
+            (Column::Decimal(col1), Column::Decimal(col2)) => col1.partial_cmp(col2),
             (Column::Boolean(col1), Column::Boolean(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::String(col1), Column::String(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::Timestamp(col1), Column::Timestamp(col2)) => {
@@ -1502,6 +1503,7 @@ impl ColumnBuilder {
             (ColumnBuilder::Null { len }, ScalarRef::Null) => *len += 1,
             (ColumnBuilder::EmptyArray { len }, ScalarRef::EmptyArray) => *len += 1,
             (ColumnBuilder::Number(builder), ScalarRef::Number(value)) => builder.push(value),
+            (ColumnBuilder::Decimal(builder), ScalarRef::Decimal(value)) => builder.push(value),
             (ColumnBuilder::Boolean(builder), ScalarRef::Boolean(value)) => builder.push(value),
             (ColumnBuilder::String(builder), ScalarRef::String(value)) => {
                 builder.put_slice(value);
@@ -1569,6 +1571,9 @@ impl ColumnBuilder {
                 *len += other_len;
             }
             (ColumnBuilder::Number(builder), Column::Number(column)) => {
+                builder.append_column(column);
+            }
+            (ColumnBuilder::Decimal(builder), Column::Decimal(column)) => {
                 builder.append_column(column);
             }
             (ColumnBuilder::Boolean(builder), Column::Boolean(other)) => {

@@ -14,10 +14,11 @@
 
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::TableSchemaRef;
 use opendal::Operator;
+use storages_common_blocks::blocks_to_parquet;
+use storages_common_table_meta::table::TableCompression;
 use uuid::Uuid;
-
-use crate::common::write_blocks_to_buffer;
 
 pub(super) struct ResultCacheWriter {
     operator: Operator,
@@ -27,17 +28,24 @@ pub(super) struct ResultCacheWriter {
     max_bytes: usize,
     num_rows: usize,
 
+    schema: TableSchemaRef,
     blocks: Vec<DataBlock>,
 }
 
 impl ResultCacheWriter {
-    pub fn create(location: String, operator: Operator, max_bytes: usize) -> Self {
+    pub fn create(
+        schema: TableSchemaRef,
+        location: String,
+        operator: Operator,
+        max_bytes: usize,
+    ) -> Self {
         ResultCacheWriter {
             location,
             operator,
             current_bytes: 0,
             max_bytes,
             num_rows: 0,
+            schema,
             blocks: vec![],
         }
     }
@@ -55,9 +63,14 @@ impl ResultCacheWriter {
     /// Write the result cache to the storage and return the location.
     pub async fn write_to_storage(&self) -> Result<String> {
         let mut buf = Vec::with_capacity(self.current_bytes);
-        write_blocks_to_buffer(&self.blocks, &mut buf)?;
+        let _ = blocks_to_parquet(
+            &self.schema,
+            self.blocks.clone(),
+            &mut buf,
+            TableCompression::None,
+        )?;
 
-        let file_location = format!("{}/{}", self.location, Uuid::new_v4().as_simple());
+        let file_location = format!("{}/{}.parquet", self.location, Uuid::new_v4().as_simple());
         let object = self.operator.object(&file_location);
 
         object.write(buf).await?;

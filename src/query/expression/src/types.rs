@@ -298,6 +298,7 @@ impl DataType {
                 Scalar::Tuple(tys.iter().map(|ty| ty.default_value()).collect())
             }
             DataType::Variant => Scalar::Variant(vec![]),
+
             _ => unimplemented!(),
         }
     }

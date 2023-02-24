@@ -30,7 +30,6 @@ opendal = { workspace = true, features = [
     "services-moka",
     "services-redis",
     "trust-dns",
-    "compress",
 ] }
 parking_lot = "0.12.1"
 regex = "1.6.0"
