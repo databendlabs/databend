@@ -20,7 +20,7 @@ function Footer() {
   const {footer} = useThemeConfig()
   return (
     <footer className={clsx('footer', styles.footer)}>
-        <p>Copyright © {year} Datafuse Labs, Inc. Built with Docusaurus.</p>
+        <p>Copyright © {year} The Databend Community. Built with Docusaurus.</p>
         <div className={clsx('footer-items', styles.footerItems)}>
         {footer.links[0].items.map((item,index)=>{
           return <Link to={item.to} key={index}><h6>{item.label}</h6></Link>

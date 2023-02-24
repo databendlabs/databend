@@ -9,18 +9,18 @@ import * as icons from "../components/Icons"
 const community = [
   {
     'icon':'Github',
-    'star': '5.3 K',
+    'star': '5.4 K',
     'title': 'GitHub',
     'link': 'https://github.com/datafuselabs/databend'
   },
   {
     'icon':'Slack',
-    'title': 'Join us Slack channel',
+    'title': 'Slack',
     'link': 'https://link.databend.rs/join-slack'
   },
   {
     'icon':'Twitter',
-    'title': 'Follow us on Twitter',
+    'title': 'Twitter',
     'link': 'https://twitter.com/Datafuse_Labs'
   },
   {
@@ -71,7 +71,7 @@ function HomepageHeader() {
             <div className={clsx('cloud-banner', styles.cloudBanner)}>
               <div style={{textAlign:'center'}}>
               <h5>🎉 Databend Cloud Now Available</h5>
-              <p>Register now and get $200 discount.</p>
+              <p>Register now and get a $200 coupon.</p>
               </div>
               <Link
               className={clsx("button", styles.Button, styles.White)}
