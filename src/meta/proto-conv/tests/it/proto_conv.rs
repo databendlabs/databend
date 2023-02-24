@@ -225,16 +225,7 @@ pub(crate) fn new_latest_schema() -> TableSchema {
                 scale: 6,
             })),
         ),
-        TableField::new(
-            "map",
-            TableDataType::Map(Box::new(TableDataType::Tuple {
-                fields_name: vec!["key".to_string(), "val".to_string()],
-                fields_type: vec![
-                    TableDataType::String,
-                    TableDataType::Number(NumberDataType::Int64),
-                ],
-            })),
-        ),
+        TableField::new("empty_map", TableDataType::EmptyMap),
     ];
     TableSchema::new(fields)
 }
