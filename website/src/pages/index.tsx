@@ -15,7 +15,7 @@ const community = [
   },
   {
     'icon':'Slack',
-    'title': 'Join us Slack chanel',
+    'title': 'Join us Slack channel',
     'link': 'https://link.databend.rs/join-slack'
   },
   {
