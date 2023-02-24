@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
+use std::collections::btree_map::Entry;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -113,7 +113,7 @@ pub struct TransformConvertGrouping<Method: HashMethodBounds> {
     pushing_bucket: isize,
     initialized_all_inputs: bool,
     params: Arc<AggregatorParams>,
-    buckets_blocks: HashMap<isize, Vec<DataBlock>>,
+    buckets_blocks: BTreeMap<isize, Vec<DataBlock>>,
     unsplitted_blocks: Vec<DataBlock>,
 }
 
@@ -139,7 +139,7 @@ impl<Method: HashMethodBounds> TransformConvertGrouping<Method> {
             working_bucket: 0,
             pushing_bucket: 0,
             output: OutputPort::create(),
-            buckets_blocks: HashMap::new(),
+            buckets_blocks: BTreeMap::new(),
             unsplitted_blocks: vec![],
             initialized_all_inputs: false,
         })
@@ -370,9 +370,8 @@ impl<Method: HashMethodBounds> Processor for TransformConvertGrouping<Method> {
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(first_key) = self.buckets_blocks.keys().next().cloned() {
-            let bucket_blocks = self.buckets_blocks.remove(&first_key).unwrap();
-            let meta = ConvertGroupingMetaInfo::create(self.pushing_bucket, bucket_blocks);
+        if let Some((bucket, bucket_blocks)) = self.buckets_blocks.pop_first() {
+            let meta = ConvertGroupingMetaInfo::create(bucket, bucket_blocks);
             self.output.push_data(Ok(DataBlock::empty_with_meta(meta)));
             return Ok(Event::NeedConsume);
         }
