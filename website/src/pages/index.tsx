@@ -21,12 +21,12 @@ const community = [
   {
     'icon':'Twitter',
     'title': 'Twitter',
-    'link': 'https://twitter.com/Datafuse_Labs'
+    'link': 'https://twitter.com/DatabendLabs'
   },
   {
     'icon':'Youtube',
     'title': 'YouTube',
-    'link': 'https://www.youtube.com/@Datafuse_Labs'
+    'link': 'https://www.youtube.com/@DatabendLabs'
   },
 ]
 

@@ -64,6 +64,6 @@ curl --user 'cloudapp:password' --data-binary 'SHOW TABLES' 'https://<tenant>--<
 
 - [Slack](https://link.databend.rs/join-slack) (For live discussion with the Community)
 - [Github](https://github.com/datafuselabs/databend) (Feature/Bug reports, Contributions)
-- [Twitter](https://twitter.com/Datafuse_Labs) (Get the news fast)
+- [Twitter](https://twitter.com/DatabendLabs) (Get the news fast)
 - [Weekly](https://weekly.databend.rs/) (A weekly newsletter about Databend)
 - [I'm feeling lucky](https://link.databend.rs/i-m-feeling-lucky) (Pick up a good first issue now!)

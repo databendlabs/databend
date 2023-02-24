@@ -19,6 +19,6 @@ We'd love to hear from you. If you have any questions about Databend or want to 
 - Discussions: https://github.com/datafuselabs/databend/discussions
 
 Follow us on social media and stay tuned for more exciting updates on Databend:
-- Twitter：https://twitter.com/Datafuse_Labs
+- Twitter：https://twitter.com/DatabendLabs
 - Slack：https://link.databend.rs/join-slack
 - WeChat：Databend

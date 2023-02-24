@@ -143,7 +143,7 @@ The Databend community is open to data professionals, students, and anyone who h
 
 - [Slack](https://link.databend.rs/join-slack): Chat with the community
 - [GitHub](https://github.com/datafuselabs/databend): Feature requests, bug reports, and contributions
-- [Twitter](https://twitter.com/Datafuse_Labs): Stay in the know
+- [Twitter](https://twitter.com/DatabendLabs): Stay in the know
 - [Weekly](https://weekly.databend.rs/): Weekly updates
 
 ## Roadmap
