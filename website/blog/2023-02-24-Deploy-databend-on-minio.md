@@ -111,6 +111,11 @@ export ver=v0.9.51-nightly
 wget https://repo.databend.rs/databend/$ver/databend-$ver-x86_64-unknown-linux-musl.tar.gz
 cd databend
 tar zxvf ../databend-$ver-x86_64-unknown-linux-musl.tar.gz
+
+sudo mkdir /var/log/databend
+sudo mkdir /var/lib/databend
+sudo chown -R $USER /var/log/databend
+sudo chown -R $USER /var/log/databend
 ```
 
 ![ ](../static/img/blog/databend-minio-beginner-01-3.png)
@@ -132,7 +137,8 @@ change:
 type = "s3"
 # Set a local folder to store your data.
 # Comment out this block if you're NOT using local file system as storage.
-[storage.fs]data_path = "./.databend/stateless_test_data"
+[storage.fs]
+data_path = "/var/lib/databend/data"
 # To use S3-compatible object storage, uncomment this block and set your values.
 [storage.s3]
 bucket = "databend"
