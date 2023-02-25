@@ -25,9 +25,11 @@ use crate::expression::Literal;
 use crate::expression::RawExpr;
 use crate::function::FunctionRegistry;
 use crate::function::FunctionSignature;
+use crate::types::decimal::DecimalSize;
 use crate::types::number::NumberDataType;
 use crate::types::number::NumberScalar;
 use crate::types::DataType;
+use crate::types::DecimalDataType;
 use crate::AutoCastRules;
 use crate::ColumnIndex;
 use crate::Scalar;
@@ -476,6 +478,7 @@ pub fn can_auto_cast_to(
                 .zip(dest_tys)
                 .all(|(src_ty, dest_ty)| can_auto_cast_to(src_ty, dest_ty, auto_cast_rules))
         }
+        (DataType::Decimal(_) | DataType::Number(_), DataType::Decimal(_)) => true,
         _ => false,
     }
 }
@@ -514,11 +517,24 @@ pub fn common_super_type(
                 .collect::<Option<Vec<_>>>()?;
             Some(DataType::Tuple(tys))
         }
-        // todo!("decimal")
-        // (
-        //     DataType::Number(_) | DataType::Decimal(_),
-        //     DataType::Number(_) | DataType::Decimal(_),
-        // ) =>  DataType::Decimal(?),
+        (DataType::Number(_), DataType::Decimal(ty))
+        | (DataType::Decimal(ty), DataType::Number(_)) => {
+            let max_precision = ty.max_precision();
+            let scale = ty.scale();
+
+            DecimalDataType::from_size(DecimalSize {
+                precision: max_precision,
+                scale,
+            })
+            .ok()
+            .map(|size| DataType::Decimal(size))
+        }
+
+        (DataType::Decimal(a), DataType::Decimal(b)) => {
+            let ty = DecimalDataType::binary_result_type(&a, &b, false, false, true).ok();
+            ty.map(|ty| DataType::Decimal(ty))
+        }
+
         (ty1, ty2) => {
             let ty1_can_cast_to = auto_cast_rules
                 .iter()

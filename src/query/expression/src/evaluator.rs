@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::panic;
 use std::collections::HashMap;
-use std::sync::atomic::AtomicI64;
 #[cfg(debug_assertions)]
 use std::sync::Mutex;
 
