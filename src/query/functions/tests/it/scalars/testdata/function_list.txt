@@ -3190,6 +3190,7 @@ lte
 minus
 multi_if
 multiply
+ne
 noteq
 plus
 point_in_ellipses

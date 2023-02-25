@@ -163,6 +163,31 @@ SELECT ANY(CAST(2.34 AS DECIMAL(6, 2)))
 ----
 2.34
 
+
+## compare
+
+query IIIII
+select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(13,2) a , 3.1::Decimal(8,2) b);
+----
+0 1 0 1 0
+
+
+query IIIII
+select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(13,2) a , 3 b);
+----
+0 0 1 1 1
+
+query IIIII
+select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(13,2) a , 3.1 b);
+----
+0 1 0 1 0
+
+query IIIII
+select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(13,2) a , 2.9 b);
+----
+1 0 0 0 1
+
+
 ## insert
 
 statement ok
