@@ -33,7 +33,7 @@ Basic Float32/Float64 data types.
 
 ## Functions
 
-See [Numeric Functions](/doc/reference/functions/numeric-functions).
+See [Numeric Functions](/doc/sql-functions/numeric-functions).
 
 ## Examples
 
