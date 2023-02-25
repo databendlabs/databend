@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::BitAnd;
 use std::rc::Rc;
 
 use common_exception::Result;
@@ -151,10 +150,9 @@ impl ExploreExprTask {
         operator: &RelOperator,
     ) -> roaring::RoaringBitmap {
         unsafe {
-            operator
-                .exploration_candidate_rules()
-                .bitand(&RULE_FACTORY.exploration_rules)
-                .bitand(&optimizer.explore_rule_set)
+            operator.exploration_candidate_rules()
+                & (&RULE_FACTORY.exploration_rules)
+                & (&optimizer.explore_rule_set)
         }
     }
 

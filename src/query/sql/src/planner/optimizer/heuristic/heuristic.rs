@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::BitAnd;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
@@ -127,17 +126,12 @@ impl HeuristicOptimizer {
     }
 
     fn calc_operator_rule_set(&self, operator: &RelOperator) -> roaring::RoaringBitmap {
-        unsafe {
-            operator
-                .transrormation_candidate_rules()
-                .bitand(&RULE_FACTORY.transformation_rules)
-        }
+        unsafe { operator.transrormation_candidate_rules() & (&RULE_FACTORY.transformation_rules) }
     }
 
     fn get_rule(&self, rule_id: u32) -> Result<RulePtr> {
         unsafe {
             RULE_FACTORY.create_rule(
-                // std::mem::transmute::<u8, RuleID>(rule_id as u8),
                 DEFAULT_REWRITE_RULES[rule_id as usize],
                 Some(self.metadata.clone()),
             )
