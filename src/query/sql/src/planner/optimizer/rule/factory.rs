@@ -73,7 +73,9 @@ impl RuleFactory {
             RuleID::PushDownFilterJoin => {
                 Ok(Box::new(RulePushDownFilterJoin::new(metadata.unwrap())))
             }
-            RuleID::PushDownFilterScan => Ok(Box::new(RulePushDownFilterScan::new())),
+            RuleID::PushDownFilterScan => {
+                Ok(Box::new(RulePushDownFilterScan::new(metadata.unwrap())))
+            }
             RuleID::PushDownLimitUnion => Ok(Box::new(RulePushDownLimitUnion::new())),
             RuleID::PushDownLimitScan => Ok(Box::new(RulePushDownLimitScan::new())),
             RuleID::PushDownSortScan => Ok(Box::new(RulePushDownSortScan::new())),

@@ -76,7 +76,6 @@ const config = {
     ],
     plugins: [
         'docusaurus-plugin-sass',
-        './src/plugins/pxToVw',
         './src/plugins/globalSassVarInject',
         [
             '@docusaurus/plugin-content-docs',
@@ -100,7 +99,7 @@ const config = {
         ({
             announcementBar: {
                 id: 'announcementBar-2', // Increment on change
-                content: `⭐️ If you like Databend, give it a star on <a target="_blank" rel="noopener noreferrer" href="https://github.com/datafuselabs/databend">GitHub</a> and follow us on <a target="_blank" rel="noopener noreferrer" href="https://twitter.com/datafuse_labs" >Twitter</a> ${TwitterSvg}`,
+                content: `⭐️ If you like Databend, give it a star on <a target="_blank" rel="noopener noreferrer" href="https://github.com/datafuselabs/databend">GitHub</a> and follow us on <a target="_blank" rel="noopener noreferrer" href="https://twitter.com/DatabendLabs" >Twitter</a> ${TwitterSvg}`,
             },
             navbar: {
                 title: 'Databend',
@@ -121,11 +120,6 @@ const config = {
                     },
                     { to: '/blog', label: 'Blog', position: 'right' }, // or position: 'right'
                     {
-                        href: 'https://github.com/datafuselabs/databend',
-                        label: 'GitHub',
-                        position: 'right',
-                    },
-                    {
                         type: 'localeDropdown',
                         position: 'right',
                         dropdownItemsAfter: [
@@ -138,21 +132,7 @@ const config = {
                 ],
             },
             footer: {
-                style: 'dark',
                 links: [
-                    {
-                        title: 'GET STARTED',
-                        items: [
-                            {
-                                label: 'What is Databend',
-                                to: '/doc'
-                            },
-                            {
-                                label: 'Quick Start',
-                                to: '/doc/guides'
-                            },
-                        ]
-                    },
                     {
                         title: 'RESOURCES',
                         items: [
@@ -175,7 +155,7 @@ const config = {
                             },
                             {
                                 label: 'Twitter',
-                                href: 'https://twitter.com/Datafuse_Labs',
+                                href: 'https://twitter.com/DatabendLabs',
                             },
                         ],
                     },

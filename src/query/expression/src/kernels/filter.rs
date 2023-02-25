@@ -97,7 +97,9 @@ impl Column {
         }
 
         match self {
-            Column::Null { .. } | Column::EmptyArray { .. } => self.slice(0..length),
+            Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {
+                self.slice(0..length)
+            }
             Column::Number(column) => with_number_type!(|NUM_TYPE| match column {
                 NumberColumn::NUM_TYPE(values) => {
                     Column::Number(NumberColumn::NUM_TYPE(Self::filter_primitive_types(
@@ -130,7 +132,7 @@ impl Column {
                 let d = Self::filter_primitive_types(column, filter);
                 Column::Date(d)
             }
-            Column::Array(column) => {
+            Column::Array(column) | Column::Map(column) => {
                 let mut offsets = Vec::with_capacity(length + 1);
                 offsets.push(0);
                 let builder = ColumnBuilder::from_column(

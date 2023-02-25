@@ -109,6 +109,9 @@ pub trait TableContext: Send + Sync {
     fn get_cluster(&self) -> Arc<Cluster>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
     fn get_stage_attachment(&self) -> Option<StageAttachment>;
+    fn get_last_query_id(&self, index: i32) -> String;
+    fn get_result_cache_key(&self, query_id: &str) -> Option<String>;
+    fn set_query_id_result_cache(&self, query_id: String, result_cache_key: String);
     fn set_on_error_map(&self, map: Option<HashMap<String, ErrorCode>>);
 
     fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()>;

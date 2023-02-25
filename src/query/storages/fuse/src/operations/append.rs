@@ -157,7 +157,8 @@ impl FuseTable {
 
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
         let mut extra_key_num = 0;
-        let mut operators = Vec::with_capacity(cluster_keys.len());
+
+        let mut exprs = Vec::with_capacity(cluster_keys.len());
 
         for remote_expr in &cluster_keys {
             let expr = remote_expr
@@ -169,7 +170,7 @@ impl FuseTable {
                     let cname = format!("{}", expr);
 
                     merged.push(DataField::new(cname.as_str(), expr.data_type().clone()));
-                    operators.push(BlockOperator::Map { expr });
+                    exprs.push(expr);
 
                     let offset = merged.len() - 1;
                     extra_key_num += 1;
@@ -180,13 +181,15 @@ impl FuseTable {
         }
 
         let func_ctx = ctx.get_function_context()?;
-        if !operators.is_empty() {
+        if !exprs.is_empty() {
             pipeline.add_transform(move |input, output| {
                 Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                     input,
                     output,
                     func_ctx,
-                    operators.clone(),
+                    vec![BlockOperator::Map {
+                        exprs: exprs.clone(),
+                    }],
                 )))
             })?;
         }

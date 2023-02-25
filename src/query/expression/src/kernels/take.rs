@@ -67,7 +67,9 @@ impl Column {
     where I: common_arrow::arrow::types::Index {
         let length = indices.len();
         match self {
-            Column::Null { .. } | Column::EmptyArray { .. } => self.slice(0..length),
+            Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {
+                self.slice(0..length)
+            }
             Column::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
                 NumberColumn::NUM_TYPE(values) =>
                     Self::take_arg_types::<NumberType<NUM_TYPE>, _>(values, indices),
@@ -99,7 +101,7 @@ impl Column {
                     .unwrap();
                 Column::Date(d)
             }
-            Column::Array(column) => {
+            Column::Array(column) | Column::Map(column) => {
                 let mut offsets = Vec::with_capacity(length + 1);
                 offsets.push(0);
                 let builder = ColumnBuilder::from_column(

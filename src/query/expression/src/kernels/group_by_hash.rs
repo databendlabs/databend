@@ -494,7 +494,7 @@ fn build(
 
 pub fn serialize_column_binary(column: &Column, row: usize, vec: &mut Vec<u8>) {
     match column {
-        Column::Null { .. } | Column::EmptyArray { .. } => vec.push(0),
+        Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => vec.push(0),
         Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
             NumberColumn::NUM_TYPE(v) => vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
         }),
@@ -505,7 +505,7 @@ pub fn serialize_column_binary(column: &Column, row: usize, vec: &mut Vec<u8>) {
         Column::Decimal(_) => unreachable!("Decimal is not supported in group by keys format"),
         Column::Timestamp(v) => vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
         Column::Date(v) => vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
-        Column::Array(array) => {
+        Column::Array(array) | Column::Map(array) => {
             let data = array.index(row).unwrap();
             BinaryWrite::write_uvarint(vec, data.len() as u64).unwrap();
             for i in 0..data.len() {

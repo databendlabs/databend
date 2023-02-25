@@ -18,6 +18,7 @@ use std::hash::Hash;
 use std::time::Duration;
 use std::time::Instant;
 
+#[derive(Debug)]
 struct TtlValue<V> {
     timeout: Instant,
     value: V,
@@ -26,12 +27,14 @@ struct TtlValue<V> {
 /// `CleanPolicy::ReadModify` triggers cleanup on every read or modification.
 /// `CleanPolicy::Modify` triggers cleanup on every modification.
 /// `CleanPolicy::Manual` never triggers cleanup automatically.
+#[derive(Debug)]
 pub enum CleanPolicy {
     ReadModify,
     Modify,
     Manual,
 }
 /// `TtlHashMap` is a `HashMap` wrapper with expiration features.
+#[derive(Debug)]
 pub struct TtlHashMap<K, V>
 where K: Eq + Hash
 {

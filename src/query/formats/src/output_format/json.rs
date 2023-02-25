@@ -18,6 +18,7 @@ use common_expression::DataBlock;
 use common_expression::ScalarRef;
 use common_expression::TableSchemaRef;
 use common_io::prelude::FormatSettings;
+use serde_json::Map as JsonMap;
 use serde_json::Value as JsonValue;
 
 use crate::output_format::OutputFormat;
@@ -95,6 +96,7 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
             serde_json::to_value(dt.format("%Y-%m-%d %H:%M:%S").to_string()).unwrap()
         }
         ScalarRef::EmptyArray => JsonValue::Array(vec![]),
+        ScalarRef::EmptyMap => JsonValue::Object(JsonMap::new()),
         ScalarRef::String(x) => JsonValue::String(String::from_utf8_lossy(x).to_string()),
         ScalarRef::Array(x) => {
             let vals = x
@@ -102,6 +104,20 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
                 .map(|x| scalar_to_json(x.clone(), format))
                 .collect();
             JsonValue::Array(vals)
+        }
+        ScalarRef::Map(x) => {
+            let vals = x
+                .iter()
+                .map(|s| match s {
+                    ScalarRef::Tuple(t) => {
+                        let k = scalar_to_json(t[0].clone(), format);
+                        let v = scalar_to_json(t[1].clone(), format);
+                        (k.to_string(), v)
+                    }
+                    _ => unreachable!(),
+                })
+                .collect();
+            JsonValue::Object(vals)
         }
         ScalarRef::Tuple(x) => {
             let vals = x

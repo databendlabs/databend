@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
+use std::collections::btree_map::Entry;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -114,7 +114,7 @@ pub struct TransformConvertGrouping<Method: HashMethodBounds> {
     pushing_bucket: isize,
     initialized_all_inputs: bool,
     params: Arc<AggregatorParams>,
-    buckets_blocks: HashMap<isize, Vec<DataBlock>>,
+    buckets_blocks: BTreeMap<isize, Vec<DataBlock>>,
     unsplitted_blocks: Vec<DataBlock>,
 }
 
@@ -140,7 +140,7 @@ impl<Method: HashMethodBounds> TransformConvertGrouping<Method> {
             working_bucket: 0,
             pushing_bucket: 0,
             output: OutputPort::create(),
-            buckets_blocks: HashMap::new(),
+            buckets_blocks: BTreeMap::new(),
             unsplitted_blocks: vec![],
             initialized_all_inputs: false,
         })
@@ -173,15 +173,19 @@ impl<Method: HashMethodBounds> TransformConvertGrouping<Method> {
                 continue;
             }
 
-            self.inputs[index].port.set_need_data();
-
             if !self.inputs[index].port.has_data() {
+                self.inputs[index].port.set_need_data();
                 self.initialized_all_inputs = false;
                 continue;
             }
 
-            self.inputs[index].bucket =
-                self.add_bucket(self.inputs[index].port.pull_data().unwrap()?);
+            let data_block = self.inputs[index].port.pull_data().unwrap()?;
+            self.inputs[index].bucket = self.add_bucket(data_block);
+
+            if self.inputs[index].bucket <= SINGLE_LEVEL_BUCKET_NUM {
+                self.inputs[index].port.set_need_data();
+                self.initialized_all_inputs = false;
+            }
         }
 
         Ok(self.initialized_all_inputs)
@@ -332,19 +336,24 @@ impl<Method: HashMethodBounds> Processor for TransformConvertGrouping<Method> {
                 }
 
                 all_inputs_is_finished = false;
-                if self.inputs[index].bucket >= self.working_bucket {
+                if self.inputs[index].bucket > self.working_bucket {
                     continue;
                 }
 
-                self.inputs[index].port.set_need_data();
                 if !self.inputs[index].port.has_data() {
                     all_port_prepared_data = false;
+                    self.inputs[index].port.set_need_data();
                     continue;
                 }
 
-                self.inputs[index].bucket =
-                    self.add_bucket(self.inputs[index].port.pull_data().unwrap()?);
+                let data_block = self.inputs[index].port.pull_data().unwrap()?;
+                self.inputs[index].bucket = self.add_bucket(data_block);
                 debug_assert!(self.unsplitted_blocks.is_empty());
+
+                if self.inputs[index].bucket <= self.working_bucket {
+                    all_port_prepared_data = false;
+                    self.inputs[index].port.set_need_data();
+                }
             }
 
             if all_inputs_is_finished {
@@ -359,6 +368,12 @@ impl<Method: HashMethodBounds> Processor for TransformConvertGrouping<Method> {
         }
 
         if pushed_data_block || self.try_push_data_block() {
+            return Ok(Event::NeedConsume);
+        }
+
+        if let Some((bucket, bucket_blocks)) = self.buckets_blocks.pop_first() {
+            let meta = ConvertGroupingMetaInfo::create(bucket, bucket_blocks);
+            self.output.push_data(Ok(DataBlock::empty_with_meta(meta)));
             return Ok(Event::NeedConsume);
         }
 
