@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// use std::ops::BitAnd;
+use std::ops::BitAnd;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
@@ -23,14 +23,14 @@ use super::prune_unused_columns::UnusedColumnPruner;
 use crate::optimizer::heuristic::decorrelate::decorrelate_subquery;
 use crate::optimizer::heuristic::prewhere_optimization::PrewhereOptimizer;
 use crate::optimizer::heuristic::RuleList;
-// use crate::optimizer::rule::RulePtr;
+use crate::optimizer::rule::RulePtr;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
-// use crate::optimizer::RULE_FACTORY;
-// use crate::plans::Operator;
-// use crate::plans::RelOperator;
+use crate::optimizer::RULE_FACTORY;
+use crate::plans::Operator;
+use crate::plans::RelOperator;
 use crate::BindContext;
 use crate::MetadataRef;
 
@@ -132,45 +132,32 @@ impl HeuristicOptimizer {
         Ok(result)
     }
 
-    // fn calc_operator_rule_set(&self, operator: &RelOperator) -> roaring::RoaringBitmap {
-    //     unsafe {
-    //         operator
-    //             .transrormation_candidate_rules()
-    //             .bitand(&RULE_FACTORY.transformation_rules)
-    //     }
-    // }
+    fn calc_operator_rule_set(&self, operator: &RelOperator) -> roaring::RoaringBitmap {
+        unsafe {
+            operator
+                .transrormation_candidate_rules()
+                .bitand(&RULE_FACTORY.transformation_rules)
+        }
+    }
 
-    // fn get_rule(&self, rule_id: u32) -> Result<RulePtr> {
-    //     unsafe {
-    //         RULE_FACTORY.create_rule(
-    //             std::mem::transmute::<u8, RuleID>(rule_id as u8),
-    //             Some(self.metadata.clone()),
-    //         )
-    //     }
-    // }
+    fn get_rule(&self, rule_id: u32) -> Result<RulePtr> {
+        unsafe {
+            RULE_FACTORY.create_rule(
+                std::mem::transmute::<u8, RuleID>(rule_id as u8),
+                // DEFAULT_REWRITE_RULES[rule_id as usize],
+                Some(self.metadata.clone()),
+            )
+        }
+    }
 
     /// Try to apply the rules to the expression.
     /// Return the final result that no rule can be applied.
-    fn apply_transform_rules(&self, s_expr: &SExpr, rule_list: &RuleList) -> Result<SExpr> {
+    fn apply_transform_rules(&self, s_expr: &SExpr, _rule_list: &RuleList) -> Result<SExpr> {
         let mut s_expr = s_expr.clone();
-        // let rule_set = self.calc_operator_rule_set(&s_expr.plan);
+        let rule_set = self.calc_operator_rule_set(&s_expr.plan);
 
-        // for rule_id in rule_set.iter() {
-        //     let rule = self.get_rule(rule_id)?;
-        //     let mut state = TransformResult::new();
-        //     if s_expr.match_pattern(rule.pattern()) && !s_expr.applied_rule(&rule.id()) {
-        //         s_expr.set_applied_rule(&rule.id());
-        //         rule.apply(&s_expr, &mut state)?;
-        //         if !state.results().is_empty() {
-        //             // Recursive optimize the result
-        //             let result = &state.results()[0];
-        //             let optimized_result = self.optimize_expression(result)?;
-        //             return Ok(optimized_result);
-        //         }
-        //     }
-        // }
-
-        for rule in rule_list.iter() {
+        for rule_id in rule_set.iter() {
+            let rule = self.get_rule(rule_id)?;
             let mut state = TransformResult::new();
             if s_expr.match_pattern(rule.pattern()) && !s_expr.applied_rule(&rule.id()) {
                 s_expr.set_applied_rule(&rule.id());
@@ -183,6 +170,20 @@ impl HeuristicOptimizer {
                 }
             }
         }
+
+        // for rule in rule_list.iter() {
+        //     let mut state = TransformResult::new();
+        //     if s_expr.match_pattern(rule.pattern()) && !s_expr.applied_rule(&rule.id()) {
+        //         s_expr.set_applied_rule(&rule.id());
+        //         rule.apply(&s_expr, &mut state)?;
+        //         if !state.results().is_empty() {
+        //             // Recursive optimize the result
+        //             let result = &state.results()[0];
+        //             let optimized_result = self.optimize_expression(result)?;
+        //             return Ok(optimized_result);
+        //         }
+        //     }
+        // }
 
         Ok(s_expr.clone())
     }

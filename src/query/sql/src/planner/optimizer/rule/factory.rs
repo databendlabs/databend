@@ -58,7 +58,7 @@ impl RuleFactory {
     pub fn create() -> Self {
         RuleFactory {
             transformation_rules: (RuleID::NormalizeScalarFilter as u32
-                ..RuleID::FoldCountAggregate as u32)
+                ..RuleID::CommuteJoin as u32)
                 .collect::<RoaringBitmap>(),
             exploration_rules: (RuleID::CommuteJoin as u32..RuleID::ExchangeJoin as u32)
                 .collect::<RoaringBitmap>(),

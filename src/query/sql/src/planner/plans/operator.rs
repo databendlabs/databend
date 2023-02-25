@@ -44,7 +44,7 @@ pub trait Operator {
     }
 
     fn transrormation_candidate_rules(&self) -> roaring::RoaringBitmap {
-        (RuleID::NormalizeScalarFilter as u32..RuleID::FoldCountAggregate as u32)
+        (RuleID::NormalizeScalarFilter as u32..RuleID::CommuteJoin as u32)
             .collect::<RoaringBitmap>()
     }
 
