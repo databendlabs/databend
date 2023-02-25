@@ -43,12 +43,21 @@ pub fn build_fuse_native_source_pipeline(
 ) -> Result<()> {
     (max_threads, max_io_requests) = adjust_threads_and_request(max_threads, max_io_requests, plan);
 
+    if topk.is_some() {
+        max_threads = max_threads.min(16);
+        max_io_requests = max_io_requests.min(16);
+    }
+
     let mut source_builder = SourcePipeBuilder::create();
 
     match block_reader.support_blocking_api() {
         true => {
             let partitions = dispatch_partitions(ctx.clone(), plan, max_threads);
-            let partitions = StealablePartitions::new(partitions, ctx.clone());
+            let mut partitions = StealablePartitions::new(partitions, ctx.clone());
+
+            if topk.is_some() {
+                partitions.disable_steal();
+            }
 
             for i in 0..max_threads {
                 let output = OutputPort::create();
@@ -68,6 +77,10 @@ pub fn build_fuse_native_source_pipeline(
         false => {
             let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
             let partitions = StealablePartitions::new(partitions, ctx.clone());
+
+            if topk.is_some() {
+                partitions.disable_steal();
+            }
 
             for i in 0..max_io_requests {
                 let output = OutputPort::create();
