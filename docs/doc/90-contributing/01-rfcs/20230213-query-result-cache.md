@@ -83,9 +83,8 @@ Databend will cache every query result is query result cache is enabled. If the 
 ### Related configurations
 
 - `enable_query_result_cache`: whether to enable query result cache (default: false).
-- `max_result_cache_bytes`: the maximum size of the result cache for one query (default: 1048576 bytes, 1MB).
-- `result_cache_ttl`: the time-to-live of the result cache (default: 300 seconds).
-- `tolerate_inconsistent_result_cache`: whether to tolerate inconsistent query result cache (default: false). If the underlying data is changed, the result cache will be invalidated. If this configuration is set to true, Databend will still use the result cache even if the underlying data is changed.
+- `query_result_cache_max_bytes`: the maximum size of the result cache for one query (default: 1048576 bytes, 1MB).
+- `query_result_cache_ttl_secs`: the time-to-live of the result cache (default: 300 seconds).
 
 ### Write result cache
 
@@ -117,7 +116,7 @@ The process of `TransformWriteResultCache` is like:
 
 1. If upstream is finished, use `cache_writer` to generate  and write the result to a cache file. Go to 6.
 2. Read a `DataBlock` from the input port.
-3. If `cache_writer` is full (reach `max_result_cache_bytes`), goto 5 (do not write to cache).
+3. If `cache_writer` is full (reach `query_result_cache_max_bytes`), goto 5 (do not write to cache).
 4. Push the `DataBlock` into `cache_writer`.
 5. Output the `DataBlock` to the output port. Goto 1.
 6. Finish.
