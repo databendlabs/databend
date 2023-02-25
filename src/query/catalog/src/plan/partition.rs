@@ -185,6 +185,8 @@ impl Default for Partitions {
 pub struct StealablePartitions {
     pub partitions: Arc<RwLock<Vec<VecDeque<PartInfoPtr>>>>,
     pub ctx: Arc<dyn TableContext>,
+    // In some cases, we need to disable steal.
+    // Such as topk queries, this is suitable that topk will respect all the pagecache and reduce false sharing between threads.
     pub disable_steal: bool,
 }
 
