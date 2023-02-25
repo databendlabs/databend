@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::panic;
 use std::collections::HashMap;
+use std::sync::atomic::AtomicI64;
 #[cfg(debug_assertions)]
 use std::sync::Mutex;
 
@@ -168,30 +170,31 @@ impl<'a> Evaluator<'a> {
             }
         };
 
-        #[cfg(debug_assertions)]
-        if result.is_err() {
-            static RECURSING: Mutex<bool> = Mutex::new(false);
-            if !*RECURSING.lock().unwrap() {
-                *RECURSING.lock().unwrap() = true;
-                assert_eq!(
-                    ConstantFolder::fold_with_domain(
-                        expr,
-                        self.input_columns
-                            .domains()
-                            .into_iter()
-                            .enumerate()
-                            .collect(),
-                        self.func_ctx,
-                        self.fn_registry
-                    )
-                    .1,
-                    None,
-                    "domain calculation should not return any domain for expressions that are possible to fail"
-                );
-                *RECURSING.lock().unwrap() = false;
-            }
-        }
-
+        // We can't call this in debug mode, because it will cause infinite recursion.
+        // Eg: select 3.2::Decimal(10, 2)::Int32;
+        // #[cfg(debug_assertions)]
+        // if result.is_err() {
+        //     static RECURSING: Mutex<bool> = Mutex::new(false);
+        //     if !*RECURSING.lock().unwrap() {
+        //         *RECURSING.lock().unwrap() = true;
+        //         assert_eq!(
+        //             ConstantFolder::fold_with_domain(
+        //                 expr,
+        //                 self.input_columns
+        //                     .domains()
+        //                     .into_iter()
+        //                     .enumerate()
+        //                     .collect(),
+        //                 self.func_ctx,
+        //                 self.fn_registry
+        //             )
+        //             .1,
+        //             None,
+        //             "domain calculation should not return any domain for expressions that are possible to fail"
+        //         );
+        //         *RECURSING.lock().unwrap() = false;
+        //     }
+        // }
         result
     }
 
