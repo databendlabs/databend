@@ -76,7 +76,7 @@ pub fn build_fuse_native_source_pipeline(
         }
         false => {
             let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
-            let partitions = StealablePartitions::new(partitions, ctx.clone());
+            let mut partitions = StealablePartitions::new(partitions, ctx.clone());
 
             if topk.is_some() {
                 partitions.disable_steal();
