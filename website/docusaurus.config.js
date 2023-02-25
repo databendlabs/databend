@@ -22,13 +22,10 @@ const config = {
 
     i18n: {
         defaultLocale: 'en-US',
-        locales: ['en-US', 'zh-CN'],
+        locales: ['en-US'],
         localeConfigs: {
             'en-US': {
                 label: 'English',
-            },
-            'zh-CN': {
-                label: '简体中文',
             },
         },
     },
@@ -119,16 +116,6 @@ const config = {
                         position: 'right',
                     },
                     { to: '/blog', label: 'Blog', position: 'right' }, // or position: 'right'
-                    {
-                        type: 'localeDropdown',
-                        position: 'right',
-                        dropdownItemsAfter: [
-                            {
-                                to: 'https://databend.crowdin.com/databend',
-                                label: 'Help Us Translate',
-                            },
-                        ],
-                    },
                 ],
             },
             footer: {
