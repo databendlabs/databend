@@ -201,6 +201,6 @@ Databend is an open source, flexible, low-cost repository for real-time analysis
   
 - [GitHub Discussions](https://github.com/datafuselabs/databend/discussions)
 
-- [Twitter](https://twitter.com/Datafuse_Labs)
+- [Twitter](https://twitter.com/DatabendLabs)
 
 - [Slack Channel](https://link.databend.rs/join-slack)
