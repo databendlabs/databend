@@ -49,7 +49,8 @@ pub trait Operator {
     }
 
     fn exploration_candidate_rules(&self) -> roaring::RoaringBitmap {
-        (RuleID::CommuteJoin as u32..RuleID::ExchangeJoin as u32).collect::<RoaringBitmap>()
+        (RuleID::CommuteJoin as u32..(RuleID::RightExchangeJoin as u32) + 1)
+            .collect::<RoaringBitmap>()
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty>;

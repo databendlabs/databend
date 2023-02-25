@@ -54,12 +54,12 @@ pub fn calc_explore_rule_set(enable_bushy_join: bool) -> roaring::RoaringBitmap 
 /// Get rule set of join order RS-B2, which may generate bushy trees.
 /// Read paper "The Complexity of Transformation-Based Join Enumeration" for more details.
 fn calc_join_rule_set_rs_b2() -> roaring::RoaringBitmap {
-    (RuleID::CommuteJoin as u32..RuleID::ExchangeJoin as u32).collect::<RoaringBitmap>()
+    (RuleID::CommuteJoin as u32..RuleID::CommuteJoinBaseTable as u32).collect::<RoaringBitmap>()
 }
 
 /// Get rule set of join order RS-L1, which will only generate left-deep trees.
 /// Read paper "The Complexity of Transformation-Based Join Enumeration" for more details.
 fn calc_join_rule_set_rs_l1() -> roaring::RoaringBitmap {
-    (RuleID::CommuteJoinBaseTable as u32..RuleID::LeftExchangeJoin as u32)
+    (RuleID::CommuteJoinBaseTable as u32..RuleID::RightExchangeJoin as u32)
         .collect::<RoaringBitmap>()
 }

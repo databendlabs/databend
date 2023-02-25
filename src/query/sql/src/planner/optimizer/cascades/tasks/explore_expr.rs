@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::BitAnd;
 // use std::ops::BitAnd;
 use std::rc::Rc;
 
@@ -23,10 +24,10 @@ use super::Task;
 use crate::optimizer::cascades::scheduler::Scheduler;
 use crate::optimizer::cascades::tasks::SharedCounter;
 use crate::optimizer::cascades::CascadesOptimizer;
-// use crate::optimizer::RuleID;
-// use crate::optimizer::RULE_FACTORY;
-// use crate::plans::Operator;
-// use crate::plans::RelOperator;
+use crate::optimizer::RuleID;
+use crate::optimizer::RULE_FACTORY;
+use crate::plans::Operator;
+use crate::plans::RelOperator;
 use crate::IndexType;
 
 #[derive(Clone, Copy, Debug)]
@@ -145,18 +146,18 @@ impl ExploreExprTask {
         }
     }
 
-    // fn calc_operator_rule_set(
-    //     &self,
-    //     optimizer: &CascadesOptimizer,
-    //     operator: &RelOperator,
-    // ) -> roaring::RoaringBitmap {
-    //     unsafe {
-    //         operator
-    //             .exploration_candidate_rules()
-    //             .bitand(&RULE_FACTORY.exploration_rules)
-    //             .bitand(&optimizer.explore_rule_set)
-    //     }
-    // }
+    fn calc_operator_rule_set(
+        &self,
+        optimizer: &CascadesOptimizer,
+        operator: &RelOperator,
+    ) -> roaring::RoaringBitmap {
+        unsafe {
+            operator
+                .exploration_candidate_rules()
+                .bitand(&RULE_FACTORY.exploration_rules)
+                .bitand(&optimizer.explore_rule_set)
+        }
+    }
 
     fn explore_self(
         &mut self,
@@ -167,27 +168,27 @@ impl ExploreExprTask {
             .memo
             .group(self.group_index)?
             .m_expr(self.m_expr_index)?;
-        // let rule_set = self.calc_operator_rule_set(optimizer, &m_expr.plan);
+        let rule_set = self.calc_operator_rule_set(optimizer, &m_expr.plan);
 
-        // for rule_id in rule_set.iter() {
-        //     let apply_rule_task = ApplyRuleTask::with_parent(
-        //         unsafe { std::mem::transmute::<u8, RuleID>(rule_id as u8) },
-        //         m_expr.group_index,
-        //         m_expr.index,
-        //         &self.ref_count,
-        //     );
-        //     scheduler.add_task(Task::ApplyRule(apply_rule_task));
-        // }
-
-        for rule in optimizer.explore_rules.iter() {
+        for rule_id in rule_set.iter() {
             let apply_rule_task = ApplyRuleTask::with_parent(
-                rule.id(),
+                unsafe { std::mem::transmute::<u8, RuleID>(rule_id as u8) },
                 m_expr.group_index,
                 m_expr.index,
                 &self.ref_count,
             );
             scheduler.add_task(Task::ApplyRule(apply_rule_task));
         }
+
+        // for rule in optimizer.explore_rules.iter() {
+        //     let apply_rule_task = ApplyRuleTask::with_parent(
+        //         rule.id(),
+        //         m_expr.group_index,
+        //         m_expr.index,
+        //         &self.ref_count,
+        //     );
+        //     scheduler.add_task(Task::ApplyRule(apply_rule_task));
+        // }
 
         if let Some(parent) = &self.parent {
             parent.dec();

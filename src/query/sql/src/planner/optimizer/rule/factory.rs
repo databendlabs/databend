@@ -60,7 +60,7 @@ impl RuleFactory {
             transformation_rules: (RuleID::NormalizeScalarFilter as u32
                 ..RuleID::CommuteJoin as u32)
                 .collect::<RoaringBitmap>(),
-            exploration_rules: (RuleID::CommuteJoin as u32..RuleID::ExchangeJoin as u32)
+            exploration_rules: (RuleID::CommuteJoin as u32..(RuleID::RightExchangeJoin as u32) + 1)
                 .collect::<RoaringBitmap>(),
         }
     }
