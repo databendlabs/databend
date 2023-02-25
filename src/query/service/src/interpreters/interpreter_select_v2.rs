@@ -179,7 +179,7 @@ impl Interpreter for SelectInterpreterV2 {
                 kv_store.clone(),
                 self.ctx
                     .get_settings()
-                    .get_tolerate_inconsistent_result_cache()?,
+                    .get_query_result_cache_allow_inconsistent()?,
             );
 
             // 2. Check the cache.

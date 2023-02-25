@@ -201,7 +201,8 @@ impl Settings {
                     UserSettingValue::UInt64(48),
                 ),
                 level: ScopeLevel::Session,
-                desc: "If the distance between two IO ranges to be read in one file is less than storage_io_min_bytes_for_seek, then Databend sequentially reads a range of file that contains both ranges, thus avoiding extra seek. Default value is 48Bytes",
+                desc: "If the distance between two IO ranges to be read in one file is less than storage_io_min_bytes_for_seek, then Databend sequentially reads a range of file that contains both ranges, thus avoiding extra seek. \
+                Default value is 48Bytes",
                 possible_values: None,
             },
             // storage_io_max_page_bytes_for_read
@@ -491,37 +492,44 @@ impl Settings {
                     UserSettingValue::UInt64(0),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Enable the cache result of each query. It's disabled by default.",
+                desc: "Enable the query result caching of SQL queries in Databend. \
+                When this setting is enabled, Databend will store the results of queries in storage. \
+                This can improve query performance by reducing the amount of time required to re-execute the same query multiple times. \
+                Default is disabled.",
                 possible_values: None,
             },
             SettingValue {
                 default_value: UserSettingValue::UInt64(1048576), // 1MB
                 user_setting: UserSetting::create(
-                    "max_result_cache_bytes",
+                    "query_result_cache_max_bytes",
                     UserSettingValue::UInt64(1048576),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The maximum bytes of the result cache for one query, default: 1048576 bytes (1MB).",
+                desc: "The maximum bytes of the query result cache for one query, default: 1048576 bytes (1MB).",
                 possible_values: None,
             },
             SettingValue {
                 default_value: UserSettingValue::UInt64(300), // seconds
                 user_setting: UserSetting::create(
-                    "result_cache_ttl",
+                    "query_result_cache_ttl_secs",
                     UserSettingValue::UInt64(300),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Time-to-live of query result cache, default: 300 seconds (5 minutes).",
+                desc: "The time-to-live (TTL) for cached query results, in seconds. \
+                 Once the TTL for a cached result has expired, the result is considered stale and will not be used for new queries. \
+                 Default: 300 seconds (5 minutes).",
                 possible_values: None,
             },
             SettingValue {
                 default_value: UserSettingValue::UInt64(0),
                 user_setting: UserSetting::create(
-                    "tolerate_inconsistent_result_cache",
+                    "query_result_cache_allow_inconsistent",
                     UserSettingValue::UInt64(0),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Tolerate inconsistent result cache. It's disabled by default.",
+                desc: "Controls whether inconsistent cached results can be used for queries. \
+                When this setting is set to TRUE, Databend will use cached results even if they may be inconsistent due to changes in the underlying data. \
+                Default is FALSE (disabled).",
                 possible_values: None,
             },
         ];
@@ -860,18 +868,18 @@ impl Settings {
         self.try_get_u64(key).map(|v| v != 0)
     }
 
-    pub fn get_max_result_cache_bytes(&self) -> Result<usize> {
-        let key = "max_result_cache_bytes";
+    pub fn get_query_result_cache_max_bytes(&self) -> Result<usize> {
+        let key = "query_result_cache_max_bytes";
         self.try_get_u64(key).map(|v| v as usize)
     }
 
-    pub fn get_result_cache_ttl(&self) -> Result<u64> {
-        let key = "result_cache_ttl";
+    pub fn get_query_result_cache_ttl_secs(&self) -> Result<u64> {
+        let key = "query_result_cache_ttl_secs";
         self.try_get_u64(key)
     }
 
-    pub fn get_tolerate_inconsistent_result_cache(&self) -> Result<bool> {
-        let key = "tolerate_inconsistent_result_cache";
+    pub fn get_query_result_cache_allow_inconsistent(&self) -> Result<bool> {
+        let key = "query_result_cache_allow_inconsistent";
         self.try_get_u64(key).map(|v| v != 0)
     }
 
