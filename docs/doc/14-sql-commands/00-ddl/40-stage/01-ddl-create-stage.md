@@ -120,7 +120,7 @@ externalLocation ::=
 
 ### formatTypeOptions
 
-For details about `FILE_FORMAT`, see [Input & Output File Formats](../../../13-sql-reference/75-file-format-options.md).
+For details about `FILE_FORMAT`, see [Input & Output File Formats](../../../13-sql-reference/50-file-format-options.md).
 
 ### copyOptions
 ```
