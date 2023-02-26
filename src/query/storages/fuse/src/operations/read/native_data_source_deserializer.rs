@@ -34,6 +34,7 @@ use common_exception::Result;
 use common_expression::filter_helper::FilterHelpers;
 use common_expression::types::BooleanType;
 use common_expression::BlockEntry;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
@@ -370,13 +371,10 @@ impl Processor for NativeDeserializeDataTransform {
 
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
-            if let Some(mut source_meta) = data_block.take_meta() {
-                if let Some(source_meta) = source_meta
-                    .as_mut_any()
-                    .downcast_mut::<NativeDataSourceMeta>()
-                {
-                    self.parts = VecDeque::from(std::mem::take(&mut source_meta.part));
-                    self.chunks = VecDeque::from(std::mem::take(&mut source_meta.chunks));
+            if let Some(block_meta) = data_block.take_meta() {
+                if let Some(source_meta) = NativeDataSourceMeta::downcast_from(block_meta) {
+                    self.parts = VecDeque::from(source_meta.part);
+                    self.chunks = VecDeque::from(source_meta.chunks);
                     return Ok(Event::Sync);
                 }
             }

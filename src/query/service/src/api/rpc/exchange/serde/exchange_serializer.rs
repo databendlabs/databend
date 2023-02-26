@@ -80,10 +80,6 @@ impl BlockMetaInfo for ExchangeSerializeMeta {
         self
     }
 
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
     fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
         unimplemented!("Unimplemented equals ExchangeSerializeMeta")
     }
