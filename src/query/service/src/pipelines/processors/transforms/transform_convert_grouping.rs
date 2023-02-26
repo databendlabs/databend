@@ -20,7 +20,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::with_hash_method;
 use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoDowncastHelper;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_expression::HashMethodKind;
@@ -82,6 +82,10 @@ impl ConvertGroupingMetaInfo {
 
 #[typetag::serde(name = "convert_grouping")]
 impl BlockMetaInfo for ConvertGroupingMetaInfo {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
         unimplemented!("Unimplemented equals for ConvertGroupingMetaInfo")
     }

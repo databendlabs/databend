@@ -19,7 +19,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoDowncastHelper;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
 use storages_common_table_meta::meta::SegmentInfo;
 
@@ -34,6 +34,10 @@ pub struct CompactSourceMeta {
 
 #[typetag::serde(name = "compact_source_meta")]
 impl BlockMetaInfo for CompactSourceMeta {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         match CompactSourceMeta::downcast_ref_from(info) {
             None => false,
@@ -71,6 +75,10 @@ pub struct CompactSinkMeta {
 
 #[typetag::serde(name = "compact_sink_meta")]
 impl BlockMetaInfo for CompactSinkMeta {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         match CompactSinkMeta::downcast_ref_from(info) {
             None => false,

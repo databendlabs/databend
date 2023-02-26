@@ -57,31 +57,23 @@ pub struct BlockEntry {
 
 #[typetag::serde(tag = "type")]
 pub trait BlockMetaInfo: Debug + Send + Sync + 'static {
+    fn as_any(&self) -> &dyn Any;
+
     #[allow(clippy::borrowed_box)]
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool;
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo>;
 }
 
-pub trait BlockMetaType {
-    fn meta_type_id(&self) -> TypeId;
+pub trait BlockMetaInfoDowncast: Sized {
+    fn downcast_from(boxed: BlockMetaInfoPtr) -> Option<Self>;
+
+    fn downcast_ref_from(boxed: &BlockMetaInfoPtr) -> Option<&Self>;
 }
 
-impl<T: ?Sized + BlockMetaInfo> BlockMetaType for T {
-    fn meta_type_id(&self) -> TypeId {
-        TypeId::of::<T>()
-    }
-}
-
-pub trait BlockMetaInfoDowncastHelper: Sized {
-    fn downcast_from(s: BlockMetaInfoPtr) -> Option<Self>;
-
-    fn downcast_ref_from(s: &BlockMetaInfoPtr) -> Option<&Self>;
-}
-
-impl<T: BlockMetaInfo + BlockMetaType> BlockMetaInfoDowncastHelper for T {
+impl<T: BlockMetaInfo> BlockMetaInfoDowncast for T {
     fn downcast_from(boxed: BlockMetaInfoPtr) -> Option<Self> {
-        if boxed.meta_type_id() == TypeId::of::<T>() {
+        if boxed.as_any().is::<T>() {
             unsafe {
                 // SAFETY: `is` ensures this type cast is correct
                 let raw_ptr = Box::into_raw(boxed) as *const dyn BlockMetaInfo;
@@ -93,7 +85,7 @@ impl<T: BlockMetaInfo + BlockMetaType> BlockMetaInfoDowncastHelper for T {
     }
 
     fn downcast_ref_from(boxed: &BlockMetaInfoPtr) -> Option<&Self> {
-        if boxed.meta_type_id() == TypeId::of::<T>() {
+        if boxed.as_any().is::<T>() {
             unsafe {
                 // SAFETY: `is` ensures this type cast is correct
                 let unboxed = boxed.as_ref();

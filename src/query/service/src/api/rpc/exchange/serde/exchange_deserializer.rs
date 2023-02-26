@@ -24,7 +24,7 @@ use common_arrow::arrow::io::ipc::IpcSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoDowncastHelper;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
@@ -157,6 +157,10 @@ impl<'de> serde::Deserialize<'de> for ExchangeDeserializeMeta {
 
 #[typetag::serde(name = "exchange_source")]
 impl BlockMetaInfo for ExchangeDeserializeMeta {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
         unimplemented!("Unimplemented equals ExchangeSourceMeta")
     }

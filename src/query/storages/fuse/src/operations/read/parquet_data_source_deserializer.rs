@@ -21,7 +21,7 @@ use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::BlockMetaInfoDowncastHelper;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;

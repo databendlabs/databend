@@ -18,7 +18,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoDowncastHelper;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::BlockMeta;
@@ -36,6 +36,10 @@ pub struct SerializeDataMeta {
 
 #[typetag::serde(name = "serialize_data_meta")]
 impl BlockMetaInfo for SerializeDataMeta {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         match SerializeDataMeta::downcast_ref_from(info) {
             None => false,
@@ -84,6 +88,10 @@ pub struct MutationTransformMeta {
 
 #[typetag::serde(name = "mutation_transform_meta")]
 impl BlockMetaInfo for MutationTransformMeta {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         match MutationTransformMeta::downcast_ref_from(info) {
             None => false,
@@ -120,6 +128,10 @@ pub struct MutationSinkMeta {
 
 #[typetag::serde(name = "mutation_sink_meta")]
 impl BlockMetaInfo for MutationSinkMeta {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         match MutationSinkMeta::downcast_ref_from(info) {
             None => false,

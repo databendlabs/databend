@@ -21,7 +21,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoDowncastHelper;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_pipeline_core::pipe::Pipe;
@@ -70,6 +70,10 @@ impl<'de> serde::Deserialize<'de> for ExchangeShuffleMeta {
 
 #[typetag::serde(name = "exchange_shuffle")]
 impl BlockMetaInfo for ExchangeShuffleMeta {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
         unimplemented!("Unimplemented equals ExchangeShuffleMeta")
     }

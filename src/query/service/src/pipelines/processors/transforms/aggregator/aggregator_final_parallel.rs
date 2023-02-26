@@ -18,7 +18,7 @@ use std::vec;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockMetaInfoDowncastHelper;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
 use common_functions::aggregates::StateAddr;

@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_expression::BlockMetaInfo;
-use common_expression::BlockMetaInfoDowncastHelper;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use storages_common_table_meta::meta::SegmentInfo;
 
@@ -71,6 +71,10 @@ impl TryFrom<&DataBlock> for AppendOperationLogEntry {
 
 #[typetag::serde(name = "operation_log")]
 impl BlockMetaInfo for AppendOperationLogEntry {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         match AppendOperationLogEntry::downcast_ref_from(info) {
             None => false,
