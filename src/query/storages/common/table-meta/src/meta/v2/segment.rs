@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::collections::HashMap;
+use std::ops::Range;
 use std::sync::Arc;
 
 use common_arrow::native::ColumnMeta as NativeColumnMeta;
@@ -112,6 +113,38 @@ impl ColumnMeta {
         match self {
             ColumnMeta::Parquet(v) => (v.offset, v.len),
             ColumnMeta::Native(v) => (v.offset, v.pages.iter().map(|page| page.length).sum()),
+        }
+    }
+
+    pub fn read_rows(&self, range: &Option<Range<usize>>) -> u64 {
+        match self {
+            ColumnMeta::Parquet(v) => v.num_values,
+            ColumnMeta::Native(v) => match range {
+                Some(range) => v
+                    .pages
+                    .iter()
+                    .skip(range.start)
+                    .take(range.end - range.start)
+                    .map(|page| page.num_values)
+                    .sum(),
+                None => v.pages.iter().map(|page| page.num_values).sum(),
+            },
+        }
+    }
+
+    pub fn read_bytes(&self, range: &Option<Range<usize>>) -> u64 {
+        match self {
+            ColumnMeta::Parquet(v) => v.len,
+            ColumnMeta::Native(v) => match range {
+                Some(range) => v
+                    .pages
+                    .iter()
+                    .skip(range.start)
+                    .take(range.end - range.start)
+                    .map(|page| page.length)
+                    .sum(),
+                None => v.pages.iter().map(|page| page.length).sum(),
+            },
         }
     }
 }

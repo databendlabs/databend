@@ -26,6 +26,7 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use tracing::info;
 
+use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
 use crate::operations::read::native_data_source_deserializer::NativeDeserializeDataTransform;
 use crate::operations::read::native_data_source_reader::ReadNativeDataSource;
@@ -225,7 +226,28 @@ pub fn adjust_threads_and_request(
     plan: &DataSourcePlan,
 ) -> (usize, usize) {
     if !plan.parts.is_lazy {
-        let block_nums = plan.parts.partitions.len().max(1);
+        let mut block_nums = plan.parts.partitions.len();
+
+        // If the read bytes of a partition is small enough, less than 16k rows
+        // we will not use an extra heavy thread to process it.
+        static MIN_ROWS_READ_PER_THREAD: u64 = 16 * 1024;
+        plan.parts.partitions.iter().for_each(|part| {
+            if let Some(part) = part.as_any().downcast_ref::<FusePartInfo>() {
+                let read_rows: u64 = part
+                    .columns_meta
+                    .iter()
+                    .map(|(_, meta)| meta.read_rows(&part.range))
+                    .sum();
+
+                if read_rows < MIN_ROWS_READ_PER_THREAD {
+                    block_nums -= 1;
+                }
+            }
+        });
+
+        // At least max(1/8 of the original parts, 1), in case of too many small partitions but io threads is just one.
+        block_nums = std::cmp::max(block_nums, plan.parts.partitions.len() / 8);
+        block_nums = std::cmp::max(block_nums, 1);
 
         max_threads = std::cmp::min(max_threads, block_nums);
         max_io_requests = std::cmp::min(max_io_requests, block_nums);
