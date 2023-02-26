@@ -93,15 +93,6 @@ impl BlockMeta {
     pub fn compression(&self) -> Compression {
         self.compression
     }
-
-    // true read_rows, maybe a range from a block
-    pub fn read_rows(&self, range: &Option<Range<usize>>) -> u64 {
-        self.col_metas
-            .iter()
-            .next()
-            .map(|(_, m)| m.read_rows(range))
-            .unwrap_or(self.row_count)
-    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, EnumAsInner)]

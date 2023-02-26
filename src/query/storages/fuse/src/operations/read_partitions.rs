@@ -381,7 +381,7 @@ impl FuseTable {
             }
         }
 
-        let rows_count = meta.read_rows(&range);
+        let rows_count = meta.row_count;
         let location = meta.location.0.clone();
         let format_version = meta.location.1;
 
@@ -420,7 +420,7 @@ impl FuseTable {
             }
         }
 
-        let rows_count = meta.read_rows(&range);
+        let rows_count = meta.row_count;
         let location = meta.location.0.clone();
         let format_version = meta.location.1;
 

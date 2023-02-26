@@ -234,11 +234,19 @@ pub fn adjust_threads_and_request(
         // If the read bytes of a partition is small enough, less than 16k rows
         // we will not use an extra heavy thread to process it.
         // now only works for native reader
-        static MIN_ROWS_READ_PER_THREAD: usize = 16 * 1024;
+        static MIN_ROWS_READ_PER_THREAD: u64 = 16 * 1024;
         if is_native {
             plan.parts.partitions.iter().for_each(|part| {
                 if let Some(part) = part.as_any().downcast_ref::<FusePartInfo>() {
-                    if part.nums_rows < MIN_ROWS_READ_PER_THREAD {
+                    let to_read_rows = part
+                        .columns_meta
+                        .iter()
+                        .map(|(_, meta)| meta.read_rows(&part.range))
+                        .filter(|rows| *rows > 0)
+                        .next()
+                        .unwrap_or(part.nums_rows as u64);
+
+                    if to_read_rows < MIN_ROWS_READ_PER_THREAD {
                         block_nums -= 1;
                     }
                 }
