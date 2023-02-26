@@ -186,7 +186,7 @@ A [PCRE2](https://www.pcre.org/current/doc/html/)-based regular expression patte
 
 ### FILE_FORMAT
 
-See [Input & Output File Formats](../../13-sql-reference/75-file-format-options.md).
+See [Input & Output File Formats](../../13-sql-reference/50-file-format-options.md).
 
 ### copyOptions
 
