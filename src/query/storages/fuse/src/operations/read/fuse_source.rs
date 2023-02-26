@@ -233,13 +233,7 @@ pub fn adjust_threads_and_request(
         static MIN_ROWS_READ_PER_THREAD: u64 = 16 * 1024;
         plan.parts.partitions.iter().for_each(|part| {
             if let Some(part) = part.as_any().downcast_ref::<FusePartInfo>() {
-                let read_rows: u64 = part
-                    .columns_meta
-                    .iter()
-                    .map(|(_, meta)| meta.read_rows(&part.range))
-                    .sum();
-
-                if read_rows < MIN_ROWS_READ_PER_THREAD {
+                if part.nums_rows < MIN_ROWS_READ_PER_THREAD {
                     block_nums -= 1;
                 }
             }
