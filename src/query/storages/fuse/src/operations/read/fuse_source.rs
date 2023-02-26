@@ -240,10 +240,9 @@ pub fn adjust_threads_and_request(
                 if let Some(part) = part.as_any().downcast_ref::<FusePartInfo>() {
                     let to_read_rows = part
                         .columns_meta
-                        .iter()
-                        .map(|(_, meta)| meta.read_rows(&part.range))
-                        .filter(|rows| *rows > 0)
-                        .next()
+                        .values()
+                        .map(|meta| meta.read_rows(&part.range))
+                        .find(|rows| *rows > 0)
                         .unwrap_or(part.nums_rows as u64);
 
                     if to_read_rows < MIN_ROWS_READ_PER_THREAD {
