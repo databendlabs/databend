@@ -76,14 +76,6 @@ impl<'de> serde::Deserialize<'de> for ExchangeSerializeMeta {
 
 #[typetag::serde(name = "exchange_serialize")]
 impl BlockMetaInfo for ExchangeSerializeMeta {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
     fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
         unimplemented!("Unimplemented equals ExchangeSerializeMeta")
     }

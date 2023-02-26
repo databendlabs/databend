@@ -20,6 +20,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::with_hash_method;
 use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoDowncastHelper;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_expression::HashMethodKind;
@@ -81,20 +82,12 @@ impl ConvertGroupingMetaInfo {
 
 #[typetag::serde(name = "convert_grouping")]
 impl BlockMetaInfo for ConvertGroupingMetaInfo {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
+    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
+        unimplemented!("Unimplemented equals for ConvertGroupingMetaInfo")
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         unimplemented!("Unimplemented clone for ConvertGroupingMetaInfo")
-    }
-
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals for ConvertGroupingMetaInfo")
     }
 }
 
@@ -194,7 +187,7 @@ impl<Method: HashMethodBounds> TransformConvertGrouping<Method> {
     fn add_bucket(&mut self, data_block: DataBlock) -> isize {
         if let Some(info) = data_block
             .get_meta()
-            .and_then(|meta| meta.as_any().downcast_ref::<AggregateInfo>())
+            .and_then(|meta| AggregateInfo::downcast_ref_from(meta))
         {
             if info.overflow.is_none() && info.bucket > SINGLE_LEVEL_BUCKET_NUM {
                 let bucket = info.bucket;
@@ -214,7 +207,7 @@ impl<Method: HashMethodBounds> TransformConvertGrouping<Method> {
         // check if it's local state
         if let Some(info) = data_block
             .get_meta()
-            .and_then(|meta| meta.as_any().downcast_ref::<AggregateHashStateInfo>())
+            .and_then(|meta| AggregateHashStateInfo::downcast_ref_from(meta))
         {
             let bucket = info.bucket as isize;
             match self.buckets_blocks.entry(bucket) {
@@ -385,7 +378,7 @@ impl<Method: HashMethodBounds> Processor for TransformConvertGrouping<Method> {
         if let Some(data_block) = self.unsplitted_blocks.pop() {
             let data_block_meta: Option<&AggregateInfo> = data_block
                 .get_meta()
-                .and_then(|meta| meta.as_any().downcast_ref::<AggregateInfo>());
+                .and_then(|meta| AggregateInfo::downcast_ref_from(meta));
 
             let data_blocks = match data_block_meta {
                 None => self.convert_to_two_level(data_block)?,
@@ -530,8 +523,8 @@ impl<Method: HashMethodBounds> Processor for MergeBucketTransform<Method> {
         if let Some(mut data_block) = self.input_block.take() {
             let mut blocks = vec![];
             if let Some(mut meta) = data_block.take_meta() {
-                if let Some(meta) = meta.as_mut_any().downcast_mut::<ConvertGroupingMetaInfo>() {
-                    std::mem::swap(&mut blocks, &mut meta.blocks);
+                if let Some(meta) = ConvertGroupingMetaInfo::downcast_from(meta) {
+                    blocks = meta.blocks;
                 }
             }
 

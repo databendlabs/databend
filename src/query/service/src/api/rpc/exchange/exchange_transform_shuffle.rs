@@ -21,6 +21,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoDowncastHelper;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_pipeline_core::pipe::Pipe;
@@ -69,14 +70,6 @@ impl<'de> serde::Deserialize<'de> for ExchangeShuffleMeta {
 
 #[typetag::serde(name = "exchange_shuffle")]
 impl BlockMetaInfo for ExchangeShuffleMeta {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
     fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
         unimplemented!("Unimplemented equals ExchangeShuffleMeta")
     }
@@ -195,29 +188,23 @@ impl Processor for ExchangeShuffleTransform {
             }
 
             if let Some(mut data_block) = self.try_pull_inputs()? {
-                let mut block_meta = data_block.take_meta();
-                let shuffle_meta = block_meta
-                    .as_mut()
-                    .and_then(|meta| meta.as_mut_any().downcast_mut::<ExchangeShuffleMeta>());
-
-                match shuffle_meta {
-                    None => {
-                        return Err(ErrorCode::Internal(
-                            "ExchangeShuffleTransform only recv ExchangeShuffleMeta.",
-                        ));
-                    }
-                    Some(shuffle_meta) => {
-                        let blocks = std::mem::take(&mut shuffle_meta.blocks);
+                if let Some(block_meta) = data_block.take_meta() {
+                    if let Some(shuffle_meta) = ExchangeShuffleMeta::downcast_from(block_meta) {
+                        let blocks = shuffle_meta.blocks;
                         for (index, block) in blocks.into_iter().enumerate() {
                             if !block.is_empty() {
                                 self.buffer.push_back(index, block);
                             }
                         }
+
+                        // Try push again.
+                        continue;
                     }
                 }
 
-                // Try push again.
-                continue;
+                return Err(ErrorCode::Internal(
+                    "ExchangeShuffleTransform only recv ExchangeShuffleMeta.",
+                ));
             }
 
             if self.all_inputs_finished && self.buffer.is_empty() {
@@ -336,7 +323,7 @@ impl ExchangeSorting for ShuffleExchangeSorting {
     fn block_number(&self, data_block: &DataBlock) -> Result<isize> {
         let block_meta = data_block.get_meta();
         let shuffle_meta = block_meta
-            .and_then(|meta| meta.as_any().downcast_ref::<ExchangeShuffleMeta>())
+            .and_then(|meta| ExchangeShuffleMeta::downcast_ref_from(meta))
             .unwrap();
 
         for block in &shuffle_meta.blocks {

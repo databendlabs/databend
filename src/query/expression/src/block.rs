@@ -13,8 +13,11 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::any::TypeId;
 use std::collections::HashSet;
 use std::fmt::Debug;
+use std::mem::ManuallyDrop;
+use std::ops::Deref;
 use std::ops::Range;
 
 use common_arrow::arrow::array::Array;
@@ -53,14 +56,53 @@ pub struct BlockEntry {
 }
 
 #[typetag::serde(tag = "type")]
-pub trait BlockMetaInfo: Debug + Send + Sync {
-    fn as_any(&self) -> &dyn Any;
-    fn as_mut_any(&mut self) -> &mut dyn Any;
-
+pub trait BlockMetaInfo: Debug + Send + Sync + 'static {
     #[allow(clippy::borrowed_box)]
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool;
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo>;
+}
+
+pub trait BlockMetaType {
+    fn meta_type_id(&self) -> TypeId;
+}
+
+impl<T: ?Sized + BlockMetaInfo> BlockMetaType for T {
+    fn meta_type_id(&self) -> TypeId {
+        TypeId::of::<T>()
+    }
+}
+
+pub trait BlockMetaInfoDowncastHelper: Sized {
+    fn downcast_from(s: BlockMetaInfoPtr) -> Option<Self>;
+
+    fn downcast_ref_from(s: &BlockMetaInfoPtr) -> Option<&Self>;
+}
+
+impl<T: BlockMetaInfo + BlockMetaType> BlockMetaInfoDowncastHelper for T {
+    fn downcast_from(boxed: BlockMetaInfoPtr) -> Option<Self> {
+        if boxed.meta_type_id() == TypeId::of::<T>() {
+            unsafe {
+                // SAFETY: `is` ensures this type cast is correct
+                let raw_ptr = Box::into_raw(boxed) as *const dyn BlockMetaInfo;
+                return Some(std::ptr::read(raw_ptr as *const Self));
+            }
+        }
+
+        None
+    }
+
+    fn downcast_ref_from(boxed: &BlockMetaInfoPtr) -> Option<&Self> {
+        if boxed.meta_type_id() == TypeId::of::<T>() {
+            unsafe {
+                // SAFETY: `is` ensures this type cast is correct
+                let unboxed = boxed.as_ref();
+                return Some(&*(unboxed as *const dyn BlockMetaInfo as *const Self));
+            }
+        }
+
+        None
+    }
 }
 
 impl DataBlock {
@@ -481,10 +523,7 @@ impl Eq for Box<dyn BlockMetaInfo> {}
 
 impl PartialEq for Box<dyn BlockMetaInfo> {
     fn eq(&self, other: &Self) -> bool {
-        let this_type_id = self.as_any().type_id();
-        let other_type_id = other.as_any().type_id();
-
-        match this_type_id == other_type_id {
+        match self.type_id() == other.type_id() {
             true => self.equals(other),
             false => false,
         }

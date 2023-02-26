@@ -59,14 +59,6 @@ impl<'de> serde::Deserialize<'de> for TestDataMeta {
 
 #[typetag::serde(name = "test_data_meta")]
 impl BlockMetaInfo for TestDataMeta {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
     fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
         unimplemented!("equals is unimplemented for TestDataMeta")
     }

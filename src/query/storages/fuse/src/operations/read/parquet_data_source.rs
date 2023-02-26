@@ -60,19 +60,11 @@ impl<'de> serde::Deserialize<'de> for DataSourceMeta {
 
 #[typetag::serde(name = "fuse_data_source")]
 impl BlockMetaInfo for DataSourceMeta {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
+    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
+        unimplemented!("Unimplemented equals DataSourceMeta")
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         unimplemented!("Unimplemented clone DataSourceMeta")
-    }
-
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals DataSourceMeta")
     }
 }

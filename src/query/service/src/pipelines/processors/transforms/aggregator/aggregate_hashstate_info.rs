@@ -61,19 +61,11 @@ impl<'de> Deserialize<'de> for AggregateHashStateInfo {
 
 #[typetag::serde(name = "aggregate_hash_state_info")]
 impl BlockMetaInfo for AggregateHashStateInfo {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
+    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
+        unimplemented!("Unimplemented equals for AggregateHashStateInfo")
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         unimplemented!("Unimplemented clone for AggregateHashStateInfo")
-    }
-
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals for AggregateHashStateInfo")
     }
 }
