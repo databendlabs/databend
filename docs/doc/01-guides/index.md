@@ -1,5 +1,5 @@
 ---
-title: Getting Started Tutorials
+title: Getting Started 
 ---
 
 These tutorials are intended to help you get started with Databend:
