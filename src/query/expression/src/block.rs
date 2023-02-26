@@ -512,7 +512,10 @@ impl Eq for Box<dyn BlockMetaInfo> {}
 
 impl PartialEq for Box<dyn BlockMetaInfo> {
     fn eq(&self, other: &Self) -> bool {
-        match self.type_id() == other.type_id() {
+        let this_type_id = self.as_any().type_id();
+        let other_type_id = other.as_any().type_id();
+
+        match this_type_id == other_type_id {
             true => self.equals(other),
             false => false,
         }
