@@ -74,6 +74,12 @@ impl FusePartInfo {
         sort_min_max: Option<(Scalar, Scalar)>,
         range: Option<Range<usize>>,
     ) -> Arc<Box<dyn PartInfo>> {
+        debug_assert!(
+            columns_meta
+                .iter()
+                .all(|(_, meta)| meta.total_rows() == rows_count as usize)
+        );
+
         Arc::new(Box::new(FusePartInfo {
             location,
             format_version,
