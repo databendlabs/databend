@@ -38,7 +38,7 @@ default_compression = 'zstd'
 [log]
 
 [log.file]
-level = "ERROR"
+level = "INFO"
 format = "text"
 dir = "./.databend/logs_3"
 
