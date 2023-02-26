@@ -22,7 +22,6 @@ use lexical_core::FromLexical;
 pub trait ReadNumberExt {
     fn read_int_text<T: FromLexical>(&mut self) -> Result<T>;
     fn read_float_text<T: FromLexical>(&mut self) -> Result<T>;
-
     fn read_num_text_exact<T: FromLexical>(&mut self) -> Result<T>;
 }
 

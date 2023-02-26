@@ -61,6 +61,7 @@ message DataType {
     Tuple    tuple_t       = 41;
     Empty    variant_t     = 42;
     Decimal  decimal_t     = 43;
+    Empty    empty_map_t   = 44;
   }
 }
 

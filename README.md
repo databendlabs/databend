@@ -209,7 +209,7 @@ For general help in using Databend, please refer to the official documentation. 
 
 - [Slack](https://link.databend.rs/join-slack) (For live discussion with the Community)
 - [GitHub](https://github.com/datafuselabs/databend) (Feature/Bug reports, Contributions)
-- [Twitter](https://twitter.com/Datafuse_Labs) (Get the news fast)
+- [Twitter](https://twitter.com/DatabendLabs) (Get the news fast)
 - [I'm feeling lucky](https://link.databend.rs/i-m-feeling-lucky) (Pick up a good first issue now!)
 
 ## Roadmap

@@ -74,9 +74,7 @@ use crate::MetadataRef;
 /// More information can be found in the paper: Unnesting Arbitrary Queries
 pub fn decorrelate_subquery(metadata: MetadataRef, s_expr: SExpr) -> Result<SExpr> {
     let mut rewriter = SubqueryRewriter::new(metadata);
-    let hoisted = rewriter.rewrite(&s_expr)?;
-
-    Ok(hoisted)
+    rewriter.rewrite(&s_expr)
 }
 
 impl SubqueryRewriter {

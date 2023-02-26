@@ -35,7 +35,7 @@ import TabItem from '@theme/TabItem';
 
 <TabItem value="Data Manipulation" label="Data Manipulation">
 
-- Supports atomic operations such as SELECT, INSERT, DELETE, UPDATE, COPY, and ALTER.
+- Supports atomic operations such as `SELECT`, `INSERT`, `DELETE`, `UPDATE`, `COPY`, and `ALTER`.
 - Provides advanced features such as Time Travel and Multi Catalog (Apache Hive / Apache Iceberg).
 - Supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON, and Parquet.
 - Supports semi-structured data types such as [ARRAY, MAP, and JSON](https://databend.rs/doc/sql-reference/data-types/data-type-semi-structured-types).
@@ -143,7 +143,7 @@ The Databend community is open to data professionals, students, and anyone who h
 
 - [Slack](https://link.databend.rs/join-slack): Chat with the community
 - [GitHub](https://github.com/datafuselabs/databend): Feature requests, bug reports, and contributions
-- [Twitter](https://twitter.com/Datafuse_Labs): Stay in the know
+- [Twitter](https://twitter.com/DatabendLabs): Stay in the know
 - [Weekly](https://weekly.databend.rs/): Weekly updates
 
 ## Roadmap

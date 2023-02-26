@@ -187,6 +187,15 @@ impl FuseTable {
         }
     }
 
+    /// Get max page size.
+    /// For native storage format.
+    pub fn get_max_page_size(&self) -> Option<usize> {
+        match self.storage_format {
+            FuseStorageFormat::Parquet => None,
+            FuseStorageFormat::Native => Some(self.get_write_settings().max_page_size),
+        }
+    }
+
     pub fn parse_storage_prefix(table_info: &TableInfo) -> Result<String> {
         let table_id = table_info.ident.table_id;
         let db_id = table_info

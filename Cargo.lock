@@ -1839,7 +1839,6 @@ dependencies = [
  "async-trait",
  "common-exception",
  "common-expression",
- "common-io",
  "futures",
  "petgraph",
  "serde",
@@ -1889,7 +1888,6 @@ dependencies = [
  "parking_lot 0.12.1",
  "serde",
  "serde_json",
- "similar-asserts",
  "tracing",
  "typetag",
  "xml-rs",
@@ -5551,8 +5549,8 @@ dependencies = [
 
 [[package]]
 name = "openraft"
-version = "0.7.3"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.7.4-alpha.3#c6fe29d4a53b47f6c43d83a24e1610788a4c0166"
+version = "0.7.4"
+source = "git+https://github.com/datafuselabs/openraft?tag=v0.7.4#959636885e2069c685b1bdb9ebc5a875565f4a8a"
 dependencies = [
  "anyerror",
  "anyhow",

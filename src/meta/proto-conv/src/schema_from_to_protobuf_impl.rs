@@ -209,6 +209,7 @@ impl FromToProto for ex::TableDataType {
                     Dt24::DecimalT(x) => {
                         ex::TableDataType::Decimal(ex::types::decimal::DecimalDataType::from_pb(x)?)
                     }
+                    Dt24::EmptyMapT(_) => ex::TableDataType::EmptyMap,
                 };
                 Ok(x)
             }
@@ -223,6 +224,7 @@ impl FromToProto for ex::TableDataType {
         let x = match self {
             TableDataType::Null => new_pb_dt24(Dt24::NullT(pb::Empty {})),
             TableDataType::EmptyArray => new_pb_dt24(Dt24::EmptyArrayT(pb::Empty {})),
+            TableDataType::EmptyMap => new_pb_dt24(Dt24::EmptyMapT(pb::Empty {})),
             TableDataType::Boolean => new_pb_dt24(Dt24::BoolT(pb::Empty {})),
             TableDataType::String => new_pb_dt24(Dt24::StringT(pb::Empty {})),
             TableDataType::Number(n) => {

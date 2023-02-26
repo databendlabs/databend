@@ -334,20 +334,19 @@ impl PipelineBuilder {
     fn build_eval_scalar(&mut self, eval_scalar: &EvalScalar) -> Result<()> {
         self.build_pipeline(&eval_scalar.input)?;
 
-        let operators = eval_scalar
+        let exprs = eval_scalar
             .exprs
             .iter()
-            .map(|(scalar, _)| {
-                Ok(BlockOperator::Map {
-                    expr: scalar.as_expr(&BUILTIN_FUNCTIONS),
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
+            .map(|(scalar, _)| scalar.as_expr(&BUILTIN_FUNCTIONS))
+            .collect::<Vec<_>>();
+
+        let op = BlockOperator::Map { exprs };
+
         let func_ctx = self.ctx.get_function_context()?;
 
         self.main_pipeline.add_transform(|input, output| {
             let transform =
-                CompoundBlockOperator::create(input, output, func_ctx, operators.clone());
+                CompoundBlockOperator::create(input, output, func_ctx, vec![op.clone()]);
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(

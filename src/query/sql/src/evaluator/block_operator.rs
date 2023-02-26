@@ -33,8 +33,8 @@ use common_pipeline_transforms::processors::transforms::Transformer;
 /// `BlockOperator` takes a `DataBlock` as input and produces a `DataBlock` as output.
 #[derive(Clone)]
 pub enum BlockOperator {
-    /// Evaluate expression and append result column to the end.
-    Map { expr: Expr },
+    /// Batch mode of map which merges map operators into one.
+    Map { exprs: Vec<Expr> },
 
     /// Filter the input `DataBlock` with the predicate `eval`.
     Filter { expr: Expr },
@@ -47,14 +47,16 @@ pub enum BlockOperator {
 impl BlockOperator {
     pub fn execute(&self, func_ctx: &FunctionContext, mut input: DataBlock) -> Result<DataBlock> {
         match self {
-            BlockOperator::Map { expr } => {
-                let evaluator = Evaluator::new(&input, *func_ctx, &BUILTIN_FUNCTIONS);
-                let result = evaluator.run(expr)?;
-                let col = BlockEntry {
-                    data_type: expr.data_type().clone(),
-                    value: result,
-                };
-                input.add_column(col);
+            BlockOperator::Map { exprs } => {
+                for expr in exprs {
+                    let evaluator = Evaluator::new(&input, *func_ctx, &BUILTIN_FUNCTIONS);
+                    let result = evaluator.run(expr)?;
+                    let col = BlockEntry {
+                        data_type: expr.data_type().clone(),
+                        value: result,
+                    };
+                    input.add_column(col);
+                }
                 Ok(input)
             }
 
@@ -90,14 +92,26 @@ impl CompoundBlockOperator {
         ctx: FunctionContext,
         operators: Vec<BlockOperator>,
     ) -> Box<dyn Processor> {
+        let operators = Self::compact_map(operators);
         Transformer::<Self>::create(input_port, output_port, Self { operators, ctx })
     }
 
-    #[allow(dead_code)]
-    pub fn append(self, operator: BlockOperator) -> Self {
-        let mut result = self;
-        result.operators.push(operator);
-        result
+    pub fn compact_map(operators: Vec<BlockOperator>) -> Vec<BlockOperator> {
+        let mut results = Vec::with_capacity(operators.len());
+
+        for op in operators {
+            match op {
+                BlockOperator::Map { exprs } => {
+                    if let Some(BlockOperator::Map { exprs: pre_exprs }) = results.last_mut() {
+                        pre_exprs.extend(exprs);
+                    } else {
+                        results.push(BlockOperator::Map { exprs });
+                    }
+                }
+                _ => results.push(op),
+            }
+        }
+        results
     }
 
     #[allow(dead_code)]

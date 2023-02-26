@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
@@ -59,14 +60,11 @@ impl AsyncSink for ExchangeWriterSink {
             None => Err(ErrorCode::Internal(
                 "ExchangeWriterSink only recv ExchangeSerializeMeta.",
             )),
-            Some(mut block_meta) => match block_meta
-                .as_mut_any()
-                .downcast_mut::<ExchangeSerializeMeta>()
-            {
+            Some(block_meta) => match ExchangeSerializeMeta::downcast_from(block_meta) {
                 None => Err(ErrorCode::Internal(
                     "ExchangeWriterSink only recv ExchangeSerializeMeta.",
                 )),
-                Some(block_meta) => Ok(block_meta.packet.take().unwrap()),
+                Some(block_meta) => Ok(block_meta.packet.unwrap()),
             },
         }?;
 

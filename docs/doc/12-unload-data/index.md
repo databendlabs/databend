@@ -7,7 +7,7 @@ Unloading data refers to the process of extracting or transferring data stored i
 
 Databend recommends using the `COPY INTO <location>` command to export your data to a [Stage](../14-sql-commands/00-ddl/40-stage/index.md) or an external location as a file in one of the supported formats. This command is a convenient and efficient way to transfer data out of the database and into a file for further processing or analysis. 
 
-For more information about the command, see [`COPY INTO <location>`](../14-sql-commands/10-dml/dml-copy-into-location.md). To view the list of supported file formats that can be used to save the exported data, see [Input & Output File Formats](../13-sql-reference/75-file-format-options.md).
+For more information about the command, see [`COPY INTO <location>`](../14-sql-commands/10-dml/dml-copy-into-location.md). To view the list of supported file formats that can be used to save the exported data, see [Input & Output File Formats](../13-sql-reference/50-file-format-options.md).
 
 ## Tutorial - Unload to an External Stage
 

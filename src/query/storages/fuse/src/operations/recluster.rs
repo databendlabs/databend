@@ -138,11 +138,7 @@ impl FuseTable {
         // ReadDataKind to avoid OOM.
         self.do_read_data(ctx.clone(), &plan, pipeline)?;
 
-        let max_page_size = if self.is_native() {
-            Some(self.get_write_settings().max_page_size)
-        } else {
-            None
-        };
+        let max_page_size = self.get_max_page_size();
 
         let cluster_stats_gen = self.get_cluster_stats_gen(
             ctx.clone(),

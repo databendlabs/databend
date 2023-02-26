@@ -37,7 +37,7 @@
   },
   "link.item.label.Twitter": {
     "message": "Twitter",
-    "description": "The label of footer link with label=Twitter linking to https://twitter.com/Datafuse_Labs"
+    "description": "The label of footer link with label=Twitter linking to https://twitter.com/DatabendLabs"
   },
   "link.item.label.Weekly": {
     "message": "Weekly",
