@@ -1839,7 +1839,6 @@ dependencies = [
  "async-trait",
  "common-exception",
  "common-expression",
- "common-io",
  "futures",
  "petgraph",
  "serde",
