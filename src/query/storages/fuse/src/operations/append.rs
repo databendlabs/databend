@@ -72,11 +72,7 @@ impl FuseTable {
             }
         }
 
-        let max_page_size = if self.is_native() {
-            Some(write_settings.max_page_size)
-        } else {
-            None
-        };
+        let max_page_size = self.get_max_page_size();
         let cluster_stats_gen = self.get_cluster_stats_gen(
             ctx.clone(),
             max_page_size,
