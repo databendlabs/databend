@@ -36,7 +36,7 @@ This guideline show how to connect and query to Databend using Golang. We will b
 
 ### main.go
 
-```text title='main.go'
+```go title='main.go'
 package main
 
 import (
@@ -128,7 +128,7 @@ func main() {
 
 ### Golang mod
 
-```text
+```shell
 go mod init databend-golang
 ```
 
