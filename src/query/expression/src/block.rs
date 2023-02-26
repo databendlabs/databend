@@ -13,11 +13,8 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::any::TypeId;
 use std::collections::HashSet;
 use std::fmt::Debug;
-use std::mem::ManuallyDrop;
-use std::ops::Deref;
 use std::ops::Range;
 
 use common_arrow::arrow::array::Array;

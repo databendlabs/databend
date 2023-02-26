@@ -191,7 +191,7 @@ impl<Method: HashMethodBounds> TransformConvertGrouping<Method> {
     fn add_bucket(&mut self, data_block: DataBlock) -> isize {
         if let Some(info) = data_block
             .get_meta()
-            .and_then(|meta| AggregateInfo::downcast_ref_from(meta))
+            .and_then(AggregateInfo::downcast_ref_from)
         {
             if info.overflow.is_none() && info.bucket > SINGLE_LEVEL_BUCKET_NUM {
                 let bucket = info.bucket;
@@ -211,7 +211,7 @@ impl<Method: HashMethodBounds> TransformConvertGrouping<Method> {
         // check if it's local state
         if let Some(info) = data_block
             .get_meta()
-            .and_then(|meta| AggregateHashStateInfo::downcast_ref_from(meta))
+            .and_then(AggregateHashStateInfo::downcast_ref_from)
         {
             let bucket = info.bucket as isize;
             match self.buckets_blocks.entry(bucket) {
@@ -382,7 +382,7 @@ impl<Method: HashMethodBounds> Processor for TransformConvertGrouping<Method> {
         if let Some(data_block) = self.unsplitted_blocks.pop() {
             let data_block_meta: Option<&AggregateInfo> = data_block
                 .get_meta()
-                .and_then(|meta| AggregateInfo::downcast_ref_from(meta));
+                .and_then(AggregateInfo::downcast_ref_from);
 
             let data_blocks = match data_block_meta {
                 None => self.convert_to_two_level(data_block)?,
@@ -526,8 +526,8 @@ impl<Method: HashMethodBounds> Processor for MergeBucketTransform<Method> {
     fn process(&mut self) -> Result<()> {
         if let Some(mut data_block) = self.input_block.take() {
             let mut blocks = vec![];
-            if let Some(mut meta) = data_block.take_meta() {
-                if let Some(meta) = ConvertGroupingMetaInfo::downcast_from(meta) {
+            if let Some(block_meta) = data_block.take_meta() {
+                if let Some(meta) = ConvertGroupingMetaInfo::downcast_from(block_meta) {
                     blocks = meta.blocks;
                 }
             }

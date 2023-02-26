@@ -129,7 +129,7 @@ impl ExchangeSorting for SinkExchangeSorting {
     fn block_number(&self, data_block: &DataBlock) -> Result<isize> {
         let block_meta = data_block.get_meta();
         let shuffle_meta = block_meta
-            .and_then(|meta| ExchangeSerializeMeta::downcast_ref_from(meta))
+            .and_then(ExchangeSerializeMeta::downcast_ref_from)
             .unwrap();
 
         Ok(shuffle_meta.block_number)

@@ -104,7 +104,7 @@ impl Transform for TransformExchangeDeserializer {
     const NAME: &'static str = "TransformExchangeDeserializer";
 
     fn transform(&mut self, mut data: DataBlock) -> Result<DataBlock> {
-        if let Some(mut block_meta) = data.take_meta() {
+        if let Some(block_meta) = data.take_meta() {
             if let Some(exchange_meta) = ExchangeDeserializeMeta::downcast_from(block_meta) {
                 return match exchange_meta.packet.unwrap() {
                     DataPacket::ErrorCode(v) => Err(v),

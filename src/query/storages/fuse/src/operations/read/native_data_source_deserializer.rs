@@ -371,8 +371,8 @@ impl Processor for NativeDeserializeDataTransform {
 
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
-            if let Some(mut source_meta) = data_block.take_meta() {
-                if let Some(source_meta) = NativeDataSourceMeta::downcast_from(source_meta) {
+            if let Some(block_meta) = data_block.take_meta() {
+                if let Some(source_meta) = NativeDataSourceMeta::downcast_from(block_meta) {
                     self.parts = VecDeque::from(source_meta.part);
                     self.chunks = VecDeque::from(source_meta.chunks);
                     return Ok(Event::Sync);

@@ -125,8 +125,8 @@ impl<const HAS_AGG: bool, Method: HashMethodBounds> BucketAggregator<HAS_AGG, Me
         }
 
         for mut data_block in blocks {
-            if let Some(mut meta) = data_block.take_meta() {
-                if let Some(mut info) = AggregateHashStateInfo::downcast_from(meta) {
+            if let Some(block_meta) = data_block.take_meta() {
+                if let Some(mut info) = AggregateHashStateInfo::downcast_from(block_meta) {
                     let hashtable = info
                         .hash_state
                         .downcast_mut::<Method::HashTable<usize>>()
