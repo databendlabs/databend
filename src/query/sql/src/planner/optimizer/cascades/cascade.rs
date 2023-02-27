@@ -34,7 +34,6 @@ use crate::optimizer::rule::RuleSet;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::SExpr;
 use crate::IndexType;
-use crate::MetadataRef;
 
 /// A cascades-style search engine to enumerate possible alternations of a relational expression and
 /// find the optimal one.
@@ -48,11 +47,10 @@ pub struct CascadesOptimizer {
     /// group index -> best cost context
     pub best_cost_map: HashMap<IndexType, CostContext>,
     _ctx: Arc<dyn TableContext>,
-    pub metadata: MetadataRef,
 }
 
 impl CascadesOptimizer {
-    pub fn create(ctx: Arc<dyn TableContext>, metadata: MetadataRef) -> Result<Self> {
+    pub fn create(ctx: Arc<dyn TableContext>) -> Result<Self> {
         let enable_bushy_join = ctx.get_settings().get_enable_bushy_join()? != 0;
         let explore_rules = if ctx.get_settings().get_enable_cbo()? {
             get_explore_rule_set(enable_bushy_join)
@@ -65,12 +63,11 @@ impl CascadesOptimizer {
             RoaringBitmap::new()
         };
         Ok(CascadesOptimizer {
-            memo: Memo::create(&metadata),
+            memo: Memo::create(),
             explore_rules,
             cost_model: Box::new(DefaultCostModel),
             best_cost_map: HashMap::new(),
             _ctx: ctx,
-            metadata: metadata.clone(),
             explore_rule_set,
         })
     }

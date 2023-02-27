@@ -149,7 +149,7 @@ pub fn optimize_query(
     let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata.clone());
     let mut result = heuristic.optimize(s_expr)?;
 
-    let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata)?;
+    let mut cascades = CascadesOptimizer::create(ctx.clone())?;
     result = cascades.optimize(result)?;
 
     // So far, we don't have ability to execute distributed query
@@ -170,10 +170,10 @@ fn get_optimized_memo(
     metadata: MetadataRef,
     bind_context: Box<BindContext>,
 ) -> Result<(Memo, HashMap<IndexType, CostContext>)> {
-    let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata.clone());
+    let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata);
     let result = heuristic.optimize(s_expr)?;
 
-    let mut cascades = CascadesOptimizer::create(ctx, metadata)?;
+    let mut cascades = CascadesOptimizer::create(ctx)?;
     cascades.optimize(result)?;
     Ok((cascades.memo, cascades.best_cost_map))
 }
