@@ -185,6 +185,9 @@ impl Default for Partitions {
 pub struct StealablePartitions {
     pub partitions: Arc<RwLock<Vec<VecDeque<PartInfoPtr>>>>,
     pub ctx: Arc<dyn TableContext>,
+    // In some cases, we need to disable steal.
+    // Such as topk queries, this is suitable that topk will respect all the pagecache and reduce false sharing between threads.
+    pub disable_steal: bool,
 }
 
 impl StealablePartitions {
@@ -192,7 +195,12 @@ impl StealablePartitions {
         StealablePartitions {
             partitions: Arc::new(RwLock::new(partitions)),
             ctx,
+            disable_steal: false,
         }
+    }
+
+    pub fn disable_steal(&mut self) {
+        self.disable_steal = true;
     }
 
     pub fn steal_one(&self, idx: usize) -> Option<PartInfoPtr> {
@@ -211,6 +219,10 @@ impl StealablePartitions {
             let index = (idx + step) % partitions.len();
             if !partitions[index].is_empty() {
                 return partitions[index].pop_front();
+            }
+
+            if self.disable_steal {
+                break;
             }
         }
 
@@ -237,6 +249,10 @@ impl StealablePartitions {
                 let ps = &mut partitions[index];
                 let size = ps.len().min(max_size);
                 return ps.drain(..size).collect();
+            }
+
+            if self.disable_steal {
+                break;
             }
         }
 

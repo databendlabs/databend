@@ -28,6 +28,7 @@ use common_expression::filter_helper::FilterHelpers;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
@@ -53,7 +54,8 @@ pub struct ParquetPrewhereInfo {
     pub func_ctx: FunctionContext,
     pub reader: Arc<ParquetReader>,
     pub filter: Expr,
-    pub top_k: Option<(usize, TopKSorter)>, /* the usize is the index of the column in ParquetReader.schema */
+    pub top_k: Option<(usize, TopKSorter)>,
+    // the usize is the index of the column in ParquetReader.schema
 }
 
 pub struct ParquetDeserializeTransform {
@@ -187,13 +189,10 @@ impl Processor for ParquetDeserializeTransform {
 
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
-            let mut source_meta = data_block.take_meta().unwrap();
-            let source_meta = source_meta
-                .as_mut_any()
-                .downcast_mut::<ParquetSourceMeta>()
-                .unwrap();
+            let source_meta = data_block.take_meta().unwrap();
+            let source_meta = ParquetSourceMeta::downcast_from(source_meta).unwrap();
 
-            self.parts = VecDeque::from(std::mem::take(&mut source_meta.parts));
+            self.parts = VecDeque::from(source_meta.parts);
 
             self.check_topn();
             if self.top_k_finished {
@@ -202,7 +201,7 @@ impl Processor for ParquetDeserializeTransform {
                 return Ok(Event::Finished);
             }
 
-            self.data_readers = VecDeque::from(std::mem::take(&mut source_meta.readers));
+            self.data_readers = VecDeque::from(source_meta.readers);
             return Ok(Event::Sync);
         }
 

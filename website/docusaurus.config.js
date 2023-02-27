@@ -14,7 +14,7 @@ const config = {
     tagline: 'Databend is a modern cloud data warehouse that empowers your object storage for real-time analytics.',
     url: 'https://databend.rs',
     baseUrl: '/',
-    onBrokenLinks: 'warn',
+    onBrokenLinks: 'throw',
     onBrokenMarkdownLinks: 'throw',
     favicon: 'img/logo/logo-no-text.svg',
     organizationName: 'datafuselabs',
@@ -22,13 +22,10 @@ const config = {
 
     i18n: {
         defaultLocale: 'en-US',
-        locales: ['en-US', 'zh-CN'],
+        locales: ['en-US'],
         localeConfigs: {
             'en-US': {
                 label: 'English',
-            },
-            'zh-CN': {
-                label: '简体中文',
             },
         },
     },
@@ -99,7 +96,7 @@ const config = {
         ({
             announcementBar: {
                 id: 'announcementBar-2', // Increment on change
-                content: `⭐️ If you like Databend, give it a star on <a target="_blank" rel="noopener noreferrer" href="https://github.com/datafuselabs/databend">GitHub</a> and follow us on <a target="_blank" rel="noopener noreferrer" href="https://twitter.com/datafuse_labs" >Twitter</a> ${TwitterSvg}`,
+                content: `⭐️ If you like Databend, give it a star on <a target="_blank" rel="noopener noreferrer" href="https://github.com/datafuselabs/databend">GitHub</a> and follow us on <a target="_blank" rel="noopener noreferrer" href="https://twitter.com/DatabendLabs" >Twitter</a> ${TwitterSvg}`,
             },
             navbar: {
                 title: 'Databend',
@@ -119,16 +116,6 @@ const config = {
                         position: 'right',
                     },
                     { to: '/blog', label: 'Blog', position: 'right' }, // or position: 'right'
-                    {
-                        type: 'localeDropdown',
-                        position: 'right',
-                        dropdownItemsAfter: [
-                            {
-                                to: 'https://databend.crowdin.com/databend',
-                                label: 'Help Us Translate',
-                            },
-                        ],
-                    },
                 ],
             },
             footer: {
@@ -155,7 +142,7 @@ const config = {
                             },
                             {
                                 label: 'Twitter',
-                                href: 'https://twitter.com/Datafuse_Labs',
+                                href: 'https://twitter.com/DatabendLabs',
                             },
                         ],
                     },

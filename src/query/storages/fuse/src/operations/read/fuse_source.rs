@@ -26,6 +26,7 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use tracing::info;
 
+use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
 use crate::operations::read::native_data_source_deserializer::NativeDeserializeDataTransform;
 use crate::operations::read::native_data_source_reader::ReadNativeDataSource;
@@ -41,14 +42,24 @@ pub fn build_fuse_native_source_pipeline(
     topk: Option<TopK>,
     mut max_io_requests: usize,
 ) -> Result<()> {
-    (max_threads, max_io_requests) = adjust_threads_and_request(max_threads, max_io_requests, plan);
+    (max_threads, max_io_requests) =
+        adjust_threads_and_request(true, max_threads, max_io_requests, plan);
+
+    if topk.is_some() {
+        max_threads = max_threads.min(16);
+        max_io_requests = max_io_requests.min(16);
+    }
 
     let mut source_builder = SourcePipeBuilder::create();
 
     match block_reader.support_blocking_api() {
         true => {
             let partitions = dispatch_partitions(ctx.clone(), plan, max_threads);
-            let partitions = StealablePartitions::new(partitions, ctx.clone());
+            let mut partitions = StealablePartitions::new(partitions, ctx.clone());
+
+            if topk.is_some() {
+                partitions.disable_steal();
+            }
 
             for i in 0..max_threads {
                 let output = OutputPort::create();
@@ -67,7 +78,11 @@ pub fn build_fuse_native_source_pipeline(
         }
         false => {
             let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
-            let partitions = StealablePartitions::new(partitions, ctx.clone());
+            let mut partitions = StealablePartitions::new(partitions, ctx.clone());
+
+            if topk.is_some() {
+                partitions.disable_steal();
+            }
 
             for i in 0..max_io_requests {
                 let output = OutputPort::create();
@@ -109,7 +124,8 @@ pub fn build_fuse_parquet_source_pipeline(
     mut max_threads: usize,
     mut max_io_requests: usize,
 ) -> Result<()> {
-    (max_threads, max_io_requests) = adjust_threads_and_request(max_threads, max_io_requests, plan);
+    (max_threads, max_io_requests) =
+        adjust_threads_and_request(false, max_threads, max_io_requests, plan);
 
     let mut source_builder = SourcePipeBuilder::create();
 
@@ -207,12 +223,38 @@ pub fn dispatch_partitions(
 }
 
 pub fn adjust_threads_and_request(
+    is_native: bool,
     mut max_threads: usize,
     mut max_io_requests: usize,
     plan: &DataSourcePlan,
 ) -> (usize, usize) {
     if !plan.parts.is_lazy {
-        let block_nums = plan.parts.partitions.len().max(1);
+        let mut block_nums = plan.parts.partitions.len();
+
+        // If the read bytes of a partition is small enough, less than 16k rows
+        // we will not use an extra heavy thread to process it.
+        // now only works for native reader
+        static MIN_ROWS_READ_PER_THREAD: u64 = 16 * 1024;
+        if is_native {
+            plan.parts.partitions.iter().for_each(|part| {
+                if let Some(part) = part.as_any().downcast_ref::<FusePartInfo>() {
+                    let to_read_rows = part
+                        .columns_meta
+                        .values()
+                        .map(|meta| meta.read_rows(&part.range))
+                        .find(|rows| *rows > 0)
+                        .unwrap_or(part.nums_rows as u64);
+
+                    if to_read_rows < MIN_ROWS_READ_PER_THREAD {
+                        block_nums -= 1;
+                    }
+                }
+            });
+        }
+
+        // At least max(1/8 of the original parts, 1), in case of too many small partitions but io threads is just one.
+        block_nums = std::cmp::max(block_nums, plan.parts.partitions.len() / 8);
+        block_nums = std::cmp::max(block_nums, 1);
 
         max_threads = std::cmp::min(max_threads, block_nums);
         max_io_requests = std::cmp::min(max_io_requests, block_nums);

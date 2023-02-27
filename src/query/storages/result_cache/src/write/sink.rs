@@ -98,8 +98,8 @@ impl WriteResultCacheSink {
         kv_store: Arc<MetaStore>,
     ) -> Result<ProcessorPtr> {
         let settings = ctx.get_settings();
-        let max_bytes = settings.get_max_result_cache_bytes()?;
-        let ttl = settings.get_result_cache_ttl()?;
+        let max_bytes = settings.get_query_result_cache_max_bytes()?;
+        let ttl = settings.get_query_result_cache_ttl_secs()?;
         let tenant = ctx.get_tenant();
         let sql = ctx.get_query_str();
         let partitions_shas = ctx.get_partitions_shas();
