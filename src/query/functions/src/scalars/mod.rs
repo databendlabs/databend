@@ -31,6 +31,7 @@ mod geo;
 mod map;
 mod math;
 mod tuple;
+mod unnest;
 mod variant;
 
 mod comparison;
@@ -54,6 +55,7 @@ fn builtin_functions() -> FunctionRegistry {
 
     register_auto_cast_rules(&mut registry);
 
+    unnest::register(&mut registry);
     variant::register(&mut registry);
     arithmetic::register(&mut registry);
     array::register(&mut registry);

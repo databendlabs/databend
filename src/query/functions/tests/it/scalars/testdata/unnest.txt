@@ -1,0 +1,40 @@
+error: no overload satisfies `unnest(UInt8)`
+
+has tried possible overloads:
+  unnest(Array(T0)) :: Array(T0)            : unable to unify `UInt8` with `Array(T0)`
+  unnest(Array(T0) NULL) :: Array(T0) NULL  : unable to unify `UInt8` with `Array(T0)`
+
+ast            : unnest([]::array(int))
+raw expr       : unnest(CAST(array() AS Array(Int32)))
+checked expr   : unnest<T0=Int32><Array(T0)>(CAST(array<>() AS Array(Int32)))
+evaluation (internal):
++--------+----------------------------------------------------+
+| Column | Data                                               |
++--------+----------------------------------------------------+
+| Output | ArrayColumn { values: Int32([]), offsets: [0, 0] } |
++--------+----------------------------------------------------+
+
+
+ast            : unnest([1, 2, 3])
+raw expr       : unnest(array(1_u8, 2_u8, 3_u8))
+checked expr   : unnest<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8))
+evaluation (internal):
++--------+-----------------------------------------------------------+
+| Column | Data                                                      |
++--------+-----------------------------------------------------------+
+| Output | ArrayColumn { values: UInt8([1, 2, 3]), offsets: [0, 3] } |
++--------+-----------------------------------------------------------+
+
+
+ast            : unnest(a)
+raw expr       : unnest(a::Array(Int32))
+checked expr   : unnest<T0=Int32><Array(T0)>(a)
+evaluation (internal):
++--------+--------------------------------------------------------------------+
+| Column | Data                                                               |
++--------+--------------------------------------------------------------------+
+| a      | ArrayColumn { values: Int32([1, 2, 3, 4, 5]), offsets: [0, 2, 5] } |
+| Output | ArrayColumn { values: Int32([1, 2, 3, 4, 5]), offsets: [0, 2, 5] } |
++--------+--------------------------------------------------------------------+
+
+
