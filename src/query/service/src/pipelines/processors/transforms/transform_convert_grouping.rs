@@ -41,9 +41,9 @@ use serde::Serializer;
 
 use super::aggregator::AggregateHashStateInfo;
 use super::group_by::BUCKETS_LG2;
+use crate::pipelines::processors::transforms::aggregator::transform_group_by_final::TransformFinalGroupBy;
 use crate::pipelines::processors::transforms::aggregator::AggregateInfo;
 use crate::pipelines::processors::transforms::aggregator::BucketAggregator;
-use crate::pipelines::processors::transforms::aggregator::TransformFinalGroupBy;
 use crate::pipelines::processors::transforms::aggregator::TransformPartitionBucket;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;

@@ -1,0 +1,105 @@
+use std::sync::Arc;
+
+use common_exception::ErrorCode;
+use common_expression::DataBlock;
+use common_hashtable::HashtableLike;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_transforms::processors::transforms::BlockMetaTransform;
+use common_pipeline_transforms::processors::transforms::BlockMetaTransformer;
+
+use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::estimated_key_size;
+use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
+use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
+use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
+use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
+use crate::pipelines::processors::AggregatorParams;
+
+pub struct TransformFinalGroupBy<Method: HashMethodBounds> {
+    method: Method,
+    params: Arc<AggregatorParams>,
+}
+
+impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
+    pub fn try_create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        method: Method,
+        params: Arc<AggregatorParams>,
+    ) -> common_exception::Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(BlockMetaTransformer::create(
+            input,
+            output,
+            TransformFinalGroupBy::<Method> { method, params },
+        )))
+    }
+}
+
+impl<Method> BlockMetaTransform<AggregateMeta<Method, ()>> for TransformFinalGroupBy<Method>
+where Method: HashMethodBounds
+{
+    const NAME: &'static str = "TransformFinalGroupBy";
+
+    fn transform(
+        &mut self,
+        meta: AggregateMeta<Method, ()>,
+    ) -> common_exception::Result<DataBlock> {
+        if let AggregateMeta::Partitioned { bucket, data } = meta {
+            let mut hashtable = self.method.create_hash_table::<()>()?;
+            'merge_hashtable: for bucket_data in data {
+                match bucket_data {
+                    AggregateMeta::Partitioned { .. } => unreachable!(),
+                    AggregateMeta::Serialized(payload) => {
+                        debug_assert!(bucket == payload.bucket);
+                        let column = payload.get_group_by_column();
+                        let keys_iter = self.method.keys_iter_from_column(column)?;
+
+                        unsafe {
+                            for key in keys_iter.iter() {
+                                let _ = hashtable.insert_and_entry(key);
+                            }
+
+                            if let Some(limit) = self.params.limit {
+                                if hashtable.len() >= limit {
+                                    break 'merge_hashtable;
+                                }
+                            }
+                        }
+                    }
+                    AggregateMeta::HashTable(payload) => unsafe {
+                        debug_assert!(bucket == payload.bucket);
+
+                        for key in payload.hashtable.iter() {
+                            let _ = hashtable.insert_and_entry(key.key());
+                        }
+
+                        if let Some(limit) = self.params.limit {
+                            if hashtable.len() >= limit {
+                                break 'merge_hashtable;
+                            }
+                        }
+                    },
+                }
+            }
+
+            let value_size = estimated_key_size(&hashtable);
+            let keys_len = hashtable.len();
+
+            let mut group_columns_builder =
+                self.method
+                    .group_columns_builder(keys_len, value_size, &self.params);
+
+            for group_entity in hashtable.iter() {
+                group_columns_builder.append_value(group_entity.key());
+            }
+
+            return Ok(DataBlock::new_from_columns(group_columns_builder.finish()?));
+        }
+
+        Err(ErrorCode::Internal(
+            "TransformFinalGroupBy only recv AggregateMeta::Partitioned",
+        ))
+    }
+}

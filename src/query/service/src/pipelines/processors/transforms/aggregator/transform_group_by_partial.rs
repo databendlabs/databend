@@ -31,8 +31,6 @@ use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
 
-type GroupByMeta<Method> = AggregateMeta<Method, ()>;
-
 enum HashTable<Method: HashMethodBounds> {
     MovedOut,
     HashTable(Method::HashTable<()>),
@@ -76,7 +74,6 @@ pub struct TransformPartialGroupBy<Method: HashMethodBounds> {
 }
 
 impl<Method: HashMethodBounds> TransformPartialGroupBy<Method> {
-    #[allow(dead_code)]
     pub fn try_create(
         ctx: Arc<QueryContext>,
         method: Method,
@@ -169,7 +166,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
             HashTable::HashTable(v) => match Method::HashTable::len(&v) == 0 {
                 true => vec![],
                 false => vec![DataBlock::empty_with_meta(
-                    GroupByMeta::<Method>::create_hashtable(-1, v, ArenaHolder::create(None)),
+                    AggregateMeta::<Method, ()>::create_hashtable(-1, v, ArenaHolder::create(None)),
                 )],
             },
             HashTable::PartitionedHashTable(v) => {
@@ -177,7 +174,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                 for (bucket, hashtable) in v.into_iter_tables().enumerate() {
                     if Method::HashTable::len(&hashtable) != 0 {
                         blocks.push(DataBlock::empty_with_meta(
-                            GroupByMeta::<Method>::create_hashtable(
+                            AggregateMeta::<Method, ()>::create_hashtable(
                                 bucket as isize,
                                 hashtable,
                                 ArenaHolder::create(None),
@@ -188,89 +185,5 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                 blocks
             }
         })
-    }
-}
-
-pub struct TransformFinalGroupBy<Method: HashMethodBounds> {
-    method: Method,
-    params: Arc<AggregatorParams>,
-}
-
-impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
-    pub fn try_create(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        method: Method,
-        params: Arc<AggregatorParams>,
-    ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(BlockMetaTransformer::create(
-            input,
-            output,
-            TransformFinalGroupBy::<Method> { method, params },
-        )))
-    }
-}
-
-impl<Method> BlockMetaTransform<GroupByMeta<Method>> for TransformFinalGroupBy<Method>
-where Method: HashMethodBounds
-{
-    const NAME: &'static str = "TransformFinalGroupBy";
-
-    fn transform(&mut self, meta: AggregateMeta<Method, ()>) -> Result<DataBlock> {
-        match meta {
-            AggregateMeta::HashTable(_) => unreachable!(),
-            AggregateMeta::Serialized(_) => unreachable!(),
-            AggregateMeta::Partitioned { bucket, data } => {
-                let mut hashtable = self.method.create_hash_table::<()>()?;
-                'merge_hashtable: for bucket_data in data {
-                    match bucket_data {
-                        AggregateMeta::Partitioned { .. } => unreachable!(),
-                        AggregateMeta::Serialized(payload) => {
-                            debug_assert!(bucket == payload.bucket);
-                            let column = payload.get_group_by_column();
-                            let keys_iter = self.method.keys_iter_from_column(column)?;
-
-                            unsafe {
-                                for key in keys_iter.iter() {
-                                    let _ = hashtable.insert_and_entry(key);
-                                }
-
-                                if let Some(limit) = self.params.limit {
-                                    if hashtable.len() >= limit {
-                                        break 'merge_hashtable;
-                                    }
-                                }
-                            }
-                        }
-                        AggregateMeta::HashTable(payload) => unsafe {
-                            debug_assert!(bucket == payload.bucket);
-
-                            for key in payload.hashtable.iter() {
-                                let _ = hashtable.insert_and_entry(key.key());
-                            }
-
-                            if let Some(limit) = self.params.limit {
-                                if hashtable.len() >= limit {
-                                    break 'merge_hashtable;
-                                }
-                            }
-                        },
-                    }
-                }
-
-                let value_size = estimated_key_size(&hashtable);
-                let keys_len = hashtable.len();
-
-                let mut group_columns_builder =
-                    self.method
-                        .group_columns_builder(keys_len, value_size, &self.params);
-
-                for group_entity in hashtable.iter() {
-                    group_columns_builder.append_value(group_entity.key());
-                }
-
-                Ok(DataBlock::new_from_columns(group_columns_builder.finish()?))
-            }
-        }
     }
 }
