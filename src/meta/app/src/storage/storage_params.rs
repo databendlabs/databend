@@ -37,6 +37,7 @@ pub enum StorageParams {
     Oss(StorageOssConfig),
     S3(StorageS3Config),
     Redis(StorageRedisConfig),
+    Webhdfs(StorageWebhdfsConfig),
 
     /// None means this storage type is none.
     ///
@@ -70,6 +71,7 @@ impl StorageParams {
             StorageParams::S3(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Gcs(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Redis(_) => false,
+            StorageParams::Webhdfs(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::None => false,
         }
     }
@@ -91,6 +93,7 @@ impl StorageParams {
             StorageParams::S3(v) => v.root = f(&v.root),
             StorageParams::Gcs(v) => v.root = f(&v.root),
             StorageParams::Redis(v) => v.root = f(&v.root),
+            StorageParams::Webhdfs(v) => v.root = f(&v.root),
             StorageParams::None => {}
         };
 
@@ -155,6 +158,9 @@ impl Display for StorageParams {
                     "redis | db={},root={},endpoint={}",
                     v.db, v.root, v.endpoint_url
                 )
+            }
+            StorageParams::Webhdfs(v) => {
+                write!(f, "webhdfs | root={},endpoint={}", v.root, v.endpoint_url)
             }
             StorageParams::None => {
                 write!(f, "none",)
@@ -472,6 +478,26 @@ impl Debug for StorageRedisConfig {
     }
 }
 
+/// config for WebHDFS Storage Service
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageWebhdfsConfig {
+    pub endpoint_url: String,
+    pub root: String,
+    pub delegation: String,
+}
+
+impl Debug for StorageWebhdfsConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut ds = f.debug_struct("StorageWebhdfsConfig");
+
+        ds.field("endpoint_url", &self.endpoint_url)
+            .field("root", &self.root);
+
+        ds.field("delegation", &mask_string(&self.delegation, 3));
+
+        ds.finish()
+    }
+}
 /// Mask a string by "******", but keep `unmask_len` of suffix.
 ///
 /// Copied from `common-base` so that we don't need to depend on it.
