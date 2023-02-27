@@ -16,7 +16,6 @@ use std::marker::PhantomData;
 
 use common_arrow::arrow::buffer::Buffer;
 use common_expression::types::decimal::Decimal;
-
 use common_expression::types::number::Number;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::NumberType;

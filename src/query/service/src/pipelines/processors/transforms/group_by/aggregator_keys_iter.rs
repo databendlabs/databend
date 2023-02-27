@@ -16,7 +16,6 @@ use std::slice::Iter;
 
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
-
 use common_expression::types::number::Number;
 use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringIterator;

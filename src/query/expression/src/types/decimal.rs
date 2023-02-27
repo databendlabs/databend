@@ -427,9 +427,6 @@ impl Decimal for i128 {
     const MIN: i128 = i128::MIN;
 
     const MAX: i128 = i128::MAX;
-    fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn {
-        DecimalColumn::Decimal128(value, size)
-    }
 }
 
 impl Decimal for i256 {
