@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod aggregate_group_by;
 mod aggregate_exchange_sorting;
+mod aggregate_group_by;
 mod aggregate_hashstate_info;
 mod aggregate_info;
 mod aggregate_meta;
@@ -22,6 +22,7 @@ mod aggregator_params;
 mod aggregator_partial;
 mod aggregator_partitioned;
 mod aggregator_single_key;
+mod transform_partition_bucket;
 mod utils;
 
 pub use aggregate_exchange_sorting::AggregateExchangeSorting;

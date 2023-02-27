@@ -16,6 +16,7 @@ use std::collections::VecDeque;
 use std::iter::TrustedLen;
 use std::mem::MaybeUninit;
 use std::slice::IterMut;
+use std::vec::IntoIter;
 
 use crate::FastHash;
 use crate::HashSet;
@@ -41,6 +42,10 @@ impl<Impl: HashtableLike, const BUCKETS_LG2: u32, const HIGH_BIT: bool>
 {
     pub fn iter_tables_mut(&mut self) -> IterMut<'_, Impl> {
         self.tables.iter_mut()
+    }
+
+    pub fn into_iter_tables(self) -> IntoIter<Impl> {
+        self.tables.into_iter()
     }
 }
 
