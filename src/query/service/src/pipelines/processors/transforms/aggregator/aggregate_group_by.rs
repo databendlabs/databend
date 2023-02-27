@@ -24,10 +24,14 @@ use crate::pipelines::processors::transforms::aggregator::estimated_key_size;
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
+use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
+use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
+
+type GroupByMeta<Method> = AggregateMeta<Method, ()>;
 
 enum HashTable<Method: HashMethodBounds> {
     MovedOut,
@@ -142,7 +146,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                         // let s = PartitionedHashMethod::convert_hashtable(&self.method, &hashtable)?;
                         // hashtable.clear();
                         // self.hash_table = HashTable::HashTable(hashtable);
-                        // return Ok(Some(DataBlock::empty_with_meta(AggregateMeta::<Method, ()>::create_partitioned_hashtable(
+                        // return Ok(Some(DataBlock::empty_with_meta(GroupByMeta::<Method>::create_partitioned_hashtable(
                         //     v,
                         //     ArenaHolder::create(None),
                         // ))));
@@ -162,40 +166,30 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
     fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
         Ok(match std::mem::take(&mut self.hash_table) {
             HashTable::MovedOut => unreachable!(),
-            HashTable::HashTable(v) => vec![DataBlock::empty_with_meta(
-                AggregateMeta::<Method, ()>::create_hashtable(-1, v, ArenaHolder::create(None)),
-            )],
+            HashTable::HashTable(v) => match Method::HashTable::len(&v) == 0 {
+                true => vec![],
+                false => vec![DataBlock::empty_with_meta(
+                    GroupByMeta::<Method>::create_hashtable(-1, v, ArenaHolder::create(None)),
+                )],
+            },
             HashTable::PartitionedHashTable(v) => {
                 let mut blocks = Vec::with_capacity(256);
                 for (bucket, hashtable) in v.into_iter_tables().enumerate() {
-                    blocks.push(DataBlock::empty_with_meta(
-                        AggregateMeta::<Method, ()>::create_hashtable(
-                            bucket as isize,
-                            hashtable,
-                            ArenaHolder::create(None),
-                        ),
-                    ));
+                    if Method::HashTable::len(&hashtable) != 0 {
+                        blocks.push(DataBlock::empty_with_meta(
+                            GroupByMeta::<Method>::create_hashtable(
+                                bucket as isize,
+                                hashtable,
+                                ArenaHolder::create(None),
+                            ),
+                        ));
+                    }
                 }
                 blocks
             }
         })
     }
 }
-
-// struct TransformMergeGroupBy {}
-//
-// impl<Method: HashMethodBounds> BlockMetaAccumulatingTransform<AggregateMeta<Method, ()>> for TransformMergeGroupBy {
-//     const NAME: &'static str = "TransformMergeGroupBy";
-//
-//     fn transform(&mut self, data: AggregateMeta<Method, ()>) -> Result<Option<DataBlock>> {
-//         // match data {
-//         //     AggregateMeta::HashTable(_) => {}
-//         //     // AggregateMeta::Spilling(_) => {}
-//         //     // AggregateMeta::PartitionedHashTable(_) => {}
-//         // }
-//         todo!()
-//     }
-// }
 
 pub struct TransformFinalGroupBy<Method: HashMethodBounds> {
     method: Method,
@@ -217,20 +211,40 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
     }
 }
 
-impl<Method: HashMethodBounds> BlockMetaTransform<AggregateMeta<Method, ()>>
-    for TransformFinalGroupBy<Method>
+impl<Method> BlockMetaTransform<GroupByMeta<Method>> for TransformFinalGroupBy<Method>
+where Method: HashMethodBounds
 {
     const NAME: &'static str = "TransformFinalGroupBy";
 
     fn transform(&mut self, meta: AggregateMeta<Method, ()>) -> Result<DataBlock> {
         match meta {
             AggregateMeta::HashTable(_) => unreachable!(),
+            AggregateMeta::Serialized(_) => unreachable!(),
             AggregateMeta::Partitioned { bucket, data } => {
                 let mut hashtable = self.method.create_hash_table::<()>()?;
                 'merge_hashtable: for bucket_data in data {
                     match bucket_data {
                         AggregateMeta::Partitioned { .. } => unreachable!(),
+                        AggregateMeta::Serialized(payload) => {
+                            debug_assert!(bucket == payload.bucket);
+                            let column = payload.get_group_by_column();
+                            let keys_iter = self.method.keys_iter_from_column(column)?;
+
+                            unsafe {
+                                for key in keys_iter.iter() {
+                                    let _ = hashtable.insert_and_entry(key);
+                                }
+
+                                if let Some(limit) = self.params.limit {
+                                    if hashtable.len() >= limit {
+                                        break 'merge_hashtable;
+                                    }
+                                }
+                            }
+                        }
                         AggregateMeta::HashTable(payload) => unsafe {
+                            debug_assert!(bucket == payload.bucket);
+
                             for key in payload.hashtable.iter() {
                                 let _ = hashtable.insert_and_entry(key.key());
                             }

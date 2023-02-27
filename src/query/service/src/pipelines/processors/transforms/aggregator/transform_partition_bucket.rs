@@ -44,6 +44,7 @@ use serde::Serializer;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
+use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::AggregateInfo;
 use crate::pipelines::processors::transforms::aggregator::BucketAggregator;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
@@ -74,11 +75,7 @@ pub struct TransformPartitionBucket<Method: HashMethodBounds, V: Copy + Send + S
 impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
     TransformPartitionBucket<Method, V>
 {
-    pub fn create(
-        method: Method,
-        params: Arc<AggregatorParams>,
-        input_nums: usize,
-    ) -> Result<Self> {
+    pub fn create(method: Method, input_nums: usize) -> Result<Self> {
         let mut inputs = Vec::with_capacity(input_nums);
 
         for _index in 0..input_nums {
@@ -150,24 +147,23 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
     fn add_bucket(&mut self, data_block: DataBlock) -> isize {
         if let Some(block_meta) = data_block.get_meta() {
             if let Some(block_meta) = AggregateMeta::<Method, V>::downcast_ref_from(block_meta) {
-                match block_meta {
+                let bucket = match block_meta {
                     AggregateMeta::Partitioned { .. } => unreachable!(),
-                    AggregateMeta::HashTable(hashtable_payload) => {
-                        let bucket = hashtable_payload.bucket;
+                    AggregateMeta::Serialized(payload) => payload.bucket,
+                    AggregateMeta::HashTable(payload) => payload.bucket,
+                };
 
-                        if bucket > SINGLE_LEVEL_BUCKET_NUM {
-                            match self.buckets_blocks.entry(bucket) {
-                                Entry::Vacant(v) => {
-                                    v.insert(vec![data_block]);
-                                }
-                                Entry::Occupied(mut v) => {
-                                    v.get_mut().push(data_block);
-                                }
-                            };
-
-                            return bucket;
+                if bucket > SINGLE_LEVEL_BUCKET_NUM {
+                    match self.buckets_blocks.entry(bucket) {
+                        Entry::Vacant(v) => {
+                            v.insert(vec![data_block]);
                         }
-                    }
+                        Entry::Occupied(mut v) => {
+                            v.get_mut().push(data_block);
+                        }
+                    };
+
+                    return bucket;
                 }
             }
         }
@@ -222,6 +218,32 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
         }
 
         DataBlock::empty_with_meta(AggregateMeta::<Method, V>::create_partitioned(bucket, data))
+    }
+
+    fn partition_block(&self, payload: SerializedPayload) -> Result<Vec<Option<DataBlock>>> {
+        let column = payload.get_group_by_column();
+        let keys_iter = self.method.keys_iter_from_column(column)?;
+
+        let mut indices = Vec::with_capacity(payload.data_block.num_rows());
+
+        for key_item in keys_iter.iter() {
+            let hash = self.method.get_hash(key_item);
+            indices.push(hash2bucket::<8, true>(hash as usize) as u16);
+        }
+
+        let scatter_blocks = DataBlock::scatter(&payload.data_block, &indices, 1 << 8)?;
+
+        let mut blocks = Vec::with_capacity(scatter_blocks.len());
+        for (bucket, data_block) in scatter_blocks.into_iter().enumerate() {
+            blocks.push(match data_block.is_empty() {
+                true => None,
+                false => Some(DataBlock::empty_with_meta(
+                    AggregateMeta::<Method, V>::create_serialized(bucket as isize, data_block),
+                )),
+            });
+        }
+
+        Ok(blocks)
     }
 
     fn partition_hashtable(
@@ -346,30 +368,38 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(mut data_block) = self.unsplitted_blocks.pop() {
-            if let Some(block_meta) = data_block.take_meta() {
-                if let Some(block_meta) = AggregateMeta::<Method, V>::downcast_from(block_meta) {
-                    let data_blocks = match block_meta {
-                        AggregateMeta::Partitioned { .. } => unreachable!(),
-                        AggregateMeta::HashTable(payload) => self.partition_hashtable(payload)?,
-                    };
+        let block_meta = self
+            .unsplitted_blocks
+            .pop()
+            .and_then(|mut block| block.take_meta())
+            .and_then(AggregateMeta::<Method, V>::downcast_from);
 
-                    for (bucket, block) in data_blocks.into_iter().enumerate() {
-                        if let Some(data_block) = block {
-                            match self.buckets_blocks.entry(bucket as isize) {
-                                Entry::Vacant(v) => {
-                                    v.insert(vec![data_block]);
-                                }
-                                Entry::Occupied(mut v) => {
-                                    v.get_mut().push(data_block);
-                                }
-                            };
-                        }
+        match block_meta {
+            None => Err(ErrorCode::Internal(
+                "Internal error, TransformPartitionBucket only recv AggregateMeta.",
+            )),
+            Some(agg_block_meta) => {
+                let data_blocks = match agg_block_meta {
+                    AggregateMeta::Partitioned { .. } => unreachable!(),
+                    AggregateMeta::Serialized(payload) => self.partition_block(payload)?,
+                    AggregateMeta::HashTable(payload) => self.partition_hashtable(payload)?,
+                };
+
+                for (bucket, block) in data_blocks.into_iter().enumerate() {
+                    if let Some(data_block) = block {
+                        match self.buckets_blocks.entry(bucket as isize) {
+                            Entry::Vacant(v) => {
+                                v.insert(vec![data_block]);
+                            }
+                            Entry::Occupied(mut v) => {
+                                v.get_mut().push(data_block);
+                            }
+                        };
                     }
                 }
+
+                Ok(())
             }
         }
-
-        Ok(())
     }
 }

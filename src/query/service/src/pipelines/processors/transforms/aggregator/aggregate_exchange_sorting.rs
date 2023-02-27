@@ -20,6 +20,7 @@ use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 
 use crate::api::ExchangeSorting;
+use crate::pipelines::processors::transforms::aggregator::serde::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregateInfo;
 
 pub struct AggregateExchangeSorting {}
@@ -35,9 +36,12 @@ impl ExchangeSorting for AggregateExchangeSorting {
         match data_block.get_meta() {
             None => Ok(-1),
             Some(block_meta_info) => match AggregateInfo::downcast_ref_from(block_meta_info) {
-                None => Err(ErrorCode::Internal(
-                    "Internal error, AggregateExchangeSorting only recv AggregateInfo",
-                )),
+                None => match AggregateSerdeMeta::downcast_ref_from(block_meta_info) {
+                    None => Err(ErrorCode::Internal(
+                        "Internal error, AggregateExchangeSorting only recv AggregateInfo or AggregateSerdeMeta",
+                    )),
+                    Some(meta_info) => Ok(meta_info.bucket),
+                },
                 Some(meta_info) => Ok(meta_info.bucket),
             },
         }

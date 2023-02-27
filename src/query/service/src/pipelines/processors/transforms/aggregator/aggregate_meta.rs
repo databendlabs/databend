@@ -4,6 +4,7 @@ use std::fmt::Formatter;
 
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
+use common_expression::Column;
 use common_expression::DataBlock;
 use common_hashtable::HashtableLike;
 
@@ -18,7 +19,20 @@ pub struct HashTablePayload<T: HashtableLike> {
     pub arena_holder: ArenaHolder,
 }
 
+pub struct SerializedPayload {
+    pub bucket: isize,
+    pub data_block: DataBlock,
+}
+
+impl SerializedPayload {
+    pub fn get_group_by_column(&self) -> &Column {
+        let entry = self.data_block.columns().last().unwrap();
+        entry.value.as_column().unwrap()
+    }
+}
+
 pub enum AggregateMeta<Method: HashMethodBounds, V: Send + Sync + 'static> {
+    Serialized(SerializedPayload),
     HashTable(HashTablePayload<Method::HashTable<V>>),
 
     Partitioned { bucket: isize, data: Vec<Self> },
@@ -37,23 +51,16 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V
         }))
     }
 
+    pub fn create_serialized(bucket: isize, block: DataBlock) -> BlockMetaInfoPtr {
+        Box::new(AggregateMeta::<Method, V>::Serialized(SerializedPayload {
+            bucket,
+            data_block: block,
+        }))
+    }
+
     pub fn create_partitioned(bucket: isize, data: Vec<Self>) -> BlockMetaInfoPtr {
         Box::new(AggregateMeta::<Method, V>::Partitioned { data, bucket })
     }
-
-    // pub fn create_partitioned_hashtable(
-    //     hashtable: <PartitionedHashMethod<Method> as PolymorphicKeysHelper<
-    //         PartitionedHashMethod<Method>,
-    //     >>::HashTable<V>,
-    //     arena_holder: ArenaHolder,
-    // ) -> BlockMetaInfoPtr {
-    //     Box::new(AggregateMeta::<Method, V>::PartitionedHashTable(
-    //         HashTablePayload {
-    //             arena_holder,
-    //             inner: hashtable,
-    //         },
-    //     ))
-    // }
 }
 
 impl<Method: HashMethodBounds, V: Send + Sync + 'static> serde::Serialize
@@ -81,11 +88,9 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Debug for AggregateMeta
             AggregateMeta::Partitioned { .. } => {
                 f.debug_struct("AggregateMeta::Partitioned").finish()
             }
-            // AggregateMeta::PartitionedHashTable(_) => f
-            //     .debug_struct("AggregateMeta::PartitionedHashTable")
-            //     .finish(),
-            // AggregateMeta::Spilling(_) => f.debug_struct("AggregateMeta::Spilling").finish(),
-            // AggregateMeta::Bucket { .. } => f.debug_struct("AggregateMeta::Bucket").finish(),
+            AggregateMeta::Serialized { .. } => {
+                f.debug_struct("AggregateMeta::Serialized").finish()
+            }
         }
     }
 }

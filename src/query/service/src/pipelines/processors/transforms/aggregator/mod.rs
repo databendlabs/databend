@@ -22,6 +22,7 @@ mod aggregator_params;
 mod aggregator_partial;
 mod aggregator_partitioned;
 mod aggregator_single_key;
+mod serde;
 mod transform_partition_bucket;
 mod utils;
 
@@ -41,3 +42,6 @@ pub use aggregator_single_key::FinalSingleStateAggregator;
 pub use aggregator_single_key::PartialSingleStateAggregator;
 pub use transform_partition_bucket::TransformPartitionBucket;
 pub use utils::*;
+
+pub use self::serde::TransformGroupByDeserializer;
+pub use self::serde::TransformGroupBySerializer;

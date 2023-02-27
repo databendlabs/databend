@@ -47,6 +47,7 @@ use crate::pipelines::processors::transforms::aggregator::TransformFinalGroupBy;
 use crate::pipelines::processors::transforms::aggregator::TransformPartitionBucket;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
+use crate::pipelines::processors::transforms::TransformGroupByDeserializer;
 use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
 
@@ -439,13 +440,19 @@ fn build_convert_grouping<Method: HashMethodBounds>(
 }
 
 fn build_partition_bucket<Method: HashMethodBounds>(
+    ctx: &Arc<QueryContext>,
     method: Method,
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
 ) -> Result<()> {
+    if !ctx.get_cluster().is_empty() {
+        pipeline.add_transform(|input, output| {
+            TransformGroupByDeserializer::<Method>::try_create(input, output)
+        })?;
+    }
+
     let input_nums = pipeline.output_len();
-    let transform =
-        TransformPartitionBucket::<Method, ()>::create(method.clone(), params.clone(), input_nums)?;
+    let transform = TransformPartitionBucket::<Method, ()>::create(method.clone(), input_nums)?;
 
     let output = transform.get_output();
     let inputs_port = transform.get_inputs();
@@ -473,9 +480,9 @@ pub fn efficiently_memory_final_aggregator(
     let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
     let method = DataBlock::choose_hash_method(&sample_block, group_cols)?;
 
-    match params.aggregate_functions.is_empty() && ctx.get_cluster().is_empty() {
+    match params.aggregate_functions.is_empty() {
         true => with_hash_method!(|T| match method {
-            HashMethodKind::T(v) => build_partition_bucket(v, pipeline, params.clone()),
+            HashMethodKind::T(v) => build_partition_bucket(ctx, v, pipeline, params.clone()),
         }),
         false => with_hash_method!(|T| match method {
             HashMethodKind::T(v) => build_convert_grouping(v, pipeline, params.clone()),
