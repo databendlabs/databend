@@ -372,13 +372,7 @@ impl Display for TableReference {
                 alias,
             } => {
                 write!(f, "{location}")?;
-                if let Some(files) = &options.files {
-                    let files = files.join(",");
-                    write!(f, " FILES {files}")?;
-                }
-                if let Some(pattern) = &options.pattern {
-                    write!(f, " PATTERN {pattern}")?;
-                }
+                write!(f, "{options}")?;
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
                 }

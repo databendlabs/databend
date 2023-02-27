@@ -90,6 +90,58 @@ pub struct SelectStageOptions {
     pub connection: BTreeMap<String, String>,
 }
 
+// SELECT <columns> FROM
+// {@<stage_name>[/<path>] | '<uri>'} [(
+// [ PARTTERN => '<regex_pattern>']
+// [ FILE_FORMAT => '<format_name>']
+// [ FILES => ( 'file_name' [ , 'file_name' ... ] ) ]
+// [ ENDPOINT_URL => <'url'> ]
+// [ AWS_KEY_ID => <'aws_key_id'> ]
+// [ AWS_KEY_SECRET => <'aws_key_secret'> ]
+// [ ACCESS_KEY_ID => <'access_key_id'> ]
+// [ ACCESS_KEY_SECRET => <'access_key_secret'> ]
+// [ SECRET_ACCESS_KEY => <'secret_access_key'> ]
+// [ SESSION_TOKEN => <'session_token'> ]
+// [ REGION => <'region'> ]
+// [ ENABLE_VIRTUAL_HOST_STYLE => true|false ]
+// )]
+impl Display for SelectStageOptions {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, " (")?;
+
+        let mut output: Vec<String> = vec![];
+        if let Some(files) = self.files.clone() {
+            let files = files
+                .iter()
+                .map(|x| format!("'{}'", x))
+                .collect::<Vec<String>>();
+            let files = files.join(",");
+            let files = format!("FILES => ({})", files);
+            output.push(files);
+        }
+
+        if let Some(file_format) = self.file_format.clone() {
+            let file_format = format!("FILE_FORMAT => '{}'", file_format);
+            output.push(file_format);
+        }
+
+        if let Some(pattern) = self.pattern.clone() {
+            let pattern = format!("PATTERN => '{}'", pattern);
+            output.push(pattern);
+        }
+
+        if !self.connection.is_empty() {
+            for (k, v) in self.connection.iter() {
+                output.push(format!(" {} => '{}'", k, v));
+            }
+        }
+
+        let output = output.join(",");
+        write!(f, "{output})")?;
+        Ok(())
+    }
+}
+
 impl SelectStageOptions {
     pub fn from(opts: Vec<SelectStageOption>) -> Self {
         let mut options: SelectStageOptions = Default::default();
