@@ -35,6 +35,7 @@ pub enum RuleID {
     // Rewrite rules
     NormalizeScalarFilter,
     NormalizeDisjunctiveFilter,
+    PushDownFilterAggregate,
     PushDownFilterEvalScalar,
     PushDownFilterUnion,
     PushDownFilterJoin,
@@ -75,6 +76,7 @@ impl Display for RuleID {
             RuleID::RulePushDownLimitExpression => write!(f, "PushDownLimitExpression"),
             RuleID::PushDownLimitSort => write!(f, "PushDownLimitSort"),
             RuleID::PushDownLimitAggregate => write!(f, "PushDownLimitAggregate"),
+            RuleID::PushDownFilterAggregate => write!(f, "PushDownFilterAggregate"),
             RuleID::PushDownLimitScan => write!(f, "PushDownLimitScan"),
             RuleID::PushDownSortScan => write!(f, "PushDownSortScan"),
             RuleID::EliminateEvalScalar => write!(f, "EliminateEvalScalar"),
