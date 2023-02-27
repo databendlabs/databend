@@ -25,7 +25,28 @@ SELECT num_rows FROM system.query_cache;
 3
 
 statement ok
+INSERT INTO t1 VALUES (4);
+
+statement ok
+SELECT * FROM t1;
+
+# tables under system db should not be cached
+statement ok
+SET query_result_cache_allow_inconsistent = 1;
+
+query I
+SELECT num_rows FROM system.query_cache;
+----
+4
+
+statement ok
+SET query_result_cache_allow_inconsistent = 0;
+
+statement ok
 SET enable_query_result_cache = 0;
+
+statement ok
+truncate table system.query_cache;
 
 statement ok
 DROP TABLE t1;
