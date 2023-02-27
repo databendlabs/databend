@@ -21,6 +21,7 @@ use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
@@ -43,8 +44,6 @@ use crate::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
 use crate::table_args::TableArgs;
 use crate::table_context::TableContext;
 use crate::table_mutator::TableMutator;
-
-pub type ColumnId = u32;
 
 #[async_trait::async_trait]
 pub trait Table: Sync + Send {
@@ -238,7 +237,7 @@ pub trait Table: Sync + Send {
         let (_, _, _, _) = (ctx, filter, col_indices, pipeline);
 
         Err(ErrorCode::Unimplemented(format!(
-            "table {},  of engine type {}, does not support DELETE FROM",
+            "table {}, engine type {}, does not support DELETE FROM",
             self.name(),
             self.get_table_info().engine(),
         )))

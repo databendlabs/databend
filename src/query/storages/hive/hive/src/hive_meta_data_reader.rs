@@ -30,7 +30,6 @@ impl MetaDataReader {
     pub fn meta_data_reader(dal: Operator) -> FileMetaDataReader {
         FileMetaDataReader::new(
             CacheManager::instance().get_file_meta_data_cache(),
-            "file_meta_data_cache".to_owned(),
             LoaderWrapper(dal),
         )
     }

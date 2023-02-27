@@ -24,13 +24,18 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check::check_function;
 use common_expression::types::DataType;
+use common_expression::ConstantFolder;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRefExt;
+use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
+use super::cast_expr_to_non_null_boolean;
 use super::AggregateFinal;
 use super::AggregateFunctionDesc;
 use super::AggregateFunctionSignature;
@@ -69,11 +74,22 @@ use crate::DUMMY_TABLE_INDEX;
 pub struct PhysicalPlanBuilder {
     metadata: MetadataRef,
     ctx: Arc<dyn TableContext>,
+    next_plan_id: u32,
 }
 
 impl PhysicalPlanBuilder {
     pub fn new(metadata: MetadataRef, ctx: Arc<dyn TableContext>) -> Self {
-        Self { metadata, ctx }
+        Self {
+            metadata,
+            ctx,
+            next_plan_id: 0,
+        }
+    }
+
+    fn next_plan_id(&mut self) -> u32 {
+        let id = self.next_plan_id;
+        self.next_plan_id += 1;
+        id
     }
 
     fn build_projection(
@@ -127,7 +143,7 @@ impl PhysicalPlanBuilder {
     }
 
     #[async_recursion::async_recursion]
-    pub async fn build(&self, s_expr: &SExpr) -> Result<PhysicalPlan> {
+    pub async fn build(&mut self, s_expr: &SExpr) -> Result<PhysicalPlan> {
         // Build stat info
         let stat_info = self.build_plan_stat_info(s_expr)?;
 
@@ -178,6 +194,7 @@ impl PhysicalPlanBuilder {
                     .await?;
 
                 Ok(PhysicalPlan::TableScan(TableScan {
+                    plan_id: self.next_plan_id(),
                     name_mapping,
                     source: Box::new(source),
                     table_index: scan.table_index,
@@ -195,6 +212,7 @@ impl PhysicalPlanBuilder {
                     .read_plan_with_catalog(self.ctx.clone(), CATALOG_DEFAULT.to_string(), None)
                     .await?;
                 Ok(PhysicalPlan::TableScan(TableScan {
+                    plan_id: self.next_plan_id(),
                     name_mapping: BTreeMap::from([("dummy".to_string(), DUMMY_COLUMN_INDEX)]),
                     source: Box::new(source),
                     table_index: DUMMY_TABLE_INDEX,
@@ -218,6 +236,7 @@ impl PhysicalPlanBuilder {
                         .collect::<Vec<_>>(),
                 );
                 Ok(PhysicalPlan::HashJoin(HashJoin {
+                    plan_id: self.next_plan_id(),
                     build: Box::new(build_side),
                     probe: Box::new(probe_side),
                     join_type: join.join_type.clone(),
@@ -225,36 +244,54 @@ impl PhysicalPlanBuilder {
                         .right_conditions
                         .iter()
                         .map(|scalar| {
-                            Ok(scalar
-                                .as_expr_with_col_index()?
-                                .project_column_ref(|index| {
-                                    build_schema.index_of(&index.to_string()).unwrap()
-                                })
-                                .as_remote_expr())
+                            let expr =
+                                scalar
+                                    .as_expr_with_col_index()?
+                                    .project_column_ref(|index| {
+                                        build_schema.index_of(&index.to_string()).unwrap()
+                                    });
+                            let (expr, _) = ConstantFolder::fold(
+                                &expr,
+                                self.ctx.get_function_context()?,
+                                &BUILTIN_FUNCTIONS,
+                            );
+                            Ok(expr.as_remote_expr())
                         })
                         .collect::<Result<_>>()?,
                     probe_keys: join
                         .left_conditions
                         .iter()
                         .map(|scalar| {
-                            Ok(scalar
-                                .as_expr_with_col_index()?
-                                .project_column_ref(|index| {
-                                    probe_schema.index_of(&index.to_string()).unwrap()
-                                })
-                                .as_remote_expr())
+                            let expr =
+                                scalar
+                                    .as_expr_with_col_index()?
+                                    .project_column_ref(|index| {
+                                        probe_schema.index_of(&index.to_string()).unwrap()
+                                    });
+                            let (expr, _) = ConstantFolder::fold(
+                                &expr,
+                                self.ctx.get_function_context()?,
+                                &BUILTIN_FUNCTIONS,
+                            );
+                            Ok(expr.as_remote_expr())
                         })
                         .collect::<Result<_>>()?,
                     non_equi_conditions: join
                         .non_equi_conditions
                         .iter()
                         .map(|scalar| {
-                            Ok(scalar
-                                .as_expr_with_col_index()?
-                                .project_column_ref(|index| {
-                                    merged_schema.index_of(&index.to_string()).unwrap()
-                                })
-                                .as_remote_expr())
+                            let expr =
+                                scalar
+                                    .as_expr_with_col_index()?
+                                    .project_column_ref(|index| {
+                                        merged_schema.index_of(&index.to_string()).unwrap()
+                                    });
+                            let (expr, _) = ConstantFolder::fold(
+                                &expr,
+                                self.ctx.get_function_context()?,
+                                &BUILTIN_FUNCTIONS,
+                            );
+                            Ok(expr.as_remote_expr())
                         })
                         .collect::<Result<_>>()?,
                     marker_index: join.marker_index,
@@ -268,20 +305,25 @@ impl PhysicalPlanBuilder {
                 let input = Box::new(self.build(s_expr.child(0)?).await?);
                 let input_schema = input.output_schema()?;
                 Ok(PhysicalPlan::EvalScalar(EvalScalar {
+                    plan_id: self.next_plan_id(),
                     input,
                     exprs: eval_scalar
                         .items
                         .iter()
                         .map(|item| {
-                            Ok((
+                            let expr =
                                 item.scalar
                                     .as_expr_with_col_index()?
                                     .project_column_ref(|index| {
                                         input_schema.index_of(&index.to_string()).unwrap()
-                                    })
-                                    .as_remote_expr(),
-                                item.index,
-                            ))
+                                    });
+
+                            let (expr, _) = ConstantFolder::fold(
+                                &expr,
+                                self.ctx.get_function_context()?,
+                                &BUILTIN_FUNCTIONS,
+                            );
+                            Ok((expr.as_remote_expr(), item.index))
                         })
                         .collect::<Result<_>>()?,
 
@@ -293,17 +335,25 @@ impl PhysicalPlanBuilder {
                 let input = Box::new(self.build(s_expr.child(0)?).await?);
                 let input_schema = input.output_schema()?;
                 Ok(PhysicalPlan::Filter(Filter {
+                    plan_id: self.next_plan_id(),
                     input,
                     predicates: filter
                         .predicates
                         .iter()
                         .map(|scalar| {
-                            Ok(scalar
-                                .as_expr_with_col_index()?
-                                .project_column_ref(|index| {
-                                    input_schema.index_of(&index.to_string()).unwrap()
-                                })
-                                .as_remote_expr())
+                            let expr =
+                                scalar
+                                    .as_expr_with_col_index()?
+                                    .project_column_ref(|index| {
+                                        input_schema.index_of(&index.to_string()).unwrap()
+                                    });
+                            let expr = cast_expr_to_non_null_boolean(expr)?;
+                            let (expr, _) = ConstantFolder::fold(
+                                &expr,
+                                self.ctx.get_function_context()?,
+                                &BUILTIN_FUNCTIONS,
+                            );
+                            Ok(expr.as_remote_expr())
                         })
                         .collect::<Result<_>>()?,
 
@@ -357,6 +407,7 @@ impl PhysicalPlanBuilder {
                         match input {
                             PhysicalPlan::Exchange(PhysicalExchange { input, kind, .. }) => {
                                 let aggregate_partial = AggregatePartial {
+                                    plan_id: self.next_plan_id(),
                                     input,
                                     agg_funcs,
                                     group_by: group_items,
@@ -388,6 +439,7 @@ impl PhysicalPlanBuilder {
                                 })
                             }
                             _ => PhysicalPlan::AggregatePartial(AggregatePartial {
+                                plan_id: self.next_plan_id(),
                                 agg_funcs,
                                 group_by: group_items,
                                 input: Box::new(input),
@@ -456,6 +508,7 @@ impl PhysicalPlanBuilder {
                                 let before_group_by_schema = partial.input.output_schema()?;
                                 let limit = agg.limit;
                                 PhysicalPlan::AggregateFinal(AggregateFinal {
+                                    plan_id: self.next_plan_id(),
                                     input: Box::new(input),
                                     group_by: group_items,
                                     agg_funcs,
@@ -474,6 +527,7 @@ impl PhysicalPlanBuilder {
                                 let limit = agg.limit;
 
                                 PhysicalPlan::AggregateFinal(AggregateFinal {
+                                    plan_id: self.next_plan_id(),
                                     input: Box::new(input),
                                     group_by: group_items,
                                     agg_funcs,
@@ -500,6 +554,7 @@ impl PhysicalPlanBuilder {
                 Ok(result)
             }
             RelOperator::Sort(sort) => Ok(PhysicalPlan::Sort(Sort {
+                plan_id: self.next_plan_id(),
                 input: Box::new(self.build(s_expr.child(0)?).await?),
                 order_by: sort
                     .items
@@ -515,6 +570,7 @@ impl PhysicalPlanBuilder {
                 stat_info: Some(stat_info),
             })),
             RelOperator::Limit(limit) => Ok(PhysicalPlan::Limit(Limit {
+                plan_id: self.next_plan_id(),
                 input: Box::new(self.build(s_expr.child(0)?).await?),
                 limit: limit.limit,
                 offset: limit.offset,
@@ -529,14 +585,18 @@ impl PhysicalPlanBuilder {
                     Exchange::Random => FragmentKind::Init,
                     Exchange::Hash(scalars) => {
                         for scalar in scalars {
-                            keys.push(
+                            let expr =
                                 scalar
                                     .as_expr_with_col_index()?
                                     .project_column_ref(|index| {
                                         input_schema.index_of(&index.to_string()).unwrap()
-                                    })
-                                    .as_remote_expr(),
+                                    });
+                            let (expr, _) = ConstantFolder::fold(
+                                &expr,
+                                self.ctx.get_function_context()?,
+                                &BUILTIN_FUNCTIONS,
                             );
+                            keys.push(expr.as_remote_expr());
                         }
                         FragmentKind::Normal
                     }
@@ -562,6 +622,7 @@ impl PhysicalPlanBuilder {
                     .map(|(left, _)| Ok(left_schema.field_with_name(left)?.clone()))
                     .collect::<Result<Vec<_>>>()?;
                 Ok(PhysicalPlan::UnionAll(UnionAll {
+                    plan_id: self.next_plan_id(),
                     left: Box::new(left),
                     right: Box::new(self.build(s_expr.child(1)?).await?),
                     pairs,
@@ -588,14 +649,32 @@ impl PhysicalPlanBuilder {
             Self::build_projection(&metadata, table_schema, &scan.columns, has_inner_column);
         let _project_schema = projection.project_schema(table_schema);
 
-        let push_down_filters = scan
+        let push_down_filter = scan
             .push_down_predicates
-            .clone()
-            .map(|predicates| -> Result<Vec<RemoteExpr<String>>> {
-                predicates
+            .as_ref()
+            .filter(|p| !p.is_empty())
+            .map(|predicates| -> Result<RemoteExpr<String>> {
+                let predicates: Result<Vec<Expr<String>>> = predicates
+                    .iter()
+                    .map(|p| p.as_expr_with_col_name())
+                    .collect();
+
+                let predicates = predicates?;
+                let expr = predicates
                     .into_iter()
-                    .map(|scalar| Ok(scalar.as_expr_with_col_name()?.as_remote_expr()))
-                    .collect::<Result<Vec<_>>>()
+                    .reduce(|lhs, rhs| {
+                        check_function(None, "and", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS).unwrap()
+                    })
+                    .unwrap();
+
+                let expr = cast_expr_to_non_null_boolean(expr)?;
+
+                let (expr, _) = ConstantFolder::fold(
+                    &expr,
+                    self.ctx.get_function_context()?,
+                    &BUILTIN_FUNCTIONS,
+                );
+                Ok(expr.as_remote_expr())
             })
             .transpose()?;
 
@@ -603,26 +682,6 @@ impl PhysicalPlanBuilder {
             .prewhere
             .as_ref()
             .map(|prewhere| -> Result<PrewhereInfo> {
-                let predicate = if prewhere.predicates.is_empty() {
-                    None
-                } else {
-                    let mut scalar = prewhere.predicates[0].clone();
-                    for predicate in prewhere.predicates.iter().skip(1) {
-                        scalar = ScalarExpr::AndExpr(AndExpr {
-                            left: Box::new(scalar),
-                            right: Box::new(predicate.clone()),
-                            return_type: Box::new(DataType::Boolean),
-                        });
-                    }
-
-                    Some(scalar)
-                };
-
-                assert!(
-                    predicate.is_some(),
-                    "There should be at least one predicate in prewhere"
-                );
-
                 let remain_columns = scan
                     .columns
                     .difference(&prewhere.prewhere_columns)
@@ -647,7 +706,26 @@ impl PhysicalPlanBuilder {
                     &remain_columns,
                     has_inner_column,
                 );
-                let filter = predicate.unwrap().as_expr_with_col_name()?.as_remote_expr();
+
+                let predicate = prewhere
+                    .predicates
+                    .iter()
+                    .cloned()
+                    .reduce(|lhs, rhs| {
+                        ScalarExpr::AndExpr(AndExpr {
+                            left: Box::new(lhs),
+                            right: Box::new(rhs),
+                            return_type: Box::new(DataType::Boolean),
+                        })
+                    })
+                    .expect("there should be at least one predicate in prewhere");
+                let expr = cast_expr_to_non_null_boolean(predicate.as_expr_with_col_name()?)?;
+                let (filter, _) = ConstantFolder::fold(
+                    &expr,
+                    self.ctx.get_function_context()?,
+                    &BUILTIN_FUNCTIONS,
+                );
+                let filter = filter.as_remote_expr();
 
                 Ok::<PrewhereInfo, ErrorCode>(PrewhereInfo {
                     output_columns,
@@ -694,7 +772,7 @@ impl PhysicalPlanBuilder {
 
         Ok(PushDownInfo {
             projection: Some(projection),
-            filters: push_down_filters.unwrap_or_default(),
+            filter: push_down_filter,
             prewhere: prewhere_info,
             limit: scan.limit,
             order_by: order_by.unwrap_or_default(),

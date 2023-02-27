@@ -38,6 +38,7 @@ mod control;
 mod datetime;
 mod geo;
 mod hash;
+mod map;
 mod math;
 mod misc;
 mod other;
@@ -249,4 +250,9 @@ fn list_all_builtin_functions() {
     {
         writeln!(file, "{alias_name} -> {original_name}").unwrap();
     }
+}
+
+#[test]
+fn check_ambiguity() {
+    BUILTIN_FUNCTIONS.check_ambiguity()
 }

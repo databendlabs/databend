@@ -1,5 +1,5 @@
 {
-  "label": "Deploy & Manage Databend",
+  "label": "Deployment",
   "link": {
     "type": "generated-index",
     "slug": "/deploy"

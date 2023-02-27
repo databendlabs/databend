@@ -160,6 +160,12 @@ impl Column {
                 indices,
                 scatter_size,
             ),
+            Column::EmptyMap { .. } => Self::scatter_repeat_scalars::<I>(
+                &Scalar::EmptyMap,
+                data_type,
+                indices,
+                scatter_size,
+            ),
             Column::Boolean(bm) => Self::scatter_scalars::<BooleanType, _>(
                 bm,
                 MutableBitmap::with_capacity(length),
@@ -184,7 +190,7 @@ impl Column {
                 indices,
                 scatter_size,
             ),
-            Column::Array(column) => {
+            Column::Array(column) | Column::Map(column) => {
                 let mut offsets = Vec::with_capacity(length + 1);
                 offsets.push(0);
                 let builder = ColumnBuilder::from_column(

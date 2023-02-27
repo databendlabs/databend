@@ -1,139 +1,150 @@
 ---
-title: Architecture Overview
+title: Welcome
 slug: /
 ---
+import GetLatest from '@site/src/components/GetLatest';
 
-Databend is an open-source **Elastic** and **Workload-Aware** modern cloud data warehouse focusing on Low-Cost and Low-Complexity for your massive-scale analytics needs.
+Welcome to the Databend documentation! Databend is an **open-source**, **elastic**, and **workload-aware** modern cloud data warehouse designed to meet businesses' massive-scale analytics needs at low cost and with low complexity.
 
-Databend uses the latest techniques in vectorized query processing to allow you to do blazing-fast data analytics on object storage:
-([S3](https://aws.amazon.com/s3/), [Azure Blob](https://azure.microsoft.com/en-us/services/storage/blobs/), [Google Cloud Storage](https://cloud.google.com/storage/), [Alibaba Cloud OSS](https://www.alibabacloud.com/product/object-storage-service), [Tencent Cloud COS](https://www.tencentcloud.com/products/cos), [Huawei Cloud OBS](https://www.huaweicloud.com/intl/en-us/product/obs.html), [Cloudflare R2](https://www.cloudflare.com/products/r2/), [Wasabi](https://wasabi.com/) or [MinIO](https://min.io)).
+This welcome page guides you through the features, architecture, and other important details about Databend.
 
-- __Feature-Rich__
+## Why Databend?
 
-  Support `SELECT/INSERT/DELETE/UPDATE/COPY/ALTER`,  Time Travel, Multi Catalog(Apache Hive/Apache Iceberg).
+Databend is always searching for and incorporating the most advanced and innovative technologies to provide you with an exceptional user experience.
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
 
-- __Instant Elasticity__
+<Tabs groupId="whydatabend">
+<TabItem value="Performance" label="Performance">
 
-  Databend completely separates storage from compute, which allows you easily scale up or scale down based on your application's needs.
+- Blazing-fast data analytics on object storage.
+- Leverages data-level parallelism and instruction-level parallelism technologies for optimal performance.
+- Supports Git-like MVCC storage for easy querying, cloning, and restoration of historical data.
+- No indexes to build, no manual tuning, and no need to figure out partitions or shard data.
 
+</TabItem>
 
-- __Blazing Performance__
+<TabItem value="Compatibility" label="Compatibility">
 
-  Databend leverages data-level parallelism(Vectorized Query Execution) and instruction-level parallelism(SIMD) technology, offering blazing performance data analytics.
+- Compatible with MySQL / ClickHouse.
+- ANSI SQL compliant.
+- Easy connection with existing tools such as [MySQL Client](https://databend.rs/doc/integrations/api/mysql-handler), [ClickHouse Client](https://databend.rs/doc/integrations/api/clickhouse-handler), [Vector](https://vector.dev/), [DBeaver](https://dbeaver.com/), [Jupyter](https://databend.rs/doc/integrations/gui-tool/jupyter), [JDBC](https://databend.rs/doc/develop), and more.
 
+</TabItem>
 
-- __Git-like MVCC Storage__
+<TabItem value="Data Manipulation" label="Data Manipulation">
 
-  Databend stores data with snapshots. It's easy to query, clone, and restore historical data in tables.
- 
+- Supports atomic operations such as `SELECT`, `INSERT`, `DELETE`, `UPDATE`, `COPY`, and `ALTER`.
+- Provides advanced features such as Time Travel and Multi Catalog (Apache Hive / Apache Iceberg).
+- Supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON, and Parquet.
+- Supports semi-structured data types such as [ARRAY, MAP, and JSON](https://databend.rs/doc/sql-reference/data-types/data-type-semi-structured-types).
 
-- __Support for Semi-Structured Data__
+</TabItem>
 
-  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON, and Parquet, which are located in the cloud or your local file system; Databend also supports semi-structured data types: [ARRAY, MAP, JSON](https://databend.rs/doc/sql-reference/data-types/data-type-semi-structured-types), which is easy to import and operate on semi-structured.
- 
+<TabItem value="Cloud Storage" label="Cloud Storage">
 
-- __MySQL/ClickHouse Compatible__
+- Supports various cloud storage platforms, including [Amazon S3](https://aws.amazon.com/s3/), [Azure Blob](https://azure.microsoft.com/en-us/services/storage/blobs/), [Google Cloud Storage](https://cloud.google.com/storage/), [Alibaba Cloud OSS](https://www.alibabacloud.com/product/object-storage-service), [Tencent Cloud COS](https://www.tencentcloud.com/products/cos), [Huawei Cloud OBS](https://www.huaweicloud.com/intl/en-us/product/obs.html), [Cloudflare R2](https://www.cloudflare.com/products/r2/), [Wasabi](https://wasabi.com/), and [MinIO](https://min.io).
+- Allows instant elasticity, enabling users to scale up or down based on their application needs.
 
-  Databend is ANSI SQL compliant and MySQL/ClickHouse wire protocol compatible, making it easy to connect with existing tools([MySQL Client](https://databend.rs/doc/integrations/api/mysql-handler), [ClickHouse Client](https://databend.rs/doc/integrations/api/clickhouse-handler), [Vector](https://vector.dev/), [DBeaver](https://dbeaver.com/), [Jupyter](https://databend.rs/doc/integrations/gui-tool/jupyter), [JDBC](https://databend.rs/doc/develop), etc.).
+</TabItem>
+</Tabs>
 
+## Databend Architucture
 
-- __Easy to Use__
-
-  Databend has no indexes to build, no manual tuning required, no manual figuring out partitions or shard data, it’s all done for you as data is loaded into the table.
- 
- 
-## Design Overview
-
-This is the high-level architecture of Databend. It consists of three components:
-- `meta service layer`
-- `compute layer`
-- `storage layer`
+Databend's high-level architecture is composed of a meta-service layer, a compute layer, and a storage layer.
 
 ![Databend Architecture](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/arch/datafuse-arch-20210817.svg)
 
-### Meta Service Layer
+<Tabs groupId="databendlay">
+<TabItem value="Meta-Service Layer" label="Meta-Service Layer">
 
-The meta service is a layer to service multiple tenants. This layer implements a persistent key-value store to store each tenant's state.
-In the current implementation, the meta service has many components:
+Databend has the capability to support multiple tenants, and the meta-service layer serves these tenants and stores their respective states in a persistent key-value store. The meta-service layer plays a vital management role in Databend by:
 
-- Metadata, which manages all metadata of databases, tables, clusters, the transaction, etc.
-- Administration, which stores user info, user management, access control information, usage statistics, etc.
-- Security, which performs authorization and authentication to protect the privacy of users' data.
+- Managing all metadata related to databases, tables, clusters, transactions, and more.
+- Storing user information, access control data, usage statistics, and other related information.
+- Performing user authentication and authorization to ensure a secure environment.
 
-The code of `Meta Service Layer` mainly resides in the `metasrv` directory of the repository.
+If you're interested, you can find the code related to the meta-service layer in the [meta](https://github.com/datafuselabs/databend/tree/main/src/meta) folder of the GitHub repository.
 
-### Compute Layer
+</TabItem>
+<TabItem value="Compute Layer" label="Compute Layer">
 
-The compute layer is the layer that carries out computation for query processing. This layer may consist of many clusters,
-and each cluster may consist of many nodes. Each node is a computing unit and is a collection of components:
+The compute layer's main responsibility is to execute computations for queries, and it can include several clusters, each with multiple nodes.
 
-- **Planner**
+To form a cluster, several nodes can be grouped together by assigning them a shared namespace. This allows clusters to access the same database, which facilitates the handling of multiple user queries concurrently. By adding new nodes to a cluster, it is possible to scale up the computational tasks that are already running. This process, known as "work-stealing", ensures that the system can continue to operate efficiently even with additional nodes.
 
-  The query planner builds an execution plan from the user's SQL statement and represents the query with different types of relational operators (such as `Projection`, `Filter`, `Limit`, etc.).
+A node serves as a fundamental unit of the computer layer and is composed of the following components:
 
-  For example:
-  ```
-  databend :) EXPLAIN SELECT avg(number) FROM numbers(100000) GROUP BY number % 3
-  ┌─explain─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │ Projection: avg(number):Float64                                                                                                                                                         │
-  │   AggregatorFinal: groupBy=[[(number % 3)]], aggr=[[avg(number)]]                                                                                                                       │
-  │     AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[avg(number)]]                                                                                                                   │
-  │       Expression: (number % 3):UInt8, number:UInt64 (Before GroupBy)                                                                                                                    │
-  │         ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 100000, read_bytes: 800000, partitions_scanned: 11, partitions_total: 11], push_downs: [projections: [0]] │
-  └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-  ```
+- Planner: The planner creates a plan for executing the SQL statement provided by the user. This plan includes various types of operators from [relational algebra](https://en.wikipedia.org/wiki/Relational_algebra), such as Projection, Filter, and Limit, to represent the query.
 
-- **Optimizer**
+```sql
+EXPLAIN SELECT avg(number) FROM numbers(100000) GROUP BY number % 3
 
-  A rule-based optimizer, some rules like predicate push down or pruning of unused columns.
+explain                                                   |
+----------------------------------------------------------+
+EvalScalar                                                |
+├── expressions: [avg(number) (#3)]                       |
+└── AggregateFinal                                        |
+    ├── group by: [(number % 3)]                          |
+    ├── aggregate functions: [avg(number)]                |
+    └── AggregatePartial                                  |
+        ├── group by: [(number % 3)]                      |
+        ├── aggregate functions: [avg(number)]            |
+        └── EvalScalar                                    |
+            ├── expressions: [%(numbers.number (#0), 3)]  |
+            └── TableScan                                 |
+                ├── table: default.system.numbers         |
+                ├── read rows: 100000                     |
+                ├── read bytes: 800000                    |
+                ├── partitions total: 2                   |
+                ├── partitions scanned: 2                 |
+                └── push downs: [filters: [], limit: NONE]|
+```
 
-- **Processors**
+- Optimizer: The optimizer is a rule-based optimizer that employs a set of predefined rules, such as "predicate pushdown" and "pruning of unused columns", to determine the most efficient way to execute a query.
 
-  A Pull&Push-Based query execution pipeline, which is built by planner instructions.
-  Each pipeline executor is a processor(such as `SourceTransform`, `FilterTransform`, etc.), it has zero or more inputs and zero or more outputs, and connected as a pipeline, it also can be distributed on multiple nodes judged by your query workload.
+- Processors: A query execution pipeline is a series of steps that retrieves data for a given query. Databend builds the query execution pipeline using planner instructions and follows a Pull&Push approach, meaning it can both pull and push data as needed. Each step in the pipeline is called a "processor", such as SourceTransform or FilterTransform, and can have multiple inputs and outputs. The processors are connected to form a pipeline that executes the query. To optimize performance, the pipeline can be distributed across multiple nodes depending on the query workload.
 
-  For example:
-  ```
-  databend :) EXPLAIN PIPELINE SELECT avg(number) FROM numbers(100000) GROUP BY number % 3
-  ┌─explain────────────────────────────────────────────────────────────────────────────────┐
-  │ ProjectionTransform × 16 processors                                                    │
-  │   Mixed (GroupByFinalTransform × 1 processor) to (ProjectionTransform × 16 processors) │
-  │     GroupByFinalTransform × 1 processor                                                │
-  │       Merge (GroupByPartialTransform × 16 processors) to (GroupByFinalTransform × 1)   │
-  │         GroupByPartialTransform × 16 processors                                        │
-  │           ExpressionTransform × 16 processors                                          │
-  │             SourceTransform × 16 processors                                            │
-  └────────────────────────────────────────────────────────────────────────────────────────┘
-  ```
+```sql
+EXPLAIN PIPELINE SELECT avg(number) FROM numbers(100000) GROUP BY number % 3
 
-Node is the smallest unit of the compute layer. A set of nodes can be registered as one cluster via namespace.
-Many clusters can attach the same database, so they can serve the query in parallel by different users.
-When you add new nodes to a cluster, the currently running computational tasks can be scaled(known as work-stealing) guarantee.
+explain                                                                              |
+-------------------------------------------------------------------------------------+
+CompoundChunkOperator(Rename) × 1 processor                                          |
+  CompoundChunkOperator(Project) × 1 processor                                       |
+    CompoundChunkOperator(Map) × 1 processor                                         |
+      GroupByFinalTransform × 1 processor                                            |
+        Merge (GroupByPartialTransform × 2 processors) to (GroupByFinalTransform × 1)|
+          GroupByPartialTransform × 2 processors                                     |
+            CompoundChunkOperator(Map) × 2 processors                                |
+              CompoundChunkOperator(Project->Rename) × 2 processors                  |
+                NumbersSourceTransform × 2 processors                                |
+```
 
-The `Compute Layer` codes are mainly in the `query` directory.
+If you're interested, you can find the code related to the compute layer in the [query](https://github.com/datafuselabs/databend/tree/main/src/query) folder of the GitHub repository.
 
-### Storage Layer
+</TabItem>
+<TabItem value="Storage Layer" label="Storage Layer">
 
-Databend stores data in an efficient, columnar format as Parquet files.
-For efficient pruning, Databend also creates indexes for each Parquet file:
+Databend uses an open-source and efficient columnar format known as [Parquet](https://parquet.apache.org/) to store data. To make querying faster, Databend also creates indexes for each Parquet file. There are two types of indexes:
 
-- `min_max.idx` The index file stores the *minimum* and *maximum* value of this Parquet file.
-- `sparse.idx` The index file store the <key, parquet-page> mapping for every [N] records' granularity.
+- min_max.idx: Stores the minimum and maximum value of the Parquet file.
+- sparse.idx: Stores the mapping of the key and the corresponding Parquet page for every [N] records' granularity.
 
-With the indexes, we can speed up the queries by reducing the I/O and CPU costs.
-Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 has `min_max.idx` of `[4, 6)` in column `x` if the query predicate is `WHERE x < 4`, only f1 needs to be accessed and processed.
+With these indexes, Databend can speed up queries by reducing the I/O and CPU costs. For example, if Parquet file f1 has min_max.idx of [3, 5) and Parquet file f2 has min_max.idx of [4, 6) in column x, and the query is looking for values where x is less than 4, only f1 needs to be accessed and processed.
 
-## Getting Started
-
-- [Guides](/doc/guides)
+</TabItem>
+</Tabs>
 
 ## Community
 
-- [Slack](https://link.databend.rs/join-slack) (For live discussion with the Community)
-- [GitHub](https://github.com/datafuselabs/databend) (Feature/Bug reports, Contributions)
-- [Twitter](https://twitter.com/Datafuse_Labs) (Get the news fast)
-- [Weekly](https://weekly.databend.rs/) (A weekly newsletter about the Databend)
+The Databend community is open to data professionals, students, and anyone who has a passion for cloud data warehouses. Feel free to click on the links below to be a part of the excitement:
+
+- [Slack](https://link.databend.rs/join-slack): Chat with the community
+- [GitHub](https://github.com/datafuselabs/databend): Feature requests, bug reports, and contributions
+- [Twitter](https://twitter.com/DatabendLabs): Stay in the know
+- [Weekly](https://weekly.databend.rs/): Weekly updates
 
 ## Roadmap
 

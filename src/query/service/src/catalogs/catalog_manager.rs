@@ -19,42 +19,46 @@ use common_catalog::catalog::Catalog;
 pub use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_config::CatalogConfig;
-use common_config::Config;
+use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_app::schema::CatalogType;
+use common_meta_app::schema::CatalogOption;
 use common_meta_app::schema::CreateCatalogReq;
 use common_meta_app::schema::DropCatalogReq;
+use common_meta_app::schema::IcebergCatalogOption;
+use common_storage::DataOperator;
 #[cfg(feature = "hive")]
 use common_storages_hive::HiveCatalog;
+use common_storages_iceberg::IcebergCatalog;
 use dashmap::DashMap;
 
 use crate::catalogs::DatabaseCatalog;
 
 #[async_trait::async_trait]
 pub trait CatalogManagerHelper {
-    async fn init(conf: &Config) -> Result<()>;
+    async fn init(conf: &InnerConfig) -> Result<()>;
 
-    async fn try_create(conf: &Config) -> Result<Arc<CatalogManager>>;
+    async fn try_create(conf: &InnerConfig) -> Result<Arc<CatalogManager>>;
 
-    async fn register_build_in_catalogs(&self, conf: &Config) -> Result<()>;
+    async fn register_build_in_catalogs(&self, conf: &InnerConfig) -> Result<()>;
 
-    fn register_external_catalogs(&self, conf: &Config) -> Result<()>;
+    fn register_external_catalogs(&self, conf: &InnerConfig) -> Result<()>;
 
-    fn create_user_defined_catalog(&self, req: CreateCatalogReq) -> Result<()>;
+    /// build catalog from sql
+    async fn create_user_defined_catalog(&self, req: CreateCatalogReq) -> Result<()>;
 
     fn drop_user_defined_catalog(&self, req: DropCatalogReq) -> Result<()>;
 }
 
 #[async_trait::async_trait]
 impl CatalogManagerHelper for CatalogManager {
-    async fn init(conf: &Config) -> Result<()> {
+    async fn init(conf: &InnerConfig) -> Result<()> {
         GlobalInstance::set(Self::try_create(conf).await?);
 
         Ok(())
     }
 
-    async fn try_create(conf: &Config) -> Result<Arc<CatalogManager>> {
+    async fn try_create(conf: &InnerConfig) -> Result<Arc<CatalogManager>> {
         let catalog_manager = CatalogManager {
             catalogs: DashMap::new(),
         };
@@ -69,7 +73,7 @@ impl CatalogManagerHelper for CatalogManager {
         Ok(Arc::new(catalog_manager))
     }
 
-    async fn register_build_in_catalogs(&self, conf: &Config) -> Result<()> {
+    async fn register_build_in_catalogs(&self, conf: &InnerConfig) -> Result<()> {
         let default_catalog: Arc<dyn Catalog> =
             Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
         self.catalogs
@@ -77,7 +81,7 @@ impl CatalogManagerHelper for CatalogManager {
         Ok(())
     }
 
-    fn register_external_catalogs(&self, conf: &Config) -> Result<()> {
+    fn register_external_catalogs(&self, conf: &InnerConfig) -> Result<()> {
         // currently, if the `hive` feature is not enabled
         // the loop will quit after the first iteration.
         // this is expected.
@@ -105,15 +109,16 @@ impl CatalogManagerHelper for CatalogManager {
         Ok(())
     }
 
-    fn create_user_defined_catalog(&self, req: CreateCatalogReq) -> Result<()> {
-        let catalog_type = req.meta.catalog_type;
+    async fn create_user_defined_catalog(&self, req: CreateCatalogReq) -> Result<()> {
+        let catalog_option = req.meta.catalog_option;
 
         // create catalog first
-        match catalog_type {
-            CatalogType::Default => Err(ErrorCode::CatalogNotSupported(
-                "Creating a DEFAULT catalog is not allowed",
-            )),
-            CatalogType::Hive => {
+        match catalog_option {
+            // NOTE:
+            // when compiling without `hive` feature enabled
+            // `address` will be seem as unused, which is not intentional
+            #[allow(unused)]
+            CatalogOption::Hive(address) => {
                 #[cfg(not(feature = "hive"))]
                 {
                     Err(ErrorCode::CatalogNotSupported(
@@ -122,16 +127,29 @@ impl CatalogManagerHelper for CatalogManager {
                 }
                 #[cfg(feature = "hive")]
                 {
-                    let catalog_options = req.meta.options;
-                    let address = catalog_options
-                        .get("address")
-                        .ok_or_else(|| ErrorCode::InvalidArgument("expected field: ADDRESS"))?;
                     let catalog: Arc<dyn Catalog> = Arc::new(HiveCatalog::try_create(address)?);
                     let ctl_name = &req.name_ident.catalog_name;
                     let if_not_exists = req.if_not_exists;
 
                     self.insert_catalog(ctl_name, catalog, if_not_exists)
                 }
+            }
+            CatalogOption::Iceberg(opt) => {
+                let IcebergCatalogOption {
+                    storage_params: sp,
+                    flatten,
+                } = opt;
+
+                let data_operator = DataOperator::try_create(&sp).await?;
+                let ctl_name = &req.name_ident.catalog_name;
+                let catalog: Arc<dyn Catalog> = Arc::new(IcebergCatalog::try_create(
+                    ctl_name,
+                    flatten,
+                    data_operator,
+                )?);
+
+                let if_not_exists = req.if_not_exists;
+                self.insert_catalog(ctl_name, catalog, if_not_exists)
             }
         }
     }

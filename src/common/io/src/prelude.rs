@@ -18,7 +18,6 @@ pub use bytes::BytesMut;
 pub use crate::binary_read::BinaryRead;
 pub use crate::binary_write::put_uvarint;
 pub use crate::binary_write::BinaryWrite;
-pub use crate::file_split::*;
 pub use crate::format_settings::FormatSettings;
 pub use crate::position::*;
 pub use crate::serialization::*;

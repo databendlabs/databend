@@ -14,18 +14,18 @@
 
 mod sort;
 pub mod transform;
+pub mod transform_accumulating;
 pub mod transform_block_compact;
 pub mod transform_block_compact_no_split;
 pub mod transform_compact;
-pub mod transform_limit;
 pub mod transform_multi_sort_merge;
 pub mod transform_sort_merge;
 pub mod transform_sort_partial;
 
 pub use transform::*;
+pub use transform_accumulating::*;
 pub use transform_block_compact::*;
 pub use transform_compact::*;
-pub use transform_limit::*;
 pub use transform_multi_sort_merge::*;
 pub use transform_sort_merge::*;
 pub use transform_sort_partial::*;

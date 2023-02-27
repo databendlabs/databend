@@ -24,6 +24,7 @@ use common_expression::DataField;
 use common_expression::Expr;
 use common_expression::SortColumnDescription;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::transform_block_compact_no_split::BlockCompactorNoSplit;
 use common_pipeline_transforms::processors::transforms::BlockCompactor;
@@ -50,32 +51,28 @@ impl FuseTable {
         match append_mode {
             AppendMode::Normal => {
                 pipeline.add_transform(|transform_input_port, transform_output_port| {
-                    TransformCompact::try_create(
+                    Ok(ProcessorPtr::create(TransformCompact::try_create(
                         transform_input_port,
                         transform_output_port,
                         BlockCompactor::new(block_compact_thresholds, true),
-                    )
+                    )?))
                 })?;
             }
             AppendMode::Copy => {
                 let size = pipeline.output_len();
                 pipeline.resize(1)?;
                 pipeline.add_transform(|transform_input_port, transform_output_port| {
-                    TransformCompact::try_create(
+                    Ok(ProcessorPtr::create(TransformCompact::try_create(
                         transform_input_port,
                         transform_output_port,
                         BlockCompactorNoSplit::new(block_compact_thresholds),
-                    )
+                    )?))
                 })?;
                 pipeline.resize(size)?;
             }
         }
 
-        let max_page_size = if self.is_native() {
-            Some(write_settings.max_page_size)
-        } else {
-            None
-        };
+        let max_page_size = self.get_max_page_size();
         let cluster_stats_gen = self.get_cluster_stats_gen(
             ctx.clone(),
             max_page_size,
@@ -96,12 +93,12 @@ impl FuseTable {
                 .collect();
 
             pipeline.add_transform(|transform_input_port, transform_output_port| {
-                TransformSortPartial::try_create(
+                Ok(ProcessorPtr::create(TransformSortPartial::try_create(
                     transform_input_port,
                     transform_output_port,
                     None,
                     sort_descs.clone(),
-                )
+                )?))
             })?;
         }
 
@@ -156,7 +153,8 @@ impl FuseTable {
 
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
         let mut extra_key_num = 0;
-        let mut operators = Vec::with_capacity(cluster_keys.len());
+
+        let mut exprs = Vec::with_capacity(cluster_keys.len());
 
         for remote_expr in &cluster_keys {
             let expr = remote_expr
@@ -168,7 +166,7 @@ impl FuseTable {
                     let cname = format!("{}", expr);
 
                     merged.push(DataField::new(cname.as_str(), expr.data_type().clone()));
-                    operators.push(BlockOperator::Map { expr });
+                    exprs.push(expr);
 
                     let offset = merged.len() - 1;
                     extra_key_num += 1;
@@ -179,14 +177,16 @@ impl FuseTable {
         }
 
         let func_ctx = ctx.get_function_context()?;
-        if !operators.is_empty() {
+        if !exprs.is_empty() {
             pipeline.add_transform(move |input, output| {
-                Ok(CompoundBlockOperator::create(
+                Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                     input,
                     output,
                     func_ctx,
-                    operators.clone(),
-                ))
+                    vec![BlockOperator::Map {
+                        exprs: exprs.clone(),
+                    }],
+                )))
             })?;
         }
 

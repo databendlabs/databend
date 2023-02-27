@@ -176,7 +176,7 @@ impl Domain {
             }
             DataType::EmptyArray => Domain::Array(None),
             DataType::Array(ty) => Domain::Array(Some(Box::new(Domain::full(ty)))),
-            DataType::Map(_) | DataType::Variant => Domain::Undefined,
+            DataType::EmptyMap | DataType::Map(_) | DataType::Variant => Domain::Undefined,
             DataType::Generic(_) => unreachable!(),
         }
     }
@@ -311,10 +311,14 @@ impl Domain {
             Domain::Number(NumberDomain::UInt64(SimpleDomain { min, max })) if min == max => {
                 Some(Scalar::Number(NumberScalar::UInt64(*min)))
             }
-            Domain::Number(NumberDomain::Float32(SimpleDomain { min, max })) if min == max => {
+            Domain::Number(NumberDomain::Float32(SimpleDomain { min, max }))
+                if min == max && !min.is_nan() =>
+            {
                 Some(Scalar::Number(NumberScalar::Float32(*min)))
             }
-            Domain::Number(NumberDomain::Float64(SimpleDomain { min, max })) if min == max => {
+            Domain::Number(NumberDomain::Float64(SimpleDomain { min, max }))
+                if min == max && !min.is_nan() =>
+            {
                 Some(Scalar::Number(NumberScalar::Float64(*min)))
             }
             Domain::Boolean(BooleanDomain {

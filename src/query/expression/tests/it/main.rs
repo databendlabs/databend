@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
 #![feature(box_patterns)]
 #![feature(try_blocks)]
 
+extern crate core;
+
 mod common;
-mod fill_field_default_value;
+mod decimal;
 mod group_by;
 mod kernel;
-mod schema;
+mod serde;
 mod sort;

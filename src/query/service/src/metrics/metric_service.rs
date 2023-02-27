@@ -16,7 +16,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use common_exception::ErrorCode;
-use common_exception::Result;
+use common_http::HttpError;
 use common_http::HttpShutdownHandler;
 use common_metrics::PrometheusHandle;
 use poem::web::Data;
@@ -36,16 +36,15 @@ pub async fn metric_handler(prom_extension: Data<&PrometheusHandle>) -> impl Int
 
 impl MetricService {
     // TODO add session tls handler
-    pub fn create() -> Result<Box<MetricService>> {
-        Ok(Box::new(MetricService {
+    pub fn create() -> Box<MetricService> {
+        Box::new(MetricService {
             shutdown_handler: HttpShutdownHandler::create("metric api".to_string()),
-        }))
+        })
     }
 
-    async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-        let prometheus_handle = common_metrics::try_handle().ok_or_else(|| {
-            ErrorCode::InitPrometheusFailure("Prometheus recorder has not been initialized yet.")
-        })?;
+    async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr, HttpError> {
+        let prometheus_handle = common_metrics::try_handle().unwrap();
+
         let app = poem::Route::new()
             .at("/metrics", poem::get(metric_handler))
             .data(prometheus_handle);
@@ -63,7 +62,17 @@ impl Server for MetricService {
         self.shutdown_handler.shutdown(graceful).await;
     }
 
-    async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-        self.start_without_tls(listening).await
+    async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr, ErrorCode> {
+        let res = self.start_without_tls(listening).await;
+
+        res.map_err(|e: HttpError| match e {
+            HttpError::BadAddressFormat(any_err) => {
+                ErrorCode::BadAddressFormat(any_err.to_string())
+            }
+            le @ HttpError::ListenError { .. } => ErrorCode::CannotListenerPort(le.to_string()),
+            HttpError::TlsConfigError(any_err) => {
+                ErrorCode::TLSConfigurationFailure(any_err.to_string())
+            }
+        })
     }
 }

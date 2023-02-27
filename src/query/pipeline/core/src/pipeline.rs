@@ -24,7 +24,9 @@ use crate::pipe::PipeItem;
 use crate::processors::port::InputPort;
 use crate::processors::port::OutputPort;
 use crate::processors::processor::ProcessorPtr;
+use crate::processors::DuplicateProcessor;
 use crate::processors::ResizeProcessor;
+use crate::processors::ShuffleProcessor;
 use crate::SinkPipeBuilder;
 use crate::SourcePipeBuilder;
 use crate::TransformPipeBuilder;
@@ -60,10 +62,10 @@ impl Debug for Pipeline {
     }
 }
 
-pub type InitCallback = Arc<Box<dyn Fn() -> Result<()> + Send + Sync + 'static>>;
+pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 
 pub type FinishedCallback =
-    Arc<Box<dyn Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>>;
+    Box<dyn FnOnce(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>;
 
 impl Pipeline {
     pub fn create() -> Pipeline {
@@ -210,49 +212,112 @@ impl Pipeline {
         }
     }
 
-    pub fn set_on_init<F: Fn() -> Result<()> + Send + Sync + 'static>(&mut self, f: F) {
-        if let Some(on_init) = &self.on_init {
-            let old_on_init = on_init.clone();
+    /// Duplite a pipe input to two outputs.
+    ///
+    /// If `force_finish_together` enabled, once one output is finished, the other output will be finished too.
+    pub fn duplicate(&mut self, force_finish_together: bool) -> Result<()> {
+        match self.pipes.last() {
+            Some(pipe) if pipe.output_length > 0 => {
+                let mut items = Vec::with_capacity(pipe.output_length);
+                for _ in 0..pipe.output_length {
+                    let input = InputPort::create();
+                    let output1 = OutputPort::create();
+                    let output2 = OutputPort::create();
+                    let processor = DuplicateProcessor::create(
+                        input.clone(),
+                        output1.clone(),
+                        output2.clone(),
+                        force_finish_together,
+                    );
+                    items.push(PipeItem::create(
+                        ProcessorPtr::create(Box::new(processor)),
+                        vec![input],
+                        vec![output1, output2],
+                    ));
+                }
+                self.pipes.push(Pipe::create(
+                    pipe.output_length,
+                    pipe.output_length * 2,
+                    items,
+                ));
+                Ok(())
+            }
+            _ => Err(ErrorCode::Internal("Cannot duplicate empty pipe.")),
+        }
+    }
 
-            self.on_init = Some(Arc::new(Box::new(move || {
+    /// Used to re-order the input data according to the rule.
+    ///
+    /// `rule` is a vector of [usize], each element is the index of the output port.
+    ///
+    /// For example, if the rule is `[1, 2, 0]`, the data flow will be:
+    ///
+    /// - input 0 -> output 1
+    /// - input 1 -> output 2
+    /// - input 2 -> output 0
+    pub fn reorder_inputs(&mut self, rule: Vec<usize>) {
+        match self.pipes.last() {
+            Some(pipe) if pipe.output_length > 1 => {
+                debug_assert!(rule.len() == pipe.output_length);
+                let mut inputs = Vec::with_capacity(pipe.output_length);
+                let mut outputs = Vec::with_capacity(pipe.output_length);
+                for _ in 0..pipe.output_length {
+                    inputs.push(InputPort::create());
+                    outputs.push(OutputPort::create());
+                }
+                let processor = ShuffleProcessor::create(inputs.clone(), outputs.clone(), rule);
+                self.pipes
+                    .push(Pipe::create(inputs.len(), outputs.len(), vec![
+                        PipeItem::create(
+                            ProcessorPtr::create(Box::new(processor)),
+                            inputs,
+                            outputs,
+                        ),
+                    ]));
+            }
+            _ => {}
+        }
+    }
+
+    pub fn set_on_init<F: FnOnce() -> Result<()> + Send + Sync + 'static>(&mut self, f: F) {
+        if let Some(old_on_init) = self.on_init.take() {
+            self.on_init = Some(Box::new(move || {
                 old_on_init()?;
                 f()
-            })));
+            }));
 
             return;
         }
 
-        self.on_init = Some(Arc::new(Box::new(f)));
+        self.on_init = Some(Box::new(f));
     }
 
-    pub fn set_on_finished<F: Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>(
+    pub fn set_on_finished<F: FnOnce(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>(
         &mut self,
         f: F,
     ) {
-        if let Some(on_finished) = &self.on_finished {
-            let old_finished = on_finished.clone();
-
-            self.on_finished = Some(Arc::new(Box::new(move |may_error| {
-                old_finished(may_error)?;
+        if let Some(on_finished) = self.on_finished.take() {
+            self.on_finished = Some(Box::new(move |may_error| {
+                on_finished(may_error)?;
                 f(may_error)
-            })));
+            }));
 
             return;
         }
 
-        self.on_finished = Some(Arc::new(Box::new(f)));
+        self.on_finished = Some(Box::new(f));
     }
 
     pub fn take_on_init(&mut self) -> InitCallback {
         match self.on_init.take() {
-            None => Arc::new(Box::new(|| Ok(()))),
+            None => Box::new(|| Ok(())),
             Some(on_init) => on_init,
         }
     }
 
     pub fn take_on_finished(&mut self) -> FinishedCallback {
         match self.on_finished.take() {
-            None => Arc::new(Box::new(|_may_error| Ok(()))),
+            None => Box::new(|_may_error| Ok(())),
             Some(on_finished) => on_finished,
         }
     }

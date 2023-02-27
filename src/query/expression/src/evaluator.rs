@@ -312,7 +312,40 @@ impl<'a> Evaluator<'a> {
                 }
                 other => unreachable!("source: {}", other),
             },
-
+            (DataType::EmptyMap, DataType::Map(inner_dest_ty)) => match value {
+                Value::Scalar(Scalar::EmptyMap) => {
+                    let new_column = ColumnBuilder::with_capacity(inner_dest_ty, 0).build();
+                    Ok(Value::Scalar(Scalar::Map(new_column)))
+                }
+                Value::Column(Column::EmptyMap { len }) => {
+                    let mut builder = ColumnBuilder::with_capacity(dest_type, len);
+                    for _ in 0..len {
+                        builder.push_default();
+                    }
+                    Ok(Value::Column(builder.build()))
+                }
+                other => unreachable!("source: {}", other),
+            },
+            (DataType::Map(inner_src_ty), DataType::Map(inner_dest_ty)) => match value {
+                Value::Scalar(Scalar::Map(array)) => {
+                    let new_array = self
+                        .run_cast(span, inner_src_ty, inner_dest_ty, Value::Column(array))?
+                        .into_column()
+                        .unwrap();
+                    Ok(Value::Scalar(Scalar::Map(new_array)))
+                }
+                Value::Column(Column::Map(col)) => {
+                    let new_col = self
+                        .run_cast(span, inner_src_ty, inner_dest_ty, Value::Column(col.values))?
+                        .into_column()
+                        .unwrap();
+                    Ok(Value::Column(Column::Map(Box::new(ArrayColumn {
+                        values: new_col,
+                        offsets: col.offsets,
+                    }))))
+                }
+                other => unreachable!("source: {}", other),
+            },
             (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty))
                 if fields_src_ty.len() == fields_dest_ty.len() =>
             {
@@ -401,7 +434,7 @@ impl<'a> Evaluator<'a> {
                         .unwrap();
                     Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
                         column: new_col.column,
-                        validity: bitmap::or(&col.validity, &new_col.validity),
+                        validity: bitmap::and(&col.validity, &new_col.validity),
                     }))))
                 }
                 other => unreachable!("source: {}", other),
@@ -454,7 +487,44 @@ impl<'a> Evaluator<'a> {
                 }
                 _ => unreachable!(),
             },
-
+            (DataType::EmptyMap, DataType::Map(inner_dest_ty)) => match value {
+                Value::Scalar(Scalar::EmptyMap) => {
+                    let new_column = ColumnBuilder::with_capacity(inner_dest_ty, 0).build();
+                    Ok(Value::Scalar(Scalar::Map(new_column)))
+                }
+                Value::Column(Column::EmptyMap { len }) => {
+                    let mut builder = ColumnBuilder::with_capacity(dest_type, len);
+                    for _ in 0..len {
+                        builder.push_default();
+                    }
+                    Ok(Value::Column(builder.build()))
+                }
+                other => unreachable!("source: {}", other),
+            },
+            (DataType::Map(inner_src_ty), DataType::Map(inner_dest_ty)) => match value {
+                Value::Scalar(Scalar::Map(array)) => {
+                    let new_array = self
+                        .run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(array))?
+                        .into_column()
+                        .unwrap();
+                    Ok(Value::Scalar(Scalar::Map(new_array)))
+                }
+                Value::Column(Column::Map(col)) => {
+                    let new_values = self
+                        .run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(col.values))?
+                        .into_column()
+                        .unwrap();
+                    let new_col = Column::Map(Box::new(ArrayColumn {
+                        values: new_values,
+                        offsets: col.offsets,
+                    }));
+                    Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
+                        validity: constant_bitmap(true, new_col.len()).into(),
+                        column: new_col,
+                    }))))
+                }
+                _ => unreachable!(),
+            },
             (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty))
                 if fields_src_ty.len() == fields_dest_ty.len() =>
             {
@@ -517,7 +587,13 @@ impl<'a> Evaluator<'a> {
             display_name: String::new(),
         };
 
-        let cast_expr = match check_function(span, cast_fn, &[], &[expr], self.fn_registry) {
+        let params = if let DataType::Decimal(ty) = dest_type {
+            vec![ty.precision() as usize, ty.scale() as usize]
+        } else {
+            vec![]
+        };
+
+        let cast_expr = match check_function(span, cast_fn, &params, &[expr], self.fn_registry) {
             Ok(cast_expr) => cast_expr,
             Err(_) => return Ok(None),
         };
@@ -599,6 +675,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         let mut old_domain = None;
         for _ in 0..MAX_ITERATIONS {
             let (new_expr, domain) = self.fold_once(&old_expr);
+
             if new_expr == old_expr {
                 return (new_expr, domain);
             }
@@ -945,7 +1022,12 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             display_name: String::new(),
         };
 
-        let cast_expr = check_function(span, cast_fn, &[], &[expr], self.fn_registry).ok()?;
+        let params = if let DataType::Decimal(ty) = dest_type {
+            vec![ty.precision() as usize, ty.scale() as usize]
+        } else {
+            vec![]
+        };
+        let cast_expr = check_function(span, cast_fn, &params, &[expr], self.fn_registry).ok()?;
 
         if cast_expr.data_type() != dest_type {
             return None;

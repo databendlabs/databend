@@ -41,12 +41,14 @@ use crate::api::DataPacket;
 use crate::api::FragmentData;
 
 pub struct ExchangeSerializeMeta {
+    pub block_number: isize,
     pub packet: Option<DataPacket>,
 }
 
 impl ExchangeSerializeMeta {
-    pub fn create(packet: DataPacket) -> BlockMetaInfoPtr {
+    pub fn create(packet: DataPacket, block_number: isize) -> BlockMetaInfoPtr {
         Box::new(ExchangeSerializeMeta {
+            block_number,
             packet: Some(packet),
         })
     }
@@ -78,10 +80,6 @@ impl BlockMetaInfo for ExchangeSerializeMeta {
         self
     }
 
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
     fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
         unimplemented!("Unimplemented equals ExchangeSerializeMeta")
     }
@@ -104,10 +102,14 @@ impl TransformExchangeSerializer {
     ) -> ProcessorPtr {
         let arrow_schema = schema.to_arrow();
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
-        Transformer::create(input, output, TransformExchangeSerializer {
-            ipc_fields,
-            options: WriteOptions { compression: None },
-        })
+        ProcessorPtr::create(Transformer::create(
+            input,
+            output,
+            TransformExchangeSerializer {
+                ipc_fields,
+                options: WriteOptions { compression: None },
+            },
+        ))
     }
 }
 
@@ -131,6 +133,7 @@ impl Transform for TransformExchangeSerializer {
 
         Ok(DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
             DataPacket::FragmentData(FragmentData::create(meta, values)),
+            0,
         )))
     }
 }

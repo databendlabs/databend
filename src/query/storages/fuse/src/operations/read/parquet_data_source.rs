@@ -23,7 +23,7 @@ use common_expression::BlockMetaInfoPtr;
 use serde::Deserializer;
 use serde::Serializer;
 
-use crate::MergeIOReadResult;
+use crate::io::MergeIOReadResult;
 
 pub struct DataSourceMeta {
     pub part: Vec<PartInfoPtr>,
@@ -64,15 +64,11 @@ impl BlockMetaInfo for DataSourceMeta {
         self
     }
 
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
+    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
+        unimplemented!("Unimplemented equals DataSourceMeta")
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         unimplemented!("Unimplemented clone DataSourceMeta")
-    }
-
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals DataSourceMeta")
     }
 }

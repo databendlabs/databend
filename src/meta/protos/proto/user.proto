@@ -211,6 +211,14 @@ message UserStageInfo {
     uint64 split_size = 6;
   }
 
+  message UserDefinedFileFormat {
+    uint64 ver = 100;
+    uint64 min_reader_ver = 101;
+    string name = 1;
+    FileFormatOptions file_format_options = 2;
+    UserIdentity creator = 3;
+  }
+
   string stage_name = 1;
 
   StageType stage_type = 2;
@@ -239,3 +247,4 @@ message StageFile {
   optional UserIdentity creator = 5;
   optional string etag = 6;
 }
+

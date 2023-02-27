@@ -21,7 +21,6 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
 #[async_trait]
@@ -37,11 +36,12 @@ pub trait AsyncSink: Send {
     }
 
     #[unboxed_simple]
-    async fn consume(&mut self, data_block: DataBlock) -> Result<()>;
+    async fn consume(&mut self, data_block: DataBlock) -> Result<bool>;
 }
 
 pub struct AsyncSinker<T: AsyncSink + 'static> {
     inner: T,
+    finished: bool,
     input: Arc<InputPort>,
     input_data: Option<DataBlock>,
     called_on_start: bool,
@@ -49,14 +49,15 @@ pub struct AsyncSinker<T: AsyncSink + 'static> {
 }
 
 impl<T: AsyncSink + 'static> AsyncSinker<T> {
-    pub fn create(input: Arc<InputPort>, inner: T) -> ProcessorPtr {
-        ProcessorPtr::create(Box::new(AsyncSinker {
+    pub fn create(input: Arc<InputPort>, inner: T) -> Box<dyn Processor> {
+        Box::new(AsyncSinker {
             inner,
             input,
+            finished: false,
             input_data: None,
             called_on_start: false,
             called_on_finish: false,
-        }))
+        })
     }
 }
 
@@ -77,6 +78,15 @@ impl<T: AsyncSink + 'static> Processor for AsyncSinker<T> {
 
         if self.input_data.is_some() {
             return Ok(Event::Async);
+        }
+
+        if self.finished {
+            if !self.called_on_finish {
+                return Ok(Event::Async);
+            }
+
+            self.input.finish();
+            return Ok(Event::Finished);
         }
 
         if self.input.is_finished() {
@@ -103,7 +113,7 @@ impl<T: AsyncSink + 'static> Processor for AsyncSinker<T> {
             self.called_on_start = true;
             self.inner.on_start().await?;
         } else if let Some(data_block) = self.input_data.take() {
-            self.inner.consume(data_block).await?;
+            self.finished = self.inner.consume(data_block).await?;
         } else if !self.called_on_finish {
             self.called_on_finish = true;
             self.inner.on_finish().await?;

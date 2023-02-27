@@ -17,12 +17,12 @@ use std::collections::HashMap;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ColumnId;
 use common_expression::TableSchemaRef;
-use storages_common_table_meta::meta::ColumnId;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::SingleColumnMeta;
 
-pub fn column_metas(
+pub fn column_parquet_metas(
     file_meta: &ThriftFileMetaData,
     schema: &TableSchemaRef,
 ) -> Result<HashMap<ColumnId, ColumnMeta>> {

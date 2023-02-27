@@ -22,7 +22,7 @@ use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::*;
 use common_meta_kvapi::kvapi;
-use common_meta_types::KVAppError;
+use common_meta_types::MetaError;
 use enumflags2::BitFlags;
 use tracing::info;
 
@@ -32,6 +32,7 @@ use crate::get_share_id_to_name_or_err;
 use crate::get_share_meta_by_id_or_err;
 use crate::get_share_or_err;
 use crate::is_all_db_data_removed;
+use crate::kv_app_error::KVAppError;
 use crate::testing::get_kv_data;
 use crate::SchemaApi;
 use crate::ShareApi;
@@ -45,7 +46,7 @@ use crate::ShareApi;
 pub struct ShareApiTestSuite {}
 
 async fn if_share_object_data_exists(
-    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     entry: &ShareGrantEntry,
 ) -> Result<bool, KVAppError> {
     if let Ok((_seq, _share_ids)) = get_object_shared_by_share_ids(kv_api, &entry.object).await {
@@ -56,7 +57,7 @@ async fn if_share_object_data_exists(
 
 // Return true if all the share data has been removed.
 async fn is_all_share_data_removed(
-    kv_api: &(impl kvapi::KVApi<Error = KVAppError> + ?Sized),
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     share_name: &ShareNameIdent,
     share_id: u64,
     share_meta: &ShareMeta,
@@ -108,7 +109,7 @@ impl ShareApiTestSuite {
     pub async fn test_single_node_share<B, MT>(b: B) -> anyhow::Result<()>
     where
         B: kvapi::ApiBuilder<MT>,
-        MT: ShareApi + kvapi::AsKVApi<Error = KVAppError> + SchemaApi,
+        MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi,
     {
         let suite = ShareApiTestSuite {};
 
@@ -124,7 +125,7 @@ impl ShareApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn share_create_show_drop<MT: ShareApi + kvapi::AsKVApi<Error = KVAppError>>(
+    async fn share_create_show_drop<MT: ShareApi + kvapi::AsKVApi<Error = MetaError>>(
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -191,7 +192,7 @@ impl ShareApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn share_add_remove_account<MT: ShareApi + kvapi::AsKVApi<Error = KVAppError>>(
+    async fn share_add_remove_account<MT: ShareApi + kvapi::AsKVApi<Error = MetaError>>(
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -485,7 +486,7 @@ impl ShareApiTestSuite {
 
     #[tracing::instrument(level = "debug", skip_all)]
     async fn share_grant_revoke_object<
-        MT: ShareApi + kvapi::AsKVApi<Error = KVAppError> + SchemaApi,
+        MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi,
     >(
         &self,
         mt: &MT,
@@ -828,7 +829,7 @@ impl ShareApiTestSuite {
 
     #[tracing::instrument(level = "debug", skip_all)]
     async fn get_share_grant_objects<
-        MT: ShareApi + kvapi::AsKVApi<Error = KVAppError> + SchemaApi,
+        MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi,
     >(
         &self,
         mt: &MT,
@@ -958,7 +959,7 @@ impl ShareApiTestSuite {
 
     #[tracing::instrument(level = "debug", skip_all)]
     async fn get_grant_privileges_of_object<
-        MT: ShareApi + kvapi::AsKVApi<Error = KVAppError> + SchemaApi,
+        MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi,
     >(
         &self,
         mt: &MT,

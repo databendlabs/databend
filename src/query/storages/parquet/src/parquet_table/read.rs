@@ -20,11 +20,9 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::ConstantFolder;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
 use common_expression::Expr;
-use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::TableSchemaRef;
 use common_expression::TopKSorter;
@@ -45,16 +43,10 @@ impl ParquetTable {
         ParquetReader::create(self.operator.clone(), self.arrow_schema.clone(), projection)
     }
 
-    fn build_filter(
-        ctx: FunctionContext,
-        filter: &RemoteExpr<String>,
-        schema: &DataSchema,
-    ) -> Expr {
-        let expr = filter
+    fn build_filter(filter: &RemoteExpr<String>, schema: &DataSchema) -> Expr {
+        filter
             .as_expr(&BUILTIN_FUNCTIONS)
-            .project_column_ref(|name| schema.index_of(name).unwrap());
-        let (expr, _) = ConstantFolder::fold(&expr, ctx, &BUILTIN_FUNCTIONS);
-        expr
+            .project_column_ref(|name| schema.index_of(name).unwrap())
     }
 
     #[inline]
@@ -86,7 +78,7 @@ impl ParquetTable {
         let top_k = plan
             .push_downs
             .as_ref()
-            .map(|p| p.top_k(&table_schema, RangeIndex::supported_type))
+            .map(|p| p.top_k(&table_schema, None, RangeIndex::supported_type))
             .unwrap_or_default();
 
         // Build prewhere info.
@@ -128,14 +120,14 @@ impl ParquetTable {
                     p.prewhere_columns,
                 )?;
                 src_fields.extend_from_slice(reader.output_schema.fields());
-                let func_ctx = ctx.get_function_context()?;
-                let filter = Self::build_filter(func_ctx, &p.filter, &reader.output_schema);
+                let filter = Self::build_filter(&p.filter, &reader.output_schema);
                 let top_k = top_k.map(|(name, top_k)| {
                     (
                         reader.output_schema.index_of(&name).unwrap(),
                         TopKSorter::new(top_k.limit, top_k.asc),
                     )
                 });
+                let func_ctx = ctx.get_function_context()?;
                 Ok::<_, ErrorCode>(ParquetPrewhereInfo {
                     func_ctx,
                     reader,

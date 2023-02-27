@@ -1,0 +1,17 @@
+[Unit]
+Description=Databend Meta
+Documentation=https://databend.rs
+After=network-online.target
+Requires=network-online.target
+
+[Service]
+User=databend
+Group=databend
+ExecStart=/usr/bin/databend-meta --config-file /etc/databend/databend-meta.toml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=no
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+EnvironmentFile=-/etc/default/databend-meta
+
+[Install]
+WantedBy=multi-user.target

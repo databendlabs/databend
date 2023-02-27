@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::default::Default;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use chrono::TimeZone;
@@ -27,13 +26,13 @@ use common_ast::ast::Statement;
 use common_ast::ast::TableAlias;
 use common_ast::ast::TableReference;
 use common_ast::ast::TimeTravelPoint;
+use common_ast::ast::UriLocation;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::ParquetReadOptions;
-use common_catalog::table::ColumnId;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
@@ -42,6 +41,7 @@ use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
+use common_expression::ColumnId;
 use common_expression::ConstantFolder;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageFileFormatType;
@@ -295,8 +295,10 @@ impl Binder {
                     FileLocation::Stage(location) => {
                         parse_stage_location_v2(&self.ctx, &location.name, &location.path).await?
                     }
-                    FileLocation::Uri(mut l) => {
-                        let (storage_params, path) = parse_uri_location(&mut l)?;
+                    FileLocation::Uri(uri) => {
+                        let mut location =
+                            UriLocation::from_uri(uri, "".to_string(), options.connection.clone())?;
+                        let (storage_params, path) = parse_uri_location(&mut location)?;
                         if !storage_params.is_secure()
                             && !GlobalConfig::instance().storage.allow_insecure
                         {
@@ -309,12 +311,11 @@ impl Binder {
                     }
                 };
 
-                let file_format = match &options.file_format {
-                    Some(f) => StageFileFormatType::from_str(f)?,
-                    None => user_stage_info.file_format_options.format.clone(),
+                let file_format_options = match &options.file_format {
+                    Some(f) => self.ctx.get_file_format(f).await?,
+                    None => user_stage_info.file_format_options.clone(),
                 };
-
-                if matches!(file_format, StageFileFormatType::Parquet) {
+                if matches!(file_format_options.format, StageFileFormatType::Parquet) {
                     let files_info = StageFilesInfo {
                         path,
                         pattern: options.pattern.clone(),

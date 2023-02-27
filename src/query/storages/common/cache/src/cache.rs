@@ -12,103 +12,89 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
+use std::hash::BuildHasher;
 use std::hash::Hash;
 use std::sync::Arc;
 
-pub trait CacheAccessor<K, V> {
-    fn get<Q>(&self, k: &Q) -> Option<Arc<V>>
-    where
-        K: Borrow<Q>,
-        Q: Hash + Eq + ?Sized;
+use common_cache::Count;
+use common_cache::CountableMeter;
+use common_cache::DefaultHashBuilder;
 
+use crate::metrics_inc_cache_access_count;
+use crate::metrics_inc_cache_hit_count;
+use crate::metrics_inc_cache_miss_count;
+
+// The cache accessor, crate users usually working on this interface while manipulating caches
+pub trait CacheAccessor<K, V, S = DefaultHashBuilder, M = Count>
+where
+    K: Eq + Hash,
+    S: BuildHasher,
+    M: CountableMeter<K, Arc<V>>,
+{
+    fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<V>>;
     fn put(&self, key: K, value: Arc<V>);
-    fn evict<Q>(&self, k: &Q) -> bool
-    where
-        K: Borrow<Q>,
-        Q: Hash + Eq + ?Sized;
+    fn evict(&self, k: &str) -> bool;
+    fn contains_key(&self, k: &str) -> bool;
 }
 
-/// The minimum interface that cache providers should implement
-pub trait StorageCache<K, V> {
-    type Meter;
-    fn put(&mut self, key: K, value: Arc<V>);
-
-    fn get<Q>(&mut self, k: &Q) -> Option<&Arc<V>>
-    where
-        K: Borrow<Q>,
-        Q: Hash + Eq + ?Sized;
-
-    fn evict<Q>(&mut self, k: &Q) -> bool
-    where
-        K: Borrow<Q>,
-        Q: Hash + Eq + ?Sized;
+/// Helper trait to convert a Cache into NamedCache
+pub trait Named
+where Self: Sized
+{
+    fn name_with(self, name: impl Into<String>) -> NamedCache<Self> {
+        NamedCache {
+            name: name.into(),
+            cache: self,
+        }
+    }
 }
 
-mod impls {
-    use std::borrow::Borrow;
-    use std::hash::Hash;
-    use std::sync::Arc;
+impl<T> Named for T where T: Sized + Clone {}
 
-    use parking_lot::RwLock;
+/// A named cache that with embedded metrics logging
+#[derive(Clone)]
+pub struct NamedCache<C> {
+    name: String,
+    cache: C,
+}
 
-    use crate::cache::CacheAccessor;
-    use crate::cache::StorageCache;
+impl<C> NamedCache<C> {
+    #[inline]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
 
-    impl<V, C> CacheAccessor<String, V> for Arc<RwLock<C>>
-    where C: StorageCache<String, V>
-    {
-        fn get<Q>(&self, k: &Q) -> Option<Arc<V>>
-        where
-            String: Borrow<Q>,
-            Q: Hash + Eq + ?Sized,
-        {
-            let mut guard = self.write();
-            guard.get(k).cloned()
-        }
-
-        fn put(&self, k: String, v: Arc<V>) {
-            let mut guard = self.write();
-            guard.put(k, v);
-        }
-
-        fn evict<Q>(&self, k: &Q) -> bool
-        where
-            String: Borrow<Q>,
-            Q: Hash + Eq + ?Sized,
-        {
-            let mut guard = self.write();
-            guard.evict(k)
+impl<K, V, S, M, C> CacheAccessor<K, V, S, M> for NamedCache<C>
+where
+    C: CacheAccessor<K, V, S, M>,
+    K: Eq + Hash,
+    S: BuildHasher,
+    M: CountableMeter<K, Arc<V>>,
+{
+    fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<V>> {
+        metrics_inc_cache_access_count(1, &self.name);
+        match self.cache.get(k) {
+            None => {
+                metrics_inc_cache_miss_count(1, &self.name);
+                None
+            }
+            v @ Some(_) => {
+                metrics_inc_cache_hit_count(1, &self.name);
+                v
+            }
         }
     }
 
-    impl<V, C> CacheAccessor<String, V> for Option<Arc<RwLock<C>>>
-    where C: StorageCache<String, V>
-    {
-        fn get<Q>(&self, k: &Q) -> Option<Arc<V>>
-        where
-            String: Borrow<Q>,
-            Q: Hash + Eq + ?Sized,
-        {
-            self.as_ref().and_then(|cache| cache.get(k))
-        }
+    fn put(&self, key: K, value: Arc<V>) {
+        self.cache.put(key, value)
+    }
 
-        fn put(&self, k: String, v: Arc<V>) {
-            if let Some(cache) = self {
-                cache.put(k, v);
-            }
-        }
+    fn evict(&self, k: &str) -> bool {
+        self.cache.evict(k)
+    }
 
-        fn evict<Q>(&self, k: &Q) -> bool
-        where
-            String: Borrow<Q>,
-            Q: Hash + Eq + ?Sized,
-        {
-            if let Some(cache) = self {
-                cache.evict(k)
-            } else {
-                false
-            }
-        }
+    fn contains_key(&self, k: &str) -> bool {
+        self.cache.contains_key(k)
     }
 }

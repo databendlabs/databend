@@ -26,7 +26,6 @@ use common_meta_types::protobuf::ClientInfo;
 use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
-use common_meta_types::KVAppError;
 use common_meta_types::MetaClientError;
 use common_meta_types::MetaError;
 use common_meta_types::TxnReply;
@@ -100,11 +99,11 @@ impl Request {
 /// Meta-client worker-to-handle response body
 #[derive(Debug, derive_more::TryInto)]
 pub enum Response {
-    Get(Result<GetKVReply, KVAppError>),
-    MGet(Result<MGetKVReply, KVAppError>),
-    PrefixList(Result<ListKVReply, KVAppError>),
-    Upsert(Result<UpsertKVReply, KVAppError>),
-    Txn(Result<TxnReply, KVAppError>),
+    Get(Result<GetKVReply, MetaError>),
+    MGet(Result<MGetKVReply, MetaError>),
+    PrefixList(Result<ListKVReply, MetaError>),
+    Upsert(Result<UpsertKVReply, MetaError>),
+    Txn(Result<TxnReply, MetaError>),
     Watch(Result<tonic::codec::Streaming<WatchResponse>, MetaError>),
     Export(Result<tonic::codec::Streaming<ExportedChunk>, MetaError>),
     MakeClient(

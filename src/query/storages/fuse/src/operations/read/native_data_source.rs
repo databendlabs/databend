@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
@@ -25,7 +26,7 @@ use serde::Serializer;
 
 use crate::io::NativeReaderExt;
 
-pub type DataChunks = Vec<(usize, NativeReader<Box<dyn NativeReaderExt>>)>;
+pub type DataChunks = BTreeMap<usize, Vec<NativeReader<Box<dyn NativeReaderExt>>>>;
 
 pub struct NativeDataSourceMeta {
     pub part: Vec<PartInfoPtr>,
@@ -66,15 +67,11 @@ impl BlockMetaInfo for NativeDataSourceMeta {
         self
     }
 
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
+    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
+        unimplemented!("Unimplemented equals NativeDataSourceMeta")
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         unimplemented!("Unimplemented clone NativeDataSourceMeta")
-    }
-
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals NativeDataSourceMeta")
     }
 }

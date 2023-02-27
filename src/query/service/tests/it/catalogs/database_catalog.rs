@@ -26,7 +26,7 @@ use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DropDatabaseReq;
-use common_meta_app::schema::DropTableReq;
+use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
@@ -212,23 +212,16 @@ async fn test_catalogs_table() -> Result<()> {
 
     // Drop.
     {
-        let mut req = DropTableReq {
-            if_exists: false,
-            name_ident: TableNameIdent {
-                tenant: tenant.to_string(),
-                db_name: "default".to_string(),
-                table_name: "test_table".to_string(),
-            },
-        };
-        let res = catalog.drop_table(req.clone()).await;
+        let tbl = catalog.get_table(tenant, "default", "test_table").await?;
+        let res = catalog
+            .drop_table_by_id(DropTableByIdReq {
+                if_exists: false,
+                tb_id: tbl.get_table_info().ident.table_id,
+            })
+            .await;
         assert!(res.is_ok());
         let table_list_4 = catalog.list_tables(tenant, "default").await?;
         assert!(table_list_4.is_empty());
-
-        // Tenant empty.
-        req.name_ident.tenant = "".to_string();
-        let res = catalog.drop_table(req).await;
-        assert!(res.is_err());
     }
 
     Ok(())

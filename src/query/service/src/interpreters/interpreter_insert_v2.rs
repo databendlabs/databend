@@ -416,7 +416,7 @@ impl Interpreter for InsertInterpreterV2 {
                             bind_context,
                             ..
                         } => {
-                            let builder1 =
+                            let mut builder1 =
                                 PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone());
                             (builder1.build(s_expr).await?, bind_context.columns.clone())
                         }
@@ -459,7 +459,8 @@ impl Interpreter for InsertInterpreterV2 {
                     };
 
                     let mut build_res =
-                        build_query_pipeline(&self.ctx, &[], &insert_select_plan, false).await?;
+                        build_query_pipeline(&self.ctx, &[], &insert_select_plan, false, false)
+                            .await?;
 
                     let ctx = self.ctx.clone();
                     let overwrite = self.plan.overwrite;
@@ -777,7 +778,7 @@ pub fn skip_to_next_row<R: AsRef<[u8]>>(reader: &mut Cursor<R>, mut balance: i32
 
 async fn fill_default_value(
     binder: &mut ScalarBinder<'_>,
-    operators: &mut Vec<BlockOperator>,
+    map_exprs: &mut Vec<Expr>,
     field: &DataField,
     schema: &DataSchema,
 ) -> Result<()> {
@@ -795,30 +796,29 @@ async fn fill_default_value(
                 target_type: Box::new(field.data_type().clone()),
             })
         }
+
         let expr = scalar
             .as_expr_with_col_index()?
             .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());
-        operators.push(BlockOperator::Map { expr });
+        map_exprs.push(expr);
     } else {
         // If field data type is nullable, then we'll fill it with null.
         if field.data_type().is_nullable() {
-            operators.push(BlockOperator::Map {
-                expr: Expr::Constant {
-                    span: None,
-                    scalar: DataScalar::Null,
-                    data_type: field.data_type().clone(),
-                },
-            });
+            let expr = Expr::Constant {
+                span: None,
+                scalar: DataScalar::Null,
+                data_type: field.data_type().clone(),
+            };
+            map_exprs.push(expr);
         } else {
             let data_type = field.data_type().clone();
             let default_value = data_type.default_value();
-            operators.push(BlockOperator::Map {
-                expr: Expr::Constant {
-                    span: None,
-                    scalar: default_value,
-                    data_type,
-                },
-            });
+            let expr = Expr::Constant {
+                span: None,
+                scalar: default_value,
+                data_type,
+            };
+            map_exprs.push(expr);
         }
     }
     Ok(())
@@ -840,7 +840,6 @@ async fn exprs_to_scalar(
             exprs
         )));
     }
-    let mut operators = Vec::with_capacity(schema_fields_len);
     let mut scalar_binder = ScalarBinder::new(
         bind_context,
         ctx.clone(),
@@ -849,12 +848,13 @@ async fn exprs_to_scalar(
         &[],
     );
 
+    let mut map_exprs = Vec::with_capacity(exprs.len());
     for (i, expr) in exprs.iter().enumerate() {
         // `DEFAULT` in insert values will be parsed as `Expr::ColumnRef`.
         if let AExpr::ColumnRef { column, .. } = expr {
             if column.name.eq_ignore_ascii_case("default") {
                 let field = schema.field(i);
-                fill_default_value(&mut scalar_binder, &mut operators, field, schema).await?;
+                fill_default_value(&mut scalar_binder, &mut map_exprs, field, schema).await?;
                 continue;
             }
         }
@@ -872,8 +872,11 @@ async fn exprs_to_scalar(
         let expr = scalar
             .as_expr_with_col_index()?
             .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());
-        operators.push(BlockOperator::Map { expr });
+        map_exprs.push(expr);
     }
+
+    let mut operators = Vec::with_capacity(schema_fields_len);
+    operators.push(BlockOperator::Map { exprs: map_exprs });
 
     let one_row_chunk = DataBlock::new(
         vec![BlockEntry {

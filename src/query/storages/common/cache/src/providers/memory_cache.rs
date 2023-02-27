@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
 use std::hash::BuildHasher;
-use std::hash::Hash;
 use std::sync::Arc;
 
 use common_cache::BytesMeter;
@@ -25,21 +23,34 @@ use common_cache::DefaultHashBuilder;
 use common_cache::LruCache;
 use parking_lot::RwLock;
 
-use crate::cache::StorageCache;
-
-pub type ItemCache<V> = LruCache<String, Arc<V>, DefaultHashBuilder, Count>;
+pub type ImMemoryCache<V, S, M> = LruCache<String, Arc<V>, S, M>;
 pub type BytesCache = LruCache<String, Arc<Vec<u8>>, DefaultHashBuilder, BytesMeter>;
 
-pub type InMemoryItemCacheHolder<T> = Arc<RwLock<ItemCache<T>>>;
+pub type InMemoryItemCacheHolder<T, S = DefaultHashBuilder, M = Count> =
+    Arc<RwLock<ImMemoryCache<T, S, M>>>;
 pub type InMemoryBytesCacheHolder = Arc<RwLock<BytesCache>>;
 
 pub struct InMemoryCacheBuilder;
 impl InMemoryCacheBuilder {
+    // new cache that cache `V`, and metered by the given `meter`
+    pub fn new_in_memory_cache<V, M>(
+        capacity: u64,
+        meter: M,
+    ) -> InMemoryItemCacheHolder<V, DefaultHashBuilder, M>
+    where
+        M: CountableMeter<String, Arc<V>>,
+    {
+        let cache = LruCache::with_meter_and_hasher(capacity, meter, DefaultHashBuilder::new());
+        Arc::new(RwLock::new(cache))
+    }
+
+    // new cache that caches `V` and meter by counting
     pub fn new_item_cache<V>(capacity: u64) -> InMemoryItemCacheHolder<V> {
         let cache = LruCache::new(capacity);
         Arc::new(RwLock::new(cache))
     }
 
+    // new cache that cache `Vec<u8>`, and metered by byte size
     pub fn new_bytes_cache(capacity: u64) -> InMemoryBytesCacheHolder {
         let cache =
             LruCache::with_meter_and_hasher(capacity, BytesMeter, DefaultHashBuilder::new());
@@ -47,31 +58,74 @@ impl InMemoryCacheBuilder {
     }
 }
 
-impl<K, V, S, M> StorageCache<K, V> for LruCache<K, Arc<V>, S, M>
-where
-    M: CountableMeter<K, Arc<V>>,
-    S: BuildHasher,
-    K: Eq + Hash,
-{
-    type Meter = M;
+// default impls
+mod impls {
+    use std::sync::Arc;
 
-    fn put(&mut self, key: K, value: Arc<V>) {
-        Cache::put(self, key, value);
+    use parking_lot::RwLock;
+
+    use super::*;
+    use crate::cache::CacheAccessor;
+
+    // Wrap a Cache with RwLock, and impl CacheAccessor for it
+    impl<V, C, S, M> CacheAccessor<String, V, S, M> for Arc<RwLock<C>>
+    where
+        C: Cache<String, Arc<V>, S, M>,
+        M: CountableMeter<String, Arc<V>>,
+        S: BuildHasher,
+    {
+        fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<V>> {
+            let mut guard = self.write();
+            guard.get(k.as_ref()).cloned()
+        }
+
+        fn put(&self, k: String, v: Arc<V>) {
+            let mut guard = self.write();
+            guard.put(k, v);
+        }
+
+        fn evict(&self, k: &str) -> bool {
+            let mut guard = self.write();
+            guard.pop(k).is_some()
+        }
+
+        fn contains_key(&self, k: &str) -> bool {
+            let guard = self.read();
+            guard.contains(k)
+        }
     }
 
-    fn get<Q>(&mut self, k: &Q) -> Option<&Arc<V>>
+    // Wrap an Option<CacheAccessor>, and impl CacheAccessor for it
+    impl<V, C, S, M> CacheAccessor<String, V, S, M> for Option<C>
     where
-        K: Borrow<Q>,
-        Q: Hash + Eq + ?Sized,
+        C: CacheAccessor<String, V, S, M>,
+        M: CountableMeter<String, Arc<V>>,
+        S: BuildHasher,
     {
-        Cache::get(self, k)
-    }
+        fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<V>> {
+            self.as_ref().and_then(|cache| cache.get(k))
+        }
 
-    fn evict<Q>(&mut self, k: &Q) -> bool
-    where
-        K: Borrow<Q>,
-        Q: Hash + Eq + ?Sized,
-    {
-        self.pop(k).is_some()
+        fn put(&self, k: String, v: Arc<V>) {
+            if let Some(cache) = self {
+                cache.put(k, v);
+            }
+        }
+
+        fn evict(&self, k: &str) -> bool {
+            if let Some(cache) = self {
+                cache.evict(k)
+            } else {
+                false
+            }
+        }
+
+        fn contains_key(&self, k: &str) -> bool {
+            if let Some(cache) = self {
+                cache.contains_key(k)
+            } else {
+                false
+            }
+        }
     }
 }

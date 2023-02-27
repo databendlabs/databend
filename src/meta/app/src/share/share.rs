@@ -20,11 +20,11 @@ use std::fmt::Formatter;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_meta_types::errors::app_error::AppError;
-use common_meta_types::errors::app_error::WrongShareObject;
 use enumflags2::bitflags;
 use enumflags2::BitFlags;
 
+use crate::app_error::AppError;
+use crate::app_error::WrongShareObject;
 use crate::schema::DatabaseMeta;
 use crate::schema::TableMeta;
 

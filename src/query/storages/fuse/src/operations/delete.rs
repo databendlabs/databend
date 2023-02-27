@@ -24,7 +24,7 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::filter_helper::FilterHelpers;
+use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::Column;
@@ -33,6 +33,7 @@ use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::Evaluator;
 use common_expression::Expr;
+use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_expression::Value;
@@ -164,17 +165,19 @@ impl FuseTable {
             1,
         );
 
-        let filter_expr = filter
+        let filter = filter
             .as_expr(&BUILTIN_FUNCTIONS)
             .project_column_ref(|name| schema.index_of(name).unwrap());
+
+        assert_eq!(filter.data_type(), &DataType::Boolean);
+
         let func_ctx = ctx.get_function_context()?;
         let evaluator = Evaluator::new(&dummy_block, func_ctx, &BUILTIN_FUNCTIONS);
-        let res = evaluator
-            .run(&filter_expr)
-            .map_err(|e| e.add_message("eval try eval const failed:"))?;
-        let predicates = FilterHelpers::cast_to_nonull_boolean(&res).ok_or_else(|| {
-            ErrorCode::BadArguments("Result of filter expression cannot be converted to boolean.")
-        })?;
+        let predicates = evaluator
+            .run(&filter)
+            .map_err(|e| e.add_message("eval try eval const failed:"))?
+            .try_downcast::<BooleanType>()
+            .unwrap();
 
         Ok(match &predicates {
             Value::Scalar(v) => *v,
@@ -193,7 +196,7 @@ impl FuseTable {
         let projection = Projection::Columns(col_indices.clone());
         self.mutation_block_pruning(
             ctx.clone(),
-            vec![filter.clone()],
+            Some(filter.clone()),
             projection.clone(),
             base_snapshot,
         )
@@ -207,25 +210,28 @@ impl FuseTable {
                 .project_column_ref(|name| schema.index_of(name).unwrap()),
         ));
 
-        let all_col_ids = self.all_the_columns_ids();
-        let remain_col_ids: Vec<usize> = all_col_ids
+        let all_column_indices = self.all_column_indices();
+        let remain_column_indices: Vec<usize> = all_column_indices
             .into_iter()
-            .filter(|id| !col_indices.contains(id))
+            .filter(|index| !col_indices.contains(index))
             .collect();
-        let mut source_col_ids = col_indices;
-        let remain_reader = if remain_col_ids.is_empty() {
+        let mut source_col_indices = col_indices;
+        let remain_reader = if remain_column_indices.is_empty() {
             Arc::new(None)
         } else {
-            source_col_ids.extend_from_slice(&remain_col_ids);
+            source_col_indices.extend_from_slice(&remain_column_indices);
             Arc::new(Some(
-                (*self.create_block_reader(Projection::Columns(remain_col_ids), ctx.clone())?)
-                    .clone(),
+                (*self.create_block_reader(
+                    Projection::Columns(remain_column_indices),
+                    ctx.clone(),
+                )?)
+                .clone(),
             ))
         };
 
         // resort the block.
-        let mut projection = (0..source_col_ids.len()).collect::<Vec<_>>();
-        projection.sort_by_key(|&i| source_col_ids[i]);
+        let mut projection = (0..source_col_indices.len()).collect::<Vec<_>>();
+        projection.sort_by_key(|&i| source_col_indices[i]);
         let ops = vec![BlockOperator::Project { projection }];
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -240,6 +246,7 @@ impl FuseTable {
                     block_reader.clone(),
                     remain_reader.clone(),
                     ops.clone(),
+                    self.storage_format,
                 )
             },
             max_threads,
@@ -249,13 +256,13 @@ impl FuseTable {
     pub async fn mutation_block_pruning(
         &self,
         ctx: Arc<dyn TableContext>,
-        filters: Vec<RemoteExpr<String>>,
+        filter: Option<RemoteExpr<String>>,
         projection: Projection,
         base_snapshot: &TableSnapshot,
     ) -> Result<()> {
         let push_down = Some(PushDownInfo {
             projection: Some(projection),
-            filters,
+            filter,
             ..PushDownInfo::default()
         });
 
@@ -282,7 +289,7 @@ impl FuseTable {
             PruningStatistics::default(),
         )?;
 
-        let parts = Partitions::create(
+        let parts = Partitions::create_nolazy(
             PartitionsShuffleKind::Mod,
             block_metas
                 .into_iter()
@@ -343,7 +350,7 @@ impl FuseTable {
         let cluster_keys = self.cluster_keys(ctx);
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
         let mut extra_key_num = 0;
-        let mut operators = Vec::with_capacity(cluster_keys.len());
+        let mut exprs = Vec::with_capacity(cluster_keys.len());
 
         for remote_expr in &cluster_keys {
             let expr: Expr = remote_expr
@@ -354,7 +361,7 @@ impl FuseTable {
                 _ => {
                     let cname = format!("{}", expr);
                     merged.push(DataField::new(cname.as_str(), expr.data_type().clone()));
-                    operators.push(BlockOperator::Map { expr });
+                    exprs.push(expr);
 
                     let offset = merged.len() - 1;
                     extra_key_num += 1;
@@ -364,12 +371,7 @@ impl FuseTable {
             cluster_key_index.push(index);
         }
 
-        let max_page_size = if self.is_native() {
-            Some(self.get_write_settings().max_page_size)
-        } else {
-            None
-        };
-
+        let max_page_size = self.get_max_page_size();
         Ok(ClusterStatsGenerator::new(
             self.cluster_key_meta.as_ref().unwrap().0,
             cluster_key_index,
@@ -377,15 +379,15 @@ impl FuseTable {
             max_page_size,
             0,
             self.get_block_compact_thresholds(),
-            operators,
+            vec![BlockOperator::Map { exprs }],
             merged,
             func_ctx,
         ))
     }
 
-    pub fn all_the_columns_ids(&self) -> Vec<usize> {
+    pub fn all_column_indices(&self) -> Vec<FieldIndex> {
         (0..self.table_info.schema().fields().len())
             .into_iter()
-            .collect::<Vec<usize>>()
+            .collect::<Vec<FieldIndex>>()
     }
 }

@@ -21,10 +21,8 @@ use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::DataBlock;
-use common_expression::HashMethod;
 use common_expression::Value;
 use common_functions::aggregates::StateAddr;
-use common_hashtable::FastHash;
 use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
@@ -32,10 +30,9 @@ use tracing::info;
 
 use super::estimated_key_size;
 use crate::pipelines::processors::transforms::aggregator::aggregate_info::AggregateInfo;
-use crate::pipelines::processors::transforms::aggregator::aggregator_final_parallel::ParallelFinalAggregator;
 use crate::pipelines::processors::transforms::aggregator::AggregateHashStateInfo;
 use crate::pipelines::processors::transforms::aggregator::PartialAggregator;
-use crate::pipelines::processors::transforms::aggregator::SingleStateAggregator;
+use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
@@ -45,11 +42,15 @@ use crate::pipelines::processors::AggregatorParams;
 pub trait PartitionedAggregatorLike
 where Self: Aggregator + Send
 {
-    const SUPPORT_TWO_LEVEL: bool;
+    const SUPPORT_PARTITION: bool;
 
     type PartitionedAggregator: Aggregator;
 
     fn get_state_cardinality(&self) -> usize {
+        0
+    }
+
+    fn get_state_bytes(&self) -> usize {
         0
     }
 
@@ -68,17 +69,19 @@ where Self: Aggregator + Send
     }
 }
 
-impl<Method, const HAS_AGG: bool> PartitionedAggregatorLike for PartialAggregator<HAS_AGG, Method>
-where
-    Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
-    Method::HashKey: FastHash,
+impl<Method: HashMethodBounds, const HAS_AGG: bool> PartitionedAggregatorLike
+    for PartialAggregator<HAS_AGG, Method>
 {
-    const SUPPORT_TWO_LEVEL: bool = Method::SUPPORT_TWO_LEVEL;
+    const SUPPORT_PARTITION: bool = Method::SUPPORT_PARTITIONED;
 
     type PartitionedAggregator = PartialAggregator<HAS_AGG, PartitionedHashMethod<Method>>;
 
     fn get_state_cardinality(&self) -> usize {
         self.hash_table.len()
+    }
+
+    fn get_state_bytes(&self) -> usize {
+        self.hash_table.bytes_len()
     }
 
     // PartialAggregator<HAS_AGG, Method> -> PartitionedAggregator<PartialAggregator<HAS_AGG, Method>>
@@ -169,6 +172,7 @@ where
                     Box::new(table),
                     agg.area_holder.clone(),
                 );
+
                 let block = DataBlock::new_with_meta(vec![], rows, Some(meta));
                 return Ok(vec![block]);
             }
@@ -238,26 +242,6 @@ where
 
         Ok(data_blocks)
     }
-}
-
-impl PartitionedAggregatorLike for SingleStateAggregator<true> {
-    const SUPPORT_TWO_LEVEL: bool = false;
-    type PartitionedAggregator = SingleStateAggregator<true>;
-}
-
-impl PartitionedAggregatorLike for SingleStateAggregator<false> {
-    const SUPPORT_TWO_LEVEL: bool = false;
-    type PartitionedAggregator = SingleStateAggregator<false>;
-}
-
-impl<Method, const HAS_AGG: bool> PartitionedAggregatorLike
-    for ParallelFinalAggregator<HAS_AGG, Method>
-where
-    Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
-    Method::HashKey: FastHash,
-{
-    const SUPPORT_TWO_LEVEL: bool = false;
-    type PartitionedAggregator = ParallelFinalAggregator<HAS_AGG, PartitionedHashMethod<Method>>;
 }
 
 // Example: PartitionedAggregator<PartialAggregator<HAS_AGG, Method>> ->

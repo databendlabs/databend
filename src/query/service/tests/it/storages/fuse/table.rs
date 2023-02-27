@@ -15,11 +15,9 @@
 use std::default::Default;
 
 use common_base::base::tokio;
-use common_catalog::plan::DataSourceInfo;
-use common_catalog::plan::DataSourcePlan;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
-use databend_query::sessions::TableContext;
+use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_query::storages::fuse::FuseTable;
 use databend_query::stream::ReadDataBlockStream;
 use futures::TryStreamExt;
@@ -54,22 +52,12 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         table = fixture.latest_default_table().await?;
         assert_ne!(prev_version, table.get_table_info().ident.seq);
 
-        let (stats, parts) = table.read_partitions(ctx.clone(), None).await?;
+        let (stats, _) = table.read_partitions(ctx.clone(), None).await?;
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);
 
-        ctx.set_partitions(parts.clone())?;
-        let stream = table
-            .read_data_block_stream(ctx.clone(), &DataSourcePlan {
-                catalog: "default".to_owned(),
-                source_info: DataSourceInfo::TableSource(Default::default()),
-                output_schema: Default::default(),
-                parts,
-                statistics: Default::default(),
-                description: "".to_string(),
-                tbl_args: None,
-                push_downs: None,
-            })
-            .await?;
+        let plan = table.read_plan(ctx.clone(), None).await?;
+
+        let stream = table.read_data_block_stream(ctx.clone(), &plan).await?;
         let blocks = stream.try_collect::<Vec<_>>().await?;
         let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
         assert_eq!(rows, num_blocks * rows_per_block);
@@ -112,24 +100,12 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         let table = fixture.latest_default_table().await?;
         assert_ne!(prev_version, table.get_table_info().ident.seq);
 
-        let (stats, parts) = table.read_partitions(ctx.clone(), None).await?;
+        let (stats, _) = table.read_partitions(ctx.clone(), None).await?;
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);
 
-        // inject partitions to current ctx
-        ctx.set_partitions(parts.clone())?;
+        let plan = table.read_plan(ctx.clone(), None).await?;
+        let stream = table.read_data_block_stream(ctx.clone(), &plan).await?;
 
-        let stream = table
-            .read_data_block_stream(ctx.clone(), &DataSourcePlan {
-                catalog: "default".to_owned(),
-                source_info: DataSourceInfo::TableSource(Default::default()),
-                output_schema: Default::default(),
-                parts,
-                statistics: Default::default(),
-                description: "".to_string(),
-                tbl_args: None,
-                push_downs: None,
-            })
-            .await?;
         let blocks = stream.try_collect::<Vec<_>>().await?;
         let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
         assert_eq!(rows, num_blocks * rows_per_block);

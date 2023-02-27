@@ -12,6 +12,8 @@ test = false
 
 [dependencies] # In alphabetical order
 common-arrow = { path = "../arrow" }
+common-meta-stoerr = { path = "../../meta/stoerr" }
+common-meta-types = { path = "../../meta/types" }
 
 # Github dependencies
 # TODO: Use the version from crates.io once

@@ -2,69 +2,22 @@
 title: Comparison Operators
 title_includes: =, >=, >, !=, <=, <, <>
 ---
-Comparison operators.
 
-## Syntax
+## Comparison Operators
 
-| Operator | Syntax             |  Description
-| -------- | ------------------ |  ----------
-| `=`        |  `a = b`         |  a is equal to b.
-| `!=`       |  `a != b`        |  a is not equal to b.
-| `<>`       |  `a <> b`        |  a is not equal to b.
-| `>`        |  `a > b`         |  a is greater than b.
-| `>=`       |  `a >= b`        |  a is greater than or equal to b.
-| `<`        |  `a < b`         |  a is less than b.
-| `<=`       |  `a <= b`        |  a is less than or equal to b.
+| Operator  | Description                     | Example       | Result |
+|-----------|---------------------------------|---------------|--------|
+| **=**     | a is equal to b                 | **2 = 2**     | TRUE   |
+| **!=**    | a is not equal to b             | **2 != 3**    | TRUE   |
+| **<\>**   | a is not equal to b             | **2 <\> 2**   | FALSE  |
+| **>**     | a is greater than b             | **2 > 3**     | FALSE  |
+| **>=**    | a is greater than or equal to b | **4 >= NULL** | NULL   |
+| **<**     | a is less than b                | **2 < 3**     | TRUE   |
+| **<=**    | a is less than or equal to b    | **2 <= 3**    | TRUE   |
 
-## Examples
+## IS (NOT) NULL
 
-```sql
-SELECT 1=1;
-+---------+
-| (1 = 1) |
-+---------+
-|       1 |
-+---------+
-
-SELECT 2>=1;
-+----------+
-| (2 >= 1) |
-+----------+
-|        1 |
-+----------+
-
-SELECT 2>1;
-+---------+
-| (2 > 1) |
-+---------+
-|       1 |
-+---------+
-
-SELECT 2 <= 1;
-+----------+
-| (2 <= 1) |
-+----------+
-|        0 |
-+----------+
-
-SELECT 1 < 2;
-+---------+
-| (1 < 2) |
-+---------+
-|       1 |
-+---------+
-
-SELECT '.01' != '0.01';
-+-------------------+
-| ('.01' <> '0.01') |
-+-------------------+
-|                 1 |
-+-------------------+
-
-SELECT '.01' <> '0.01';
-+-------------------+
-| ('.01' <> '0.01') |
-+-------------------+
-|                 1 |
-+-------------------+
-```
+| Operator                   | Description                                 | Example                    | Result |
+|----------------------------|---------------------------------------------|----------------------------|--------|
+| **expression IS NULL**     | TRUE if expression is NULL, FALSE otherwise | **(4>= NULL) IS NULL**     | TRUE   |
+| **expression IS NOT NULL** | FALSE if expression is NULL, TRUE otherwise | **(4>= NULL) IS NOT NULL** | FALSE  |

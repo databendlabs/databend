@@ -257,7 +257,7 @@ SELECT sqrt(-4)
 ----
 NaN
 
-statement error 1065
+statement error 1001
 SELECT sqrt('a')
 
 query F
@@ -306,11 +306,11 @@ statement error 1065
 SELECT pow(2, 'a')
 
 
-statement error 1065
+statement error 1001
 SELECT abs('-233.0')
 
 
-statement error 1065
+statement error 1001
 SELECT abs('blah')
 
 

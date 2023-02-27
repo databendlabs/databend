@@ -15,7 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_config::Config;
+use common_config::InnerConfig;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
 use common_meta_app::schema::CountTablesReply;
@@ -29,8 +29,8 @@ use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
-use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
@@ -91,7 +91,7 @@ impl MutableCatalog {
     ///
     /// MetaEmbedded
     /// ```
-    pub async fn try_create_with_config(conf: Config) -> Result<Self> {
+    pub async fn try_create_with_config(conf: InnerConfig) -> Result<Self> {
         let meta = {
             let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
 
@@ -249,11 +249,9 @@ impl Catalog for MutableCatalog {
         db.create_table(req).await
     }
 
-    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
-        let db = self
-            .get_database(&req.name_ident.tenant, &req.name_ident.db_name)
-            .await?;
-        db.drop_table(req).await
+    async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply> {
+        let res = self.ctx.meta.drop_table_by_id(req).await?;
+        Ok(res)
     }
 
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {

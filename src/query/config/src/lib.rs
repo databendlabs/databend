@@ -19,26 +19,30 @@
 ///
 /// We are providing two config types:
 ///
-/// - [`inner::Config`] which will be exposed as [`crate::Config`] will be used in all business logic.
-/// - [`outer_v0::Config`] is the outer config for [`inner::Config`] which will be exposed to end-users.
-/// - [`global::GlobalConfig`] is a global config singleton of [`crate::Config`].
+/// - [`config::Config`] represents the options from command line , configuration files or environment vars.
+/// - [`inner::InnerConfig`] "internal representation" of application settings, built from Config.
+/// - [`global::GlobalConfig`] A global singleton of [`crate::InnerConfig`].
 ///
-/// It's safe to refactor [`inner::Config`] in anyway, as long as it satisfied the following traits
+/// It's safe to refactor [`inner::InnerConfig`] in anyway, as long as it satisfied the following traits
 ///
-/// - `TryInto<inner::Config> for outer_v0::Config`
-/// - `From<inner::Config> for outer_v0::Config`
+/// - `TryInto<inner::InnerConfig> for config::Config`
+/// - `From<inner::InnerConfig> for config::Config`
+mod config;
 mod global;
 mod inner;
-mod outer_v0;
+mod obsolete;
 mod version;
 
+pub use config::CacheStorageTypeConfig;
+pub use config::Config;
+pub use config::QueryConfig;
+pub use config::StorageConfig;
 pub use global::GlobalConfig;
+pub use inner::CacheConfig;
+pub use inner::CacheStorageTypeConfig as CacheStorageTypeInnerConfig;
 pub use inner::CatalogConfig;
 pub use inner::CatalogHiveConfig;
-pub use inner::Config;
-pub use inner::QueryConfig;
+pub use inner::InnerConfig;
 pub use inner::ThriftProtocol;
-pub use outer_v0::Config as OuterConfig;
-pub use outer_v0::StorageConfig;
 pub use version::DATABEND_COMMIT_VERSION;
 pub use version::QUERY_SEMVER;

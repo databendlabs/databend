@@ -23,11 +23,6 @@ use crate::api::InitNodesChannelPacket;
 use crate::api::QueryFragmentsPlanPacket;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct CancelAction {
-    pub query_id: String,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct InitQueryFragmentsPlan {
     pub executor_packet: QueryFragmentsPlanPacket,
 }
@@ -36,12 +31,9 @@ impl TryInto<InitQueryFragmentsPlan> for Vec<u8> {
     type Error = Status;
 
     fn try_into(self) -> Result<InitQueryFragmentsPlan, Self::Error> {
-        match std::str::from_utf8(&self) {
+        match serde_json::from_slice::<InitQueryFragmentsPlan>(&self) {
             Err(cause) => Err(Status::invalid_argument(cause.to_string())),
-            Ok(utf8_body) => match serde_json::from_str::<InitQueryFragmentsPlan>(utf8_body) {
-                Err(cause) => Err(Status::invalid_argument(cause.to_string())),
-                Ok(action) => Ok(action),
-            },
+            Ok(action) => Ok(action),
         }
     }
 }
@@ -52,7 +44,7 @@ impl TryInto<Vec<u8>> for InitQueryFragmentsPlan {
     fn try_into(self) -> Result<Vec<u8>, Self::Error> {
         serde_json::to_vec(&self).map_err_to_code(
             ErrorCode::Internal,
-            || "Logical error: cannot serialize PrepareExecutor.",
+            || "Logical error: cannot serialize InitQueryFragmentsPlan.",
         )
     }
 }
@@ -66,12 +58,9 @@ impl TryInto<InitNodesChannel> for Vec<u8> {
     type Error = Status;
 
     fn try_into(self) -> Result<InitNodesChannel, Self::Error> {
-        match std::str::from_utf8(&self) {
+        match serde_json::from_slice::<InitNodesChannel>(&self) {
             Err(cause) => Err(Status::invalid_argument(cause.to_string())),
-            Ok(utf8_body) => match serde_json::from_str::<InitNodesChannel>(utf8_body) {
-                Err(cause) => Err(Status::invalid_argument(cause.to_string())),
-                Ok(action) => Ok(action),
-            },
+            Ok(action) => Ok(action),
         }
     }
 }
@@ -103,9 +92,11 @@ impl TryInto<FlightAction> for Action {
                 Ok(FlightAction::InitQueryFragmentsPlan(self.body.try_into()?))
             }
             "InitNodesChannel" => Ok(FlightAction::InitNodesChannel(self.body.try_into()?)),
-            "ExecutePartialQuery" => match String::from_utf8(self.body.to_owned()) {
-                Ok(query_id) => Ok(FlightAction::ExecutePartialQuery(query_id)),
-                Err(cause) => Err(Status::invalid_argument(cause.to_string())),
+            "ExecutePartialQuery" => unsafe {
+                let (buf, length, capacity) = self.body.into_raw_parts();
+                Ok(FlightAction::ExecutePartialQuery(String::from_raw_parts(
+                    buf, length, capacity,
+                )))
             },
             un_implemented => Err(Status::unimplemented(format!(
                 "UnImplement action {}",

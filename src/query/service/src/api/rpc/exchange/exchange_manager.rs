@@ -27,6 +27,8 @@ use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
+use common_profile::ProfSpanSetRef;
+use common_sql::executor::PhysicalPlan;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
 
@@ -38,12 +40,13 @@ use crate::api::rpc::exchange::exchange_transform::ExchangeTransform;
 use crate::api::rpc::exchange::statistics_receiver::StatisticsReceiver;
 use crate::api::rpc::exchange::statistics_sender::StatisticsSender;
 use crate::api::rpc::flight_client::FlightExchange;
+use crate::api::rpc::flight_client::FlightExchangeRef;
 use crate::api::rpc::flight_scatter_broadcast::BroadcastFlightScatter;
 use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
 use crate::api::rpc::Packet;
 use crate::api::DataExchange;
+use crate::api::ExchangeSorting;
 use crate::api::FlightClient;
-use crate::api::FragmentPayload;
 use crate::api::FragmentPlanPacket;
 use crate::api::InitNodesChannelPacket;
 use crate::api::QueryFragmentsPlanPacket;
@@ -308,7 +311,7 @@ impl DataExchangeManager {
         }
     }
 
-    pub fn get_flight_exchanges(&self, params: &ExchangeParams) -> Result<Vec<FlightExchange>> {
+    pub fn get_flight_exchanges(&self, params: &ExchangeParams) -> Result<Vec<FlightExchangeRef>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &*queries_coordinator_guard.deref().get() };
 
@@ -395,13 +398,13 @@ impl QueryCoordinator {
         Ok(())
     }
 
-    pub fn get_flight_exchanges(&self, params: &ExchangeParams) -> Result<Vec<FlightExchange>> {
+    pub fn get_flight_exchanges(&self, params: &ExchangeParams) -> Result<Vec<FlightExchangeRef>> {
         match params {
             ExchangeParams::MergeExchange(params) => {
                 let mut exchanges = vec![];
                 for ((_target, fragment), exchange) in &self.fragment_exchanges {
                     if *fragment == params.fragment_id {
-                        exchanges.push(exchange.clone());
+                        exchanges.push(exchange.get_ref());
                     }
                 }
 
@@ -412,7 +415,7 @@ impl QueryCoordinator {
 
                 for destination in &params.destination_ids {
                     exchanges.push(match destination == &params.executor_id {
-                        true => Ok(FlightExchange::Dummy),
+                        true => Ok(FlightExchange::Dummy.get_ref()),
                         false => match self
                             .fragment_exchanges
                             .get(&(destination.clone(), params.fragment_id))
@@ -421,7 +424,7 @@ impl QueryCoordinator {
                                 "Unknown fragment exchange channel, {}, {}",
                                 destination, params.fragment_id
                             ))),
-                            Some(exchange_channel) => Ok(exchange_channel.clone()),
+                            Some(exchange_channel) => Ok(exchange_channel.get_ref()),
                         },
                     }?);
                 }
@@ -482,7 +485,13 @@ impl QueryCoordinator {
                 return Ok(fragment_coordinator.pipeline_build_res.unwrap());
             }
 
-            let exchange_params = fragment_coordinator.create_exchange_params(info)?;
+            let exchange_params = fragment_coordinator.create_exchange_params(
+                info,
+                fragment_coordinator
+                    .pipeline_build_res
+                    .as_ref()
+                    .and_then(|x| x.exchange_sorting.clone()),
+            )?;
             let mut build_res = fragment_coordinator.pipeline_build_res.unwrap();
 
             let data_exchange = fragment_coordinator.data_exchange.as_ref().unwrap();
@@ -527,7 +536,15 @@ impl QueryCoordinator {
 
         let mut params = Vec::with_capacity(self.fragments_coordinator.len());
         for coordinator in self.fragments_coordinator.values() {
-            params.push(coordinator.create_exchange_params(info)?);
+            params.push(
+                coordinator.create_exchange_params(
+                    info,
+                    coordinator
+                        .pipeline_build_res
+                        .as_ref()
+                        .and_then(|x| x.exchange_sorting.clone()),
+                )?,
+            );
         }
 
         for ((_, coordinator), params) in self.fragments_coordinator.iter_mut().zip(params) {
@@ -587,9 +604,9 @@ impl QueryCoordinator {
 }
 
 struct FragmentCoordinator {
-    payload: FragmentPayload,
     initialized: bool,
     fragment_id: usize,
+    physical_plan: PhysicalPlan,
     data_exchange: Option<DataExchange>,
     pipeline_build_res: Option<PipelineBuildResult>,
 }
@@ -598,19 +615,24 @@ impl FragmentCoordinator {
     pub fn create(packet: &FragmentPlanPacket) -> Box<FragmentCoordinator> {
         Box::new(FragmentCoordinator {
             initialized: false,
-            payload: packet.payload.clone(),
+            physical_plan: packet.physical_plan.clone(),
             fragment_id: packet.fragment_id,
             data_exchange: packet.data_exchange.clone(),
             pipeline_build_res: None,
         })
     }
 
-    pub fn create_exchange_params(&self, info: &QueryInfo) -> Result<ExchangeParams> {
+    pub fn create_exchange_params(
+        &self,
+        info: &QueryInfo,
+        exchange_sorting: Option<Arc<dyn ExchangeSorting>>,
+    ) -> Result<ExchangeParams> {
         match &self.data_exchange {
             None => Err(ErrorCode::Internal("Cannot find data exchange.")),
             Some(DataExchange::Merge(exchange)) => {
                 Ok(ExchangeParams::MergeExchange(MergeExchangeParams {
-                    schema: self.payload.schema()?,
+                    exchange_sorting,
+                    schema: self.physical_plan.output_schema()?,
                     fragment_id: self.fragment_id,
                     query_id: info.query_id.to_string(),
                     destination_id: exchange.destination_id.clone(),
@@ -618,7 +640,8 @@ impl FragmentCoordinator {
             }
             Some(DataExchange::Broadcast(exchange)) => {
                 Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
-                    schema: self.payload.schema()?,
+                    exchange_sorting,
+                    schema: self.physical_plan.output_schema()?,
                     fragment_id: self.fragment_id,
                     query_id: info.query_id.to_string(),
                     executor_id: info.current_executor.to_string(),
@@ -630,7 +653,8 @@ impl FragmentCoordinator {
             }
             Some(DataExchange::ShuffleDataExchange(exchange)) => {
                 Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
-                    schema: self.payload.schema()?,
+                    exchange_sorting,
+                    schema: self.physical_plan.output_schema()?,
                     fragment_id: self.fragment_id,
                     query_id: info.query_id.to_string(),
                     executor_id: info.current_executor.to_string(),
@@ -649,13 +673,10 @@ impl FragmentCoordinator {
         if !self.initialized {
             self.initialized = true;
 
-            match &self.payload {
-                FragmentPayload::Plan(plan) => {
-                    let pipeline_ctx = QueryContext::create_from(ctx);
-                    let pipeline_builder = PipelineBuilder::create(pipeline_ctx);
-                    self.pipeline_build_res = Some(pipeline_builder.finalize(plan)?);
-                }
-            };
+            let pipeline_ctx = QueryContext::create_from(ctx);
+            let pipeline_builder =
+                PipelineBuilder::create(pipeline_ctx, false, ProfSpanSetRef::default());
+            self.pipeline_build_res = Some(pipeline_builder.finalize(&self.physical_plan)?);
         }
 
         Ok(())

@@ -22,6 +22,7 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_sinks::SyncSenderSink;
 use common_pipeline_sources::SyncReceiverSource;
 use databend_query::pipelines::executor::RunningGraph;
@@ -107,7 +108,7 @@ async fn test_simple_pipeline_init_queue() -> Result<()> {
     let (_guard, ctx) = create_query_context().await?;
     unsafe {
         assert_eq!(
-            format!("{:?}", create_simple_pipeline(ctx)?.init_schedule_queue()?),
+            format!("{:?}", create_simple_pipeline(ctx)?.init_schedule_queue(0)?),
             "ScheduleQueue { \
                 sync_queue: [\
                     QueueItem { id: 2, name: \"SyncSenderSink\" }\
@@ -126,7 +127,7 @@ async fn test_parallel_simple_pipeline_init_queue() -> Result<()> {
         assert_eq!(
             format!(
                 "{:?}",
-                create_parallel_simple_pipeline(ctx)?.init_schedule_queue()?
+                create_parallel_simple_pipeline(ctx)?.init_schedule_queue(0)?
             ),
             "ScheduleQueue { \
                 sync_queue: [\
@@ -145,7 +146,7 @@ async fn test_resize_pipeline_init_queue() -> Result<()> {
     let (_guard, ctx) = create_query_context().await?;
     unsafe {
         assert_eq!(
-            format!("{:?}", create_resize_pipeline(ctx)?.init_schedule_queue()?),
+            format!("{:?}", create_resize_pipeline(ctx)?.init_schedule_queue(0)?),
             "ScheduleQueue { \
                 sync_queue: [\
                     QueueItem { id: 7, name: \"SyncSenderSink\" }, \
@@ -244,7 +245,7 @@ fn create_sink_pipe(size: usize) -> Result<(Vec<Receiver<Result<DataBlock>>>, Pi
         let (tx, rx) = channel(1);
         rxs.push(rx);
         items.push(PipeItem::create(
-            SyncSenderSink::create(tx, input.clone()),
+            ProcessorPtr::create(SyncSenderSink::create(tx, input.clone())),
             vec![input],
             vec![],
         ));

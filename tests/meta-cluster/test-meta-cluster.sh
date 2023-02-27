@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 set -o errexit
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
@@ -90,6 +90,6 @@ run_test() {
 
 chmod +x ./target/${BUILD_PROFILE}/*
 
-echo " === current metasrv ver: $(./bins/current/databend-meta --single --cmd ver | tr '\n' ' ')"
+echo " === current metasrv ver: $(./target/${BUILD_PROFILE}/databend-meta --single --cmd ver | tr '\n' ' ')"
 
 run_test

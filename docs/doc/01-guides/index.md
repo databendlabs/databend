@@ -1,5 +1,5 @@
 ---
-title: Getting Started Tutorials
+title: Get Started 
 ---
 
 These tutorials are intended to help you get started with Databend:
@@ -19,10 +19,10 @@ These tutorials are intended to help you get started with Databend:
 * [How to Connect Databend with ClickHouse Client](../11-integrations/00-api/02-clickhouse-handler.md)
 * [How to Connect Databend with REST API](../11-integrations/00-api/00-rest.md)
 * [How to Connect Databend with DBeaver SQL IDE](../11-integrations/20-gui-tool/01-dbeaver.md)
-* [How to Execute Queries in Python](../20-develop/01-python.md)
+* [How to Execute Queries in Python](../03-develop/01-python.md)
 * [How to Query Databend in Jupyter Notebooks](../11-integrations/20-gui-tool/00-jupyter.md)
-* [How to Execute Queries in Golang](../20-develop/00-golang.md)
-* [How to Execute Queries in Node.js](../20-develop/02-nodejs.md)
+* [How to Execute Queries in Golang](../03-develop/00-golang.md)
+* [How to Execute Queries in Node.js](../03-develop/02-nodejs.md)
 
 ## Loading Data into Databend
 
@@ -57,6 +57,7 @@ These tutorials are intended to help you get started with Databend:
 * [How to Drop a Table](../14-sql-commands/00-ddl/20-table/20-ddl-drop-table.md)
 * [How to Rename a Table](../14-sql-commands/00-ddl/20-table/30-ddl-rename-table.md)
 * [How to Truncate a Table](../14-sql-commands/00-ddl/20-table/40-ddl-truncate-table.md)
+* [How to Add/Drop Table Column](../14-sql-commands/00-ddl/20-table/90-alter-table-column.md)
 
 ## Managing Views
 

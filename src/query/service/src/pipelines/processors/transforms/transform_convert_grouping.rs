@@ -13,17 +13,18 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
+use std::collections::btree_map::Entry;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::with_hash_method;
 use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
-use common_expression::HashMethod;
 use common_expression::HashMethodKind;
+use common_hashtable::hash2bucket;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
@@ -41,8 +42,8 @@ use super::aggregator::AggregateHashStateInfo;
 use super::group_by::BUCKETS_LG2;
 use crate::pipelines::processors::transforms::aggregator::AggregateInfo;
 use crate::pipelines::processors::transforms::aggregator::BucketAggregator;
+use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
-use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::AggregatorParams;
 
 // Overflow to object storage data block
@@ -85,16 +86,12 @@ impl BlockMetaInfo for ConvertGroupingMetaInfo {
         self
     }
 
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
+    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
+        unimplemented!("Unimplemented equals for ConvertGroupingMetaInfo")
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         unimplemented!("Unimplemented clone for ConvertGroupingMetaInfo")
-    }
-
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals for ConvertGroupingMetaInfo")
     }
 }
 
@@ -105,7 +102,7 @@ struct InputPortState {
 
 /// A helper class that  Map
 /// AggregateInfo/AggregateHashStateInfo  --->  ConvertGroupingMetaInfo { meta: blocks with Option<AggregateHashStateInfo> }
-pub struct TransformConvertGrouping<Method: HashMethod + PolymorphicKeysHelper<Method>> {
+pub struct TransformConvertGrouping<Method: HashMethodBounds> {
     output: Arc<OutputPort>,
     inputs: Vec<InputPortState>,
 
@@ -114,11 +111,11 @@ pub struct TransformConvertGrouping<Method: HashMethod + PolymorphicKeysHelper<M
     pushing_bucket: isize,
     initialized_all_inputs: bool,
     params: Arc<AggregatorParams>,
-    buckets_blocks: HashMap<isize, Vec<DataBlock>>,
+    buckets_blocks: BTreeMap<isize, Vec<DataBlock>>,
     unsplitted_blocks: Vec<DataBlock>,
 }
 
-impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGrouping<Method> {
+impl<Method: HashMethodBounds> TransformConvertGrouping<Method> {
     pub fn create(
         method: Method,
         params: Arc<AggregatorParams>,
@@ -140,7 +137,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
             working_bucket: 0,
             pushing_bucket: 0,
             output: OutputPort::create(),
-            buckets_blocks: HashMap::new(),
+            buckets_blocks: BTreeMap::new(),
             unsplitted_blocks: vec![],
             initialized_all_inputs: false,
         })
@@ -173,15 +170,19 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
                 continue;
             }
 
-            self.inputs[index].port.set_need_data();
-
             if !self.inputs[index].port.has_data() {
+                self.inputs[index].port.set_need_data();
                 self.initialized_all_inputs = false;
                 continue;
             }
 
-            self.inputs[index].bucket =
-                self.add_bucket(self.inputs[index].port.pull_data().unwrap()?);
+            let data_block = self.inputs[index].port.pull_data().unwrap()?;
+            self.inputs[index].bucket = self.add_bucket(data_block);
+
+            if self.inputs[index].bucket <= SINGLE_LEVEL_BUCKET_NUM {
+                self.inputs[index].port.set_need_data();
+                self.initialized_all_inputs = false;
+            }
         }
 
         Ok(self.initialized_all_inputs)
@@ -190,7 +191,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
     fn add_bucket(&mut self, data_block: DataBlock) -> isize {
         if let Some(info) = data_block
             .get_meta()
-            .and_then(|meta| meta.as_any().downcast_ref::<AggregateInfo>())
+            .and_then(AggregateInfo::downcast_ref_from)
         {
             if info.overflow.is_none() && info.bucket > SINGLE_LEVEL_BUCKET_NUM {
                 let bucket = info.bucket;
@@ -210,7 +211,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
         // check if it's local state
         if let Some(info) = data_block
             .get_meta()
-            .and_then(|meta| meta.as_any().downcast_ref::<AggregateHashStateInfo>())
+            .and_then(AggregateHashStateInfo::downcast_ref_from)
         {
             let bucket = info.bucket as isize;
             match self.buckets_blocks.entry(bucket) {
@@ -274,7 +275,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
 
         for key_item in keys_iter.iter() {
             let hash = self.method.get_hash(key_item);
-            indices.push((hash as usize >> (64u32 - BUCKETS_LG2)) as u16);
+            indices.push(hash2bucket::<BUCKETS_LG2, true>(hash as usize) as u16);
         }
 
         DataBlock::scatter(&data_block, &indices, 1 << BUCKETS_LG2)
@@ -282,9 +283,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
 }
 
 #[async_trait::async_trait]
-impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Processor
-    for TransformConvertGrouping<Method>
-{
+impl<Method: HashMethodBounds> Processor for TransformConvertGrouping<Method> {
     fn name(&self) -> String {
         String::from("TransformConvertGrouping")
     }
@@ -334,19 +333,24 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
                 }
 
                 all_inputs_is_finished = false;
-                if self.inputs[index].bucket >= self.working_bucket {
+                if self.inputs[index].bucket > self.working_bucket {
                     continue;
                 }
 
-                self.inputs[index].port.set_need_data();
                 if !self.inputs[index].port.has_data() {
                     all_port_prepared_data = false;
+                    self.inputs[index].port.set_need_data();
                     continue;
                 }
 
-                self.inputs[index].bucket =
-                    self.add_bucket(self.inputs[index].port.pull_data().unwrap()?);
+                let data_block = self.inputs[index].port.pull_data().unwrap()?;
+                self.inputs[index].bucket = self.add_bucket(data_block);
                 debug_assert!(self.unsplitted_blocks.is_empty());
+
+                if self.inputs[index].bucket <= self.working_bucket {
+                    all_port_prepared_data = false;
+                    self.inputs[index].port.set_need_data();
+                }
             }
 
             if all_inputs_is_finished {
@@ -364,6 +368,12 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
             return Ok(Event::NeedConsume);
         }
 
+        if let Some((bucket, bucket_blocks)) = self.buckets_blocks.pop_first() {
+            let meta = ConvertGroupingMetaInfo::create(bucket, bucket_blocks);
+            self.output.push_data(Ok(DataBlock::empty_with_meta(meta)));
+            return Ok(Event::NeedConsume);
+        }
+
         self.output.finish();
         Ok(Event::Finished)
     }
@@ -372,7 +382,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
         if let Some(data_block) = self.unsplitted_blocks.pop() {
             let data_block_meta: Option<&AggregateInfo> = data_block
                 .get_meta()
-                .and_then(|meta| meta.as_any().downcast_ref::<AggregateInfo>());
+                .and_then(AggregateInfo::downcast_ref_from);
 
             let data_blocks = match data_block_meta {
                 None => self.convert_to_two_level(data_block)?,
@@ -400,7 +410,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
     }
 }
 
-fn build_convert_grouping<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>(
+fn build_convert_grouping<Method: HashMethodBounds>(
     method: Method,
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
@@ -438,7 +448,7 @@ pub fn efficiently_memory_final_aggregator(
     })
 }
 
-struct MergeBucketTransform<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> {
+struct MergeBucketTransform<Method: HashMethodBounds> {
     method: Method,
     params: Arc<AggregatorParams>,
 
@@ -449,9 +459,7 @@ struct MergeBucketTransform<Method: HashMethod + PolymorphicKeysHelper<Method> +
     output_blocks: Vec<DataBlock>,
 }
 
-impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>
-    MergeBucketTransform<Method>
-{
+impl<Method: HashMethodBounds> MergeBucketTransform<Method> {
     pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
@@ -470,9 +478,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>
 }
 
 #[async_trait::async_trait]
-impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Processor
-    for MergeBucketTransform<Method>
-{
+impl<Method: HashMethodBounds> Processor for MergeBucketTransform<Method> {
     fn name(&self) -> String {
         String::from("MergeBucketTransform")
     }
@@ -520,9 +526,9 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
     fn process(&mut self) -> Result<()> {
         if let Some(mut data_block) = self.input_block.take() {
             let mut blocks = vec![];
-            if let Some(mut meta) = data_block.take_meta() {
-                if let Some(meta) = meta.as_mut_any().downcast_mut::<ConvertGroupingMetaInfo>() {
-                    std::mem::swap(&mut blocks, &mut meta.blocks);
+            if let Some(block_meta) = data_block.take_meta() {
+                if let Some(meta) = ConvertGroupingMetaInfo::downcast_from(block_meta) {
+                    blocks = meta.blocks;
                 }
             }
 

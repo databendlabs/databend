@@ -1,10 +1,10 @@
 ---
-title: How to Write Scalar Functions
+title: How to Write a Scalar Function
 ---
 
-## What's scalar functions
+## What's Scalar Function
 
-Scalar functions (sometimes referred to as User-Defined Functions / UDFs) return a single value as a return value for each row, not as a result set, and can be used in most places within a query or SET statement, except for the FROM clause.
+A scalar function (also known as User-Defined Functions or UDFs) returns a single value for each row instead of a result set. Scalar functions can be used in most places within a query or SET statement (except the FROM clause).
 
 ```text title="One to One Mapping execution"
 
@@ -23,18 +23,15 @@ Scalar functions (sometimes referred to as User-Defined Functions / UDFs) return
 └─────┘                    └──────┘
 ```
 
+### What You Need to Know before Writing
 
-### Knowledge before writing the eval function
+#### Logical Datatypes and Physical Datatypes
 
-#### Logical datatypes and physical datatypes.
+We use logical datatypes in Databend and physical datatypes in the execution/compute engine.
 
-Logical datatypes are the datatypes that we use in Databend, and physical datatypes are the datatypes that we use in the execution/compute engine.
-Such as `Date32`, it's a logical data type, but its physical is `Int32`, so its column is represented by `Int32Column`.
+Take `Date` as an example, `Date` is a logical datatype while its physical datatype is `Int32`, so its column is represented by `Buffer<i32>`.
 
-We can get logical datatype by `data_type` function of `DataField` , and the physical datatype by `data_type` function in `ColumnRef`.
-`ColumnsWithField` has `data_type` function which returns the logical datatype.
-
-#### Arrow's memory layout
+#### Arrow's Memory Layout
 
 Databend's memory layout is based on the Arrow system, you can find Arrow's memory layout [here] (https://arrow.apache.org/docs/format/Columnar.html#format-columnar).
 
@@ -42,7 +39,6 @@ For example a primitive array of int32s:
 
 [1, null, 2, 4, 8]
 Would look like this:
-
 
 ```text
 * Length: 5, Null count: 1
@@ -63,163 +59,188 @@ Would look like this:
 In most cases, we can ignore null for simd operation, and add the null mask to the result after the operation.
 This is very common optimization and widely used in arrow's compute system.
 
-### Special column
+### Special Column
 
--  Constant column
+- Constant column
 
-    Sometimes column is constant in the block, such as: `SELECT 3 from table`, the column 3 is always 3, so we can use a constant column to represent it. This is useful to save the memory space during computation.
+  Sometimes column is constant in the block, such as: `SELECT 3 from table`, the column 3 is always 3, so we can use a constant column to represent it. This helps save memory space during computation.
 
-    So databend's DataColumn is represented by:
-
-    ```rust
-    #[derive(Clone)]
-    pub struct ConstColumn {
-        length: usize,
-        column: ColumnRef,
-    }
-    ```
 - Nullable column
 
-    By default, columns are not nullable. If we want a nullable column, we can use this to represent it.
+  By default, columns are not nullable. To include null values in a column, you can use a nullable column.
 
-    ```rust
-    #[derive(Clone)]
-    pub struct NullableColumn {
-        validity: Bitmap,
-        column: ColumnRef,
-    }
-    ```
+## Function Registration
 
-### Writing function guidelines
+The `FunctionRegistry` is used to register functions.
 
-## ScalarFunction trait introduction
+```rust
+#[derive(Default)]
+pub struct FunctionRegistry {
+    pub funcs: HashMap<&'static str, Vec<Arc<Function>>>,
+    #[allow(clippy::type_complexity)]
+    pub factories: HashMap<
+        &'static str,
+        Vec<Box<dyn Fn(&[usize], &[DataType]) -> Option<Arc<Function>> + 'static>>,
+    >,
+    pub aliases: HashMap<&'static str, &'static str>,
+}
+```
 
-All scalar functions implement `Function` trait, and we register them into a global static `FunctionFactory`, the factory is just an index map and the key is the name of the scalar function.
+It contains three HashMaps: `funcs`, `factories`, and `aliases`.
 
-:::tip
-    Function name in Databend is case-insensitive.
-:::
+Both `funcs` and `factories` store registered functions. `funcs` takes a fixed number of arguments (currently from 0 to 5), `register_0_arg`, `register_1_arg`, and so on. `factories` takes variable-length parameters (such as concat) and calls the function`register_function_factory`.
 
-``` rust
+`aliases` uses key-value pairs to store aliases for functions. A function can have more than one alias (for example, `minus` has `subtract` and 'neg'). The key is the alias of a function, and the value is the name of the current function, and the `register_aliases` function will be called.
 
-pub trait Function: fmt::Display + Sync + Send + DynClone {
+In addition, there are different levels of register api depending on the function required.
+
+|                                     | Auto Vectorization | Access Output Column Builder | Auto Null Passthrough | Auto Combine Null | Auto Downcast | Throw Runtime Error | Varidic | Tuple |
+| ----------------------------------- | -- | -- | -- | -- | -- | -- | -- | -- |
+| register_n_arg                      | ✔️ | ❌ | ✔️ | ❌ | ✔️ | ❌ | ❌ | ❌ |
+| register_passthrough_nullable_n_arg | ❌ | ✔️ | ✔️ | ❌ | ✔️ | ✔️ | ❌ | ❌ |
+| register_combine_nullable_n_arg     | ❌ | ✔️ | ✔️ | ✔️ | ✔️ | ✔️ | ❌ | ❌ |
+| register_n_arg_core                 | ❌ | ✔️ | ❌ | ❌ | ✔️ | ✔️ | ❌ | ❌ |
+| register_function_factory           | ❌ | ✔️ | ❌ | ❌ | ❌ | ✔️ | ✔️ | ✔️ |
+
+## Function Composition
+
+Since the values of `funcs` are the body of the function, let's see how a `Function` is constructed in Databend.
+
+```rust
+pub struct Function {
+    pub signature: FunctionSignature,
+    #[allow(clippy::type_complexity)]
+    pub calc_domain: Box<dyn Fn(&[Domain]) -> Option<Domain>>,
+    #[allow(clippy::type_complexity)]
+    pub eval: Box<dyn Fn(&[ValueRef<AnyType>], FunctionContext) -> Result<Value<AnyType>, String>>,
+}
+```
+
+Functions are represented by the `Function` struct, which includes a function `signature`, a calculation domain (`cal_domain`), and an evaluation function (`eval`).
+
+The signature includes the function name, the parameters type, the return type and the function properties (which are not currently available and are reserved for use with functions). Note in particular that the function name needs to be lowercase when registering. Some tokens are transformed via `src/query/ast/src/parser/token.rs`.
+
+```rust
+#[allow(non_camel_case_types)]
+#[derive(Logos, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TokenKind {
+    ...
+    #[token("+")]
+    Plus,
     ...
 }
 ```
 
- *Let's take function `sqrt` as an example*
+As an example, let's consider the addition function used in the query `select 1+2`. The `+` token is converted to `Plus`, and the function name needs to be lowercase. Therefore, the function name used for registration is `plus`.
 
-- Declare the function named `SqrtFunction`
-``` rust
-#[derive(Clone)]
-pub struct SqrtFunction {
-    display_name: String,
+```rust
+with_number_mapped_type!(|NUM_TYPE| match left {
+    NumberDataType::NUM_TYPE => {
+        registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, _, _>(
+            "plus",
+            FunctionProperty::default(),
+            |lhs| Some(lhs.clone()),
+            |a, _| a,
+        );
+    }
+});
+```
+
+`cal_domain` is used to calculate the input value set for the output value. This is described by a mathematical formula such as `y = f(x)` where the domain is the set of values `x` that can be used as arguments to `f` to generate values `y`. This allows us to easily filter out values that are not in the domain when indexing data, greatly improving response efficiency.
+
+`eval` can be understood as the concrete implementation of a function, which takes characters or numbers as input, parses them into expressions, and converts them into another set of values.
+
+## Example
+
+There are several categories of functions, including arithmetic, array, boolean, control, comparison, datetime, math, and string.
+
+### `length` function
+
+The length function takes a `String` parameter and returns a `Number`. It is named as `length`, with **no domain restrictions** since each string should have a length. The last argument is a closure function that serves as the implementation of `length`.
+
+```rust
+registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
+    "length",
+    FunctionProperty::default(),
+    |_| None,
+    |val, _| val.len() as u64,
+);
+```
+
+In the implementation of `register_1_arg`, we see that the called function is `register_passthrough_nullable_1_arg`, whose name contains **nullable**. `eval` is called by `vectorize_1_arg`.
+
+> It's worth noting that the [register.rs in src/query/expression/src](https://github.com/datafuselabs/databend/blob/2aec38605eebb7f0e1717f7f54ec52ae0f2e530b/src/query/codegen/src/writes/register.rs) should not be manually modified as it is generated by [src/query/codegen/src/writes/register.rs](https://github.com/datafuselabs/databend/blob/2aec38605eebb7f0e1717f7f54ec52ae0f2e530b/src/query/codegen/src/writes/register.rs).
+
+```rust
+pub fn register_1_arg<I1: ArgType, O: ArgType, F, G>(
+    &mut self,
+    name: &'static str,
+    property: FunctionProperty,
+    calc_domain: F,
+    func: G,
+) where
+    F: Fn(&I1::Domain) -> Option<O::Domain> + 'static + Clone + Copy,
+    G: Fn(I1::ScalarRef<'_>, FunctionContext) -> O::Scalar + 'static + Clone + Copy,
+{
+    self.register_passthrough_nullable_1_arg::<I1, O, _, _>(
+        name,
+        property,
+        calc_domain,
+        vectorize_1_arg(func),
+    )
 }
 ```
 
-- Implement `SqrtFunction` to have a constructor and description.
-
-```rust
-impl SqrtFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
-        assert_numeric(args[0])?;
-        Ok(Box::new(SqrtFunction {
-            display_name: display_name.to_string(),
-        }))
-    }
-
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic().num_arguments(1))
-    }
-}
-```
-
-The `try_create` is useful to create this function, at last we can register it into the factory.
-
-The `desc` is used to describe the function. Inside it, we can set the features, such as the number of arguments, the deterministic or not, etc.
-
-- Implement the simple function for `sqrt`
-
-```rust
-fn sqrt<S>(value: S, _ctx: &mut EvalContext) -> f64
-where S: AsPrimitive<f64> {
-    value.as_().sqrt()
-}
-```
-
-It's really simple, `S: AsPrimitive<f64>` means we can accept a primitive value as the argument.
-
-- Implement Function trait
-
-```rust
-impl Function for SqrtFunction {
-    fn name(&self) -> &str {
-        &self.display_name
-    }
-
-    fn return_type(&self) -> DataTypeImpl {
-        Float64Type::new_impl()
-    }
-
-    fn eval(&self, _func_ctx: FunctionContext, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
-        let mut ctx = EvalContext::default();
-        with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
-             let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), sqrt::<$S>, &mut ctx)?;
-             Ok(col.arc())
-        },{
-            unreachable!()
-        })
-    }
-}
-```
-
-By defaults, we enable `passthrough_constant`, that means: `sqrt(constant_column)`  will be converted into `Consntat(sqrt(column), rows)` in `FunctionAdaptor`.
-
-And we have enabled `passthrough_nullable`, that means: `sqrt(nullable_column)`  will be converted into `Nullable(sqrt(no_nullable_column), null_bitmaps)` in `FunctionAdaptor`.
-
-So inside the `eval` function, we really don't need to care about constant or nullable cases. It's pretty simple and efficient.
-
-
-The macro `with_match_primitive_type_id` will match the primitive type id, and cast the column into corresponding type, so we allowed `sqrt(i8)`, `sqrt(i16)` ... types.
-
-The `scalar_unary_op` is a helper function to implement the scalar function for unary operator.
-This is very commonly used and there is `scalar_binary_op` too. See more in [binary](https://github.com/datafuselabs/databend/blob/e7edeea2e3ae5fb1f8408903df10b1b641b57652/common/functions/src/scalars/expressions/binary.rs), [unary](https://github.com/datafuselabs/databend/blob/e7edeea2e3ae5fb1f8408903df10b1b641b57652/common/functions/src/scalars/expressions/unary.rs)
-
-
-## Register the function into the factory
-
-```rust
-factory.register("sqrt", SqrtFunction::desc());
-```
-
-
-## Testing
-To be a good engineer, don't forget to test your codes, please add unit tests and stateless tests after you finish the new scalar functions.
-
-- [Unit tests](https://github.com/datafuselabs/databend/blob/034e1cd95c1376341b9421c08f8eb38b40fc5dda/common/functions/tests/it/scalars/maths/sqrt.rs)
-
-- Stateless tests:
+In practical scenarios, `eval` accepts not only strings or numbers, but also null or other various types. `null` is undoubtedly the most special one. The parameter we receive may also be a column or a value. For example, in the following SQL queries, length is called with a null value or a column:
 
 ```sql
-
-SELECT sqrt(-3), sqrt(3), sqrt(0), sqrt(3.0), sqrt( to_uint64(3) ), sqrt(null) ;
-+----------+--------------------+---------+--------------------+--------------------+------------+
-| sqrt(-3) | sqrt(3)            | sqrt(0) | sqrt(3)            | sqrt(to_uint64(3)) | sqrt(NULL) |
-+----------+--------------------+---------+--------------------+--------------------+------------+
-|      NaN | 1.7320508075688772 |       0 | 1.7320508075688772 | 1.7320508075688772 |       NULL |
-+----------+--------------------+---------+--------------------+--------------------+------------+
-
-SELECT sqrt('-3');
-ERROR 1105 (HY000): Code: 1007, displayText = Expected a numeric type, but got String (while in SELECT before projection).
+select length(null);
++--------------+
+| length(null) |
++--------------+
+|         NULL |
++--------------+
+select length(id) from t;
++------------+
+| length(id) |
++------------+
+|          2 |
+|          3 |
++------------+
 ```
 
-All is done!
+Therefore, if we don't need to handle `null` values in the function, we can simply use `register_x_arg`. Otherwise, we can refer to the implementation of [try_to_timestamp](https://github.com/datafuselabs/databend/blob/d5e06af03ba0f99afdd6bdc974bf2f5c1c022db8/src/query/functions/src/scalars/datetime.rs).
 
+For functions that require specialization in vectorize, `register_passthrough_nullable_x_arg` should be used to perform specific vectorization optimization.
 
-## Refer to other examples
-As you see, adding a new scalar function in Databend is not as hard as you think.
-Before you start to add one, please refer to other scalar function examples, such as `sign`, `expr`, `tan`, `atan`
+For example, the implementation of the `regexp` function takes two `String` parameters and returns a `Bool`. In order to further optimize and reduce the repeated parsing of regular expressions, a `HashMap` structure is introduced to vectorized execution. Therefore, `vectorize_regexp` is separately implemented to handle this optimization.
 
-## Summary
-We welcome all community users to contribute more powerful functions to Databend. If you find any problems, feel free to [open an issue](https://github.com/datafuselabs/databend/issues) in GitHub, we will use our best efforts to help you.
+```rust
+registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
+    "regexp",
+    FunctionProperty::default(),
+    |_, _| None,
+    vectorize_regexp(|str, pat, map, _| {
+        let pattern = if let Some(pattern) = map.get(pat) {
+            pattern
+        } else {
+            let re = regexp::build_regexp_from_pattern("regexp", pat, None)?;
+            map.insert(pat.to_vec(), re);
+            map.get(pat).unwrap()
+        };
+        Ok(pattern.is_match(str))
+    }),
+);
+```
+
+## Testing
+
+As a good developer, you always test your code, don't you? Please add unit tests and logic tests after you complete the new scalar functions.
+
+### Unit Test
+
+The unit tests for scalar functions are located in [scalars](https://github.com/datafuselabs/databend/tree/d5e06af03ba0f99afdd6bdc974bf2f5c1c022db8/src/query/functions/tests/it/scalars).
+
+### Logic Test
+
+The logic tests for functions are located in [02_function](https://github.com/datafuselabs/databend/tree/d5e06af03ba0f99afdd6bdc974bf2f5c1c022db8/tests/sqllogictests/suites/query/02_function).

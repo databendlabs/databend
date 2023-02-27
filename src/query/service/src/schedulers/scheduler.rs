@@ -14,7 +14,9 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_profile::ProfSpanSetRef;
 
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
@@ -33,10 +35,16 @@ pub async fn build_query_pipeline(
     result_columns: &[ColumnBinding],
     plan: &PhysicalPlan,
     ignore_result: bool,
+    enable_profiling: bool,
 ) -> Result<PipelineBuildResult> {
     let mut build_res = if !plan.is_distributed_plan() {
-        build_local_pipeline(ctx, plan).await
+        build_local_pipeline(ctx, plan, enable_profiling).await
     } else {
+        if enable_profiling {
+            return Err(ErrorCode::Unimplemented(
+                "Query profiling is not supported in distributed mode",
+            ));
+        }
         build_distributed_pipeline(ctx, plan).await
     }?;
 
@@ -55,8 +63,10 @@ pub async fn build_query_pipeline(
 pub async fn build_local_pipeline(
     ctx: &Arc<QueryContext>,
     plan: &PhysicalPlan,
+    enable_profiling: bool,
 ) -> Result<PipelineBuildResult> {
-    let pipeline = PipelineBuilder::create(ctx.clone());
+    let pipeline =
+        PipelineBuilder::create(ctx.clone(), enable_profiling, ProfSpanSetRef::default());
     let mut build_res = pipeline.finalize(plan)?;
 
     let settings = ctx.get_settings();
@@ -70,6 +80,7 @@ pub async fn build_distributed_pipeline(
     plan: &PhysicalPlan,
 ) -> Result<PipelineBuildResult> {
     let fragmenter = Fragmenter::try_create(ctx.clone())?;
+
     let root_fragment = fragmenter.build_fragment(plan)?;
     let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
     root_fragment.get_actions(ctx.clone(), &mut fragments_actions)?;

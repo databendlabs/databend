@@ -25,6 +25,7 @@ use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::FieldIndex;
 use common_expression::Scalar;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
@@ -42,7 +43,7 @@ pub struct ColumnMeta {
 pub struct ParquetRowGroupPart {
     pub location: String,
     pub num_rows: usize,
-    pub column_metas: HashMap<usize, ColumnMeta>,
+    pub column_metas: HashMap<FieldIndex, ColumnMeta>,
     pub row_selection: Option<Vec<Interval>>,
 
     pub sort_min_max: Option<(Scalar, Scalar)>,

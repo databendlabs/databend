@@ -15,7 +15,6 @@ use std::collections::BTreeMap;
 
 use nom::branch::alt;
 use nom::combinator::map;
-use url::Url;
 
 use crate::ast::SelectStageOption;
 use crate::ast::StageLocation;
@@ -42,34 +41,42 @@ pub fn parameter_to_string(i: Input) -> IResult<String> {
     )(i)
 }
 
+fn connection_opt(sep: &'static str) -> impl FnMut(Input) -> IResult<(String, String)> {
+    move |i| {
+        let sep1 = match_text(sep);
+        let sep2 = match_text(sep);
+        let string_options = map(
+            rule! {
+                (AWS_KEY_ID
+                    | AWS_SECRET_KEY
+                    | ACCESS_KEY_ID
+                    | ACCESS_KEY_SECRET
+                    | ENDPOINT_URL
+                    | SECRET_ACCESS_KEY
+                    | SESSION_TOKEN
+                    | REGION
+                    | ENABLE_VIRTUAL_HOST_STYLE)
+                ~ #sep1 ~ #literal_string
+            },
+            |(k, _, v)| (k.text().to_string().to_lowercase(), v),
+        );
+
+        let bool_options = map(
+            rule! {
+                (ENABLE_VIRTUAL_HOST_STYLE) ~ #sep2 ~ #literal_bool
+            },
+            |(k, _, v)| (k.text().to_string().to_lowercase(), v.to_string()),
+        );
+
+        alt((string_options, bool_options))(i)
+    }
+}
+
 pub fn connection_options(i: Input) -> IResult<BTreeMap<String, String>> {
-    let string_options = map(
-        rule! {
-            (AWS_KEY_ID
-                | AWS_SECRET_KEY
-                | ACCESS_KEY_ID
-                | ACCESS_KEY_SECRET
-                | ENDPOINT_URL
-                | SECRET_ACCESS_KEY
-                | SESSION_TOKEN
-                | REGION
-                | ENABLE_VIRTUAL_HOST_STYLE)
-            ~ "=" ~ #literal_string
-        },
-        |(k, _, v)| (k.text().to_string(), v),
-    );
-
-    let bool_options = map(
-        rule! {
-            (ENABLE_VIRTUAL_HOST_STYLE) ~ "=" ~ #literal_bool
-        },
-        |(k, _, v)| (k.text().to_string(), v.to_string()),
-    );
-
-    map(
-        rule! { "(" ~ (#string_options | #bool_options)* ~ ")"},
-        |(_, opts, _)| BTreeMap::from_iter(opts.iter().map(|(k, v)| (k.to_lowercase(), v.clone()))),
-    )(i)
+    let connection_opt = connection_opt("=");
+    map(rule! { "(" ~ (#connection_opt)* ~ ")"}, |(_, opts, _)| {
+        BTreeMap::from_iter(opts.iter().map(|(k, v)| (k.to_lowercase(), v.clone())))
+    })(i)
 }
 
 pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
@@ -90,6 +97,7 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
     let string_options = map(
         rule! {
             (TYPE
+                | FORMAT_NAME
                 | COMPRESSION
                 | RECORD_DELIMITER
                 | FIELD_DELIMITER
@@ -116,8 +124,15 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
     );
 
     map(
-        rule! { "(" ~ (#option_type | #option_compression | #string_options | #int_options | #none_options)* ~ ")"},
-        |(_, opts, _)| BTreeMap::from_iter(opts.iter().map(|(k, v)| (k.to_lowercase(), v.clone()))),
+        rule! { (#option_type | #option_compression | #string_options | #int_options | #none_options)* },
+        |opts| BTreeMap::from_iter(opts.iter().map(|(k, v)| (k.to_lowercase(), v.clone()))),
+    )(i)
+}
+
+pub fn file_format_clause(i: Input) -> IResult<BTreeMap<String, String>> {
+    map(
+        rule! { FILE_FORMAT ~ "=" ~ "(" ~ #format_options ~ ")" },
+        |(_, _, _, opts, _)| opts,
     )(i)
 }
 
@@ -162,48 +177,19 @@ pub fn uri_location(i: Input) -> IResult<UriLocation> {
                 "".to_string()
             };
             // fs location is not a valid url, let's check it in advance.
-            if let Some(path) = location.strip_prefix("fs://") {
-                return Ok(UriLocation::new(
-                    "fs".to_string(),
-                    "".to_string(),
-                    path.to_string(),
-                    part_prefix,
-                    BTreeMap::default(),
-                ));
-            }
-
-            let parsed =
-                Url::parse(&location).map_err(|_| ErrorKind::Other("invalid uri location"))?;
 
             // TODO: We will use `CONNECTION` to replace `CREDENTIALS`.
             let mut conns = connection_opt.map(|v| v.2).unwrap_or_default();
             conns.extend(credentials_opt.map(|v| v.2).unwrap_or_default());
 
-            let protocol = parsed.scheme().to_string();
-
-            let name = parsed
-                .host_str()
-                .map(|hostname| {
-                    if let Some(port) = parsed.port() {
-                        format!("{}:{}", hostname, port)
-                    } else {
-                        hostname.to_string()
-                    }
-                })
-                .ok_or(ErrorKind::Other("invalid uri location"))?;
-
-            let path = if parsed.path().is_empty() {
-                "/".to_string()
-            } else {
-                parsed.path().to_string()
-            };
-
-            Ok(UriLocation::new(protocol, name, path, part_prefix, conns))
+            UriLocation::from_uri(location, part_prefix, conns)
+                .map_err(|_| ErrorKind::Other("invalid uri"))
         },
     )(i)
 }
 
 pub fn select_stage_option(i: Input) -> IResult<SelectStageOption> {
+    let connection_opt = connection_opt("=>");
     alt((
         map(
             rule! { FILES ~ "=>" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")" },
@@ -217,5 +203,6 @@ pub fn select_stage_option(i: Input) -> IResult<SelectStageOption> {
             rule! { FILE_FORMAT ~ "=>" ~ #literal_string },
             |(_, _, file_format)| SelectStageOption::FileFormat(file_format),
         ),
+        map(connection_opt, SelectStageOption::Connection),
     ))(i)
 }

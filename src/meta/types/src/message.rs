@@ -15,15 +15,12 @@
 use openraft::raft::AppendEntriesRequest;
 use openraft::raft::InstallSnapshotRequest;
 use openraft::raft::VoteRequest;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use crate::protobuf::RaftReply;
 use crate::protobuf::RaftRequest;
-use crate::InvalidReply;
 use crate::LogEntry;
-use crate::TxnOpResponse;
-use crate::TxnReply;
+use crate::MetaAPIError;
 
 impl tonic::IntoRequest<RaftRequest> for LogEntry {
     fn into_request(self) -> tonic::Request<RaftRequest> {
@@ -98,30 +95,10 @@ impl tonic::IntoRequest<RaftRequest> for &VoteRequest {
     }
 }
 
-impl<T, E> From<RaftReply> for Result<T, E>
-where
-    T: DeserializeOwned,
-    E: DeserializeOwned + From<InvalidReply>,
+impl<T> From<Result<T, MetaAPIError>> for RaftReply
+where T: Serialize
 {
-    fn from(msg: RaftReply) -> Self {
-        if !msg.data.is_empty() {
-            let res: T = serde_json::from_str(&msg.data)
-                .map_err(|e| InvalidReply::new("can not decode RaftReply.data", &e))?;
-            Ok(res)
-        } else {
-            let err: E = serde_json::from_str(&msg.error)
-                .map_err(|e| InvalidReply::new("can not decode RaftReply.error", &e))?;
-            Err(err)
-        }
-    }
-}
-
-impl<T, E> From<Result<T, E>> for RaftReply
-where
-    T: Serialize,
-    E: Serialize,
-{
-    fn from(r: Result<T, E>) -> Self {
+    fn from(r: Result<T, MetaAPIError>) -> Self {
         match r {
             Ok(x) => {
                 let data = serde_json::to_string(&x).expect("fail to serialize");
@@ -138,77 +115,5 @@ where
                 }
             }
         }
-    }
-}
-
-/// Convert txn response to `success` and a series of `TxnOpResponse`.
-/// If `success` is false, then the vec is empty
-impl<E> From<TxnReply> for Result<(bool, Vec<TxnOpResponse>), E>
-where E: DeserializeOwned
-{
-    fn from(msg: TxnReply) -> Self {
-        if msg.error.is_empty() {
-            Ok((msg.success, msg.responses))
-        } else {
-            let err: E = serde_json::from_str(&msg.error).expect("fail to deserialize");
-            Err(err)
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    #[derive(serde::Serialize, serde::Deserialize)]
-    struct Foo {
-        i: i32,
-    }
-
-    use crate::protobuf::RaftReply;
-    use crate::MetaNetworkError;
-
-    #[test]
-    fn test_valid_reply() -> anyhow::Result<()> {
-        // Unable to decode `.data`
-
-        let msg = RaftReply {
-            data: "foo".to_string(),
-            error: "".to_string(),
-        };
-        let res: Result<Foo, MetaNetworkError> = msg.into();
-        match res {
-            Err(MetaNetworkError::InvalidReply(inv_reply)) => {
-                assert!(
-                    inv_reply
-                        .to_string()
-                        .starts_with("InvalidReply: can not decode RaftReply.data")
-                );
-            }
-            _ => {
-                unreachable!("expect InvalidReply")
-            }
-        }
-
-        // Unable to decode `.error`
-
-        let msg = RaftReply {
-            data: "".to_string(),
-            error: "foo".to_string(),
-        };
-        let res: Result<Foo, MetaNetworkError> = msg.into();
-        match res {
-            Err(MetaNetworkError::InvalidReply(inv_reply)) => {
-                assert!(
-                    inv_reply
-                        .to_string()
-                        .starts_with("InvalidReply: can not decode RaftReply.error")
-                );
-            }
-            _ => {
-                unreachable!("expect InvalidReply")
-            }
-        }
-
-        Ok(())
     }
 }

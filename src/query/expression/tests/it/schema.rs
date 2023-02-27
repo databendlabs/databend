@@ -17,6 +17,8 @@ use std::collections::BTreeMap;
 use common_exception::Result;
 use common_expression::create_test_complex_schema;
 use common_expression::types::NumberDataType;
+use common_expression::ColumnId;
+use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
@@ -77,11 +79,20 @@ fn test_project_schema_from_tuple() -> Result<()> {
                 (2, "b12"),
                 (3, "b2"),
             ];
-            let (column_ids, leaf_fields) = project_schema.leaf_fields();
-            for (i, (column_id, leaf_field)) in column_ids.iter().zip(leaf_fields).enumerate() {
-                assert_eq!(expected_column_id_field[i].0, *column_id);
+            let leaf_fields = project_schema.leaf_fields();
+            for (i, leaf_field) in leaf_fields.iter().enumerate() {
+                assert_eq!(expected_column_id_field[i].0, leaf_field.column_id());
                 assert_eq!(expected_column_id_field[i].1, leaf_field.name());
             }
+
+            // verify leaf column ids of projected schema are as expected
+            assert_eq!(
+                leaf_fields
+                    .into_iter()
+                    .flat_map(|f| f.leaf_column_ids())
+                    .collect::<Vec<_>>(),
+                project_schema.to_leaf_column_ids()
+            );
         }
     };
 
@@ -151,13 +162,80 @@ fn test_schema_from_simple_type() -> Result<()> {
     assert_eq!(schema.to_leaf_column_ids(), vec![0, 1, 2]);
     assert_eq!(schema.next_column_id(), 3);
 
-    let (leaf_column_ids, leaf_fields) = schema.leaf_fields();
-    assert_eq!(leaf_column_ids, schema.to_leaf_column_ids());
+    let leaf_fields = schema.leaf_fields();
     let leaf_field_names = vec!["a", "b", "c"];
+    let leaf_column_ids = vec![0, 1, 2];
     for (i, field) in leaf_fields.iter().enumerate() {
-        assert_eq!(field.name(), leaf_field_names[i])
+        assert_eq!(field.name(), leaf_field_names[i]);
+        assert_eq!(field.column_id(), leaf_column_ids[i]);
     }
 
+    // verify leaf column ids are as expected
+    assert_eq!(
+        leaf_fields
+            .iter()
+            .flat_map(|f| f.leaf_column_ids())
+            .collect::<Vec<_>>(),
+        schema.to_leaf_column_ids()
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_field_leaf_default_values() -> Result<()> {
+    let b1 = TableDataType::Tuple {
+        fields_name: vec!["b11".to_string(), "b12".to_string()],
+        fields_type: vec![TableDataType::Boolean, TableDataType::String],
+    };
+    let b = TableDataType::Tuple {
+        fields_name: vec!["b1".to_string(), "b2".to_string()],
+        fields_type: vec![b1, TableDataType::Number(NumberDataType::Int64)],
+    };
+    let fields = vec![
+        TableField::new("a", TableDataType::Number(NumberDataType::UInt64)),
+        TableField::new("b", b),
+        TableField::new("c", TableDataType::Number(NumberDataType::UInt64)),
+    ];
+    let schema = TableSchema::new(fields);
+
+    let default_values = vec![
+        Scalar::Number(common_expression::types::number::NumberScalar::UInt64(1)),
+        Scalar::Tuple(vec![
+            Scalar::Tuple(vec![
+                Scalar::Boolean(true),
+                Scalar::String(vec!['a', 'b'].iter().map(|c| *c as u8).collect::<Vec<_>>()),
+            ]),
+            Scalar::Number(common_expression::types::number::NumberScalar::Int64(2)),
+        ]),
+        Scalar::Number(common_expression::types::number::NumberScalar::UInt64(10)),
+    ];
+
+    let leaf_default_values = schema.field_leaf_default_values(&default_values);
+    let expected_leaf_default_values: Vec<(ColumnId, Scalar)> = vec![
+        (
+            0,
+            Scalar::Number(common_expression::types::number::NumberScalar::UInt64(1)),
+        ),
+        (1, Scalar::Boolean(true)),
+        (
+            2,
+            Scalar::String(vec!['a', 'b'].iter().map(|c| *c as u8).collect::<Vec<_>>()),
+        ),
+        (
+            3,
+            Scalar::Number(common_expression::types::number::NumberScalar::Int64(2)),
+        ),
+        (
+            4,
+            Scalar::Number(common_expression::types::number::NumberScalar::UInt64(10)),
+        ),
+    ];
+    expected_leaf_default_values
+        .iter()
+        .for_each(|(col_id, default_value)| {
+            assert_eq!(leaf_default_values.get(col_id).unwrap(), default_value)
+        });
     Ok(())
 }
 
@@ -166,8 +244,17 @@ fn test_schema_from_struct() -> Result<()> {
     let schema = create_test_complex_schema();
     let flat_column_ids = schema.to_leaf_column_ids();
 
-    let (leaf_column_ids, leaf_fields) = schema.leaf_fields();
-    assert_eq!(leaf_column_ids, schema.to_leaf_column_ids());
+    let leaf_fields = schema.leaf_fields();
+
+    // verify leaf column ids are as expected
+    assert_eq!(
+        leaf_fields
+            .iter()
+            .flat_map(|f| f.leaf_column_ids())
+            .collect::<Vec<_>>(),
+        schema.to_leaf_column_ids()
+    );
+
     let expected_fields = vec![
         ("u64", TableDataType::Number(NumberDataType::UInt64)),
         ("0", TableDataType::Number(NumberDataType::UInt64)),
@@ -195,10 +282,12 @@ fn test_schema_from_struct() -> Result<()> {
         ("a", TableDataType::Number(NumberDataType::Int32)),
         ("b", TableDataType::Number(NumberDataType::Int32)),
     ];
+
     for (i, field) in leaf_fields.iter().enumerate() {
         let expected_field = &expected_fields[i];
         assert_eq!(field.name(), expected_field.0);
         assert_eq!(field.data_type().to_owned(), expected_field.1);
+        assert_eq!(field.column_id(), i as u32);
     }
 
     let expeted_column_ids = vec![
@@ -262,9 +351,9 @@ fn test_schema_from_struct() -> Result<()> {
             (10, "a"),
             (11, "b"),
         ];
-        let (column_ids, leaf_fields) = schema.leaf_fields();
-        for (i, (column_id, leaf_field)) in column_ids.iter().zip(leaf_fields).enumerate() {
-            assert_eq!(expected_column_id_field[i].0, *column_id);
+        let leaf_fields = schema.leaf_fields();
+        for (i, leaf_field) in leaf_fields.iter().enumerate() {
+            assert_eq!(expected_column_id_field[i].0, leaf_field.column_id());
             assert_eq!(expected_column_id_field[i].1, leaf_field.name());
         }
     }
@@ -380,9 +469,9 @@ fn test_schema_modify_field() -> Result<()> {
             (5, "1"),
             (6, "ary:0:0"),
         ];
-        let (column_ids, leaf_fields) = schema.leaf_fields();
-        for (i, (column_id, leaf_field)) in column_ids.iter().zip(leaf_fields).enumerate() {
-            assert_eq!(expected_column_id_field[i].0, *column_id);
+        let leaf_fields = schema.leaf_fields();
+        for (i, leaf_field) in leaf_fields.iter().enumerate() {
+            assert_eq!(expected_column_id_field[i].0, leaf_field.column_id());
             assert_eq!(expected_column_id_field[i].1, leaf_field.name());
         }
     }

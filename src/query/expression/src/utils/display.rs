@@ -40,6 +40,7 @@ use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalDataType;
 use crate::types::decimal::DecimalDomain;
 use crate::types::decimal::DecimalScalar;
+use crate::types::map::KvPair;
 use crate::types::nullable::NullableDomain;
 use crate::types::number::NumberColumn;
 use crate::types::number::NumberDataType;
@@ -107,6 +108,7 @@ impl<'a> Debug for ScalarRef<'a> {
         match self {
             ScalarRef::Null => write!(f, "NULL"),
             ScalarRef::EmptyArray => write!(f, "[] :: Array(Nothing)"),
+            ScalarRef::EmptyMap => write!(f, "{{}} :: Map(Nothing)"),
             ScalarRef::Number(val) => write!(f, "{val:?}"),
             ScalarRef::Decimal(val) => write!(f, "{val:?}"),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
@@ -123,6 +125,19 @@ impl<'a> Debug for ScalarRef<'a> {
             ScalarRef::Timestamp(t) => write!(f, "{t:?}"),
             ScalarRef::Date(d) => write!(f, "{d:?}"),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
+            ScalarRef::Map(col) => {
+                write!(f, "{{")?;
+                let kv_col = KvPair::<AnyType, AnyType>::try_downcast_column(col).unwrap();
+                for (i, (key, value)) in kv_col.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{key:?}")?;
+                    write!(f, ":")?;
+                    write!(f, "{value:?}")?;
+                }
+                write!(f, "}}")
+            }
             ScalarRef::Tuple(fields) => {
                 write!(f, "(")?;
                 for (i, field) in fields.iter().enumerate() {
@@ -146,6 +161,7 @@ impl Debug for Column {
         match self {
             Column::Null { len } => f.debug_struct("Null").field("len", len).finish(),
             Column::EmptyArray { len } => f.debug_struct("EmptyArray").field("len", len).finish(),
+            Column::EmptyMap { len } => f.debug_struct("EmptyMap").field("len", len).finish(),
             Column::Number(col) => write!(f, "{col:?}"),
             Column::Decimal(col) => write!(f, "{col:?}"),
             Column::Boolean(col) => f.debug_tuple("Boolean").field(col).finish(),
@@ -153,6 +169,7 @@ impl Debug for Column {
             Column::Timestamp(col) => write!(f, "{col:?}"),
             Column::Date(col) => write!(f, "{col:?}"),
             Column::Array(col) => write!(f, "{col:?}"),
+            Column::Map(col) => write!(f, "{col:?}"),
             Column::Nullable(col) => write!(f, "{col:?}"),
             Column::Tuple { fields, len } => f
                 .debug_struct("Tuple")
@@ -169,6 +186,7 @@ impl<'a> Display for ScalarRef<'a> {
         match self {
             ScalarRef::Null => write!(f, "NULL"),
             ScalarRef::EmptyArray => write!(f, "[]"),
+            ScalarRef::EmptyMap => write!(f, "{{}}"),
             ScalarRef::Number(val) => write!(f, "{val}"),
             ScalarRef::Decimal(val) => write!(f, "{val}"),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
@@ -185,6 +203,19 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::Timestamp(t) => write!(f, "{}", timestamp_to_string(*t, Tz::UTC)),
             ScalarRef::Date(d) => write!(f, "{}", date_to_string(*d as i64, Tz::UTC)),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
+            ScalarRef::Map(col) => {
+                write!(f, "{{")?;
+                let kv_col = KvPair::<AnyType, AnyType>::try_downcast_column(col).unwrap();
+                for (i, (key, value)) in kv_col.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{key}")?;
+                    write!(f, ":")?;
+                    write!(f, "{value}")?;
+                }
+                write!(f, "}}")
+            }
             ScalarRef::Tuple(fields) => {
                 write!(f, "(")?;
                 for (i, field) in fields.iter().enumerate() {
@@ -418,6 +449,7 @@ impl Display for DataType {
             DataType::Nullable(inner) => write!(f, "{inner} NULL"),
             DataType::EmptyArray => write!(f, "Array(Nothing)"),
             DataType::Array(inner) => write!(f, "Array({inner})"),
+            DataType::EmptyMap => write!(f, "Map(Nothing)"),
             DataType::Map(inner) => write!(f, "Map({inner})"),
             DataType::Tuple(tys) => {
                 write!(f, "Tuple(")?;
@@ -451,6 +483,7 @@ impl Display for TableDataType {
             TableDataType::Nullable(inner) => write!(f, "{inner} NULL"),
             TableDataType::EmptyArray => write!(f, "Array(Nothing)"),
             TableDataType::Array(inner) => write!(f, "Array({inner})"),
+            TableDataType::EmptyMap => write!(f, "Map(Nothing)"),
             TableDataType::Map(inner) => write!(f, "Map({inner})"),
             TableDataType::Tuple {
                 fields_name,
@@ -746,14 +779,25 @@ fn display_decimal_128(num: i128, scale: u8) -> String {
         write!(buf, "{}", num).unwrap();
     } else {
         let pow_scale = 10_i128.pow(scale as u32);
-        write!(
-            buf,
-            "{}.{:0>width$}",
-            num / pow_scale,
-            (num % pow_scale).abs(),
-            width = scale as usize
-        )
-        .unwrap();
+        if num >= 0 {
+            write!(
+                buf,
+                "{}.{:0>width$}",
+                num / pow_scale,
+                (num % pow_scale).abs(),
+                width = scale as usize
+            )
+            .unwrap();
+        } else {
+            write!(
+                buf,
+                "-{}.{:0>width$}",
+                -num / pow_scale,
+                (num % pow_scale).abs(),
+                width = scale as usize
+            )
+            .unwrap();
+        }
     }
     buf
 }
@@ -764,14 +808,26 @@ fn display_decimal_256(num: i256, scale: u8) -> String {
         write!(buf, "{}", num).unwrap();
     } else {
         let pow_scale = i256::from(10).pow(scale as u32);
-        write!(
-            buf,
-            "{}.{:0>width$}",
-            num / pow_scale,
-            num % pow_scale,
-            width = scale as usize
-        )
-        .unwrap();
+        // -1/10 = 0
+        if num >= 0 {
+            write!(
+                buf,
+                "{}.{:0>width$}",
+                num / pow_scale,
+                num % pow_scale.abs(),
+                width = scale as usize
+            )
+            .unwrap();
+        } else {
+            write!(
+                buf,
+                "-{}.{:0>width$}",
+                -num / pow_scale,
+                num % pow_scale,
+                width = scale as usize
+            )
+            .unwrap();
+        }
     }
     buf
 }

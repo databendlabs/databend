@@ -315,11 +315,19 @@ impl SubqueryRewriter {
 
                 let scalar = if flatten_info.from_count_func {
                     // convert count aggregate function to multi_if function, if count() is not null, then count() else 0
-                    let is_null = ScalarExpr::FunctionCall(FunctionCall {
+                    let is_not_null = ScalarExpr::FunctionCall(FunctionCall {
                         params: vec![],
                         arguments: vec![column_ref.clone()],
                         func_name: "is_not_null".to_string(),
                         return_type: Box::new(DataType::Boolean),
+                    });
+                    let cast_column_ref_to_uint64 = ScalarExpr::CastExpr(CastExpr {
+                        is_try: true,
+                        argument: Box::new(column_ref.clone()),
+                        from_type: Box::new(column_ref.data_type()),
+                        target_type: Box::new(
+                            DataType::Number(NumberDataType::UInt64).wrap_nullable(),
+                        ),
                     });
                     let zero = ScalarExpr::ConstantExpr(ConstantExpr {
                         value: Literal::Int64(0),
@@ -331,7 +339,7 @@ impl SubqueryRewriter {
                         is_try: true,
                         argument: Box::new(ScalarExpr::FunctionCall(FunctionCall {
                             params: vec![],
-                            arguments: vec![is_null, column_ref.clone(), zero],
+                            arguments: vec![is_not_null, cast_column_ref_to_uint64, zero],
                             func_name: "if".to_string(),
                             return_type: Box::new(
                                 DataType::Number(NumberDataType::UInt64).wrap_nullable(),

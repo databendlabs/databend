@@ -25,7 +25,8 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::filter_helper::FilterHelpers;
-use common_expression::types::AnyType;
+use common_expression::types::BooleanType;
+use common_expression::types::DataType;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
@@ -46,7 +47,7 @@ use crate::HivePartInfo;
 
 struct PreWhereData {
     data_blocks: Vec<DataBlock>,
-    valids: Vec<Value<AnyType>>,
+    valids: Vec<Value<BooleanType>>,
 }
 
 enum State {
@@ -140,23 +141,26 @@ impl HiveTableSource {
         &self,
         filter: &Expr,
         data_blocks: &Vec<DataBlock>,
-    ) -> Result<(bool, Vec<Value<AnyType>>)> {
+    ) -> Result<(bool, Vec<Value<BooleanType>>)> {
+        assert_eq!(filter.data_type(), &DataType::Boolean);
+
         let mut valids = vec![];
         let mut exists = false;
         let func_ctx = self.ctx.get_function_context()?;
         for datablock in data_blocks {
             let evaluator = Evaluator::new(datablock, func_ctx, &BUILTIN_FUNCTIONS);
-            let res = evaluator
+            let predicates = evaluator
                 .run(filter)
-                .map_err(|e| e.add_message("eval prewhere filter failed:"))?;
-            valids.push(res.clone());
+                .map_err(|e| e.add_message("eval prewhere filter failed:"))?
+                .try_downcast::<BooleanType>()
+                .unwrap();
+
             // shortcut, if predicates is const boolean (or can be cast to boolean)
-            match FilterHelpers::filter_exists(&res)? {
-                true => {
-                    exists = true;
-                }
-                false => {}
+            if !FilterHelpers::is_all_unset(&predicates) {
+                exists = true;
             }
+
+            valids.push(predicates);
         }
 
         assert_eq!(data_blocks.len(), valids.len());
@@ -197,7 +201,7 @@ impl HiveTableSource {
                     .into_iter()
                     .zip(valids.iter())
                     .map(|(datablock, valid)| {
-                        let datablock = DataBlock::filter(datablock, valid).unwrap();
+                        let datablock = DataBlock::filter_boolean_value(datablock, valid).unwrap();
                         datablock
                             .resort(&self.source_schema, &self.output_schema)
                             .unwrap()
@@ -245,7 +249,7 @@ impl HiveTableSource {
                     for column in r.columns().iter() {
                         a.add_column(column.clone());
                     }
-                    let a = DataBlock::filter(a, v).unwrap();
+                    let a = DataBlock::filter_boolean_value(a, v).unwrap();
                     a.resort(&self.source_schema, &self.output_schema).unwrap()
                 })
                 .filter(|x| !x.is_empty())

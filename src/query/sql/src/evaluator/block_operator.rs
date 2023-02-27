@@ -15,56 +15,63 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::types::BooleanType;
+use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::Expr;
+use common_expression::FieldIndex;
 use common_expression::FunctionContext;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_pipeline_transforms::processors::transforms::Transformer;
 
 /// `BlockOperator` takes a `DataBlock` as input and produces a `DataBlock` as output.
 #[derive(Clone)]
 pub enum BlockOperator {
-    /// Evaluate expression and append result column to the end.
-    Map { expr: Expr },
+    /// Batch mode of map which merges map operators into one.
+    Map { exprs: Vec<Expr> },
 
     /// Filter the input `DataBlock` with the predicate `eval`.
     Filter { expr: Expr },
 
     /// Reorganize the input `DataBlock` with `projection`.
-    Project { projection: Vec<usize> },
+    Project { projection: Vec<FieldIndex> },
     // Remap { indices: Vec<(IndexType, IndexType)> },
 }
 
 impl BlockOperator {
     pub fn execute(&self, func_ctx: &FunctionContext, mut input: DataBlock) -> Result<DataBlock> {
         match self {
-            BlockOperator::Map { expr } => {
-                let evaluator = Evaluator::new(&input, *func_ctx, &BUILTIN_FUNCTIONS);
-                let result = evaluator.run(expr)?;
-                let col = BlockEntry {
-                    data_type: expr.data_type().clone(),
-                    value: result,
-                };
-                input.add_column(col);
+            BlockOperator::Map { exprs } => {
+                for expr in exprs {
+                    let evaluator = Evaluator::new(&input, *func_ctx, &BUILTIN_FUNCTIONS);
+                    let result = evaluator.run(expr)?;
+                    let col = BlockEntry {
+                        data_type: expr.data_type().clone(),
+                        value: result,
+                    };
+                    input.add_column(col);
+                }
                 Ok(input)
             }
 
             BlockOperator::Filter { expr } => {
+                assert_eq!(expr.data_type(), &DataType::Boolean);
+
                 let evaluator = Evaluator::new(&input, *func_ctx, &BUILTIN_FUNCTIONS);
-                let filter = evaluator.run(expr)?;
-                input.filter(&filter)
+                let filter = evaluator.run(expr)?.try_downcast::<BooleanType>().unwrap();
+                input.filter_boolean_value(&filter)
             }
 
             BlockOperator::Project { projection } => {
                 let mut result = DataBlock::new(vec![], input.num_rows());
-                for id in projection {
-                    result.add_column(input.get_by_offset(*id).clone());
+                for index in projection {
+                    result.add_column(input.get_by_offset(*index).clone());
                 }
                 Ok(result)
             }
@@ -84,15 +91,27 @@ impl CompoundBlockOperator {
         output_port: Arc<OutputPort>,
         ctx: FunctionContext,
         operators: Vec<BlockOperator>,
-    ) -> ProcessorPtr {
+    ) -> Box<dyn Processor> {
+        let operators = Self::compact_map(operators);
         Transformer::<Self>::create(input_port, output_port, Self { operators, ctx })
     }
 
-    #[allow(dead_code)]
-    pub fn append(self, operator: BlockOperator) -> Self {
-        let mut result = self;
-        result.operators.push(operator);
-        result
+    pub fn compact_map(operators: Vec<BlockOperator>) -> Vec<BlockOperator> {
+        let mut results = Vec::with_capacity(operators.len());
+
+        for op in operators {
+            match op {
+                BlockOperator::Map { exprs } => {
+                    if let Some(BlockOperator::Map { exprs: pre_exprs }) = results.last_mut() {
+                        pre_exprs.extend(exprs);
+                    } else {
+                        results.push(BlockOperator::Map { exprs });
+                    }
+                }
+                _ => results.push(op),
+            }
+        }
+        results
     }
 
     #[allow(dead_code)]

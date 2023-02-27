@@ -42,6 +42,7 @@ pub struct PrewhereInfo {
     /// columns of remain reading stage.
     pub remain_columns: Projection,
     /// filter for prewhere
+    /// Assumption: expression's data type must be `DataType::Boolean`.
     pub filter: RemoteExpr<String>,
 }
 
@@ -52,8 +53,8 @@ pub struct PushDownInfo {
     /// It represents the columns to be read from the source.
     pub projection: Option<Projection>,
     /// Optional filter expression plan
-    /// split_conjunctions by `and` operator
-    pub filters: Vec<RemoteExpr<String>>,
+    /// Assumption: expression's data type must be `DataType::Boolean`.
+    pub filter: Option<RemoteExpr<String>>,
     /// Optional prewhere information
     /// used for prewhere optimization
     pub prewhere: Option<PrewhereInfo>,
@@ -74,7 +75,12 @@ pub struct TopK {
 }
 
 impl PushDownInfo {
-    pub fn top_k(&self, schema: &TableSchema, support: fn(&DataType) -> bool) -> Option<TopK> {
+    pub fn top_k(
+        &self,
+        schema: &TableSchema,
+        cluster_key: Option<&String>,
+        support: fn(&DataType) -> bool,
+    ) -> Option<TopK> {
         if !self.order_by.is_empty() && self.limit.is_some() {
             let order = &self.order_by[0];
             let limit = self.limit.unwrap();
@@ -92,9 +98,20 @@ impl PushDownInfo {
                     return None;
                 }
 
-                let (leaf_column_ids, leaf_fields) = schema.leaf_fields();
-                let index = leaf_fields.iter().position(|p| p == field).unwrap();
-                let column_id = leaf_column_ids[index];
+                // Only do topk in storage for cluster key.
+
+                if let Some(cluster_key) = cluster_key.as_ref() {
+                    if !cluster_key.contains(id) {
+                        return None;
+                    }
+                }
+
+                let leaf_fields = schema.leaf_fields();
+                let column_id = leaf_fields
+                    .iter()
+                    .find(|&p| p == field)
+                    .unwrap()
+                    .column_id();
 
                 let top_k = TopK {
                     limit: self.limit.unwrap(),

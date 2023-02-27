@@ -21,6 +21,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_pipeline_core::pipe::Pipe;
@@ -33,6 +34,8 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
 
 use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
+use crate::api::rpc::exchange::exchange_sorting::ExchangeSorting;
+use crate::api::rpc::exchange::exchange_sorting::TransformExchangeSorting;
 use crate::api::rpc::exchange::exchange_transform_scatter::ScatterTransform;
 
 pub struct ExchangeShuffleMeta {
@@ -68,10 +71,6 @@ impl<'de> serde::Deserialize<'de> for ExchangeShuffleMeta {
 #[typetag::serde(name = "exchange_shuffle")]
 impl BlockMetaInfo for ExchangeShuffleMeta {
     fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn Any {
         self
     }
 
@@ -193,29 +192,23 @@ impl Processor for ExchangeShuffleTransform {
             }
 
             if let Some(mut data_block) = self.try_pull_inputs()? {
-                let mut block_meta = data_block.take_meta();
-                let shuffle_meta = block_meta
-                    .as_mut()
-                    .and_then(|meta| meta.as_mut_any().downcast_mut::<ExchangeShuffleMeta>());
-
-                match shuffle_meta {
-                    None => {
-                        return Err(ErrorCode::Internal(
-                            "ExchangeShuffleTransform only recv ExchangeShuffleMeta.",
-                        ));
-                    }
-                    Some(shuffle_meta) => {
-                        let blocks = std::mem::take(&mut shuffle_meta.blocks);
+                if let Some(block_meta) = data_block.take_meta() {
+                    if let Some(shuffle_meta) = ExchangeShuffleMeta::downcast_from(block_meta) {
+                        let blocks = shuffle_meta.blocks;
                         for (index, block) in blocks.into_iter().enumerate() {
                             if !block.is_empty() {
                                 self.buffer.push_back(index, block);
                             }
                         }
+
+                        // Try push again.
+                        continue;
                     }
                 }
 
-                // Try push again.
-                continue;
+                return Err(ErrorCode::Internal(
+                    "ExchangeShuffleTransform only recv ExchangeShuffleMeta.",
+                ));
             }
 
             if self.all_inputs_finished && self.buffer.is_empty() {
@@ -292,6 +285,21 @@ pub fn exchange_shuffle(params: &ShuffleExchangeParams, pipeline: &mut Pipeline)
         ))
     })?;
 
+    if let Some(exchange_sorting) = &params.exchange_sorting {
+        let output_len = pipeline.output_len();
+        let sorting = ShuffleExchangeSorting::create(exchange_sorting.clone());
+
+        let transform = TransformExchangeSorting::create(output_len, sorting);
+
+        let output = transform.get_output();
+        let inputs = transform.get_inputs();
+        pipeline.add_pipe(Pipe::create(output_len, 1, vec![PipeItem::create(
+            ProcessorPtr::create(Box::new(transform)),
+            inputs,
+            vec![output],
+        )]));
+    }
+
     let output_len = pipeline.output_len();
     let new_output_len = params.destination_ids.len();
     let transform = ExchangeShuffleTransform::create(output_len, new_output_len);
@@ -303,4 +311,31 @@ pub fn exchange_shuffle(params: &ShuffleExchangeParams, pipeline: &mut Pipeline)
     ]));
 
     Ok(())
+}
+
+struct ShuffleExchangeSorting {
+    inner: Arc<dyn ExchangeSorting>,
+}
+
+impl ShuffleExchangeSorting {
+    pub fn create(inner: Arc<dyn ExchangeSorting>) -> Arc<dyn ExchangeSorting> {
+        Arc::new(ShuffleExchangeSorting { inner })
+    }
+}
+
+impl ExchangeSorting for ShuffleExchangeSorting {
+    fn block_number(&self, data_block: &DataBlock) -> Result<isize> {
+        let block_meta = data_block.get_meta();
+        let shuffle_meta = block_meta
+            .and_then(ExchangeShuffleMeta::downcast_ref_from)
+            .unwrap();
+
+        for block in &shuffle_meta.blocks {
+            if !block.is_empty() {
+                return self.inner.block_number(block);
+            }
+        }
+
+        Ok(0)
+    }
 }

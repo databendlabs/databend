@@ -22,7 +22,9 @@
 #![deny(unused_crate_dependencies)]
 #![feature(no_sanitize)]
 
+pub mod app_error;
 pub mod principal;
 pub mod schema;
 pub mod share;
 pub mod storage;
+pub mod tenant;

@@ -19,6 +19,8 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use common_compress::DecompressDecoder;
+use common_compress::DecompressState;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Column;
@@ -32,8 +34,6 @@ use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
-use opendal::raw::DecompressDecoder;
-use opendal::raw::DecompressState;
 use opendal::Operator;
 
 use crate::input_formats::input_pipeline::AligningStateTrait;
@@ -295,7 +295,7 @@ impl<T: InputFormatTextBase> InputFormat for T {
         let mut infos = vec![];
         for path in files {
             let obj = op.object(path);
-            let size = obj.metadata().await?.content_length() as usize;
+            let size = obj.stat().await?.content_length() as usize;
             let compress_alg = InputContext::get_compression_alg_copy(
                 stage_info.file_format_options.compression,
                 path,

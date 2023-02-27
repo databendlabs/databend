@@ -19,12 +19,14 @@ use chrono_tz::Tz;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::date::check_date;
+use common_expression::types::decimal::Decimal;
 use common_expression::types::number::Number;
 use common_expression::types::timestamp::check_timestamp;
 use common_expression::uniform_date;
 use common_expression::ArrayDeserializer;
 use common_expression::BooleanDeserializer;
 use common_expression::DateDeserializer;
+use common_expression::DecimalDeserializer;
 use common_expression::NullDeserializer;
 use common_expression::NullableDeserializer;
 use common_expression::NumberDeserializer;
@@ -80,6 +82,8 @@ impl FieldJsonAstDecoder {
             TypeDeserializerImpl::UInt64(c) => self.read_int(c, value),
             TypeDeserializerImpl::Float32(c) => self.read_float(c, value),
             TypeDeserializerImpl::Float64(c) => self.read_float(c, value),
+            TypeDeserializerImpl::Decimal128(c) => self.read_decimal(c, value),
+            TypeDeserializerImpl::Decimal256(c) => self.read_decimal(c, value),
             TypeDeserializerImpl::Date(c) => self.read_date(c, value),
             TypeDeserializerImpl::Timestamp(c) => self.read_timestamp(c, value),
             TypeDeserializerImpl::String(c) => self.read_string(c, value),
@@ -157,6 +161,15 @@ impl FieldJsonAstDecoder {
         }
     }
 
+    fn read_decimal<D: Decimal>(
+        &self,
+        column: &mut DecimalDeserializer<D>,
+        value: &Value,
+    ) -> Result<()>
+where {
+        column.de_json_inner(value)
+    }
+
     fn read_string(&self, column: &mut StringDeserializer, value: &Value) -> Result<()> {
         match value {
             Value::String(s) => {
@@ -178,7 +191,15 @@ impl FieldJsonAstDecoder {
                 column.builder.push(days);
                 Ok(())
             }
-            _ => Err(ErrorCode::BadBytes("Incorrect boolean value")),
+            Value::Number(number) => match number.as_i64() {
+                Some(n) => {
+                    let n = check_date(n)?;
+                    column.builder.push(n);
+                    Ok(())
+                }
+                None => Err(ErrorCode::BadArguments("Incorrect date value")),
+            },
+            _ => Err(ErrorCode::BadBytes("Incorrect date value")),
         }
     }
 
@@ -194,7 +215,17 @@ impl FieldJsonAstDecoder {
                 column.builder.push(micros.as_());
                 Ok(())
             }
-            _ => Err(ErrorCode::BadBytes("Incorrect boolean value")),
+            Value::Number(number) => match number.as_i64() {
+                Some(n) => {
+                    check_timestamp(n)?;
+                    column.builder.push(n);
+                    Ok(())
+                }
+                None => Err(ErrorCode::BadArguments(
+                    "Incorrect timestamp value, must be i64",
+                )),
+            },
+            _ => Err(ErrorCode::BadBytes("Incorrect timestamp value")),
         }
     }
 

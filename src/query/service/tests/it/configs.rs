@@ -17,10 +17,13 @@ use std::env::temp_dir;
 use std::fs;
 use std::io::Write;
 
+use common_config::CacheConfig;
+use common_config::CacheStorageTypeConfig;
 use common_config::CatalogConfig;
 use common_config::CatalogHiveConfig;
-use common_config::Config;
+use common_config::InnerConfig;
 use common_config::ThriftProtocol;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 
@@ -44,16 +47,15 @@ fn test_env_config_s3() -> Result<()> {
             ("QUERY_FLIGHT_API_ADDRESS", Some("1.2.3.4:9091")),
             ("QUERY_ADMIN_API_ADDRESS", Some("1.2.3.4:8081")),
             ("QUERY_METRIC_API_ADDRESS", Some("1.2.3.4:7071")),
-            ("QUERY_TABLE_META_CACHE_ENABLED", Some("true")),
-            ("QUERY_TABLE_MEMORY_CACHE_MB_SIZE", Some("512")),
-            ("QUERY_TABLE_DISK_CACHE_ROOT", Some("_cache_env")),
-            ("QUERY_TABLE_DISK_CACHE_MB_SIZE", Some("512")),
-            ("QUERY_TABLE_CACHE_SNAPSHOT_COUNT", Some("256")),
-            ("QUERY_TABLE_CACHE_SEGMENT_COUNT", Some("10240")),
+            ("CACHE_ENABLE_TABLE_META_CACHE", Some("true")),
+            ("CACHE_DISK_PATH", Some("_cache_env")),
+            ("CACHE_DISK_MAX_BYES", Some("512")),
+            ("CACHE_TABLE_META_SNAPSHOT_COUNT", Some("256")),
+            ("CACHE_TABLE_META_SEGMENT_COUNT", Some("10240")),
             ("META_ENDPOINTS", Some("0.0.0.0:9191")),
-            ("TABLE_CACHE_BLOOM_INDEX_META_COUNT", Some("3000")),
+            ("CACHE_TABLE_BLOOM_INDEX_META_COUNT", Some("3000")),
             (
-                "TABLE_CACHE_BLOOM_INDEX_DATA_BYTES",
+                "CACHE_TABLE_BLOOM_INDEX_FILTER_COUNT",
                 Some(format!("{}", 1024 * 1024 * 1024).as_str()),
             ),
             ("STORAGE_TYPE", Some("s3")),
@@ -83,7 +85,9 @@ fn test_env_config_s3() -> Result<()> {
             ("CONFIG_FILE", None),
         ],
         || {
-            let configured = Config::load_for_test().expect("must success").into_outer();
+            let configured = InnerConfig::load_for_test()
+                .expect("must success")
+                .into_config();
 
             assert_eq!("DEBUG", configured.log.level);
 
@@ -125,15 +129,14 @@ fn test_env_config_s3() -> Result<()> {
             assert_eq!("us.key", configured.storage.s3.secret_access_key);
             assert_eq!("us.bucket", configured.storage.s3.bucket);
 
-            assert!(configured.query.table_engine_memory_enabled);
-
-            assert!(configured.query.table_meta_cache_enabled);
-            assert_eq!(10240, configured.query.table_cache_segment_count);
-            assert_eq!(256, configured.query.table_cache_snapshot_count);
-            assert_eq!(3000, configured.query.table_cache_bloom_index_meta_count);
+            assert!(configured.cache.enable_table_meta_cache);
+            assert!(configured.cache.enable_table_bloom_index_cache);
+            assert_eq!(10240, configured.cache.table_meta_segment_count);
+            assert_eq!(256, configured.cache.table_meta_snapshot_count);
+            assert_eq!(3000, configured.cache.table_bloom_index_meta_count);
             assert_eq!(
-                1024 * 1024,
-                configured.query.table_cache_bloom_index_filter_count
+                1024 * 1024 * 1024,
+                configured.cache.table_bloom_index_filter_count
             );
             assert_eq!(HashMap::new(), configured.catalogs);
         },
@@ -162,16 +165,15 @@ fn test_env_config_fs() -> Result<()> {
             ("QUERY_FLIGHT_API_ADDRESS", Some("1.2.3.4:9091")),
             ("QUERY_ADMIN_API_ADDRESS", Some("1.2.3.4:8081")),
             ("QUERY_METRIC_API_ADDRESS", Some("1.2.3.4:7071")),
-            ("QUERY_TABLE_META_CACHE_ENABLED", Some("true")),
-            ("QUERY_TABLE_MEMORY_CACHE_MB_SIZE", Some("512")),
-            ("QUERY_TABLE_DISK_CACHE_ROOT", Some("_cache_env")),
-            ("QUERY_TABLE_DISK_CACHE_MB_SIZE", Some("512")),
-            ("QU-ERY_TABLE_CACHE_SNAPSHOT_COUNT", Some("256")),
-            ("QUERY_TABLE_CACHE_SEGMENT_COUNT", Some("10240")),
+            ("CACHE_ENABLE_TABLE_META_CACHE", Some("true")),
+            ("CACHE_DISK_PATH", Some("_cache_env")),
+            ("CACHE_DISK_MAX_BYTES", Some("512")),
+            ("CACHE_TABLE_META_SNAPSHOT_COUNT", Some("256")),
+            ("CACHE_TABLE_META_SEGMENT_COUNT", Some("10240")),
             ("META_ENDPOINTS", Some("0.0.0.0:9191")),
-            ("TABLE_CACHE_BLOOM_INDEX_META_COUNT", Some("3000")),
+            ("CACHE_TABLE_BLOOM_INDEX_META_COUNT", Some("3000")),
             (
-                "TABLE_CACHE_BLOOM_INDEX_DATA_BYTES",
+                "CACHE_TABLE_BLOOM_INDEX_FILTER_COUNT",
                 Some(format!("{}", 1024 * 1024 * 1024).as_str()),
             ),
             ("STORAGE_TYPE", Some("fs")),
@@ -201,7 +203,9 @@ fn test_env_config_fs() -> Result<()> {
             ("CONFIG_FILE", None),
         ],
         || {
-            let configured = Config::load_for_test().expect("must success").into_outer();
+            let configured = InnerConfig::load_for_test()
+                .expect("must success")
+                .into_config();
 
             assert_eq!("DEBUG", configured.log.level);
 
@@ -243,18 +247,16 @@ fn test_env_config_fs() -> Result<()> {
             assert_eq!("", configured.storage.gcs.gcs_root);
             assert_eq!("", configured.storage.gcs.credential);
 
-            assert!(configured.query.table_engine_memory_enabled);
-
-            assert!(configured.query.table_meta_cache_enabled);
-            assert_eq!(512, configured.query.table_memory_cache_mb_size);
-            assert_eq!("_cache_env", configured.query.table_disk_cache_root);
-            assert_eq!(512, configured.query.table_disk_cache_mb_size);
-            assert_eq!(10240, configured.query.table_cache_segment_count);
-            assert_eq!(256, configured.query.table_cache_snapshot_count);
-            assert_eq!(3000, configured.query.table_cache_bloom_index_meta_count);
+            assert!(configured.cache.enable_table_bloom_index_cache);
+            assert!(configured.cache.enable_table_meta_cache);
+            assert_eq!("_cache_env", configured.cache.disk_cache_config.path);
+            assert_eq!(512, configured.cache.disk_cache_config.max_bytes);
+            assert_eq!(10240, configured.cache.table_meta_segment_count);
+            assert_eq!(256, configured.cache.table_meta_snapshot_count);
+            assert_eq!(3000, configured.cache.table_bloom_index_meta_count);
             assert_eq!(
-                1024 * 1024,
-                configured.query.table_cache_bloom_index_filter_count
+                1024 * 1024 * 1024,
+                configured.cache.table_bloom_index_filter_count
             );
         },
     );
@@ -281,16 +283,15 @@ fn test_env_config_gcs() -> Result<()> {
             ("QUERY_FLIGHT_API_ADDRESS", Some("1.2.3.4:9091")),
             ("QUERY_ADMIN_API_ADDRESS", Some("1.2.3.4:8081")),
             ("QUERY_METRIC_API_ADDRESS", Some("1.2.3.4:7071")),
-            ("QUERY_TABLE_META_CACHE_ENABLED", Some("true")),
-            ("QUERY_TABLE_MEMORY_CACHE_MB_SIZE", Some("512")),
-            ("QUERY_TABLE_DISK_CACHE_ROOT", Some("_cache_env")),
-            ("QUERY_TABLE_DISK_CACHE_MB_SIZE", Some("512")),
-            ("QUERY_TABLE_CACHE_SNAPSHOT_COUNT", Some("256")),
-            ("QUERY_TABLE_CACHE_SEGMENT_COUNT", Some("10240")),
+            ("CACHE_ENABLE_TABLE_META_CACHE", Some("true")),
+            ("CACHE_DISK_PATH", Some("_cache_env")),
+            ("CACHE_DISK_MAX_BYTES", Some("512")),
+            ("CACHE_TABLE_META_SNAPSHOT_COUNT", Some("256")),
+            ("CACHE_TABLE_META_SEGMENT_COUNT", Some("10240")),
             ("META_ENDPOINTS", Some("0.0.0.0:9191")),
-            ("TABLE_CACHE_BLOOM_INDEX_META_COUNT", Some("3000")),
+            ("CACHE_TABLE_BLOOM_INDEX_META_COUNT", Some("3000")),
             (
-                "TABLE_CACHE_BLOOM_INDEX_DATA_BYTES",
+                "CACHE_TABLE_BLOOM_INDEX_FILTER_COUNT",
                 Some(format!("{}", 1024 * 1024 * 1024).as_str()),
             ),
             ("STORAGE_TYPE", Some("gcs")),
@@ -320,7 +321,9 @@ fn test_env_config_gcs() -> Result<()> {
             ("CONFIG_FILE", None),
         ],
         || {
-            let configured = Config::load_for_test().expect("must success").into_outer();
+            let configured = InnerConfig::load_for_test()
+                .expect("must success")
+                .into_config();
 
             assert_eq!("DEBUG", configured.log.level);
 
@@ -369,18 +372,16 @@ fn test_env_config_gcs() -> Result<()> {
             assert_eq!("", configured.storage.oss.oss_access_key_id);
             assert_eq!("", configured.storage.oss.oss_access_key_secret);
 
-            assert!(configured.query.table_engine_memory_enabled);
-
-            assert!(configured.query.table_meta_cache_enabled);
-            assert_eq!(512, configured.query.table_memory_cache_mb_size);
-            assert_eq!("_cache_env", configured.query.table_disk_cache_root);
-            assert_eq!(512, configured.query.table_disk_cache_mb_size);
-            assert_eq!(10240, configured.query.table_cache_segment_count);
-            assert_eq!(256, configured.query.table_cache_snapshot_count);
-            assert_eq!(3000, configured.query.table_cache_bloom_index_meta_count);
+            assert!(configured.cache.enable_table_meta_cache);
+            assert!(configured.cache.enable_table_bloom_index_cache);
+            assert_eq!("_cache_env", configured.cache.disk_cache_config.path);
+            assert_eq!(512, configured.cache.disk_cache_config.max_bytes);
+            assert_eq!(10240, configured.cache.table_meta_segment_count);
+            assert_eq!(256, configured.cache.table_meta_snapshot_count);
+            assert_eq!(3000, configured.cache.table_bloom_index_meta_count);
             assert_eq!(
-                1024 * 1024,
-                configured.query.table_cache_bloom_index_filter_count
+                1024 * 1024 * 1024,
+                configured.cache.table_bloom_index_filter_count
             );
         },
     );
@@ -407,16 +408,17 @@ fn test_env_config_oss() -> Result<()> {
             ("QUERY_FLIGHT_API_ADDRESS", Some("1.2.3.4:9091")),
             ("QUERY_ADMIN_API_ADDRESS", Some("1.2.3.4:8081")),
             ("QUERY_METRIC_API_ADDRESS", Some("1.2.3.4:7071")),
-            ("QUERY_TABLE_META_CACHE_ENABLED", Some("true")),
-            ("QUERY_TABLE_MEMORY_CACHE_MB_SIZE", Some("512")),
-            ("QUERY_TABLE_DISK_CACHE_ROOT", Some("_cache_env")),
-            ("QUERY_TABLE_DISK_CACHE_MB_SIZE", Some("512")),
-            ("QUERY_TABLE_CACHE_SNAPSHOT_COUNT", Some("256")),
-            ("QUERY_TABLE_CACHE_SEGMENT_COUNT", Some("10240")),
+            ("CACHE_ENABLE_TABLE_META_CACHE", Some("true")),
+            ("CACHE_DATA_CACHE_STORAGE", Some("disk")),
+            ("TABLE_CACHE_BLOOM_INDEX_FILTER_COUNT", Some("1")),
+            ("CACHE_DISK_PATH", Some("_cache_env")),
+            ("CACHE_DISK_MAX_BYTES", Some("512")),
+            ("CACHE_TABLE_META_SNAPSHOT_COUNT", Some("256")),
+            ("CACHE_TABLE_META_SEGMENT_COUNT", Some("10240")),
             ("META_ENDPOINTS", Some("0.0.0.0:9191")),
-            ("TABLE_CACHE_BLOOM_INDEX_META_COUNT", Some("3000")),
+            ("CACHE_TABLE_BLOOM_INDEX_META_COUNT", Some("3000")),
             (
-                "TABLE_CACHE_BLOOM_INDEX_DATA_BYTES",
+                "CACHE_TABLE_BLOOM_INDEX_FILTER_COUNT",
                 Some(format!("{}", 1024 * 1024 * 1024).as_str()),
             ),
             ("STORAGE_TYPE", Some("oss")),
@@ -446,7 +448,9 @@ fn test_env_config_oss() -> Result<()> {
             ("CONFIG_FILE", None),
         ],
         || {
-            let configured = Config::load_for_test().expect("must success").into_outer();
+            let configured = InnerConfig::load_for_test()
+                .expect("must success")
+                .into_config();
 
             assert_eq!("DEBUG", configured.log.level);
 
@@ -502,18 +506,15 @@ fn test_env_config_oss() -> Result<()> {
             assert_eq!("", configured.storage.gcs.gcs_root);
             assert_eq!("", configured.storage.gcs.credential);
 
-            assert!(configured.query.table_engine_memory_enabled);
-
-            assert!(configured.query.table_meta_cache_enabled);
-            assert_eq!(512, configured.query.table_memory_cache_mb_size);
-            assert_eq!("_cache_env", configured.query.table_disk_cache_root);
-            assert_eq!(512, configured.query.table_disk_cache_mb_size);
-            assert_eq!(10240, configured.query.table_cache_segment_count);
-            assert_eq!(256, configured.query.table_cache_snapshot_count);
-            assert_eq!(3000, configured.query.table_cache_bloom_index_meta_count);
+            assert!(configured.cache.enable_table_meta_cache);
+            assert_eq!("_cache_env", configured.cache.disk_cache_config.path);
+            assert_eq!(512, configured.cache.disk_cache_config.max_bytes);
+            assert_eq!(10240, configured.cache.table_meta_segment_count);
+            assert_eq!(256, configured.cache.table_meta_snapshot_count);
+            assert_eq!(3000, configured.cache.table_bloom_index_meta_count);
             assert_eq!(
-                1024 * 1024,
-                configured.query.table_cache_bloom_index_filter_count
+                1024 * 1024 * 1024,
+                configured.cache.table_bloom_index_filter_count
             );
         },
     );
@@ -558,18 +559,8 @@ rpc_tls_server_key = ""
 rpc_tls_query_server_root_ca_cert = ""
 rpc_tls_query_service_domain_name = "localhost"
 table_engine_memory_enabled = true
-database_engine_github_enabled = true
 wait_timeout_mills = 5000
 max_query_log_size = 10000
-table_meta_cache_enabled = false
-table_cache_snapshot_count = 256
-table_cache_segment_count = 10240
-table_cache_block_meta_count = 102400
-table_memory_cache_mb_size = 256
-table_disk_cache_root = "_cache"
-table_disk_cache_mb_size = 1024
-table_cache_bloom_index_meta_count = 3000
-table_cache_bloom_index_filter_count = 1048576 
 management_mode = false
 jwt_key_file = ""
 async_insert_max_data_size = 10000
@@ -640,6 +631,19 @@ protocol = "binary"
 type = "hive"
 address = "127.0.0.1:9083"
 protocol = "binary"
+
+[cache]
+
+enable_table_meta_cache = false
+table_meta_snapshot_count = 256
+table_meta_segment_count = 10240
+table_bloom_index_meta_count = 3000
+table_bloom_index_filter_count = 1048576 
+
+data_cache_storage = "disk"
+
+[cache.disk]
+path = "_cache"
 "#
         .as_bytes(),
     )?;
@@ -655,13 +659,20 @@ protocol = "binary"
             ("STORAGE_TYPE", None),
         ],
         || {
-            let cfg = Config::load_for_test()
+            let cfg = InnerConfig::load_for_test()
                 .expect("config load success")
-                .into_outer();
+                .into_config();
 
             assert_eq!("tenant_id_from_env", cfg.query.tenant_id);
             assert_eq!("access_key_id_from_env", cfg.storage.s3.access_key_id);
             assert_eq!("s3", cfg.storage.storage_type);
+
+            let cache_config = &cfg.cache;
+            assert_eq!(
+                cache_config.data_cache_storage,
+                CacheStorageTypeConfig::Disk
+            );
+            assert_eq!(cache_config.disk_cache_config.path, "_cache");
 
             // NOTE:
             //
@@ -715,7 +726,7 @@ protocol = "binary"
     temp_env::with_vars(
         vec![("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref()))],
         || {
-            let cfg = Config::load_for_test().expect("config load success");
+            let cfg = InnerConfig::load_for_test().expect("config load success");
 
             assert_eq!(
                 cfg.catalogs["hive"],
@@ -755,7 +766,7 @@ protocol = "binary"
     temp_env::with_vars(
         vec![("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref()))],
         || {
-            let cfg = Config::load_for_test().expect("config load success");
+            let cfg = InnerConfig::load_for_test().expect("config load success");
 
             assert_eq!(
                 cfg.catalogs["my_hive"],
@@ -770,5 +781,60 @@ protocol = "binary"
     // remove temp file
     fs::remove_file(file_path)?;
 
+    Ok(())
+}
+
+#[test]
+fn test_env_config_obsoleted() -> Result<()> {
+    let obsoleted = vec![
+        ("QUERY_TABLE_DISK_CACHE_MB_SIZE", Some("1")),
+        ("QUERY_TABLE_META_CACHE_ENABLED", Some("true")),
+        ("QUERY_TABLE_CACHE_BLOCK_META_COUNT", Some("1")),
+        ("QUERY_TABLE_MEMORY_CACHE_MB_SIZE", Some("1")),
+        ("QUERY_TABLE_DISK_CACHE_ROOT", Some("1")),
+        ("QUERY_TABLE_CACHE_SNAPSHOT_COUNT", Some("1")),
+        ("QUERY_TABLE_CACHE_STATISTIC_COUNT", Some("1")),
+        ("QUERY_TABLE_CACHE_SEGMENT_COUNT", Some("1")),
+        ("QUERY_TABLE_CACHE_BLOOM_INDEX_META_COUNT", Some("1")),
+        ("QUERY_TABLE_CACHE_BLOOM_INDEX_FILTER_COUNT", Some("1")),
+        ("QUERY_TABLE_CACHE_BLOOM_INDEX_DATA_BYTES", Some("1")),
+    ];
+
+    for env_var in obsoleted {
+        temp_env::with_vars(vec![env_var], || {
+            let r = InnerConfig::load_for_test();
+            assert!(r.is_err(), "expecting `Err`, but got `Ok`");
+            assert_eq!(r.unwrap_err().code(), ErrorCode::INVALID_CONFIG)
+        });
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_env_cache_config_and_defaults() -> Result<()> {
+    // test if one of the cache config option is overridden by environment variable
+    // default values of other cache config options are correct
+    //
+    // @see issue https://github.com/datafuselabs/databend/issues/10088
+    temp_env::with_vars(
+        vec![("CACHE_ENABLE_TABLE_META_CACHE", Some("true"))],
+        || {
+            let configured = InnerConfig::load_for_test()
+                .expect("must success")
+                .into_config();
+
+            let default = CacheConfig::default();
+            assert!(configured.cache.enable_table_meta_cache);
+            assert_eq!(
+                default.table_meta_segment_count,
+                configured.cache.table_meta_segment_count
+            );
+            assert_eq!(
+                default.table_meta_snapshot_count,
+                configured.cache.table_meta_snapshot_count
+            );
+        },
+    );
     Ok(())
 }

@@ -178,5 +178,5 @@ We'd love to hear from you. Feel free to run the code and see if Databend works 
 
 - [Databend Website](https://databend.rs)
 - [GitHub Discussions](https://github.com/datafuselabs/databend/discussions) (Feature/Bug reports, Contributions)
-- [Twitter](https://twitter.com/Datafuse_Labs) (Get the news fast)
+- [Twitter](https://twitter.com/DatabendLabs) (Get the news fast)
 - [Slack Channel](https://link.databend.rs/join-slack) (For live discussion with the Community)

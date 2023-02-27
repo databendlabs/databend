@@ -23,11 +23,13 @@ use common_ast::parser::token::TokenKind;
 use common_ast::parser::token::Tokenizer;
 use common_ast::walk_statement_mut;
 use common_ast::Backtrace;
+use common_ast::Dialect;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use parking_lot::RwLock;
 
+use super::semantic::AggregateRewriter;
 use super::semantic::DistinctToGroupBy;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerConfig;
@@ -82,7 +84,7 @@ impl Planner {
                 // Step 2: Parse the SQL.
                 let backtrace = Backtrace::new();
                 let (mut stmt, format) = parse_sql(&tokens, sql_dialect, &backtrace)?;
-                self.replace_stmt(&mut stmt);
+                self.replace_stmt(&mut stmt, sql_dialect);
 
                 // Step 3: Bind AST with catalog, and generate a pure logical SExpr
                 let metadata = Arc::new(RwLock::new(Metadata::default()));
@@ -99,8 +101,8 @@ impl Planner {
                 let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig {
                     enable_distributed_optimization: !self.ctx.get_cluster().is_empty(),
                 }));
-                let optimized_plan = optimize(self.ctx.clone(), opt_ctx, plan)?;
 
+                let optimized_plan = optimize(self.ctx.clone(), opt_ctx, plan)?;
                 Ok((optimized_plan, metadata.clone(), format))
             }
             .await;
@@ -148,11 +150,9 @@ impl Planner {
         }
     }
 
-    fn replace_stmt(&self, stmt: &mut Statement) {
-        let mut visitors = vec![DistinctToGroupBy::default()];
-        for v in visitors.iter_mut() {
-            walk_statement_mut(v, stmt)
-        }
+    fn replace_stmt(&self, stmt: &mut Statement, sql_dialect: Dialect) {
+        walk_statement_mut(&mut DistinctToGroupBy::default(), stmt);
+        walk_statement_mut(&mut AggregateRewriter { sql_dialect }, stmt);
 
         self.add_max_rows_limit(stmt);
     }

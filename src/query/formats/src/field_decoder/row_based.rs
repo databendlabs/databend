@@ -12,18 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::BufRead;
 use std::io::Cursor;
+use std::io::Seek;
+use std::io::SeekFrom;
 
 use bstr::ByteSlice;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::read_decimal_with_size;
 use common_expression::types::date::check_date;
+use common_expression::types::decimal::Decimal;
 use common_expression::types::number::Number;
 use common_expression::types::timestamp::check_timestamp;
 use common_expression::uniform_date;
 use common_expression::ArrayDeserializer;
 use common_expression::BooleanDeserializer;
 use common_expression::DateDeserializer;
+use common_expression::DecimalDeserializer;
 use common_expression::NullDeserializer;
 use common_expression::NullableDeserializer;
 use common_expression::NumberDeserializer;
@@ -80,6 +86,8 @@ pub trait FieldDecoderRowBased: FieldDecoder {
             TypeDeserializerImpl::UInt64(c) => self.read_int(c, reader, raw),
             TypeDeserializerImpl::Float32(c) => self.read_float(c, reader, raw),
             TypeDeserializerImpl::Float64(c) => self.read_float(c, reader, raw),
+            TypeDeserializerImpl::Decimal128(c) => self.read_decimal(c, reader, raw),
+            TypeDeserializerImpl::Decimal256(c) => self.read_decimal(c, reader, raw),
             TypeDeserializerImpl::Date(c) => self.read_date(c, reader, raw),
             TypeDeserializerImpl::Timestamp(c) => self.read_timestamp(c, reader, raw),
             TypeDeserializerImpl::String(c) => self.read_string(c, reader, raw),
@@ -178,6 +186,19 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         Ok(())
     }
 
+    fn read_decimal<R: AsRef<[u8]>, D: Decimal>(
+        &self,
+        column: &mut DecimalDeserializer<D>,
+        reader: &mut Cursor<R>,
+        _raw: bool,
+    ) -> Result<()> {
+        let buf = reader.remaining_slice();
+        let (n, n_read) = read_decimal_with_size(buf, column.size, false)?;
+        column.values.push(n);
+        reader.consume(n_read);
+        Ok(())
+    }
+
     fn read_string<R: AsRef<[u8]>>(
         &self,
         column: &mut StringDeserializer,
@@ -210,19 +231,29 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         column.buffer.clear();
         self.read_string_inner(reader, &mut column.buffer, raw)?;
         let mut buffer_readr = Cursor::new(&column.buffer);
-        let ts = buffer_readr.read_timestamp_text(&self.common_settings().timezone)?;
-        if !buffer_readr.eof() {
-            let data = column.buffer.to_str().unwrap_or("not utf8");
-            let msg = format!(
-                "fail to deserialize timestamp, unexpected end at pos {} of {}",
-                buffer_readr.position(),
-                data
-            );
-            return Err(ErrorCode::BadBytes(msg));
-        }
-        let micros = ts.timestamp_micros();
-        check_timestamp(micros)?;
-        column.builder.push(micros.as_());
+        let pos = buffer_readr.position();
+        let ts_result = buffer_readr.read_num_text_exact();
+        let ts = match ts_result {
+            Err(_) => {
+                buffer_readr
+                    .seek(SeekFrom::Start(pos))
+                    .expect("buffer reader seek must success");
+                let t = buffer_readr.read_timestamp_text(&self.common_settings().timezone)?;
+                if !buffer_readr.eof() {
+                    let data = column.buffer.to_str().unwrap_or("not utf8");
+                    let msg = format!(
+                        "fail to deserialize timestamp, unexpected end at pos {} of {}",
+                        buffer_readr.position(),
+                        data
+                    );
+                    return Err(ErrorCode::BadBytes(msg));
+                }
+                t.timestamp_micros()
+            }
+            Ok(t) => t,
+        };
+        check_timestamp(ts)?;
+        column.builder.push(ts.as_());
         Ok(())
     }
 

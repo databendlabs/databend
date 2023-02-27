@@ -35,6 +35,7 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
+use common_meta_app::principal::FileFormatOptions;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::CountTablesReply;
@@ -43,8 +44,8 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
-use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::RenameDatabaseReply;
@@ -355,6 +356,14 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn add_partitions_sha(&self, _sha: String) {
+        todo!()
+    }
+
+    fn get_partitions_shas(&self) -> Vec<String> {
+        todo!()
+    }
+
     fn attach_query_str(&self, _kind: String, _query: &str) {
         todo!()
     }
@@ -435,6 +444,16 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn get_last_query_id(&self, _index: i32) -> String {
+        todo!()
+    }
+    fn get_result_cache_key(&self, _query_id: &str) -> Option<String> {
+        todo!()
+    }
+    fn set_query_id_result_cache(&self, _query_id: String, _result_cache_key: String) {
+        todo!()
+    }
+
     fn set_on_error_map(&self, _map: Option<HashMap<String, ErrorCode>>) {
         todo!()
     }
@@ -456,6 +475,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
+        todo!()
+    }
+
+    async fn get_file_format(&self, _name: &str) -> Result<FileFormatOptions> {
         todo!()
     }
 
@@ -534,7 +557,7 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
-    async fn drop_table(&self, _req: DropTableReq) -> Result<DropTableReply> {
+    async fn drop_table_by_id(&self, _req: DropTableByIdReq) -> Result<DropTableReply> {
         todo!()
     }
 

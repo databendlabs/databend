@@ -21,7 +21,7 @@ use common_base::base::tokio::time::sleep;
 use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
-use common_config::Config;
+use common_config::InnerConfig;
 use common_exception::Result;
 use parking_lot::Mutex;
 use tracing::warn;
@@ -48,7 +48,7 @@ pub struct HttpQueryManager {
 }
 
 impl HttpQueryManager {
-    pub async fn init(cfg: &Config) -> Result<()> {
+    pub async fn init(cfg: &InnerConfig) -> Result<()> {
         GlobalInstance::set(Arc::new(HttpQueryManager {
             queries: Arc::new(RwLock::new(HashMap::new())),
             sessions: Mutex::new(ExpiringMap::default()),

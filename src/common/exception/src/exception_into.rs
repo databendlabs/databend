@@ -19,6 +19,10 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use common_meta_stoerr::MetaStorageError;
+use common_meta_types::MetaAPIError;
+use common_meta_types::MetaError;
+
 use crate::exception::ErrorCodeBacktrace;
 use crate::ErrorCode;
 
@@ -272,6 +276,24 @@ impl From<tonic::Status> for ErrorCode {
             }
             _ => ErrorCode::Unimplemented(status.to_string()),
         }
+    }
+}
+
+impl From<MetaError> for ErrorCode {
+    fn from(e: MetaError) -> Self {
+        ErrorCode::MetaServiceError(e.to_string())
+    }
+}
+
+impl From<MetaAPIError> for ErrorCode {
+    fn from(e: MetaAPIError) -> Self {
+        ErrorCode::MetaServiceError(e.to_string())
+    }
+}
+
+impl From<MetaStorageError> for ErrorCode {
+    fn from(e: MetaStorageError) -> Self {
+        ErrorCode::MetaServiceError(e.to_string())
     }
 }
 

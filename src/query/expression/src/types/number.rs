@@ -25,7 +25,6 @@ use ordered_float::OrderedFloat;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::concat_array;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -40,14 +39,14 @@ use crate::ScalarRef;
 pub type F32 = OrderedFloat<f32>;
 pub type F64 = OrderedFloat<f64>;
 
-pub const ALL_UNSIGNED_INTEGER_TYPES: &[NumberDataType; 4] = &[
+pub const ALL_UNSIGNED_INTEGER_TYPES: &[NumberDataType] = &[
     NumberDataType::UInt8,
     NumberDataType::UInt16,
     NumberDataType::UInt32,
     NumberDataType::UInt64,
 ];
 
-pub const ALL_INTEGER_TYPES: &[NumberDataType; 8] = &[
+pub const ALL_INTEGER_TYPES: &[NumberDataType] = &[
     NumberDataType::UInt8,
     NumberDataType::UInt16,
     NumberDataType::UInt32,
@@ -58,10 +57,19 @@ pub const ALL_INTEGER_TYPES: &[NumberDataType; 8] = &[
     NumberDataType::Int64,
 ];
 
-pub const ALL_FLOAT_TYPES: &[NumberDataType; 2] =
-    &[NumberDataType::Float32, NumberDataType::Float64];
-pub const ALL_NUMERICS_TYPES: &[NumberDataType; 10] =
-    &concat_array(ALL_INTEGER_TYPES, ALL_FLOAT_TYPES);
+pub const ALL_FLOAT_TYPES: &[NumberDataType] = &[NumberDataType::Float32, NumberDataType::Float64];
+pub const ALL_NUMERICS_TYPES: &[NumberDataType] = &[
+    NumberDataType::UInt8,
+    NumberDataType::UInt16,
+    NumberDataType::UInt32,
+    NumberDataType::UInt64,
+    NumberDataType::Int8,
+    NumberDataType::Int16,
+    NumberDataType::Int32,
+    NumberDataType::Int64,
+    NumberDataType::Float32,
+    NumberDataType::Float64,
+];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NumberType<T: Number>(PhantomData<T>);
@@ -147,7 +155,7 @@ impl<Num: Number> ValueType for NumberType<Num> {
     }
 
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
-        col.clone().slice(range.start, range.end - range.start)
+        col.clone().sliced(range.start, range.end - range.start)
     }
 
     fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a> {
@@ -372,50 +380,6 @@ impl NumberDataType {
             },
         }
     }
-
-    pub fn super_type(self, other: Self) -> Self {
-        if self.can_lossless_cast_to(other) {
-            return other;
-        } else if other.can_lossless_cast_to(self) {
-            return self;
-        }
-        let max_bit_width = 64;
-        match (self.is_float(), other.is_float()) {
-            (true, true) => NumberDataType::new(
-                max_bit_with(self.bit_width(), other.bit_width()),
-                true,
-                true,
-            ),
-            (true, false) => {
-                let bin_width = next_bit_width(other.bit_width()).unwrap_or(max_bit_width);
-                NumberDataType::new(max_bit_with(bin_width, self.bit_width()), true, true)
-            }
-            (false, true) => {
-                let bin_width = next_bit_width(self.bit_width()).unwrap_or(max_bit_width);
-                NumberDataType::new(max_bit_with(bin_width, other.bit_width()), true, true)
-            }
-            (false, false) => match (self.is_signed(), other.is_signed()) {
-                (true, true) => NumberDataType::new(
-                    max_bit_with(self.bit_width(), other.bit_width()),
-                    true,
-                    false,
-                ),
-                (false, false) => NumberDataType::new(
-                    max_bit_with(self.bit_width(), other.bit_width()),
-                    false,
-                    false,
-                ),
-                (false, true) => {
-                    let bin_width = next_bit_width(other.bit_width()).unwrap_or(max_bit_width);
-                    NumberDataType::new(max_bit_with(bin_width, self.bit_width()), true, false)
-                }
-                (true, false) => {
-                    let bin_width = next_bit_width(self.bit_width()).unwrap_or(max_bit_width);
-                    NumberDataType::new(max_bit_with(bin_width, other.bit_width()), true, false)
-                }
-            },
-        }
-    }
 }
 
 const fn next_bit_width(width: u8) -> Option<u8> {
@@ -426,10 +390,6 @@ const fn next_bit_width(width: u8) -> Option<u8> {
         64 => None,
         _ => panic!("invalid bit width"),
     }
-}
-
-const fn max_bit_with(lhs: u8, rhs: u8) -> u8 {
-    if lhs > rhs { lhs } else { rhs }
 }
 
 impl PartialOrd for NumberScalar {
@@ -493,7 +453,7 @@ impl NumberColumn {
 
         crate::with_number_type!(|NUM_TYPE| match self {
             NumberColumn::NUM_TYPE(col) => {
-                NumberColumn::NUM_TYPE(col.clone().slice(range.start, range.end - range.start))
+                NumberColumn::NUM_TYPE(col.clone().sliced(range.start, range.end - range.start))
             }
         })
     }
@@ -589,8 +549,11 @@ impl<T: Number> SimpleDomain<T> {
     }
 
     pub fn overflow_cast_with_minmax<U: Number>(&self, min: U, max: U) -> (SimpleDomain<U>, bool) {
-        let (min, min_overflowing) = overflow_cast_with_minmax::<T, U>(self.min, min, max);
-        let (max, max_overflowing) = overflow_cast_with_minmax::<T, U>(self.max, min, max);
+        let (min, min_overflowing) =
+            overflow_cast_with_minmax::<T, U>(self.min, min, max).unwrap_or((min, true));
+        let (max, max_overflowing) =
+            overflow_cast_with_minmax::<T, U>(self.max, min, max).unwrap_or((max, true));
+
         (
             SimpleDomain { min, max },
             min_overflowing || max_overflowing,
@@ -598,16 +561,15 @@ impl<T: Number> SimpleDomain<T> {
     }
 }
 
-fn overflow_cast_with_minmax<T: Number, U: Number>(src: T, min: U, max: U) -> (U, bool) {
+fn overflow_cast_with_minmax<T: Number, U: Number>(src: T, min: U, max: U) -> Option<(U, bool)> {
     let dest_min: T = num_traits::cast(min).unwrap_or(T::MIN);
     let dest_max: T = num_traits::cast(max).unwrap_or(T::MAX);
     let src_clamp: T = src.clamp(dest_min, dest_max);
     let overflowing = src != src_clamp;
-    // The number must be within the range that `U` can represent after clamping, therefore
-    // it's safe to unwrap.
-    let dest: U = num_traits::cast(src_clamp).unwrap();
 
-    (dest, overflowing)
+    // It will have errors if the src type is Inf/NaN
+    let dest: U = num_traits::cast(src_clamp)?;
+    Some((dest, overflowing))
 }
 
 #[macro_export]

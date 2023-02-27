@@ -36,6 +36,10 @@ pub type ColumnID = String;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TableScan {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+
     pub name_mapping: BTreeMap<String, IndexType>,
     pub source: Box<DataSourcePlan>,
 
@@ -59,7 +63,13 @@ impl TableScan {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Filter {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+
     pub input: Box<PhysicalPlan>,
+
+    // Assumption: expression's data type must be `DataType::Boolean`.
     pub predicates: Vec<RemoteExpr>,
 
     /// Only used for explain
@@ -74,6 +84,10 @@ impl Filter {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Project {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+
     pub input: Box<PhysicalPlan>,
     pub projections: Vec<usize>,
 
@@ -95,6 +109,10 @@ impl Project {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct EvalScalar {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+
     pub input: Box<PhysicalPlan>,
     pub exprs: Vec<(RemoteExpr, IndexType)>,
 
@@ -117,6 +135,10 @@ impl EvalScalar {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AggregatePartial {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+
     pub input: Box<PhysicalPlan>,
     pub group_by: Vec<IndexType>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
@@ -155,6 +177,10 @@ impl AggregatePartial {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AggregateFinal {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+
     pub input: Box<PhysicalPlan>,
     pub group_by: Vec<IndexType>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
@@ -186,6 +212,10 @@ impl AggregateFinal {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Sort {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+
     pub input: Box<PhysicalPlan>,
     pub order_by: Vec<SortDesc>,
     // limit = Limit.limit + Limit.offset
@@ -203,6 +233,10 @@ impl Sort {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Limit {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+
     pub input: Box<PhysicalPlan>,
     pub limit: Option<usize>,
     pub offset: usize,
@@ -219,6 +253,10 @@ impl Limit {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct HashJoin {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+
     pub build: Box<PhysicalPlan>,
     pub probe: Box<PhysicalPlan>,
     pub build_keys: Vec<RemoteExpr>,
@@ -376,6 +414,10 @@ impl ExchangeSink {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct UnionAll {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+
     pub left: Box<PhysicalPlan>,
     pub right: Box<PhysicalPlan>,
     pub pairs: Vec<(String, String)>,

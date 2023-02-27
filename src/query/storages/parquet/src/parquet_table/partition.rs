@@ -54,7 +54,7 @@ impl ParquetTable {
 
         let top_k = push_down
             .as_ref()
-            .map(|p| p.top_k(&self.table_info.schema(), RangeIndex::supported_type))
+            .map(|p| p.top_k(&self.table_info.schema(), None, RangeIndex::supported_type))
             .unwrap_or_default();
 
         // Currently, arrow2 doesn't support reading stats of a inner column of a nested type.
@@ -73,18 +73,16 @@ impl ParquetTable {
         let (projected_arrow_schema, projected_column_nodes, _, columns_to_read) =
             ParquetReader::do_projection(&self.arrow_schema, &projection)?;
         let schema = Arc::new(arrow_to_table_schema(projected_arrow_schema));
-        let filters = push_down.as_ref().map(|extra| {
-            extra
-                .filters
-                .iter()
-                .map(|f| f.as_expr(&BUILTIN_FUNCTIONS))
-                .collect::<Vec<_>>()
-        });
+
+        let filter = push_down
+            .as_ref()
+            .and_then(|extra| extra.filter.as_ref().map(|f| f.as_expr(&BUILTIN_FUNCTIONS)));
+
         let top_k = top_k.map(|top_k| {
             let offset = projected_column_nodes
                 .column_nodes
                 .iter()
-                .position(|node| node.leaf_ids[0] == top_k.column_id as usize)
+                .position(|node| node.leaf_indices[0] == top_k.column_id as usize)
                 .unwrap();
             (top_k, offset)
         });
@@ -95,15 +93,18 @@ impl ParquetTable {
             Some(RangePrunerCreator::try_create(
                 func_ctx,
                 &schema,
-                filters.as_deref(),
+                filter.as_ref(),
             )?)
         } else {
             None
         };
 
-        let page_pruners = if self.read_options.prune_pages() && filters.is_some() {
-            let filters = filters.as_ref().unwrap();
-            Some(build_column_page_pruners(func_ctx, &schema, filters)?)
+        let page_pruners = if self.read_options.prune_pages() && filter.is_some() {
+            Some(build_column_page_pruners(
+                func_ctx,
+                &schema,
+                filter.as_ref().unwrap(),
+            )?)
         } else {
             None
         };

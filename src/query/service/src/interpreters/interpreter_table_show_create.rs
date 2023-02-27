@@ -115,16 +115,23 @@ impl Interpreter for ShowCreateTableInterpreter {
             table_create_sql.push_str(format!(" CLUSTER BY {}", cluster_keys_str).as_str());
         }
 
-        table_create_sql.push_str({
-            let mut opts = table_info.options().iter().collect::<Vec<_>>();
-            opts.sort_by_key(|(k, _)| *k);
-            opts.iter()
-                .filter(|(k, _)| !is_internal_opt_key(k))
-                .map(|(k, v)| format!(" {}='{}'", k.to_uppercase(), v))
-                .collect::<Vec<_>>()
-                .join("")
-                .as_str()
-        });
+        let settings = self.ctx.get_settings();
+        let hide_options_in_show_create_table = settings
+            .get_hide_options_in_show_create_table()
+            .unwrap_or(false);
+
+        if !hide_options_in_show_create_table {
+            table_create_sql.push_str({
+                let mut opts = table_info.options().iter().collect::<Vec<_>>();
+                opts.sort_by_key(|(k, _)| *k);
+                opts.iter()
+                    .filter(|(k, _)| !is_internal_opt_key(k))
+                    .map(|(k, v)| format!(" {}='{}'", k.to_uppercase(), v))
+                    .collect::<Vec<_>>()
+                    .join("")
+                    .as_str()
+            });
+        }
 
         let block = DataBlock::new(
             vec![

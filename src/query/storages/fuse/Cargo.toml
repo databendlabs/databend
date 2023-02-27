@@ -14,7 +14,6 @@ test = false
 [dependencies]
 common-arrow = { path = "../../../common/arrow" }
 common-base = { path = "../../../common/base" }
-common-cache = { path = "../../../common/cache" }
 common-catalog = { path = "../../catalog" }
 common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
@@ -48,6 +47,7 @@ metrics = "0.20.1"
 opendal = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = "0.10.6"
 streaming-decompression = "0.1.2"
 tracing = "0.1.36"
 typetag = "0.2.3"

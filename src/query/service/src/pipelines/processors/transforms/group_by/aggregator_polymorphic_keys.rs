@@ -85,11 +85,14 @@ use crate::pipelines::processors::AggregatorParams;
 //     }
 // }
 //
-pub trait PolymorphicKeysHelper<Method: HashMethod> {
-    const SUPPORT_TWO_LEVEL: bool;
+pub trait PolymorphicKeysHelper<Method: HashMethod>: Send + Sync + 'static {
+    const SUPPORT_PARTITIONED: bool;
 
-    type HashTable: HashtableLike<Key = Method::HashKey, Value = usize> + Send + Sync + 'static;
-    fn create_hash_table(&self) -> Result<Self::HashTable>;
+    type HashTable<T: Send + Sync + 'static>: HashtableLike<Key = Method::HashKey, Value = T>
+        + Send
+        + Sync
+        + 'static;
+    fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>>;
 
     type ColumnBuilder<'a>: KeysColumnBuilder<T = &'a Method::HashKey>
     where
@@ -122,11 +125,11 @@ pub trait PolymorphicKeysHelper<Method: HashMethod> {
 }
 
 impl PolymorphicKeysHelper<HashMethodFixedKeys<u8>> for HashMethodFixedKeys<u8> {
-    const SUPPORT_TWO_LEVEL: bool = false;
+    const SUPPORT_PARTITIONED: bool = false;
 
-    type HashTable = LookupHashMap<u8, 256, usize>;
+    type HashTable<T: Send + Sync + 'static> = LookupHashMap<u8, 256, T>;
 
-    fn create_hash_table(&self) -> Result<Self::HashTable> {
+    fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>> {
         Ok(LookupHashMap::create(Default::default()))
     }
 
@@ -159,11 +162,11 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u8>> for HashMethodFixedKeys<u8> 
 }
 
 impl PolymorphicKeysHelper<HashMethodFixedKeys<u16>> for HashMethodFixedKeys<u16> {
-    const SUPPORT_TWO_LEVEL: bool = false;
+    const SUPPORT_PARTITIONED: bool = false;
 
-    type HashTable = LookupHashMap<u16, 65536, usize>;
+    type HashTable<T: Send + Sync + 'static> = LookupHashMap<u16, 65536, T>;
 
-    fn create_hash_table(&self) -> Result<Self::HashTable> {
+    fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>> {
         Ok(LookupHashMap::create(Default::default()))
     }
 
@@ -196,11 +199,11 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u16>> for HashMethodFixedKeys<u16
 }
 
 impl PolymorphicKeysHelper<HashMethodFixedKeys<u32>> for HashMethodFixedKeys<u32> {
-    const SUPPORT_TWO_LEVEL: bool = true;
+    const SUPPORT_PARTITIONED: bool = true;
 
-    type HashTable = HashMap<u32, usize>;
+    type HashTable<T: Send + Sync + 'static> = HashMap<u32, T>;
 
-    fn create_hash_table(&self) -> Result<Self::HashTable> {
+    fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>> {
         Ok(HashMap::new())
     }
 
@@ -233,11 +236,11 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u32>> for HashMethodFixedKeys<u32
 }
 
 impl PolymorphicKeysHelper<HashMethodFixedKeys<u64>> for HashMethodFixedKeys<u64> {
-    const SUPPORT_TWO_LEVEL: bool = true;
+    const SUPPORT_PARTITIONED: bool = true;
 
-    type HashTable = HashMap<u64, usize>;
+    type HashTable<T: Send + Sync + 'static> = HashMap<u64, T>;
 
-    fn create_hash_table(&self) -> Result<Self::HashTable> {
+    fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>> {
         Ok(HashMap::new())
     }
 
@@ -270,11 +273,11 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u64>> for HashMethodFixedKeys<u64
 }
 
 impl PolymorphicKeysHelper<HashMethodKeysU128> for HashMethodKeysU128 {
-    const SUPPORT_TWO_LEVEL: bool = true;
+    const SUPPORT_PARTITIONED: bool = true;
 
-    type HashTable = HashMap<u128, usize>;
+    type HashTable<T: Send + Sync + 'static> = HashMap<u128, T>;
 
-    fn create_hash_table(&self) -> Result<Self::HashTable> {
+    fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>> {
         Ok(HashMap::new())
     }
 
@@ -316,11 +319,11 @@ impl PolymorphicKeysHelper<HashMethodKeysU128> for HashMethodKeysU128 {
 }
 
 impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
-    const SUPPORT_TWO_LEVEL: bool = true;
+    const SUPPORT_PARTITIONED: bool = true;
 
-    type HashTable = HashMap<U256, usize>;
+    type HashTable<T: Send + Sync + 'static> = HashMap<U256, T>;
 
-    fn create_hash_table(&self) -> Result<Self::HashTable> {
+    fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>> {
         Ok(HashMap::new())
     }
 
@@ -363,11 +366,11 @@ impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
 }
 
 impl PolymorphicKeysHelper<HashMethodSingleString> for HashMethodSingleString {
-    const SUPPORT_TWO_LEVEL: bool = true;
+    const SUPPORT_PARTITIONED: bool = true;
 
-    type HashTable = ShortStringHashMap<[u8], usize>;
+    type HashTable<T: Send + Sync + 'static> = ShortStringHashMap<[u8], T>;
 
-    fn create_hash_table(&self) -> Result<Self::HashTable> {
+    fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>> {
         Ok(ShortStringHashMap::new())
     }
 
@@ -403,11 +406,11 @@ impl PolymorphicKeysHelper<HashMethodSingleString> for HashMethodSingleString {
 }
 
 impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
-    const SUPPORT_TWO_LEVEL: bool = true;
+    const SUPPORT_PARTITIONED: bool = true;
 
-    type HashTable = StringHashMap<[u8], usize>;
+    type HashTable<T: Send + Sync + 'static> = StringHashMap<[u8], T>;
 
-    fn create_hash_table(&self) -> Result<Self::HashTable> {
+    fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>> {
         Ok(StringHashMap::new())
     }
 
@@ -477,15 +480,15 @@ impl<Method: HashMethod + Send> HashMethod for PartitionedHashMethod<Method> {
 impl<Method> PolymorphicKeysHelper<PartitionedHashMethod<Method>> for PartitionedHashMethod<Method>
 where
     Self: HashMethod<HashKey = Method::HashKey>,
-    Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
-    Method::HashKey: FastHash,
+    Method: HashMethod + PolymorphicKeysHelper<Method>,
 {
     // Partitioned cannot be recursive
-    const SUPPORT_TWO_LEVEL: bool = false;
+    const SUPPORT_PARTITIONED: bool = false;
 
-    type HashTable = PartitionedHashMap<Method::HashTable, BUCKETS_LG2>;
+    type HashTable<T: Send + Sync + 'static> =
+        PartitionedHashMap<Method::HashTable<T>, BUCKETS_LG2>;
 
-    fn create_hash_table(&self) -> Result<Self::HashTable> {
+    fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>> {
         let buckets = (1 << BUCKETS_LG2) as usize;
         let mut tables = Vec::with_capacity(buckets);
 
@@ -528,3 +531,7 @@ where
         self.method.get_hash(v)
     }
 }
+
+pub trait HashMethodBounds: HashMethod + PolymorphicKeysHelper<Self> {}
+
+impl<T: HashMethod + PolymorphicKeysHelper<T>> HashMethodBounds for T {}

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::fmt::Debug;
-use std::hash::Hash;
 use std::iter::TrustedLen;
 use std::marker::PhantomData;
 use std::ops::Not;
@@ -22,6 +21,7 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_hashtable::FastHash;
 use common_io::prelude::BinaryWrite;
 use common_io::prelude::FormatSettings;
 use ethnum::i256;
@@ -54,8 +54,8 @@ pub enum KeysState {
     U256(Vec<u256>),
 }
 
-pub trait HashMethod: Clone {
-    type HashKey: ?Sized + Eq + Hash + Debug;
+pub trait HashMethod: Clone + Sync + Send + 'static {
+    type HashKey: ?Sized + Eq + FastHash + Debug;
 
     type HashKeyIter<'a>: Iterator<Item = &'a Self::HashKey> + TrustedLen
     where Self: 'a;
@@ -496,7 +496,7 @@ fn build(
 
 pub fn serialize_column_binary(column: &Column, row: usize, vec: &mut Vec<u8>) {
     match column {
-        Column::Null { .. } | Column::EmptyArray { .. } => vec.push(0),
+        Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => vec.push(0),
         Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
             NumberColumn::NUM_TYPE(v) => vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
         }),
@@ -507,7 +507,7 @@ pub fn serialize_column_binary(column: &Column, row: usize, vec: &mut Vec<u8>) {
         Column::Decimal(_) => unreachable!("Decimal is not supported in group by keys format"),
         Column::Timestamp(v) => vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
         Column::Date(v) => vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
-        Column::Array(array) => {
+        Column::Array(array) | Column::Map(array) => {
             let data = array.index(row).unwrap();
             BinaryWrite::write_uvarint(vec, data.len() as u64).unwrap();
             for i in 0..data.len() {

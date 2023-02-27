@@ -26,6 +26,7 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
+use common_meta_app::principal::FileFormatOptions;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_settings::Settings;
@@ -83,6 +84,8 @@ pub trait TableContext: Send + Sync {
     fn get_partition(&self) -> Option<PartInfoPtr>;
     fn get_partitions(&self, num: usize) -> Vec<PartInfoPtr>;
     fn set_partitions(&self, partitions: Partitions) -> Result<()>;
+    fn add_partitions_sha(&self, sha: String);
+    fn get_partitions_shas(&self) -> Vec<String>;
 
     fn attach_query_str(&self, kind: String, query: &str);
     fn get_query_str(&self) -> String;
@@ -106,6 +109,9 @@ pub trait TableContext: Send + Sync {
     fn get_cluster(&self) -> Arc<Cluster>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
     fn get_stage_attachment(&self) -> Option<StageAttachment>;
+    fn get_last_query_id(&self, index: i32) -> String;
+    fn get_result_cache_key(&self, query_id: &str) -> Option<String>;
+    fn set_query_id_result_cache(&self, query_id: String, result_cache_key: String);
     fn set_on_error_map(&self, map: Option<HashMap<String, ErrorCode>>);
 
     fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()>;
@@ -115,6 +121,8 @@ pub trait TableContext: Send + Sync {
     fn get_data_operator(&self) -> Result<DataOperator>;
     fn push_precommit_block(&self, block: DataBlock);
     fn consume_precommit_blocks(&self) -> Vec<DataBlock>;
+
+    async fn get_file_format(&self, name: &str) -> Result<FileFormatOptions>;
 
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;

@@ -14,11 +14,11 @@
 
 use std::collections::HashMap;
 
+use common_expression::ColumnId;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::meta::statistics::FormatVersion;
-use crate::meta::ColumnId;
 use crate::meta::SnapshotId;
 use crate::meta::Versioned;
 

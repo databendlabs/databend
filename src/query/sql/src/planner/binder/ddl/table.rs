@@ -47,22 +47,27 @@ use common_ast::parser::tokenize_sql;
 use common_ast::walk_expr_mut;
 use common_ast::Backtrace;
 use common_ast::Dialect;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_schema_type;
 use common_expression::infer_table_schema;
-use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
+use common_expression::ConstantFolder;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_meta_app::storage::StorageParams;
 use common_storage::DataOperator;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
 use storages_common_table_meta::table::is_reserved_opt_key;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use tracing::debug;
 
 use crate::binder::location::parse_uri_location;
@@ -78,6 +83,7 @@ use crate::planner::semantic::TypeChecker;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
+use crate::plans::CastExpr;
 use crate::plans::CreateTablePlanV2;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropTableClusterKeyPlan;
@@ -98,6 +104,7 @@ use crate::plans::UndropTablePlan;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::Planner;
+use crate::ScalarExpr;
 use crate::SelectBuilder;
 
 impl Binder {
@@ -114,7 +121,7 @@ impl Binder {
             with_history,
         } = stmt;
 
-        let database = self.check_database_exist(database).await?;
+        let database = self.check_database_exist(catalog, database).await?;
 
         let mut select_builder = if stmt.with_history {
             SelectBuilder::from("system.tables_with_history")
@@ -248,7 +255,7 @@ impl Binder {
     ) -> Result<Plan> {
         let ShowTablesStatusStmt { database, limit } = stmt;
 
-        let database = self.check_database_exist(database).await?;
+        let database = self.check_database_exist(&None, database).await?;
 
         let select_cols = "name AS Name, engine AS Engine, 0 AS Version, \
         NULL AS Row_format, num_rows AS Rows, NULL AS Avg_row_length, data_size AS Data_length, \
@@ -286,13 +293,21 @@ impl Binder {
         self.bind_statement(bind_context, &stmt).await
     }
 
-    async fn check_database_exist(&mut self, database: &Option<Identifier>) -> Result<String> {
+    async fn check_database_exist(
+        &mut self,
+        catalog: &Option<Identifier>,
+        database: &Option<Identifier>,
+    ) -> Result<String> {
+        let ctl_name = match catalog {
+            Some(ctl) => ctl.to_string(),
+            None => self.ctx.get_current_catalog(),
+        };
         match database {
             None => Ok(self.ctx.get_current_database()),
             Some(ident) => {
                 let database = normalize_identifier(ident, &self.name_resolution_ctx).name;
                 self.ctx
-                    .get_catalog(&self.ctx.get_current_catalog())?
+                    .get_catalog(&ctl_name)?
                     .get_database(&self.ctx.get_tenant(), &database)
                     .await?;
                 Ok(database)
@@ -436,6 +451,47 @@ impl Binder {
                 .await?;
             let db_id = db.get_db_info().ident.db_id;
             options.insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
+
+            let config = GlobalConfig::instance();
+            let is_blocking_fs = matches!(
+                storage_params.as_ref().unwrap_or(&config.storage.params),
+                StorageParams::Fs(_)
+            );
+
+            // we should persist the storage format and compression type instead of using the default value in fuse table
+            if !options.contains_key(OPT_KEY_STORAGE_FORMAT) {
+                let default_storage_format = match config.query.default_storage_format.as_str() {
+                    "" | "auto" => {
+                        if is_blocking_fs {
+                            "native"
+                        } else {
+                            "parquet"
+                        }
+                    }
+                    _ => config.query.default_storage_format.as_str(),
+                };
+                options.insert(
+                    OPT_KEY_STORAGE_FORMAT.to_owned(),
+                    default_storage_format.to_owned(),
+                );
+            }
+
+            if !options.contains_key(OPT_KEY_TABLE_COMPRESSION) {
+                let default_compression = match config.query.default_compression.as_str() {
+                    "" | "auto" => {
+                        if is_blocking_fs {
+                            "lz4"
+                        } else {
+                            "zstd"
+                        }
+                    }
+                    _ => config.query.default_compression.as_str(),
+                };
+                options.insert(
+                    OPT_KEY_TABLE_COMPRESSION.to_owned(),
+                    default_compression.to_owned(),
+                );
+            }
         }
 
         let cluster_key = {
@@ -904,15 +960,27 @@ impl Binder {
             fields.push(TableField::new(&name, schema_data_type.clone()));
             fields_default_expr.push({
                 if let Some(default_expr) = &column.default_expr {
-                    let (_expr, expr_type) = scalar_binder.bind(default_expr).await?;
-                    let data_type = DataType::from(&schema_data_type);
-                    if common_super_type(data_type.clone(), expr_type.clone()).is_none() {
+                    let (expr, _) = scalar_binder.bind(default_expr).await?;
+                    let is_try = schema_data_type.is_nullable();
+                    let cast_expr_to_field_type = ScalarExpr::CastExpr(CastExpr {
+                        is_try,
+                        from_type: Box::new(expr.data_type()),
+                        target_type: Box::new(DataType::from(&schema_data_type)),
+                        argument: Box::new(expr),
+                    })
+                    .as_expr_with_col_index()?;
+                    let (fold_to_constant, _) = ConstantFolder::fold(
+                        &cast_expr_to_field_type,
+                        self.ctx.get_function_context()?,
+                        &BUILTIN_FUNCTIONS,
+                    );
+                    if let common_expression::Expr::Constant { .. } = fold_to_constant {
+                        Some(default_expr.to_string())
+                    } else {
                         return Err(ErrorCode::SemanticError(format!(
-                            "column {name} is of type {} but default expression is of type {}",
-                            data_type, expr_type
+                            "default expression {cast_expr_to_field_type} is not a valid constant",
                         )));
                     }
-                    Some(default_expr.to_string())
                 } else {
                     None
                 }
@@ -1025,7 +1093,7 @@ impl Binder {
         for cluster_by in cluster_by.iter() {
             let (cluster_key, _) = scalar_binder.bind(cluster_by).await?;
             let expr = cluster_key.as_expr_with_col_index()?;
-            if is_expr_non_deterministic(&expr) {
+            if !expr.is_deterministic() {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Cluster by expression `{:#}` is not deterministic",
                     cluster_by
@@ -1042,17 +1110,5 @@ impl Binder {
         }
 
         Ok(cluster_keys)
-    }
-}
-
-fn is_expr_non_deterministic(expr: &common_expression::Expr) -> bool {
-    match expr {
-        common_expression::Expr::Constant { .. } => false,
-        common_expression::Expr::ColumnRef { .. } => false,
-        common_expression::Expr::Cast { expr, .. } => is_expr_non_deterministic(expr),
-        common_expression::Expr::FunctionCall { function, args, .. } => {
-            function.signature.property.non_deterministic
-                || args.iter().any(is_expr_non_deterministic)
-        }
     }
 }

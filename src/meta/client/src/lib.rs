@@ -19,6 +19,8 @@ mod grpc_client;
 mod kv_api_impl;
 mod message;
 
+pub use common_meta_api::reply::reply_to_api_result;
+pub use common_meta_api::reply::reply_to_meta_result;
 pub use grpc_action::MetaGrpcReq;
 pub use grpc_action::RequestFor;
 pub use grpc_client::ClientHandle;
@@ -40,25 +42,6 @@ pub static METACLI_COMMIT_SEMVER: Lazy<Version> = Lazy::new(|| {
 
 /// Oldest compatible nightly metasrv version
 ///
-/// ```text
-/// time
-/// ^
-/// | now  --.     now --.
-/// |        |           |
-/// |        |           '----> 8.80
-/// | 8.79 . |                  8.79
-/// |      | |
-/// |      | '---> 8.35 -.
-/// |      |             |
-/// |      '-----> 8.30 -+
-/// |                    |
-/// | 7.59               '----> 7.59
-/// |-----------------------------------
-/// | Client       Server       Client
-///
-/// --> : pointing to min compatible version
-/// ```
-///
 /// - 2022-10-19: after 0.8.79:
 ///   Update min compatible server to 0.8.35:
 ///   Since which, meta-server adds new API kv_api() to replace write_msg() and read_msg();
@@ -68,6 +51,12 @@ pub static METACLI_COMMIT_SEMVER: Lazy<Version> = Lazy::new(|| {
 ///   Remove read_msg and write_msg from service definition meta.proto
 ///   Update server.min_cli_ver to 0.8.80, the min ver in which meta-client switched from
 ///   `read_msg/write_msg` to `kv_api`
+///
+/// - 2023-02-16: since 0.9.41:
+///   Meta client add `Compatible` layer to accept KVAppError or MetaAPIError
+///
+/// - 2023-02-17: since 0.9.42:
+///   Meta service only responds with MetaAPIError.
 pub static MIN_METASRV_SEMVER: Version = Version {
     major: 0,
     minor: 8,

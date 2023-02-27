@@ -16,7 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_catalog::table_args::TableArgs;
-use common_config::Config;
+use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CountTablesReply;
@@ -25,8 +25,8 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
-use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::RenameDatabaseReply;
@@ -87,7 +87,7 @@ impl DatabaseCatalog {
         }
     }
 
-    pub async fn try_create_with_config(conf: Config) -> Result<DatabaseCatalog> {
+    pub async fn try_create_with_config(conf: InnerConfig) -> Result<DatabaseCatalog> {
         let immutable_catalog = ImmutableCatalog::try_create_with_config(&conf).await?;
         let mutable_catalog = MutableCatalog::try_create_with_config(conf).await?;
         let table_function_factory = TableFunctionFactory::create();
@@ -324,22 +324,9 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog.create_table(req).await
     }
 
-    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
-        if req.tenant().is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty(while drop table)",
-            ));
-        }
-        info!("Drop table from req:{:?}", req);
-
-        if self
-            .immutable_catalog
-            .exists_database(req.tenant(), req.db_name())
-            .await?
-        {
-            return self.immutable_catalog.drop_table(req).await;
-        }
-        self.mutable_catalog.drop_table(req).await
+    async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply> {
+        let res = self.mutable_catalog.drop_table_by_id(req).await?;
+        Ok(res)
     }
 
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {

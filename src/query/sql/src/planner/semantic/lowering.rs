@@ -96,15 +96,12 @@ impl ScalarExpr {
                     .map(ScalarExpr::as_raw_expr_with_col_name)
                     .collect(),
             },
-            ScalarExpr::CastExpr(cast) => {
-                let is_try = cast.target_type.is_nullable();
-                RawExpr::Cast {
-                    span: None,
-                    is_try,
-                    expr: Box::new(cast.argument.as_raw_expr_with_col_name()),
-                    dest_type: (*cast.target_type).clone(),
-                }
-            }
+            ScalarExpr::CastExpr(cast) => RawExpr::Cast {
+                span: None,
+                is_try: cast.is_try,
+                expr: Box::new(cast.argument.as_raw_expr_with_col_name()),
+                dest_type: (*cast.target_type).clone(),
+            },
             ScalarExpr::SubqueryExpr(subquery) => RawExpr::ColumnRef {
                 span: None,
                 id: DUMMY_NAME.to_string(),
@@ -190,15 +187,12 @@ impl ScalarExpr {
                     .map(ScalarExpr::as_raw_expr_with_col_index)
                     .collect(),
             },
-            ScalarExpr::CastExpr(cast) => {
-                let is_try = cast.target_type.is_nullable();
-                RawExpr::Cast {
-                    span: None,
-                    is_try,
-                    expr: Box::new(cast.argument.as_raw_expr_with_col_index()),
-                    dest_type: (*cast.target_type).clone(),
-                }
-            }
+            ScalarExpr::CastExpr(cast) => RawExpr::Cast {
+                span: None,
+                is_try: cast.is_try,
+                expr: Box::new(cast.argument.as_raw_expr_with_col_index()),
+                dest_type: (*cast.target_type).clone(),
+            },
             ScalarExpr::SubqueryExpr(subquery) => RawExpr::ColumnRef {
                 span: None,
                 id: DUMMY_INDEX,

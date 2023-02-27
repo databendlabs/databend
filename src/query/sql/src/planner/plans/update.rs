@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
+use common_expression::FieldIndex;
 
 use crate::plans::ScalarExpr;
 use crate::BindContext;
@@ -26,7 +27,7 @@ pub struct UpdatePlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub update_list: HashMap<usize, ScalarExpr>,
+    pub update_list: HashMap<FieldIndex, ScalarExpr>,
     pub selection: Option<ScalarExpr>,
     pub bind_context: Box<BindContext>,
 }

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_expression::types::array::ArrayColumn;
+use common_expression::types::decimal::DecimalColumn;
 use common_expression::types::ValueType;
 use common_expression::Column;
 use common_io::constants::FALSE_BYTES_LOWER;
@@ -82,9 +83,28 @@ impl FieldEncoderRowBased for FieldEncoderJSON {
         self.write_string_inner(&buf, out_buf, raw)
     }
 
+    fn write_map<T: ValueType>(
+        &self,
+        column: &ArrayColumn<T>,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+        raw: bool,
+    ) {
+        let mut buf = vec![];
+        self.nested.write_map(column, row_index, &mut buf, false);
+        self.write_string_inner(&buf, out_buf, raw)
+    }
+
     fn write_tuple(&self, columns: &[Column], row_index: usize, out_buf: &mut Vec<u8>, raw: bool) {
         let mut buf = vec![];
         self.nested.write_tuple(columns, row_index, &mut buf, false);
         self.write_string_inner(&buf, out_buf, raw)
+    }
+
+    fn write_decimal(&self, column: &DecimalColumn, row_index: usize, out_buf: &mut Vec<u8>) {
+        let data = column.index(row_index).unwrap().to_string();
+        out_buf.push(b'"');
+        out_buf.extend_from_slice(data.as_bytes());
+        out_buf.push(b'"');
     }
 }

@@ -32,6 +32,10 @@ use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableInfo;
 use common_storage::ColumnNodes;
 use opendal::Operator;
+use sha2::Digest;
+use sha2::Sha256;
+use storages_common_cache::CacheAccessor;
+use storages_common_cache_manager::CachedObject;
 use storages_common_index::Index;
 use storages_common_index::RangeIndex;
 use storages_common_table_meta::meta::BlockMeta;
@@ -57,8 +61,7 @@ impl FuseTable {
         match snapshot {
             Some(snapshot) => {
                 let settings = ctx.get_settings();
-
-                if settings.get_enable_distributed_eval_index()? {
+                if settings.get_enable_distributed_eval_index()? && !ctx.get_cluster().is_empty() {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for segment_location in &snapshot.segments {
                         segments.push(FuseLazyPartInfo::create(segment_location.clone()))
@@ -71,13 +74,14 @@ impl FuseTable {
                             snapshot.segments.len(),
                             snapshot.segments.len(),
                         ),
-                        Partitions::create(PartitionsShuffleKind::Mod, segments),
+                        Partitions::create(PartitionsShuffleKind::Mod, segments, true),
                     ));
                 }
 
                 let table_info = self.table_info.clone();
                 let segments_location = snapshot.segments.clone();
                 let summary = snapshot.summary.block_count as usize;
+
                 self.prune_snapshot_blocks(
                     ctx.clone(),
                     self.operator.clone(),
@@ -108,6 +112,24 @@ impl FuseTable {
             segments_location.len()
         );
 
+        type CacheItem = (PartStatistics, Partitions);
+
+        let cache_key = format!(
+            "{:x}",
+            Sha256::digest(format!("{:?}_{:?}", segments_location, push_downs))
+        );
+
+        if let Some(cache) = CacheItem::cache() {
+            if let Some(data) = cache.get(&cache_key) {
+                info!(
+                    "prune snapshot block from cache, final block numbers:{}, cost:{}",
+                    data.1.len(),
+                    start.elapsed().as_secs()
+                );
+                return Ok((data.0.clone(), data.1.clone()));
+            }
+        }
+
         let pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
             FusePruner::create(&ctx, dal, table_info.schema(), &push_downs)?
         } else {
@@ -135,13 +157,19 @@ impl FuseTable {
             .into_iter()
             .map(|(block_meta_index, block_meta)| (block_meta_index.range, block_meta))
             .collect::<Vec<_>>();
-        self.read_partitions_with_metas(
+
+        let result = self.read_partitions_with_metas(
             table_info.schema(),
             push_downs,
             &block_metas,
             summary,
             pruning_stats,
-        )
+        )?;
+
+        if let Some(cache) = CacheItem::cache() {
+            cache.put(cache_key, Arc::new(result.clone()));
+        }
+        Ok(result)
     }
 
     pub fn read_partitions_with_metas(
@@ -159,7 +187,13 @@ impl FuseTable {
 
         let top_k = push_downs
             .as_ref()
-            .map(|p| p.top_k(self.schema().as_ref(), RangeIndex::supported_type))
+            .map(|p| {
+                p.top_k(
+                    self.schema().as_ref(),
+                    self.cluster_key_str(),
+                    RangeIndex::supported_type,
+                )
+            })
             .unwrap_or_default();
         let (mut statistics, parts) =
             Self::to_partitions(Some(&schema), block_metas, &column_nodes, top_k, push_downs);
@@ -187,7 +221,7 @@ impl FuseTable {
     ) -> (PartStatistics, Partitions) {
         let limit = push_down
             .as_ref()
-            .filter(|p| p.order_by.is_empty() && p.filters.is_empty())
+            .filter(|p| p.order_by.is_empty() && p.filter.is_none())
             .and_then(|p| p.limit)
             .unwrap_or(usize::MAX);
 
@@ -230,7 +264,7 @@ impl FuseTable {
     fn is_exact(push_downs: &Option<PushDownInfo>) -> bool {
         match push_downs {
             None => true,
-            Some(extra) => extra.filters.is_empty(),
+            Some(extra) => extra.filter.is_none(),
         }
     }
 
@@ -241,7 +275,7 @@ impl FuseTable {
         limit: usize,
     ) -> (PartStatistics, Partitions) {
         let mut statistics = PartStatistics::default_exact();
-        let mut partitions = Partitions::create(PartitionsShuffleKind::Mod, vec![]);
+        let mut partitions = Partitions::create_nolazy(PartitionsShuffleKind::Mod, vec![]);
 
         if limit == 0 {
             return (statistics, partitions);

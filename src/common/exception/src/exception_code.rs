@@ -158,7 +158,7 @@ build_exceptions! {
     TableSchemaMismatch(1303),
 }
 
-// Metasvr errors [2001, 3000].
+// Meta service errors [2001, 3000].
 build_exceptions! {
     // Meta service does not work.
     MetaServiceError(2001),
@@ -218,6 +218,11 @@ build_exceptions! {
     StageFileAlreadyExists(2504),
     IllegalStageFileFormat(2505),
     StagePermissionDenied(2506),
+
+    // FileFormat error codes.
+    UnknownFileFormat(2507),
+    IllegalFileFormat(2508),
+    FileFormatAlreadyExists(2509),
 
     // User defined function error codes.
     IllegalUDFFormat(2601),

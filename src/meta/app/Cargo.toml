@@ -36,6 +36,9 @@ thiserror = { workspace = true }
 [dev-dependencies]
 anyhow = { workspace = true }
 
+[package.metadata.cargo-machete]
+ignored = ["num-traits"]
+
 [build-dependencies]
 common-building = { path = "../../common/building" }
 

@@ -37,7 +37,6 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Expr;
-use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
@@ -51,6 +50,7 @@ use common_pipeline_sources::SyncSourcer;
 use common_storage::init_operator;
 use common_storage::DataOperator;
 use futures::TryStreamExt;
+use opendal::ObjectMetakey;
 use opendal::ObjectMode;
 use opendal::Operator;
 use storages_common_index::RangeIndex;
@@ -106,18 +106,17 @@ impl HiveTable {
             )));
         }
 
-        let filter_expressions = push_downs.as_ref().map(|extra| {
+        let filter_expression = push_downs.as_ref().and_then(|extra| {
             extra
-                .filters
-                .iter()
-                .cloned()
+                .filter
+                .as_ref()
                 .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
-                .collect::<Vec<_>>()
         });
-        let range_filter = match filter_expressions {
-            Some(exprs) if !exprs.is_empty() => Some(RangeIndex::try_create(
+
+        let range_filter = match filter_expression {
+            Some(expr) => Some(RangeIndex::try_create(
                 ctx.get_function_context()?,
-                &exprs,
+                &expr,
                 self.table_info.schema(),
             )?),
             _ => None,
@@ -236,7 +235,7 @@ impl HiveTable {
     fn is_simple_select_query(&self, plan: &DataSourcePlan) -> bool {
         // couldn't get groupby order by info
         if let Some(PushDownInfo {
-            filters,
+            filter,
             limit: Some(lm),
             ..
         }) = &plan.push_downs
@@ -247,7 +246,14 @@ impl HiveTable {
 
             // filter out the partition column related expressions
             let partition_keys = self.get_partition_key_sets();
-            let columns = Self::get_columns_from_expressions(filters);
+            let columns = filter
+                .as_ref()
+                .map(|f| {
+                    let expr = f.as_expr(&BUILTIN_FUNCTIONS);
+                    expr.column_refs().keys().cloned().collect::<HashSet<_>>()
+                })
+                .unwrap_or_default();
+
             if columns.difference(&partition_keys).count() == 0 {
                 return true;
             }
@@ -260,16 +266,6 @@ impl HiveTable {
             Some(v) => v.iter().cloned().collect::<HashSet<_>>(),
             None => HashSet::new(),
         }
-    }
-
-    fn get_columns_from_expressions(exprs: &[RemoteExpr<String>]) -> HashSet<String> {
-        let mut cols = HashSet::new();
-        for expr in exprs {
-            for (col_name, _) in expr.as_expr(&BUILTIN_FUNCTIONS).column_refs() {
-                cols.insert(col_name);
-            }
-        }
-        cols
     }
 
     fn get_projections(&self, push_downs: &Option<PushDownInfo>) -> Result<Vec<usize>> {
@@ -388,7 +384,7 @@ impl HiveTable {
         &self,
         ctx: Arc<dyn TableContext>,
         partition_keys: Vec<String>,
-        filter_expressions: Vec<Expr<String>>,
+        filter_expression: Option<Expr<String>>,
     ) -> Result<Vec<(String, Option<String>)>> {
         let hive_catalog = ctx.get_catalog(CATALOG_HIVE)?;
         let hive_catalog = hive_catalog.as_any().downcast_ref::<HiveCatalog>().unwrap();
@@ -412,14 +408,10 @@ impl HiveTable {
             }
         }
 
-        if !filter_expressions.is_empty() {
+        if let Some(expr) = filter_expression {
             let partition_schemas = self.get_column_schemas(partition_keys.clone())?;
-            let partition_pruner = HivePartitionPruner::create(
-                ctx,
-                filter_expressions,
-                partition_schemas,
-                self.table_info.schema(),
-            );
+            let partition_pruner =
+                HivePartitionPruner::create(ctx, expr, partition_schemas, self.table_info.schema());
             partition_names = partition_pruner.prune(partition_names)?;
         }
 
@@ -464,15 +456,12 @@ impl HiveTable {
 
         if let Some(partition_keys) = &self.table_options.partition_keys {
             if !partition_keys.is_empty() {
-                let filter_expression = push_downs
-                    .as_ref()
-                    .map(|p| {
-                        p.filters
-                            .iter()
-                            .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
-                            .collect()
-                    })
-                    .unwrap_or_default();
+                let filter_expression = push_downs.as_ref().and_then(|p| {
+                    p.filter
+                        .as_ref()
+                        .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
+                });
+
                 return self
                     .get_query_locations_from_partition_table(
                         ctx.clone(),
@@ -544,7 +533,7 @@ impl HiveTable {
 
         Ok((
             Default::default(),
-            Partitions::create(PartitionsShuffleKind::Seq, partitions),
+            Partitions::create_nolazy(PartitionsShuffleKind::Seq, partitions),
         ))
     }
 }
@@ -784,15 +773,20 @@ async fn do_list_files_from_dir(
     let mut all_files = vec![];
     let mut all_dirs = vec![];
     while let Some(de) = m.try_next().await? {
+        let meta = de
+            .metadata(ObjectMetakey::Mode | ObjectMetakey::ContentLength)
+            .await?;
+
         let path = de.path();
         let file_offset = path.rfind('/').unwrap_or_default() + 1;
         if path[file_offset..].starts_with('.') || path[file_offset..].starts_with('_') {
             continue;
         }
-        match de.mode().await? {
+
+        match meta.mode() {
             ObjectMode::FILE => {
                 let filename = path.to_string();
-                let length = de.content_length().await?;
+                let length = meta.content_length();
                 all_files.push(HiveFileInfo::create(filename, length));
             }
             ObjectMode::DIR => {

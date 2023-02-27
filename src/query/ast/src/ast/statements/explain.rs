@@ -24,4 +24,7 @@ pub enum ExplainKind {
     Fragments,
     Raw,
     Plan,
+
+    // Explain analyze plan
+    AnalyzePlan,
 }

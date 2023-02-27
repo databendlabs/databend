@@ -98,16 +98,6 @@ pub fn column_merge_validity(column: &Column, bitmap: Option<Bitmap>) -> Option<
     }
 }
 
-pub const fn concat_array<T, const A: usize, const B: usize>(a: &[T; A], b: &[T; B]) -> [T; A + B] {
-    let mut result = std::mem::MaybeUninit::uninit();
-    let dest = result.as_mut_ptr() as *mut T;
-    unsafe {
-        std::ptr::copy_nonoverlapping(a.as_ptr(), dest, A);
-        std::ptr::copy_nonoverlapping(b.as_ptr(), dest.add(A), B);
-        result.assume_init()
-    }
-}
-
 pub fn serialize_to_parquet_with_compression(
     blocks: Vec<DataBlock>,
     schema: impl AsRef<TableSchema>,

@@ -50,6 +50,7 @@ databend-query = { path = "../query/service" }
 sharing-endpoint = { path = "../query/sharing-endpoint" }
 
 # Crates.io dependencies
+anyerror = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 comfy-table = "6.1.3"

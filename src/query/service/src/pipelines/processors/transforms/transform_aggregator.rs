@@ -23,7 +23,6 @@ use common_expression::*;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
-use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::transforms::aggregator::*;
 use crate::pipelines::processors::AggregatorTransformParams;
 use crate::pipelines::processors::Processor;
@@ -32,53 +31,18 @@ use crate::sessions::QueryContext;
 pub struct TransformAggregator;
 
 impl TransformAggregator {
-    pub fn try_create_final(
-        ctx: Arc<QueryContext>,
-        transform_params: AggregatorTransformParams,
-    ) -> Result<ProcessorPtr> {
-        let aggregator_params = transform_params.aggregator_params.clone();
-
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        if aggregator_params.group_columns.is_empty() {
-            return AggregatorTransform::create(
-                ctx,
-                transform_params,
-                FinalSingleStateAggregator::try_create(&aggregator_params, max_threads)?,
-            );
-        }
-
-        match aggregator_params.aggregate_functions.is_empty() {
-            true => with_mappedhash_method!(|T| match transform_params.method.clone() {
-                HashMethodKind::T(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    ParallelFinalAggregator::<false, T>::create(ctx, method, aggregator_params)?,
-                ),
-            }),
-
-            false => with_mappedhash_method!(|T| match transform_params.method.clone() {
-                HashMethodKind::T(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    ParallelFinalAggregator::<true, T>::create(ctx, method, aggregator_params)?,
-                ),
-            }),
-        }
-    }
-
     pub fn try_create_partial(
         transform_params: AggregatorTransformParams,
         ctx: Arc<QueryContext>,
         pass_state_to_final: bool,
-    ) -> Result<ProcessorPtr> {
+    ) -> Result<Box<dyn Processor>> {
         let aggregator_params = transform_params.aggregator_params.clone();
 
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
         if aggregator_params.group_columns.is_empty() {
-            return AggregatorTransform::create(
-                ctx,
-                transform_params,
-                PartialSingleStateAggregator::try_create(&aggregator_params, max_threads)?,
+            return PartialSingleStateAggregator::try_create(
+                transform_params.transform_input_port,
+                transform_params.transform_output_port,
+                &transform_params.aggregator_params,
             );
         }
 
@@ -132,7 +96,7 @@ impl<TAggregator: Aggregator + PartitionedAggregatorLike + 'static>
         ctx: Arc<QueryContext>,
         transform_params: AggregatorTransformParams,
         inner: TAggregator,
-    ) -> Result<ProcessorPtr> {
+    ) -> Result<Box<dyn Processor>> {
         let settings = ctx.get_settings();
         let two_level_threshold = settings.get_group_by_two_level_threshold()? as usize;
 
@@ -144,14 +108,12 @@ impl<TAggregator: Aggregator + PartitionedAggregatorLike + 'static>
             input_data_block: None,
         });
 
-        if TAggregator::SUPPORT_TWO_LEVEL
+        if TAggregator::SUPPORT_PARTITION
             && transform_params.aggregator_params.has_distinct_combinator()
         {
-            Ok(ProcessorPtr::create(Box::new(
-                transformer.convert_to_two_level_consume()?,
-            )))
+            Ok(Box::new(transformer.convert_to_two_level_consume()?))
         } else {
-            Ok(ProcessorPtr::create(Box::new(transformer)))
+            Ok(Box::new(transformer))
         }
     }
 
@@ -230,10 +192,14 @@ impl<TAggregator: Aggregator + PartitionedAggregatorLike + 'static>
     #[inline(always)]
     fn consume_event(&mut self) -> Result<Event> {
         if let AggregatorTransform::ConsumeData(state) = self {
-            if TAggregator::SUPPORT_TWO_LEVEL {
+            if TAggregator::SUPPORT_PARTITION {
                 let cardinality = state.inner.get_state_cardinality();
 
-                if cardinality >= state.two_level_threshold {
+                static TWOL_LEVEL_BYTES_THRESHOLD: usize = 5_000_000;
+
+                if cardinality >= state.two_level_threshold
+                    || state.inner.get_state_bytes() >= TWOL_LEVEL_BYTES_THRESHOLD
+                {
                     let mut temp_state = AggregatorTransform::Finished;
                     std::mem::swap(self, &mut temp_state);
                     temp_state = temp_state.convert_to_two_level_consume()?;

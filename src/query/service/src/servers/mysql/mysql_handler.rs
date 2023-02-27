@@ -28,6 +28,8 @@ use futures::future::AbortRegistration;
 use futures::future::Abortable;
 use futures::StreamExt;
 use opensrv_mysql::*;
+use socket2::SockRef;
+use socket2::TcpKeepalive;
 use tokio_stream::wrappers::TcpListenerStream;
 use tracing::error;
 use tracing::info;
@@ -44,15 +46,19 @@ pub struct MySQLHandler {
     abort_handle: AbortHandle,
     abort_registration: Option<AbortRegistration>,
     join_handle: Option<JoinHandle<()>>,
+    keepalive: TcpKeepalive,
 }
 
 impl MySQLHandler {
-    pub fn create() -> Result<Box<dyn Server>> {
+    pub fn create(tcp_keepalive_timeout_secs: u64) -> Result<Box<dyn Server>> {
         let (abort_handle, registration) = AbortHandle::new_pair();
+        let keepalive = TcpKeepalive::new()
+            .with_time(std::time::Duration::from_secs(tcp_keepalive_timeout_secs));
         Ok(Box::new(MySQLHandler {
             abort_handle,
             abort_registration: Some(registration),
             join_handle: None,
+            keepalive,
         }))
     }
 
@@ -67,19 +73,28 @@ impl MySQLHandler {
     }
 
     fn listen_loop(&self, stream: ListeningStream, rt: Arc<Runtime>) -> impl Future<Output = ()> {
+        let keepalive = self.keepalive.clone();
         stream.for_each(move |accept_socket| {
+            let keepalive = keepalive.clone();
             let executor = rt.clone();
             let sessions = SessionManager::instance();
             async move {
                 match accept_socket {
                     Err(error) => error!("Broken session connection: {}", error),
-                    Ok(socket) => MySQLHandler::accept_socket(sessions, executor, socket),
+                    Ok(socket) => {
+                        MySQLHandler::accept_socket(sessions, executor, socket, keepalive)
+                    }
                 };
             }
         })
     }
 
-    fn accept_socket(sessions: Arc<SessionManager>, executor: Arc<Runtime>, socket: TcpStream) {
+    fn accept_socket(
+        sessions: Arc<SessionManager>,
+        executor: Arc<Runtime>,
+        socket: TcpStream,
+        keepalive: TcpKeepalive,
+    ) {
         executor.spawn(async move {
             match sessions.create_session(SessionType::MySQL).await {
                 Err(error) => {
@@ -88,6 +103,11 @@ impl MySQLHandler {
                 }
                 Ok(session) => {
                     info!("MySQL connection coming: {:?}", socket.peer_addr());
+
+                    if let Err(e) = SockRef::from(&socket).set_tcp_keepalive(&keepalive) {
+                        warn!("failed to set socket option keepalive {}", e);
+                    }
+
                     if let Err(error) = MySQLConnection::run_on_stream(session, socket) {
                         error!("Unexpected error occurred during query: {:?}", error);
                     };

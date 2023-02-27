@@ -19,7 +19,6 @@ use common_meta_types::protobuf::RaftReply;
 use common_meta_types::Change;
 use common_meta_types::Node;
 use common_meta_types::TxnReply;
-use openraft::AppDataResponse;
 
 /// The state of an applied raft log.
 /// Normally it includes two fields: the state before applying and the state after applying the log.
@@ -34,10 +33,6 @@ use openraft::AppDataResponse;
     derive_more::TryInto,
 )]
 pub enum AppliedState {
-    Seq {
-        seq: u64,
-    },
-
     Node {
         prev: Option<Node>,
         result: Option<Node>,
@@ -51,15 +46,10 @@ pub enum AppliedState {
     None,
 }
 
-impl AppDataResponse for AppliedState {}
-
 impl fmt::Display for AppliedState {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "AppliedState: ")?;
         match self {
-            AppliedState::Seq { seq } => {
-                write!(f, "Seq: {}", seq)
-            }
             AppliedState::Node { prev, result } => {
                 write!(f, "Node: prev: {:?}, result: {:?}", prev, result)
             }
@@ -80,7 +70,6 @@ impl AppliedState {
     /// Whether the state changed
     pub fn changed(&self) -> bool {
         match self {
-            AppliedState::Seq { .. } => true,
             AppliedState::Node {
                 ref prev,
                 ref result,
@@ -109,7 +98,6 @@ impl AppliedState {
 
     pub fn prev_is_none(&self) -> bool {
         match self {
-            AppliedState::Seq { .. } => false,
             AppliedState::Node { ref prev, .. } => prev.is_none(),
             AppliedState::KV(Change { ref prev, .. }) => prev.is_none(),
             AppliedState::None => true,
@@ -119,7 +107,6 @@ impl AppliedState {
 
     pub fn result_is_none(&self) -> bool {
         match self {
-            AppliedState::Seq { .. } => false,
             AppliedState::Node { ref result, .. } => result.is_none(),
             AppliedState::KV(Change { ref result, .. }) => result.is_none(),
             AppliedState::None => true,

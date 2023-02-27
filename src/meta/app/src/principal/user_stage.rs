@@ -23,6 +23,7 @@ use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::constants::NAN_BYTES_SNAKE;
+use common_io::escape_string;
 
 use crate::principal::UserIdentity;
 use crate::storage::StorageParams;
@@ -208,6 +209,7 @@ pub struct FileFormatOptions {
     pub compression: StageFileCompression,
     pub row_tag: String,
     pub quote: String,
+    pub name: Option<String>,
 }
 
 impl Default for FileFormatOptions {
@@ -222,6 +224,7 @@ impl Default for FileFormatOptions {
             compression: StageFileCompression::default(),
             row_tag: "row".to_string(),
             quote: "".to_string(),
+            name: None,
         }
     }
 }
@@ -238,6 +241,7 @@ impl FileFormatOptions {
             compression: StageFileCompression::None,
             row_tag: "".to_string(),
             quote: "".to_string(),
+            name: None,
         }
     }
 
@@ -250,6 +254,21 @@ impl FileFormatOptions {
             ));
         }
         Ok(file_format_options)
+    }
+
+    pub fn default_by_type(format_type: StageFileFormatType) -> Self {
+        let mut options = Self::default();
+        match &format_type {
+            StageFileFormatType::Csv => {
+                options.quote = "\"".to_string();
+            }
+            StageFileFormatType::Tsv => {
+                options.field_delimiter = "\t".to_string();
+                options.escape = "\\".to_string();
+            }
+            _ => {}
+        }
+        options
     }
 
     pub fn apply(&mut self, opts: &BTreeMap<String, String>, ignore_unknown: bool) -> Result<()> {
@@ -285,6 +304,47 @@ impl FileFormatOptions {
                     }
                 }
             }
+        }
+        Ok(())
+    }
+}
+
+impl Display for FileFormatOptions {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "TYPE = {}", self.format.to_string().to_uppercase())?;
+        match self.format {
+            StageFileFormatType::Csv => {
+                write!(
+                    f,
+                    " FIELD_DELIMITER = '{}'",
+                    escape_string(&self.field_delimiter)
+                )?;
+                write!(
+                    f,
+                    " RECORD_DELIMITER = '{}'",
+                    escape_string(&self.record_delimiter)
+                )?;
+                write!(f, " QUOTE = '{}'", escape_string(&self.quote))?;
+                write!(f, " ESCAPE = '{}'", escape_string(&self.escape))?;
+                write!(f, " SKIP_HEADER = {}", &self.skip_header)?;
+                write!(f, " NAN_DISPLAY = '{}'", escape_string(&self.nan_display))?;
+            }
+            StageFileFormatType::Tsv => {
+                write!(
+                    f,
+                    " FIELD_DELIMITER = '{}'",
+                    escape_string(&self.field_delimiter)
+                )?;
+                write!(
+                    f,
+                    " RECORD_DELIMITER = '{}'",
+                    escape_string(&self.record_delimiter)
+                )?;
+            }
+            StageFileFormatType::Xml => {
+                write!(f, " ROW_TAG = {}", escape_string(&self.row_tag))?;
+            }
+            _ => {}
         }
         Ok(())
     }

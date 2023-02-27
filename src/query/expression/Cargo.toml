@@ -14,11 +14,13 @@ test = false
 common-arrow = { path = "../../common/arrow" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
+common-hashtable = { path = "../../common/hashtable" }
 common-io = { path = "../../common/io" }
 
 # Github dependencies
 
 # Crates.io dependencies
+base64 = "0.13.0"
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 comfy-table = "6"
@@ -37,7 +39,6 @@ micromarshal = "0.2.1"
 num-traits = "0.2.15"
 once_cell = "1.15.0"
 ordered-float = { workspace = true, features = ["serde", "rand"] }
-parking_lot = "0.12.1"
 primitive-types = "0.12.0"
 rand = { version = "0.8.5", features = ["small_rng"] }
 rust_decimal = "1.26"

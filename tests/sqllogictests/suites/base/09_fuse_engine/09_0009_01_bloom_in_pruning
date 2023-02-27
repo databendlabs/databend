@@ -29,4 +29,33 @@ statement ok
 DROP TABLE t
 
 statement ok
+create table t1(a UInt64, b Int64)
+
+statement ok
+insert into t1 values (1,2), (3,4)
+
+statement ok
+alter table t1 drop column a;
+
+statement ok
+alter table t1 add column a int;
+
+query II
+select * from t1 where a = 0 order by b;
+----
+2 0
+4 0
+
+statement ok
+insert into t1 values (5,6), (7,8)
+
+query II
+select * from t1 where a = 6 order by b;
+----
+5 6
+
+statement ok
+DROP TABLE t1
+
+statement ok
 DROP DATABASE db_09_0009_01

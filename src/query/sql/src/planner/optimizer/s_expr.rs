@@ -26,6 +26,7 @@ use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::IndexType;
+use crate::ScalarExpr;
 
 /// `SExpr` is abbreviation of single expression, which is a tree of relational operators.
 #[derive(Clone, Debug)]
@@ -103,6 +104,12 @@ impl SExpr {
             .ok_or_else(|| ErrorCode::Internal(format!("Invalid children index: {}", n)))
     }
 
+    pub fn child_mut(&mut self, n: usize) -> Result<&mut SExpr> {
+        self.children
+            .get_mut(n)
+            .ok_or_else(|| ErrorCode::Internal(format!("Invalid children index: {}", n)))
+    }
+
     pub fn arity(&self) -> usize {
         self.children.len()
     }
@@ -159,5 +166,64 @@ impl SExpr {
     /// Check if a rule is applied for current SExpr
     pub(crate) fn applied_rule(&self, rule_id: &RuleID) -> bool {
         self.applied_rules.get(rule_id)
+    }
+
+    /// Check if contain subquery
+    pub(crate) fn contain_subquery(&self) -> bool {
+        if !find_subquery(&self.plan) {
+            return self.children.iter().any(|child| child.contain_subquery());
+        }
+        true
+    }
+}
+
+fn find_subquery(rel_op: &RelOperator) -> bool {
+    match rel_op {
+        RelOperator::Scan(_)
+        | RelOperator::Limit(_)
+        | RelOperator::Exchange(_)
+        | RelOperator::UnionAll(_)
+        | RelOperator::Sort(_)
+        | RelOperator::DummyTableScan(_)
+        | RelOperator::Pattern(_) => false,
+        RelOperator::Join(op) => {
+            op.left_conditions.iter().any(find_subquery_in_expr)
+                || op.right_conditions.iter().any(find_subquery_in_expr)
+                || op.non_equi_conditions.iter().any(find_subquery_in_expr)
+        }
+        RelOperator::EvalScalar(op) => op
+            .items
+            .iter()
+            .any(|expr| find_subquery_in_expr(&expr.scalar)),
+        RelOperator::Filter(op) => op.predicates.iter().any(find_subquery_in_expr),
+        RelOperator::Aggregate(op) => {
+            op.group_items
+                .iter()
+                .any(|expr| find_subquery_in_expr(&expr.scalar))
+                || op
+                    .aggregate_functions
+                    .iter()
+                    .any(|expr| find_subquery_in_expr(&expr.scalar))
+        }
+    }
+}
+
+fn find_subquery_in_expr(expr: &ScalarExpr) -> bool {
+    match expr {
+        ScalarExpr::BoundColumnRef(_) | ScalarExpr::ConstantExpr(_) => false,
+        ScalarExpr::AndExpr(expr) => {
+            find_subquery_in_expr(&expr.left) || find_subquery_in_expr(&expr.right)
+        }
+        ScalarExpr::OrExpr(expr) => {
+            find_subquery_in_expr(&expr.left) || find_subquery_in_expr(&expr.right)
+        }
+        ScalarExpr::NotExpr(expr) => find_subquery_in_expr(&expr.argument),
+        ScalarExpr::ComparisonExpr(expr) => {
+            find_subquery_in_expr(&expr.left) || find_subquery_in_expr(&expr.right)
+        }
+        ScalarExpr::AggregateFunction(expr) => expr.args.iter().any(find_subquery_in_expr),
+        ScalarExpr::FunctionCall(expr) => expr.arguments.iter().any(find_subquery_in_expr),
+        ScalarExpr::CastExpr(expr) => find_subquery_in_expr(&expr.argument),
+        ScalarExpr::SubqueryExpr(_) => true,
     }
 }

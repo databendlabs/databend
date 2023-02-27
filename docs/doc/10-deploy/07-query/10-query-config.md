@@ -233,7 +233,52 @@ You can find [sample configuration files](https://github.com/datafuselabs/databe
 * Env variable: `STORAGE_OBS_SECRET_ACCESS_KEY`
 * Required.
 
-## A Toml File Sample
+## 5. Cache
+
+This configuration determines whether to enable caching of **block data** to the local disk and how to configure the cache.
+
+:::note
+
+This need databend-query version >= v0.9.40-nightly.
+
+:::
+
+### data_cache_storage
+
+* Type of storage to keep the table data cache, set to `disk` to enable the disk cache.
+* Default: `"none"`, block data caching is not enabled.
+* Env variable: `DATA_CACHE_STORAGE`
+ 
+### cache.disk
+
+#### path
+
+* Table disk cache root path.
+* Default: `"./.databend/_cache"`
+* Env variable: `CACHE-DISK-PATH`
+
+#### max_bytes
+
+* Max bytes of cached raw table data.
+* Default: `21474836480`
+* Env variable: `CACHE-DISK-MAX-BYTES`
+
+### Cache Config Example
+
+Enable disk cache:
+```shell
+
+...
+
+data_cache_storage = "disk"
+[cache.disk]
+# cache path
+path = "./databend/_cache"
+# max bytes of cached data 20G
+max_bytes = 21474836480
+```
+
+## A Full databend-query.toml Config File Sample
 
 For ease of experience, set all hosts to 0.0.0.0. Exercise caution when setting host if the application is in production.
 

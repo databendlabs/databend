@@ -10,6 +10,9 @@ runs:
     - name: pack failure artifacts
       shell: bash
       run: |
+        killall -9 databend-query || true
+        killall -9 databend-meta || true
+
         tar --exclude='target' \
             --exclude='website' \
             --exclude='docs' \
@@ -17,9 +20,8 @@ runs:
             --exclude='bins' \
             --exclude='.git' \
             --exclude='tests/suites/0_stateless/13_tpch/data' \
-            --exclude='failure-*' \
-            -zcf failure-${{ inputs.name }}.tar.gz .
+            -zcf target/failure-${{ inputs.name }}.tar.gz .
     - uses: actions/upload-artifact@v3
       with:
         name: ${{ inputs.name }}
-        path: failure-${{ inputs.name }}.tar.gz
+        path: target/failure-${{ inputs.name }}.tar.gz

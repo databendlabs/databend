@@ -1,4 +1,5 @@
-<img src="https://user-images.githubusercontent.com/172204/193307982-a286c574-80ef-41de-b52f-1b064ae7fccd.png" alt="databend" />
+<h1 align="center">The Future of Cloud Data Analytics</h1>
+
 <div align="center">
 
 <h4 align="center">
@@ -40,15 +41,8 @@
 
 </div>
 </div>
-<br>
 
-- [What is Databend?](#what-is-databend)
-- [Architecture](#architecture)
-- [Try Databend](#try-databend)
-- [Getting Started](#getting-started)
-- [Contributing](#contributing)
-- [Community](#community)
-- [Roadmap](#roadmap)
+<img src="https://user-images.githubusercontent.com/172204/219559279-ab7a11a4-9437-4a0a-85e8-cedf9ba0e24b.svg" alt="databend" />
 
 ## What is Databend?
 
@@ -79,7 +73,7 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 
 - __Support for Semi-Structured Data__
 
-  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON, and Parquet, which are located in the cloud or your local file system; Databend also supports semi-structured data types: [ARRAY, MAP, JSON](https://databend.rs/doc/sql-reference/data-types/data-type-semi-structured-types), which is easy to import and operate on semi-structured.
+  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON, and Parquet, which are located in the cloud or your local file system; Databend also supports semi-structured data types: [ARRAY, TUPLE, MAP, JSON](https://databend.rs/doc/sql-reference/data-types/data-type-semi-structured-types), which is easy to import and operate on semi-structured.
 
 
 - __MySQL/ClickHouse Compatible__
@@ -168,6 +162,7 @@ docker run --net=host  datafuselabs/databend
 - [How to Drop a Table](https://databend.rs/doc/sql-commands/ddl/table/ddl-drop-table)
 - [How to Rename a Table](https://databend.rs/doc/sql-commands/ddl/table/ddl-rename-table)
 - [How to Truncate a Table](https://databend.rs/doc/sql-commands/ddl/table/ddl-truncate-table)
+- [How to Add/Drop Table Column](https://databend.rs/doc/sql-commands/ddl/table/alter-table-column)
 
 ### Managing Views
 
@@ -214,8 +209,7 @@ For general help in using Databend, please refer to the official documentation. 
 
 - [Slack](https://link.databend.rs/join-slack) (For live discussion with the Community)
 - [GitHub](https://github.com/datafuselabs/databend) (Feature/Bug reports, Contributions)
-- [Twitter](https://twitter.com/Datafuse_Labs) (Get the news fast)
-- [Weekly](https://weekly.databend.rs/) (A weekly newsletter about Databend)
+- [Twitter](https://twitter.com/DatabendLabs) (Get the news fast)
 - [I'm feeling lucky](https://link.databend.rs/i-m-feeling-lucky) (Pick up a good first issue now!)
 
 ## Roadmap

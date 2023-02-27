@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::future::Future;
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -41,7 +42,9 @@ use common_expression::date_helper::TzFactory;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
+use common_meta_app::principal::FileFormatOptions;
 use common_meta_app::principal::RoleInfo;
+use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::TableInfo;
 use common_settings::Settings;
@@ -50,6 +53,7 @@ use common_storage::StorageMetrics;
 use common_storages_fuse::TableContext;
 use common_storages_parquet::ParquetTable;
 use common_storages_stage::StageTable;
+use common_users::UserApiProvider;
 use parking_lot::RwLock;
 use tracing::debug;
 
@@ -273,6 +277,18 @@ impl TableContext for QueryContext {
         Ok(())
     }
 
+    fn add_partitions_sha(&self, s: String) {
+        let mut shas = self.shared.partitions_shas.write();
+        shas.push(s);
+    }
+
+    fn get_partitions_shas(&self) -> Vec<String> {
+        let mut sha = self.shared.partitions_shas.read().clone();
+        // Sort to make sure the SHAs are stable for the same query.
+        sha.sort();
+        sha
+    }
+
     fn attach_query_str(&self, kind: String, query: &str) {
         self.shared.attach_query_str(kind, query);
     }
@@ -360,6 +376,24 @@ impl TableContext for QueryContext {
         self.shared.get_stage_attachment()
     }
 
+    fn get_last_query_id(&self, index: i32) -> String {
+        self.shared.session.session_ctx.get_last_query_id(index)
+    }
+
+    fn get_result_cache_key(&self, query_id: &str) -> Option<String> {
+        self.shared
+            .session
+            .session_ctx
+            .get_query_result_cache_key(query_id)
+    }
+
+    fn set_query_id_result_cache(&self, query_id: String, result_cache_key: String) {
+        self.shared
+            .session
+            .session_ctx
+            .update_query_ids_results(query_id, Some(result_cache_key))
+    }
+
     fn set_on_error_map(&self, map: Option<HashMap<String, ErrorCode>>) {
         self.shared.set_on_error_map(map);
     }
@@ -383,6 +417,21 @@ impl TableContext for QueryContext {
 
     fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
         self.shared.consume_precommit_blocks()
+    }
+
+    async fn get_file_format(&self, name: &str) -> Result<FileFormatOptions> {
+        let opt = match StageFileFormatType::from_str(name) {
+            Ok(typ) => FileFormatOptions::default_by_type(typ),
+            Err(_) => {
+                let user_mgr = UserApiProvider::instance();
+                let tenant = self.get_tenant();
+                user_mgr
+                    .get_file_format(&tenant, name)
+                    .await?
+                    .file_format_options
+            }
+        };
+        Ok(opt)
     }
 
     /// Fetch a Table by db and table name.
