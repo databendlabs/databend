@@ -60,10 +60,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_simple_domain_type_hash::<TimestampType>(registry);
     register_simple_domain_type_hash::<BooleanType>(registry);
 
-    // Decimal types we only register the default type size
-    register_simple_domain_type_hash::<DecimalType<i128>>(registry);
-    register_simple_domain_type_hash::<DecimalType<i256>>(registry);
-
     for ty in ALL_NUMERICS_TYPES {
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
@@ -71,6 +67,10 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         });
     }
+
+    // Decimal types we only register the default type size
+    register_simple_domain_type_hash::<DecimalType<i128>>(registry);
+    register_simple_domain_type_hash::<DecimalType<i256>>(registry);
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "md5",
