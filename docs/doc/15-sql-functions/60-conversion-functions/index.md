@@ -23,11 +23,6 @@ title: 'Conversion Functions'
 | **TO_UINT64( expr )**             | Convert a value to UINT64 data type                                                    | **TO_UINT64('123')**               | 123                        |
 | **TO_STRING( expr )**             | Convert a value to STRING data type                                                    | **TO_STRING(10)**                  | 10                         |
 
-:::tip
-
-[Databend Data Types](../../13-sql-reference/10-data-types/index.md)
-
-:::
 
 :::note
 
