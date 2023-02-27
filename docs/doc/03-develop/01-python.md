@@ -36,42 +36,33 @@ This guideline show how to connect and query to Databend using Python.
 
 We will be creating a table named `books` and insert a row, then query it.
 
-### Using mysql.connector
+### Using databend-py
 
 ```shell
-pip install mysql-connector-python
+pip install databend-py
 ```
 
 ```python title='main.py'
 #!/usr/bin/env python3
-import mysql.connector
 
-cnx = mysql.connector.connect(user='user1', password='abc123',
-                              host='127.0.0.1',
-							  port = 3307,
-                              database='')
+from databend_py import Client
+
+client = Client('user1:abc123@127.0.0.1', port=8000, secure=False)
 
 # Create database, table.
-cursor = cnx.cursor()
-cursor.execute("CREATE DATABASE IF NOT EXISTS book_db")
-cursor.execute("USE book_db")
-cursor.execute("CREATE TABLE IF NOT EXISTS books(title VARCHAR, author VARCHAR, date VARCHAR)")
+client.execute("CREATE DATABASE IF NOT EXISTS book_db")
+client.execute("USE book_db")
+client.execute("CREATE TABLE IF NOT EXISTS books(title VARCHAR, author VARCHAR, date VARCHAR)")
 
-# Insert new book. 
-add_book = ("INSERT INTO books "
-               "(title, author, date) "
-               "VALUES (%s, %s, %s)")
-data_book = ('mybook', 'author', '2022')
-cursor.execute(add_book, data_book)
+# Insert new book.
+client.execute("INSERT INTO books VALUES('mybook', 'author', '2022')")
 
 # Query.
-query = ("SELECT * FROM books")
-cursor.execute(query)
-for (title, author, date) in cursor:
+_, results = client.execute("SELECT * FROM books")
+for (title, author, date) in results:
   print("{} {} {}".format(title, author, date))
-
-cursor.close()
-cnx.close()
+client.execute('drop table books')
+client.execute('drop database book_db')
 ```
 
 Run `python main.py`:
@@ -79,31 +70,32 @@ Run `python main.py`:
 mybook author 2022
 ```
 
-### Using sqlalchemy
+### Using databend-sqlalchemy
 
 ```shell
-pip install sqlalchemy
+pip install databend-sqlalchemy
 ```
 
 ```python title='main.py'
 #!/usr/bin/env python3
 
-import sqlalchemy
+from databend_sqlalchemy import connector
 
-engine = sqlalchemy.create_engine("mysql+pymysql://user1:abc123@localhost:3307/")
-conn = engine.connect()
+conn = connector.connect(f"http://user1:abc123@127.0.0.1:8000").cursor()
 conn.execute("CREATE DATABASE IF NOT EXISTS book_db")
 conn.execute("USE book_db")
 conn.execute("CREATE TABLE IF NOT EXISTS books(title VARCHAR, author VARCHAR, date VARCHAR)")
 conn.execute("INSERT INTO books VALUES('mybook', 'author', '2022')")
-results = conn.execute('SELECT * FROM books').fetchall()
+conn.execute('SELECT * FROM books')
+results = conn.fetchall()
 for result in results:
     print(result)
+conn.execute('drop table books')
 conn.execute('drop database book_db')
-
 ```
 
 Run `python main.py`:
+
 ```text
 ('mybook', 'author', '2022')
 ```
