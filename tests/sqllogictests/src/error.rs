@@ -28,70 +28,28 @@ pub type Result<T> = std::result::Result<T, DSqlLogicTestError>;
 pub enum DSqlLogicTestError {
     // Error from sqllogictest-rs
     #[error("SqlLogicTest error(from sqllogictest-rs crate): {0}")]
-    SqlLogicTest(TestError),
+    SqlLogicTest(#[from] TestError),
     // Error from databend
     #[error("Databend error: {0}")]
-    Databend(ErrorCode),
+    Databend(#[from] ErrorCode),
     // Error from mysql client
     #[error("mysql client error: {0}")]
-    MysqlClient(MysqlClientError),
+    MysqlClient(#[from] MysqlClientError),
     // Error from http client
     #[error("Http client error(from reqwest crate): {0}")]
-    HttpClient(HttpClientError),
+    HttpClient(#[from] HttpClientError),
     // Error from WalkDir
     #[error("Walk dir error: {0}")]
-    WalkDir(WalkDirError),
+    WalkDir(#[from] WalkDirError),
     // Error from IOError
     #[error("io error: {0}")]
-    IO(IOError),
+    IO(#[from] IOError),
     // Error from serde json
     #[error("Serde json error: {0}")]
-    SerdeJson(SerdeJsonError),
+    SerdeJson(#[from] SerdeJsonError),
     // Error from databend sqllogictests
     #[error("Databend sqllogictests error: {0}")]
     SelfError(String),
-}
-
-impl From<TestError> for DSqlLogicTestError {
-    fn from(value: TestError) -> Self {
-        DSqlLogicTestError::SqlLogicTest(value)
-    }
-}
-
-impl From<ErrorCode> for DSqlLogicTestError {
-    fn from(value: ErrorCode) -> Self {
-        DSqlLogicTestError::Databend(value)
-    }
-}
-
-impl From<MysqlClientError> for DSqlLogicTestError {
-    fn from(value: MysqlClientError) -> Self {
-        DSqlLogicTestError::MysqlClient(value)
-    }
-}
-
-impl From<HttpClientError> for DSqlLogicTestError {
-    fn from(value: HttpClientError) -> Self {
-        DSqlLogicTestError::HttpClient(value)
-    }
-}
-
-impl From<WalkDirError> for DSqlLogicTestError {
-    fn from(value: WalkDirError) -> Self {
-        DSqlLogicTestError::WalkDir(value)
-    }
-}
-
-impl From<IOError> for DSqlLogicTestError {
-    fn from(value: IOError) -> Self {
-        DSqlLogicTestError::IO(value)
-    }
-}
-
-impl From<SerdeJsonError> for DSqlLogicTestError {
-    fn from(value: SerdeJsonError) -> Self {
-        DSqlLogicTestError::SerdeJson(value)
-    }
 }
 
 impl From<String> for DSqlLogicTestError {
