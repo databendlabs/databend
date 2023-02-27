@@ -51,8 +51,8 @@ use crate::TypeDeserializer;
 #[derive(Debug)]
 pub enum KeysState {
     Column(Column),
-    U128(Vec<u128>),
-    U256(Vec<u256>),
+    U128(Buffer<u128>),
+    U256(Buffer<u256>),
 }
 
 pub trait HashMethod: Clone + Sync + Send + 'static {
@@ -461,8 +461,25 @@ macro_rules! impl_hash_method_fixed_large_keys {
                 group_columns: &[(Column, DataType)],
                 rows: usize,
             ) -> Result<KeysState> {
+                // faster path for single fixed decimal keys
+                if group_columns.len() == 1 {
+                    if group_columns[0].1.is_decimal() {
+                        with_decimal_mapped_type!(|DECIMAL_TYPE| match &group_columns[0].0 {
+                            Column::Decimal(DecimalColumn::DECIMAL_TYPE(c, _)) => {
+                                let buffer = unsafe {
+                                    std::mem::transmute::<Buffer<DECIMAL_TYPE>, Buffer<$ty>>(
+                                        c.clone(),
+                                    )
+                                };
+                                return Ok(KeysState::$name(buffer));
+                            }
+                            _ => {}
+                        })
+                    }
+                }
+
                 let keys = self.build_keys_vec(group_columns, rows)?;
-                Ok(KeysState::$name(keys))
+                Ok(KeysState::$name(keys.into()))
             }
 
             fn build_keys_iter<'a>(
