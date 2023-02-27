@@ -281,7 +281,7 @@ macro_rules! register_decimal_binary_op {
 
             let is_multiply = $name == "multiply";
             let is_divide = $name == "divide";
-            let is_plus_minus = $name == "plus" || $name == "minus";
+            let is_plus_minus = !is_multiply && !is_divide;
 
             let return_type = if args_type[0].is_decimal() && args_type[1].is_decimal() {
                 let lhs_type = args_type[0].as_decimal().unwrap();
