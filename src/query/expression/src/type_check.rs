@@ -477,9 +477,7 @@ pub fn can_auto_cast_to(
                 .all(|(src_ty, dest_ty)| can_auto_cast_to(src_ty, dest_ty, auto_cast_rules))
         }
         (DataType::Number(_), DataType::Decimal(_)) => true,
-        (DataType::Decimal(x), DataType::Decimal(y)) => {
-            x.scale() <= y.scale() && x.precision() <= y.precision()
-        }
+        (DataType::Decimal(_), DataType::Decimal(_)) => true,
         _ => false,
     }
 }

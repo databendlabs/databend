@@ -645,9 +645,6 @@ impl DecimalDataType {
         let multiply_precision = a.precision() + b.precision();
         let divide_precision = a.precision() + b.scale();
 
-        // for addition/subtraction, we add 1 to the width to ensure we don't overflow
-        let plus_min_precision = a.leading_digits().max(b.leading_digits()) - scale + 1;
-
         if is_multiply {
             scale = a.scale() + b.scale();
             precision = precision.min(multiply_precision);
@@ -656,9 +653,10 @@ impl DecimalDataType {
             precision = precision.min(divide_precision);
         } else if is_plus_minus {
             scale = std::cmp::max(a.scale(), b.scale());
+            // for addition/subtraction, we add 1 to the width to ensure we don't overflow
+            let plus_min_precision = a.leading_digits().max(b.leading_digits()) + scale + 1;
             precision = precision.min(plus_min_precision);
         }
-
         Self::from_size(DecimalSize { precision, scale })
     }
 
