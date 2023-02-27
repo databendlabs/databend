@@ -240,7 +240,7 @@ macro_rules! register_decimal_compare_op {
                         DataType::Decimal(return_type.clone()),
                         DataType::Decimal(return_type.clone()),
                     ],
-                    return_type: DataType::Decimal(return_type.clone()),
+                    return_type: DataType::Boolean,
                     property: FunctionProperty::default(),
                 },
                 calc_domain: Box::new(|_args_domain| FunctionDomain::Full),

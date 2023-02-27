@@ -192,6 +192,10 @@ select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(13,2) a , 2.9
 ----
 1 0 0 0 1
 
+query T
+select typeof(a = b) from (select 3::Decimal(13,2) a , 2.9 b);
+----
+BOOLEAN
 
 ## insert
 
