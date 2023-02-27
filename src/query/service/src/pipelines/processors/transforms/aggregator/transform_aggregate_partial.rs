@@ -41,8 +41,8 @@ enum HashTable<Method: HashMethodBounds> {
     HashTable(Method::HashTable<usize>),
     PartitionedHashTable(
         <PartitionedHashMethod<Method> as PolymorphicKeysHelper<
-                PartitionedHashMethod<Method>,
-            >>::HashTable<usize>,
+            PartitionedHashMethod<Method>,
+        >>::HashTable<usize>,
     ),
 }
 
@@ -78,7 +78,6 @@ pub struct TransformPartialAggregate<Method: HashMethodBounds> {
 
     area: Option<Area>,
     params: Arc<AggregatorParams>,
-    // group_columns: Vec<IndexType>,
 }
 
 impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
@@ -90,7 +89,13 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
         output: Arc<OutputPort>,
         params: Arc<AggregatorParams>,
     ) -> Result<Box<dyn Processor>> {
-        let hash_table = HashTable::HashTable(method.create_hash_table()?);
+        let hashtable = method.create_hash_table()?;
+
+        let hash_table = match !Method::SUPPORT_PARTITIONED || !params.has_distinct_combinator() {
+            true => HashTable::HashTable(hashtable),
+            false => HashTable::PartitionedHashTable(PartitionedHashMethod::convert_hashtable(&method, hashtable)?)
+        };
+
         Ok(AccumulatingTransformer::create(
             input,
             output,

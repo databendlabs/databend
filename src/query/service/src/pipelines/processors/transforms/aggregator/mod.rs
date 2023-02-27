@@ -46,4 +46,7 @@ pub use transform_partition_bucket::TransformPartitionBucket;
 pub use utils::*;
 
 pub use self::serde::TransformGroupByDeserializer;
+pub use self::serde::TransformAggregateDeserializer;
 pub use self::serde::TransformGroupBySerializer;
+pub use self::serde::TransformAggregateSerializer;
+pub use transform_aggregate_partial::TransformPartialAggregate;

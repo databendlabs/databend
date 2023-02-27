@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use common_exception::Result;
 use common_exception::ErrorCode;
 use common_expression::DataBlock;
 use common_hashtable::HashtableLike;
@@ -28,7 +29,7 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
         output: Arc<OutputPort>,
         method: Method,
         params: Arc<AggregatorParams>,
-    ) -> common_exception::Result<ProcessorPtr> {
+    ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(BlockMetaTransformer::create(
             input,
             output,
@@ -42,10 +43,7 @@ where Method: HashMethodBounds
 {
     const NAME: &'static str = "TransformFinalGroupBy";
 
-    fn transform(
-        &mut self,
-        meta: AggregateMeta<Method, ()>,
-    ) -> common_exception::Result<DataBlock> {
+    fn transform(&mut self, meta: AggregateMeta<Method, ()>) -> Result<DataBlock> {
         if let AggregateMeta::Partitioned { bucket, data } = meta {
             let mut hashtable = self.method.create_hash_table::<()>()?;
             'merge_hashtable: for bucket_data in data {

@@ -42,7 +42,7 @@ use serde::Serializer;
 use super::aggregator::AggregateHashStateInfo;
 use super::group_by::BUCKETS_LG2;
 use crate::pipelines::processors::transforms::aggregator::transform_group_by_final::TransformFinalGroupBy;
-use crate::pipelines::processors::transforms::aggregator::AggregateInfo;
+use crate::pipelines::processors::transforms::aggregator::{AggregateInfo, TransformAggregateDeserializer};
 use crate::pipelines::processors::transforms::aggregator::BucketAggregator;
 use crate::pipelines::processors::transforms::aggregator::TransformPartitionBucket;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
@@ -67,14 +67,14 @@ struct ConvertGroupingMetaInfo {
 
 impl Serialize for ConvertGroupingMetaInfo {
     fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+        where S: Serializer {
         unreachable!("ConvertGroupingMetaInfo does not support exchanging between multiple nodes")
     }
 }
 
 impl<'de> Deserialize<'de> for ConvertGroupingMetaInfo {
     fn deserialize<D>(_: D) -> Result<Self, D::Error>
-    where D: Deserializer<'de> {
+        where D: Deserializer<'de> {
         unreachable!("ConvertGroupingMetaInfo does not support exchanging between multiple nodes")
     }
 }
@@ -447,7 +447,10 @@ fn build_partition_bucket<Method: HashMethodBounds>(
 ) -> Result<()> {
     if !ctx.get_cluster().is_empty() {
         pipeline.add_transform(|input, output| {
-            TransformGroupByDeserializer::<Method>::try_create(input, output)
+            match params.aggregate_functions.is_empty() {
+                true => TransformGroupByDeserializer::<Method>::try_create(input, output),
+                false => TransformAggregateDeserializer::<Method>::try_create(input, output),
+            }
         })?;
     }
 
@@ -480,14 +483,9 @@ pub fn efficiently_memory_final_aggregator(
     let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
     let method = DataBlock::choose_hash_method(&sample_block, group_cols)?;
 
-    match params.aggregate_functions.is_empty() {
-        true => with_hash_method!(|T| match method {
-            HashMethodKind::T(v) => build_partition_bucket(ctx, v, pipeline, params.clone()),
-        }),
-        false => with_hash_method!(|T| match method {
-            HashMethodKind::T(v) => build_convert_grouping(v, pipeline, params.clone()),
-        }),
-    }
+    with_hash_method!(|T| match method {
+        HashMethodKind::T(v) => build_partition_bucket(ctx, v, pipeline, params.clone()),
+    })
 }
 
 struct MergeBucketTransform<Method: HashMethodBounds> {

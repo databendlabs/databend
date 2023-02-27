@@ -59,7 +59,7 @@ use common_sql::IndexType;
 
 use super::processors::ProfileWrapper;
 use crate::api::ExchangeSorting;
-use crate::pipelines::processors::transforms::efficiently_memory_final_aggregator;
+use crate::pipelines::processors::transforms::{efficiently_memory_final_aggregator, PartialSingleStateAggregator, TransformPartialAggregate};
 use crate::pipelines::processors::transforms::AggregateExchangeSorting;
 use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
@@ -376,56 +376,12 @@ impl PipelineBuilder {
             None,
         )?;
 
-        let pass_state_to_final = self.enable_memory_efficient_aggregator(&params);
-
-        if params.aggregate_functions.is_empty() {
-            self.main_pipeline.add_transform(|input, output| {
-                let transform_params =
-                    AggregatorTransformParams::try_create(input, output, &params)?;
-
-                let transform =
-                    with_mappedhash_method!(|T| match transform_params.method.clone() {
-                        HashMethodKind::T(method) => TransformPartialGroupBy::try_create(
-                            self.ctx.clone(),
-                            method,
-                            transform_params.transform_input_port,
-                            transform_params.transform_output_port,
-                            params.clone()
-                        ),
-                    })?;
-
-                if self.enable_profiling {
-                    Ok(ProcessorPtr::create(ProfileWrapper::create(
-                        transform,
-                        aggregate.plan_id,
-                        self.prof_span_set.clone(),
-                    )))
-                } else {
-                    Ok(ProcessorPtr::create(transform))
-                }
-            })?;
-
-            if !self.ctx.get_cluster().is_empty() {
-                // TODO: can serialize only when needed.
-                self.main_pipeline.add_transform(|input, output| {
-                    let transform_params =
-                        AggregatorTransformParams::try_create(input, output, &params)?;
-
-                    with_mappedhash_method!(|T| match transform_params.method.clone() {
-                        HashMethodKind::T(method) => TransformGroupBySerializer::try_create(
-                            transform_params.transform_input_port,
-                            transform_params.transform_output_port,
-                            method,
-                        ),
-                    })
-                })?;
-            }
-        } else {
-            self.main_pipeline.add_transform(|input, output| {
-                let transform = TransformAggregator::try_create_partial(
-                    AggregatorTransformParams::try_create(input, output, &params)?,
-                    self.ctx.clone(),
-                    pass_state_to_final,
+        if params.group_columns.is_empty() {
+            return self.main_pipeline.add_transform(|input, output| {
+                let transform = PartialSingleStateAggregator::try_create(
+                    input,
+                    output,
+                    &params,
                 )?;
 
                 if self.enable_profiling {
@@ -436,6 +392,67 @@ impl PipelineBuilder {
                     )))
                 } else {
                     Ok(ProcessorPtr::create(transform))
+                }
+            });
+        }
+
+        let group_cols = &params.group_columns;
+        let schema_before_group_by = params.input_schema.clone();
+        let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
+        let method = DataBlock::choose_hash_method(&sample_block, group_cols)?;
+
+        self.main_pipeline.add_transform(|input, output| {
+            let transform = match params.aggregate_functions.is_empty() {
+                true => with_mappedhash_method!(|T| match method.clone() {
+                    HashMethodKind::T(method) => TransformPartialGroupBy::try_create(
+                        self.ctx.clone(),
+                        method,
+                        input,
+                        output,
+                        params.clone()
+                    ),
+                }),
+                false => with_mappedhash_method!(|T| match method.clone() {
+                    HashMethodKind::T(method) => TransformPartialAggregate::try_create(
+                        self.ctx.clone(),
+                        method,
+                        input,
+                        output,
+                        params.clone()
+                    ),
+                })
+            }?;
+
+            if self.enable_profiling {
+                Ok(ProcessorPtr::create(ProfileWrapper::create(
+                    transform,
+                    aggregate.plan_id,
+                    self.prof_span_set.clone(),
+                )))
+            } else {
+                Ok(ProcessorPtr::create(transform))
+            }
+        })?;
+
+        if !self.ctx.get_cluster().is_empty() {
+            // TODO: can serialize only when needed.
+            self.main_pipeline.add_transform(|input, output| {
+                match params.aggregate_functions.is_empty() {
+                    true => with_mappedhash_method!(|T| match method.clone() {
+                        HashMethodKind::T(method) => TransformGroupBySerializer::try_create(
+                            input,
+                            output,
+                            method,
+                        ),
+                    }),
+                    false => with_mappedhash_method!(|T| match method.clone() {
+                        HashMethodKind::T(method) => TransformGroupBySerializer::try_create(
+                            input,
+                            output,
+                            method,
+                            params.clone(),
+                        ),
+                    }),
                 }
             })?;
         }
