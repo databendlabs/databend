@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
-use common_exception::Result;
 use common_exception::ErrorCode;
+use common_exception::Result;
 use common_expression::DataBlock;
+use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;

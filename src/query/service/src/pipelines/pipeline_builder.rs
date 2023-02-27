@@ -59,15 +59,19 @@ use common_sql::IndexType;
 
 use super::processors::ProfileWrapper;
 use crate::api::ExchangeSorting;
-use crate::pipelines::processors::transforms::{efficiently_memory_final_aggregator, PartialSingleStateAggregator, TransformPartialAggregate};
+use crate::pipelines::processors::transforms::efficiently_memory_final_aggregator;
 use crate::pipelines::processors::transforms::AggregateExchangeSorting;
 use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
+use crate::pipelines::processors::transforms::PartialSingleStateAggregator;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
+use crate::pipelines::processors::transforms::TransformAggregateSerializer;
+use crate::pipelines::processors::transforms::TransformFinalAggregate;
 use crate::pipelines::processors::transforms::TransformGroupBySerializer;
 use crate::pipelines::processors::transforms::TransformLeftJoin;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
+use crate::pipelines::processors::transforms::TransformPartialAggregate;
 use crate::pipelines::processors::transforms::TransformPartialGroupBy;
 use crate::pipelines::processors::transforms::TransformRightJoin;
 use crate::pipelines::processors::transforms::TransformRightSemiAntiJoin;
@@ -378,11 +382,7 @@ impl PipelineBuilder {
 
         if params.group_columns.is_empty() {
             return self.main_pipeline.add_transform(|input, output| {
-                let transform = PartialSingleStateAggregator::try_create(
-                    input,
-                    output,
-                    &params,
-                )?;
+                let transform = PartialSingleStateAggregator::try_create(input, output, &params)?;
 
                 if self.enable_profiling {
                     Ok(ProcessorPtr::create(ProfileWrapper::create(
@@ -420,7 +420,7 @@ impl PipelineBuilder {
                         output,
                         params.clone()
                     ),
-                })
+                }),
             }?;
 
             if self.enable_profiling {
@@ -439,14 +439,11 @@ impl PipelineBuilder {
             self.main_pipeline.add_transform(|input, output| {
                 match params.aggregate_functions.is_empty() {
                     true => with_mappedhash_method!(|T| match method.clone() {
-                        HashMethodKind::T(method) => TransformGroupBySerializer::try_create(
-                            input,
-                            output,
-                            method,
-                        ),
+                        HashMethodKind::T(method) =>
+                            TransformGroupBySerializer::try_create(input, output, method,),
                     }),
                     false => with_mappedhash_method!(|T| match method.clone() {
-                        HashMethodKind::T(method) => TransformGroupBySerializer::try_create(
+                        HashMethodKind::T(method) => TransformAggregateSerializer::try_create(
                             input,
                             output,
                             method,

@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::{Column, DataBlock};
 use common_expression::types::string::StringColumnBuilder;
+use common_expression::Column;
+use common_expression::DataBlock;
 use common_functions::aggregates::StateAddr;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
@@ -11,13 +12,13 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::BlockMetaTransform;
 use common_pipeline_transforms::processors::transforms::BlockMetaTransformer;
-use crate::pipelines::processors::AggregatorParams;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::estimated_key_size;
 use crate::pipelines::processors::transforms::aggregator::serde::serde_meta::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
+use crate::pipelines::processors::AggregatorParams;
 
 pub struct TransformGroupBySerializer<Method: HashMethodBounds> {
     method: Method,
@@ -38,7 +39,7 @@ impl<Method: HashMethodBounds> TransformGroupBySerializer<Method> {
 }
 
 impl<Method> BlockMetaTransform<AggregateMeta<Method, ()>> for TransformGroupBySerializer<Method>
-    where Method: HashMethodBounds
+where Method: HashMethodBounds
 {
     const NAME: &'static str = "TransformGroupBySerializer";
 
@@ -62,7 +63,6 @@ impl<Method> BlockMetaTransform<AggregateMeta<Method, ()>> for TransformGroupByS
     }
 }
 
-
 pub struct TransformAggregateSerializer<Method: HashMethodBounds> {
     method: Method,
     params: Arc<AggregatorParams>,
@@ -83,12 +83,13 @@ impl<Method: HashMethodBounds> TransformAggregateSerializer<Method> {
     }
 }
 
-impl<Method> BlockMetaTransform<AggregateMeta<Method, ()>> for TransformAggregateSerializer<Method>
-    where Method: HashMethodBounds
+impl<Method> BlockMetaTransform<AggregateMeta<Method, usize>>
+    for TransformAggregateSerializer<Method>
+where Method: HashMethodBounds
 {
     const NAME: &'static str = "TransformAggregateSerializer";
 
-    fn transform(&mut self, meta: AggregateMeta<Method, ()>) -> Result<DataBlock> {
+    fn transform(&mut self, meta: AggregateMeta<Method, usize>) -> Result<DataBlock> {
         match meta {
             AggregateMeta::Partitioned { .. } => unreachable!(),
             AggregateMeta::Serialized(_) => unreachable!(),
@@ -117,7 +118,6 @@ impl<Method> BlockMetaTransform<AggregateMeta<Method, ()>> for TransformAggregat
 
                     group_key_builder.append_value(group_entity.key());
                 }
-
 
                 let mut columns = Vec::with_capacity(state_builders.len() + 1);
 

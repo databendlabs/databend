@@ -41,8 +41,8 @@ enum HashTable<Method: HashMethodBounds> {
     HashTable(Method::HashTable<usize>),
     PartitionedHashTable(
         <PartitionedHashMethod<Method> as PolymorphicKeysHelper<
-            PartitionedHashMethod<Method>,
-        >>::HashTable<usize>,
+                PartitionedHashMethod<Method>,
+            >>::HashTable<usize>,
     ),
 }
 
@@ -93,7 +93,9 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
 
         let hash_table = match !Method::SUPPORT_PARTITIONED || !params.has_distinct_combinator() {
             true => HashTable::HashTable(hashtable),
-            false => HashTable::PartitionedHashTable(PartitionedHashMethod::convert_hashtable(&method, hashtable)?)
+            false => HashTable::PartitionedHashTable(PartitionedHashMethod::convert_hashtable(
+                &method, hashtable,
+            )?),
         };
 
         Ok(AccumulatingTransformer::create(
@@ -251,7 +253,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
             HashTable::HashTable(v) => match Method::HashTable::len(&v) == 0 {
                 true => vec![],
                 false => vec![DataBlock::empty_with_meta(
-                    AggregateMeta::<Method, ()>::create_hashtable(
+                    AggregateMeta::<Method, usize>::create_hashtable(
                         -1,
                         v,
                         ArenaHolder::create(self.area.take()),
@@ -264,7 +266,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
                 for (bucket, hashtable) in v.into_iter_tables().enumerate() {
                     if Method::HashTable::len(&hashtable) != 0 {
                         blocks.push(DataBlock::empty_with_meta(
-                            AggregateMeta::<Method, ()>::create_hashtable(
+                            AggregateMeta::<Method, usize>::create_hashtable(
                                 bucket as isize,
                                 hashtable,
                                 arena_holder.clone(),
