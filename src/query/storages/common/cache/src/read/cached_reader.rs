@@ -67,7 +67,9 @@ where
                             );
                         }
 
-                        cache.put(cache_key, item.clone());
+                        if params.put_cache {
+                            cache.put(cache_key, item.clone());
+                        }
                         Ok(item)
                     }
                 }

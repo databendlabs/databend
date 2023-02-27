@@ -236,6 +236,7 @@ impl HiveBlockReader {
             location: filename.to_owned(),
             len_hint: Some(filesize),
             ver: 0,
+            put_cache: true,
         };
 
         reader.read(&load_params).await

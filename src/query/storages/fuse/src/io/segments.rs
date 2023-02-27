@@ -61,6 +61,7 @@ impl SegmentsIO {
             location: path,
             len_hint: None,
             ver,
+            put_cache: true,
         };
 
         reader.read(&load_params).await

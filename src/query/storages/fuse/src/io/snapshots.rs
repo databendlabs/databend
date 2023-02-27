@@ -83,6 +83,7 @@ impl SnapshotsIO {
             location: snapshot_location,
             len_hint: None,
             ver: format_version,
+            put_cache: true,
         };
         reader.read(&load_params).await
     }

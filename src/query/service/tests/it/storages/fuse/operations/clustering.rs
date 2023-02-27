@@ -91,6 +91,7 @@ async fn test_fuse_alter_table_cluster_key() -> common_exception::Result<()> {
         location: snapshot_loc.clone(),
         len_hint: None,
         ver: TableSnapshot::VERSION,
+        put_cache: true,
     };
 
     let snapshot = reader.read(&load_params).await?;
@@ -126,6 +127,7 @@ async fn test_fuse_alter_table_cluster_key() -> common_exception::Result<()> {
         location: snapshot_loc.clone(),
         len_hint: None,
         ver: TableSnapshot::VERSION,
+        put_cache: true,
     };
 
     let snapshot = reader.read(&params).await?;
