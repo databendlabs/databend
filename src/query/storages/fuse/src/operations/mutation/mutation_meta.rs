@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::BlockMeta;
@@ -39,19 +40,15 @@ impl BlockMetaInfo for SerializeDataMeta {
         self
     }
 
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        match SerializeDataMeta::downcast_ref_from(info) {
+            None => false,
+            Some(other) => self == other,
+        }
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         Box::new(self.clone())
-    }
-
-    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        match info.as_any().downcast_ref::<SerializeDataMeta>() {
-            None => false,
-            Some(other) => self == other,
-        }
     }
 }
 
@@ -67,7 +64,7 @@ impl SerializeDataMeta {
     }
 
     pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&SerializeDataMeta> {
-        match info.as_any().downcast_ref::<SerializeDataMeta>() {
+        match SerializeDataMeta::downcast_ref_from(info) {
             Some(part_ref) => Ok(part_ref),
             None => Err(ErrorCode::Internal(
                 "Cannot downcast from BlockMetaInfo to  SerializeDataMeta.",
@@ -95,19 +92,15 @@ impl BlockMetaInfo for MutationTransformMeta {
         self
     }
 
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        match MutationTransformMeta::downcast_ref_from(info) {
+            None => false,
+            Some(other) => self == other,
+        }
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         Box::new(self.clone())
-    }
-
-    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        match info.as_any().downcast_ref::<MutationTransformMeta>() {
-            None => false,
-            Some(other) => self == other,
-        }
     }
 }
 
@@ -117,7 +110,7 @@ impl MutationTransformMeta {
     }
 
     pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&MutationTransformMeta> {
-        match info.as_any().downcast_ref::<MutationTransformMeta>() {
+        match MutationTransformMeta::downcast_ref_from(info) {
             Some(part_ref) => Ok(part_ref),
             None => Err(ErrorCode::Internal(
                 "Cannot downcast from BlockMetaInfo to MutationTransformMeta.",
@@ -139,19 +132,15 @@ impl BlockMetaInfo for MutationSinkMeta {
         self
     }
 
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        match MutationSinkMeta::downcast_ref_from(info) {
+            None => false,
+            Some(other) => self == other,
+        }
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         Box::new(self.clone())
-    }
-
-    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        match info.as_any().downcast_ref::<MutationSinkMeta>() {
-            None => false,
-            Some(other) => self == other,
-        }
     }
 }
 
@@ -169,7 +158,7 @@ impl MutationSinkMeta {
     }
 
     pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&MutationSinkMeta> {
-        match info.as_any().downcast_ref::<MutationSinkMeta>() {
+        match MutationSinkMeta::downcast_ref_from(info) {
             Some(part_ref) => Ok(part_ref),
             None => Err(ErrorCode::Internal(
                 "Cannot downcast from BlockMetaInfo to MutationSinkMeta.",

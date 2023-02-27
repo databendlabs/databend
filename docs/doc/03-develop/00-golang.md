@@ -10,14 +10,14 @@ description:
 * **Databend :** Make sure Databend is running and accessible, see [How to deploy Databend](/doc/deploy).
 * [How to Create User](../14-sql-commands/00-ddl/30-user/01-user-create-user.md)
 * [How to Grant Privileges to User](../14-sql-commands/00-ddl/30-user/10-grant-privileges.md)
- 
+
 ## Create Databend User
 
 ```shell
 mysql -h127.0.0.1 -uroot -P3307
 ```
 
-### Create a User 
+### Create a User
 
 ```sql
 CREATE USER user1 IDENTIFIED BY 'abc123';
@@ -34,9 +34,9 @@ GRANT ALL on *.* TO user1;
 
 This guideline show how to connect and query to Databend using Golang. We will be creating a table named `books` and insert a row, then query it.
 
-### main.go 
+### main.go
 
-```text title='main.go'
+```go title='main.go'
 package main
 
 import (
@@ -44,30 +44,27 @@ import (
 	"fmt"
 	"log"
 
-	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/databendcloud/databend-go"
 )
 
 const (
 	username = "user1"
 	password = "abc123"
-	hostname = "127.0.0.1:3307"
+	hostname = "127.0.0.1:8000"
 )
 
 type Book struct {
-	Title   string
+	Title  string
 	Author string
 	Date   string
 }
 
 func dsn() string {
-	// Note Databend do not support prepared statements.
-	// set interpolateParams to make placeholders (?) in calls to db.Query() and db.Exec() interpolated into a single query string with given parameters.
-	// ref https://github.com/go-sql-driver/mysql#interpolateparams
-	return fmt.Sprintf("%s:%s@tcp(%s)/?interpolateParams=true", username, password, hostname)
+	return fmt.Sprintf("http://%s:%s@%s", username, password, hostname)
 }
 
 func main() {
-	db, err := sql.Open("mysql", dsn())
+	db, err := sql.Open("databend", dsn())
 
 	if err != nil {
 		log.Fatal(err)
@@ -124,22 +121,32 @@ func main() {
 
 		log.Printf("Select:%v", book)
 	}
-
+	db.Exec("drop table books")
+	db.Exec("drop database book_db")
 }
 ```
 
 ### Golang mod
 
-```text
+```shell
 go mod init databend-golang
 ```
 
 ```text title='go.mod'
 module databend-golang
 
-go 1.18
+go 1.20
 
-require github.com/go-sql-driver/mysql v1.6.0
+require github.com/databendcloud/databend-go v0.3.10
+
+require (
+	github.com/BurntSushi/toml v1.2.1 // indirect
+	github.com/avast/retry-go v3.0.0+incompatible // indirect
+	github.com/google/uuid v1.3.0 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
+	github.com/sirupsen/logrus v1.9.0 // indirect
+	golang.org/x/sys v0.5.0 // indirect
+)
 ```
 
 ### Run main.go
@@ -149,9 +156,9 @@ go run main.go
 ```
 
 ```text title='Outputs'
-2022/04/13 12:20:07 Connected
-2022/04/13 12:20:07 Create database book_db success
-2022/04/13 12:20:07 Create table: books
-2022/04/13 12:20:07 Insert 1 row
-2022/04/13 12:20:08 Select:{mybook author 2022}
+2023/02/24 23:57:31 Connected
+2023/02/24 23:57:31 Create database book_db success
+2023/02/24 23:57:31 Create table: books
+2023/02/24 23:57:31 Insert 1 row
+2023/02/24 23:57:31 Select:{mybook author 2022}
 ```

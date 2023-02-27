@@ -36,7 +36,7 @@ function HomepageHeader() {
     const { Github,Getstart,Book } = icons
     
     return (
-      <>
+      <div className={clsx('home-page', styles.homePage)}>
         <section className={clsx(styles.heroBanner, styles.bannerItemHeight)}>
           <div className={clsx('hero-container', styles.heroContainer)}>
             <Github size={48} color='var(--color-text-0)'/>
@@ -81,7 +81,7 @@ function HomepageHeader() {
             </div>
           </div>
         </section>
-      </>
+      </div>
     );
 }
 

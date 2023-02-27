@@ -18,6 +18,7 @@ use std::vec;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
 use common_functions::aggregates::StateAddr;
@@ -124,13 +125,13 @@ impl<const HAS_AGG: bool, Method: HashMethodBounds> BucketAggregator<HAS_AGG, Me
         }
 
         for mut data_block in blocks {
-            if let Some(mut meta) = data_block.take_meta() {
-                if let Some(info) = meta.as_mut_any().downcast_mut::<AggregateHashStateInfo>() {
+            if let Some(block_meta) = data_block.take_meta() {
+                if let Some(mut info) = AggregateHashStateInfo::downcast_from(block_meta) {
                     let hashtable = info
                         .hash_state
                         .downcast_mut::<Method::HashTable<usize>>()
                         .unwrap();
-                    self.state_holders.push(info.state_holder.take());
+                    self.state_holders.push(info.state_holder);
                     self.merge_partial_hashstates(hashtable)?;
                     continue;
                 }

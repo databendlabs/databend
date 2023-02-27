@@ -235,6 +235,8 @@ You can find [sample configuration files](https://github.com/datafuselabs/databe
 
 ## 5. Cache
 
+This configuration determines whether to enable caching of **block data** to the local disk and how to configure the cache.
+
 :::note
 
 This need databend-query version >= v0.9.40-nightly.
@@ -244,7 +246,7 @@ This need databend-query version >= v0.9.40-nightly.
 ### data_cache_storage
 
 * Type of storage to keep the table data cache, set to `disk` to enable the disk cache.
-* Default: `"none"`
+* Default: `"none"`, block data caching is not enabled.
 * Env variable: `DATA_CACHE_STORAGE`
  
 ### cache.disk

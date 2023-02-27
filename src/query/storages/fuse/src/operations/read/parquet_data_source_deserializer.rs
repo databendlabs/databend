@@ -21,6 +21,7 @@ use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
@@ -108,11 +109,10 @@ impl Processor for DeserializeDataTransform {
 
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
-            if let Some(mut source_meta) = data_block.take_meta() {
-                if let Some(source_meta) = source_meta.as_mut_any().downcast_mut::<DataSourceMeta>()
-                {
-                    self.parts = source_meta.part.clone();
-                    self.chunks = std::mem::take(&mut source_meta.data);
+            if let Some(source_meta) = data_block.take_meta() {
+                if let Some(source_meta) = DataSourceMeta::downcast_from(source_meta) {
+                    self.parts = source_meta.part;
+                    self.chunks = source_meta.data;
                     return Ok(Event::Sync);
                 }
             }

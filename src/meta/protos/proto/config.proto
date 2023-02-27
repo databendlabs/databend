@@ -61,3 +61,15 @@ message OssStorageConfig {
   string access_key_id = 4;
   string access_key_secret = 5;
 }
+
+message WebhdfsStorageConfig {
+  uint64 version = 100;
+  uint64 min_reader_ver = 101;
+
+  string endpoint_url = 1;
+  string root = 2;
+  string delegation = 3;
+
+  string username = 4; // reserved for future use
+  string password = 5; // reserved for future use
+}
