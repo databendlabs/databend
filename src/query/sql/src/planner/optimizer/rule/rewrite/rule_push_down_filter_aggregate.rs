@@ -88,18 +88,20 @@ impl Rule for RulePushDownFilterAggregate {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> common_exception::Result<()> {
         let filter: Filter = s_expr.plan().clone().try_into()?;
         if filter.is_having {
-            let agg1 = s_expr.child(0)?;
-            let agg1_plan: Aggregate = agg1.plan().clone().try_into()?;
-            let agg2 = agg1.child(0)?;
-            let agg2_plan: Aggregate = agg2.plan().clone().try_into()?;
-            if agg1_plan.mode == AggregateMode::Final && agg2_plan.mode == AggregateMode::Partial {
+            let agg_parent = s_expr.child(0)?;
+            let agg_parent_plan: Aggregate = agg_parent.plan().clone().try_into()?;
+            let agg_child = agg_parent.child(0)?;
+            let agg_child_plan: Aggregate = agg_child.plan().clone().try_into()?;
+            if agg_parent_plan.mode == AggregateMode::Final
+                && agg_child_plan.mode == AggregateMode::Partial
+            {
                 let mut push_predicates = vec![];
                 let mut remaining_predicates = vec![];
                 for predicate in filter.predicates {
                     let used_columns = predicate.used_columns();
                     let mut pushable = true;
                     for col in used_columns {
-                        if !agg1_plan.group_columns()?.contains(&col) {
+                        if !agg_parent_plan.group_columns()?.contains(&col) {
                             pushable = false;
                             break;
                         }
@@ -120,12 +122,12 @@ impl Rule for RulePushDownFilterAggregate {
                             predicates: push_predicates,
                             is_having: false,
                         }),
-                        agg2.child(0)?.clone(),
+                        agg_child.child(0)?.clone(),
                     );
                     let agg_with_filter_push_down_expr = SExpr::create_unary(
-                        RelOperator::Aggregate(agg1_plan),
+                        RelOperator::Aggregate(agg_parent_plan),
                         SExpr::create_unary(
-                            RelOperator::Aggregate(agg2_plan),
+                            RelOperator::Aggregate(agg_child_plan),
                             filter_push_down_expr,
                         ),
                     );
