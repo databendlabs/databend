@@ -550,7 +550,7 @@ impl Decimal for i256 {
     }
 
     fn data_type() -> DataType {
-        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
+        DataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
             precision: MAX_DECIMAL256_PRECISION,
             scale: 0,
         }))
