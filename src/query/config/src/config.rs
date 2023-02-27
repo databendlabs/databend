@@ -262,6 +262,10 @@ impl From<InnerStorageConfig> for StorageConfig {
             storage_num_cpus: inner.num_cpus,
             storage_type: "".to_string(),
             allow_insecure: inner.allow_insecure,
+            // use default for each config instead of using `..Default::default`
+            // using `..Default::default` is calling `Self::default`
+            // and `Self::default` relies on `InnerStorage::into()`
+            // this will lead to a stack overflow
             fs: Default::default(),
             gcs: Default::default(),
             s3: Default::default(),

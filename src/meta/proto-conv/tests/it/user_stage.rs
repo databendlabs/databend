@@ -23,6 +23,7 @@ use crate::user_proto_conv::test_internal_stage_info_v17;
 use crate::user_proto_conv::test_oss_stage_info;
 use crate::user_proto_conv::test_s3_stage_info;
 use crate::user_proto_conv::test_user_stage_info_v18;
+use crate::user_proto_conv::test_webhdfs_stage_info;
 
 #[test]
 fn test_user_stage_fs_latest() -> anyhow::Result<()> {
@@ -45,6 +46,67 @@ fn test_user_stage_gcs_latest() -> anyhow::Result<()> {
 #[test]
 fn test_user_stage_oss_latest() -> anyhow::Result<()> {
     common::test_pb_from_to("user_stage_oss", test_oss_stage_info())?;
+    Ok(())
+}
+
+#[test]
+fn test_user_stage_webhdfs_latest() -> anyhow::Result<()> {
+    common::test_pb_from_to("user_stage_webhdfs", test_webhdfs_stage_info())?;
+    Ok(())
+}
+
+#[test]
+fn test_user_stage_webhdfs_v30() -> anyhow::Result<()> {
+    // Encoded data of version 30 of common_meta_app::principal::user_stage::UserStageInfo:
+    // It is generated with common::test_pb_from_to().
+    let user_stage_info_v30 = vec![
+        10, 29, 119, 101, 98, 104, 100, 102, 115, 58, 47, 47, 112, 97, 116, 104, 47, 116, 111, 47,
+        115, 116, 97, 103, 101, 47, 102, 105, 108, 101, 115, 16, 1, 26, 81, 10, 79, 42, 77, 10, 27,
+        104, 116, 116, 112, 115, 58, 47, 47, 119, 101, 98, 104, 100, 102, 115, 46, 101, 120, 97,
+        109, 112, 108, 101, 46, 99, 111, 109, 18, 20, 47, 112, 97, 116, 104, 47, 116, 111, 47, 115,
+        116, 97, 103, 101, 47, 102, 105, 108, 101, 115, 26, 18, 60, 100, 101, 108, 101, 103, 97,
+        116, 105, 111, 110, 95, 116, 111, 107, 101, 110, 62, 160, 6, 30, 168, 6, 24, 34, 30, 8, 1,
+        16, 128, 8, 26, 1, 124, 34, 2, 47, 47, 40, 2, 58, 3, 114, 111, 119, 66, 3, 78, 97, 78, 160,
+        6, 30, 168, 6, 24, 42, 10, 10, 3, 32, 197, 24, 16, 142, 8, 24, 1, 50, 4, 116, 101, 115,
+        116, 160, 6, 30, 168, 6, 24,
+    ];
+
+    let want = || mt::principal::UserStageInfo {
+        stage_name: "webhdfs://path/to/stage/files".to_string(),
+        stage_type: mt::principal::StageType::External,
+        stage_params: mt::principal::StageParams {
+            storage: mt::storage::StorageParams::Webhdfs(mt::storage::StorageWebhdfsConfig {
+                endpoint_url: "https://webhdfs.example.com".to_string(),
+                root: "/path/to/stage/files".to_string(),
+                delegation: "<delegation_token>".to_string(),
+            }),
+        },
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
+            skip_header: 1024,
+            field_delimiter: "|".to_string(),
+            record_delimiter: "//".to_string(),
+            nan_display: "NaN".to_string(),
+            escape: "".to_string(),
+            compression: mt::principal::StageFileCompression::Bz2,
+            row_tag: "row".to_string(),
+            quote: "".to_string(),
+            name: None,
+        },
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(3141),
+            size_limit: 1038,
+            split_size: 0,
+            purge: true,
+            single: false,
+            max_file_size: 0,
+        },
+        comment: "test".to_string(),
+        ..Default::default()
+    };
+    common::test_load_old(func_name!(), user_stage_info_v30.as_slice(), 30, want())?;
+    common::test_pb_from_to(func_name!(), want())?;
+
     Ok(())
 }
 

@@ -32,7 +32,7 @@ use crate::ScalarExpr;
 #[derive(Clone, Debug)]
 pub struct SExpr {
     pub(crate) plan: RelOperator,
-    pub(crate) children: Vec<SExpr>,
+    pub(crate) children: Arc<Vec<SExpr>>,
 
     pub(crate) original_group: Option<IndexType>,
 
@@ -58,7 +58,7 @@ impl SExpr {
     ) -> Self {
         SExpr {
             plan,
-            children,
+            children: Arc::new(children),
             original_group,
             rel_prop: Arc::new(Mutex::new(rel_prop)),
 
@@ -101,12 +101,6 @@ impl SExpr {
     pub fn child(&self, n: usize) -> Result<&SExpr> {
         self.children
             .get(n)
-            .ok_or_else(|| ErrorCode::Internal(format!("Invalid children index: {}", n)))
-    }
-
-    pub fn child_mut(&mut self, n: usize) -> Result<&mut SExpr> {
-        self.children
-            .get_mut(n)
             .ok_or_else(|| ErrorCode::Internal(format!("Invalid children index: {}", n)))
     }
 
@@ -154,7 +148,7 @@ impl SExpr {
             original_group: None,
             rel_prop: Arc::new(Mutex::new(None)),
             applied_rules: self.applied_rules.clone(),
-            children,
+            children: Arc::new(children),
         }
     }
 

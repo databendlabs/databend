@@ -264,10 +264,9 @@
  --image-bg: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMSIgZmlsbD0id2hpdGUiIGZpbGwtb3BhY2l0eT0iMC4xMiIvPgo8L3N2Zz4K);
 
 }
-body{
+html,body{
   background-color: var(--color-bg-0)!important;
-  background-image:var(--image-bg);
-  background-repeat: repeat;
+  height: -webkit-fill-available;
 }
 a:hover{
   text-decoration: none;
