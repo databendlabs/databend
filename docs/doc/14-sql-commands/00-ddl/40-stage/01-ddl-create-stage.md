@@ -146,7 +146,7 @@ CREATE STAGE my_internal_stage;
 
 ### External Stages
 ```sql
-CREATE STAGE my_s3_stage url='s3://load/files/' connection=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z');
+CREATE STAGE my_s3_stage URL='s3://load/files/' CONNECTION = (ACCESS_KEY_ID = '<your-access-key-id>' SECRET_ACCESS_KEY = '<your-secret-access-key>');
 ```
 
 ```sql

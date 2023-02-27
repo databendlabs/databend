@@ -151,6 +151,17 @@ impl SelectInterpreterV2 {
 
         Ok(())
     }
+
+    pub fn include_system_tables(&self) -> bool {
+        let r_lock = self.metadata.read();
+        let tables = r_lock.tables();
+        for t in tables {
+            if t.database().eq_ignore_ascii_case("system") {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 #[async_trait::async_trait]
@@ -169,7 +180,8 @@ impl Interpreter for SelectInterpreterV2 {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         // 0. Need to build pipeline first to get the partitions.
         let mut build_res = self.build_pipeline().await?;
-        if self.ctx.get_settings().get_enable_query_result_cache()? {
+        if self.ctx.get_settings().get_enable_query_result_cache()? && !self.include_system_tables()
+        {
             let key = gen_result_cache_key(self.formatted_ast.as_ref().unwrap());
             // 1. Try to get result from cache.
             let kv_store = UserApiProvider::instance().get_meta_store_client();
