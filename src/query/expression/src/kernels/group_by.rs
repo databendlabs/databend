@@ -54,7 +54,10 @@ impl DataBlock {
         for typ in hash_key_types {
             let not_null_type = typ.remove_nullable();
 
-            if not_null_type.is_numeric() || not_null_type.is_date_or_date_time() {
+            if not_null_type.is_numeric()
+                || not_null_type.is_date_or_date_time()
+                || not_null_type.is_decimal()
+            {
                 group_key_len += not_null_type.numeric_byte_size().unwrap();
 
                 // extra one byte for null flag

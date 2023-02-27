@@ -31,6 +31,7 @@ use micromarshal::Marshal;
 
 use crate::types::boolean::BooleanType;
 use crate::types::decimal::Decimal;
+use crate::types::decimal::DecimalColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::Number;
 use crate::types::number::NumberColumn;
@@ -41,6 +42,7 @@ use crate::types::DecimalDataType;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
 use crate::types::ValueType;
+use crate::with_decimal_mapped_type;
 use crate::with_integer_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
@@ -277,7 +279,7 @@ where T: Clone
         debug_assert!(!keys.is_empty());
 
         // faster path for single signed/unsigned integer to column
-        if group_items.len() == 1 && group_items[0].1.is_numeric() {
+        if group_items.len() == 1 {
             if let DataType::Number(ty) = group_items[0].1 {
                 with_integer_mapped_type!(|NUM_TYPE| match ty {
                     NumberDataType::NUM_TYPE => {
@@ -285,6 +287,19 @@ where T: Clone
                         let col =
                             unsafe { std::mem::transmute::<Buffer<T>, Buffer<NUM_TYPE>>(buffer) };
                         return Ok(vec![NumberType::<NUM_TYPE>::upcast_column(col)]);
+                    }
+                    _ => {}
+                })
+            }
+
+            if matches!(group_items[0].1, DataType::Decimal(_)) {
+                with_decimal_mapped_type!(|DECIMAL_TYPE| match group_items[0].1 {
+                    DataType::Decimal(DecimalDataType::DECIMAL_TYPE(size)) => {
+                        let buffer: Buffer<T> = keys.into();
+                        let col = unsafe {
+                            std::mem::transmute::<Buffer<T>, Buffer<DECIMAL_TYPE>>(buffer)
+                        };
+                        return Ok(vec![DECIMAL_TYPE::upcast_column(col, size)]);
                     }
                     _ => {}
                 })
@@ -503,7 +518,13 @@ pub fn serialize_column_binary(column: &Column, row: usize, vec: &mut Vec<u8>) {
         Column::String(v) => {
             BinaryWrite::write_binary(vec, unsafe { v.index_unchecked(row) }).unwrap()
         }
-        Column::Decimal(_) => unreachable!("Decimal is not supported in group by keys format"),
+        Column::Decimal(_) => {
+            with_decimal_mapped_type!(|DECIMAL_TYPE| match column {
+                Column::Decimal(DecimalColumn::DECIMAL_TYPE(v, _)) =>
+                    vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
+                _ => unreachable!(),
+            })
+        }
         Column::Timestamp(v) => vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
         Column::Date(v) => vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
         Column::Array(array) | Column::Map(array) => {

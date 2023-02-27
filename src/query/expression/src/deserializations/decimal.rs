@@ -85,8 +85,10 @@ impl<T: Decimal> TypeDeserializer for DecimalDeserializer<T> {
 
     // See GroupHash.rs for StringColumn
     #[allow(clippy::uninit_vec)]
-    fn de_binary(&mut self, _reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
-        todo!()
+    fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
+        let t: T = T::de_binary(reader);
+        self.values.push(t);
+        Ok(())
     }
 
     fn de_default(&mut self) {
@@ -95,12 +97,17 @@ impl<T: Decimal> TypeDeserializer for DecimalDeserializer<T> {
 
     fn de_fixed_binary_batch(
         &mut self,
-        _reader: &[u8],
-        _step: usize,
-        _rows: usize,
+        reader: &[u8],
+        step: usize,
+        rows: usize,
         _format: &FormatSettings,
     ) -> Result<()> {
-        todo!()
+        for row in 0..rows {
+            let mut row_reader = &reader[step * row..];
+            let value: T = T::de_binary(&mut row_reader);
+            self.values.push(value);
+        }
+        Ok(())
     }
 
     fn de_json(&mut self, value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {

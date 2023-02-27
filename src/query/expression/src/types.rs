@@ -183,6 +183,9 @@ impl DataType {
             | DataType::Number(NumberDataType::UInt64)
             | DataType::Number(NumberDataType::Float64)
             | DataType::Number(NumberDataType::Int64) => Ok(8),
+
+            DataType::Decimal(DecimalDataType::Decimal128(_)) => Ok(16),
+            DataType::Decimal(DecimalDataType::Decimal256(_)) => Ok(32),
             _ => Result::Err(format!(
                 "Function number_byte_size argument must be numeric types, but got {:?}",
                 self
