@@ -42,7 +42,7 @@ pub struct ArenaHolder {
 
 impl ArenaHolder {
     pub fn create(area: Option<Area>) -> ArenaHolder {
-        tracing::info!("Putting one arena into holder");
+        // tracing::info!("Putting one arena into holder");
         ArenaHolder {
             _data: Arc::new(area),
         }

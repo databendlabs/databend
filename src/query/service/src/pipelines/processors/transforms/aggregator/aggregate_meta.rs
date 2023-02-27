@@ -38,10 +38,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V
     }
 
     pub fn create_partitioned(bucket: isize, data: Vec<Self>) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::<Method, V>::Partitioned {
-            data,
-            bucket,
-        })
+        Box::new(AggregateMeta::<Method, V>::Partitioned { data, bucket })
     }
 
     // pub fn create_partitioned_hashtable(
@@ -60,19 +57,19 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V
 }
 
 impl<Method: HashMethodBounds, V: Send + Sync + 'static> serde::Serialize
-for AggregateMeta<Method, V>
+    for AggregateMeta<Method, V>
 {
     fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
-        where S: serde::Serializer {
+    where S: serde::Serializer {
         unreachable!("AggregateMeta does not support exchanging between multiple nodes")
     }
 }
 
 impl<'de, Method: HashMethodBounds, V: Send + Sync + 'static> serde::Deserialize<'de>
-for AggregateMeta<Method, V>
+    for AggregateMeta<Method, V>
 {
     fn deserialize<D>(_: D) -> Result<Self, D::Error>
-        where D: serde::Deserializer<'de> {
+    where D: serde::Deserializer<'de> {
         unreachable!("AggregateMeta does not support exchanging between multiple nodes")
     }
 }
@@ -94,7 +91,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Debug for AggregateMeta
 }
 
 impl<Method: HashMethodBounds, V: Send + Sync + 'static> BlockMetaInfo
-for AggregateMeta<Method, V>
+    for AggregateMeta<Method, V>
 {
     fn as_any(&self) -> &dyn Any {
         self

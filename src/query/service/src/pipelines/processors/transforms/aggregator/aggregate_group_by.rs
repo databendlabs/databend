@@ -1,27 +1,32 @@
 use std::sync::Arc;
 use std::vec;
 
-use common_hashtable::HashtableEntryRefLike;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_transforms::processors::transforms::{AccumulatingTransform, BlockMetaTransform};
+use common_pipeline_transforms::processors::transforms::AccumulatingTransform;
 use common_pipeline_transforms::processors::transforms::AccumulatingTransformer;
 use common_pipeline_transforms::processors::transforms::BlockMetaAccumulatingTransform;
+use common_pipeline_transforms::processors::transforms::BlockMetaTransform;
+use common_pipeline_transforms::processors::transforms::BlockMetaTransformer;
+use common_pipeline_transforms::processors::transforms::Transformer;
 use common_sql::IndexType;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
-use crate::pipelines::processors::transforms::group_by::{ArenaHolder, GroupColumnsBuilder};
+use crate::pipelines::processors::transforms::aggregator::estimated_key_size;
+use crate::pipelines::processors::transforms::group_by::ArenaHolder;
+use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::estimated_key_size;
 use crate::sessions::QueryContext;
 
 enum HashTable<Method: HashMethodBounds> {
@@ -29,8 +34,8 @@ enum HashTable<Method: HashMethodBounds> {
     HashTable(Method::HashTable<()>),
     PartitionedHashTable(
         <PartitionedHashMethod<Method> as PolymorphicKeysHelper<
-            PartitionedHashMethod<Method>,
-        >>::HashTable<()>,
+                PartitionedHashMethod<Method>,
+            >>::HashTable<()>,
     ),
 }
 
@@ -197,7 +202,24 @@ pub struct TransformFinalGroupBy<Method: HashMethodBounds> {
     params: Arc<AggregatorParams>,
 }
 
-impl<Method: HashMethodBounds> BlockMetaTransform<AggregateMeta<Method, ()>> for TransformFinalGroupBy<Method> {
+impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
+    pub fn try_create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        method: Method,
+        params: Arc<AggregatorParams>,
+    ) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(BlockMetaTransformer::create(
+            input,
+            output,
+            TransformFinalGroupBy::<Method> { method, params },
+        )))
+    }
+}
+
+impl<Method: HashMethodBounds> BlockMetaTransform<AggregateMeta<Method, ()>>
+    for TransformFinalGroupBy<Method>
+{
     const NAME: &'static str = "TransformFinalGroupBy";
 
     fn transform(&mut self, meta: AggregateMeta<Method, ()>) -> Result<DataBlock> {
@@ -218,7 +240,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<AggregateMeta<Method, ()>> for
                                     break 'merge_hashtable;
                                 }
                             }
-                        }
+                        },
                     }
                 }
 

@@ -17,6 +17,7 @@ use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::with_hash_method;
 use common_expression::BlockMetaInfo;
@@ -42,9 +43,12 @@ use super::aggregator::AggregateHashStateInfo;
 use super::group_by::BUCKETS_LG2;
 use crate::pipelines::processors::transforms::aggregator::AggregateInfo;
 use crate::pipelines::processors::transforms::aggregator::BucketAggregator;
+use crate::pipelines::processors::transforms::aggregator::TransformFinalGroupBy;
+use crate::pipelines::processors::transforms::aggregator::TransformPartitionBucket;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 use crate::pipelines::processors::AggregatorParams;
+use crate::sessions::QueryContext;
 
 // Overflow to object storage data block
 #[allow(dead_code)]
@@ -434,7 +438,33 @@ fn build_convert_grouping<Method: HashMethodBounds>(
     })
 }
 
+fn build_partition_bucket<Method: HashMethodBounds>(
+    method: Method,
+    pipeline: &mut Pipeline,
+    params: Arc<AggregatorParams>,
+) -> Result<()> {
+    let input_nums = pipeline.output_len();
+    let transform =
+        TransformPartitionBucket::<Method, ()>::create(method.clone(), params.clone(), input_nums)?;
+
+    let output = transform.get_output();
+    let inputs_port = transform.get_inputs();
+
+    pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
+        ProcessorPtr::create(Box::new(transform)),
+        inputs_port,
+        vec![output],
+    )]));
+
+    pipeline.resize(input_nums)?;
+
+    pipeline.add_transform(|input, output| {
+        TransformFinalGroupBy::try_create(input, output, method.clone(), params.clone())
+    })
+}
+
 pub fn efficiently_memory_final_aggregator(
+    ctx: &Arc<QueryContext>,
     params: Arc<AggregatorParams>,
     pipeline: &mut Pipeline,
 ) -> Result<()> {
@@ -443,9 +473,14 @@ pub fn efficiently_memory_final_aggregator(
     let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
     let method = DataBlock::choose_hash_method(&sample_block, group_cols)?;
 
-    with_hash_method!(|T| match method {
-        HashMethodKind::T(v) => build_convert_grouping(v, pipeline, params.clone()),
-    })
+    match params.aggregate_functions.is_empty() && ctx.get_cluster().is_empty() {
+        true => with_hash_method!(|T| match method {
+            HashMethodKind::T(v) => build_partition_bucket(v, pipeline, params.clone()),
+        }),
+        false => with_hash_method!(|T| match method {
+            HashMethodKind::T(v) => build_convert_grouping(v, pipeline, params.clone()),
+        }),
+    }
 }
 
 struct MergeBucketTransform<Method: HashMethodBounds> {

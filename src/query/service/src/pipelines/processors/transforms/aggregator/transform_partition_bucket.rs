@@ -28,6 +28,7 @@ use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_expression::HashMethodKind;
 use common_hashtable::hash2bucket;
+use common_hashtable::HashtableLike;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
@@ -41,11 +42,13 @@ use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
 
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::{AggregateMeta, HashTablePayload};
+use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregateInfo;
 use crate::pipelines::processors::transforms::aggregator::BucketAggregator;
-use crate::pipelines::processors::transforms::group_by::{HashMethodBounds, PartitionedHashMethod};
+use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
+use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::AggregatorParams;
 
 static SINGLE_LEVEL_BUCKET_NUM: isize = -1;
@@ -55,8 +58,6 @@ struct InputPortState {
     bucket: isize,
 }
 
-/// A helper class that  Map
-/// AggregateInfo/AggregateHashStateInfo  --->  ConvertGroupingMetaInfo { meta: blocks with Option<AggregateHashStateInfo> }
 pub struct TransformPartitionBucket<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> {
     output: Arc<OutputPort>,
     inputs: Vec<InputPortState>,
@@ -70,7 +71,9 @@ pub struct TransformPartitionBucket<Method: HashMethodBounds, V: Copy + Send + S
     _phantom: PhantomData<V>,
 }
 
-impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> TransformPartitionBucket<Method, V> {
+impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
+    TransformPartitionBucket<Method, V>
+{
     pub fn create(
         method: Method,
         params: Arc<AggregatorParams>,
@@ -198,7 +201,10 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> TransformPartiti
     fn try_push_single_level(&mut self) -> bool {
         if !self.unsplitted_blocks.is_empty() {
             let data_blocks = take(&mut self.unsplitted_blocks);
-            self.output.push_data(Ok(Self::convert_blocks(SINGLE_LEVEL_BUCKET_NUM, data_blocks)));
+            self.output.push_data(Ok(Self::convert_blocks(
+                SINGLE_LEVEL_BUCKET_NUM,
+                data_blocks,
+            )));
             return true;
         }
 
@@ -215,33 +221,35 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> TransformPartiti
             }
         }
 
-        DataBlock::empty_with_meta(
-            AggregateMeta::<Method, V>::create_partitioned(bucket, data),
-        )
+        DataBlock::empty_with_meta(AggregateMeta::<Method, V>::create_partitioned(bucket, data))
     }
 
-    fn convert_to_two_level(&self, payload: HashTablePayload<Method::HashTable<V>>) -> Result<Vec<DataBlock>> {
-        let partitioned = PartitionedHashMethod::convert_hashtable(&self.method, payload.hashtable)?;
-        for (bucket, hashtable) in partitioned.into_iter_tables().enumerate() {
-            // TODO: bucket
+    fn partition_hashtable(
+        &self,
+        payload: HashTablePayload<Method::HashTable<V>>,
+    ) -> Result<Vec<Option<DataBlock>>> {
+        let mut data_blocks = Vec::with_capacity(256);
+        let temp = PartitionedHashMethod::convert_hashtable(&self.method, payload.hashtable)?;
+        for (bucket, hashtable) in temp.into_iter_tables().enumerate() {
+            data_blocks.push(match hashtable.len() == 0 {
+                true => None,
+                false => Some(DataBlock::empty_with_meta(
+                    AggregateMeta::<Method, V>::create_hashtable(
+                        bucket as isize,
+                        hashtable,
+                        payload.arena_holder.clone(),
+                    ),
+                )),
+            })
         }
-        // let keys_iter = self.method.keys_iter_from_column(keys_column)?;
-        //
-        // let mut indices = Vec::with_capacity(data_block.num_rows());
 
-        // for key_item in keys_iter.iter() {
-        //     let hash = self.method.get_hash(key_item);
-        // indices.push(hash2bucket::<BUCKETS_LG2, true>(hash as usize) as u16);
-        // }
-
-        // DataBlock::scatter(&data_block, &indices, 1 << BUCKETS_LG2)
-        todo!()
+        Ok(data_blocks)
     }
 }
 
 #[async_trait::async_trait]
 impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
-for TransformPartitionBucket<Method, V>
+    for TransformPartitionBucket<Method, V>
 {
     fn name(&self) -> String {
         String::from("TransformPartitionBucket")
@@ -343,17 +351,17 @@ for TransformPartitionBucket<Method, V>
                 if let Some(block_meta) = AggregateMeta::<Method, V>::downcast_from(block_meta) {
                     let data_blocks = match block_meta {
                         AggregateMeta::Partitioned { .. } => unreachable!(),
-                        AggregateMeta::HashTable(payload) => self.convert_to_two_level(payload)?,
+                        AggregateMeta::HashTable(payload) => self.partition_hashtable(payload)?,
                     };
 
                     for (bucket, block) in data_blocks.into_iter().enumerate() {
-                        if !block.is_empty() {
+                        if let Some(data_block) = block {
                             match self.buckets_blocks.entry(bucket as isize) {
                                 Entry::Vacant(v) => {
-                                    v.insert(vec![block]);
+                                    v.insert(vec![data_block]);
                                 }
                                 Entry::Occupied(mut v) => {
-                                    v.get_mut().push(block);
+                                    v.get_mut().push(data_block);
                                 }
                             };
                         }

@@ -431,7 +431,7 @@ impl PipelineBuilder {
             });
         }
 
-        efficiently_memory_final_aggregator(params, &mut self.main_pipeline)
+        efficiently_memory_final_aggregator(&self.ctx, params, &mut self.main_pipeline)
     }
 
     pub fn build_aggregator_params(

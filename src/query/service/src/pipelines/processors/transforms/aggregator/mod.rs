@@ -26,6 +26,8 @@ mod transform_partition_bucket;
 mod utils;
 
 pub use aggregate_exchange_sorting::AggregateExchangeSorting;
+pub use aggregate_group_by::TransformFinalGroupBy;
+pub use aggregate_group_by::TransformPartialGroupBy;
 pub use aggregate_hashstate_info::AggregateHashStateInfo;
 pub use aggregate_info::AggregateInfo;
 pub use aggregate_info::OverflowInfo;
@@ -37,4 +39,5 @@ pub use aggregator_partitioned::PartitionedAggregator;
 pub use aggregator_partitioned::PartitionedAggregatorLike;
 pub use aggregator_single_key::FinalSingleStateAggregator;
 pub use aggregator_single_key::PartialSingleStateAggregator;
+pub use transform_partition_bucket::TransformPartitionBucket;
 pub use utils::*;
