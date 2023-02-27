@@ -31,7 +31,7 @@ pub fn optimize_distributed_query(ctx: Arc<dyn TableContext>, s_expr: &SExpr) ->
         distribution: Distribution::Any,
     };
     let mut result = require_property(ctx, &required, s_expr)?;
-    result = push_down_topk_to_merge(&mut result, None)?;
+    result = push_down_topk_to_merge(&result, None)?;
     let rel_expr = RelExpr::with_s_expr(&result);
     let physical_prop = rel_expr.derive_physical_prop()?;
     let root_required = RequiredProperty {
