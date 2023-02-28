@@ -152,11 +152,24 @@ impl SelectInterpreterV2 {
         Ok(())
     }
 
-    pub fn include_system_tables(&self) -> bool {
+    fn include_system_tables(&self) -> bool {
         let r_lock = self.metadata.read();
         let tables = r_lock.tables();
         for t in tables {
-            if t.database().eq_ignore_ascii_case("system") {
+            if t.database().eq_ignore_ascii_case("system")
+                && !t.name().eq_ignore_ascii_case("result_scan")
+            {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn is_result_scan(&self) -> bool {
+        let r_lock = self.metadata.read();
+        let tables = r_lock.tables();
+        for t in tables {
+            if t.name().eq_ignore_ascii_case("result_scan") {
                 return true;
             }
         }
@@ -185,6 +198,23 @@ impl Interpreter for SelectInterpreterV2 {
             let key = gen_result_cache_key(self.formatted_ast.as_ref().unwrap());
             // 1. Try to get result from cache.
             let kv_store = UserApiProvider::instance().get_meta_store_client();
+
+            // Execute `select * from result_scan(last_query_id)` multiple times
+            // should return same result. Please consider the following scenarios:
+            // 1) select * from t1;
+            // 2) select * from result_scan(last_query_id()); --> returns result same as line 1
+            // 3) insert into t1 values(2);
+            // 4) select * from t1; --> result changed since we insert new data.
+            // 5) select * from result_scan(last_query_id()); --> result same as line 2 cause cache
+            // If we read cache for 5, we will see it returns same result as 1 and 2 cause the
+            // generated result_cache_key are same for this statement, so here we just write cache
+            // but not read cache for `result_scan`.
+            if self.is_result_scan() {
+                let schema = infer_table_schema(&self.schema())?;
+                self.add_result_cache(&key, schema, &mut build_res.main_pipeline, kv_store)?;
+                return Ok(build_res);
+            }
+
             let cache_reader = ResultCacheReader::create(
                 self.ctx.clone(),
                 &key,
