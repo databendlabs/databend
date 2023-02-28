@@ -118,8 +118,7 @@ for t in customer lineitem nation orders partsupp part region supplier; do
 COPY INTO $t FROM 's3://repo.databend.rs/tpch10/${t}/'
 credentials=(aws_key_id='$AWS_KEY_ID' aws_secret_key='$AWS_SECRET_KEY') pattern ='${t}.*'
 file_format=(type='CSV' field_delimiter='|' record_delimiter='\\n' skip_header=0);
-SQL
-  cat <<SQL | bendsql query
+ANALYZE TABLE '${t}';
 SELECT count(*) as count_${t} FROM '${t}';
 SQL
 done
