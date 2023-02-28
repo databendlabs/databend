@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-#[cfg(debug_assertions)]
-use std::sync::Mutex;
 
 use common_arrow::arrow::bitmap;
 use common_exception::ErrorCode;

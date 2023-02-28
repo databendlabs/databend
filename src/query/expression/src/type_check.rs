@@ -528,12 +528,12 @@ pub fn common_super_type(
                 scale,
             })
             .ok()
-            .map(|size| DataType::Decimal(size))
+            .map(DataType::Decimal)
         }
 
         (DataType::Decimal(a), DataType::Decimal(b)) => {
             let ty = DecimalDataType::binary_result_type(&a, &b, false, false, true).ok();
-            ty.map(|ty| DataType::Decimal(ty))
+            ty.map(DataType::Decimal)
         }
 
         (ty1, ty2) => {
