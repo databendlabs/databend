@@ -139,7 +139,7 @@ function run_query() {
     sync
     echo 3 | sudo tee /proc/sys/vm/drop_caches
     q_start=$(date +%s.%N)
-    if echo "$query" | bendsql query -f csv -r >/dev/null; then
+    if echo "$query" | bendsql query --format csv --rows-only >/dev/null; then
         q_end=$(date +%s.%N)
         q_time=$(echo "$q_end - $q_start" | bc -l)
         echo "Q${QUERY_NUM}[$seq] succeeded in $q_time seconds"
