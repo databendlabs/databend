@@ -165,7 +165,7 @@ impl Debug for ErrorCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Code: {}, displayText = {}.",
+            "Code: {}, Text = {}.",
             self.code(),
             self.message(),
         )?;
@@ -196,7 +196,7 @@ impl Display for ErrorCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Code: {}, displayText = {}.",
+            "Code: {}, Text = {}.",
             self.code(),
             self.message(),
         )
