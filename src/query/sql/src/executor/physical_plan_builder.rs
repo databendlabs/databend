@@ -52,6 +52,7 @@ use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::EvalScalar;
 use crate::executor::FragmentKind;
 use crate::executor::PhysicalPlan;
+use crate::executor::RuntimeFilterSource;
 use crate::executor::SortDesc;
 use crate::executor::UnionAll;
 use crate::optimizer::ColumnSet;
@@ -658,6 +659,19 @@ impl PhysicalPlanBuilder {
                     stat_info: Some(stat_info),
                 }))
             }
+            RelOperator::RuntimeFilterSource(op) => {
+                let input = Box::new(self.build(s_expr.child(0)?).await?);
+                let mut runtime_filters = BTreeMap::new();
+                for (id, expr) in op.runtime_filters.iter() {
+                    runtime_filters
+                        .insert(id.clone(), expr.as_expr_with_col_index()?.as_remote_expr());
+                }
+                Ok(PhysicalPlan::RuntimeFilterSource(RuntimeFilterSource {
+                    plan_id: self.next_plan_id(),
+                    input,
+                    runtime_filters,
+                }))
+            }
             _ => Err(ErrorCode::Internal(format!(
                 "Unsupported physical plan: {:?}",
                 s_expr.plan()
@@ -803,6 +817,7 @@ impl PhysicalPlanBuilder {
             prewhere: prewhere_info,
             limit: scan.limit,
             order_by: order_by.unwrap_or_default(),
+            runtime_filter: Default::default(),
         })
     }
 

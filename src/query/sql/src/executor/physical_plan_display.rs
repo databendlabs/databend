@@ -67,6 +67,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::UnionAll(union_all) => write!(f, "{}", union_all)?,
             PhysicalPlan::DistributedInsertSelect(insert_select) => write!(f, "{}", insert_select)?,
             PhysicalPlan::Unnest(unnest) => write!(f, "{}", unnest)?,
+            PhysicalPlan::RuntimeFilterSource(plan) => write!(f, "{}", plan)?,
         }
 
         for node in self.node.children() {

@@ -163,7 +163,7 @@ pub fn optimize_query(
     // break optimizer due to new added nodes by runtime filter.
     // Currently, we only support standalone.
     if !enable_distributed_query {
-        try_add_runtime_filter_nodes(&mut result)?;
+        result = try_add_runtime_filter_nodes(&result)?;
     }
     if enable_distributed_query {
         result = optimize_distributed_query(ctx.clone(), &result)?;

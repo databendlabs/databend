@@ -44,55 +44,54 @@ fn create_runtime_filters(join: &Join) -> Result<RuntimeFilterResult> {
     todo!()
 }
 
-fn wrap_filter_to_probe(s_expr: &mut SExpr, predicates: Vec<ScalarExpr>) -> Result<()> {
+fn wrap_filter_to_probe(s_expr: &SExpr, predicates: Vec<ScalarExpr>) -> Result<SExpr> {
     let mut probe_side = s_expr.child(0)?.clone();
     let new_filter = Filter {
         predicates,
         is_having: false,
     };
     probe_side = SExpr::create_unary(new_filter.into(), probe_side);
-    s_expr
+    Ok(s_expr
         .child(0)?
-        .replace_children(vec![probe_side, s_expr.child(1)?.clone()]);
-    Ok(())
+        .replace_children(vec![probe_side, s_expr.child(1)?.clone()]))
 }
 
 fn wrap_runtime_filter_source_to_build(
-    s_expr: &mut SExpr,
+    s_expr: &SExpr,
     runtime_filters: BTreeMap<RuntimeFilterId, ScalarExpr>,
-) -> Result<()> {
+) -> Result<SExpr> {
     let source_node = RuntimeFilterSource { runtime_filters };
     let mut build_side = s_expr.child(1)?.clone();
     build_side = SExpr::create_unary(source_node.into(), build_side);
-    s_expr
+    Ok(s_expr
         .child(0)?
-        .replace_children(vec![s_expr.child(0)?.clone(), build_side]);
-    Ok(())
+        .replace_children(vec![s_expr.child(0)?.clone(), build_side]))
 }
 
 // Traverse plan tree and check if exists join
 // Currently, only support inner join.
-pub fn try_add_runtime_filter_nodes(expr: &mut SExpr) -> Result<()> {
+pub fn try_add_runtime_filter_nodes(expr: &SExpr) -> Result<SExpr> {
     if expr.plan.rel_op() == RelOp::Join {
         return add_runtime_filter_nodes(expr);
     }
 
-    for child in expr.children.iter_mut() {
-        try_add_runtime_filter_nodes(child)?;
+    let mut children = vec![];
+
+    for child in expr.children.iter() {
+        children.push(try_add_runtime_filter_nodes(child)?);
     }
-    Ok(())
+    Ok(expr.replace_children(children))
 }
 
-fn add_runtime_filter_nodes(expr: &mut SExpr) -> Result<()> {
+fn add_runtime_filter_nodes(expr: &SExpr) -> Result<SExpr> {
     assert_eq!(expr.plan.rel_op(), RelOp::Join);
     let join: Join = expr.plan().clone().try_into()?;
     if join.join_type != JoinType::Inner {
-        return Ok(());
+        return Ok(expr.clone());
     }
     let runtime_filter_result = create_runtime_filters(&join)?;
     // Add a filter node to probe side, the predicates contain runtime filter info
-    wrap_filter_to_probe(expr, runtime_filter_result.predicates)?;
+    let expr = wrap_filter_to_probe(expr, runtime_filter_result.predicates)?;
     // Add RuntimeFilterSource node to build side
-    wrap_runtime_filter_source_to_build(expr, runtime_filter_result.runtime_filters)?;
-    Ok(())
+    Ok(wrap_runtime_filter_source_to_build(&expr, runtime_filter_result.runtime_filters)?)
 }

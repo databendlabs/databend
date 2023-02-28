@@ -29,7 +29,7 @@ use super::Project;
 use super::Sort;
 use super::TableScan;
 use super::Unnest;
-use crate::executor::UnionAll;
+use crate::executor::{RuntimeFilterSource, UnionAll};
 
 pub trait PhysicalPlanReplacer {
     fn replace(&mut self, plan: &PhysicalPlan) -> Result<PhysicalPlan> {
@@ -49,6 +49,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::UnionAll(plan) => self.replace_union(plan),
             PhysicalPlan::DistributedInsertSelect(plan) => self.replace_insert_select(plan),
             PhysicalPlan::Unnest(plan) => self.replace_unnest(plan),
+            PhysicalPlan::RuntimeFilterSource(plan) => self.replace_runtime_filter_source(plan),
         }
     }
 
@@ -221,7 +222,14 @@ pub trait PhysicalPlanReplacer {
             plan_id: plan.plan_id,
             input: Box::new(input),
             offsets: plan.offsets.clone(),
-            stat_info: plan.stat_info.clone(),
+            stat_info: plan.stat_info.clone(),}))}
+
+    fn replace_runtime_filter_source(&mut self, plan: &RuntimeFilterSource) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::RuntimeFilterSource(RuntimeFilterSource {
+            plan_id: plan.plan_id,
+            input: Box::new(input),
+            runtime_filters: plan.runtime_filters.clone(),
         }))
     }
 }
@@ -276,7 +284,8 @@ impl PhysicalPlan {
                 PhysicalPlan::DistributedInsertSelect(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::Unnest(plan) => {
+                PhysicalPlan::Unnest(plan) => Self::traverse(&plan.input, pre_visit, visit, post_visit),
+                PhysicalPlan::RuntimeFilterSource(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
             }

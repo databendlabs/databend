@@ -39,7 +39,7 @@ use common_pipeline_transforms::processors::transforms::try_create_transform_sor
 use common_profile::ProfSpanSetRef;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::executor::AggregateFinal;
+use common_sql::executor::{AggregateFinal, RuntimeFilterSource};
 use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::AggregatePartial;
 use common_sql::executor::DistributedInsertSelect;
@@ -161,6 +161,7 @@ impl PipelineBuilder {
             PhysicalPlan::Exchange(_) => Err(ErrorCode::Internal(
                 "Invalid physical plan with PhysicalPlan::Exchange",
             )),
+            PhysicalPlan::RuntimeFilterSource(runtime_filter_source) => self.build_runtime_filter_source(runtime_filter_source),
         }
     }
 
@@ -975,5 +976,9 @@ impl PipelineBuilder {
         )?;
 
         Ok(())
+    }
+
+    pub fn build_runtime_filter_source(&self, runtime_filter_source: &RuntimeFilterSource) -> Result<()> {
+        todo!()
     }
 }

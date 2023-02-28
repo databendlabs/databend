@@ -13,9 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::hash::Hash;
-use std::hash::Hasher;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
@@ -29,7 +27,7 @@ use crate::plans::RelOp;
 use crate::IndexType;
 use crate::ScalarExpr;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, Ord, PartialOrd)]
 pub struct RuntimeFilterId {
     id: String,
 }

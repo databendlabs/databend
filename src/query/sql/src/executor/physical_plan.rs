@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::fmt::{Display, Formatter};
 
 use common_catalog::plan::DataSourcePlan;
 use common_exception::Result;
@@ -29,6 +30,7 @@ use common_meta_app::schema::TableInfo;
 use crate::executor::explain::PlanStatsInfo;
 use crate::optimizer::ColumnSet;
 use crate::plans::JoinType;
+use crate::plans::RuntimeFilterId;
 use crate::ColumnBinding;
 use crate::IndexType;
 
@@ -483,7 +485,26 @@ impl DistributedInsertSelect {
 // Build runtime predicate data from join build side
 // Then pass it to runtime filter on join probe side
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct RuntimeFilterSource {}
+pub struct RuntimeFilterSource {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+
+    pub input: Box<PhysicalPlan>,
+    pub runtime_filters: BTreeMap<RuntimeFilterId, RemoteExpr>,
+}
+
+impl RuntimeFilterSource {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        self.input.output_schema()
+    }
+}
+
+impl Display for RuntimeFilterSource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        todo!()
+    }
+}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum PhysicalPlan {
@@ -499,6 +520,7 @@ pub enum PhysicalPlan {
     HashJoin(HashJoin),
     Exchange(Exchange),
     UnionAll(UnionAll),
+    RuntimeFilterSource(RuntimeFilterSource),
 
     /// For insert into ... select ... in cluster
     DistributedInsertSelect(Box<DistributedInsertSelect>),
@@ -534,6 +556,7 @@ impl PhysicalPlan {
             PhysicalPlan::UnionAll(plan) => plan.output_schema(),
             PhysicalPlan::DistributedInsertSelect(plan) => plan.output_schema(),
             PhysicalPlan::Unnest(plan) => plan.output_schema(),
+            PhysicalPlan::RuntimeFilterSource(plan) => plan.output_schema(),
         }
     }
 
@@ -554,6 +577,7 @@ impl PhysicalPlan {
             PhysicalPlan::ExchangeSource(_) => "Exchange Source".to_string(),
             PhysicalPlan::ExchangeSink(_) => "Exchange Sink".to_string(),
             PhysicalPlan::Unnest(_) => "Unnest".to_string(),
+            PhysicalPlan::RuntimeFilterSource(_) => "RuntimeFilterSource".to_string(),
         }
     }
 
@@ -580,6 +604,9 @@ impl PhysicalPlan {
                 Box::new(std::iter::once(plan.input.as_ref()))
             }
             PhysicalPlan::Unnest(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::RuntimeFilterSource(plan) => {
+                Box::new(std::iter::once(plan.input.as_ref()))
+            }
         }
     }
 }

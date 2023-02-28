@@ -83,6 +83,9 @@ fn to_format_tree(
             distributed_insert_to_format_tree(plan.as_ref(), metadata, prof_span_set)
         }
         PhysicalPlan::Unnest(plan) => unnest_to_format_tree(plan, metadata, prof_span_set),
+        PhysicalPlan::RuntimeFilterSource(plan) => {
+            todo!()
+        }
     }
 }
 
