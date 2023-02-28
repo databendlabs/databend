@@ -329,12 +329,9 @@ impl DataBlock {
     #[inline]
     pub fn add_meta(self, meta: Option<BlockMetaInfoPtr>) -> Result<Self> {
         if self.meta.is_some() {
-            return Err(ErrorCode::Internal(format!(
-                "Internal error, block meta data is set twice.\
-                 current: {:?}, set: {:?}",
-                serde_json::to_string(self.meta.as_ref().unwrap()),
-                serde_json::to_string(meta.as_ref().unwrap()),
-            )));
+            return Err(ErrorCode::Internal(
+                "Internal error, block meta data is set twice.",
+            ));
         }
 
         Ok(Self {
