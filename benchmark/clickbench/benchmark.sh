@@ -136,6 +136,8 @@ function run_query() {
 
     local q_start q_end q_time
 
+    sync
+    echo 3 | sudo tee /proc/sys/vm/drop_caches
     q_start=$(date +%s.%N)
     if echo "$query" | bendsql query -f csv -r >/dev/null; then
         q_end=$(date +%s.%N)
