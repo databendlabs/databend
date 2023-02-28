@@ -26,6 +26,7 @@ use crate::api::ExchangeSorting;
 
 pub struct PipelineBuildResult {
     pub main_pipeline: Pipeline,
+    
     // Containing some sub queries pipelines, must be complete pipeline
     pub sources_pipelines: Vec<Pipeline>,
 
