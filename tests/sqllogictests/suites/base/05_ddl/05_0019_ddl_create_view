@@ -106,4 +106,4 @@ drop view if exists tmp_view
 query T
 explain create view test as SELECT * FROM 's3://testbucket/admin/data/tuple.parquet'(files => ('tuple.parquet', 'test.parquet'), pattern => '.*.parquet', FILE_FORMAT => 'parquet',  aws_key_id => 'minioadmin',  aws_secret_key => 'minioadmin',  endpoint_url => 'http://127.0.0.1:9900/')
 ----
-CreateViewPlan { if_not_exists: false, tenant: "admin", catalog: "default", database: "default", viewname: "test", column_names: [], subquery: "SELECT * FROM 's3://testbucket/admin/data/tuple.parquet' (FILES => ('tuple.parquet','test.parquet'),FILE_FORMAT => 'parquet',PATTERN => '.*.parquet', aws_key_id => 'minioadmin', aws_secret_key => 'minioadmin', endpoint_url => 'http://127.0.0.1:9900/')" }
+CreateViewPlan { if_not_exists: false, tenant: "NW9qb3f", catalog: "default", database: "default", viewname: "test", column_names: [], subquery: "SELECT * FROM 's3://testbucket/admin/data/tuple.parquet' (FILES => ('tuple.parquet','test.parquet'),FILE_FORMAT => 'parquet',PATTERN => '.*.parquet', aws_key_id => 'minioadmin', aws_secret_key => 'minioadmin', endpoint_url => 'http://127.0.0.1:9900/')" }
