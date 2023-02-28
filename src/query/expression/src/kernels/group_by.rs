@@ -25,7 +25,6 @@ use crate::types::DataType;
 use crate::DataBlock;
 use crate::HashMethodKeysU128;
 use crate::HashMethodKeysU256;
-use crate::HashMethodKeysU512;
 
 impl DataBlock {
     pub fn choose_hash_method(chunk: &DataBlock, indices: &[usize]) -> Result<HashMethodKind> {
@@ -55,7 +54,10 @@ impl DataBlock {
         for typ in hash_key_types {
             let not_null_type = typ.remove_nullable();
 
-            if not_null_type.is_numeric() || not_null_type.is_date_or_date_time() {
+            if not_null_type.is_numeric()
+                || not_null_type.is_date_or_date_time()
+                || not_null_type.is_decimal()
+            {
                 group_key_len += not_null_type.numeric_byte_size().unwrap();
 
                 // extra one byte for null flag
@@ -74,7 +76,6 @@ impl DataBlock {
             5..=8 => Ok(HashMethodKind::KeysU64(HashMethodKeysU64::default())),
             9..=16 => Ok(HashMethodKind::KeysU128(HashMethodKeysU128::default())),
             17..=32 => Ok(HashMethodKind::KeysU256(HashMethodKeysU256::default())),
-            33..=64 => Ok(HashMethodKind::KeysU512(HashMethodKeysU512::default())),
             _ => Ok(HashMethodKind::Serializer(HashMethodSerializer::default())),
         }
     }

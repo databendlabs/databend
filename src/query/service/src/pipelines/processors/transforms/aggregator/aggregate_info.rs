@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::HashMap;
 
 use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -46,18 +47,14 @@ impl BlockMetaInfo for AggregateInfo {
         self
     }
 
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        match AggregateInfo::downcast_ref_from(info) {
+            None => false,
+            Some(other) => self == other,
+        }
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         Box::new(self.clone())
-    }
-
-    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        match info.as_any().downcast_ref::<AggregateInfo>() {
-            None => false,
-            Some(other) => self == other,
-        }
     }
 }

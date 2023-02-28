@@ -20,7 +20,6 @@ use std::ops::RangeBounds;
 use anyerror::AnyError;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::tokio::sync::RwLockWriteGuard;
-use common_meta_raft_store::applied_state::AppliedState;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::log::RaftLog;
 use common_meta_raft_store::state::RaftState;
@@ -36,6 +35,7 @@ use common_meta_sled_store::openraft::ErrorVerb;
 use common_meta_sled_store::openraft::Membership;
 use common_meta_sled_store::openraft::StateMachineChanges;
 use common_meta_stoerr::MetaStorageError;
+use common_meta_types::AppliedState;
 use common_meta_types::Endpoint;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaError;
@@ -686,7 +686,12 @@ impl RaftStoreBare {
             .get_node(node_id)
             .await?
             .map(|n| n.endpoint)
-            .ok_or_else(|| MetaNetworkError::GetNodeAddrError(format!("node id: {}", node_id)))?;
+            .ok_or_else(|| {
+                MetaNetworkError::GetNodeAddrError(format!(
+                    "fail to get endpoint of node_id: {}",
+                    node_id
+                ))
+            })?;
 
         Ok(endpoint)
     }

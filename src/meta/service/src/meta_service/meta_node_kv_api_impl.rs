@@ -22,7 +22,7 @@ use common_meta_kvapi::kvapi::MGetKVReply;
 use common_meta_kvapi::kvapi::MGetKVReq;
 use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_raft_store::applied_state::AppliedState;
+use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaAPIError;

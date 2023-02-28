@@ -247,6 +247,7 @@ impl FuseTable {
                     block_reader.clone(),
                     remain_reader.clone(),
                     ops.clone(),
+                    self.storage_format,
                 )
             },
             max_threads,
@@ -289,7 +290,7 @@ impl FuseTable {
             PruningStatistics::default(),
         )?;
 
-        let parts = Partitions::create(
+        let parts = Partitions::create_nolazy(
             PartitionsShuffleKind::Mod,
             block_metas
                 .into_iter()
@@ -350,7 +351,7 @@ impl FuseTable {
         let cluster_keys = self.cluster_keys(ctx);
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
         let mut extra_key_num = 0;
-        let mut operators = Vec::with_capacity(cluster_keys.len());
+        let mut exprs = Vec::with_capacity(cluster_keys.len());
 
         for remote_expr in &cluster_keys {
             let expr: Expr = remote_expr
@@ -361,7 +362,7 @@ impl FuseTable {
                 _ => {
                     let cname = format!("{}", expr);
                     merged.push(DataField::new(cname.as_str(), expr.data_type().clone()));
-                    operators.push(BlockOperator::Map { expr });
+                    exprs.push(expr);
 
                     let offset = merged.len() - 1;
                     extra_key_num += 1;
@@ -371,12 +372,7 @@ impl FuseTable {
             cluster_key_index.push(index);
         }
 
-        let max_page_size = if self.is_native() {
-            Some(self.get_write_settings().max_page_size)
-        } else {
-            None
-        };
-
+        let max_page_size = self.get_max_page_size();
         Ok(ClusterStatsGenerator::new(
             self.cluster_key_meta.as_ref().unwrap().0,
             cluster_key_index,
@@ -384,7 +380,7 @@ impl FuseTable {
             max_page_size,
             0,
             self.get_block_compact_thresholds(),
-            operators,
+            vec![BlockOperator::Map { exprs }],
             merged,
             func_ctx,
         ))

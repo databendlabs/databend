@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_io::prelude::FileSplit;
 
 use crate::processors::UpdateTrigger;
 use crate::unsafe_cell_wrap::UnSafeCellWrap;
@@ -31,10 +30,7 @@ const FLAGS_MASK: usize = 0b111;
 const UNSET_FLAGS_MASK: usize = !FLAGS_MASK;
 
 #[repr(align(8))]
-pub enum SharedData {
-    Data(Result<DataBlock>),
-    FilePartition(Result<FileSplit>),
-}
+pub struct SharedData(pub Result<DataBlock>);
 
 pub struct SharedStatus {
     data: AtomicPtr<SharedData>,
@@ -185,31 +181,7 @@ impl InputPort {
             let unset_flags = HAS_DATA | NEED_DATA;
             match self.shared.swap(std::ptr::null_mut(), 0, unset_flags) {
                 address if address.is_null() => None,
-                address => {
-                    if let SharedData::Data(block) = *Box::from_raw(address) {
-                        Some(block)
-                    } else {
-                        unreachable!()
-                    }
-                }
-            }
-        }
-    }
-
-    #[inline(always)]
-    pub fn pull_file_partition(&self) -> Option<Result<FileSplit>> {
-        unsafe {
-            UpdateTrigger::update_input(&self.update_trigger);
-            let unset_flags = HAS_DATA | NEED_DATA;
-            match self.shared.swap(std::ptr::null_mut(), 0, unset_flags) {
-                address if address.is_null() => None,
-                address => {
-                    if let SharedData::FilePartition(part) = *Box::from_raw(address) {
-                        Some(part)
-                    } else {
-                        unreachable!()
-                    }
-                }
+                address => Some((*Box::from_raw(address)).0),
             }
         }
     }
@@ -247,17 +219,7 @@ impl OutputPort {
         unsafe {
             UpdateTrigger::update_output(&self.update_trigger);
 
-            let data = Box::into_raw(Box::new(SharedData::Data(data)));
-            self.shared.swap(data, HAS_DATA, HAS_DATA);
-        }
-    }
-
-    #[inline(always)]
-    pub fn push_split(&self, data: Result<FileSplit>) {
-        unsafe {
-            UpdateTrigger::update_output(&self.update_trigger);
-
-            let data = Box::into_raw(Box::new(SharedData::FilePartition(data)));
+            let data = Box::into_raw(Box::new(SharedData(data)));
             self.shared.swap(data, HAS_DATA, HAS_DATA);
         }
     }

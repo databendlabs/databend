@@ -315,6 +315,17 @@ impl Substitution {
             }),
             DataType::Nullable(box ty) => Ok(DataType::Nullable(Box::new(self.apply(ty)?))),
             DataType::Array(box ty) => Ok(DataType::Array(Box::new(self.apply(ty)?))),
+            DataType::Map(box ty) => match ty {
+                DataType::Tuple(fields_ty) => {
+                    let fields_ty = fields_ty
+                        .into_iter()
+                        .map(|field_ty| self.apply(field_ty))
+                        .collect::<Result<_>>()?;
+                    let inner_ty = DataType::Tuple(fields_ty);
+                    Ok(DataType::Map(Box::new(inner_ty)))
+                }
+                _ => unreachable!(),
+            },
             DataType::Tuple(fields_ty) => {
                 let fields_ty = fields_ty
                     .into_iter()
@@ -394,6 +405,7 @@ pub fn unify(
         }
         (DataType::Null, DataType::Nullable(_)) => Ok(Substitution::empty()),
         (DataType::EmptyArray, DataType::Array(_)) => Ok(Substitution::empty()),
+        (DataType::EmptyMap, DataType::Map(_)) => Ok(Substitution::empty()),
         (DataType::Nullable(src_ty), DataType::Nullable(dest_ty)) => {
             unify(src_ty, dest_ty, auto_cast_rules)
         }
@@ -401,6 +413,10 @@ pub fn unify(
         (DataType::Array(src_ty), DataType::Array(dest_ty)) => {
             unify(src_ty, dest_ty, auto_cast_rules)
         }
+        (DataType::Map(box src_ty), DataType::Map(box dest_ty)) => match (src_ty, dest_ty) {
+            (DataType::Tuple(_), DataType::Tuple(_)) => unify(src_ty, dest_ty, auto_cast_rules),
+            (_, _) => unreachable!(),
+        },
         (DataType::Tuple(src_tys), DataType::Tuple(dest_tys))
             if src_tys.len() == dest_tys.len() =>
         {
@@ -438,6 +454,7 @@ pub fn can_auto_cast_to(
         }
         (DataType::Null, DataType::Nullable(_)) => true,
         (DataType::EmptyArray, DataType::Array(_)) => true,
+        (DataType::EmptyMap, DataType::Map(_)) => true,
         (DataType::Nullable(src_ty), DataType::Nullable(dest_ty)) => {
             can_auto_cast_to(src_ty, dest_ty, auto_cast_rules)
         }
@@ -445,6 +462,12 @@ pub fn can_auto_cast_to(
         (DataType::Array(src_ty), DataType::Array(dest_ty)) => {
             can_auto_cast_to(src_ty, dest_ty, auto_cast_rules)
         }
+        (DataType::Map(box src_ty), DataType::Map(box dest_ty)) => match (src_ty, dest_ty) {
+            (DataType::Tuple(_), DataType::Tuple(_)) => {
+                can_auto_cast_to(src_ty, dest_ty, auto_cast_rules)
+            }
+            (_, _) => unreachable!(),
+        },
         (DataType::Tuple(src_tys), DataType::Tuple(dest_tys))
             if src_tys.len() == dest_tys.len() =>
         {
@@ -453,7 +476,8 @@ pub fn can_auto_cast_to(
                 .zip(dest_tys)
                 .all(|(src_ty, dest_ty)| can_auto_cast_to(src_ty, dest_ty, auto_cast_rules))
         }
-        (DataType::Number(_) | DataType::Decimal(_), DataType::Decimal(_)) => true,
+        (DataType::Number(_), DataType::Decimal(_)) => true,
+        (DataType::Decimal(x), DataType::Decimal(y)) => x.precision() <= y.precision(),
         _ => false,
     }
 }
@@ -477,6 +501,11 @@ pub fn common_super_type(
         (DataType::EmptyArray, ty @ DataType::Array(_))
         | (ty @ DataType::Array(_), DataType::EmptyArray) => Some(ty),
         (DataType::Array(box ty1), DataType::Array(box ty2)) => Some(DataType::Array(Box::new(
+            common_super_type(ty1, ty2, auto_cast_rules)?,
+        ))),
+        (DataType::EmptyMap, ty @ DataType::Map(_))
+        | (ty @ DataType::Map(_), DataType::EmptyMap) => Some(ty),
+        (DataType::Map(box ty1), DataType::Map(box ty2)) => Some(DataType::Map(Box::new(
             common_super_type(ty1, ty2, auto_cast_rules)?,
         ))),
         (DataType::Tuple(tys1), DataType::Tuple(tys2)) if tys1.len() == tys2.len() => {

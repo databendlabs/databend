@@ -16,12 +16,12 @@ import TabItem from '@theme/TabItem';
 
 ```shell
 
-curl -L -o /usr/share/keyrings/datafuselabs-keyring.gpg https://repo.databend.rs/deb/datafuselabs.gpg
-curl -L -o /etc/apt/sources.list.d/datafuselabs.list https://repo.databend.rs/deb/datafuselabs.list
+sudo curl -L -o /usr/share/keyrings/datafuselabs-keyring.gpg https://repo.databend.rs/deb/datafuselabs.gpg
+sudo curl -L -o /etc/apt/sources.list.d/datafuselabs.list https://repo.databend.rs/deb/datafuselabs.list
 
-apt update
+sudo apt update
 
-apt install databend
+sudo apt install databend
 ```
 
 </TabItem>
@@ -37,16 +37,23 @@ Supported by:
 :::
 
 ```shell
-curl -L -o /etc/apt/sources.list.d/datafuselabs.sources https://repo.databend.rs/deb/datafuselabs.sources
+sudo curl -L -o /etc/apt/sources.list.d/datafuselabs.sources https://repo.databend.rs/deb/datafuselabs.sources
 
-apt update
+sudo apt update
 
-apt install databend
+sudo apt install databend
 ```
 
 </TabItem>
 
 </Tabs>
+
+:::tip
+To run databend:
+
+* `sudo systemctl start databend-meta`
+* `sudo systemctl start databend-query`
+:::
 
 
 ## Docker

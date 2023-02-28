@@ -24,20 +24,25 @@ use common_exception::Result;
 use common_hashtable::FastHash;
 use common_io::prelude::BinaryWrite;
 use common_io::prelude::FormatSettings;
+use ethnum::i256;
+use ethnum::u256;
+use ethnum::U256;
 use micromarshal::Marshal;
-use primitive_types::U256;
-use primitive_types::U512;
 
 use crate::types::boolean::BooleanType;
+use crate::types::decimal::Decimal;
+use crate::types::decimal::DecimalColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::Number;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::types::string::StringIterator;
 use crate::types::DataType;
+use crate::types::DecimalDataType;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
 use crate::types::ValueType;
+use crate::with_decimal_mapped_type;
 use crate::with_integer_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
@@ -46,9 +51,8 @@ use crate::TypeDeserializer;
 #[derive(Debug)]
 pub enum KeysState {
     Column(Column),
-    U128(Vec<u128>),
-    U256(Vec<U256>),
-    U512(Vec<U512>),
+    U128(Buffer<u128>),
+    U256(Buffer<u256>),
 }
 
 pub trait HashMethod: Clone + Sync + Send + 'static {
@@ -73,8 +77,7 @@ pub type HashMethodKeysU16 = HashMethodFixedKeys<u16>;
 pub type HashMethodKeysU32 = HashMethodFixedKeys<u32>;
 pub type HashMethodKeysU64 = HashMethodFixedKeys<u64>;
 pub type HashMethodKeysU128 = HashMethodFixedKeys<u128>;
-pub type HashMethodKeysU256 = HashMethodFixedKeys<U256>;
-pub type HashMethodKeysU512 = HashMethodFixedKeys<U512>;
+pub type HashMethodKeysU256 = HashMethodFixedKeys<u256>;
 
 /// These methods are `generic` method to generate hash key,
 /// that is the 'numeric' or 'binary` representation of each column value as hash key.
@@ -88,7 +91,6 @@ pub enum HashMethodKind {
     KeysU64(HashMethodKeysU64),
     KeysU128(HashMethodKeysU128),
     KeysU256(HashMethodKeysU256),
-    KeysU512(HashMethodKeysU512),
 }
 
 #[macro_export]
@@ -96,7 +98,7 @@ macro_rules! with_hash_method {
     ( | $t:tt | $($tail:tt)* ) => {
         match_template::match_template! {
             $t = [Serializer, SingleString, KeysU8, KeysU16,
-            KeysU32, KeysU64, KeysU128, KeysU256, KeysU512],
+            KeysU32, KeysU64, KeysU128, KeysU256],
             $($tail)*
         }
     }
@@ -115,7 +117,6 @@ macro_rules! with_mappedhash_method {
                 KeysU64 => HashMethodKeysU64,
                 KeysU128 => HashMethodKeysU128,
                 KeysU256 => HashMethodKeysU256,
-                KeysU512 => HashMethodKeysU512
             ],
             $($tail)*
         }
@@ -137,9 +138,12 @@ impl HashMethodKind {
             HashMethodKind::KeysU16(_) => DataType::Number(NumberDataType::UInt16),
             HashMethodKind::KeysU32(_) => DataType::Number(NumberDataType::UInt32),
             HashMethodKind::KeysU64(_) => DataType::Number(NumberDataType::UInt64),
-            HashMethodKind::KeysU128(_)
-            | HashMethodKind::KeysU256(_)
-            | HashMethodKind::KeysU512(_) => DataType::String,
+            HashMethodKind::KeysU128(_) => {
+                DataType::Decimal(DecimalDataType::Decimal128(i128::default_decimal_size()))
+            }
+            HashMethodKind::KeysU256(_) => {
+                DataType::Decimal(DecimalDataType::Decimal256(i256::default_decimal_size()))
+            }
         }
     }
 }
@@ -275,7 +279,7 @@ where T: Clone
         debug_assert!(!keys.is_empty());
 
         // faster path for single signed/unsigned integer to column
-        if group_items.len() == 1 && group_items[0].1.is_numeric() {
+        if group_items.len() == 1 {
             if let DataType::Number(ty) = group_items[0].1 {
                 with_integer_mapped_type!(|NUM_TYPE| match ty {
                     NumberDataType::NUM_TYPE => {
@@ -283,6 +287,19 @@ where T: Clone
                         let col =
                             unsafe { std::mem::transmute::<Buffer<T>, Buffer<NUM_TYPE>>(buffer) };
                         return Ok(vec![NumberType::<NUM_TYPE>::upcast_column(col)]);
+                    }
+                    _ => {}
+                })
+            }
+
+            if matches!(group_items[0].1, DataType::Decimal(_)) {
+                with_decimal_mapped_type!(|DECIMAL_TYPE| match group_items[0].1 {
+                    DataType::Decimal(DecimalDataType::DECIMAL_TYPE(size)) => {
+                        let buffer: Buffer<T> = keys.into();
+                        let col = unsafe {
+                            std::mem::transmute::<Buffer<T>, Buffer<DECIMAL_TYPE>>(buffer)
+                        };
+                        return Ok(vec![DECIMAL_TYPE::upcast_column(col, size)]);
                     }
                     _ => {}
                 })
@@ -444,8 +461,25 @@ macro_rules! impl_hash_method_fixed_large_keys {
                 group_columns: &[(Column, DataType)],
                 rows: usize,
             ) -> Result<KeysState> {
+                // faster path for single fixed decimal keys
+                if group_columns.len() == 1 {
+                    if group_columns[0].1.is_decimal() {
+                        with_decimal_mapped_type!(|DECIMAL_TYPE| match &group_columns[0].0 {
+                            Column::Decimal(DecimalColumn::DECIMAL_TYPE(c, _)) => {
+                                let buffer = unsafe {
+                                    std::mem::transmute::<Buffer<DECIMAL_TYPE>, Buffer<$ty>>(
+                                        c.clone(),
+                                    )
+                                };
+                                return Ok(KeysState::$name(buffer));
+                            }
+                            _ => {}
+                        })
+                    }
+                }
+
                 let keys = self.build_keys_vec(group_columns, rows)?;
-                Ok(KeysState::$name(keys))
+                Ok(KeysState::$name(keys.into()))
             }
 
             fn build_keys_iter<'a>(
@@ -463,7 +497,6 @@ macro_rules! impl_hash_method_fixed_large_keys {
 
 impl_hash_method_fixed_large_keys! {u128, U128}
 impl_hash_method_fixed_large_keys! {U256, U256}
-impl_hash_method_fixed_large_keys! {U512, U512}
 
 #[inline]
 fn build(
@@ -494,7 +527,7 @@ fn build(
 
 pub fn serialize_column_binary(column: &Column, row: usize, vec: &mut Vec<u8>) {
     match column {
-        Column::Null { .. } | Column::EmptyArray { .. } => vec.push(0),
+        Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => vec.push(0),
         Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
             NumberColumn::NUM_TYPE(v) => vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
         }),
@@ -502,10 +535,16 @@ pub fn serialize_column_binary(column: &Column, row: usize, vec: &mut Vec<u8>) {
         Column::String(v) => {
             BinaryWrite::write_binary(vec, unsafe { v.index_unchecked(row) }).unwrap()
         }
-        Column::Decimal(_) => unreachable!("Decimal is not supported in group by keys format"),
+        Column::Decimal(_) => {
+            with_decimal_mapped_type!(|DECIMAL_TYPE| match column {
+                Column::Decimal(DecimalColumn::DECIMAL_TYPE(v, _)) =>
+                    vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
+                _ => unreachable!(),
+            })
+        }
         Column::Timestamp(v) => vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
         Column::Date(v) => vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
-        Column::Array(array) => {
+        Column::Array(array) | Column::Map(array) => {
             let data = array.index(row).unwrap();
             BinaryWrite::write_uvarint(vec, data.len() as u64).unwrap();
             for i in 0..data.len() {

@@ -13,130 +13,27 @@
 // limitations under the License.
 
 use std::borrow::BorrowMut;
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec;
 
-use common_base::runtime::ThreadPool;
-use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
 use common_functions::aggregates::StateAddr;
 use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
-use tracing::info;
 
 use super::estimated_key_size;
 use super::AggregateHashStateInfo;
-use crate::pipelines::processors::transforms::aggregator::aggregate_info::AggregateInfo;
 use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
-use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::processors::AggregatorParams;
-use crate::sessions::QueryContext;
-
-pub struct ParallelFinalAggregator<const HAS_AGG: bool, Method: HashMethodBounds> {
-    method: Method,
-    query_ctx: Arc<QueryContext>,
-    params: Arc<AggregatorParams>,
-    buckets_blocks: HashMap<isize, Vec<DataBlock>>,
-    generated: bool,
-}
-
-impl<Method: HashMethodBounds, const HAS_AGG: bool> ParallelFinalAggregator<HAS_AGG, Method> {
-    pub fn create(
-        ctx: Arc<QueryContext>,
-        method: Method,
-        params: Arc<AggregatorParams>,
-    ) -> Result<Self> {
-        Ok(Self {
-            params,
-            method,
-            query_ctx: ctx,
-            buckets_blocks: HashMap::new(),
-            generated: false,
-        })
-    }
-}
-
-impl<Method: HashMethodBounds, const HAS_AGG: bool> Aggregator
-    for ParallelFinalAggregator<HAS_AGG, Method>
-{
-    const NAME: &'static str = "GroupByFinalTransform";
-
-    fn consume(&mut self, block: DataBlock) -> Result<()> {
-        let mut bucket = -1;
-        if let Some(meta_info) = block.get_meta() {
-            if let Some(meta_info) = meta_info.as_any().downcast_ref::<AggregateInfo>() {
-                bucket = meta_info.bucket;
-            }
-        }
-
-        match self.buckets_blocks.entry(bucket) {
-            Entry::Vacant(v) => {
-                v.insert(vec![block]);
-                Ok(())
-            }
-            Entry::Occupied(mut v) => {
-                v.get_mut().push(block);
-                Ok(())
-            }
-        }
-    }
-
-    fn generate(&mut self) -> Result<Vec<DataBlock>> {
-        if self.generated {
-            return Ok(vec![]);
-        }
-
-        let mut generate_blocks = Vec::new();
-        let settings = self.query_ctx.get_settings();
-        let max_threads = settings.get_max_threads()? as usize;
-
-        if max_threads <= 1
-            || self.buckets_blocks.len() == 1
-            || self.buckets_blocks.contains_key(&-1)
-        {
-            let mut data_blocks = vec![];
-            for (_, bucket_blocks) in std::mem::take(&mut self.buckets_blocks) {
-                data_blocks.extend(bucket_blocks);
-            }
-
-            let method = self.method.clone();
-            let params = self.params.clone();
-            let mut bucket_aggregator = BucketAggregator::<HAS_AGG, _>::create(method, params)?;
-            generate_blocks = bucket_aggregator.merge_blocks(data_blocks)?;
-        } else if self.buckets_blocks.len() > 1 {
-            info!("Merge to final state using a parallel algorithm.");
-
-            let thread_pool = ThreadPool::create(max_threads)?;
-            let mut join_handles = Vec::with_capacity(self.buckets_blocks.len());
-
-            for (_, bucket_blocks) in std::mem::take(&mut self.buckets_blocks) {
-                let method = self.method.clone();
-                let params = self.params.clone();
-                let mut bucket_aggregator = BucketAggregator::<HAS_AGG, _>::create(method, params)?;
-                join_handles.push(
-                    thread_pool.execute(move || bucket_aggregator.merge_blocks(bucket_blocks)),
-                );
-            }
-
-            generate_blocks.reserve(join_handles.len());
-            for join_handle in join_handles {
-                generate_blocks.extend(join_handle.join()?);
-            }
-        }
-        self.generated = true;
-        Ok(generate_blocks)
-    }
-}
 
 pub struct BucketAggregator<const HAS_AGG: bool, Method: HashMethodBounds> {
     area: Area,
@@ -228,13 +125,13 @@ impl<const HAS_AGG: bool, Method: HashMethodBounds> BucketAggregator<HAS_AGG, Me
         }
 
         for mut data_block in blocks {
-            if let Some(mut meta) = data_block.take_meta() {
-                if let Some(info) = meta.as_mut_any().downcast_mut::<AggregateHashStateInfo>() {
+            if let Some(block_meta) = data_block.take_meta() {
+                if let Some(mut info) = AggregateHashStateInfo::downcast_from(block_meta) {
                     let hashtable = info
                         .hash_state
                         .downcast_mut::<Method::HashTable<usize>>()
                         .unwrap();
-                    self.state_holders.push(info.state_holder.take());
+                    self.state_holders.push(info.state_holder);
                     self.merge_partial_hashstates(hashtable)?;
                     continue;
                 }

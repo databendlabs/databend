@@ -18,6 +18,7 @@ pub mod boolean;
 pub mod date;
 pub mod decimal;
 pub mod empty_array;
+pub mod empty_map;
 pub mod generic;
 pub mod map;
 pub mod null;
@@ -33,6 +34,7 @@ use std::ops::Range;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
+use ethnum::i256;
 use ordered_float::OrderedFloat;
 use serde::Deserialize;
 use serde::Serialize;
@@ -43,6 +45,7 @@ pub use self::boolean::BooleanType;
 pub use self::date::DateType;
 pub use self::decimal::DecimalDataType;
 pub use self::empty_array::EmptyArrayType;
+pub use self::empty_map::EmptyMapType;
 pub use self::generic::GenericType;
 pub use self::map::MapType;
 pub use self::null::NullType;
@@ -55,6 +58,7 @@ pub use self::timestamp::TimestampType;
 pub use self::variant::VariantType;
 use crate::deserializations::ArrayDeserializer;
 use crate::deserializations::DateDeserializer;
+use crate::deserializations::DecimalDeserializer;
 use crate::deserializations::NullableDeserializer;
 use crate::deserializations::NumberDeserializer;
 use crate::deserializations::TimestampDeserializer;
@@ -73,6 +77,7 @@ pub type GenericMap = [DataType];
 pub enum DataType {
     Null,
     EmptyArray,
+    EmptyMap,
     Boolean,
     String,
     Number(NumberDataType),
@@ -178,6 +183,9 @@ impl DataType {
             | DataType::Number(NumberDataType::UInt64)
             | DataType::Number(NumberDataType::Float64)
             | DataType::Number(NumberDataType::Int64) => Ok(8),
+
+            DataType::Decimal(DecimalDataType::Decimal128(_)) => Ok(16),
+            DataType::Decimal(DecimalDataType::Decimal256(_)) => Ok(32),
             _ => Result::Err(format!(
                 "Function number_byte_size argument must be numeric types, but got {:?}",
                 self
@@ -228,8 +236,16 @@ impl DataType {
             }
             DataType::Variant => VariantDeserializer::with_capacity(capacity).into(),
             DataType::Array(ty) => ArrayDeserializer::with_capacity(capacity, ty).into(),
+            DataType::Map(_ty) => todo!(),
             DataType::Tuple(types) => TupleDeserializer::with_capacity(capacity, types).into(),
-
+            DataType::Decimal(types) => match types {
+                DecimalDataType::Decimal128(_) => {
+                    DecimalDeserializer::<i128>::with_capacity(types, capacity).into()
+                }
+                DecimalDataType::Decimal256(_) => {
+                    DecimalDeserializer::<i256>::with_capacity(types, capacity).into()
+                }
+            },
             _ => unimplemented!(),
         }
     }
@@ -266,6 +282,7 @@ impl DataType {
         match self {
             DataType::Null => Scalar::Null,
             DataType::EmptyArray => Scalar::EmptyArray,
+            DataType::EmptyMap => Scalar::EmptyMap,
             DataType::Boolean => Scalar::Boolean(false),
             DataType::String => Scalar::String(vec![]),
             DataType::Number(num_ty) => Scalar::Number(match num_ty {
@@ -280,14 +297,25 @@ impl DataType {
                 NumberDataType::Float32 => NumberScalar::Float32(OrderedFloat(0.0)),
                 NumberDataType::Float64 => NumberScalar::Float64(OrderedFloat(0.0)),
             }),
+            DataType::Decimal(ty) => Scalar::Decimal(ty.default_scalar()),
             DataType::Timestamp => Scalar::Timestamp(0),
             DataType::Date => Scalar::Date(0),
             DataType::Nullable(_) => Scalar::Null,
-            DataType::Array(_) => Scalar::EmptyArray,
+            DataType::Array(ty) => {
+                let builder = ColumnBuilder::with_capacity(ty, 0);
+                let col = builder.build();
+                Scalar::Array(col)
+            }
+            DataType::Map(ty) => {
+                let builder = ColumnBuilder::with_capacity(ty, 0);
+                let col = builder.build();
+                Scalar::Map(col)
+            }
             DataType::Tuple(tys) => {
                 Scalar::Tuple(tys.iter().map(|ty| ty.default_value()).collect())
             }
             DataType::Variant => Scalar::Variant(vec![]),
+
             _ => unimplemented!(),
         }
     }

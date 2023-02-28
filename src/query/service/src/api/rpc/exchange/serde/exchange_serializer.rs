@@ -41,12 +41,14 @@ use crate::api::DataPacket;
 use crate::api::FragmentData;
 
 pub struct ExchangeSerializeMeta {
+    pub block_number: isize,
     pub packet: Option<DataPacket>,
 }
 
 impl ExchangeSerializeMeta {
-    pub fn create(packet: DataPacket) -> BlockMetaInfoPtr {
+    pub fn create(packet: DataPacket, block_number: isize) -> BlockMetaInfoPtr {
         Box::new(ExchangeSerializeMeta {
+            block_number,
             packet: Some(packet),
         })
     }
@@ -75,10 +77,6 @@ impl<'de> serde::Deserialize<'de> for ExchangeSerializeMeta {
 #[typetag::serde(name = "exchange_serialize")]
 impl BlockMetaInfo for ExchangeSerializeMeta {
     fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn Any {
         self
     }
 
@@ -135,6 +133,7 @@ impl Transform for TransformExchangeSerializer {
 
         Ok(DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
             DataPacket::FragmentData(FragmentData::create(meta, values)),
+            0,
         )))
     }
 }

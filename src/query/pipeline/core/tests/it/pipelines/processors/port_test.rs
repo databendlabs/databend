@@ -63,10 +63,6 @@ impl BlockMetaInfo for TestDataMeta {
         self
     }
 
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
     fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
         unimplemented!("equals is unimplemented for TestDataMeta")
     }

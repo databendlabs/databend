@@ -9,6 +9,7 @@ on:
       - "website/**"
       - "**.md"
       - "docker/**"
+      - "scripts/setup/**"
       - ".devcontainer/**"
 
 concurrency:
@@ -19,6 +20,8 @@ env:
   BUILD_PROFILE: debug
   RUNNER_PROVIDER: aws
   CARGO_INCREMENTAL: 0
+  # Remove this env after rust 1.68 has been released.
+  CARGO_UNSTABLE_SPARSE_REGISTRY: true
 
 jobs:
   check:

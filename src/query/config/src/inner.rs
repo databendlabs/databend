@@ -158,6 +158,8 @@ pub struct QueryConfig {
     pub async_insert_max_data_size: u64,
     pub async_insert_busy_timeout: u64,
     pub async_insert_stale_timeout: u64,
+    pub default_storage_format: String,
+    pub default_compression: String,
     pub idm: IDMConfig,
     pub share_endpoint_address: String,
     pub share_endpoint_auth_token_file: String,
@@ -205,6 +207,8 @@ impl Default for QueryConfig {
             async_insert_max_data_size: 10000,
             async_insert_busy_timeout: 200,
             async_insert_stale_timeout: 0,
+            default_storage_format: "auto".to_string(),
+            default_compression: "auto".to_string(),
             idm: IDMConfig::default(),
             share_endpoint_address: "".to_string(),
             share_endpoint_auth_token_file: "".to_string(),
@@ -418,6 +422,9 @@ pub struct CacheConfig {
     /// Max number of cached bloom index meta objects. Set it to 0 to disable it.
     pub table_bloom_index_meta_count: u64,
 
+    /// Max number of cached prune partitions objects. Set it to 0 to disable it.
+    pub table_prune_partitions_count: u64,
+
     /// Max number of cached bloom index filters. Set it to 0 to disable it.
     // One bloom index filter per column of data block being indexed will be generated if necessary.
     //
@@ -502,6 +509,7 @@ impl Default for CacheConfig {
             enable_table_index_bloom: true,
             table_bloom_index_meta_count: 3000,
             table_bloom_index_filter_count: 1048576,
+            table_prune_partitions_count: 256,
             data_cache_storage: Default::default(),
             table_data_cache_population_queue_size: 65536,
             disk_cache_config: Default::default(),

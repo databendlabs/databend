@@ -68,13 +68,14 @@ impl CopyInterpreterV2 {
         path: &str,
         query: &Plan,
     ) -> Result<PipelineBuildResult> {
-        let (s_expr, metadata, bind_context) = match query {
+        let (s_expr, metadata, bind_context, formatted_ast) = match query {
             Plan::Query {
                 s_expr,
                 metadata,
                 bind_context,
+                formatted_ast,
                 ..
-            } => (s_expr, metadata, bind_context),
+            } => (s_expr, metadata, bind_context, formatted_ast),
             v => unreachable!("Input plan must be Query, but it's {}", v),
         };
 
@@ -83,6 +84,7 @@ impl CopyInterpreterV2 {
             *(bind_context.clone()),
             *s_expr.clone(),
             metadata.clone(),
+            formatted_ast.clone(),
             false,
         )?;
 

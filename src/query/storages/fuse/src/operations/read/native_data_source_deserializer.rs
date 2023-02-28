@@ -34,6 +34,7 @@ use common_exception::Result;
 use common_expression::filter_helper::FilterHelpers;
 use common_expression::types::BooleanType;
 use common_expression::BlockEntry;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
@@ -49,8 +50,6 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_storage::ColumnNode;
-use storages_common_index::Index;
-use storages_common_index::RangeIndex;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
@@ -82,7 +81,6 @@ pub struct NativeDeserializeDataTransform {
 
     read_columns: Vec<usize>,
     top_k: Option<(TopK, TopKSorter, usize)>,
-    topn_finish: bool,
     // Identifies whether the ArrayIter has been initialised.
     inited: bool,
     // The ArrayIter of each columns to read Pages in order.
@@ -96,20 +94,13 @@ impl NativeDeserializeDataTransform {
         ctx: Arc<dyn TableContext>,
         block_reader: Arc<BlockReader>,
         plan: &DataSourcePlan,
+        top_k: Option<TopK>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
 
-        let table_schema = plan.source_info.schema();
         let src_schema: DataSchema = (block_reader.schema().as_ref()).into();
-
-        let top_k = plan
-            .push_downs
-            .as_ref()
-            .map(|p| p.top_k(table_schema.as_ref(), RangeIndex::supported_type))
-            .unwrap_or_default();
-
         let mut prewhere_columns: Vec<usize> =
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => (0..src_schema.num_fields()).collect(),
@@ -176,7 +167,6 @@ impl NativeDeserializeDataTransform {
                 prewhere_filter,
                 skipped_page: 0,
                 top_k,
-                topn_finish: false,
                 read_columns: vec![],
                 inited: false,
                 array_iters: BTreeMap::new(),
@@ -215,21 +205,6 @@ impl NativeDeserializeDataTransform {
         self.scan_progress.incr(&progress_values);
         self.output_data = Some(data_block);
         Ok(())
-    }
-
-    /// check topk should return finished or not
-    fn check_topn(&mut self) {
-        if let Some((_, sorter, _)) = &mut self.top_k {
-            if let Some(next_part) = self.parts.front() {
-                let next_part = next_part.as_any().downcast_ref::<FusePartInfo>().unwrap();
-                if next_part.sort_min_max.is_none() {
-                    return;
-                }
-                if let Some(sort_min_max) = &next_part.sort_min_max {
-                    self.topn_finish = sorter.never_match(sort_min_max);
-                }
-            }
-        }
     }
 
     /// If the top-k or all prewhere columns are default values, check if the filter is met,
@@ -300,7 +275,6 @@ impl NativeDeserializeDataTransform {
         let _ = self.chunks.pop_front();
         let _ = self.parts.pop_front().unwrap();
 
-        self.check_topn();
         self.inited = false;
         self.array_iters.clear();
         self.array_skip_pages.clear();
@@ -397,28 +371,12 @@ impl Processor for NativeDeserializeDataTransform {
             return Ok(Event::Sync);
         }
 
-        if self.topn_finish {
-            self.input.finish();
-            self.output.finish();
-            return Ok(Event::Finished);
-        }
-
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
-            if let Some(mut source_meta) = data_block.take_meta() {
-                if let Some(source_meta) = source_meta
-                    .as_mut_any()
-                    .downcast_mut::<NativeDataSourceMeta>()
-                {
-                    self.parts = VecDeque::from(std::mem::take(&mut source_meta.part));
-
-                    self.check_topn();
-                    if self.topn_finish {
-                        self.input.finish();
-                        self.output.finish();
-                        return Ok(Event::Finished);
-                    }
-                    self.chunks = VecDeque::from(std::mem::take(&mut source_meta.chunks));
+            if let Some(block_meta) = data_block.take_meta() {
+                if let Some(source_meta) = NativeDataSourceMeta::downcast_from(block_meta) {
+                    self.parts = VecDeque::from(source_meta.part);
+                    self.chunks = VecDeque::from(source_meta.chunks);
                     return Ok(Event::Sync);
                 }
             }
@@ -445,6 +403,15 @@ impl Processor for NativeDeserializeDataTransform {
 
             // Init array_iters and array_skip_pages to read pages in subsequent processes.
             if !self.inited {
+                if let Some((_top_k, sorter, _index)) = self.top_k.as_mut() {
+                    let next_part = FusePartInfo::from_part(&self.parts[0])?;
+                    if let Some(sort_min_max) = &next_part.sort_min_max {
+                        if sorter.never_match(sort_min_max) {
+                            return self.finish_process();
+                        }
+                    }
+                }
+
                 self.inited = true;
                 for (index, column_node) in
                     self.block_reader.project_column_nodes.iter().enumerate()
@@ -507,6 +474,7 @@ impl Processor for NativeDeserializeDataTransform {
                 }
                 if let Some(mut array_iter) = self.array_iters.remove(index) {
                     let skip_pages = self.array_skip_pages.get(index).unwrap();
+
                     match array_iter.nth(*skip_pages) {
                         Some(array) => {
                             self.read_columns.push(*index);
@@ -584,6 +552,7 @@ impl Processor for NativeDeserializeDataTransform {
             for index in self.remain_columns.iter() {
                 if let Some(mut array_iter) = self.array_iters.remove(index) {
                     let skip_pages = self.array_skip_pages.get(index).unwrap();
+
                     match array_iter.nth(*skip_pages) {
                         Some(array) => {
                             self.read_columns.push(*index);
@@ -614,8 +583,8 @@ impl Processor for NativeDeserializeDataTransform {
             } else {
                 block
             };
-            let block = block.resort(&self.src_schema, &self.output_schema)?;
 
+            let block = block.resort(&self.src_schema, &self.output_schema)?;
             // Step 7: Add the block to output data
             self.add_block(block)?;
         }

@@ -53,14 +53,45 @@ pub struct BlockEntry {
 }
 
 #[typetag::serde(tag = "type")]
-pub trait BlockMetaInfo: Debug + Send + Sync {
+pub trait BlockMetaInfo: Debug + Send + Sync + 'static {
     fn as_any(&self) -> &dyn Any;
-    fn as_mut_any(&mut self) -> &mut dyn Any;
 
     #[allow(clippy::borrowed_box)]
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool;
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo>;
+}
+
+pub trait BlockMetaInfoDowncast: Sized {
+    fn downcast_from(boxed: BlockMetaInfoPtr) -> Option<Self>;
+
+    fn downcast_ref_from(boxed: &BlockMetaInfoPtr) -> Option<&Self>;
+}
+
+impl<T: BlockMetaInfo> BlockMetaInfoDowncast for T {
+    fn downcast_from(boxed: BlockMetaInfoPtr) -> Option<Self> {
+        if boxed.as_any().is::<T>() {
+            unsafe {
+                // SAFETY: `is` ensures this type cast is correct
+                let raw_ptr = Box::into_raw(boxed) as *const dyn BlockMetaInfo;
+                return Some(std::ptr::read(raw_ptr as *const Self));
+            }
+        }
+
+        None
+    }
+
+    fn downcast_ref_from(boxed: &BlockMetaInfoPtr) -> Option<&Self> {
+        if boxed.as_any().is::<T>() {
+            unsafe {
+                // SAFETY: `is` ensures this type cast is correct
+                let unboxed = boxed.as_ref();
+                return Some(&*(unboxed as *const dyn BlockMetaInfo as *const Self));
+            }
+        }
+
+        None
+    }
 }
 
 impl DataBlock {

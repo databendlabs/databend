@@ -22,7 +22,7 @@ use common_expression::TableSchemaRef;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::SingleColumnMeta;
 
-pub fn column_metas(
+pub fn column_parquet_metas(
     file_meta: &ThriftFileMetaData,
     schema: &TableSchemaRef,
 ) -> Result<HashMap<ColumnId, ColumnMeta>> {

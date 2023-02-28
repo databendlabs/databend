@@ -20,7 +20,11 @@ pub trait Index {
         let inner_type = data_type.remove_nullable();
         matches!(
             inner_type,
-            DataType::Number(_) | DataType::Date | DataType::Timestamp | DataType::String
+            DataType::Number(_)
+                | DataType::Date
+                | DataType::Timestamp
+                | DataType::String
+                | DataType::Decimal(_)
         )
     }
 }

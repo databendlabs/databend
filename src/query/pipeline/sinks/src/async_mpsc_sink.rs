@@ -53,9 +53,6 @@ pub struct AsyncMpscSinker<T: AsyncMpscSink + 'static> {
 
 impl<T: AsyncMpscSink + 'static> AsyncMpscSinker<T> {
     pub fn create(inputs: Vec<Arc<InputPort>>, inner: T) -> Box<dyn Processor> {
-        for input in &inputs {
-            input.set_need_data();
-        }
         Box::new(AsyncMpscSinker {
             inner,
             inputs,
@@ -81,6 +78,7 @@ impl<T: AsyncMpscSink + 'static> AsyncMpscSinker<T> {
                     self.cur_input_index = index;
                     return Some(input.clone());
                 }
+                input.set_need_data();
             }
 
             index += 1;

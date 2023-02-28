@@ -31,11 +31,13 @@ tenant_id = "test_tenant"
 cluster_id = "test_cluster"
 
 table_engine_memory_enabled = true
+default_storage_format = 'parquet'
+default_compression = 'zstd'
 
 [log]
 
 [log.file]
-level = "ERROR"
+level = "INFO"
 format = "text"
 dir = "./.databend/logs_2"
 

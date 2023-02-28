@@ -75,6 +75,7 @@ runs:
         ln -s build-tool $BIN_LOCAL/rustup
         ln -s build-tool $BIN_LOCAL/make
         ln -s build-tool $BIN_LOCAL/taplo
+        ln -s build-tool $BIN_LOCAL/typos
 
     - name: check cargo version
       shell: bash

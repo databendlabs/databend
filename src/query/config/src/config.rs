@@ -262,6 +262,10 @@ impl From<InnerStorageConfig> for StorageConfig {
             storage_num_cpus: inner.num_cpus,
             storage_type: "".to_string(),
             allow_insecure: inner.allow_insecure,
+            // use default for each config instead of using `..Default::default`
+            // using `..Default::default` is calling `Self::default`
+            // and `Self::default` relies on `InnerStorage::into()`
+            // this will lead to a stack overflow
             fs: Default::default(),
             gcs: Default::default(),
             s3: Default::default(),
@@ -1141,7 +1145,7 @@ pub struct QueryConfig {
     #[clap(long, default_value_t)]
     pub jwt_key_file: String,
 
-    /// If there are multiple trusted jwt provider put it into additonal_jwt_key_files configuration
+    /// If there are multiple trusted jwt provider put it into additional_jwt_key_files configuration
     #[clap(skip)]
     pub jwt_key_files: Vec<String>,
 
@@ -1156,6 +1160,12 @@ pub struct QueryConfig {
     /// The maximum timeout in milliseconds since the last insert before inserting collected data.
     #[clap(long, default_value = "0")]
     pub async_insert_stale_timeout: u64,
+
+    #[clap(long, default_value = "auto")]
+    pub default_storage_format: String,
+
+    #[clap(long, default_value = "auto")]
+    pub default_compression: String,
 
     #[clap(skip)]
     users: Vec<UserConfig>,
@@ -1276,6 +1286,8 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             async_insert_max_data_size: self.async_insert_max_data_size,
             async_insert_busy_timeout: self.async_insert_busy_timeout,
             async_insert_stale_timeout: self.async_insert_stale_timeout,
+            default_storage_format: self.default_storage_format,
+            default_compression: self.default_compression,
             idm: InnerIDMConfig {
                 users: users_to_inner(self.users)?,
             },
@@ -1334,6 +1346,9 @@ impl From<InnerQueryConfig> for QueryConfig {
             async_insert_max_data_size: inner.async_insert_max_data_size,
             async_insert_busy_timeout: inner.async_insert_busy_timeout,
             async_insert_stale_timeout: inner.async_insert_stale_timeout,
+            default_storage_format: inner.default_storage_format,
+            default_compression: inner.default_compression,
+
             users: users_from_inner(inner.idm.users),
             share_endpoint_address: inner.share_endpoint_address,
             share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,
@@ -1784,6 +1799,9 @@ pub struct CacheConfig {
     )]
     pub table_bloom_index_filter_count: u64,
 
+    #[clap(long = "cache-table-prune-partitions-count", default_value = "256")]
+    pub table_prune_partitions_count: u64,
+
     /// Type of data cache storage
     #[clap(long = "cache-data-cache-storage", value_enum, default_value_t)]
     pub data_cache_storage: CacheStorageTypeConfig,
@@ -1927,6 +1945,7 @@ mod cache_config_converters {
                 enable_table_index_bloom: value.enable_table_bloom_index_cache,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
+                table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.try_into()?,
                 table_data_cache_population_queue_size: value
                     .table_data_cache_population_queue_size,
@@ -1946,6 +1965,7 @@ mod cache_config_converters {
                 enable_table_bloom_index_cache: value.enable_table_index_bloom,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
+                table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.into(),
                 table_data_cache_population_queue_size: value
                     .table_data_cache_population_queue_size,

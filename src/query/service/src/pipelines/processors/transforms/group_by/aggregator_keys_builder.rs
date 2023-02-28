@@ -14,11 +14,14 @@
 
 use std::marker::PhantomData;
 
+use common_arrow::arrow::buffer::Buffer;
+use common_expression::types::decimal::Decimal;
 use common_expression::types::number::Number;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::NumberType;
 use common_expression::types::ValueType;
 use common_expression::Column;
+use ethnum::i256;
 
 use super::large_number::LargeNumber;
 
@@ -82,8 +85,8 @@ impl<'a> KeysColumnBuilder for StringKeysColumnBuilder<'a> {
 }
 
 pub struct LargeFixedKeysColumnBuilder<'a, T: LargeNumber> {
-    pub values: Vec<u8>,
-    pub _t: PhantomData<&'a T>,
+    pub _t: PhantomData<&'a ()>,
+    pub values: Vec<T>,
 }
 
 impl<'a, T: LargeNumber> KeysColumnBuilder for LargeFixedKeysColumnBuilder<'a, T> {
@@ -91,18 +94,25 @@ impl<'a, T: LargeNumber> KeysColumnBuilder for LargeFixedKeysColumnBuilder<'a, T
 
     #[inline]
     fn append_value(&mut self, v: Self::T) {
-        let values = &mut self.values;
-        values.reserve(T::BYTE_SIZE);
-        let len = values.len();
-        unsafe { values.set_len(len + T::BYTE_SIZE) }
-        v.serialize_to(&mut values[len..len + T::BYTE_SIZE]);
+        self.values.push(*v);
     }
 
     #[inline]
     fn finish(self) -> Column {
-        let len = self.values.len() / T::BYTE_SIZE;
-        let offsets = (0..=len).map(|x| (x * T::BYTE_SIZE) as u64).collect();
-        let builder = StringColumnBuilder::from_data(self.values, offsets);
-        Column::String(builder.build())
+        match T::BYTE_SIZE {
+            16 => {
+                let values: Buffer<T> = self.values.into();
+                let values: Buffer<i128> = unsafe { std::mem::transmute(values) };
+                let col = i128::to_column_from_buffer(values, i128::default_decimal_size());
+                Column::Decimal(col)
+            }
+            32 => {
+                let values: Buffer<T> = self.values.into();
+                let values: Buffer<i256> = unsafe { std::mem::transmute(values) };
+                let col = i256::to_column_from_buffer(values, i256::default_decimal_size());
+                Column::Decimal(col)
+            }
+            _ => unreachable!(),
+        }
     }
 }

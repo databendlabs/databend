@@ -39,7 +39,7 @@ use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
 
 struct State {
-    is_catch_error: AtomicBool,
+    is_finished: AtomicBool,
     finish_mutex: Mutex<bool>,
     finish_condvar: Condvar,
 
@@ -50,21 +50,24 @@ impl State {
     pub fn create() -> Arc<State> {
         Arc::new(State {
             catch_error: Mutex::new(None),
-            is_catch_error: AtomicBool::new(false),
+            is_finished: AtomicBool::new(false),
             finish_mutex: Mutex::new(false),
             finish_condvar: Condvar::new(),
         })
     }
 
     pub fn finished(&self, message: Result<()>) {
+        self.is_finished.store(true, Ordering::Release);
+
         if let Err(error) = message {
-            self.is_catch_error.store(true, Ordering::Release);
             *self.catch_error.lock() = Some(error);
         }
 
-        let mut mutex = self.finish_mutex.lock();
-        *mutex = true;
-        self.finish_condvar.notify_one();
+        {
+            let mut mutex = self.finish_mutex.lock();
+            *mutex = true;
+            self.finish_condvar.notify_one();
+        }
     }
 
     pub fn wait_finish(&self) {
@@ -75,17 +78,12 @@ impl State {
         }
     }
 
-    pub fn is_catch_error(&self) -> bool {
-        self.is_catch_error.load(Ordering::Relaxed)
+    pub fn is_finished(&self) -> bool {
+        self.is_finished.load(Ordering::Relaxed)
     }
 
-    pub fn get_catch_error(&self) -> ErrorCode {
-        let catch_error = self.catch_error.lock();
-
-        match catch_error.as_ref() {
-            None => ErrorCode::Internal("It's a bug."),
-            Some(catch_error) => catch_error.clone(),
-        }
+    pub fn try_get_catch_error(&self) -> Option<ErrorCode> {
+        self.catch_error.lock().as_ref().cloned()
     }
 }
 
@@ -104,7 +102,15 @@ impl PipelinePullingExecutor {
             ));
         }
 
-        pipeline.add_sink(|input| Ok(ProcessorPtr::create(PullingSink::create(tx.clone(), input))))
+        pipeline
+            .add_sink(|input| Ok(ProcessorPtr::create(PullingSink::create(tx.clone(), input))))?;
+
+        pipeline.set_on_finished(move |_may_error| {
+            drop(tx);
+            Ok(())
+        });
+
+        Ok(())
     }
 
     pub fn try_create(
@@ -114,6 +120,7 @@ impl PipelinePullingExecutor {
         let (sender, receiver) = std::sync::mpsc::sync_channel(pipeline.output_len());
 
         Self::wrap_pipeline(&mut pipeline, sender)?;
+
         let executor = PipelineExecutor::create(pipeline, settings)?;
         Ok(PipelinePullingExecutor {
             receiver,
@@ -128,6 +135,7 @@ impl PipelinePullingExecutor {
     ) -> Result<PipelinePullingExecutor> {
         let mut main_pipeline = build_res.main_pipeline;
         let (sender, receiver) = std::sync::mpsc::sync_channel(main_pipeline.output_len());
+
         Self::wrap_pipeline(&mut main_pipeline, sender)?;
 
         let mut pipelines = build_res.sources_pipelines;
@@ -175,12 +183,28 @@ impl PipelinePullingExecutor {
     }
 
     pub fn pull_data(&mut self) -> Result<Option<DataBlock>> {
+        let mut need_check_graph_status = false;
+
         loop {
             return match self.receiver.recv_timeout(Duration::from_millis(100)) {
                 Ok(data_block) => Ok(Some(data_block)),
                 Err(RecvTimeoutError::Timeout) => {
-                    if self.state.is_catch_error() {
-                        return Err(self.state.get_catch_error());
+                    if self.state.is_finished() {
+                        if let Some(error) = self.state.try_get_catch_error() {
+                            return Err(error);
+                        }
+
+                        // It may be parallel. Let's check again.
+                        if !need_check_graph_status {
+                            need_check_graph_status = true;
+                            self.state.wait_finish();
+                            continue;
+                        }
+
+                        return Err(ErrorCode::Internal(format!(
+                            "Processor graph not completed. graph nodes state: {}",
+                            self.executor.format_graph_nodes()
+                        )));
                     }
 
                     continue;
@@ -194,11 +218,10 @@ impl PipelinePullingExecutor {
 
                     self.state.wait_finish();
 
-                    if self.state.is_catch_error() {
-                        Err(self.state.get_catch_error())
-                    } else {
-                        Ok(None)
-                    }
+                    return match self.state.try_get_catch_error() {
+                        None => Ok(None),
+                        Some(error) => Err(error),
+                    };
                 }
             };
         }

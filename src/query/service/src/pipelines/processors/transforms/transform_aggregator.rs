@@ -31,39 +31,6 @@ use crate::sessions::QueryContext;
 pub struct TransformAggregator;
 
 impl TransformAggregator {
-    pub fn try_create_final(
-        ctx: Arc<QueryContext>,
-        transform_params: AggregatorTransformParams,
-    ) -> Result<Box<dyn Processor>> {
-        let aggregator_params = transform_params.aggregator_params.clone();
-
-        if aggregator_params.group_columns.is_empty() {
-            return FinalSingleStateAggregator::try_create(
-                transform_params.transform_input_port,
-                transform_params.transform_output_port,
-                &aggregator_params,
-            );
-        }
-
-        match aggregator_params.aggregate_functions.is_empty() {
-            true => with_mappedhash_method!(|T| match transform_params.method.clone() {
-                HashMethodKind::T(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    ParallelFinalAggregator::<false, T>::create(ctx, method, aggregator_params)?,
-                ),
-            }),
-
-            false => with_mappedhash_method!(|T| match transform_params.method.clone() {
-                HashMethodKind::T(method) => AggregatorTransform::create(
-                    ctx.clone(),
-                    transform_params,
-                    ParallelFinalAggregator::<true, T>::create(ctx, method, aggregator_params)?,
-                ),
-            }),
-        }
-    }
-
     pub fn try_create_partial(
         transform_params: AggregatorTransformParams,
         ctx: Arc<QueryContext>,
@@ -78,6 +45,11 @@ impl TransformAggregator {
                 &transform_params.aggregator_params,
             );
         }
+
+        tracing::info!(
+            "Start to create partial aggregator, method {:?}",
+            transform_params.method
+        );
 
         match aggregator_params.aggregate_functions.is_empty() {
             true => with_mappedhash_method!(|T| match transform_params.method.clone() {
@@ -228,7 +200,11 @@ impl<TAggregator: Aggregator + PartitionedAggregatorLike + 'static>
             if TAggregator::SUPPORT_PARTITION {
                 let cardinality = state.inner.get_state_cardinality();
 
-                if cardinality >= state.two_level_threshold {
+                static TWOL_LEVEL_BYTES_THRESHOLD: usize = 5_000_000;
+
+                if cardinality >= state.two_level_threshold
+                    || state.inner.get_state_bytes() >= TWOL_LEVEL_BYTES_THRESHOLD
+                {
                     let mut temp_state = AggregatorTransform::Finished;
                     std::mem::swap(self, &mut temp_state);
                     temp_state = temp_state.convert_to_two_level_consume()?;

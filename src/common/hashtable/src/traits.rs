@@ -15,13 +15,13 @@
 // To avoid RUSTFLAGS="-C target-feature=+sse4.2" warning.
 #![allow(unused_imports)]
 use std::hash::BuildHasher;
+use std::hash::Hasher;
 use std::iter::TrustedLen;
 use std::mem::MaybeUninit;
 use std::num::NonZeroU64;
 
+use ethnum::U256;
 use ordered_float::OrderedFloat;
-use primitive_types::U256;
-use primitive_types::U512;
 
 /// # Safety
 ///
@@ -82,29 +82,12 @@ impl_key_for_primitive_types!(i128);
 unsafe impl Keyable for U256 {
     #[inline(always)]
     fn equals_zero(this: &Self) -> bool {
-        U256::is_zero(this)
+        *this == U256::ZERO
     }
 
     #[inline(always)]
     fn is_zero(this: &MaybeUninit<Self>) -> bool {
-        U256::is_zero(unsafe { this.assume_init_ref() })
-    }
-
-    #[inline(always)]
-    fn hash(&self) -> u64 {
-        self.fast_hash()
-    }
-}
-
-unsafe impl Keyable for U512 {
-    #[inline(always)]
-    fn is_zero(this: &MaybeUninit<Self>) -> bool {
-        U512::is_zero(unsafe { this.assume_init_ref() })
-    }
-
-    #[inline(always)]
-    fn equals_zero(this: &Self) -> bool {
-        U512::is_zero(this)
+        *unsafe { this.assume_init_ref() } == U256::ZERO
     }
 
     #[inline(always)]
@@ -185,13 +168,11 @@ unsafe impl UnsizedKeyable for str {
 }
 
 pub trait FastHash {
+    // Note: when using `_mm_crc32_u64`, the high 32 bits of the result is always 0.
+    // But it's enough for our use case because hashtable's len will not exceed 2^32.
+    // And for partitioned hashtable, we use the low 32 bits to get the bucket number.
     fn fast_hash(&self) -> u64;
 }
-
-#[allow(dead_code)]
-const CRC_A: u32 = u32::MAX;
-#[allow(dead_code)]
-const CRC_B: u32 = 0;
 
 macro_rules! impl_fast_hash_for_primitive_types {
     ($t: ty) => {
@@ -200,12 +181,7 @@ macro_rules! impl_fast_hash_for_primitive_types {
             fn fast_hash(&self) -> u64 {
                 cfg_if::cfg_if! {
                     if #[cfg(target_feature = "sse4.2")] {
-                        use std::arch::x86_64::_mm_crc32_u64;
-                        let mut high = CRC_A;
-                        let mut low = CRC_B;
-                        high = unsafe { _mm_crc32_u64(high as u64, *self as u64) as u32 };
-                        low = unsafe { _mm_crc32_u64(low as u64, *self as u64) as u32 };
-                        (high as u64) << 32 | low as u64
+                        unsafe { std::arch::x86_64::_mm_crc32_u64(u64::MAX, *self as u64) }
                     } else {
                         let mut hasher = *self as u64;
                         hasher ^= hasher >> 33;
@@ -236,14 +212,8 @@ impl FastHash for u128 {
         cfg_if::cfg_if! {
             if #[cfg(target_feature = "sse4.2")] {
                 use std::arch::x86_64::_mm_crc32_u64;
-                let mut high = CRC_A;
-                let mut low = CRC_B;
-                let y = [*self as u64, (*self >> 64) as u64];
-                for x in y {
-                    high = unsafe { _mm_crc32_u64(high as u64, x) as u32 };
-                    low = unsafe { _mm_crc32_u64(low as u64, x) as u32 };
-                }
-                (high as u64) << 32 | low as u64
+                let value = unsafe { _mm_crc32_u64(u64::MAX, *self as u64) };
+                unsafe { _mm_crc32_u64(value, (*self >> 64) as u64) }
             } else {
                 use std::hash::Hasher;
                 let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
@@ -268,45 +238,18 @@ impl FastHash for U256 {
         cfg_if::cfg_if! {
             if #[cfg(target_feature = "sse4.2")] {
                 use std::arch::x86_64::_mm_crc32_u64;
-                let mut high = CRC_A;
-                let mut low = CRC_B;
+                let mut value = u64::MAX;
                 for x in self.0 {
-                    high = unsafe { _mm_crc32_u64(high as u64, x) as u32 };
-                    low = unsafe { _mm_crc32_u64(low as u64, x) as u32 };
+                    value = unsafe { _mm_crc32_u64(value, x as u64) };
+                    value = unsafe { _mm_crc32_u64(value, (x >> 64) as u64) };
                 }
-                (high as u64) << 32 | low as u64
+                value
             } else {
-                 use std::hash::Hasher;
+                use std::hash::Hasher;
                 let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
                 let mut hasher = state.build_hasher();
                 for x in self.0 {
-                    hasher.write_u64(x);
-                }
-                hasher.finish()
-            }
-        }
-    }
-}
-
-impl FastHash for U512 {
-    #[inline(always)]
-    fn fast_hash(&self) -> u64 {
-        cfg_if::cfg_if! {
-            if #[cfg(target_feature = "sse4.2")] {
-                use std::arch::x86_64::_mm_crc32_u64;
-                let mut high = CRC_A;
-                let mut low = CRC_B;
-                for x in self.0 {
-                    high = unsafe { _mm_crc32_u64(high as u64, x) as u32 };
-                    low = unsafe { _mm_crc32_u64(low as u64, x) as u32 };
-                }
-                (high as u64) << 32 | low as u64
-            } else {
-                 use std::hash::Hasher;
-                let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
-                let mut hasher = state.build_hasher();
-                for x in self.0 {
-                    hasher.write_u64(x);
+                    hasher.write_u128(x);
                 }
                 hasher.finish()
             }
@@ -347,24 +290,21 @@ impl FastHash for [u8] {
             if #[cfg(target_feature = "sse4.2")] {
                 use crate::utils::read_le;
                 use std::arch::x86_64::_mm_crc32_u64;
-                let mut high = CRC_A;
-                let mut low = CRC_B;
+                let mut value = u64::MAX;
                 for i in (0..self.len()).step_by(8) {
                     if i + 8 < self.len() {
                         unsafe {
                             let x = (&self[i] as *const u8 as *const u64).read_unaligned();
-                            high = _mm_crc32_u64(high as u64, x) as u32;
-                            low = _mm_crc32_u64(low as u64, x) as u32;
+                            value = _mm_crc32_u64(value, x);
                         }
                     } else {
                         unsafe {
                             let x = read_le(&self[i] as *const u8, self.len() - i);
-                            high = _mm_crc32_u64(high as u64, x) as u32;
-                            low = _mm_crc32_u64(low as u64, x) as u32;
+                            value = _mm_crc32_u64(value, x);
                         }
                     }
                 }
-                (high as u64) << 32 | low as u64
+                value
             } else {
                 use std::hash::Hasher;
                 let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
@@ -383,15 +323,11 @@ impl<const N: usize> FastHash for ([u64; N], NonZeroU64) {
         cfg_if::cfg_if! {
             if #[cfg(target_feature = "sse4.2")] {
                 use std::arch::x86_64::_mm_crc32_u64;
-                let mut high = CRC_A;
-                let mut low = CRC_B;
+                let mut value = u64::MAX;
                 for x in self.0 {
-                    high = unsafe { _mm_crc32_u64(high as u64, x) as u32 };
-                    low = unsafe { _mm_crc32_u64(low as u64, x) as u32 };
+                    value = unsafe { _mm_crc32_u64(value, x) };
                 }
-                high = unsafe { _mm_crc32_u64(high as u64, self.1.get()) as u32 };
-                low = unsafe { _mm_crc32_u64(low as u64, self.1.get()) as u32 };
-                (high as u64) << 32 | low as u64
+                value
             } else {
                  use std::hash::Hasher;
                 let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
@@ -426,7 +362,7 @@ pub trait EntryMutRefLike {
 
 #[allow(clippy::len_without_is_empty)]
 pub trait HashtableLike {
-    type Key: ?Sized + FastHash;
+    type Key: ?Sized;
     type Value;
 
     type EntryRef<'a>: EntryRefLike<KeyRef = &'a Self::Key, ValueRef = &'a Self::Value>

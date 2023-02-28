@@ -27,7 +27,24 @@ pub struct ShuffleProcessor {
 }
 
 impl ShuffleProcessor {
-    pub fn create(channel: Vec<(Arc<InputPort>, Arc<OutputPort>)>) -> Self {
+    pub fn create(
+        inputs: Vec<Arc<InputPort>>,
+        outputs: Vec<Arc<OutputPort>>,
+        rule: Vec<usize>,
+    ) -> Self {
+        let len = rule.len();
+        debug_assert!({
+            let mut sorted = rule.clone();
+            sorted.sort();
+            let expected = (0..len).collect::<Vec<_>>();
+            sorted == expected
+        });
+
+        let mut channel = Vec::with_capacity(len);
+        for (i, input) in inputs.into_iter().enumerate() {
+            let output = outputs[rule[i]].clone();
+            channel.push((input, output));
+        }
         ShuffleProcessor { channel }
     }
 }
@@ -44,35 +61,21 @@ impl Processor for ShuffleProcessor {
 
     fn event(&mut self) -> Result<Event> {
         let mut finished = true;
-        let mut need_data = true;
         for (input, output) in self.channel.iter() {
-            match (input.is_finished(), output.is_finished()) {
-                (true, true) => {}
-                (true, false) => {
-                    output.finish();
-                }
-                (false, true) => {
-                    input.finish();
-                }
-                (false, false) => {
-                    finished = false;
-                    if !output.can_push() {
-                        return Ok(Event::NeedConsume);
-                    }
-                    if input.has_data() {
-                        need_data = false;
-                        output.push_data(input.pull_data().unwrap());
-                    }
-                }
+            if output.is_finished() || input.is_finished() {
+                input.finish();
+                output.finish();
+                continue;
+            }
+            finished = false;
+            input.set_need_data();
+            if output.can_push() && input.has_data() {
+                output.push_data(input.pull_data().unwrap());
             }
         }
-
         if finished {
-            Ok(Event::Finished)
-        } else if need_data {
-            Ok(Event::NeedData)
-        } else {
-            Ok(Event::NeedConsume)
+            return Ok(Event::Finished);
         }
+        Ok(Event::NeedData)
     }
 }

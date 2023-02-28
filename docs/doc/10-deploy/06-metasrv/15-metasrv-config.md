@@ -56,7 +56,7 @@ join                     = ["127.0.0.1:28103", "127.0.0.1:28203"]
 
 ## 1. Logging config
 
-- `log_id` is the path to a directory for storing hourly-rolling debug log.
+- `log_dir` is the path to a directory for storing hourly-rolling debug log.
 - `log_level` is the log level. By default, it is `DEBUG`.
 
 ## 2. Admin config

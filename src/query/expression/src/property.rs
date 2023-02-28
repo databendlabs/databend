@@ -176,7 +176,7 @@ impl Domain {
             }
             DataType::EmptyArray => Domain::Array(None),
             DataType::Array(ty) => Domain::Array(Some(Box::new(Domain::full(ty)))),
-            DataType::Map(_) | DataType::Variant => Domain::Undefined,
+            DataType::EmptyMap | DataType::Map(_) | DataType::Variant => Domain::Undefined,
             DataType::Generic(_) => unreachable!(),
         }
     }

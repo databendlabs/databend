@@ -133,6 +133,7 @@ impl BlockReader {
         part: PartInfoPtr,
     ) -> Result<BTreeMap<usize, Vec<NativeReader<Reader>>>> {
         let part = FusePartInfo::from_part(&part)?;
+
         let mut results: BTreeMap<usize, Vec<NativeReader<Reader>>> = BTreeMap::new();
         for (index, column_node) in self.project_column_nodes.iter().enumerate() {
             let op = self.operator.clone();
