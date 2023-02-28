@@ -17,6 +17,7 @@ use common_meta_kvapi::kvapi::GetKVReply;
 use common_meta_kvapi::kvapi::MGetKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
+use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::MetaError;
 use common_meta_types::SeqV;
@@ -25,7 +26,6 @@ use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKV;
 use tracing::debug;
 
-use crate::applied_state::AppliedState;
 use crate::state_machine::StateMachine;
 
 #[async_trait::async_trait]
