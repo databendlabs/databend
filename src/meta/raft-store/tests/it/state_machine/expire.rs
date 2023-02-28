@@ -20,11 +20,11 @@ use common_meta_raft_store::key_spaces::Expire;
 use common_meta_raft_store::key_spaces::GenericKV;
 use common_meta_raft_store::state_machine::ExpireKey;
 use common_meta_raft_store::state_machine::StateMachine;
-use common_meta_sled_store::openraft::Entry;
-use common_meta_sled_store::openraft::EntryPayload;
-use common_meta_sled_store::openraft::LogId;
 use common_meta_sled_store::AsKeySpace;
+use common_meta_types::new_log_id;
 use common_meta_types::Cmd;
+use common_meta_types::Entry;
+use common_meta_types::EntryPayload;
 use common_meta_types::KVMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::UpsertKV;
@@ -154,9 +154,9 @@ fn expired_item(key: &str, time_sec: u64, seq: u64) -> (String, ExpireKey) {
 }
 
 /// Build a raft log entry with expire time
-fn ent(index: u64, key: &str, expire: Option<u64>, time_ms: Option<u64>) -> Entry<LogEntry> {
+fn ent(index: u64, key: &str, expire: Option<u64>, time_ms: Option<u64>) -> Entry {
     Entry {
-        log_id: LogId { term: 1, index },
+        log_id: new_log_id(1, 0, index),
         payload: EntryPayload::Normal(LogEntry {
             txid: None,
             time_ms,

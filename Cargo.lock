@@ -1728,9 +1728,10 @@ dependencies = [
  "maplit",
  "num",
  "once_cell",
- "openraft",
+ "openraft 0.8.2",
  "pretty_assertions",
  "serde",
+ "serde_json",
  "tempfile",
  "tracing",
 ]
@@ -1747,7 +1748,7 @@ dependencies = [
  "common-meta-types",
  "common-tracing",
  "once_cell",
- "openraft",
+ "openraft 0.8.2",
  "pretty_assertions",
  "serde",
  "serde_json",
@@ -1795,7 +1796,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "once_cell",
- "openraft",
+ "openraft 0.8.2",
  "prost",
  "prost-build",
  "regex",
@@ -2815,7 +2816,7 @@ dependencies = [
  "databend-meta",
  "databend-query",
  "limits-rs",
- "openraft",
+ "openraft 0.8.2",
  "poem",
  "sentry",
  "serde",
@@ -2892,7 +2893,7 @@ dependencies = [
  "common-proto-conv",
  "common-protos",
  "common-tracing",
- "openraft",
+ "openraft 0.8.2",
  "serde",
  "serde_json",
  "tokio",
@@ -3637,6 +3638,12 @@ name = "fs_extra"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2022715d62ab30faffd124d40b76f4134a550a87792276512b18d63272333394"
+
+[[package]]
+name = "fuchsia-cprng"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a06f77d526c1a601b7c4cdd98f54b5eaabffc14d5f2f0296febdc7f357c6d3ba"
 
 [[package]]
 name = "funty"
@@ -5524,8 +5531,9 @@ dependencies = [
 
 [[package]]
 name = "openraft"
-version = "0.7.4"
-source = "git+https://github.com/datafuselabs/openraft?tag=v0.7.4#959636885e2069c685b1bdb9ebc5a875565f4a8a"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83a564e30e56d0064e47f51cd6d480160f042a1f960dde15eaf2096be20d290e"
 dependencies = [
  "anyerror",
  "anyhow",
@@ -5538,6 +5546,31 @@ dependencies = [
  "maplit",
  "rand 0.8.5",
  "serde",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-futures",
+]
+
+[[package]]
+name = "openraft"
+version = "0.8.2"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.2-alpha.4#b5caa44d1aac0b539180c1c490f0883dcc83048a"
+dependencies = [
+ "anyerror",
+ "anyhow",
+ "async-trait",
+ "byte-unit",
+ "clap 3.2.23",
+ "derive_more",
+ "futures",
+ "maplit",
+ "openraft 0.7.5",
+ "pin-utils",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "tempdir",
  "thiserror",
  "tokio",
  "tracing",
@@ -6463,6 +6496,19 @@ checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
 
 [[package]]
 name = "rand"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "552840b97013b1a26992c11eac34bdd778e464601a4c2054b5f0bff7c6761293"
+dependencies = [
+ "fuchsia-cprng",
+ "libc",
+ "rand_core 0.3.1",
+ "rdrand",
+ "winapi",
+]
+
+[[package]]
+name = "rand"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a6b1679d49b24bbfe0c803429aa1874472f50d9b363131f0e89fc356b544d03"
@@ -6505,6 +6551,21 @@ dependencies = [
  "ppv-lite86",
  "rand_core 0.6.4",
 ]
+
+[[package]]
+name = "rand_core"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a6fdeb83b075e8266dcc8762c22776f6877a63111121f5f8c7411e5be7eed4b"
+dependencies = [
+ "rand_core 0.4.2",
+]
+
+[[package]]
+name = "rand_core"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c33a3c44ca05fa6f1807d8e6743f3824e8509beca625669633be0acbdf509dc"
 
 [[package]]
 name = "rand_core"
@@ -6580,6 +6641,15 @@ dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
  "num_cpus",
+]
+
+[[package]]
+name = "rdrand"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "678054eb77286b51581ba43620cc911abf02758c91f93f479767aed0f90458b2"
+dependencies = [
+ "rand_core 0.3.1",
 ]
 
 [[package]]
@@ -7916,6 +7986,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a30d48359f77fbb6af3d7b928cc2d092e1dc90b44f397e979ef08ae15733ed65"
 dependencies = [
  "once_cell",
+]
+
+[[package]]
+name = "tempdir"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15f2b5fb00ccdf689e0149d1b1b3c03fead81c2b37735d812fa8bddbbf41b6d8"
+dependencies = [
+ "rand 0.4.6",
+ "remove_dir_all",
 ]
 
 [[package]]

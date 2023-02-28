@@ -15,9 +15,7 @@
 use std::str::FromStr;
 
 use common_meta_stoerr::MetaStorageError;
-use common_meta_types::anyerror::AnyError;
 use common_meta_types::LogId;
-use common_meta_types::LogIndex;
 
 /// Structured snapshot id used by meta service
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -41,42 +39,46 @@ impl FromStr for MetaSnapshotId {
     type Err = MetaStorageError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let invalid = || {
-            MetaStorageError::SnapshotError(AnyError::error(format!("invalid snapshot_id: {}", s)))
-        };
-        let mut segs = s.split('-');
+        // TODO:
+        let _ = s;
+        unimplemented!("do not need to parse snapshot id");
 
-        let term = segs.next().ok_or_else(invalid)?;
-        let log_index = segs.next().ok_or_else(invalid)?;
-        let snapshot_index = segs.next().ok_or_else(invalid)?;
-
-        let log_id = if term.is_empty() {
-            if log_index.is_empty() {
-                None
-            } else {
-                return Err(invalid());
-            }
-        } else {
-            let t = term.parse::<u64>().map_err(|_e| invalid())?;
-            let i = log_index.parse::<LogIndex>().map_err(|_e| invalid())?;
-            Some(LogId::new(t, i))
-        };
-
-        let snapshot_index = snapshot_index.parse::<u64>().map_err(|_e| invalid())?;
-
-        Ok(Self {
-            last_applied: log_id,
-            uniq: snapshot_index,
-        })
+        // let invalid = || {
+        //     MetaStorageError::SnapshotError(AnyError::error(format!("invalid snapshot_id: {}", s)))
+        // };
+        // let mut segs = s.split('-');
+        //
+        // let term = segs.next().ok_or_else(invalid)?;
+        // let log_index = segs.next().ok_or_else(invalid)?;
+        // let snapshot_index = segs.next().ok_or_else(invalid)?;
+        //
+        // let log_id = if term.is_empty() {
+        //     if log_index.is_empty() {
+        //         None
+        //     } else {
+        //         return Err(invalid());
+        //     }
+        // } else {
+        //     let t = term.parse::<u64>().map_err(|_e| invalid())?;
+        //     let i = log_index.parse::<LogIndex>().map_err(|_e| invalid())?;
+        //     Some(LogId::new(t, i))
+        // };
+        //
+        // let snapshot_index = snapshot_index.parse::<u64>().map_err(|_e| invalid())?;
+        //
+        // Ok(Self {
+        //     last_applied: log_id,
+        //     uniq: snapshot_index,
+        // })
     }
 }
 
 impl ToString for MetaSnapshotId {
     fn to_string(&self) -> String {
         if let Some(last) = self.last_applied {
-            format!("{}-{}-{}", last.term, last.index, self.uniq)
+            format!("{}-{}-{}", last.leader_id, last.index, self.uniq)
         } else {
-            format!("--{}", self.uniq)
+            format!("---{}", self.uniq)
         }
     }
 }
@@ -85,7 +87,7 @@ impl ToString for MetaSnapshotId {
 mod tests {
     use std::str::FromStr;
 
-    use common_meta_types::LogId;
+    use common_meta_types::new_log_id;
 
     use crate::state_machine::snapshot_id::MetaSnapshotId;
 
@@ -93,8 +95,8 @@ mod tests {
     fn test_meta_snapshot_id() -> anyhow::Result<()> {
         assert_eq!("--5", MetaSnapshotId::new(None, 5).to_string());
         assert_eq!(
-            "1-2-5",
-            MetaSnapshotId::new(Some(LogId::new(1, 2)), 5).to_string()
+            "1-8-2-5",
+            MetaSnapshotId::new(Some(new_log_id(1, 8, 2)), 5).to_string()
         );
 
         assert_eq!(
@@ -102,7 +104,7 @@ mod tests {
             MetaSnapshotId::from_str("--5")
         );
         assert_eq!(
-            Ok(MetaSnapshotId::new(Some(LogId::new(1, 2)), 5)),
+            Ok(MetaSnapshotId::new(Some(new_log_id(1, 8, 2)), 5)),
             MetaSnapshotId::from_str("1-2-5")
         );
 

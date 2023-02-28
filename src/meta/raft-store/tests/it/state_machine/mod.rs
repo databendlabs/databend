@@ -18,11 +18,13 @@ use std::time::UNIX_EPOCH;
 use common_base::base::tokio;
 use common_meta_kvapi::kvapi::KVApi;
 use common_meta_raft_store::state_machine::StateMachine;
-use common_meta_sled_store::openraft;
+use common_meta_types::new_log_id;
 use common_meta_types::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
 use common_meta_types::Endpoint;
+use common_meta_types::Entry;
+use common_meta_types::EntryPayload;
 use common_meta_types::KVMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
@@ -31,9 +33,6 @@ use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKV;
 use common_meta_types::With;
-use openraft::raft::Entry;
-use openraft::raft::EntryPayload;
-use openraft::LogId;
 use pretty_assertions::assert_eq;
 use tracing::info;
 
@@ -58,7 +57,7 @@ async fn test_state_machine_apply_add_node() -> anyhow::Result<()> {
         let ss = &sm;
         async move {
             ss.apply(&Entry {
-                log_id: LogId { term: 1, index },
+                log_id: new_log_id(1, 0, index),
                 payload: EntryPayload::Normal(LogEntry {
                     txid: None,
                     time_ms: None,

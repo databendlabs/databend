@@ -37,13 +37,13 @@ use common_meta_stoerr::MetaStorageError;
 use common_meta_types::anyerror::AnyError;
 use common_meta_types::Cmd;
 use common_meta_types::Endpoint;
+use common_meta_types::Entry;
+use common_meta_types::EntryPayload;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
+use common_meta_types::Membership;
 use common_meta_types::Node;
-use openraft::raft::Entry;
-use openraft::raft::EntryPayload;
-use openraft::Membership;
-use openraft::NodeId;
+use common_meta_types::NodeId;
 use tokio::net::TcpSocket;
 use url::Url;
 
@@ -236,8 +236,8 @@ async fn init_new_cluster(
     {
         // insert last membership log
         log_id.index += 1;
-        let membership = Membership::new_single(node_ids);
-        let entry: Entry<LogEntry> = Entry::<LogEntry> {
+        let membership = Membership::new(vec![node_ids], ());
+        let entry: Entry = Entry {
             log_id,
             payload: EntryPayload::Membership(membership),
         };
@@ -259,7 +259,7 @@ async fn init_new_cluster(
                 overriding: true,
             };
 
-            let entry: Entry<LogEntry> = Entry::<LogEntry> {
+            let entry: Entry = Entry {
                 log_id,
                 payload: EntryPayload::Normal(LogEntry {
                     txid: None,
