@@ -19,12 +19,11 @@ use std::marker::PhantomData;
 use std::mem::take;
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::with_hash_method;
-use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoDowncast;
-use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_expression::HashMethodKind;
 use common_hashtable::hash2bucket;
@@ -37,20 +36,19 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
-use serde::Deserialize;
-use serde::Deserializer;
-use serde::Serialize;
-use serde::Serializer;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SerializedPayload;
-use crate::pipelines::processors::transforms::aggregator::AggregateInfo;
-use crate::pipelines::processors::transforms::aggregator::BucketAggregator;
+use crate::pipelines::processors::transforms::aggregator::TransformAggregateDeserializer;
+use crate::pipelines::processors::transforms::aggregator::TransformFinalGroupBy;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
+use crate::pipelines::processors::transforms::TransformFinalAggregate;
+use crate::pipelines::processors::transforms::TransformGroupByDeserializer;
 use crate::pipelines::processors::AggregatorParams;
+use crate::sessions::QueryContext;
 
 static SINGLE_LEVEL_BUCKET_NUM: isize = -1;
 
@@ -401,5 +399,68 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
                 Ok(())
             }
         }
+    }
+}
+
+fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>(
+    ctx: &Arc<QueryContext>,
+    method: Method,
+    pipeline: &mut Pipeline,
+    params: Arc<AggregatorParams>,
+) -> Result<()> {
+    if !ctx.get_cluster().is_empty() {
+        pipeline.add_transform(
+            |input, output| match params.aggregate_functions.is_empty() {
+                true => TransformGroupByDeserializer::<Method>::try_create(input, output),
+                false => TransformAggregateDeserializer::<Method>::try_create(input, output),
+            },
+        )?;
+    }
+
+    let input_nums = pipeline.output_len();
+    let transform = TransformPartitionBucket::<Method, V>::create(method.clone(), input_nums)?;
+
+    let output = transform.get_output();
+    let inputs_port = transform.get_inputs();
+
+    pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
+        ProcessorPtr::create(Box::new(transform)),
+        inputs_port,
+        vec![output],
+    )]));
+
+    pipeline.resize(input_nums)?;
+
+    pipeline.add_transform(
+        |input, output| match params.aggregate_functions.is_empty() {
+            true => {
+                TransformFinalGroupBy::try_create(input, output, method.clone(), params.clone())
+            }
+            false => {
+                TransformFinalAggregate::try_create(input, output, method.clone(), params.clone())
+            }
+        },
+    )
+}
+
+pub fn efficiently_memory_final_aggregator(
+    ctx: &Arc<QueryContext>,
+    params: Arc<AggregatorParams>,
+    pipeline: &mut Pipeline,
+) -> Result<()> {
+    let group_cols = &params.group_columns;
+    let schema_before_group_by = params.input_schema.clone();
+    let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
+    let method = DataBlock::choose_hash_method(&sample_block, group_cols)?;
+
+    match params.aggregate_functions.is_empty() {
+        true => with_hash_method!(|T| match method {
+            HashMethodKind::T(v) =>
+                build_partition_bucket::<_, ()>(ctx, v, pipeline, params.clone()),
+        }),
+        false => with_hash_method!(|T| match method {
+            HashMethodKind::T(v) =>
+                build_partition_bucket::<_, usize>(ctx, v, pipeline, params.clone()),
+        }),
     }
 }

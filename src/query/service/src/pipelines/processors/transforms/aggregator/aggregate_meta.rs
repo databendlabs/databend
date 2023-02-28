@@ -10,8 +10,6 @@ use common_hashtable::HashtableLike;
 
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
-use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
-use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 
 pub struct HashTablePayload<T: HashtableLike> {
     pub hashtable: T,

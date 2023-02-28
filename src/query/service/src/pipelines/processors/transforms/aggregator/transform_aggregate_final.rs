@@ -21,7 +21,6 @@ use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
-use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::AggregatorParams;
 
 pub struct TransformFinalAggregate<Method: HashMethodBounds> {
@@ -152,29 +151,25 @@ where Method: HashMethodBounds
                         let offsets_aggregate_states = &self.params.offsets_aggregate_states;
 
                         for entry in Method::HashTable::iter(&payload.hashtable) {
-                            let key = entry.key();
-                            unsafe {
-                                match hashtable.insert(key) {
-                                    Ok(e) => {
-                                        // just set new places and the arena will be keeped in partial state
-                                        e.write(*entry.get());
-                                    }
-                                    Err(place) => {
-                                        // place already exists
-                                        // that means we should merge the aggregation
-                                        let place = StateAddr::new(*place);
-                                        let old_place = StateAddr::new(*entry.get());
+                            match hashtable.insert(entry.key()) {
+                                Ok(e) => {
+                                    // just set new places and the arena will be keeped in partial state
+                                    e.write(*entry.get());
+                                }
+                                Err(place) => {
+                                    // place already exists
+                                    // that means we should merge the aggregation
+                                    let place = StateAddr::new(*place);
+                                    let old_place = StateAddr::new(*entry.get());
 
-                                        for (idx, aggregate_function) in
-                                            aggregate_functions.iter().enumerate()
-                                        {
-                                            let final_place =
-                                                place.next(offsets_aggregate_states[idx]);
-                                            let state_place =
-                                                old_place.next(offsets_aggregate_states[idx]);
-                                            aggregate_function.merge(final_place, state_place)?;
-                                            aggregate_function.drop_state(state_place);
-                                        }
+                                    for (idx, aggregate_function) in
+                                        aggregate_functions.iter().enumerate()
+                                    {
+                                        let final_place = place.next(offsets_aggregate_states[idx]);
+                                        let state_place =
+                                            old_place.next(offsets_aggregate_states[idx]);
+                                        aggregate_function.merge(final_place, state_place)?;
+                                        aggregate_function.drop_state(state_place);
                                     }
                                 }
                             }

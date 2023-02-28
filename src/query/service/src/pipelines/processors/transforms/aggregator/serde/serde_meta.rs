@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashMap;
 
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoDowncast;

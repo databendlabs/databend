@@ -66,7 +66,6 @@ use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::PartialSingleStateAggregator;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
 use crate::pipelines::processors::transforms::TransformAggregateSerializer;
-use crate::pipelines::processors::transforms::TransformFinalAggregate;
 use crate::pipelines::processors::transforms::TransformGroupBySerializer;
 use crate::pipelines::processors::transforms::TransformLeftJoin;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
@@ -76,13 +75,11 @@ use crate::pipelines::processors::transforms::TransformPartialGroupBy;
 use crate::pipelines::processors::transforms::TransformRightJoin;
 use crate::pipelines::processors::transforms::TransformRightSemiAntiJoin;
 use crate::pipelines::processors::AggregatorParams;
-use crate::pipelines::processors::AggregatorTransformParams;
 use crate::pipelines::processors::JoinHashTable;
 use crate::pipelines::processors::LeftJoinCompactor;
 use crate::pipelines::processors::MarkJoinCompactor;
 use crate::pipelines::processors::RightJoinCompactor;
 use crate::pipelines::processors::SinkBuildHashTable;
-use crate::pipelines::processors::TransformAggregator;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::processors::TransformHashJoinProbe;
 use crate::pipelines::processors::TransformLimit;
@@ -457,12 +454,6 @@ impl PipelineBuilder {
         self.exchange_sorting = Some(AggregateExchangeSorting::create());
 
         Ok(())
-    }
-
-    fn enable_memory_efficient_aggregator(&self, params: &Arc<AggregatorParams>) -> bool {
-        self.ctx.get_cluster().is_empty()
-            && !params.group_columns.is_empty()
-            && self.main_pipeline.output_len() > 1
     }
 
     fn build_aggregate_final(&mut self, aggregate: &AggregateFinal) -> Result<()> {
