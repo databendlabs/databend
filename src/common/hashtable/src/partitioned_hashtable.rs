@@ -47,6 +47,14 @@ impl<Impl: HashtableLike, const BUCKETS_LG2: u32, const HIGH_BIT: bool>
     pub fn into_iter_tables(self) -> IntoIter<Impl> {
         self.tables.into_iter()
     }
+
+    // #Unsafe the caller must ensure that the hashtable is not used after take_inner_tables
+    pub unsafe fn pop_first_inner_table(&mut self) -> Option<Impl> {
+        match self.tables.is_empty() {
+            true => None,
+            false => Some(self.tables.remove(0)),
+        }
+    }
 }
 
 /// crc32c hash will return a 32-bit hash value even it's type is u64.

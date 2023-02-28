@@ -45,6 +45,7 @@ use crate::pipelines::processors::transforms::aggregator::TransformFinalGroupBy;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
+use crate::pipelines::processors::transforms::PartitionedHashTableDropper;
 use crate::pipelines::processors::transforms::TransformFinalAggregate;
 use crate::pipelines::processors::transforms::TransformGroupByDeserializer;
 use crate::pipelines::processors::AggregatorParams;
@@ -246,19 +247,17 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
 
     fn partition_hashtable(
         &self,
-        payload: HashTablePayload<Method::HashTable<V>>,
+        payload: HashTablePayload<Method, V>,
     ) -> Result<Vec<Option<DataBlock>>> {
-        let mut data_blocks = Vec::with_capacity(256);
-        let temp = PartitionedHashMethod::convert_hashtable(&self.method, payload.hashtable)?;
-        for (bucket, hashtable) in temp.into_iter_tables().enumerate() {
-            data_blocks.push(match hashtable.len() == 0 {
+        let temp = PartitionedHashMethod::convert_hashtable(&self.method, payload.cell)?;
+        let cells = PartitionedHashTableDropper::split_cell(temp);
+
+        let mut data_blocks = Vec::with_capacity(cells.len());
+        for (bucket, cell) in cells.into_iter().enumerate() {
+            data_blocks.push(match cell.hashtable.len() == 0 {
                 true => None,
                 false => Some(DataBlock::empty_with_meta(
-                    AggregateMeta::<Method, V>::create_hashtable(
-                        bucket as isize,
-                        hashtable,
-                        payload.arena_holder.clone(),
-                    ),
+                    AggregateMeta::<Method, V>::create_hashtable(bucket as isize, cell),
                 )),
             })
         }

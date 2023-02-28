@@ -62,11 +62,11 @@ where Method: HashMethodBounds
             AggregateMeta::Partitioned { .. } => unreachable!(),
             AggregateMeta::Serialized(_) => unreachable!(),
             AggregateMeta::HashTable(payload) => {
-                let value_size = estimated_key_size(&payload.hashtable);
-                let keys_len = Method::HashTable::len(&payload.hashtable);
+                let keys_len = payload.cell.hashtable.len();
+                let value_size = estimated_key_size(&payload.cell.hashtable);
                 let mut group_key_builder = self.method.keys_column_builder(keys_len, value_size);
 
-                for group_entity in Method::HashTable::iter(&payload.hashtable) {
+                for group_entity in payload.cell.hashtable.iter() {
                     group_key_builder.append_value(group_entity.key());
                 }
 
@@ -108,8 +108,8 @@ where Method: HashMethodBounds
             AggregateMeta::Partitioned { .. } => unreachable!(),
             AggregateMeta::Serialized(_) => unreachable!(),
             AggregateMeta::HashTable(payload) => {
-                let value_size = estimated_key_size(&payload.hashtable);
-                let keys_len = Method::HashTable::len(&payload.hashtable);
+                let keys_len = payload.cell.hashtable.len();
+                let value_size = estimated_key_size(&payload.cell.hashtable);
 
                 let funcs = &self.params.aggregate_functions;
                 let offsets_aggregate_states = &self.params.offsets_aggregate_states;
@@ -121,7 +121,7 @@ where Method: HashMethodBounds
 
                 let mut group_key_builder = self.method.keys_column_builder(keys_len, value_size);
 
-                for group_entity in Method::HashTable::iter(&payload.hashtable) {
+                for group_entity in payload.cell.hashtable.iter() {
                     let place = Into::<StateAddr>::into(*group_entity.get());
 
                     for (idx, func) in funcs.iter().enumerate() {

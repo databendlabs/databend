@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::DerefMut;
 use std::sync::Arc;
 use std::vec;
 
@@ -27,15 +26,13 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::transforms::AccumulatingTransform;
 use common_pipeline_transforms::processors::transforms::AccumulatingTransformer;
 use common_sql::IndexType;
-use regex::internal::Input;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_cell::GroupByHashTableDropper;
 use crate::pipelines::processors::transforms::aggregator::aggregate_cell::HashTableCell;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
-use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
-use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
+use crate::pipelines::processors::transforms::PartitionedHashTableDropper;
 use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
 
@@ -126,15 +123,13 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
             match &mut self.hash_table {
                 HashTable::MovedOut => unreachable!(),
                 HashTable::HashTable(cell) => {
-                    let hashtable = cell.deref_mut();
                     for key in self.method.build_keys_iter(&state)? {
-                        let _ = hashtable.insert_and_entry(key);
+                        let _ = cell.hashtable.insert_and_entry(key);
                     }
                 }
                 HashTable::PartitionedHashTable(cell) => {
-                    let hashtable = cell.deref_mut();
                     for key in self.method.build_keys_iter(&state)? {
-                        let _ = hashtable.insert_and_entry(key);
+                        let _ = cell.hashtable.insert_and_entry(key);
                     }
                 }
             };
@@ -142,12 +137,12 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
             #[allow(clippy::collapsible_if)]
             if Method::SUPPORT_PARTITIONED {
                 if matches!(&self.hash_table, HashTable::HashTable(cell)
-                    if cell.len() >= self.settings.convert_threshold ||
-                        cell.bytes_len() >= self.settings.spilling_bytes_threshold_per_proc
+                    if cell.hashtable.len() >= self.settings.convert_threshold ||
+                        cell.hashtable.bytes_len() >= self.settings.spilling_bytes_threshold_per_proc
                 ) {
-                    if let HashTable::HashTable(hashtable) = std::mem::take(&mut self.hash_table) {
+                    if let HashTable::HashTable(cell) = std::mem::take(&mut self.hash_table) {
                         self.hash_table = HashTable::PartitionedHashTable(
-                            PartitionedHashMethod::convert_hashtable_new(&self.method, hashtable)?,
+                            PartitionedHashMethod::convert_hashtable(&self.method, cell)?,
                         );
                     }
                 }
@@ -160,32 +155,23 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
     fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
         Ok(match std::mem::take(&mut self.hash_table) {
             HashTable::MovedOut => unreachable!(),
-            HashTable::HashTable(cell) => match cell.len() == 0 {
+            HashTable::HashTable(cell) => match cell.hashtable.len() == 0 {
                 true => vec![],
-                false => {
-                    let (hashtable, _, _, _) = cell.into_inner();
-                    vec![DataBlock::empty_with_meta(
-                        AggregateMeta::<Method, ()>::create_hashtable(
-                            -1,
-                            hashtable,
-                            ArenaHolder::create(None),
-                        ),
-                    )]
-                }
+                false => vec![DataBlock::empty_with_meta(
+                    AggregateMeta::<Method, ()>::create_hashtable(-1, cell),
+                )],
             },
             HashTable::PartitionedHashTable(v) => {
-                let mut blocks = Vec::with_capacity(256);
-                // for (bucket, hashtable) in v.into_iter_tables().enumerate() {
-                //     if Method::HashTable::len(&hashtable) != 0 {
-                //         blocks.push(DataBlock::empty_with_meta(
-                //             AggregateMeta::<Method, ()>::create_hashtable(
-                //                 bucket as isize,
-                //                 hashtable,
-                //                 ArenaHolder::create(None),
-                //             ),
-                //         ));
-                //     }
-                // }
+                let cells = PartitionedHashTableDropper::split_cell(v);
+                let mut blocks = Vec::with_capacity(cells.len());
+                for (bucket, cell) in cells.into_iter().enumerate() {
+                    if cell.hashtable.len() != 0 {
+                        blocks.push(DataBlock::empty_with_meta(
+                            AggregateMeta::<Method, ()>::create_hashtable(bucket as isize, cell),
+                        ));
+                    }
+                }
+
                 blocks
             }
         })

@@ -30,24 +30,20 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::transforms::AccumulatingTransform;
 use common_pipeline_transforms::processors::transforms::AccumulatingTransformer;
 
+use crate::pipelines::processors::transforms::aggregator::aggregate_cell::AggregateHashTableDropper;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
-use crate::pipelines::processors::transforms::group_by::Area;
-use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
-use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
+use crate::pipelines::processors::transforms::HashTableCell;
+use crate::pipelines::processors::transforms::PartitionedHashTableDropper;
 use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
 
 #[allow(clippy::enum_variant_names)]
 enum HashTable<Method: HashMethodBounds> {
     MovedOut,
-    HashTable(Method::HashTable<usize>),
-    PartitionedHashTable(
-        <PartitionedHashMethod<Method> as PolymorphicKeysHelper<
-                PartitionedHashMethod<Method>,
-            >>::HashTable<usize>,
-    ),
+    HashTable(HashTableCell<Method, usize>),
+    PartitionedHashTable(HashTableCell<PartitionedHashMethod<Method>, usize>),
 }
 
 impl<Method: HashMethodBounds> Default for HashTable<Method> {
@@ -80,7 +76,6 @@ pub struct TransformPartialAggregate<Method: HashMethodBounds> {
     settings: GroupBySettings,
     hash_table: HashTable<Method>,
 
-    area: Option<Area>,
     params: Arc<AggregatorParams>,
 }
 
@@ -94,6 +89,8 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
         params: Arc<AggregatorParams>,
     ) -> Result<Box<dyn Processor>> {
         let hashtable = method.create_hash_table()?;
+        let _dropper = AggregateHashTableDropper::create(params.clone());
+        let hashtable = HashTableCell::create(hashtable, _dropper);
 
         let hash_table = match !Method::SUPPORT_PARTITIONED || !params.has_distinct_combinator() {
             true => HashTable::HashTable(hashtable),
@@ -109,7 +106,6 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                 method,
                 params,
                 hash_table,
-                area: Some(Area::create()),
                 settings: GroupBySettings::try_from(ctx)?,
             },
         ))
@@ -191,14 +187,13 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
             match &mut self.hash_table {
                 HashTable::MovedOut => unreachable!(),
                 HashTable::HashTable(hashtable) => {
-                    let area = self.area.as_mut().unwrap();
                     let mut places = Vec::with_capacity(rows_num);
 
                     for key in self.method.build_keys_iter(&state)? {
-                        places.push(match hashtable.insert_and_entry(key) {
+                        places.push(match hashtable.hashtable.insert_and_entry(key) {
                             Err(entry) => Into::<StateAddr>::into(*entry.get()),
                             Ok(mut entry) => {
-                                let place = self.params.alloc_layout(area);
+                                let place = self.params.alloc_layout(&mut hashtable.arena);
                                 *entry.get_mut() = place.addr();
                                 place
                             }
@@ -208,14 +203,13 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                     Self::execute(&self.params, &block, &places)
                 }
                 HashTable::PartitionedHashTable(hashtable) => {
-                    let area = self.area.as_mut().unwrap();
                     let mut places = Vec::with_capacity(rows_num);
 
                     for key in self.method.build_keys_iter(&state)? {
-                        places.push(match hashtable.insert_and_entry(key) {
+                        places.push(match hashtable.hashtable.insert_and_entry(key) {
                             Err(entry) => Into::<StateAddr>::into(*entry.get()),
                             Ok(mut entry) => {
-                                let place = self.params.alloc_layout(area);
+                                let place = self.params.alloc_layout(&mut hashtable.arena);
                                 *entry.get_mut() = place.addr();
                                 place
                             }
@@ -237,13 +231,13 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
 
         #[allow(clippy::collapsible_if)]
         if Method::SUPPORT_PARTITIONED {
-            if matches!(&self.hash_table, HashTable::HashTable(hashtable)
-                if hashtable.len() >= self.settings.convert_threshold ||
-                    hashtable.bytes_len() >= self.settings.spilling_bytes_threshold_per_proc
+            if matches!(&self.hash_table, HashTable::HashTable(cell)
+                if cell.hashtable.len() >= self.settings.convert_threshold ||
+                    cell.hashtable.bytes_len() >= self.settings.spilling_bytes_threshold_per_proc
             ) {
-                if let HashTable::HashTable(hashtable) = std::mem::take(&mut self.hash_table) {
+                if let HashTable::HashTable(cell) = std::mem::take(&mut self.hash_table) {
                     self.hash_table = HashTable::PartitionedHashTable(
-                        PartitionedHashMethod::convert_hashtable(&self.method, hashtable)?,
+                        PartitionedHashMethod::convert_hashtable(&self.method, cell)?,
                     );
                 }
             }
@@ -255,30 +249,23 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
     fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
         Ok(match std::mem::take(&mut self.hash_table) {
             HashTable::MovedOut => unreachable!(),
-            HashTable::HashTable(v) => match Method::HashTable::len(&v) == 0 {
+            HashTable::HashTable(v) => match v.hashtable.len() == 0 {
                 true => vec![],
                 false => vec![DataBlock::empty_with_meta(
-                    AggregateMeta::<Method, usize>::create_hashtable(
-                        -1,
-                        v,
-                        ArenaHolder::create(self.area.take()),
-                    ),
+                    AggregateMeta::<Method, usize>::create_hashtable(-1, v),
                 )],
             },
             HashTable::PartitionedHashTable(v) => {
-                let mut blocks = Vec::with_capacity(256);
-                let arena_holder = ArenaHolder::create(self.area.take());
-                for (bucket, hashtable) in v.into_iter_tables().enumerate() {
-                    if Method::HashTable::len(&hashtable) != 0 {
+                let cells = PartitionedHashTableDropper::split_cell(v);
+                let mut blocks = Vec::with_capacity(cells.len());
+                for (bucket, cell) in cells.into_iter().enumerate() {
+                    if cell.hashtable.len() != 0 {
                         blocks.push(DataBlock::empty_with_meta(
-                            AggregateMeta::<Method, usize>::create_hashtable(
-                                bucket as isize,
-                                hashtable,
-                                arena_holder.clone(),
-                            ),
+                            AggregateMeta::<Method, usize>::create_hashtable(bucket as isize, cell),
                         ));
                     }
                 }
+
                 blocks
             }
         })

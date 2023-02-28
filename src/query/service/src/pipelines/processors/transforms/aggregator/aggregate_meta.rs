@@ -20,14 +20,14 @@ use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::Column;
 use common_expression::DataBlock;
-use common_hashtable::HashtableLike;
 
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
+use crate::pipelines::processors::transforms::HashTableCell;
 
-pub struct HashTablePayload<T: HashtableLike> {
-    pub hashtable: T,
+pub struct HashTablePayload<T: HashMethodBounds, V: Send + Sync + 'static> {
     pub bucket: isize,
+    pub cell: HashTableCell<T, V>,
     pub arena_holder: ArenaHolder,
 }
 
@@ -45,21 +45,17 @@ impl SerializedPayload {
 
 pub enum AggregateMeta<Method: HashMethodBounds, V: Send + Sync + 'static> {
     Serialized(SerializedPayload),
-    HashTable(HashTablePayload<Method::HashTable<V>>),
+    HashTable(HashTablePayload<Method, V>),
 
     Partitioned { bucket: isize, data: Vec<Self> },
 }
 
 impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V> {
-    pub fn create_hashtable(
-        bucket: isize,
-        hashtable: Method::HashTable<V>,
-        arena_holder: ArenaHolder,
-    ) -> BlockMetaInfoPtr {
+    pub fn create_hashtable(bucket: isize, cell: HashTableCell<Method, V>) -> BlockMetaInfoPtr {
         Box::new(AggregateMeta::<Method, V>::HashTable(HashTablePayload {
+            cell,
             bucket,
-            hashtable,
-            arena_holder,
+            arena_holder: ArenaHolder::create(None),
         }))
     }
 

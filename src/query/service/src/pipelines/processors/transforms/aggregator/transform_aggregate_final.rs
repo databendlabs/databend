@@ -29,12 +29,13 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::BlockMetaTransform;
 use common_pipeline_transforms::processors::transforms::BlockMetaTransformer;
 
+use crate::pipelines::processors::transforms::aggregator::aggregate_cell::AggregateHashTableDropper;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::estimated_key_size;
-use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
+use crate::pipelines::processors::transforms::HashTableCell;
 use crate::pipelines::processors::AggregatorParams;
 
 pub struct TransformFinalAggregate<Method: HashMethodBounds> {
@@ -64,12 +65,12 @@ where Method: HashMethodBounds
 
     fn transform(&mut self, meta: AggregateMeta<Method, usize>) -> Result<DataBlock> {
         if let AggregateMeta::Partitioned { bucket, data } = meta {
-            let mut area = Area::create();
-            let temp_place = self.params.alloc_layout(&mut area);
-
             let mut reach_limit = false;
-            let mut state_holders = Vec::with_capacity(data.len());
-            let mut hashtable = self.method.create_hash_table::<usize>()?;
+            let hashtable = self.method.create_hash_table::<usize>()?;
+            let _dropper = AggregateHashTableDropper::create(self.params.clone());
+            let mut hash_cell = HashTableCell::<Method, usize>::create(hashtable, _dropper);
+            let temp_place = self.params.alloc_layout(&mut hash_cell.arena);
+            hash_cell.temp_values.push(temp_place.addr());
 
             for bucket_data in data {
                 match bucket_data {
@@ -88,11 +89,11 @@ where Method: HashMethodBounds
                             let (len, _) = keys_iter.size_hint();
                             let mut places = Vec::with_capacity(len);
 
-                            let mut current_len = hashtable.len();
+                            let mut current_len = hash_cell.hashtable.len();
                             unsafe {
                                 for (row, key) in keys_iter.enumerate() {
                                     if reach_limit {
-                                        let entry = hashtable.entry(key);
+                                        let entry = hash_cell.hashtable.entry(key);
                                         if let Some(entry) = entry {
                                             let place = Into::<StateAddr>::into(*entry.get());
                                             places.push((row, place));
@@ -100,9 +101,10 @@ where Method: HashMethodBounds
                                         continue;
                                     }
 
-                                    match hashtable.insert_and_entry(key) {
+                                    match hash_cell.hashtable.insert_and_entry(key) {
                                         Ok(mut entry) => {
-                                            let place = self.params.alloc_layout(&mut area);
+                                            let place =
+                                                self.params.alloc_layout(&mut hash_cell.arena);
                                             places.push((row, place));
 
                                             *entry.get_mut() = place.addr();
@@ -160,40 +162,34 @@ where Method: HashMethodBounds
                     AggregateMeta::HashTable(payload) => unsafe {
                         debug_assert!(bucket == payload.bucket);
 
-                        state_holders.push(payload.arena_holder);
                         let aggregate_functions = &self.params.aggregate_functions;
                         let offsets_aggregate_states = &self.params.offsets_aggregate_states;
 
-                        for entry in Method::HashTable::iter(&payload.hashtable) {
-                            match hashtable.insert(entry.key()) {
-                                Ok(e) => {
-                                    // just set new places and the arena will be keeped in partial state
-                                    e.write(*entry.get());
+                        for entry in payload.cell.hashtable.iter() {
+                            let place = match hash_cell.hashtable.insert(entry.key()) {
+                                Err(place) => StateAddr::new(*place),
+                                Ok(entry) => {
+                                    let place = self.params.alloc_layout(&mut hash_cell.arena);
+                                    entry.write(place.addr());
+                                    place
                                 }
-                                Err(place) => {
-                                    // place already exists
-                                    // that means we should merge the aggregation
-                                    let place = StateAddr::new(*place);
-                                    let old_place = StateAddr::new(*entry.get());
+                            };
 
-                                    for (idx, aggregate_function) in
-                                        aggregate_functions.iter().enumerate()
-                                    {
-                                        let final_place = place.next(offsets_aggregate_states[idx]);
-                                        let state_place =
-                                            old_place.next(offsets_aggregate_states[idx]);
-                                        aggregate_function.merge(final_place, state_place)?;
-                                        aggregate_function.drop_state(state_place);
-                                    }
-                                }
+                            let old_place = StateAddr::new(*entry.get());
+
+                            for (idx, aggregate_function) in aggregate_functions.iter().enumerate()
+                            {
+                                let final_place = place.next(offsets_aggregate_states[idx]);
+                                let state_place = old_place.next(offsets_aggregate_states[idx]);
+                                aggregate_function.merge(final_place, state_place)?;
                             }
                         }
                     },
                 }
             }
 
-            let keys_len = hashtable.len();
-            let value_size = estimated_key_size(&hashtable);
+            let keys_len = hash_cell.hashtable.len();
+            let value_size = estimated_key_size(&hash_cell.hashtable);
 
             let mut group_columns_builder =
                 self.method
@@ -213,7 +209,7 @@ where Method: HashMethodBounds
             };
 
             let mut places = Vec::with_capacity(keys_len);
-            for group_entity in hashtable.iter() {
+            for group_entity in hash_cell.hashtable.iter() {
                 places.push(StateAddr::new(*group_entity.get()));
                 group_columns_builder.append_value(group_entity.key());
             }

@@ -83,7 +83,7 @@ where Method: HashMethodBounds
                     AggregateMeta::HashTable(payload) => unsafe {
                         debug_assert!(bucket == payload.bucket);
 
-                        for key in payload.hashtable.iter() {
+                        for key in payload.cell.hashtable.iter() {
                             let _ = hashtable.insert_and_entry(key.key());
                         }
 
