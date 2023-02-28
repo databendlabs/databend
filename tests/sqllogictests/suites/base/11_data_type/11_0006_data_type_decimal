@@ -169,6 +169,12 @@ SELECT ANY(CAST(2.34 AS DECIMAL(6, 2)))
 2.34
 
 
+query TTTT
+select typeof(a+b), typeof(a-b), typeof(a*b), typeof(a/b) from (select 3::Decimal(13,2) a , 3.1::Decimal(8,3) b);
+----
+DECIMAL(15, 3) DECIMAL(15, 3) DECIMAL(21, 5) DECIMAL(16, 2)
+
+
 ## compare
 
 query IIIII

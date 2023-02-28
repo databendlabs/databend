@@ -15,11 +15,10 @@
 use std::fmt;
 use std::fmt::Formatter;
 
-use common_meta_types::protobuf::RaftReply;
-use common_meta_types::Change;
-use common_meta_types::Node;
-use common_meta_types::TxnReply;
-use openraft::AppDataResponse;
+use crate::protobuf::RaftReply;
+use crate::Change;
+use crate::Node;
+use crate::TxnReply;
 
 /// The state of an applied raft log.
 /// Normally it includes two fields: the state before applying and the state after applying the log.
@@ -46,8 +45,6 @@ pub enum AppliedState {
     #[try_into(ignore)]
     None,
 }
-
-impl AppDataResponse for AppliedState {}
 
 impl fmt::Display for AppliedState {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

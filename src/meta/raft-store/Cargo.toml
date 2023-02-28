@@ -37,7 +37,6 @@ maplit = "1.0.2"
 num = "0.4.0"
 once_cell = "1.15.0"
 serde = { workspace = true }
-serde_json = { workspace = true }
 tracing = "0.1.36"
 
 [dev-dependencies]

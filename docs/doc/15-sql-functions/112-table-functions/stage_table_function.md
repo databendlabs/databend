@@ -32,7 +32,7 @@ The function parameters are as follows:
 
 `<format_name>` should be one of the following:
 
-1. A built-in file format (see [Input & Output File Formats](../../13-sql-reference/75-file-format-options.md).
+1. A built-in file format (see [Input & Output File Formats](../../13-sql-reference/50-file-format-options.md).
 2. A named file format created by [CREATE FILE FORMAT](../../14-sql-commands/00-ddl/100-file-format/01-ddl-create-file-format.md).
 
 If not specified for named stages, the format of the stage should be used.

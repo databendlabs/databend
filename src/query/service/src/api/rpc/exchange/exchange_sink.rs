@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
@@ -128,7 +129,7 @@ impl ExchangeSorting for SinkExchangeSorting {
     fn block_number(&self, data_block: &DataBlock) -> Result<isize> {
         let block_meta = data_block.get_meta();
         let shuffle_meta = block_meta
-            .and_then(|meta| meta.as_any().downcast_ref::<ExchangeSerializeMeta>())
+            .and_then(ExchangeSerializeMeta::downcast_ref_from)
             .unwrap();
 
         Ok(shuffle_meta.block_number)

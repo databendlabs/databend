@@ -65,15 +65,11 @@ impl BlockMetaInfo for AggregateHashStateInfo {
         self
     }
 
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
+    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
+        unimplemented!("Unimplemented equals for AggregateHashStateInfo")
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         unimplemented!("Unimplemented clone for AggregateHashStateInfo")
-    }
-
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals for AggregateHashStateInfo")
     }
 }

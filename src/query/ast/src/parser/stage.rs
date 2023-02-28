@@ -55,6 +55,8 @@ fn connection_opt(sep: &'static str) -> impl FnMut(Input) -> IResult<(String, St
                     | SECRET_ACCESS_KEY
                     | SESSION_TOKEN
                     | REGION
+                    | HTTPS
+                    | DELEGATION
                     | ENABLE_VIRTUAL_HOST_STYLE)
                 ~ #sep1 ~ #literal_string
             },

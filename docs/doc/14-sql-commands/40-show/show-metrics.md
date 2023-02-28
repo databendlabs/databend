@@ -2,7 +2,7 @@
 title: SHOW METRICS
 ---
 
-Shows the list of [system metrics](../../13-sql-reference/70-system-tables/system-metrics.md).
+Shows the list of [system metrics](../../13-sql-reference/20-system-tables/system-metrics.md).
 
 ## Syntax
 
