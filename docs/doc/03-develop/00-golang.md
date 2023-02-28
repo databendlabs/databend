@@ -1,40 +1,48 @@
 ---
-title: How to Work With Databend in Golang
+title: Developing with Databend using Golang
 sidebar_label: Golang
 description:
-   How to work with Databend in Golang.
+   How to Develop with Databend using Golang.
 ---
 
-## Before You Begin
+Databend offers a driver (databend-go) written in Golang, which facilitates the development of applications using the Golang programming language and establishes connectivity with Databend.
 
-* **Databend :** Make sure Databend is running and accessible, see [How to deploy Databend](/doc/deploy).
-* [How to Create User](../14-sql-commands/00-ddl/30-user/01-user-create-user.md)
-* [How to Grant Privileges to User](../14-sql-commands/00-ddl/30-user/10-grant-privileges.md)
+For installation instructions, examples, and the source code, see the GitHub [databend-go](https://github.com/databendcloud/databend-go) repo.
 
-## Create Databend User
+In the following tutorial, you'll learn how to utilize the driver `databend-go` to develop your applications. The tutorial will walk you through creating a SQL user in Databend and then writing Golang code to create a table, insert data, and perform data queries.
+
+
+## Tutorial: Developing with Databend using Golang
+
+Before you start, make sure you have successfully installed Databend. For how to install Databend, see [How to deploy Databend](/doc/deploy).
+
+## Step 1. Create a SQL User
+
+In this step, you'll create a SQL user in Databend and grant privileges to the user.
+
+1. Connect to Databend from a MySQL client.
 
 ```shell
 mysql -h127.0.0.1 -uroot -P3307
 ```
 
-### Create a User
+2. Create a user named `user1`.
 
 ```sql
 CREATE USER user1 IDENTIFIED BY 'abc123';
 ```
 
-### Grants Privileges
+3. Grant privileges to `user1`.
 
-Grants `ALL` privileges to the user `user1`:
 ```sql
 GRANT ALL on *.* TO user1;
 ```
 
-## Golang
+## Step 2. Write a Golang Program
 
-This guideline show how to connect and query to Databend using Golang. We will be creating a table named `books` and insert a row, then query it.
+In this step, you'll create a simple Golang program that communicates with Databend. The program will involve tasks such as creating a table, inserting data, and executing data queries.
 
-### main.go
+1. Copy and paste the following code to the file `main.go`:
 
 ```go title='main.go'
 package main
@@ -126,7 +134,7 @@ func main() {
 }
 ```
 
-### Golang mod
+2. Install dependencies. 
 
 ```shell
 go mod init databend-golang
@@ -149,7 +157,7 @@ require (
 )
 ```
 
-### Run main.go
+3. Run the program. 
 
 ```shell
 go run main.go
