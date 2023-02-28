@@ -53,6 +53,7 @@ mod tuple;
 mod unnest;
 mod variant;
 
+#[allow(clippy::type_complexity)]
 pub fn run_ast_and_eval(
     text: &str,
     columns: &[(&str, Column)],

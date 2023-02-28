@@ -14,7 +14,10 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::array::ArrayColumn;
+use common_expression::types::AnyType;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
@@ -23,6 +26,9 @@ use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FieldIndex;
 use common_expression::FunctionContext;
+use common_expression::FunctionID;
+use common_expression::Scalar;
+use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
@@ -48,16 +54,39 @@ impl BlockOperator {
     pub fn execute(&self, func_ctx: &FunctionContext, mut input: DataBlock) -> Result<DataBlock> {
         match self {
             BlockOperator::Map { exprs } => {
-                for expr in exprs {
+                let mut unnest_columns = vec![];
+                let offset = input.num_columns();
+
+                for (i, expr) in exprs.iter().enumerate() {
                     let evaluator = Evaluator::new(&input, *func_ctx, &BUILTIN_FUNCTIONS);
-                    let result = evaluator.run(expr)?;
-                    let col = BlockEntry {
-                        data_type: expr.data_type().clone(),
-                        value: result,
-                    };
-                    input.add_column(col);
+
+                    if let Expr::FunctionCall {
+                        id: FunctionID::Builtin { name, .. },
+                        ..
+                    } = expr
+                    {
+                        if name == "unnest" {
+                            let result = evaluator.run(expr)?;
+                            let values_and_offsets =
+                                result.into_column().unwrap().into_array().unwrap();
+                            unnest_columns.push((i + offset, values_and_offsets));
+                            // add a temporary dummy column.
+                            input.add_column(BlockEntry {
+                                data_type: DataType::Null,
+                                value: Value::Scalar(Scalar::Null),
+                            })
+                        }
+                    } else {
+                        let result = evaluator.run(expr)?;
+                        let col = BlockEntry {
+                            data_type: expr.data_type().clone(),
+                            value: result,
+                        };
+                        input.add_column(col);
+                    }
                 }
-                Ok(input)
+
+                Self::fit_unnest(input, &unnest_columns)
             }
 
             BlockOperator::Filter { expr } => {
@@ -76,6 +105,72 @@ impl BlockOperator {
                 Ok(result)
             }
         }
+    }
+
+    fn fit_unnest(
+        input: DataBlock,
+        unnest_columns: &[(usize, Box<ArrayColumn<AnyType>>)],
+    ) -> Result<DataBlock> {
+        if unnest_columns.is_empty() {
+            return Ok(input);
+        }
+
+        // TODO: allow multiple unnest columns.
+        if unnest_columns.len() > 1 {
+            return Err(ErrorCode::Internal(
+                "Only one unnest column is allowed now.",
+            ));
+        }
+
+        let (unnest_index, unnest_col) = &unnest_columns[0];
+        let (unnest_values, unnest_offsets) = (&unnest_col.values, &unnest_col.offsets);
+
+        let num_rows = unnest_values.len() * input.num_rows();
+        // Convert unnest_offsets to take indices.
+        let mut take_indices = Vec::with_capacity(num_rows);
+        let offset_len = unnest_offsets.len();
+        for i in 1..offset_len {
+            let (from, end) = unsafe {
+                (
+                    *unnest_offsets.get_unchecked(i - 1) as usize,
+                    *unnest_offsets.get_unchecked(i) as usize,
+                )
+            };
+            take_indices.extend(vec![i as u64; end - from]);
+        }
+
+        let mut cols = Vec::with_capacity(input.num_columns());
+        let meta = input.get_meta().cloned();
+
+        for (i, col) in input.columns().iter().enumerate() {
+            if i == *unnest_index {
+                let (from, end) = unsafe {
+                    (
+                        *unnest_offsets.get_unchecked(0) as usize,
+                        *unnest_offsets.get_unchecked(offset_len - 1) as usize,
+                    )
+                };
+                // `unnest_col` may be sliced once, so we should slice `unnest_values` to get the needed data.
+                let col = unnest_values.slice(from..end);
+                cols.push(BlockEntry {
+                    data_type: unnest_values.data_type(),
+                    value: Value::Column(col),
+                })
+            } else {
+                match &col.value {
+                    Value::Column(col) => {
+                        let new_col = col.take(&take_indices);
+                        cols.push(BlockEntry {
+                            data_type: col.data_type(),
+                            value: Value::Column(new_col),
+                        })
+                    }
+                    Value::Scalar(_) => cols.push(col.clone()),
+                }
+            }
+        }
+
+        Ok(DataBlock::new_with_meta(cols, num_rows, meta))
     }
 }
 
