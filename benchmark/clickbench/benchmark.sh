@@ -137,7 +137,7 @@ function run_query() {
     local q_start q_end q_time
 
     q_start=$(date +%s.%N)
-    if echo "$query" | bendsql query; then
+    if echo "$query" | bendsql query -f csv -r >/dev/null; then
         q_end=$(date +%s.%N)
         q_time=$(echo "$q_end - $q_start" | bc -l)
         echo "Q${QUERY_NUM}[$seq] succeeded in $q_time seconds"
