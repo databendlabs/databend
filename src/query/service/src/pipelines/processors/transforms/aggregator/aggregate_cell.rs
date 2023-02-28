@@ -27,7 +27,7 @@ use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::AggregatorParams;
 
-//
+// Manage unsafe memory usage, free memory when the cell is destroyed.
 pub struct HashTableCell<T: HashMethodBounds, V: Send + Sync + 'static> {
     pub hashtable: T::HashTable<V>,
     pub arena: Area,
@@ -45,7 +45,7 @@ impl<T: HashMethodBounds, V: Send + Sync + 'static> Drop for HashTableCell<T, V>
         if let Some(dropper) = self._dropper.take() {
             dropper.destroy(&mut self.hashtable);
 
-            for value in &std::mem::take(&mut self.temp_values) {
+            for value in &self.temp_values {
                 dropper.destroy_value(value)
             }
         }
@@ -187,8 +187,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> PartitionedHashTableDro
     ) -> Vec<HashTableCell<Method, V>> {
         unsafe {
             let arena = std::mem::replace(&mut v.arena, Area::create());
-            let arena_holder = ArenaHolder::create(Some(arena));
-            v.arena_holders.push(arena_holder.clone());
+            v.arena_holders.push(ArenaHolder::create(Some(arena)));
 
             let dropper = v
                 ._dropper
@@ -203,7 +202,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> PartitionedHashTableDro
             let mut cells = Vec::with_capacity(256);
             while let Some(table) = v.hashtable.pop_first_inner_table() {
                 let mut table_cell = HashTableCell::create(table, dropper.clone());
-                table_cell.arena_holders.push(arena_holder.clone());
+                table_cell.arena_holders = v.arena_holders.to_vec();
                 cells.push(table_cell);
             }
 

@@ -176,7 +176,6 @@ where Method: HashMethodBounds
                             };
 
                             let old_place = StateAddr::new(*entry.get());
-
                             for (idx, aggregate_function) in aggregate_functions.iter().enumerate()
                             {
                                 let final_place = place.next(offsets_aggregate_states[idx]);
