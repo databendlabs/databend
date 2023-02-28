@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod aggregate_cell;
 mod aggregate_exchange_sorting;
 mod aggregate_meta;
 mod aggregator_params;
@@ -24,6 +25,8 @@ mod transform_partition_bucket;
 mod transform_single_key;
 mod utils;
 
+pub use aggregate_cell::HashTableCell;
+pub use aggregate_cell::PartitionedHashTableDropper;
 pub use aggregate_exchange_sorting::AggregateExchangeSorting;
 pub use aggregator_params::AggregatorParams;
 pub use transform_aggregate_final::TransformFinalAggregate;

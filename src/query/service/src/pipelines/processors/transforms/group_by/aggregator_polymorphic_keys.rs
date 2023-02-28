@@ -52,7 +52,10 @@ use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder:
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::FixedKeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::SerializedKeysColumnIter;
+use crate::pipelines::processors::transforms::HashTableCell;
+use crate::pipelines::processors::transforms::PartitionedHashTableDropper;
 use crate::pipelines::processors::AggregatorParams;
+use crate::pipelines::processors::HashTable;
 
 // Provide functions for all HashMethod to help implement polymorphic group by key
 //
@@ -490,6 +493,44 @@ impl<Method: HashMethodBounds> PartitionedHashMethod<Method> {
         );
 
         Ok(partitioned_hashtable)
+    }
+
+    pub fn convert_hashtable_new<T>(
+        method: &Method,
+        cell: HashTableCell<Method::HashTable<T>>,
+    ) -> Result<
+        HashTableCell<<Self as PolymorphicKeysHelper<PartitionedHashMethod<Method>>>::HashTable<T>>,
+    >
+    where
+        T: Copy + Send + Sync + 'static,
+        Self: PolymorphicKeysHelper<PartitionedHashMethod<Method>>,
+    {
+        let (hashtable, holders, values, _dropper) = cell.into_inner();
+        let instant = Instant::now();
+        let partitioned_method = Self::create(method.clone());
+        let mut partitioned_hashtable = partitioned_method.create_hash_table()?;
+
+        unsafe {
+            for item in hashtable.iter() {
+                match partitioned_hashtable.insert_and_entry(item.key()) {
+                    Ok(mut entry) => {
+                        *entry.get_mut() = *item.get();
+                    }
+                    Err(mut entry) => {
+                        *entry.get_mut() = *item.get();
+                    }
+                };
+            }
+        }
+
+        info!(
+            "Convert to Partitioned HashTable elapsed: {:?}",
+            instant.elapsed()
+        );
+
+        let _dropper = PartitionedHashTableDropper::<Method, T>::create(_dropper);
+        let cell = HashTableCell::create(partitioned_hashtable, _dropper);
+        Ok(cell)
     }
 }
 
