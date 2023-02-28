@@ -52,6 +52,8 @@ use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder:
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::FixedKeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::SerializedKeysColumnIter;
+use crate::pipelines::processors::transforms::group_by::Area;
+use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::HashTableCell;
 use crate::pipelines::processors::transforms::PartitionedHashTableDropper;
 use crate::pipelines::processors::AggregatorParams;
@@ -491,18 +493,23 @@ impl<Method: HashMethodBounds> PartitionedHashMethod<Method> {
             instant.elapsed()
         );
 
-        {
-            // TODO(winter): This is unsafe code. If panic occurs during execution, it will cause memory leak
-            let _dropper = cell._dropper.take().unwrap();
-            let temp_values = std::mem::take(&mut cell.temp_values);
-            let arena_holders = std::mem::take(&mut cell.arena_holders);
-            let _dropper = PartitionedHashTableDropper::<Method, T>::create(_dropper);
-            let mut cell = HashTableCell::create(partitioned_hashtable, _dropper);
-            cell.extend_holders(arena_holders);
-            cell.extend_temp_values(temp_values);
+        let arena = std::mem::replace(&mut cell.arena, Area::create());
+        cell.arena_holders.push(ArenaHolder::create(Some(arena)));
+        let temp_values = cell.temp_values.to_vec();
+        let arena_holders = cell.arena_holders.to_vec();
 
-            Ok(cell)
-        }
+        let _old_dropper = cell._dropper.clone().unwrap();
+        let _new_dropper = PartitionedHashTableDropper::<Method, T>::create(_old_dropper);
+
+        // TODO(winter): No idea(may memory leak).
+        // We need to ensure that the following two lines of code are atomic.
+        // take_old_dropper before create new HashTableCell - may memory leak
+        // create new HashTableCell before take_old_dropper - may double free memory
+        let _old_dropper = cell._dropper.take();
+        let mut cell = HashTableCell::create(partitioned_hashtable, _new_dropper);
+        cell.temp_values = temp_values;
+        cell.arena_holders = arena_holders;
+        Ok(cell)
     }
 }
 

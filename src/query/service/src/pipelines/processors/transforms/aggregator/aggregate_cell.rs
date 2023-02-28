@@ -1,7 +1,23 @@
+// Copyright 2023 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use std::any::Any;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use common_functions::aggregates::StateAddr;
+use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
 use crate::pipelines::processors::transforms::group_by::Area;
@@ -48,14 +64,6 @@ impl<T: HashMethodBounds, V: Send + Sync + 'static> HashTableCell<T, V> {
             _dropper: Some(_dropper),
             arena: Area::create(),
         }
-    }
-
-    pub fn extend_holders(&mut self, holders: Vec<ArenaHolder>) {
-        self.arena_holders.extend(holders)
-    }
-
-    pub fn extend_temp_values(&mut self, values: Vec<<T::HashTable<V> as HashtableLike>::Value>) {
-        self.temp_values.extend(values)
     }
 }
 
@@ -111,11 +119,55 @@ impl<T: HashMethodBounds> HashTableDropper<T, usize> for AggregateHashTableDropp
     }
 
     fn destroy(&self, hashtable: &mut T::HashTable<usize>) {
-        // TODO:
+        let aggregator_params = self.params.as_ref();
+        let aggregate_functions = &aggregator_params.aggregate_functions;
+        let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
+
+        let functions = aggregate_functions
+            .iter()
+            .filter(|p| p.need_manual_drop_state())
+            .collect::<Vec<_>>();
+
+        let state_offsets = offsets_aggregate_states
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| aggregate_functions[*idx].need_manual_drop_state())
+            .map(|(_, s)| *s)
+            .collect::<Vec<_>>();
+
+        if !state_offsets.is_empty() {
+            for group_entity in hashtable.iter() {
+                let place = Into::<StateAddr>::into(*group_entity.get());
+
+                for (function, state_offset) in functions.iter().zip(state_offsets.iter()) {
+                    unsafe { function.drop_state(place.next(*state_offset)) }
+                }
+            }
+        }
     }
 
     fn destroy_value(&self, value: &usize) {
-        // todo!()
+        let aggregator_params = self.params.as_ref();
+        let aggregate_functions = &aggregator_params.aggregate_functions;
+        let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
+
+        let functions = aggregate_functions
+            .iter()
+            .filter(|p| p.need_manual_drop_state())
+            .collect::<Vec<_>>();
+
+        let state_offsets = offsets_aggregate_states
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| aggregate_functions[*idx].need_manual_drop_state())
+            .map(|(_, s)| *s)
+            .collect::<Vec<_>>();
+
+        let temp_place = StateAddr::new(*value);
+        for (state_offset, function) in state_offsets.iter().zip(functions.iter()) {
+            let place = temp_place.next(*state_offset);
+            unsafe { function.drop_state(place) }
+        }
     }
 }
 
@@ -134,6 +186,10 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> PartitionedHashTableDro
         mut v: HashTableCell<PartitionedHashMethod<Method>, V>,
     ) -> Vec<HashTableCell<Method, V>> {
         unsafe {
+            let arena = std::mem::replace(&mut v.arena, Area::create());
+            let arena_holder = ArenaHolder::create(Some(arena));
+            v.arena_holders.push(arena_holder.clone());
+
             let dropper = v
                 ._dropper
                 .as_ref()
@@ -146,7 +202,9 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> PartitionedHashTableDro
 
             let mut cells = Vec::with_capacity(256);
             while let Some(table) = v.hashtable.pop_first_inner_table() {
-                cells.push(HashTableCell::create(table, dropper.clone()));
+                let mut table_cell = HashTableCell::create(table, dropper.clone());
+                table_cell.arena_holders.push(arena_holder.clone());
+                cells.push(table_cell);
             }
 
             cells
