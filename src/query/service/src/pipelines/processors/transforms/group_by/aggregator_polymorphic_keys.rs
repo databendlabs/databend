@@ -497,10 +497,8 @@ impl<Method: HashMethodBounds> PartitionedHashMethod<Method> {
 
     pub fn convert_hashtable_new<T>(
         method: &Method,
-        cell: HashTableCell<Method::HashTable<T>>,
-    ) -> Result<
-        HashTableCell<<Self as PolymorphicKeysHelper<PartitionedHashMethod<Method>>>::HashTable<T>>,
-    >
+        cell: HashTableCell<Method, T>,
+    ) -> Result<HashTableCell<PartitionedHashMethod<Method>, T>>
     where
         T: Copy + Send + Sync + 'static,
         Self: PolymorphicKeysHelper<PartitionedHashMethod<Method>>,

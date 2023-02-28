@@ -1,5 +1,5 @@
 use std::marker::PhantomData;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use common_hashtable::FastHash;
@@ -15,19 +15,33 @@ use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::AggregatorParams;
 
 //
-pub struct HashTableCell<T: HashtableLike> {
-    inner: Option<T>,
+pub struct HashTableCell<T: HashMethodBounds, V: Send + Sync + 'static> {
+    inner: Option<T::HashTable<V>>,
     arena: Option<Area>,
     arena_holders: Vec<ArenaHolder>,
-    temp_values: Vec<T::Value>,
-    _dropper: Option<Arc<dyn HashTableDropper<T>>>,
+    temp_values: Vec<<T::HashTable<V> as HashtableLike>::Value>,
+    _dropper: Option<Arc<dyn HashTableDropper<T, V>>>,
 }
 
-unsafe impl<T: HashtableLike + Send> Send for HashTableCell<T> {}
+unsafe impl<T: HashMethodBounds, V: Send + Sync + 'static> Send for HashTableCell<T, V> {}
 
-unsafe impl<T: HashtableLike + Sync> Sync for HashTableCell<T> {}
+unsafe impl<T: HashMethodBounds, V: Send + Sync + 'static> Sync for HashTableCell<T, V> {}
 
-impl<T: HashtableLike> Drop for HashTableCell<T> {
+impl<T: HashMethodBounds, V: Send + Sync + 'static> Deref for HashTableCell<T, V> {
+    type Target = T::HashTable<V>;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner.as_ref().unwrap()
+    }
+}
+
+impl<T: HashMethodBounds, V: Send + Sync + 'static> DerefMut for HashTableCell<T, V> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.inner.as_mut().unwrap()
+    }
+}
+
+impl<T: HashMethodBounds, V: Send + Sync + 'static> Drop for HashTableCell<T, V> {
     fn drop(&mut self) {
         if let Some(dropper) = self._dropper.take() {
             if Arc::strong_count(&dropper) == 1 {
@@ -41,9 +55,12 @@ impl<T: HashtableLike> Drop for HashTableCell<T> {
     }
 }
 
-impl<T: HashtableLike> HashTableCell<T> {
-    pub fn create(inner: T, _dropper: Arc<dyn HashTableDropper<T>>) -> HashTableCell<T> {
-        HashTableCell::<T> {
+impl<T: HashMethodBounds, V: Send + Sync + 'static> HashTableCell<T, V> {
+    pub fn create(
+        inner: T::HashTable<V>,
+        _dropper: Arc<dyn HashTableDropper<T, V>>,
+    ) -> HashTableCell<T, V> {
+        HashTableCell::<T, V> {
             inner: Some(inner),
             arena_holders: vec![],
             temp_values: vec![],
@@ -56,23 +73,8 @@ impl<T: HashtableLike> HashTableCell<T> {
         self.arena.as_mut()
     }
 
-    pub fn get_hash_table(&self) -> &T {
-        match &self.inner {
-            None => unreachable!(),
-            Some(inner) => inner,
-        }
-    }
-
-    pub fn get_hash_table_mut(&mut self) -> &mut T {
-        match &mut self.inner {
-            None => unreachable!(),
-            Some(inner) => inner,
-        }
-    }
-
-    pub fn freeze_arena(mut self) -> HashTableCell<T> {
-        self.arena_holders
-            .push(ArenaHolder::create(self.arena.take()));
+    pub fn freeze_arena(mut self) -> HashTableCell<T, V> {
+        self.arena_holders.push(ArenaHolder::create(self.arena.take()));
         self
     }
 
@@ -80,17 +82,17 @@ impl<T: HashtableLike> HashTableCell<T> {
         self.arena_holders.extend(holders)
     }
 
-    pub fn add_temp_values(&mut self, value: T::Value) {
+    pub fn add_temp_values(&mut self, value: <T::HashTable<V> as HashtableLike>::Value) {
         self.temp_values.push(value)
     }
 
     pub fn into_inner(
         mut self,
     ) -> (
-        T,
+        T::HashTable<V>,
         Vec<ArenaHolder>,
-        Vec<T::Value>,
-        Arc<dyn HashTableDropper<T>>,
+        Vec<<T::HashTable<V> as HashtableLike>::Value>,
+        Arc<dyn HashTableDropper<T, V>>,
     ) {
         (
             self.inner.take().unwrap(),
@@ -101,40 +103,40 @@ impl<T: HashtableLike> HashTableCell<T> {
     }
 }
 
-pub trait HashTableDropper<T: HashtableLike> {
-    fn destroy(&self, hashtable: T);
-    fn destroy_value(&self, value: &T::Value);
+pub trait HashTableDropper<T: HashMethodBounds, V: Send + Sync + 'static> {
+    fn destroy(&self, hashtable: T::HashTable<V>);
+    fn destroy_value(&self, value: &<T::HashTable<V> as HashtableLike>::Value);
 }
 
-pub struct GroupByHashTableDropper<T: HashtableLike<Value = ()> + 'static> {
+pub struct GroupByHashTableDropper<T: HashMethodBounds> {
     _phantom: PhantomData<T>,
 }
 
-impl<T: HashtableLike<Value = ()> + 'static> GroupByHashTableDropper<T> {
-    pub fn create() -> Arc<dyn HashTableDropper<T>> {
+impl<T: HashMethodBounds> GroupByHashTableDropper<T> {
+    pub fn create() -> Arc<dyn HashTableDropper<T, ()>> {
         Arc::new(GroupByHashTableDropper::<T> {
             _phantom: Default::default(),
         })
     }
 }
 
-impl<T: HashtableLike<Value = ()> + 'static> HashTableDropper<T> for GroupByHashTableDropper<T> {
-    fn destroy(&self, _: T) {
+impl<T: HashMethodBounds> HashTableDropper<T, ()> for GroupByHashTableDropper<T> {
+    fn destroy(&self, _: T::HashTable<()>) {
         // do nothing
     }
 
-    fn destroy_value(&self, _: &T::Value) {
+    fn destroy_value(&self, _: &()) {
         // do nothing
     }
 }
 
-pub struct AggregateHashTableDropper<T: HashtableLike<Value = usize> + 'static> {
+pub struct AggregateHashTableDropper<T: HashMethodBounds> {
     params: Arc<AggregatorParams>,
     _phantom: PhantomData<T>,
 }
 
-impl<T: HashtableLike<Value = usize> + 'static> AggregateHashTableDropper<T> {
-    pub fn create(params: Arc<AggregatorParams>) -> Arc<dyn HashTableDropper<T>> {
+impl<T: HashMethodBounds> AggregateHashTableDropper<T> {
+    pub fn create(params: Arc<AggregatorParams>) -> Arc<dyn HashTableDropper<T, usize>> {
         Arc::new(AggregateHashTableDropper::<T> {
             params,
             _phantom: Default::default(),
@@ -142,10 +144,8 @@ impl<T: HashtableLike<Value = usize> + 'static> AggregateHashTableDropper<T> {
     }
 }
 
-impl<T: HashtableLike<Value = usize> + 'static> HashTableDropper<T>
-    for AggregateHashTableDropper<T>
-{
-    fn destroy(&self, hashtable: T) {
+impl<T: HashMethodBounds> HashTableDropper<T, usize> for AggregateHashTableDropper<T> {
+    fn destroy(&self, hashtable: T::HashTable<usize>) {
         // TODO:
     }
 
@@ -155,37 +155,41 @@ impl<T: HashtableLike<Value = usize> + 'static> HashTableDropper<T>
 }
 
 pub struct PartitionedHashTableDropper<Method: HashMethodBounds, V: Send + Sync + 'static> {
-    _inner_dropper: Arc<dyn HashTableDropper<Method::HashTable<V>>>,
+    _inner_dropper: Arc<dyn HashTableDropper<Method, V>>,
 }
 
 impl<Method: HashMethodBounds, V: Send + Sync + 'static> PartitionedHashTableDropper<Method, V> {
     pub fn create(
-        _inner_dropper: Arc<dyn HashTableDropper<Method::HashTable<V>>>,
-    ) -> Arc<
-        dyn HashTableDropper<
-            <PartitionedHashMethod<Method> as PolymorphicKeysHelper<
-                PartitionedHashMethod<Method>,
-            >>::HashTable<V>,
-        >,
-    > {
+        _inner_dropper: Arc<dyn HashTableDropper<Method, V>>,
+    ) -> Arc<dyn HashTableDropper<PartitionedHashMethod<Method>, V>> {
         Arc::new(Self { _inner_dropper })
     }
 
-    pub fn get_inner(&self) -> Arc<dyn HashTableDropper<Method::HashTable<V>>> {
+    pub fn get_inner(&self) -> Arc<dyn HashTableDropper<Method, V>> {
         self._inner_dropper.clone()
     }
 }
 
-impl<Method: HashMethodBounds, V: Send + Sync + 'static> HashTableDropper<<PartitionedHashMethod<Method> as PolymorphicKeysHelper<PartitionedHashMethod<Method>>>::HashTable<V>>
-for PartitionedHashTableDropper<Method, V>
+impl<Method: HashMethodBounds, V: Send + Sync + 'static>
+HashTableDropper<PartitionedHashMethod<Method>, V> for PartitionedHashTableDropper<Method, V>
 {
-    fn destroy(&self, hashtable: <PartitionedHashMethod<Method> as PolymorphicKeysHelper<PartitionedHashMethod<Method>>>::HashTable<V>) {
+    fn destroy(
+        &self,
+        hashtable: <PartitionedHashMethod<Method> as PolymorphicKeysHelper<
+            PartitionedHashMethod<Method>,
+        >>::HashTable<V>,
+    ) {
         for inner_table in hashtable.into_iter_tables() {
             self._inner_dropper.destroy(inner_table)
         }
     }
 
-    fn destroy_value(&self, value: &<<PartitionedHashMethod<Method> as PolymorphicKeysHelper<PartitionedHashMethod<Method>>>::HashTable<V> as HashtableLike>::Value) {
+    fn destroy_value(
+        &self,
+        value: &<<PartitionedHashMethod<Method> as PolymorphicKeysHelper<
+            PartitionedHashMethod<Method>,
+        >>::HashTable<V> as HashtableLike>::Value,
+    ) {
         self._inner_dropper.destroy_value(value)
     }
 }
