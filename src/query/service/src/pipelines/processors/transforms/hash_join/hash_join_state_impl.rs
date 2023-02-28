@@ -216,9 +216,6 @@ impl HashJoinState for JoinHashTable {
                 HashTable::KeysU256(table) => insert_key! {
                   &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,
                 },
-                HashTable::KeysU512(table) => insert_key! {
-                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,
-                },
             }
         }
         Ok(())

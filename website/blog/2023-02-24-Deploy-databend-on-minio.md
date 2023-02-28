@@ -1,6 +1,6 @@
 ---
-title: Deploying a single instance of Databend using on MinIO
-description:  Using Databend to facilitate data analysis on MinIO
+title: Deploying a single instance of Databend on MinIO
+description:  Using Databend to facilitate data analysis with MinIO
 slug:  deploying-databend-using-on-minio
 date: 2023-02-24
 tags: [beginner]
@@ -15,11 +15,11 @@ authors:
 
 ![Alt text](../static/img/blog/databend-minio-beginner-01.png)
 
-In this article, we will discuss how to deploy a single instance of Databend using MinIO for facilitating data analysis. MinIO is an object storage solution that is lightweight and easy to operate. Databend is a modern data warehouse designed for cloud architecture, built with Rust and open-source. It provides rapid elastic scaling and aims to create an on-demand, pay-as-you-go data cloud product experience.
+This blog walks you through the process of deploying a single instance of Databend on MinIO. MinIO is an object storage solution that is lightweight and easy to operate. Databend is a modern data warehouse designed for cloud architecture, built with Rust and open-source. It provides rapid elastic scaling and aims to create an on-demand, pay-as-you-go data cloud product experience.
 
 Open-Source Repo: https://github.com/datafuselabs/databend/
 
-Databend Docs: https://databend.rs
+Databend Docs: https://databend.rs/doc
 
 ## Databend Architecture
 
@@ -40,7 +40,7 @@ This layer interacts directly with users and their storage. They interact with D
 The Databend storage layer is the Databend Fuse Engine and supports for cloud and self-built object storage. Databend uses the Parquet format to store data block with min/max indexing, sparse indexing, bloom indexing, etc.
 
 
-### Databend Supported Deployment Platforms
+### Supported Deployment Platforms
 
 | Platform    | Supported|
 | ----------- | -------- |
@@ -67,13 +67,11 @@ The following uses the MinIO + Databend standalone deployment in Linux of x64 as
 | Software | Path           | Port                                                |
 | -------- | -------------- | --------------------------------------------------- |
 | minio    | /data/minio    | 9900                                                |
-| databend | /data/databend | mysql: 3307 <br/> http:  8000 <br/>Clickhouse http:  8124 |
+| databend | /data/databend | mysql: 3307 <br/> http:  8000 <br/>ClickHouse http:  8124 |
 
-### Minio Deployment
+### Deploy MinIO
 
-MinIO Homepage: https://min.io/
-
-Download MinIO from the official website and start it by running the following commands:
+Download [MinIO](https://min.io/) from the official website and start it by running the following commands:
 
 ```Bash
 cd /data 
@@ -121,15 +119,16 @@ sudo chown -R $USER /var/log/databend
 ![ ](../static/img/blog/databend-minio-beginner-01-3.png)
 
 The Databend installation files are extracted to a directory named "databend".
+
 ### Configure Databend
 
-Once you have installed Databend, you'll need to configure it. The default configuration file for databend-query is included with the download. You can modify this file as follows:
+You need to configure Databend after the installation. The default configuration file for databend-query is included with the download. You can modify this file as follows:
 
 ```Bash
 vim configs/databend-query.toml
 ```
 
-change:
+Updates:
 
 ```Bash
 # Storage config.[storage]
@@ -151,12 +150,12 @@ secret_access_key = "minioadmin"
 
 To start Databend, run the following command:
 
-```Bash
+```bash
 ./script/start.sh
 ```
 
 To check that Databend is running, you can use the following command:
-```
+```bash
 ps axu |grep databend
 ```
 
@@ -164,16 +163,16 @@ ps axu |grep databend
 
 To stop Databend, run the following command:
 
-```Bash
+```bash
 ./script/stop.sh 
 ```
 
-#### Connect to  Databend
+#### Connect to Databend
 
-Databend has three external service ports by default: 
+Databend has three external service ports by default:
  
 - MySQL: 3307 supports MySQL cli and application connection. 
-- Clickhouse: 8124 Clickhouse http handler protocol 
+- ClickHouse: 8124 ClickHouse http handler protocol 
 - [http prot: 8000](https://databend.rs/doc/integrations/api/rest) The Databend HTTP handler is a REST API
  
 To connect to Databend using the MySQL client, run the following command:
@@ -184,17 +183,17 @@ mysql -h 127.0.0.1 -P3307 -uroot
 
 >Note that the root user can log in without a password from localhost. Databend permission management refers to the design of MySQL 8.0 and allows you to manage Databend users in the same way as MySQL 8.0 user management. 
  
-Clickhouse protocol using: https://databend.rs/doc/reference/api/clickhouse-handler 
+ClickHouse protocol using: https://databend.rs/doc/reference/api/clickhouse-handler 
  
 You're all set up now. Use Databend as you're with MySQL.
 
 ## Other Resources
-- load data to Databend: https://databend.rs/doc/load-data/
+- Loading data to Databend: https://databend.rs/doc/load-data/
 - Databend k8s opterator: https://github.com/datafuselabs/helm-charts
-- bendsql:  https://github.com/databendcloud/bendsql 
-- Databend driver:
+- bendsql: https://github.com/databendcloud/bendsql 
+- Databend drivers:
   - Java Driver: https://github.com/databendcloud/databend-jdbc
-  - Go  Driver: https://github.com/databendcloud/databend-go
+  - Go Driver: https://github.com/databendcloud/databend-go
   - Python Driver: https://github.com/databendcloud/databend-py
 
 ## Connect With Us

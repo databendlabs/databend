@@ -46,6 +46,11 @@ impl TransformAggregator {
             );
         }
 
+        tracing::info!(
+            "Start to create partial aggregator, method {:?}",
+            transform_params.method
+        );
+
         match aggregator_params.aggregate_functions.is_empty() {
             true => with_mappedhash_method!(|T| match transform_params.method.clone() {
                 HashMethodKind::T(method) => AggregatorTransform::create(

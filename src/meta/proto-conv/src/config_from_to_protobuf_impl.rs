@@ -16,6 +16,7 @@ use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageGcsConfig;
 use common_meta_app::storage::StorageOssConfig;
 use common_meta_app::storage::StorageS3Config;
+use common_meta_app::storage::StorageWebhdfsConfig;
 use common_protos::pb;
 
 use crate::reader_check_msg;
@@ -154,6 +155,37 @@ impl FromToProto for StorageOssConfig {
             root: self.root.clone(),
             access_key_id: self.access_key_id.clone(),
             access_key_secret: self.access_key_secret.clone(),
+        })
+    }
+}
+
+impl FromToProto for StorageWebhdfsConfig {
+    type PB = pb::WebhdfsStorageConfig;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.version
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.version, p.min_reader_ver)?;
+
+        Ok(StorageWebhdfsConfig {
+            endpoint_url: p.endpoint_url,
+            root: p.root,
+            delegation: p.delegation,
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::WebhdfsStorageConfig, Incompatible> {
+        Ok(pb::WebhdfsStorageConfig {
+            version: VER,
+            min_reader_ver: MIN_READER_VER,
+            endpoint_url: self.endpoint_url.clone(),
+            root: self.root.clone(),
+            delegation: self.delegation.clone(),
+
+            username: String::new(), // reserved for future use
+            password: String::new(), // reserved for future use
         })
     }
 }
