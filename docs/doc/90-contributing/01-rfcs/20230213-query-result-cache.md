@@ -139,6 +139,26 @@ The table contains such information:
 - `result_size`: the size of the result cache (bytes).
 - `location`: the location of the result cache file.
 
+### Table function `RESULT_SCAN`
+
+`RESULT_SCAN` is a useful table function to retrieve the result set of a previous query.
+
+It can be used like:
+
+```sql
+select * from RESULT_SCAN('<query_id>');
+select * from RESULT_SCAN(LAST_QUERY_ID());
+```
+
+If the previous query result is cached, we can get the result set quickly from query result cache.
+
 ### Non-deterministic functions
 
 Some functions are non-deterministic, such as `now()`, `rand()`, `uuid()`, etc. If these functions are used in the query, the result will not be cached.
+
+## References
+
+- [Query Cache in ClickHouse](https://clickhouse.com/docs/en/operations/query-cache/)
+- [Blog about the query cache in ClickHouse](https://clickhouse.com/blog/introduction-to-the-clickhouse-query-cache-and-design)
+- [RESULT_SCAN in snowflake](https://docs.snowflake.com/ja/sql-reference/functions/result_scan)
+- [Tuning the Result Cache in Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/19/tgdba/tuning-result-cache.html)
