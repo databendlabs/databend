@@ -14,11 +14,29 @@ We can use `DECIMAL(P, S)` to indicate decimal types.
 
 If `P` is less than 38, the physical datatype of decimal is `Decimal128`, otherwise it's `Decimal256`.
 
+For a DECIMAL(P, S) data type:
+* The minimum value is `-10^P + 1` divided by `10^S`.
+* The maximum value is `10^P - 1` divided by `10^S`.
+ 
+If you have a `DECIMAL(10, 2)` , you can store values with up to `10 digits`, with `2 digits` to the right of the decimal point. The minimum value is `-9999999.99`, and the maximum value is `9999999.99`.
+
 ## Example
 
 ```sql
 
-select 3::Decimal(19, 1); -- 3.0
+-- Create a table with decimal data type.
+create table decimal(value decimal(36, 18));
+
+-- Insert two values.
+insert into decimal values(0.152587668674722117), (0.017820781941443176);
+
+select * from decimal;
++----------------------+
+| value                |
++----------------------+
+| 0.152587668674722117 |
+| 0.017820781941443176 |
++----------------------+
 ```
 
 ## Precision Inference

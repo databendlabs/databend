@@ -36,6 +36,7 @@ use common_meta_app::storage::StorageOssConfig;
 use common_meta_app::storage::StorageParams;
 use common_meta_app::storage::StorageRedisConfig;
 use common_meta_app::storage::StorageS3Config;
+use common_meta_app::storage::StorageWebhdfsConfig;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MetricsLayer;
@@ -66,6 +67,7 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
         StorageParams::S3(cfg) => build_operator(init_s3_operator(cfg)?),
         StorageParams::Oss(cfg) => build_operator(init_oss_operator(cfg)?),
         StorageParams::Redis(cfg) => build_operator(init_redis_operator(cfg)?),
+        StorageParams::Webhdfs(cfg) => build_operator(init_webhdfs_operator(cfg)?),
         v => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
@@ -290,6 +292,17 @@ fn init_redis_operator(v: &StorageRedisConfig) -> Result<impl Accessor> {
     if let Some(v) = &v.password {
         builder.password(v);
     }
+
+    Ok(builder.build()?)
+}
+
+/// init_webhdfs_operator will init a WebHDFS operator
+fn init_webhdfs_operator(v: &StorageWebhdfsConfig) -> Result<impl Accessor> {
+    let mut builder = services::Webhdfs::default();
+
+    builder.endpoint(&v.endpoint_url);
+    builder.root(&v.root);
+    builder.delegation(&v.delegation);
 
     Ok(builder.build()?)
 }

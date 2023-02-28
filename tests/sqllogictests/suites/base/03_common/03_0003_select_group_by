@@ -167,3 +167,25 @@ select count() from numbers(10) group by to_nullable('ab')
 statement ok
 DROP TABLE t_array
 
+## Decimal
+
+query III
+select (number%3 + 1) c , (number%3 + 2) d, count() from numbers(100) group by c,d order by c,d;
+----
+1 2 34
+2 3 33
+3 4 33
+
+query II
+select (number % 3)::Decimal(19, 2) c , count() from numbers(100) group by c order by c;
+----
+0.00 34
+1.00 33
+2.00 33
+
+query ITI
+select (number % 3)::Decimal(19, 2) c, to_string(number % 3) d, count() from numbers(100) group by c,d order by c, d;
+----
+0.00 0 34
+1.00 1 33
+2.00 2 33

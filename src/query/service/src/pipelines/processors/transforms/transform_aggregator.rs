@@ -46,17 +46,10 @@ impl TransformAggregator {
             );
         }
 
-        if aggregator_params.aggregate_functions.is_empty() && ctx.get_cluster().is_empty() {
-            return with_mappedhash_method!(|T| match transform_params.method.clone() {
-                HashMethodKind::T(method) => TransformPartialGroupBy::try_create(
-                    ctx,
-                    method,
-                    transform_params.transform_input_port,
-                    transform_params.transform_output_port,
-                    aggregator_params
-                ),
-            });
-        }
+        tracing::info!(
+            "Start to create partial aggregator, method {:?}",
+            transform_params.method
+        );
 
         match aggregator_params.aggregate_functions.is_empty() {
             true => with_mappedhash_method!(|T| match transform_params.method.clone() {

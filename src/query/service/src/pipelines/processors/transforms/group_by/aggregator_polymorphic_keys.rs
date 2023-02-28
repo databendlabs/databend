@@ -25,7 +25,6 @@ use common_expression::HashMethod;
 use common_expression::HashMethodFixedKeys;
 use common_expression::HashMethodKeysU128;
 use common_expression::HashMethodKeysU256;
-use common_expression::HashMethodKeysU512;
 use common_expression::HashMethodSerializer;
 use common_expression::HashMethodSingleString;
 use common_expression::KeysState;
@@ -38,8 +37,7 @@ use common_hashtable::LookupHashMap;
 use common_hashtable::PartitionedHashMap;
 use common_hashtable::ShortStringHashMap;
 use common_hashtable::StringHashMap;
-use primitive_types::U256;
-use primitive_types::U512;
+use ethnum::U256;
 use tracing::info;
 
 use super::aggregator_keys_builder::LargeFixedKeysColumnBuilder;
@@ -297,11 +295,16 @@ impl PolymorphicKeysHelper<HashMethodKeysU128> for HashMethodKeysU128 {
 
     type KeysColumnIter = LargeFixedKeysColumnIter<u128>;
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        LargeFixedKeysColumnIter::create(column.as_string().ok_or_else(|| {
-            ErrorCode::IllegalDataType(
-                "Illegal data type for LargeFixedKeysColumnIter<u128>".to_string(),
-            )
-        })?)
+        let buffer = column
+            .as_decimal()
+            .and_then(|c| c.as_decimal128())
+            .ok_or_else(|| {
+                ErrorCode::IllegalDataType(
+                    "Illegal data type for LargeFixedKeysColumnIter<u128>".to_string(),
+                )
+            })?;
+        let buffer = unsafe { std::mem::transmute(buffer.0.clone()) };
+        LargeFixedKeysColumnIter::create(buffer)
     }
 
     type GroupColumnsBuilder<'a> = FixedKeysGroupColumnsBuilder<'a, u128>;
@@ -338,11 +341,17 @@ impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
 
     type KeysColumnIter = LargeFixedKeysColumnIter<U256>;
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        LargeFixedKeysColumnIter::create(column.as_string().ok_or_else(|| {
-            ErrorCode::IllegalDataType(
-                "Illegal data type for LargeFixedKeysColumnIter<u256>".to_string(),
-            )
-        })?)
+        let buffer = column
+            .as_decimal()
+            .and_then(|c| c.as_decimal256())
+            .ok_or_else(|| {
+                ErrorCode::IllegalDataType(
+                    "Illegal data type for LargeFixedKeysColumnIter<u128>".to_string(),
+                )
+            })?;
+        let buffer = unsafe { std::mem::transmute(buffer.0.clone()) };
+
+        LargeFixedKeysColumnIter::create(buffer)
     }
 
     type GroupColumnsBuilder<'a> = FixedKeysGroupColumnsBuilder<'a, U256>;
@@ -356,47 +365,6 @@ impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
     }
 
     fn get_hash(&self, v: &U256) -> u64 {
-        v.fast_hash()
-    }
-}
-
-impl PolymorphicKeysHelper<HashMethodKeysU512> for HashMethodKeysU512 {
-    const SUPPORT_PARTITIONED: bool = true;
-
-    type HashTable<T: Send + Sync + 'static> = HashMap<U512, T>;
-
-    fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>> {
-        Ok(HashMap::new())
-    }
-
-    type ColumnBuilder<'a> = LargeFixedKeysColumnBuilder<'a, U512>;
-    fn keys_column_builder(&self, capacity: usize, _: usize) -> LargeFixedKeysColumnBuilder<U512> {
-        LargeFixedKeysColumnBuilder {
-            _t: PhantomData::default(),
-            values: Vec::with_capacity(capacity * 64),
-        }
-    }
-
-    type KeysColumnIter = LargeFixedKeysColumnIter<U512>;
-    fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        LargeFixedKeysColumnIter::create(column.as_string().ok_or_else(|| {
-            ErrorCode::IllegalDataType(
-                "Illegal data type for LargeFixedKeysColumnIter<u512>".to_string(),
-            )
-        })?)
-    }
-
-    type GroupColumnsBuilder<'a> = FixedKeysGroupColumnsBuilder<'a, U512>;
-    fn group_columns_builder(
-        &self,
-        capacity: usize,
-        _data_capacity: usize,
-        params: &AggregatorParams,
-    ) -> FixedKeysGroupColumnsBuilder<U512> {
-        FixedKeysGroupColumnsBuilder::create(capacity, params)
-    }
-
-    fn get_hash(&self, v: &U512) -> u64 {
         v.fast_hash()
     }
 }

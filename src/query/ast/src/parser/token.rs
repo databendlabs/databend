@@ -363,6 +363,8 @@ pub enum TokenKind {
     DEFAULT,
     #[token("DEFLATE", ignore(ascii_case))]
     DEFLATE,
+    #[token("DELEGATION", ignore(ascii_case))]
+    DELEGATION, // delegation token, used in webhdfs
     #[token("DELETE", ignore(ascii_case))]
     DELETE,
     #[token("DESC", ignore(ascii_case))]
@@ -475,6 +477,8 @@ pub enum TokenKind {
     HIVE,
     #[token("HOUR", ignore(ascii_case))]
     HOUR,
+    #[token("HTTPS", ignore(ascii_case))]
+    HTTPS,
     #[token("ICEBERG", ignore(ascii_case))]
     ICEBERG,
     #[token("INTERSECT", ignore(ascii_case))]

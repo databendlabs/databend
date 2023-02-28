@@ -537,6 +537,9 @@ impl FromToProto for mt::storage::StorageParams {
             Some(pb::user_stage_info::stage_storage::Storage::Oss(s)) => Ok(
                 mt::storage::StorageParams::Oss(mt::storage::StorageOssConfig::from_pb(s)?),
             ),
+            Some(pb::user_stage_info::stage_storage::Storage::Webhdfs(s)) => Ok(
+                mt::storage::StorageParams::Webhdfs(mt::storage::StorageWebhdfsConfig::from_pb(s)?),
+            ),
             None => Err(Incompatible {
                 reason: "StageStorage.storage cannot be None".to_string(),
             }),
@@ -556,6 +559,11 @@ impl FromToProto for mt::storage::StorageParams {
             }),
             mt::storage::StorageParams::Oss(v) => Ok(pb::user_stage_info::StageStorage {
                 storage: Some(pb::user_stage_info::stage_storage::Storage::Oss(v.to_pb()?)),
+            }),
+            mt::storage::StorageParams::Webhdfs(v) => Ok(pb::user_stage_info::StageStorage {
+                storage: Some(pb::user_stage_info::stage_storage::Storage::Webhdfs(
+                    v.to_pb()?,
+                )),
             }),
             others => Err(Incompatible {
                 reason: format!("stage type: {} not supported", others),

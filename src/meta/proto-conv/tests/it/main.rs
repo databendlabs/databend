@@ -36,3 +36,4 @@ mod v026_schema;
 mod v027_schema;
 mod v028_schema;
 mod v029_schema;
+mod v030_user_stage;

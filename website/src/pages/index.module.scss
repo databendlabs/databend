@@ -1,156 +1,161 @@
 
-.heroContainer{
-  display: flex;
-  padding-top: 60px;
-  gap: 32px;
-  flex-direction: column;
-  align-items: center;
-  hr{
-    width: 100%;
-    max-width: 720px;
-  }
-  .title{
-    font-family: 'Poppins';
-    font-style: normal;
-    font-weight: 800;
-    font-size: 60px;
-    line-height: 84px;
-    text-align: center;
-    color: var(--color-text-0);
-    span{
-      background: linear-gradient(94.99deg, #EF708E -2.92%, #C9357C 34.95%, #5200FF 81.04%), #010E29;
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      text-fill-color: transparent;
+.homePage{
+  background-image:var(--image-bg);
+  background-repeat: repeat;
+  height: 100vh;
+  .heroContainer{
+    display: flex;
+    padding-top: 60px;
+    gap: 32px;
+    flex-direction: column;
+    align-items: center;
+    hr{
+      width: 100%;
+      max-width: 720px;
+    }
+    .title{
+      font-family: 'Poppins';
+      font-style: normal;
+      font-weight: 800;
+      font-size: 60px;
+      line-height: 84px;
+      text-align: center;
+      color: var(--color-text-0);
+      span{
+        background: linear-gradient(94.99deg, #EF708E -2.92%, #C9357C 34.95%, #5200FF 81.04%), #010E29;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        text-fill-color: transparent;
+      }
+      @include media{
+        font-size: 48px;
+      }
+    }
+    .subtitle{
+      font-family: 'Poppins';
+      font-style: normal;
+      font-weight: 600;
+      font-size: 16px;
+      line-height: 24px;
+      /* identical to box height */
+      text-align: center;
+      color: var(--color-text-0);
+    }
+    .actionGroup{
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .Community{
+      display: flex;
+      gap: 24px;
+      flex-direction: column;
+      padding-top: 32px;
+      h6{
+        text-align: center;
+        margin: 0;
+        font-weight: 400;
+        color: var(--color-text-1);
+      }
+      .CommunityGroup{
+      display: flex;
+      gap: 24px;
+      max-width: 720px;
+      flex-direction: row;
+      flex-wrap: wrap;
+      justify-content: center;
+      .communityItem{
+        padding: 12px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        background-color: var(--color-fill-0);
+        border-radius: 6px;
+        border: 1px solid var(--color-border);
+        min-width: 340px;
+        width: 100%;
+        h6{
+          margin: 0;
+          color:var(--color-text-0);
+          font-weight: 700;
+        }
+        .Icon{
+          padding: 6px;
+          display: flex;
+          color:var(--color-text-0)
+        }
+        &:hover{
+          background-color: var(--color-primary-light-default);
+          border-color: var(--color-primary);
+          .Icon{
+            color: var(--color-primary)!important;
+          }
+          h6{
+            text-decoration: none!important;
+            color: var(--color-primary);
+          }
+        }
+        .tag{
+          font-size: 14px;
+          color: var(--color-text-1);
+          background-color: var(--color-fill-1);
+          padding: 0 4px;
+          border-radius: 3px;
+        }
+      }
+      }
+    }
+    .cloudBanner{
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      background: linear-gradient(94.99deg, #EF708E -2.92%, #C9357C 34.95%, #5200FF 81.04%), #A7B2E1;
+      color: white;
+      border-radius: 12px;
+      border: 0.5px solid var(--color-border);
+      width: 100%;
+      max-width: 720px;
+      align-items: center;
+      h5{
+        font-size: 16px;
+        color: white;
+        margin-bottom: 4px;
+      }
     }
     @include media{
-      font-size: 48px;
+      padding: 20px;
     }
+    
   }
-  .subtitle{
-    font-family: 'Poppins';
-    font-style: normal;
-    font-weight: 600;
-    font-size: 16px;
-    line-height: 24px;
-    /* identical to box height */
-    text-align: center;
-    color: var(--color-text-0);
-  }
-  .actionGroup{
+  .Button{
     display: flex;
-    gap: 16px;
-    justify-content: center;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-  .Community{
-    display: flex;
-    gap: 24px;
-    flex-direction: column;
-    padding-top: 32px;
-    h6{
-      text-align: center;
-      margin: 0;
-      font-weight: 400;
-      color: var(--color-text-1);
-    }
-    .CommunityGroup{
-    display: flex;
-    gap: 24px;
-    max-width: 720px;
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: center;
-    .communityItem{
-      padding: 12px;
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      background-color: var(--color-fill-0);
-      border-radius: 6px;
-      border: 1px solid var(--color-border);
-      min-width: 340px;
-      width: 100%;
-      h6{
-        margin: 0;
-        color:var(--color-text-0);
-        font-weight: 700;
-      }
-      .Icon{
-        padding: 6px;
-        display: flex;
-        color:var(--color-text-0)
-      }
-      &:hover{
-        background-color: var(--color-primary-light-default);
-        border-color: var(--color-primary);
-        .Icon{
-          color: var(--color-primary)!important;
-        }
-        h6{
-          text-decoration: none!important;
-          color: var(--color-primary);
-        }
-      }
-      .tag{
-        font-size: 14px;
-        color: var(--color-text-1);
-        background-color: var(--color-fill-1);
-        padding: 0 4px;
-        border-radius: 3px;
-      }
-    }
-    }
-  }
-  .cloudBanner{
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    background: linear-gradient(94.99deg, #EF708E -2.92%, #C9357C 34.95%, #5200FF 81.04%), #A7B2E1;
-    color: white;
-    border-radius: 12px;
-    border: 0.5px solid var(--color-border);
-    width: 100%;
-    max-width: 720px;
-    align-items: center;
-    h5{
-      font-size: 16px;
-      color: white;
-      margin-bottom: 4px;
-    }
-  }
-  @include media{
-    padding: 20px;
-  }
-  
-}
-.Button{
-  display: flex;
-  padding: 12px 16px;
-  gap: 4px;
-  color:var(--color-text-0);
-  background-color: var(--color-fill-0);
-  border: 1px solid var(--color-border);
-  &:hover{
+    padding: 12px 16px;
+    gap: 4px;
     color:var(--color-text-0);
-    background-color: var(--color-fill-1);
-  }
-  &.Primary{
-    background-color: var(--color-primary);
-    color: white;
-    &:hover{
-      background-color: var(--color-primary-hover);
-    }
-  }
-  &.White{
-    color: white;
+    background-color: var(--color-fill-0);
     border: 1px solid var(--color-border);
-  }
-  @include media{
-    width: 100%;
-    justify-content: center;
+    &:hover{
+      color:var(--color-text-0);
+      background-color: var(--color-fill-1);
+    }
+    &.Primary{
+      background-color: var(--color-primary);
+      color: white;
+      &:hover{
+        background-color: var(--color-primary-hover);
+      }
+    }
+    &.White{
+      color: white;
+      border: 1px solid var(--color-border);
+    }
+    @include media{
+      width: 100%;
+      justify-content: center;
+    }
   }
 }
