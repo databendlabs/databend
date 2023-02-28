@@ -8,7 +8,7 @@ Returns the result set of a previous command in same session as if the result wa
 ## Syntax
 
 ```sql
-RESULT_SCAN('<query_id>' | LAST_QUERY_ID())
+RESULT_SCAN( { '<query_id>' | LAST_QUERY_ID() } )
 ```
 
 ## Examples
