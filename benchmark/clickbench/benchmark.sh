@@ -136,8 +136,6 @@ function run_query() {
 
     local q_start q_end q_time
 
-    sync
-    echo 3 | sudo tee /proc/sys/vm/drop_caches
     q_start=$(date +%s.%N)
     if echo "$query" | bendsql query --format csv --rows-only >/dev/null; then
         q_end=$(date +%s.%N)
@@ -154,6 +152,8 @@ TRIES=6
 QUERY_NUM=1
 while read -r query; do
     echo "Running Q${QUERY_NUM}: ${query}"
+    sync
+    echo 3 | sudo tee /proc/sys/vm/drop_caches
     for i in $(seq 1 $TRIES); do
         run_query "$QUERY_NUM" "$i" "$query"
     done
