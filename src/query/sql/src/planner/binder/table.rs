@@ -68,6 +68,7 @@ use crate::BindContext;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
 use crate::IndexType;
+use crate::TableVirtualColumn;
 
 impl Binder {
     pub(super) async fn bind_one_table(
@@ -443,6 +444,21 @@ impl Binder {
                         }
                     }
                 }
+                ColumnEntry::VirtualColumn(TableVirtualColumn {
+                    column_index,
+                    virtual_column,
+                    ..
+                }) => {
+                    let column_binding = ColumnBinding {
+                        database_name: Some(database_name.to_string()),
+                        table_name: Some(table.name().to_string()),
+                        column_name: virtual_column.column_name().clone(),
+                        index: *column_index,
+                        data_type: Box::new(virtual_column.data_type()),
+                        visibility: Visibility::Virtual,
+                    };
+                    bind_context.add_column_binding(column_binding);
+                }
                 _ => {
                     return Err(ErrorCode::Internal("Invalid column entry"));
                 }
@@ -464,6 +480,9 @@ impl Binder {
                             ColumnEntry::DerivedColumn(DerivedColumn { column_index, .. }) => {
                                 column_index
                             }
+                            ColumnEntry::VirtualColumn(TableVirtualColumn {
+                                column_index, ..
+                            }) => column_index,
                         })
                         .collect(),
                     push_down_predicates: None,

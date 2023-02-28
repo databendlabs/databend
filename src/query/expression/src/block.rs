@@ -420,8 +420,6 @@ impl DataBlock {
         default_vals: &[Scalar],
     ) -> Result<DataBlock> {
         let num_rows = data_block.num_rows();
-        let mut new_data_block = DataBlock::empty();
-        new_data_block.num_rows = num_rows;
         let mut data_block_columns_idx: usize = 0;
         let data_block_columns = data_block.columns();
 

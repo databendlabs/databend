@@ -181,17 +181,20 @@ impl BlockReader {
         data_block: DataBlock,
         parts: &VecDeque<PartInfoPtr>,
     ) -> Result<DataBlock> {
-        let part = FusePartInfo::from_part(&parts[0])?;
+        let fuse_part = FusePartInfo::from_part(&parts[0])?;
 
-        let data_block_column_ids: HashSet<ColumnId> = part.columns_meta.keys().cloned().collect();
+        let data_block_column_ids: HashSet<ColumnId> =
+            fuse_part.columns_meta.keys().cloned().collect();
         let default_vals = self.default_vals.clone();
 
-        DataBlock::create_with_default_value_and_block(
+        let data_block = DataBlock::create_with_default_value_and_block(
             &self.projected_schema,
             &data_block,
             &data_block_column_ids,
             &default_vals,
-        )
+        )?;
+
+        self.fill_virtual_column_values(fuse_part.nums_rows, Some(parts[0].clone()), data_block)
     }
 
     pub fn build_block(

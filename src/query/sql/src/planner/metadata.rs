@@ -20,11 +20,14 @@ use std::sync::Arc;
 
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
+use common_catalog::plan::VirtualColumn;
 use common_catalog::table::Table;
 use common_expression::types::DataType;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use parking_lot::RwLock;
+
+use crate::binder::VirtualColumnMap;
 
 /// Planner use [`usize`] as it's index type.
 ///
@@ -91,7 +94,15 @@ impl Metadata {
     pub fn columns_by_table_index(&self, index: IndexType) -> Vec<ColumnEntry> {
         self.columns
             .iter()
-            .filter(|v| matches!(v, ColumnEntry::BaseTableColumn(BaseTableColumn { table_index, .. }) if index == *table_index))
+            .filter(|column| match column {
+                ColumnEntry::BaseTableColumn(BaseTableColumn { table_index, .. }) => {
+                    index == *table_index
+                }
+                ColumnEntry::VirtualColumn(TableVirtualColumn { table_index, .. }) => {
+                    index == *table_index
+                }
+                _ => false,
+            })
             .cloned()
             .collect()
     }
@@ -128,6 +139,21 @@ impl Metadata {
         column_index
     }
 
+    fn add_virtual_table_column(
+        &mut self,
+        table_index: IndexType,
+        virtual_column: VirtualColumn,
+    ) -> IndexType {
+        let column_index = self.columns.len();
+        self.columns
+            .push(ColumnEntry::VirtualColumn(TableVirtualColumn {
+                table_index,
+                column_index,
+                virtual_column,
+            }));
+        column_index
+    }
+
     pub fn add_table(
         &mut self,
         catalog: String,
@@ -137,6 +163,7 @@ impl Metadata {
         source_of_view: bool,
     ) -> IndexType {
         let table_name = table_meta.name().to_string();
+
         let table_index = self.tables.len();
         // If exists table alias name, use it instead of origin name
         let table_entry = TableEntry {
@@ -199,6 +226,12 @@ impl Metadata {
                 );
                 leaf_index += 1;
             }
+        }
+
+        // add virtual columns
+        let virtual_columns = VirtualColumnMap::instance().all_virtual_columns();
+        for virtual_column in virtual_columns {
+            self.add_virtual_table_column(table_index, virtual_column);
         }
         table_index
     }
@@ -305,12 +338,20 @@ pub struct DerivedColumn {
 }
 
 #[derive(Clone, Debug)]
+pub struct TableVirtualColumn {
+    pub table_index: IndexType,
+    pub column_index: IndexType,
+    pub virtual_column: VirtualColumn,
+}
+
+#[derive(Clone, Debug)]
 pub enum ColumnEntry {
     /// Column from base table, for example `SELECT t.a, t.b FROM t`.
     BaseTableColumn(BaseTableColumn),
 
     /// Column synthesized from other columns, for example `SELECT t.a + t.b AS a FROM t`.
     DerivedColumn(DerivedColumn),
+    VirtualColumn(TableVirtualColumn),
 }
 
 impl ColumnEntry {
@@ -318,6 +359,7 @@ impl ColumnEntry {
         match self {
             ColumnEntry::BaseTableColumn(base) => base.column_index,
             ColumnEntry::DerivedColumn(derived) => derived.column_index,
+            ColumnEntry::VirtualColumn(virtual_column) => virtual_column.column_index,
         }
     }
 }

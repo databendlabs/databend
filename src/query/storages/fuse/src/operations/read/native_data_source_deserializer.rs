@@ -311,10 +311,12 @@ impl NativeDeserializeDataTransform {
     fn finish_process_with_default_values(&mut self) -> Result<()> {
         let _ = self.chunks.pop_front();
         let part = self.parts.pop_front().unwrap();
-        let part = FusePartInfo::from_part(&part)?;
+        let fuse_part = FusePartInfo::from_part(&part)?;
 
-        let num_rows = part.nums_rows;
-        let data_block = self.block_reader.build_default_values_block(num_rows)?;
+        let num_rows = fuse_part.nums_rows;
+        let data_block = self
+            .block_reader
+            .build_default_values_block(Some(part), num_rows)?;
         let data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
 
         self.add_block(data_block)?;

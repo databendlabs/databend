@@ -30,7 +30,7 @@ use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::Compression;
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug)]
 pub struct FusePartInfo {
     pub location: String,
     /// FusePartInfo itself is not versioned

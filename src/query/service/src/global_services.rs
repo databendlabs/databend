@@ -18,6 +18,7 @@ use common_catalog::catalog::CatalogManager;
 use common_config::GlobalConfig;
 use common_config::InnerConfig;
 use common_exception::Result;
+use common_sql::binder::VirtualColumnMap;
 use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
 use common_tracing::QueryLogger;
@@ -72,6 +73,7 @@ impl GlobalServices {
         )
         .await?;
         RoleCacheManager::init()?;
+        VirtualColumnMap::init()?;
 
         Ok(())
     }

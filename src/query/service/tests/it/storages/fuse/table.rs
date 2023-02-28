@@ -68,6 +68,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
                 description: "".to_string(),
                 tbl_args: None,
                 push_downs: None,
+                virtual_column_data_source: None,
             })
             .await?;
         let blocks = stream.try_collect::<Vec<_>>().await?;
@@ -128,6 +129,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
                 description: "".to_string(),
                 tbl_args: None,
                 push_downs: None,
+                virtual_column_data_source: None,
             })
             .await?;
         let blocks = stream.try_collect::<Vec<_>>().await?;

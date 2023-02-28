@@ -19,6 +19,7 @@ mod projection;
 mod pruning_statistics;
 mod pushdown;
 mod stage_file_info;
+mod virtual_column;
 
 pub use datasource::*;
 pub use partition::*;
@@ -28,3 +29,4 @@ pub use pruning_statistics::PruningStatistics;
 pub use pushdown::*;
 pub use stage_file_info::StageFileInfo;
 pub use stage_file_info::StageFileStatus;
+pub use virtual_column::*;

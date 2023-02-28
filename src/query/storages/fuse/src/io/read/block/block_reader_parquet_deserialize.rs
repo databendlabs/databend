@@ -26,6 +26,7 @@ use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
 use common_catalog::plan::PartInfoPtr;
+use common_catalog::plan::VirtualColumnMeta;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
@@ -66,18 +67,19 @@ impl BlockReader {
         part: PartInfoPtr,
         chunks: HashMap<ColumnId, DataItem>,
     ) -> Result<DataBlock> {
-        let part = FusePartInfo::from_part(&part)?;
+        let fuse_part = FusePartInfo::from_part(&part)?;
         let start = Instant::now();
 
         if chunks.is_empty() {
-            return self.build_default_values_block(part.nums_rows);
+            return self.build_default_values_block(Some(part.clone()), fuse_part.nums_rows);
         }
 
         let deserialized_res = self.deserialize_parquet_chunks_with_buffer(
-            &part.location,
-            part.nums_rows,
-            &part.compression,
-            &part.columns_meta,
+            Some(part.clone()),
+            &fuse_part.location,
+            fuse_part.nums_rows,
+            &fuse_part.compression,
+            &fuse_part.columns_meta,
             chunks,
             None,
         );
@@ -90,15 +92,52 @@ impl BlockReader {
         deserialized_res
     }
 
-    pub fn build_default_values_block(&self, num_rows: usize) -> Result<DataBlock> {
+    pub fn build_default_values_block(
+        &self,
+        part: Option<PartInfoPtr>,
+        num_rows: usize,
+    ) -> Result<DataBlock> {
         let data_schema = self.data_schema();
         let default_vals = self.default_vals.clone();
-        DataBlock::create_with_default_value(&data_schema, &default_vals, num_rows)
+        let data_block =
+            DataBlock::create_with_default_value(&data_schema, &default_vals, num_rows)?;
+
+        self.fill_virtual_column_values(num_rows, part, data_block)
+    }
+
+    pub fn fill_virtual_column_values(
+        &self,
+        num_rows: usize,
+        part: Option<PartInfoPtr>,
+        data_block: DataBlock,
+    ) -> Result<DataBlock> {
+        match self.project_virtual_columns {
+            Some(ref project_virtual_columns) => match part {
+                Some(part) => {
+                    let fuse_part = FusePartInfo::from_part(&part)?;
+                    let block_meta_index = fuse_part.block_meta_index().unwrap();
+                    let mut new_data_block = data_block;
+                    let virtual_column_meta = VirtualColumnMeta {
+                        segment_idx: block_meta_index.segment_idx,
+                        block_idx: block_meta_index.block_idx,
+                    };
+                    for virtual_column in project_virtual_columns.values() {
+                        let column = virtual_column.generate_column(&virtual_column_meta, num_rows);
+                        new_data_block.add_column(column);
+                    }
+                    Ok(new_data_block)
+                }
+                None => Ok(data_block),
+            },
+            None => Ok(data_block),
+        }
     }
 
     /// Deserialize column chunks data from parquet format to DataBlock with a uncompressed buffer.
+    #[allow(clippy::too_many_arguments)]
     pub fn deserialize_parquet_chunks_with_buffer(
         &self,
+        part: Option<PartInfoPtr>,
         block_path: &str,
         num_rows: usize,
         compression: &Compression,
@@ -107,7 +146,7 @@ impl BlockReader {
         uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
     ) -> Result<DataBlock> {
         if column_chunks.is_empty() {
-            return self.build_default_values_block(num_rows);
+            return self.build_default_values_block(part, num_rows);
         }
 
         let mut need_default_vals = Vec::with_capacity(self.project_column_nodes.len());
@@ -152,7 +191,7 @@ impl BlockReader {
         // build data block
         let chunk = Chunk::try_new(chunk_arrays)?;
         let data_block = if !need_to_fill_default_val {
-            DataBlock::from_arrow_chunk(&chunk, &self.data_schema())
+            DataBlock::from_arrow_chunk(&chunk, &self.data_schema())?
         } else {
             let data_schema = self.data_schema();
             let mut default_vals = Vec::with_capacity(need_default_vals.len());
@@ -168,8 +207,10 @@ impl BlockReader {
                 &chunk,
                 &default_vals,
                 num_rows,
-            )
+            )?
         };
+
+        let data_block = self.fill_virtual_column_values(num_rows, part, data_block)?;
 
         // populate cache if necessary
         if let Some(cache) = CacheManager::instance().get_table_data_array_cache() {
@@ -181,7 +222,7 @@ impl BlockReader {
                 }
             }
         }
-        data_block
+        Ok(data_block)
     }
 
     fn chunks_to_parquet_array_iter<'a>(

@@ -373,6 +373,16 @@ impl TableSchema {
         Ok(())
     }
 
+    pub fn add_virtual_column(
+        &mut self,
+        name: &str,
+        data_type: TableDataType,
+        column_id: ColumnId,
+    ) {
+        let field = TableField::new_from_column_id(name, data_type, column_id);
+        self.fields.push(field);
+    }
+
     pub fn drop_column(&mut self, column: &str) -> Result<()> {
         if self.fields.len() == 1 {
             return Err(ErrorCode::DropColumnEmptyError(

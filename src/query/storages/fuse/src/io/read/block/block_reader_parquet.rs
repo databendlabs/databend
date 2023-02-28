@@ -40,6 +40,7 @@ impl BlockReader {
         let num_rows = meta.row_count as usize;
 
         self.deserialize_parquet_chunks_with_buffer(
+            None,
             &meta.location.0,
             num_rows,
             &meta.compression,

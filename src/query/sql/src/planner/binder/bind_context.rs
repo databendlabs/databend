@@ -41,6 +41,8 @@ pub enum Visibility {
     // The result should only contain one `a` column.
     // So we need make `t.a` or `t1.a` invisible in unqualified
     UnqualifiedWildcardInVisible,
+    // Virtual column
+    Virtual,
 }
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]

@@ -137,13 +137,14 @@ impl Processor for DeserializeDataTransform {
             let start = Instant::now();
 
             let columns_chunks = read_res.columns_chunks()?;
-            let part = FusePartInfo::from_part(&part)?;
+            let fuse_part = FusePartInfo::from_part(&part)?;
 
             let data_block = self.block_reader.deserialize_parquet_chunks_with_buffer(
-                &part.location,
-                part.nums_rows,
-                &part.compression,
-                &part.columns_meta,
+                Some(part.clone()),
+                &fuse_part.location,
+                fuse_part.nums_rows,
+                &fuse_part.compression,
+                &fuse_part.columns_meta,
                 columns_chunks,
                 Some(self.uncompressed_buffer.clone()),
             )?;

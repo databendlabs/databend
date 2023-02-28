@@ -21,6 +21,7 @@ use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::plan::VirtualColumnDataSource;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -33,7 +34,6 @@ use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
-use itertools::Itertools;
 
 use super::cast_expr_to_non_null_boolean;
 use super::AggregateFinal;
@@ -46,6 +46,7 @@ use super::HashJoin;
 use super::Limit;
 use super::Sort;
 use super::TableScan;
+use crate::binder::VirtualColumnMap;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::EvalScalar;
@@ -65,9 +66,9 @@ use crate::plans::Scan;
 use crate::BaseTableColumn;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
-use crate::IndexType;
 use crate::Metadata;
 use crate::MetadataRef;
+use crate::TableVirtualColumn;
 use crate::DUMMY_COLUMN_INDEX;
 use crate::DUMMY_TABLE_INDEX;
 
@@ -97,47 +98,57 @@ impl PhysicalPlanBuilder {
         schema: &TableSchema,
         columns: &ColumnSet,
         has_inner_column: bool,
+        ignore_virtual_column: bool,
     ) -> Projection {
         if !has_inner_column {
-            let col_indices = columns
-                .iter()
-                .map(|index| {
-                    let name = match metadata.column(*index) {
-                        ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => {
-                            column_name
+            let mut col_indices = Vec::new();
+            for index in columns.iter() {
+                let name = match metadata.column(*index) {
+                    ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => {
+                        column_name
+                    }
+                    ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
+                    ColumnEntry::VirtualColumn(TableVirtualColumn { virtual_column, .. }) => {
+                        if ignore_virtual_column {
+                            continue;
                         }
-                        ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
-                    };
-                    schema.index_of(name).unwrap()
-                })
-                .sorted()
-                .collect::<Vec<_>>();
+                        virtual_column.column_name()
+                    }
+                };
+                col_indices.push(schema.index_of(name).unwrap());
+            }
+
+            col_indices.sort();
             Projection::Columns(col_indices)
         } else {
-            let col_indices = columns
-                .iter()
-                .map(|index| {
-                    let column = metadata.column(*index);
-                    match column {
-                        ColumnEntry::BaseTableColumn(BaseTableColumn {
-                            column_name,
-                            path_indices,
-                            ..
-                        }) => match path_indices {
-                            Some(path_indices) => (column.index(), path_indices.to_vec()),
-                            None => {
-                                let idx = schema.index_of(column_name).unwrap();
-                                (column.index(), vec![idx])
-                            }
-                        },
-                        ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => {
-                            let idx = schema.index_of(alias).unwrap();
-                            (column.index(), vec![idx])
+            let mut col_indices = BTreeMap::new();
+            for index in columns.iter() {
+                let column = metadata.column(*index);
+                match column {
+                    ColumnEntry::BaseTableColumn(BaseTableColumn {
+                        column_name,
+                        path_indices,
+                        ..
+                    }) => match path_indices {
+                        Some(path_indices) => {
+                            col_indices.insert(column.index(), path_indices.to_vec());
+                        }
+                        None => {
+                            let idx = schema.index_of(column_name).unwrap();
+                            col_indices.insert(column.index(), vec![idx]);
+                        }
+                    },
+                    ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => {
+                        let idx = schema.index_of(alias).unwrap();
+                        col_indices.insert(column.index(), vec![idx]);
+                    }
+                    ColumnEntry::VirtualColumn(TableVirtualColumn { column_index, .. }) => {
+                        if !ignore_virtual_column {
+                            col_indices.insert(*column_index, vec![*column_index]);
                         }
                     }
-                })
-                .sorted()
-                .collect::<BTreeMap<_, Vec<IndexType>>>();
+                }
+            }
             Projection::InnerColumns(col_indices)
         }
     }
@@ -151,6 +162,7 @@ impl PhysicalPlanBuilder {
             RelOperator::Scan(scan) => {
                 let mut has_inner_column = false;
                 let mut name_mapping = BTreeMap::new();
+                let mut project_virtual_columns = BTreeMap::new();
                 let metadata = self.metadata.read().clone();
                 for index in scan.columns.iter() {
                     let column = metadata.column(*index);
@@ -160,6 +172,12 @@ impl PhysicalPlanBuilder {
                         if path_indices.is_some() {
                             has_inner_column = true;
                         }
+                    } else if let ColumnEntry::VirtualColumn(TableVirtualColumn {
+                        virtual_column,
+                        ..
+                    }) = column
+                    {
+                        project_virtual_columns.insert(*index, virtual_column.to_owned());
                     }
 
                     let name = match column {
@@ -167,6 +185,9 @@ impl PhysicalPlanBuilder {
                             column_name
                         }
                         ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
+                        ColumnEntry::VirtualColumn(TableVirtualColumn {
+                            virtual_column, ..
+                        }) => virtual_column.column_name(),
                     };
                     if let Some(prewhere) = &scan.prewhere {
                         // if there is a prewhere optimization,
@@ -181,7 +202,26 @@ impl PhysicalPlanBuilder {
 
                 let table_entry = metadata.table(scan.table_index);
                 let table = table_entry.table();
-                let table_schema = table.schema();
+                let mut table_schema = table.schema();
+                if !project_virtual_columns.is_empty() {
+                    let mut schema = table_schema.as_ref().clone();
+                    for virtual_column in VirtualColumnMap::instance().all_virtual_columns() {
+                        schema.add_virtual_column(
+                            virtual_column.column_name(),
+                            virtual_column.table_data_type(),
+                            virtual_column.column_id(),
+                        );
+                    }
+                    table_schema = Arc::new(schema);
+                }
+                let virtual_column_data_source = if !project_virtual_columns.is_empty() {
+                    Some(VirtualColumnDataSource {
+                        schema: table_schema.clone(),
+                        project_virtual_columns,
+                    })
+                } else {
+                    None
+                };
 
                 let push_downs = self.push_downs(scan, &table_schema, has_inner_column)?;
 
@@ -190,6 +230,7 @@ impl PhysicalPlanBuilder {
                         self.ctx.clone(),
                         table_entry.catalog().to_string(),
                         Some(push_downs),
+                        virtual_column_data_source,
                     )
                     .await?;
 
@@ -209,7 +250,12 @@ impl PhysicalPlanBuilder {
                     .get_table(self.ctx.get_tenant().as_str(), "system", "one")
                     .await?;
                 let source = table
-                    .read_plan_with_catalog(self.ctx.clone(), CATALOG_DEFAULT.to_string(), None)
+                    .read_plan_with_catalog(
+                        self.ctx.clone(),
+                        CATALOG_DEFAULT.to_string(),
+                        None,
+                        None,
+                    )
                     .await?;
                 Ok(PhysicalPlan::TableScan(TableScan {
                     plan_id: self.next_plan_id(),
@@ -645,9 +691,15 @@ impl PhysicalPlanBuilder {
         has_inner_column: bool,
     ) -> Result<PushDownInfo> {
         let metadata = self.metadata.read().clone();
-        let projection =
-            Self::build_projection(&metadata, table_schema, &scan.columns, has_inner_column);
-        let _project_schema = projection.project_schema(table_schema);
+        let projection = Self::build_projection(
+            &metadata,
+            table_schema,
+            &scan.columns,
+            has_inner_column,
+            // for projection, we need to ignore read data from virtual column,
+            // or else in read_partition when search virtual column from table schema will core.
+            true,
+        );
 
         let push_down_filter = scan
             .push_down_predicates
@@ -693,18 +745,21 @@ impl PhysicalPlanBuilder {
                     table_schema,
                     &prewhere.output_columns,
                     has_inner_column,
+                    false,
                 );
                 let prewhere_columns = Self::build_projection(
                     &metadata,
                     table_schema,
                     &prewhere.prewhere_columns,
                     has_inner_column,
+                    false,
                 );
                 let remain_columns = Self::build_projection(
                     &metadata,
                     table_schema,
                     &remain_columns,
                     has_inner_column,
+                    false,
                 );
 
                 let predicate = prewhere
@@ -754,6 +809,13 @@ impl PhysicalPlanBuilder {
                             ColumnEntry::DerivedColumn(DerivedColumn {
                                 alias, data_type, ..
                             }) => (alias.clone(), data_type.clone()),
+                            ColumnEntry::VirtualColumn(TableVirtualColumn {
+                                virtual_column,
+                                ..
+                            }) => (
+                                virtual_column.column_name().to_owned(),
+                                virtual_column.data_type(),
+                            ),
                         };
 
                         // sort item is already a column
