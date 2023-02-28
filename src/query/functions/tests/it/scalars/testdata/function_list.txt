@@ -3141,6 +3141,8 @@ try_to_variant(T0 NULL) :: Variant NULL
 typeof(T0) :: String
 unhex(String) :: String
 unhex(String NULL) :: String NULL
+unnest(Array(T0)) :: Array(T0)
+unnest(Array(T0) NULL) :: Array(T0) NULL
 upper(String) :: String
 upper(String NULL) :: String NULL
 xor(Boolean, Boolean) :: Boolean

@@ -107,6 +107,42 @@ impl BlockOperator {
         }
     }
 
+    /// Apply the `unnest`ed columns to the whole `DataBlock`.
+    /// Each row in non-unnest columns will be replicated due to the related unnest column.
+    ///
+    /// For example:
+    ///
+    /// ```
+    /// +---------+--------+
+    /// | arr     | number |
+    /// +---------+--------+
+    /// | [1,2]   |      0 |
+    /// | [3,4,5] |      1 |
+    /// +---------+--------+
+    /// ```
+    ///
+    /// After `unnest(arr)`, each row of `number` will be replicated by the length of `arr` at the same row.
+    /// The result will be:
+    ///
+    /// ```
+    /// +-------------+--------+
+    /// | unnest(arr) | number |
+    /// +-------------+--------+
+    /// | 1           |      0 |
+    /// | 2           |      0 |
+    /// | 3           |      1 |
+    /// | 4           |      1 |
+    /// | 5           |      1 |
+    /// +-------------+--------+
+    /// ```
+    ///
+    /// If the argument of `unnest` is a scalar, like:
+    ///
+    /// ```sql
+    /// select unnest([1,2,3]), number from numbers(2);
+    /// ```
+    ///
+    /// The array scalar `[1,2,3]` will be replicated first (See the logic in `src/query/functions/src/scalars/unnest.rs`).
     fn fit_unnest(
         input: DataBlock,
         unnest_columns: &[(usize, Box<ArrayColumn<AnyType>>)],
@@ -125,15 +161,15 @@ impl BlockOperator {
         let (unnest_index, unnest_col) = &unnest_columns[0];
         let (unnest_values, unnest_offsets) = (&unnest_col.values, &unnest_col.offsets);
 
-        let num_rows = unnest_values.len() * input.num_rows();
+        let num_rows = unnest_values.len();
         // Convert unnest_offsets to take indices.
         let mut take_indices = Vec::with_capacity(num_rows);
-        let offset_len = unnest_offsets.len();
-        for i in 1..offset_len {
+        let offset_len = unnest_offsets.len() - 1;
+        for i in 0..offset_len {
             let (from, end) = unsafe {
                 (
-                    *unnest_offsets.get_unchecked(i - 1) as usize,
                     *unnest_offsets.get_unchecked(i) as usize,
+                    *unnest_offsets.get_unchecked(i + 1) as usize,
                 )
             };
             take_indices.extend(vec![i as u64; end - from]);
@@ -147,7 +183,7 @@ impl BlockOperator {
                 let (from, end) = unsafe {
                     (
                         *unnest_offsets.get_unchecked(0) as usize,
-                        *unnest_offsets.get_unchecked(offset_len - 1) as usize,
+                        *unnest_offsets.get_unchecked(offset_len) as usize,
                     )
                 };
                 // `unnest_col` may be sliced once, so we should slice `unnest_values` to get the needed data.
