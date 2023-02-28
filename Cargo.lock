@@ -1739,7 +1739,6 @@ dependencies = [
  "openraft",
  "pretty_assertions",
  "serde",
- "serde_json",
  "tempfile",
  "tracing",
 ]

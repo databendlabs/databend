@@ -16,7 +16,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use common_base::base::tokio;
-use common_meta_raft_store::applied_state::AppliedState;
 use common_meta_raft_store::state_machine::testing::pretty_snapshot;
 use common_meta_raft_store::state_machine::testing::snapshot_logs;
 use common_meta_raft_store::state_machine::SerializableSnapshot;
@@ -30,6 +29,7 @@ use common_meta_sled_store::openraft::LogId;
 use common_meta_sled_store::openraft::Membership;
 use common_meta_sled_store::openraft::RaftStorage;
 use common_meta_sled_store::openraft::StorageHelper;
+use common_meta_types::AppliedState;
 use common_meta_types::LogEntry;
 use databend_meta::init_meta_ut;
 use databend_meta::store::RaftStoreBare;
