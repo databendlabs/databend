@@ -166,8 +166,6 @@ impl<'a> Evaluator<'a> {
             }
         };
 
-        // We can't call this in debug mode, because it will cause infinite recursion.
-        // Eg: select 3.2::Decimal(10, 2)::Int32;
         #[cfg(debug_assertions)]
         if result.is_err() {
             use std::sync::atomic::AtomicBool;
