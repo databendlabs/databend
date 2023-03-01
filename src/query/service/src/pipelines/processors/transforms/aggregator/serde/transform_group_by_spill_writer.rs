@@ -1,5 +1,6 @@
 use std::any::Any;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_base::base::GlobalUniqName;
 use common_exception::ErrorCode;
@@ -14,6 +15,7 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::Processor;
 use opendal::Operator;
+use tracing::info;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::serde::transform_group_by_serializer::serialize_group_by;
@@ -145,6 +147,7 @@ impl<Method: HashMethodBounds> Processor for TransformGroupBySpillWriter<Method>
 
     async fn async_process(&mut self) -> Result<()> {
         if let Some((bucket, total_size, data)) = self.writing_data_block.take() {
+            let instant = Instant::now();
             let unique_name = GlobalUniqName::unique();
             let location = format!("{}/{}", self.location_prefix, unique_name);
             let object = self.operator.object(&location);
@@ -159,6 +162,12 @@ impl<Method: HashMethodBounds> Processor for TransformGroupBySpillWriter<Method>
             }
 
             object.write(write_data).await?;
+            info!(
+                "Write aggregate spill {} successfully, elapsed: {:?}",
+                &location,
+                instant.elapsed()
+            );
+
             self.spilled_meta = Some(AggregateMeta::<Method, ()>::create_spilled(
                 bucket,
                 location,

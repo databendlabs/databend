@@ -1,6 +1,7 @@
 use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -15,6 +16,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use itertools::Itertools;
 use opendal::Operator;
+use tracing::info;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SerializedPayload;
@@ -156,8 +158,14 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                 AggregateMeta::Serialized(_) => unreachable!(),
                 AggregateMeta::Spilled(payload) => {
                     // TODO: need retry read
+                    let instant = Instant::now();
                     let object = self.operator.object(&payload.location);
                     let data = object.read().await?;
+                    info!(
+                        "Read aggregate spill {} successfully, elapsed: {:?}",
+                        &payload.location,
+                        instant.elapsed()
+                    );
                     // TODO: can remove this location
                     self.deserializing_meta = Some((block_meta, VecDeque::from(vec![data])));
                 }
@@ -166,9 +174,18 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                     for meta in data {
                         // TODO: need retry read
                         if let AggregateMeta::Spilled(payload) = meta {
-                            let object = self.operator.object(&payload.location);
+                            let location = payload.location.clone();
+                            let operator = self.operator.clone();
                             read_data.push(common_base::base::tokio::spawn(async move {
-                                object.read().await
+                                let instant = Instant::now();
+                                let object = operator.object(&location);
+                                let data = object.read().await?;
+                                info!(
+                                    "Read aggregate spill {} successfully, elapsed: {:?}",
+                                    location,
+                                    instant.elapsed()
+                                );
+                                Ok(data)
                                 // TODO: can remove this location
                             }));
                         }

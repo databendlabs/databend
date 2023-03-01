@@ -74,6 +74,14 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V
         }))
     }
 
+    pub fn create_spilling(bucket: isize, cell: HashTableCell<Method, V>) -> BlockMetaInfoPtr {
+        Box::new(AggregateMeta::<Method, V>::Spilling(HashTablePayload {
+            cell,
+            bucket,
+            arena_holder: ArenaHolder::create(None),
+        }))
+    }
+
     pub fn create_spilled(
         bucket: isize,
         location: String,
