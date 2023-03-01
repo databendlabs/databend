@@ -38,6 +38,7 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
         RuleID::MergeFilter,
         RuleID::MergeEvalScalar,
         RuleID::PushDownFilterUnion,
+        RuleID::PushDownFilterAggregate,
         RuleID::PushDownLimitUnion,
         RuleID::RulePushDownLimitExpression,
         RuleID::PushDownLimitSort,

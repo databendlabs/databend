@@ -63,6 +63,15 @@ impl Aggregate {
         }
         Ok(used_columns)
     }
+
+    pub fn group_columns(&self) -> Result<ColumnSet> {
+        let mut col_set = ColumnSet::new();
+        for group_item in self.group_items.iter() {
+            col_set.insert(group_item.index);
+            col_set.extend(group_item.scalar.used_columns())
+        }
+        Ok(col_set)
+    }
 }
 
 impl Operator for Aggregate {
