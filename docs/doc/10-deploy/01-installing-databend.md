@@ -67,8 +67,7 @@ sudo systemctl start databend-query
 Databend provides these types of installation images on the Docker Hub:
 
 - [Databend All-in-One Docker Image](https://hub.docker.com/r/datafuselabs/databend): Built for local tests, CI, and so on.
-
-- Separated images: Built for production environments, Kubernetes, [Helm Charts](https://github.com/datafuselabs/helm-charts).
+- Separated images: Built for production environments, Kubernetes, and [Helm Charts](https://github.com/datafuselabs/helm-charts).
   - [databend-meta](https://hub.docker.com/r/datafuselabs/databend-meta)
   - [databend-query](https://hub.docker.com/r/datafuselabs/databend-query)
 
