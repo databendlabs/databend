@@ -213,8 +213,7 @@ impl Interpreter for SelectInterpreterV2 {
             // meta_key through related query_id and using this meta_key to read cache.
             let meta_key = if let Some(t) = self.result_scan_table() {
                 let arg_query_id = parse_result_scan_args(&t.table_args().unwrap())?;
-                let qurey_id_related_meta_key = self.ctx.get_result_cache_key(&arg_query_id);
-                qurey_id_related_meta_key
+                self.ctx.get_result_cache_key(&arg_query_id)
             } else {
                 None
             };
