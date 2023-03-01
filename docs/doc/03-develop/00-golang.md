@@ -2,7 +2,7 @@
 title: Developing with Databend using Golang
 sidebar_label: Golang
 description:
-   How to Develop with Databend using Golang.
+   Develop with Databend using Golang.
 ---
 
 Databend offers a driver (databend-go) written in Golang, which facilitates the development of applications using the Golang programming language and establishes connectivity with Databend.
@@ -11,38 +11,30 @@ For installation instructions, examples, and the source code, see the GitHub [da
 
 In the following tutorial, you'll learn how to utilize the driver `databend-go` to develop your applications. The tutorial will walk you through creating a SQL user in Databend and then writing Golang code to create a table, insert data, and perform data queries.
 
-
 ## Tutorial: Developing with Databend using Golang
 
 Before you start, make sure you have successfully installed Databend. For how to install Databend, see [How to deploy Databend](/doc/deploy).
 
-## Step 1. Create a SQL User
+### Step 1. Prepare a SQL User Account
 
-In this step, you'll create a SQL user in Databend and grant privileges to the user.
+To connect your program to Databend and execute SQL operations, you must provide a SQL user account with appropriate privileges in your code. Create one in Databend if needed, and ensure that the SQL user has only the necessary privileges for security.
 
-1. Connect to Databend from a MySQL client.
-
-```shell
-mysql -h127.0.0.1 -uroot -P3307
-```
-
-2. Create a user named `user1`.
+This tutorial uses a SQL user named 'user1' with password 'abc123' as an example. As the program will write data into Databend, the user needs ALL privileges. For how to manage SQL users and their privileges, see https://databend.rs/doc/reference/sql/ddl/user.
 
 ```sql
 CREATE USER user1 IDENTIFIED BY 'abc123';
-```
-
-3. Grant privileges to `user1`.
-
-```sql
 GRANT ALL on *.* TO user1;
 ```
 
-## Step 2. Write a Golang Program
+### Step 2. Write a Golang Program
 
 In this step, you'll create a simple Golang program that communicates with Databend. The program will involve tasks such as creating a table, inserting data, and executing data queries.
 
 1. Copy and paste the following code to the file `main.go`:
+
+:::note
+The value of `hostname` in the code below must align with your HTTP handler settings for Databend query service.
+:::
 
 ```go title='main.go'
 package main

@@ -1,7 +1,7 @@
 with revenue as (
     select
         l_suppkey as supplier_no,
-        truncate(sum(l_extendedprice * (1 - l_discount)), 2) as total_revenue
+        sum(l_extendedprice * (1 - l_discount)) as total_revenue
     from
         lineitem
     where

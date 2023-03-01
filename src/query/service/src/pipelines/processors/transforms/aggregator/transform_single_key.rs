@@ -83,7 +83,7 @@ impl PartialSingleStateAggregator {
 impl AccumulatingTransform for PartialSingleStateAggregator {
     const NAME: &'static str = "AggregatorPartialTransform";
 
-    fn transform(&mut self, block: DataBlock) -> Result<Option<DataBlock>> {
+    fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
         let block = block.convert_to_full();
 
         for (idx, func) in self.funcs.iter().enumerate() {
@@ -102,11 +102,11 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
             func.accumulate(place, &arg_columns, None, block.num_rows())?;
         }
 
-        Ok(None)
+        Ok(vec![])
     }
 
-    fn on_finish(&mut self, generate_data: bool) -> Result<Option<DataBlock>> {
-        let mut generate_data_block = None;
+    fn on_finish(&mut self, generate_data: bool) -> Result<Vec<DataBlock>> {
+        let mut generate_data_block = vec![];
 
         if generate_data {
             let mut columns = Vec::with_capacity(self.funcs.len());
@@ -122,7 +122,7 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
                 });
             }
 
-            generate_data_block = Some(DataBlock::new(columns, 1));
+            generate_data_block = vec![DataBlock::new(columns, 1)];
         }
 
         // destroy states
@@ -188,7 +188,7 @@ impl FinalSingleStateAggregator {
 impl AccumulatingTransform for FinalSingleStateAggregator {
     const NAME: &'static str = "AggregatorFinalTransform";
 
-    fn transform(&mut self, block: DataBlock) -> Result<Option<DataBlock>> {
+    fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
         if !block.is_empty() {
             let block = block.convert_to_full();
             let places = self.new_places();
@@ -205,11 +205,11 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
             }
         }
 
-        Ok(None)
+        Ok(vec![])
     }
 
-    fn on_finish(&mut self, generate_data: bool) -> Result<Option<DataBlock>> {
-        let mut generate_data_block = None;
+    fn on_finish(&mut self, generate_data: bool) -> Result<Vec<DataBlock>> {
+        let mut generate_data_block = vec![];
 
         if generate_data {
             let mut aggr_values = {
@@ -245,7 +245,7 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
                 }
             }
 
-            generate_data_block = Some(DataBlock::new_from_columns(columns));
+            generate_data_block = vec![DataBlock::new_from_columns(columns)];
         }
 
         for (places, func) in self.to_merge_places.iter().zip(self.funcs.iter()) {

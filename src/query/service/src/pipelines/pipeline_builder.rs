@@ -19,9 +19,11 @@ use common_catalog::table::AppendMode;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_function;
+use common_expression::with_mappedhash_method;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::FunctionContext;
+use common_expression::HashMethodKind;
 use common_expression::SortColumnDescription;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
@@ -60,20 +62,23 @@ use crate::pipelines::processors::transforms::efficiently_memory_final_aggregato
 use crate::pipelines::processors::transforms::AggregateExchangeSorting;
 use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
+use crate::pipelines::processors::transforms::PartialSingleStateAggregator;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
+use crate::pipelines::processors::transforms::TransformAggregateSerializer;
+use crate::pipelines::processors::transforms::TransformGroupBySerializer;
 use crate::pipelines::processors::transforms::TransformLeftJoin;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
+use crate::pipelines::processors::transforms::TransformPartialAggregate;
+use crate::pipelines::processors::transforms::TransformPartialGroupBy;
 use crate::pipelines::processors::transforms::TransformRightJoin;
 use crate::pipelines::processors::transforms::TransformRightSemiAntiJoin;
 use crate::pipelines::processors::AggregatorParams;
-use crate::pipelines::processors::AggregatorTransformParams;
 use crate::pipelines::processors::JoinHashTable;
 use crate::pipelines::processors::LeftJoinCompactor;
 use crate::pipelines::processors::MarkJoinCompactor;
 use crate::pipelines::processors::RightJoinCompactor;
 use crate::pipelines::processors::SinkBuildHashTable;
-use crate::pipelines::processors::TransformAggregator;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::processors::TransformHashJoinProbe;
 use crate::pipelines::processors::TransformLimit;
@@ -356,22 +361,56 @@ impl PipelineBuilder {
 
     fn build_aggregate_partial(&mut self, aggregate: &AggregatePartial) -> Result<()> {
         self.build_pipeline(&aggregate.input)?;
+
         let params = Self::build_aggregator_params(
             aggregate.input.output_schema()?,
-            // aggregate.output_schema()?,
             &aggregate.group_by,
             &aggregate.agg_funcs,
             None,
         )?;
 
-        let pass_state_to_final = self.enable_memory_efficient_aggregator(&params);
+        if params.group_columns.is_empty() {
+            return self.main_pipeline.add_transform(|input, output| {
+                let transform = PartialSingleStateAggregator::try_create(input, output, &params)?;
+
+                if self.enable_profiling {
+                    Ok(ProcessorPtr::create(ProfileWrapper::create(
+                        transform,
+                        aggregate.plan_id,
+                        self.prof_span_set.clone(),
+                    )))
+                } else {
+                    Ok(ProcessorPtr::create(transform))
+                }
+            });
+        }
+
+        let group_cols = &params.group_columns;
+        let schema_before_group_by = params.input_schema.clone();
+        let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
+        let method = DataBlock::choose_hash_method(&sample_block, group_cols)?;
 
         self.main_pipeline.add_transform(|input, output| {
-            let transform = TransformAggregator::try_create_partial(
-                AggregatorTransformParams::try_create(input, output, &params)?,
-                self.ctx.clone(),
-                pass_state_to_final,
-            )?;
+            let transform = match params.aggregate_functions.is_empty() {
+                true => with_mappedhash_method!(|T| match method.clone() {
+                    HashMethodKind::T(method) => TransformPartialGroupBy::try_create(
+                        self.ctx.clone(),
+                        method,
+                        input,
+                        output,
+                        params.clone()
+                    ),
+                }),
+                false => with_mappedhash_method!(|T| match method.clone() {
+                    HashMethodKind::T(method) => TransformPartialAggregate::try_create(
+                        self.ctx.clone(),
+                        method,
+                        input,
+                        output,
+                        params.clone()
+                    ),
+                }),
+            }?;
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(
@@ -384,15 +423,29 @@ impl PipelineBuilder {
             }
         })?;
 
+        if !self.ctx.get_cluster().is_empty() {
+            // TODO: can serialize only when needed.
+            self.main_pipeline.add_transform(|input, output| {
+                match params.aggregate_functions.is_empty() {
+                    true => with_mappedhash_method!(|T| match method.clone() {
+                        HashMethodKind::T(method) =>
+                            TransformGroupBySerializer::try_create(input, output, method,),
+                    }),
+                    false => with_mappedhash_method!(|T| match method.clone() {
+                        HashMethodKind::T(method) => TransformAggregateSerializer::try_create(
+                            input,
+                            output,
+                            method,
+                            params.clone(),
+                        ),
+                    }),
+                }
+            })?;
+        }
+
         self.exchange_sorting = Some(AggregateExchangeSorting::create());
 
         Ok(())
-    }
-
-    fn enable_memory_efficient_aggregator(&self, params: &Arc<AggregatorParams>) -> bool {
-        self.ctx.get_cluster().is_empty()
-            && !params.group_columns.is_empty()
-            && self.main_pipeline.output_len() > 1
     }
 
     fn build_aggregate_final(&mut self, aggregate: &AggregateFinal) -> Result<()> {
@@ -423,7 +476,7 @@ impl PipelineBuilder {
             });
         }
 
-        efficiently_memory_final_aggregator(params, &mut self.main_pipeline)
+        efficiently_memory_final_aggregator(&self.ctx, params, &mut self.main_pipeline)
     }
 
     pub fn build_aggregator_params(
