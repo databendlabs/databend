@@ -248,8 +248,12 @@ impl SnapshotsIO {
 
             for snapshot_lite_extend in results.into_iter().flatten() {
                 snapshot_lites.push(snapshot_lite_extend.snapshot_lite);
-                segment_location_with_index
-                    .extend(snapshot_lite_extend.segment_locations.into_iter());
+                for (k, v) in snapshot_lite_extend.segment_locations.into_iter() {
+                    segment_location_with_index
+                        .entry(k)
+                        .and_modify(|val| val.extend(v.iter()))
+                        .or_insert(v);
+                }
             }
 
             // Refresh status.
