@@ -13,7 +13,6 @@ use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::Processor;
-use common_storage::DataOperator;
 use opendal::Operator;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
@@ -26,6 +25,7 @@ pub struct TransformGroupBySpillWriter<Method: HashMethodBounds> {
     output: Arc<OutputPort>,
 
     operator: Operator,
+    location_prefix: String,
     spilled_meta: Option<BlockMetaInfoPtr>,
     spilling_meta: Option<AggregateMeta<Method, ()>>,
     writing_data_block: Option<(isize, usize, Vec<Vec<u8>>)>,
@@ -37,12 +37,14 @@ impl<Method: HashMethodBounds> TransformGroupBySpillWriter<Method> {
         output: Arc<OutputPort>,
         method: Method,
         operator: Operator,
+        location_prefix: String,
     ) -> Box<dyn Processor> {
         Box::new(TransformGroupBySpillWriter::<Method> {
             method,
             input,
             output,
             operator,
+            location_prefix,
             spilled_meta: None,
             spilling_meta: None,
             writing_data_block: None,
@@ -144,7 +146,7 @@ impl<Method: HashMethodBounds> Processor for TransformGroupBySpillWriter<Method>
     async fn async_process(&mut self) -> Result<()> {
         if let Some((bucket, total_size, data)) = self.writing_data_block.take() {
             let unique_name = GlobalUniqName::unique();
-            let location = unique_name;
+            let location = format!("{}/{}", self.location_prefix, unique_name);
             let object = self.operator.object(&location);
 
             // temp code: waiting https://github.com/datafuselabs/opendal/pull/1431

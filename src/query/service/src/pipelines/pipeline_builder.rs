@@ -435,6 +435,7 @@ impl PipelineBuilder {
         })?;
 
         let operator = DataOperator::instance().operator();
+        let location_prefix = format!("_aggregate_spill/{}", self.ctx.get_tenant());
         self.main_pipeline.add_transform(|input, output| {
             let transform = match params.aggregate_functions.is_empty() {
                 true => with_mappedhash_method!(|T| match method.clone() {
@@ -443,6 +444,7 @@ impl PipelineBuilder {
                         output,
                         method,
                         operator.clone(),
+                        location_prefix.clone()
                     ),
                 }),
                 false => with_mappedhash_method!(|T| match method.clone() {
@@ -451,7 +453,8 @@ impl PipelineBuilder {
                         output,
                         method,
                         operator.clone(),
-                        params.clone()
+                        params.clone(),
+                        location_prefix.clone()
                     ),
                 }),
             };

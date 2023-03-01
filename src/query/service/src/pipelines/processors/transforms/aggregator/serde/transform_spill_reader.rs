@@ -158,6 +158,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                     // TODO: need retry read
                     let object = self.operator.object(&payload.location);
                     let data = object.read().await?;
+                    // TODO: can remove this location
                     self.deserializing_meta = Some((block_meta, VecDeque::from(vec![data])));
                 }
                 AggregateMeta::Partitioned { data, .. } => {
@@ -168,6 +169,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                             let object = self.operator.object(&payload.location);
                             read_data.push(common_base::base::tokio::spawn(async move {
                                 object.read().await
+                                // TODO: can remove this location
                             }));
                         }
                     }
