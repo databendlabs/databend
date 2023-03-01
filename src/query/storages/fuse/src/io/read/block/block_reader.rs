@@ -42,6 +42,7 @@ pub struct BlockReader {
     pub(crate) operator: Operator,
     pub(crate) projection: Projection,
     pub(crate) projected_schema: TableSchemaRef,
+    pub(crate) projected_virtual_schema: Option<TableSchemaRef>,
     pub(crate) project_indices: BTreeMap<FieldIndex, (ColumnId, Field, DataType)>,
     pub(crate) project_column_nodes: Vec<ColumnNode>,
     pub(crate) parquet_schema_descriptor: SchemaDescriptor,
@@ -115,6 +116,21 @@ impl BlockReader {
             }
         };
 
+        let projected_virtual_schema =
+            if let Some(ref project_virtual_columns) = project_virtual_columns {
+                let mut schema = projected_schema.as_ref().clone();
+                for virtual_column in project_virtual_columns.values() {
+                    schema.add_virtual_column(
+                        virtual_column.column_name(),
+                        virtual_column.table_data_type(),
+                        virtual_column.column_id(),
+                    );
+                }
+                Some(Arc::new(schema))
+            } else {
+                None
+            };
+
         let arrow_schema = schema.to_arrow();
         let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
 
@@ -131,6 +147,7 @@ impl BlockReader {
             operator,
             projection,
             projected_schema,
+            projected_virtual_schema,
             project_indices,
             project_column_nodes,
             parquet_schema_descriptor,
@@ -163,6 +180,10 @@ impl BlockReader {
 
     pub fn schema(&self) -> TableSchemaRef {
         self.projected_schema.clone()
+    }
+
+    pub fn projected_virtual_schema(&self) -> &Option<TableSchemaRef> {
+        &self.projected_virtual_schema
     }
 
     pub fn data_fields(&self) -> Vec<DataField> {

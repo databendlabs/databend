@@ -108,7 +108,8 @@ impl BlockReader {
                         block_idx: block_meta_index.block_idx,
                     };
                     for virtual_column in project_virtual_columns.values() {
-                        let column = virtual_column.generate_column(&virtual_column_meta, num_rows);
+                        let column =
+                            virtual_column.generate_column_values(&virtual_column_meta, num_rows);
                         new_data_block.add_column(column);
                     }
                     Ok(new_data_block)

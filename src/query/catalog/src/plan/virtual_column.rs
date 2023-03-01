@@ -73,15 +73,16 @@ impl VirtualColumn {
         u32::MAX
     }
 
-    pub fn generate_column(&self, meta: &VirtualColumnMeta, num_rows: usize) -> BlockEntry {
+    pub fn generate_column_values(&self, meta: &VirtualColumnMeta, num_rows: usize) -> BlockEntry {
         match &self.column_type {
             VirtualColumnType::RowId => {
-                let block_id = meta.block_idx;
-                let seg_id = meta.segment_idx;
+                let block_id = meta.block_idx as u64;
+                let seg_id = meta.segment_idx as u64;
+                let high_32bit = (block_id << 48) + (seg_id << 32);
                 let mut builder =
                     NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, num_rows);
                 for i in 0..num_rows {
-                    let row_id = (block_id + seg_id + i) as u64;
+                    let row_id = high_32bit + i as u64;
                     builder.push(NumberScalar::UInt64(row_id));
                 }
                 BlockEntry {
