@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,42 +13,30 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashMap;
 
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct OverflowInfo {
-    pub temporary_path: String,
-    // bucket_id -> (offset, length)
-    pub bucket_info: HashMap<usize, (usize, usize)>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct AggregateInfo {
+pub struct AggregateSerdeMeta {
     pub bucket: isize,
-    pub overflow: Option<OverflowInfo>,
 }
 
-impl AggregateInfo {
+impl AggregateSerdeMeta {
     pub fn create(bucket: isize) -> BlockMetaInfoPtr {
-        Box::new(AggregateInfo {
-            bucket,
-            overflow: None,
-        })
+        Box::new(AggregateSerdeMeta { bucket })
     }
 }
 
-#[typetag::serde(name = "aggregate_info")]
-impl BlockMetaInfo for AggregateInfo {
+#[typetag::serde(name = "aggregate_serde")]
+impl BlockMetaInfo for AggregateSerdeMeta {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        match AggregateInfo::downcast_ref_from(info) {
+        match AggregateSerdeMeta::downcast_ref_from(info) {
             None => false,
             Some(other) => self == other,
         }
