@@ -18,6 +18,7 @@ mod transform_aggregate_spill_writer;
 mod transform_deserializer;
 mod transform_group_by_serializer;
 mod transform_group_by_spill_writer;
+mod transform_spill_reader;
 
 pub use serde_meta::AggregateSerdeMeta;
 pub use transform_aggregate_serializer::TransformAggregateSerializer;
