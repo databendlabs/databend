@@ -77,7 +77,7 @@ impl ResultScan {
         Ok(Arc::new(ResultScan {
             table_info: info.table_info.clone(),
             query_id: info.query_id.clone(),
-            block_raw_data: info.blocks_row_data.clone(),
+            block_raw_data: info.block_raw_data.clone(),
         }))
     }
 }
@@ -100,7 +100,7 @@ impl Table for ResultScan {
         DataSourceInfo::ResultScanSource(ResultScanTableInfo {
             table_info: self.table_info.clone(),
             query_id: self.query_id.clone(),
-            blocks_row_data: self.block_raw_data.clone(),
+            block_raw_data: self.block_raw_data.clone(),
         })
     }
 
