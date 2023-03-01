@@ -45,16 +45,21 @@ DECIMAL has a set of complex rules for precision inference. Different rules will
 
 ### Arithmetic Operations
 
-- Addition/Subtraction: DECIMAL(a, b) + DECIMAL(x, y) -> DECIMAL(max(a - b, x - y) + max(b, y) + 1, max(b, y)), which means both integer and decimal parts use the larger value of the two operands.
+- Addition/Subtraction: `DECIMAL(a, b) + DECIMAL(x, y) -> DECIMAL(max(a - b, x - y) + max(b, y) + 1, max(b, y))`, which means both integer and decimal parts use the larger value of the two operands.
 
-- Multiplication: DECIMAL(a, b) * DECIMAL(x, y) -> DECIMAL(a + x, b + y).
+- Multiplication: `DECIMAL(a, b) * DECIMAL(x, y) -> DECIMAL(a + x, b + y)`.
 
-- Division: DECIMAL(a, b) / DECIMAL(x, y) -> DECIMAL(a + y, b).
+- Division: `DECIMAL(a, b) / DECIMAL(x, y) -> DECIMAL(a + y, b)`.
+
+### Comparision Operations
+
+- Decimal can be compared with other numeric types.
+- Decimal can be compared with other decimal types.
 
 ### Aggregate Operations
 
-- SUM: SUM(DECIMAL(a, b)) -> DECIMAL(MAX, b)
-- AVG: AVG(DECIMAL(a, b)) -> DECIMAL(MAX, max(b, 4))
+- SUM: `SUM(DECIMAL(a, b)) -> DECIMAL(MAX, b)`
+- AVG: `AVG(DECIMAL(a, b)) -> DECIMAL(MAX, max(b, 4))`
 
 where `MAX` is 38 for decimal128 and 76 for decimal256.
 

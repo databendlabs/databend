@@ -160,5 +160,5 @@ Some functions are non-deterministic, such as `now()`, `rand()`, `uuid()`, etc. 
 
 - [Query Cache in ClickHouse](https://clickhouse.com/docs/en/operations/query-cache/)
 - [Blog about the query cache in ClickHouse](https://clickhouse.com/blog/introduction-to-the-clickhouse-query-cache-and-design)
-- [RESULT_SCAN in snowflake](https://docs.snowflake.com/ja/sql-reference/functions/result_scan)
+- [RESULT_SCAN in snowflake](https://docs.snowflake.com/en/sql-reference/functions/result_scan)
 - [Tuning the Result Cache in Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/19/tgdba/tuning-result-cache.html)

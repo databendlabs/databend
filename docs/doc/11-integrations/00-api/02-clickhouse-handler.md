@@ -9,7 +9,7 @@ description:
 
 ## Overview
 
-Databend is ClickHouse wire protocol-compatible, allow you to connect to Databend server with Clickhouse client, make it easier for users/developers to use Databend.
+Databend is ClickHouse HTTP API wire protocol-compatible, allow you to connect to Databend server with ClickHouse HTTP Handler, make it easier for users/developers to use Databend.
 
 ## ClickHouse REST API
 
