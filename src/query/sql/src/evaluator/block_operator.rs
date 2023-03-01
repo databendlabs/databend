@@ -17,16 +17,17 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::array::ArrayColumn;
+use common_expression::types::array::ArrayColumnBuilder;
 use common_expression::types::AnyType;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
+use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FieldIndex;
 use common_expression::FunctionContext;
-use common_expression::FunctionID;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
@@ -47,46 +48,25 @@ pub enum BlockOperator {
 
     /// Reorganize the input `DataBlock` with `projection`.
     Project { projection: Vec<FieldIndex> },
-    // Remap { indices: Vec<(IndexType, IndexType)> },
+
+    /// Unnest certain fields of the input `DataBlock`.
+    Unnest { fields: Vec<usize> },
 }
 
 impl BlockOperator {
     pub fn execute(&self, func_ctx: &FunctionContext, mut input: DataBlock) -> Result<DataBlock> {
         match self {
             BlockOperator::Map { exprs } => {
-                let mut unnest_columns = vec![];
-                let offset = input.num_columns();
-
-                for (i, expr) in exprs.iter().enumerate() {
+                for expr in exprs {
                     let evaluator = Evaluator::new(&input, *func_ctx, &BUILTIN_FUNCTIONS);
-
-                    if let Expr::FunctionCall {
-                        id: FunctionID::Builtin { name, .. },
-                        ..
-                    } = expr
-                    {
-                        if name == "unnest" {
-                            let result = evaluator.run(expr)?;
-                            let values_and_offsets =
-                                result.into_column().unwrap().into_array().unwrap();
-                            unnest_columns.push((i + offset, values_and_offsets));
-                            // add a temporary dummy column.
-                            input.add_column(BlockEntry {
-                                data_type: DataType::Null,
-                                value: Value::Scalar(Scalar::Null),
-                            })
-                        }
-                    } else {
-                        let result = evaluator.run(expr)?;
-                        let col = BlockEntry {
-                            data_type: expr.data_type().clone(),
-                            value: result,
-                        };
-                        input.add_column(col);
-                    }
+                    let result = evaluator.run(expr)?;
+                    let col = BlockEntry {
+                        data_type: expr.data_type().clone(),
+                        value: result,
+                    };
+                    input.add_column(col);
                 }
-
-                Self::fit_unnest(input, &unnest_columns)
+                Ok(input)
             }
 
             BlockOperator::Filter { expr } => {
@@ -103,6 +83,27 @@ impl BlockOperator {
                     result.add_column(input.get_by_offset(*index).clone());
                 }
                 Ok(result)
+            }
+
+            BlockOperator::Unnest { fields } => {
+                let num_rows = input.num_rows();
+                let mut unnest_columns = Vec::with_capacity(fields.len());
+                for field in fields {
+                    let col = input.get_by_offset(*field);
+                    let array_col = match &col.value {
+                        Value::Scalar(Scalar::Array(col)) => {
+                            Box::new(ArrayColumnBuilder::<AnyType>::repeat(col, num_rows).build())
+                        }
+                        Value::Column(Column::Array(col)) => col.clone(),
+                        _ => {
+                            return Err(ErrorCode::Internal(
+                                "Unnest can only be applied to array types.",
+                            ));
+                        }
+                    };
+                    unnest_columns.push((*field, array_col));
+                }
+                Self::fit_unnest(input, &unnest_columns)
             }
         }
     }
@@ -278,6 +279,7 @@ impl Transform for CompoundBlockOperator {
                         BlockOperator::Map { .. } => "Map",
                         BlockOperator::Filter { .. } => "Filter",
                         BlockOperator::Project { .. } => "Project",
+                        BlockOperator::Unnest { .. } => "Unnest",
                     }
                     .to_string()
                 })

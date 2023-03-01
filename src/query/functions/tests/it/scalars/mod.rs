@@ -50,7 +50,6 @@ pub(crate) mod parser;
 mod regexp;
 mod string;
 mod tuple;
-mod unnest;
 mod variant;
 
 #[allow(clippy::type_complexity)]

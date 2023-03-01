@@ -31,6 +31,7 @@ use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::NotExpr;
 use crate::plans::OrExpr;
+use crate::plans::Unnest;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::ColumnSet;
@@ -384,5 +385,18 @@ fn remove_column_nullable(
             })
         }
         ScalarExpr::ConstantExpr(_) | ScalarExpr::SubqueryExpr(_) => scalar_expr.clone(),
+        ScalarExpr::Unnest(expr) => {
+            let argument = Box::new(remove_column_nullable(
+                &expr.argument,
+                left_prop,
+                right_prop,
+                join_type,
+                metadata,
+            )?);
+            ScalarExpr::Unnest(Unnest {
+                argument,
+                return_type: expr.return_type.clone(),
+            })
+        }
     })
 }

@@ -108,6 +108,7 @@ impl ScalarExpr {
                 data_type: subquery.data_type(),
                 display_name: DUMMY_NAME.to_string(),
             },
+            ScalarExpr::Unnest(_) => unreachable!("Unnest cannot be lowered to RawExpr"),
         }
     }
 
@@ -199,6 +200,9 @@ impl ScalarExpr {
                 data_type: subquery.data_type(),
                 display_name: DUMMY_NAME.to_string(),
             },
+            ScalarExpr::Unnest(_) => {
+                unreachable!("Unnest cannot be converted to RawExpr")
+            }
         }
     }
 

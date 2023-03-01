@@ -159,6 +159,7 @@ impl PipelineBuilder {
             PhysicalPlan::Exchange(_) => Err(ErrorCode::Internal(
                 "Invalid physical plan with PhysicalPlan::Exchange",
             )),
+            PhysicalPlan::Unnest(_) => todo!("unnest"),
         }
     }
 
