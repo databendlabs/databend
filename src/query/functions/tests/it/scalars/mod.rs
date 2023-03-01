@@ -18,16 +18,12 @@ use std::io::Write;
 use comfy_table::Table;
 use common_exception::Result;
 use common_expression::type_check;
-use common_expression::types::AnyType;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::ConstantFolder;
 use common_expression::DataBlock;
-use common_expression::Domain;
 use common_expression::Evaluator;
-use common_expression::Expr;
 use common_expression::FunctionContext;
-use common_expression::RawExpr;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use goldenfile::Mint;
@@ -52,97 +48,84 @@ mod string;
 mod tuple;
 mod variant;
 
-#[allow(clippy::type_complexity)]
-pub fn run_ast_and_eval(
-    text: &str,
-    columns: &[(&str, Column)],
-) -> Result<(
-    RawExpr,
-    Expr,
-    HashMap<usize, Domain>,
-    Expr,
-    String,
-    Value<AnyType>,
-)> {
-    let raw_expr = parser::parse_raw_expr(
-        text,
-        &columns
-            .iter()
-            .map(|(name, c)| (*name, c.data_type()))
-            .collect::<Vec<_>>(),
-    );
-
-    let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
-
-    let input_domains = columns
-        .iter()
-        .map(|(_, col)| col.domain())
-        .enumerate()
-        .collect::<HashMap<_, _>>();
-
-    let (optimized_expr, output_domain) = ConstantFolder::fold_with_domain(
-        &expr,
-        input_domains.clone(),
-        FunctionContext::default(),
-        &BUILTIN_FUNCTIONS,
-    );
-
-    let remote_expr = optimized_expr.as_remote_expr();
-    let optimized_expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
-
-    let num_rows = columns.iter().map(|col| col.1.len()).max().unwrap_or(1);
-    let block = DataBlock::new(
-        columns
-            .iter()
-            .map(|(_, col)| BlockEntry {
-                data_type: col.data_type(),
-                value: Value::Column(col.clone()),
-            })
-            .collect::<Vec<_>>(),
-        num_rows,
-    );
-
-    columns.iter().for_each(|(_, col)| {
-        test_arrow_conversion(col);
-    });
-
-    let evaluator = Evaluator::new(&block, FunctionContext::default(), &BUILTIN_FUNCTIONS);
-    let result = evaluator.run(&expr);
-    let optimized_result = evaluator.run(&optimized_expr);
-    match &result {
-        Ok(result) => assert!(
-            result
-                .as_ref()
-                .semantically_eq(&optimized_result.clone().unwrap().as_ref()),
-            "{} should eq {}, expr: {}, optimized_expr: {}",
-            result,
-            optimized_result.unwrap(),
-            expr.sql_display(),
-            optimized_expr.sql_display()
-        ),
-        Err(e) => {
-            let optimized_err = optimized_result.unwrap_err();
-            assert_eq!(e.message(), optimized_err.message());
-            assert_eq!(e.span(), optimized_err.span());
-        }
-    }
-
-    Ok((
-        raw_expr,
-        expr,
-        input_domains,
-        optimized_expr,
-        output_domain
-            .as_ref()
-            .map(ToString::to_string)
-            .unwrap_or_else(|| "Unknown".to_string()),
-        result?,
-    ))
-}
-
 pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, Column)]) {
     let text = text.as_ref();
-    let result = run_ast_and_eval(text, columns);
+    let result: Result<_> = try {
+        let raw_expr = parser::parse_raw_expr(
+            text,
+            &columns
+                .iter()
+                .map(|(name, c)| (*name, c.data_type()))
+                .collect::<Vec<_>>(),
+        );
+
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+
+        let input_domains = columns
+            .iter()
+            .map(|(_, col)| col.domain())
+            .enumerate()
+            .collect::<HashMap<_, _>>();
+
+        let (optimized_expr, output_domain) = ConstantFolder::fold_with_domain(
+            &expr,
+            input_domains.clone(),
+            FunctionContext::default(),
+            &BUILTIN_FUNCTIONS,
+        );
+
+        let remote_expr = optimized_expr.as_remote_expr();
+        let optimized_expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
+
+        let num_rows = columns.iter().map(|col| col.1.len()).max().unwrap_or(1);
+        let block = DataBlock::new(
+            columns
+                .iter()
+                .map(|(_, col)| BlockEntry {
+                    data_type: col.data_type(),
+                    value: Value::Column(col.clone()),
+                })
+                .collect::<Vec<_>>(),
+            num_rows,
+        );
+
+        columns.iter().for_each(|(_, col)| {
+            test_arrow_conversion(col);
+        });
+
+        let evaluator = Evaluator::new(&block, FunctionContext::default(), &BUILTIN_FUNCTIONS);
+        let result = evaluator.run(&expr);
+        let optimized_result = evaluator.run(&optimized_expr);
+        match &result {
+            Ok(result) => assert!(
+                result
+                    .as_ref()
+                    .semantically_eq(&optimized_result.clone().unwrap().as_ref()),
+                "{} should eq {}, expr: {}, optimized_expr: {}",
+                result,
+                optimized_result.unwrap(),
+                expr.sql_display(),
+                optimized_expr.sql_display()
+            ),
+            Err(e) => {
+                let optimized_err = optimized_result.unwrap_err();
+                assert_eq!(e.message(), optimized_err.message());
+                assert_eq!(e.span(), optimized_err.span());
+            }
+        }
+
+        (
+            raw_expr,
+            expr,
+            input_domains,
+            optimized_expr,
+            output_domain
+                .as_ref()
+                .map(ToString::to_string)
+                .unwrap_or_else(|| "Unknown".to_string()),
+            result?,
+        )
+    };
 
     match result {
         Ok((raw_expr, expr, input_domains, optimized_expr, output_domain, result)) => {
