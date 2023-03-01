@@ -21,7 +21,6 @@ use common_exception::Result;
 use roaring::RoaringBitmap;
 
 use super::explore_rules::calc_explore_rule_set;
-use crate::optimizer::cascades::explore_rules::get_explore_rule_set;
 use crate::optimizer::cascades::scheduler::Scheduler;
 use crate::optimizer::cascades::tasks::OptimizeGroupTask;
 use crate::optimizer::cascades::tasks::Task;
@@ -30,7 +29,6 @@ use crate::optimizer::cost::CostModel;
 use crate::optimizer::cost::DefaultCostModel;
 use crate::optimizer::format::display_memo;
 use crate::optimizer::memo::Memo;
-use crate::optimizer::rule::RuleSet;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::SExpr;
 use crate::IndexType;
@@ -39,7 +37,6 @@ use crate::IndexType;
 /// find the optimal one.
 pub struct CascadesOptimizer {
     pub memo: Memo,
-    pub explore_rules: RuleSet,
     pub explore_rule_set: roaring::RoaringBitmap,
 
     pub cost_model: Box<dyn CostModel>,
@@ -52,11 +49,6 @@ pub struct CascadesOptimizer {
 impl CascadesOptimizer {
     pub fn create(ctx: Arc<dyn TableContext>) -> Result<Self> {
         let enable_bushy_join = ctx.get_settings().get_enable_bushy_join()? != 0;
-        let explore_rules = if ctx.get_settings().get_enable_cbo()? {
-            get_explore_rule_set(enable_bushy_join)
-        } else {
-            RuleSet::create_with_ids(vec![]).unwrap()
-        };
         let explore_rule_set = if ctx.get_settings().get_enable_cbo()? {
             calc_explore_rule_set(enable_bushy_join)
         } else {
@@ -64,7 +56,6 @@ impl CascadesOptimizer {
         };
         Ok(CascadesOptimizer {
             memo: Memo::create(),
-            explore_rules,
             cost_model: Box::new(DefaultCostModel),
             best_cost_map: HashMap::new(),
             _ctx: ctx,

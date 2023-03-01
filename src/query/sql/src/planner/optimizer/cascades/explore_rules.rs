@@ -15,35 +15,8 @@
 use roaring::RoaringBitmap;
 
 use crate::optimizer::RuleID;
-use crate::optimizer::RuleSet;
 
-pub fn get_explore_rule_set(enable_bushy_join: bool) -> RuleSet {
-    if enable_bushy_join {
-        join_rule_set_rs_b2()
-    } else {
-        join_rule_set_rs_l1()
-    }
-}
-
-/// Get rule set of join order RS-B2, which may generate bushy trees.
-/// Read paper "The Complexity of Transformation-Based Join Enumeration" for more details.
-fn join_rule_set_rs_b2() -> RuleSet {
-    RuleSet::create_with_ids(vec![
-        RuleID::CommuteJoin,
-        RuleID::LeftAssociateJoin,
-        RuleID::RightAssociateJoin,
-        RuleID::ExchangeJoin,
-    ])
-    .unwrap()
-}
-
-/// Get rule set of join order RS-L1, which will only generate left-deep trees.
-/// Read paper "The Complexity of Transformation-Based Join Enumeration" for more details.
-fn join_rule_set_rs_l1() -> RuleSet {
-    RuleSet::create_with_ids(vec![RuleID::CommuteJoinBaseTable, RuleID::LeftExchangeJoin]).unwrap()
-}
-
-pub fn calc_explore_rule_set(enable_bushy_join: bool) -> roaring::RoaringBitmap {
+pub fn calc_explore_rule_set(enable_bushy_join: bool) -> RoaringBitmap {
     if enable_bushy_join {
         calc_join_rule_set_rs_b2()
     } else {
@@ -53,13 +26,13 @@ pub fn calc_explore_rule_set(enable_bushy_join: bool) -> roaring::RoaringBitmap 
 
 /// Get rule set of join order RS-B2, which may generate bushy trees.
 /// Read paper "The Complexity of Transformation-Based Join Enumeration" for more details.
-fn calc_join_rule_set_rs_b2() -> roaring::RoaringBitmap {
+fn calc_join_rule_set_rs_b2() -> RoaringBitmap {
     (RuleID::CommuteJoin as u32..RuleID::CommuteJoinBaseTable as u32).collect::<RoaringBitmap>()
 }
 
 /// Get rule set of join order RS-L1, which will only generate left-deep trees.
 /// Read paper "The Complexity of Transformation-Based Join Enumeration" for more details.
-fn calc_join_rule_set_rs_l1() -> roaring::RoaringBitmap {
+fn calc_join_rule_set_rs_l1() -> RoaringBitmap {
     (RuleID::CommuteJoinBaseTable as u32..RuleID::RightExchangeJoin as u32)
         .collect::<RoaringBitmap>()
 }
