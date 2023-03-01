@@ -604,7 +604,7 @@ fn string_value(value: &Scalar) -> Result<String> {
 }
 
 #[inline(always)]
-fn parse_result_scan_args(table_args: &TableArgs) -> Result<String> {
+pub fn parse_result_scan_args(table_args: &TableArgs) -> Result<String> {
     let args = table_args.expect_all_positioned("RESULT_SCAN", Some(1))?;
     string_value(&args[0])
 }

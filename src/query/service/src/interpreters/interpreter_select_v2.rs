@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::Table;
 use common_exception::Result;
 use common_expression::infer_table_schema;
 use common_expression::DataSchemaRef;
@@ -24,6 +25,7 @@ use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
+use common_sql::parse_result_scan_args;
 use common_sql::MetadataRef;
 use common_storages_result_cache::gen_result_cache_key;
 use common_storages_result_cache::ResultCacheReader;
@@ -165,15 +167,15 @@ impl SelectInterpreterV2 {
         false
     }
 
-    fn is_result_scan(&self) -> bool {
+    fn result_scan_table(&self) -> Option<Arc<dyn Table>> {
         let r_lock = self.metadata.read();
         let tables = r_lock.tables();
         for t in tables {
             if t.name().eq_ignore_ascii_case("result_scan") {
-                return true;
+                return Some(t.table());
             }
         }
-        false
+        None
     }
 }
 
@@ -207,30 +209,35 @@ impl Interpreter for SelectInterpreterV2 {
             // 4) select * from t1; --> result changed since we insert new data.
             // 5) select * from result_scan(last_query_id()); --> result same as line 2 cause cache
             // If we read cache for 5, we will see it returns same result as 1 and 2 cause the
-            // generated result_cache_key are same for this statement, so here we just write cache
-            // but not read cache for `result_scan`.
-            if self.is_result_scan() {
-                let schema = infer_table_schema(&self.schema())?;
-                self.add_result_cache(&key, schema, &mut build_res.main_pipeline, kv_store)?;
-                return Ok(build_res);
-            }
+            // generated result_cache_key are same for this statement, so here we fetch the previous
+            // meta_key through related query_id and using this meta_key to read cache.
+            let meta_key = if let Some(t) = self.result_scan_table() {
+                let arg_query_id = parse_result_scan_args(&t.table_args().unwrap())?;
+                let qurey_id_related_meta_key = self.ctx.get_result_cache_key(&arg_query_id);
+                qurey_id_related_meta_key
+            } else {
+                None
+            };
 
-            let cache_reader = ResultCacheReader::create(
-                self.ctx.clone(),
-                &key,
-                kv_store.clone(),
-                self.ctx
-                    .get_settings()
-                    .get_query_result_cache_allow_inconsistent()?,
-            );
+            let cache_reader = if let Some(meta_key) = meta_key {
+                ResultCacheReader::create_with_meta_key(meta_key, kv_store.clone())
+            } else {
+                ResultCacheReader::create(
+                    self.ctx.clone(),
+                    &key,
+                    kv_store.clone(),
+                    self.ctx
+                        .get_settings()
+                        .get_query_result_cache_allow_inconsistent()?,
+                )
+            };
 
             // 2. Check the cache.
             match cache_reader.try_read_cached_result().await {
                 Ok(Some(blocks)) => {
                     // 2.0 update query_id -> result_cache_meta_key in session.
                     self.ctx
-                        .get_current_session()
-                        .update_query_ids_results(self.ctx.get_id(), cache_reader.get_meta_key());
+                        .set_query_id_result_cache(self.ctx.get_id(), cache_reader.get_meta_key());
                     // 2.1 If found, return the result directly.
                     return PipelineBuildResult::from_blocks(blocks);
                 }
