@@ -175,9 +175,7 @@ impl AsyncSource for ResultScanSource {
         self.finish = true;
         if self.ctx.get_settings().get_enable_query_result_cache()? {
             if let Some(ref blocks) = self.blocks {
-                if self.ctx.get_settings().get_enable_query_result_cache()? {
-                    return Ok(Some(DataBlock::concat(blocks)?));
-                }
+                return Ok(Some(DataBlock::concat(blocks)?));
             }
 
             let meta_key = self.ctx.get_result_cache_key(&self.arg_query_id);
