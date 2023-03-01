@@ -31,10 +31,13 @@ mod binary_read;
 mod binary_write;
 
 pub mod cursor_ext;
+mod decimal;
 mod escape;
 mod format_settings;
 mod position;
 mod serialization;
 mod stat_buffer;
 
+pub use decimal::display_decimal_128;
+pub use decimal::display_decimal_256;
 pub use escape::escape_string;
