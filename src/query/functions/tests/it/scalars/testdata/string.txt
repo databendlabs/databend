@@ -2201,11 +2201,11 @@ error:
   --> SQL:1:1
   |
 1 | lpad('hi', -1, '?')
-  | ^^^^^^^^^^^^^^^^^^^ no overload satisfies `lpad(String, Int16, String)`
+  | ^^^^^^^^^^^^^^^^^^^ no overload satisfies `lpad(String, Int8, String)`
 
 has tried possible overloads:
-  lpad(String, UInt64, String) :: String                      : unable to unify `Int16` with `UInt64`
-  lpad(String NULL, UInt64 NULL, String NULL) :: String NULL  : unable to unify `Int16` with `UInt64`
+  lpad(String, UInt64, String) :: String                      : unable to unify `Int8` with `UInt64`
+  lpad(String NULL, UInt64 NULL, String NULL) :: String NULL  : unable to unify `Int8` with `UInt64`
 
 
 
@@ -2273,11 +2273,11 @@ error:
   --> SQL:1:1
   |
 1 | rpad('hi', -1, '?')
-  | ^^^^^^^^^^^^^^^^^^^ no overload satisfies `rpad(String, Int16, String)`
+  | ^^^^^^^^^^^^^^^^^^^ no overload satisfies `rpad(String, Int8, String)`
 
 has tried possible overloads:
-  rpad(String, UInt64, String) :: String                      : unable to unify `Int16` with `UInt64`
-  rpad(String NULL, UInt64 NULL, String NULL) :: String NULL  : unable to unify `Int16` with `UInt64`
+  rpad(String, UInt64, String) :: String                      : unable to unify `Int8` with `UInt64`
+  rpad(String NULL, UInt64 NULL, String NULL) :: String NULL  : unable to unify `Int8` with `UInt64`
 
 
 
@@ -2742,8 +2742,8 @@ output         : "QuWhattic"
 
 
 ast            : insert('Quadratic', -1, 4, 'What')
-raw expr       : insert("Quadratic", minus(1_u8), 4_u8, "What")
-checked expr   : insert<String, Int64, Int64, String>("Quadratic", to_int64<Int16>(minus<UInt8>(1_u8)), to_int64<UInt8>(4_u8), "What")
+raw expr       : insert("Quadratic", -1_i8, 4_u8, "What")
+checked expr   : insert<String, Int64, Int64, String>("Quadratic", to_int64<Int8>(-1_i8), to_int64<UInt8>(4_u8), "What")
 optimized expr : "Quadratic"
 output type    : String
 output domain  : {"Quadratic"..="Quadratic"}
@@ -2991,8 +2991,8 @@ evaluation (internal):
 
 
 ast            : mid('1234567890', -3, 3)
-raw expr       : mid("1234567890", minus(3_u8), 3_u8)
-checked expr   : substr<String, Int64, UInt64>("1234567890", to_int64<Int16>(minus<UInt8>(3_u8)), to_uint64<UInt8>(3_u8))
+raw expr       : mid("1234567890", -3_i8, 3_u8)
+checked expr   : substr<String, Int64, UInt64>("1234567890", to_int64<Int8>(-3_i8), to_uint64<UInt8>(3_u8))
 optimized expr : "890"
 output type    : String
 output domain  : {"890"..="890"}
@@ -3000,8 +3000,8 @@ output         : "890"
 
 
 ast            : mid('1234567890', -3)
-raw expr       : mid("1234567890", minus(3_u8))
-checked expr   : substr<String, Int64>("1234567890", to_int64<Int16>(minus<UInt8>(3_u8)))
+raw expr       : mid("1234567890", -3_i8)
+checked expr   : substr<String, Int64>("1234567890", to_int64<Int8>(-3_i8))
 optimized expr : "890"
 output type    : String
 output domain  : {"890"..="890"}
@@ -3018,8 +3018,8 @@ output         : ""
 
 
 ast            : substr('Sakila' from -4 for 2)
-raw expr       : substr("Sakila", minus(4_u8), 2_u8)
-checked expr   : substr<String, Int64, UInt64>("Sakila", to_int64<Int16>(minus<UInt8>(4_u8)), to_uint64<UInt8>(2_u8))
+raw expr       : substr("Sakila", -4_i8, 2_u8)
+checked expr   : substr<String, Int64, UInt64>("Sakila", to_int64<Int8>(-4_i8), to_uint64<UInt8>(2_u8))
 optimized expr : "ki"
 output type    : String
 output domain  : {"ki"..="ki"}
@@ -3027,8 +3027,8 @@ output         : "ki"
 
 
 ast            : substr('sakila' FROM -4)
-raw expr       : substr("sakila", minus(4_u8))
-checked expr   : substr<String, Int64>("sakila", to_int64<Int16>(minus<UInt8>(4_u8)))
+raw expr       : substr("sakila", -4_i8)
+checked expr   : substr<String, Int64>("sakila", to_int64<Int8>(-4_i8))
 optimized expr : "kila"
 output type    : String
 output domain  : {"kila"..="kila"}

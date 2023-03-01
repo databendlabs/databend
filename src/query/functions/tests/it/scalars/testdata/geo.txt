@@ -1,6 +1,6 @@
 ast            : geo_to_h3(37.79506683, 55.71290588, 15)
-raw expr       : geo_to_h3(37.79506683_f64, 55.71290588_f64, 15_u8)
-checked expr   : geo_to_h3<Float64, Float64, UInt8>(37.79506683_f64, 55.71290588_f64, 15_u8)
+raw expr       : geo_to_h3(37.79506683_decimal(10, 8), 55.71290588_decimal(10, 8), 15_u8)
+checked expr   : geo_to_h3<Float64, Float64, UInt8>(to_float64<Decimal(10, 8)>(37.79506683_d128(10,8)), to_float64<Decimal(10, 8)>(55.71290588_d128(10,8)), 15_u8)
 optimized expr : 644325524701193974_u64
 output type    : UInt64
 output domain  : {644325524701193974..=644325524701193974}
@@ -31,8 +31,8 @@ evaluation (internal):
 
 
 ast            : great_circle_distance(55.755831, 37.617673, -55.755831, -37.617673)
-raw expr       : great_circle_distance(55.755831_f64, 37.617673_f64, minus(55.755831_f64), minus(37.617673_f64))
-checked expr   : great_circle_distance<Float64, Float64, Float64, Float64>(55.755831_f64, 37.617673_f64, minus<Float64>(55.755831_f64), minus<Float64>(37.617673_f64))
+raw expr       : great_circle_distance(55.755831_decimal(8, 6), 37.617673_decimal(8, 6), -55.755831_decimal(8, 6), -37.617673_decimal(8, 6))
+checked expr   : great_circle_distance<Float64, Float64, Float64, Float64>(to_float64<Decimal(8, 6)>(55.755831_d128(8,6)), to_float64<Decimal(8, 6)>(37.617673_d128(8,6)), to_float64<Decimal(8, 6)>(-55.755831_d128(8,6)), to_float64<Decimal(8, 6)>(-37.617673_d128(8,6)))
 optimized expr : 14128353_f32
 output type    : Float32
 output domain  : {14128353..=14128353}
@@ -65,8 +65,8 @@ evaluation (internal):
 
 
 ast            : geo_distance(55.755831, 37.617673, -55.755831, -37.617673)
-raw expr       : geo_distance(55.755831_f64, 37.617673_f64, minus(55.755831_f64), minus(37.617673_f64))
-checked expr   : geo_distance<Float64, Float64, Float64, Float64>(55.755831_f64, 37.617673_f64, minus<Float64>(55.755831_f64), minus<Float64>(37.617673_f64))
+raw expr       : geo_distance(55.755831_decimal(8, 6), 37.617673_decimal(8, 6), -55.755831_decimal(8, 6), -37.617673_decimal(8, 6))
+checked expr   : geo_distance<Float64, Float64, Float64, Float64>(to_float64<Decimal(8, 6)>(55.755831_d128(8,6)), to_float64<Decimal(8, 6)>(37.617673_d128(8,6)), to_float64<Decimal(8, 6)>(-55.755831_d128(8,6)), to_float64<Decimal(8, 6)>(-37.617673_d128(8,6)))
 optimized expr : 14128353_f32
 output type    : Float32
 output domain  : {14128353..=14128353}
@@ -131,8 +131,8 @@ evaluation (internal):
 
 
 ast            : point_in_ellipses(10., 10., 10., 9.1, 1., 0.9999)
-raw expr       : point_in_ellipses(10_f64, 10_f64, 10_f64, 9.1_f64, 1_f64, 0.9999_f64)
-checked expr   : point_in_ellipses<Float64, Float64, Float64, Float64, Float64, Float64>(10_f64, 10_f64, 10_f64, 9.1_f64, 1_f64, 0.9999_f64)
+raw expr       : point_in_ellipses(10_decimal(2, 0), 10_decimal(2, 0), 10_decimal(2, 0), 9.1_decimal(2, 1), 1_decimal(1, 0), 0.9999_decimal(4, 4))
+checked expr   : point_in_ellipses<Float64, Float64, Float64, Float64, Float64, Float64>(to_float64<Decimal(2, 0)>(10_d128(2,0)), to_float64<Decimal(2, 0)>(10_d128(2,0)), to_float64<Decimal(2, 0)>(10_d128(2,0)), to_float64<Decimal(2, 1)>(9.1_d128(2,1)), to_float64<Decimal(1, 0)>(1_d128(1,0)), to_float64<Decimal(4, 4)>(0.9999_d128(4,4)))
 optimized expr : 1_u8
 output type    : UInt8
 output domain  : {1..=1}
@@ -140,8 +140,9 @@ output         : 1
 
 
 ast            : point_in_ellipses(10., 10., 10., 9.1, a, b)
-raw expr       : point_in_ellipses(10_f64, 10_f64, 10_f64, 9.1_f64, a::Float64, b::Float64)
-checked expr   : point_in_ellipses<Float64, Float64, Float64, Float64, Float64, Float64>(10_f64, 10_f64, 10_f64, 9.1_f64, a, b)
+raw expr       : point_in_ellipses(10_decimal(2, 0), 10_decimal(2, 0), 10_decimal(2, 0), 9.1_decimal(2, 1), a::Float64, b::Float64)
+checked expr   : point_in_ellipses<Float64, Float64, Float64, Float64, Float64, Float64>(to_float64<Decimal(2, 0)>(10_d128(2,0)), to_float64<Decimal(2, 0)>(10_d128(2,0)), to_float64<Decimal(2, 0)>(10_d128(2,0)), to_float64<Decimal(2, 1)>(9.1_d128(2,1)), a, b)
+optimized expr : point_in_ellipses<Float64, Float64, Float64, Float64, Float64, Float64>(10_f64, 10_f64, 10_f64, 9.1_f64, a, b)
 evaluation:
 +--------+-----------+-------------------+-----------+
 |        | a         | b                 | Output    |
@@ -163,8 +164,8 @@ evaluation (internal):
 
 
 ast            : point_in_polygon((3., 3.), [(6, 0), (8, 4), (5, 8), (0, 2)])
-raw expr       : point_in_polygon(tuple(3_f64, 3_f64), array(tuple(6_u8, 0_u8), tuple(8_u8, 4_u8), tuple(5_u8, 8_u8), tuple(0_u8, 2_u8)))
-checked expr   : point_in_polygon<Tuple(Float64, Float64), Array(Tuple(Float64, Float64))>(tuple<Float64, Float64>(3_f64, 3_f64), CAST(array<T0=Tuple(UInt8, UInt8)><T0, T0, T0, T0>(tuple<UInt8, UInt8>(6_u8, 0_u8), tuple<UInt8, UInt8>(8_u8, 4_u8), tuple<UInt8, UInt8>(5_u8, 8_u8), tuple<UInt8, UInt8>(0_u8, 2_u8)) AS Array(Tuple(Float64, Float64))))
+raw expr       : point_in_polygon(tuple(3_decimal(1, 0), 3_decimal(1, 0)), array(tuple(6_u8, 0_u8), tuple(8_u8, 4_u8), tuple(5_u8, 8_u8), tuple(0_u8, 2_u8)))
+checked expr   : point_in_polygon<Tuple(Float64, Float64), Array(Tuple(Float64, Float64))>(CAST(tuple<Decimal(1, 0), Decimal(1, 0)>(3_d128(1,0), 3_d128(1,0)) AS Tuple(Float64, Float64)), CAST(array<T0=Tuple(UInt8, UInt8)><T0, T0, T0, T0>(tuple<UInt8, UInt8>(6_u8, 0_u8), tuple<UInt8, UInt8>(8_u8, 4_u8), tuple<UInt8, UInt8>(5_u8, 8_u8), tuple<UInt8, UInt8>(0_u8, 2_u8)) AS Array(Tuple(Float64, Float64))))
 optimized expr : 1_u8
 output type    : UInt8
 output domain  : {1..=1}
@@ -196,8 +197,8 @@ evaluation (internal):
 
 
 ast            : point_in_polygon((1., 1.), [[(4., 0.), (8., 4.), (4., 8.), (0., 4.)], [(3., 3.), (3., 5.), (5., 5.), (5., 3.)]])
-raw expr       : point_in_polygon(tuple(1_f64, 1_f64), array(array(tuple(4_f64, 0_f64), tuple(8_f64, 4_f64), tuple(4_f64, 8_f64), tuple(0_f64, 4_f64)), array(tuple(3_f64, 3_f64), tuple(3_f64, 5_f64), tuple(5_f64, 5_f64), tuple(5_f64, 3_f64))))
-checked expr   : point_in_polygon<Tuple(Float64, Float64), Array(Array(Tuple(Float64, Float64)))>(tuple<Float64, Float64>(1_f64, 1_f64), array<T0=Array(Tuple(Float64, Float64))><T0, T0>(array<T0=Tuple(Float64, Float64)><T0, T0, T0, T0>(tuple<Float64, Float64>(4_f64, 0_f64), tuple<Float64, Float64>(8_f64, 4_f64), tuple<Float64, Float64>(4_f64, 8_f64), tuple<Float64, Float64>(0_f64, 4_f64)), array<T0=Tuple(Float64, Float64)><T0, T0, T0, T0>(tuple<Float64, Float64>(3_f64, 3_f64), tuple<Float64, Float64>(3_f64, 5_f64), tuple<Float64, Float64>(5_f64, 5_f64), tuple<Float64, Float64>(5_f64, 3_f64))))
+raw expr       : point_in_polygon(tuple(1_decimal(1, 0), 1_decimal(1, 0)), array(array(tuple(4_decimal(1, 0), 0_decimal(1, 0)), tuple(8_decimal(1, 0), 4_decimal(1, 0)), tuple(4_decimal(1, 0), 8_decimal(1, 0)), tuple(0_decimal(1, 0), 4_decimal(1, 0))), array(tuple(3_decimal(1, 0), 3_decimal(1, 0)), tuple(3_decimal(1, 0), 5_decimal(1, 0)), tuple(5_decimal(1, 0), 5_decimal(1, 0)), tuple(5_decimal(1, 0), 3_decimal(1, 0)))))
+checked expr   : point_in_polygon<Tuple(Float64, Float64), Array(Array(Tuple(Float64, Float64)))>(CAST(tuple<Decimal(1, 0), Decimal(1, 0)>(1_d128(1,0), 1_d128(1,0)) AS Tuple(Float64, Float64)), CAST(array<T0=Array(Tuple(Decimal(1, 0), Decimal(1, 0)))><T0, T0>(array<T0=Tuple(Decimal(1, 0), Decimal(1, 0))><T0, T0, T0, T0>(tuple<Decimal(1, 0), Decimal(1, 0)>(4_d128(1,0), 0_d128(1,0)), tuple<Decimal(1, 0), Decimal(1, 0)>(8_d128(1,0), 4_d128(1,0)), tuple<Decimal(1, 0), Decimal(1, 0)>(4_d128(1,0), 8_d128(1,0)), tuple<Decimal(1, 0), Decimal(1, 0)>(0_d128(1,0), 4_d128(1,0))), array<T0=Tuple(Decimal(1, 0), Decimal(1, 0))><T0, T0, T0, T0>(tuple<Decimal(1, 0), Decimal(1, 0)>(3_d128(1,0), 3_d128(1,0)), tuple<Decimal(1, 0), Decimal(1, 0)>(3_d128(1,0), 5_d128(1,0)), tuple<Decimal(1, 0), Decimal(1, 0)>(5_d128(1,0), 5_d128(1,0)), tuple<Decimal(1, 0), Decimal(1, 0)>(5_d128(1,0), 3_d128(1,0)))) AS Array(Array(Tuple(Float64, Float64)))))
 optimized expr : 0_u8
 output type    : UInt8
 output domain  : {0..=0}
@@ -205,8 +206,8 @@ output         : 0
 
 
 ast            : point_in_polygon((2.5, 2.5), [[(4., 0.), (8., 4.), (4., 8.), (0., 4.)], [(3., 3.), (3., 5.), (5., 5.), (5., 3.)]])
-raw expr       : point_in_polygon(tuple(2.5_f64, 2.5_f64), array(array(tuple(4_f64, 0_f64), tuple(8_f64, 4_f64), tuple(4_f64, 8_f64), tuple(0_f64, 4_f64)), array(tuple(3_f64, 3_f64), tuple(3_f64, 5_f64), tuple(5_f64, 5_f64), tuple(5_f64, 3_f64))))
-checked expr   : point_in_polygon<Tuple(Float64, Float64), Array(Array(Tuple(Float64, Float64)))>(tuple<Float64, Float64>(2.5_f64, 2.5_f64), array<T0=Array(Tuple(Float64, Float64))><T0, T0>(array<T0=Tuple(Float64, Float64)><T0, T0, T0, T0>(tuple<Float64, Float64>(4_f64, 0_f64), tuple<Float64, Float64>(8_f64, 4_f64), tuple<Float64, Float64>(4_f64, 8_f64), tuple<Float64, Float64>(0_f64, 4_f64)), array<T0=Tuple(Float64, Float64)><T0, T0, T0, T0>(tuple<Float64, Float64>(3_f64, 3_f64), tuple<Float64, Float64>(3_f64, 5_f64), tuple<Float64, Float64>(5_f64, 5_f64), tuple<Float64, Float64>(5_f64, 3_f64))))
+raw expr       : point_in_polygon(tuple(2.5_decimal(2, 1), 2.5_decimal(2, 1)), array(array(tuple(4_decimal(1, 0), 0_decimal(1, 0)), tuple(8_decimal(1, 0), 4_decimal(1, 0)), tuple(4_decimal(1, 0), 8_decimal(1, 0)), tuple(0_decimal(1, 0), 4_decimal(1, 0))), array(tuple(3_decimal(1, 0), 3_decimal(1, 0)), tuple(3_decimal(1, 0), 5_decimal(1, 0)), tuple(5_decimal(1, 0), 5_decimal(1, 0)), tuple(5_decimal(1, 0), 3_decimal(1, 0)))))
+checked expr   : point_in_polygon<Tuple(Float64, Float64), Array(Array(Tuple(Float64, Float64)))>(CAST(tuple<Decimal(2, 1), Decimal(2, 1)>(2.5_d128(2,1), 2.5_d128(2,1)) AS Tuple(Float64, Float64)), CAST(array<T0=Array(Tuple(Decimal(1, 0), Decimal(1, 0)))><T0, T0>(array<T0=Tuple(Decimal(1, 0), Decimal(1, 0))><T0, T0, T0, T0>(tuple<Decimal(1, 0), Decimal(1, 0)>(4_d128(1,0), 0_d128(1,0)), tuple<Decimal(1, 0), Decimal(1, 0)>(8_d128(1,0), 4_d128(1,0)), tuple<Decimal(1, 0), Decimal(1, 0)>(4_d128(1,0), 8_d128(1,0)), tuple<Decimal(1, 0), Decimal(1, 0)>(0_d128(1,0), 4_d128(1,0))), array<T0=Tuple(Decimal(1, 0), Decimal(1, 0))><T0, T0, T0, T0>(tuple<Decimal(1, 0), Decimal(1, 0)>(3_d128(1,0), 3_d128(1,0)), tuple<Decimal(1, 0), Decimal(1, 0)>(3_d128(1,0), 5_d128(1,0)), tuple<Decimal(1, 0), Decimal(1, 0)>(5_d128(1,0), 5_d128(1,0)), tuple<Decimal(1, 0), Decimal(1, 0)>(5_d128(1,0), 3_d128(1,0)))) AS Array(Array(Tuple(Float64, Float64)))))
 optimized expr : 1_u8
 output type    : UInt8
 output domain  : {1..=1}
@@ -214,8 +215,8 @@ output         : 1
 
 
 ast            : point_in_polygon((2.5, 2.5), [[(4., 0.), (8., 4.), (4., 8.), (0., 4.)], [(3., 3.), (a, b), (5., 5.), (5., 3.)]])
-raw expr       : point_in_polygon(tuple(2.5_f64, 2.5_f64), array(array(tuple(4_f64, 0_f64), tuple(8_f64, 4_f64), tuple(4_f64, 8_f64), tuple(0_f64, 4_f64)), array(tuple(3_f64, 3_f64), tuple(a::Float64, b::Float64), tuple(5_f64, 5_f64), tuple(5_f64, 3_f64))))
-checked expr   : point_in_polygon<Tuple(Float64, Float64), Array(Array(Tuple(Float64, Float64)))>(tuple<Float64, Float64>(2.5_f64, 2.5_f64), array<T0=Array(Tuple(Float64, Float64))><T0, T0>(array<T0=Tuple(Float64, Float64)><T0, T0, T0, T0>(tuple<Float64, Float64>(4_f64, 0_f64), tuple<Float64, Float64>(8_f64, 4_f64), tuple<Float64, Float64>(4_f64, 8_f64), tuple<Float64, Float64>(0_f64, 4_f64)), array<T0=Tuple(Float64, Float64)><T0, T0, T0, T0>(tuple<Float64, Float64>(3_f64, 3_f64), tuple<Float64, Float64>(a, b), tuple<Float64, Float64>(5_f64, 5_f64), tuple<Float64, Float64>(5_f64, 3_f64))))
+raw expr       : point_in_polygon(tuple(2.5_decimal(2, 1), 2.5_decimal(2, 1)), array(array(tuple(4_decimal(1, 0), 0_decimal(1, 0)), tuple(8_decimal(1, 0), 4_decimal(1, 0)), tuple(4_decimal(1, 0), 8_decimal(1, 0)), tuple(0_decimal(1, 0), 4_decimal(1, 0))), array(tuple(3_decimal(1, 0), 3_decimal(1, 0)), tuple(a::Float64, b::Float64), tuple(5_decimal(1, 0), 5_decimal(1, 0)), tuple(5_decimal(1, 0), 3_decimal(1, 0)))))
+checked expr   : point_in_polygon<Tuple(Float64, Float64), Array(Array(Tuple(Float64, Float64)))>(CAST(tuple<Decimal(2, 1), Decimal(2, 1)>(2.5_d128(2,1), 2.5_d128(2,1)) AS Tuple(Float64, Float64)), array<T0=Array(Tuple(Float64, Float64))><T0, T0>(CAST(array<T0=Tuple(Decimal(1, 0), Decimal(1, 0))><T0, T0, T0, T0>(tuple<Decimal(1, 0), Decimal(1, 0)>(4_d128(1,0), 0_d128(1,0)), tuple<Decimal(1, 0), Decimal(1, 0)>(8_d128(1,0), 4_d128(1,0)), tuple<Decimal(1, 0), Decimal(1, 0)>(4_d128(1,0), 8_d128(1,0)), tuple<Decimal(1, 0), Decimal(1, 0)>(0_d128(1,0), 4_d128(1,0))) AS Array(Tuple(Float64, Float64))), array<T0=Tuple(Float64, Float64)><T0, T0, T0, T0>(CAST(tuple<Decimal(1, 0), Decimal(1, 0)>(3_d128(1,0), 3_d128(1,0)) AS Tuple(Float64, Float64)), tuple<Float64, Float64>(a, b), CAST(tuple<Decimal(1, 0), Decimal(1, 0)>(5_d128(1,0), 5_d128(1,0)) AS Tuple(Float64, Float64)), CAST(tuple<Decimal(1, 0), Decimal(1, 0)>(5_d128(1,0), 3_d128(1,0)) AS Tuple(Float64, Float64)))))
 optimized expr : point_in_polygon<Tuple(Float64, Float64), Array(Array(Tuple(Float64, Float64)))>((2.5_f64, 2.5_f64), array<T0=Array(Tuple(Float64, Float64))><T0, T0>([(4, 0), (8, 4), (4, 8), (0, 4)], array<T0=Tuple(Float64, Float64)><T0, T0, T0, T0>((3_f64, 3_f64), tuple<Float64, Float64>(a, 5_f64), (5_f64, 5_f64), (5_f64, 3_f64))))
 evaluation:
 +--------+-----------+---------+-----------+
@@ -237,8 +238,8 @@ evaluation (internal):
 
 
 ast            : point_in_polygon((2.5, 2.5), [(4., 0.), (8., 4.), (4., 8.), (0., 4.)], [(3., 3.), (3., 5.), (5., 5.), (5., 3.)])
-raw expr       : point_in_polygon(tuple(2.5_f64, 2.5_f64), array(tuple(4_f64, 0_f64), tuple(8_f64, 4_f64), tuple(4_f64, 8_f64), tuple(0_f64, 4_f64)), array(tuple(3_f64, 3_f64), tuple(3_f64, 5_f64), tuple(5_f64, 5_f64), tuple(5_f64, 3_f64)))
-checked expr   : point_in_polygon<Tuple(Float64, Float64), Array(Tuple(Float64, Float64)), Array(Tuple(Float64, Float64))>(tuple<Float64, Float64>(2.5_f64, 2.5_f64), array<T0=Tuple(Float64, Float64)><T0, T0, T0, T0>(tuple<Float64, Float64>(4_f64, 0_f64), tuple<Float64, Float64>(8_f64, 4_f64), tuple<Float64, Float64>(4_f64, 8_f64), tuple<Float64, Float64>(0_f64, 4_f64)), array<T0=Tuple(Float64, Float64)><T0, T0, T0, T0>(tuple<Float64, Float64>(3_f64, 3_f64), tuple<Float64, Float64>(3_f64, 5_f64), tuple<Float64, Float64>(5_f64, 5_f64), tuple<Float64, Float64>(5_f64, 3_f64)))
+raw expr       : point_in_polygon(tuple(2.5_decimal(2, 1), 2.5_decimal(2, 1)), array(tuple(4_decimal(1, 0), 0_decimal(1, 0)), tuple(8_decimal(1, 0), 4_decimal(1, 0)), tuple(4_decimal(1, 0), 8_decimal(1, 0)), tuple(0_decimal(1, 0), 4_decimal(1, 0))), array(tuple(3_decimal(1, 0), 3_decimal(1, 0)), tuple(3_decimal(1, 0), 5_decimal(1, 0)), tuple(5_decimal(1, 0), 5_decimal(1, 0)), tuple(5_decimal(1, 0), 3_decimal(1, 0))))
+checked expr   : point_in_polygon<Tuple(Float64, Float64), Array(Tuple(Float64, Float64)), Array(Tuple(Float64, Float64))>(CAST(tuple<Decimal(2, 1), Decimal(2, 1)>(2.5_d128(2,1), 2.5_d128(2,1)) AS Tuple(Float64, Float64)), CAST(array<T0=Tuple(Decimal(1, 0), Decimal(1, 0))><T0, T0, T0, T0>(tuple<Decimal(1, 0), Decimal(1, 0)>(4_d128(1,0), 0_d128(1,0)), tuple<Decimal(1, 0), Decimal(1, 0)>(8_d128(1,0), 4_d128(1,0)), tuple<Decimal(1, 0), Decimal(1, 0)>(4_d128(1,0), 8_d128(1,0)), tuple<Decimal(1, 0), Decimal(1, 0)>(0_d128(1,0), 4_d128(1,0))) AS Array(Tuple(Float64, Float64))), CAST(array<T0=Tuple(Decimal(1, 0), Decimal(1, 0))><T0, T0, T0, T0>(tuple<Decimal(1, 0), Decimal(1, 0)>(3_d128(1,0), 3_d128(1,0)), tuple<Decimal(1, 0), Decimal(1, 0)>(3_d128(1,0), 5_d128(1,0)), tuple<Decimal(1, 0), Decimal(1, 0)>(5_d128(1,0), 5_d128(1,0)), tuple<Decimal(1, 0), Decimal(1, 0)>(5_d128(1,0), 3_d128(1,0))) AS Array(Tuple(Float64, Float64))))
 optimized expr : 1_u8
 output type    : UInt8
 output domain  : {1..=1}
@@ -246,8 +247,8 @@ output         : 1
 
 
 ast            : point_in_polygon((2.5, 2.5), [(4., 0.), (8., 4.), (4., 8.), (0., 4.)], [(3., 3.), (a, b), (5., 5.), (5., 3.)])
-raw expr       : point_in_polygon(tuple(2.5_f64, 2.5_f64), array(tuple(4_f64, 0_f64), tuple(8_f64, 4_f64), tuple(4_f64, 8_f64), tuple(0_f64, 4_f64)), array(tuple(3_f64, 3_f64), tuple(a::Float64, b::Float64), tuple(5_f64, 5_f64), tuple(5_f64, 3_f64)))
-checked expr   : point_in_polygon<Tuple(Float64, Float64), Array(Tuple(Float64, Float64)), Array(Tuple(Float64, Float64))>(tuple<Float64, Float64>(2.5_f64, 2.5_f64), array<T0=Tuple(Float64, Float64)><T0, T0, T0, T0>(tuple<Float64, Float64>(4_f64, 0_f64), tuple<Float64, Float64>(8_f64, 4_f64), tuple<Float64, Float64>(4_f64, 8_f64), tuple<Float64, Float64>(0_f64, 4_f64)), array<T0=Tuple(Float64, Float64)><T0, T0, T0, T0>(tuple<Float64, Float64>(3_f64, 3_f64), tuple<Float64, Float64>(a, b), tuple<Float64, Float64>(5_f64, 5_f64), tuple<Float64, Float64>(5_f64, 3_f64)))
+raw expr       : point_in_polygon(tuple(2.5_decimal(2, 1), 2.5_decimal(2, 1)), array(tuple(4_decimal(1, 0), 0_decimal(1, 0)), tuple(8_decimal(1, 0), 4_decimal(1, 0)), tuple(4_decimal(1, 0), 8_decimal(1, 0)), tuple(0_decimal(1, 0), 4_decimal(1, 0))), array(tuple(3_decimal(1, 0), 3_decimal(1, 0)), tuple(a::Float64, b::Float64), tuple(5_decimal(1, 0), 5_decimal(1, 0)), tuple(5_decimal(1, 0), 3_decimal(1, 0))))
+checked expr   : point_in_polygon<Tuple(Float64, Float64), Array(Tuple(Float64, Float64)), Array(Tuple(Float64, Float64))>(CAST(tuple<Decimal(2, 1), Decimal(2, 1)>(2.5_d128(2,1), 2.5_d128(2,1)) AS Tuple(Float64, Float64)), CAST(array<T0=Tuple(Decimal(1, 0), Decimal(1, 0))><T0, T0, T0, T0>(tuple<Decimal(1, 0), Decimal(1, 0)>(4_d128(1,0), 0_d128(1,0)), tuple<Decimal(1, 0), Decimal(1, 0)>(8_d128(1,0), 4_d128(1,0)), tuple<Decimal(1, 0), Decimal(1, 0)>(4_d128(1,0), 8_d128(1,0)), tuple<Decimal(1, 0), Decimal(1, 0)>(0_d128(1,0), 4_d128(1,0))) AS Array(Tuple(Float64, Float64))), array<T0=Tuple(Float64, Float64)><T0, T0, T0, T0>(CAST(tuple<Decimal(1, 0), Decimal(1, 0)>(3_d128(1,0), 3_d128(1,0)) AS Tuple(Float64, Float64)), tuple<Float64, Float64>(a, b), CAST(tuple<Decimal(1, 0), Decimal(1, 0)>(5_d128(1,0), 5_d128(1,0)) AS Tuple(Float64, Float64)), CAST(tuple<Decimal(1, 0), Decimal(1, 0)>(5_d128(1,0), 3_d128(1,0)) AS Tuple(Float64, Float64))))
 optimized expr : 1_u8
 evaluation:
 +--------+---------+---------+---------+
@@ -269,8 +270,8 @@ evaluation (internal):
 
 
 ast            : geohash_encode(-5.60302734375, 42.593994140625)
-raw expr       : geohash_encode(minus(5.60302734375_f64), 42.593994140625_f64)
-checked expr   : geohash_encode<Float64, Float64>(minus<Float64>(5.6030273437_f64), 42.5939941406_f64)
+raw expr       : geohash_encode(-5.60302734375_decimal(12, 11), 42.593994140625_decimal(14, 12))
+checked expr   : geohash_encode<Float64, Float64>(to_float64<Decimal(12, 11)>(-5.60302734375_d128(12,11)), to_float64<Decimal(14, 12)>(42.593994140625_d128(14,12)))
 optimized expr : "ezs42d000000"
 output type    : String
 output domain  : {"ezs42d000000"..="ezs42d000000"}
@@ -278,8 +279,8 @@ output         : "ezs42d000000"
 
 
 ast            : geohash_encode(-5.60302734375, 42.593994140625, 11)
-raw expr       : geohash_encode(minus(5.60302734375_f64), 42.593994140625_f64, 11_u8)
-checked expr   : geohash_encode<Float64, Float64, UInt8>(minus<Float64>(5.6030273437_f64), 42.5939941406_f64, 11_u8)
+raw expr       : geohash_encode(-5.60302734375_decimal(12, 11), 42.593994140625_decimal(14, 12), 11_u8)
+checked expr   : geohash_encode<Float64, Float64, UInt8>(to_float64<Decimal(12, 11)>(-5.60302734375_d128(12,11)), to_float64<Decimal(14, 12)>(42.593994140625_d128(14,12)), 11_u8)
 optimized expr : "ezs42d00000"
 output type    : String
 output domain  : {"ezs42d00000"..="ezs42d00000"}
@@ -287,8 +288,8 @@ output         : "ezs42d00000"
 
 
 ast            : geohash_encode(-5.60302734375, 42.593994140625, 0)
-raw expr       : geohash_encode(minus(5.60302734375_f64), 42.593994140625_f64, 0_u8)
-checked expr   : geohash_encode<Float64, Float64, UInt8>(minus<Float64>(5.6030273437_f64), 42.5939941406_f64, 0_u8)
+raw expr       : geohash_encode(-5.60302734375_decimal(12, 11), 42.593994140625_decimal(14, 12), 0_u8)
+checked expr   : geohash_encode<Float64, Float64, UInt8>(to_float64<Decimal(12, 11)>(-5.60302734375_d128(12,11)), to_float64<Decimal(14, 12)>(42.593994140625_d128(14,12)), 0_u8)
 optimized expr : "ezs42d000000"
 output type    : String
 output domain  : {"ezs42d000000"..="ezs42d000000"}

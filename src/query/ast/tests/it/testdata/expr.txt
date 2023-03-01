@@ -242,14 +242,16 @@ Literal {
 ---------- Input ----------
 1e100000000000000
 ---------- Output ---------
-error: 
-  --> SQL:1:1
-  |
-1 | 1e100000000000000
-  | ^^^^^^^^^^^^^^^^^
-  | |
-  | unable to parse number because it positively overflowed
-  | while parsing expression
+inf
+---------- AST ------------
+Literal {
+    span: Some(
+        0..17,
+    ),
+    lit: Float(
+        inf,
+    ),
+}
 
 
 ---------- Input ----------
@@ -3052,7 +3054,7 @@ Map {
                 span: Some(
                     6..7,
                 ),
-                lit: Integer(
+                lit: UInt64(
                     1,
                 ),
             },
@@ -3070,7 +3072,7 @@ Map {
                 span: Some(
                     13..14,
                 ),
-                lit: Integer(
+                lit: UInt64(
                     2,
                 ),
             },
