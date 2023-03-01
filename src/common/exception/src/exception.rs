@@ -163,12 +163,7 @@ pub type Result<T, E = ErrorCode> = std::result::Result<T, E>;
 
 impl Debug for ErrorCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Code: {}, Text = {}.",
-            self.code(),
-            self.message(),
-        )?;
+        write!(f, "Code: {}, Text = {}.", self.code(), self.message(),)?;
 
         match self.backtrace.as_ref() {
             None => Ok(()), // no backtrace
@@ -194,12 +189,7 @@ impl Debug for ErrorCode {
 
 impl Display for ErrorCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Code: {}, Text = {}.",
-            self.code(),
-            self.message(),
-        )
+        write!(f, "Code: {}, Text = {}.", self.code(), self.message(),)
     }
 }
 
