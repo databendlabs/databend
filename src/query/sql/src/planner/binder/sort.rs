@@ -145,7 +145,7 @@ impl Binder {
                     }
                 }
                 Expr::Literal {
-                    lit: Literal::Integer(index),
+                    lit: Literal::UInt64(index),
                     ..
                 } => {
                     let index = *index as usize - 1;

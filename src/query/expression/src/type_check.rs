@@ -25,6 +25,7 @@ use crate::expression::Literal;
 use crate::expression::RawExpr;
 use crate::function::FunctionRegistry;
 use crate::function::FunctionSignature;
+use crate::types::decimal::DecimalScalar;
 use crate::types::decimal::DecimalSize;
 use crate::types::number::NumberDataType;
 use crate::types::number::NumberScalar;
@@ -117,6 +118,34 @@ pub fn check_literal(literal: &Literal) -> (Scalar, DataType) {
             Scalar::Number(NumberScalar::Int64(*v)),
             DataType::Number(NumberDataType::Int64),
         ),
+        Literal::Decimal128 {
+            value,
+            precision,
+            scale,
+        } => {
+            let size = DecimalSize {
+                precision: *precision,
+                scale: *scale,
+            };
+            (
+                Scalar::Decimal(DecimalScalar::Decimal128(*value, size)),
+                DataType::Decimal(DecimalDataType::Decimal128(size)),
+            )
+        }
+        Literal::Decimal256 {
+            value,
+            precision,
+            scale,
+        } => {
+            let size = DecimalSize {
+                precision: *precision,
+                scale: *scale,
+            };
+            (
+                Scalar::Decimal(DecimalScalar::Decimal256(*value, size)),
+                DataType::Decimal(DecimalDataType::Decimal256(size)),
+            )
+        }
         Literal::Float32(v) => (
             Scalar::Number(NumberScalar::Float32(*v)),
             DataType::Number(NumberDataType::Float32),

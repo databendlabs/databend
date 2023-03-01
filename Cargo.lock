@@ -1213,8 +1213,10 @@ version = "0.1.0"
 dependencies = [
  "common-base",
  "common-exception",
+ "common-io",
  "common-meta-app",
  "criterion",
+ "ethnum",
  "fast-float",
  "goldenfile",
  "itertools",

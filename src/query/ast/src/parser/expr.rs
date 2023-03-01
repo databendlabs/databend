@@ -1027,17 +1027,6 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
 
 pub fn literal(i: Input) -> IResult<Literal> {
     let string = map(literal_string, Literal::String);
-    let integer = map(literal_u64, Literal::Integer);
-    let float = map(literal_f64, Literal::Float);
-    let bigint = map(rule!(LiteralInteger), |lit| Literal::BigInt {
-        lit: lit.text().to_string(),
-        is_hex: false,
-    });
-    let bigint_hex = map(literal_hex_str, |lit| Literal::BigInt {
-        lit: lit.to_string(),
-        is_hex: true,
-    });
-
     let boolean = alt((
         value(Literal::Boolean(true), rule! { TRUE }),
         value(Literal::Boolean(false), rule! { FALSE }),
@@ -1047,10 +1036,8 @@ pub fn literal(i: Input) -> IResult<Literal> {
 
     rule!(
         #string
-        | #integer
-        | #float
-        | #bigint
-        | #bigint_hex
+        | #literal_decimal
+        | #literal_hex
         | #boolean
         | #current_timestamp
         | #null
@@ -1101,6 +1088,45 @@ pub fn literal_f64(i: Input) -> IResult<f64> {
             LiteralFloat
         },
         |token| Ok(fast_float::parse(token.text())?),
+    )(i)
+}
+
+pub fn literal_decimal(i: Input) -> IResult<Literal> {
+    let decimal_unit = map_res(
+        rule! {
+            LiteralInteger
+        },
+        |token| Literal::parse_decimal_uint(token.text()),
+    );
+
+    let decimal = map_res(
+        rule! {
+           LiteralFloat
+        },
+        |token| Literal::parse_decimal(token.text()),
+    );
+
+    rule!(
+        #decimal_unit
+        | #decimal
+    )(i)
+}
+
+pub fn literal_hex(i: Input) -> IResult<Literal> {
+    let hex_u64 = map_res(literal_hex_str, |lit| {
+        Ok(Literal::UInt64(u64::from_str_radix(lit, 16)?))
+    });
+    // todo(youngsofun): more accurate precision
+    let hex_u128 = map_res(literal_hex_str, |lit| {
+        Ok(Literal::Decimal128 {
+            value: i128::from_str_radix(lit, 16)?,
+            precision: 38,
+            scale: 0,
+        })
+    });
+    rule!(
+        #hex_u64
+        | #hex_u128
     )(i)
 }
 

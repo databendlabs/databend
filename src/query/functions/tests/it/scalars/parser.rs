@@ -148,7 +148,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
             params: params
                 .into_iter()
                 .map(|param| match param {
-                    ASTLiteral::Integer(u) => u as usize,
+                    ASTLiteral::UInt64(u) => u as usize,
                     _ => unimplemented!(),
                 })
                 .collect(),
@@ -545,7 +545,7 @@ fn transform_data_type(target_type: common_ast::ast::TypeName) -> DataType {
 
 pub fn transform_literal(lit: ASTLiteral) -> Literal {
     match lit {
-        ASTLiteral::Integer(u) => {
+        ASTLiteral::UInt64(u) => {
             if u < u8::MAX as u64 {
                 Literal::UInt8(u as u8)
             } else if u < u16::MAX as u64 {

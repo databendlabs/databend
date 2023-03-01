@@ -861,7 +861,7 @@ impl Binder {
             AstOptimizeTableAction::Compact { target, limit } => {
                 let limit_cnt = match limit {
                     Some(Expr::Literal {
-                        lit: Literal::Integer(uint),
+                        lit: Literal::UInt64(uint),
                         ..
                     }) => Some(*uint as usize),
                     Some(_) => {
