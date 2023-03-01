@@ -106,6 +106,9 @@ impl BlockReader {
                     let virtual_column_meta = VirtualColumnMeta {
                         segment_idx: block_meta_index.segment_idx,
                         block_idx: block_meta_index.block_idx,
+                        block_location: block_meta_index.block_location.clone(),
+                        segment_location: block_meta_index.segment_location.clone(),
+                        snapshot_location: block_meta_index.snapshot_location.clone().unwrap(),
                     };
                     for virtual_column in project_virtual_columns.values() {
                         let column =

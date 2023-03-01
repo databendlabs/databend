@@ -46,7 +46,7 @@ use super::HashJoin;
 use super::Limit;
 use super::Sort;
 use super::TableScan;
-use crate::binder::VirtualColumnMap;
+use crate::binder::VirtualColumnFactory;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::EvalScalar;
@@ -205,7 +205,7 @@ impl PhysicalPlanBuilder {
                 let mut table_schema = table.schema();
                 if !project_virtual_columns.is_empty() {
                     let mut schema = table_schema.as_ref().clone();
-                    for virtual_column in VirtualColumnMap::instance().all_virtual_columns() {
+                    for virtual_column in VirtualColumnFactory::instance().all_virtual_columns() {
                         schema.add_virtual_column(
                             virtual_column.column_name(),
                             virtual_column.table_data_type(),

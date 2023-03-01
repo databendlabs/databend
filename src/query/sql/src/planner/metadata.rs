@@ -27,7 +27,7 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use parking_lot::RwLock;
 
-use crate::binder::VirtualColumnMap;
+use crate::binder::VirtualColumnFactory;
 
 /// Planner use [`usize`] as it's index type.
 ///
@@ -229,7 +229,7 @@ impl Metadata {
         }
 
         // add virtual columns
-        let virtual_columns = VirtualColumnMap::instance().all_virtual_columns();
+        let virtual_columns = VirtualColumnFactory::instance().all_virtual_columns();
         for virtual_column in virtual_columns {
             self.add_virtual_table_column(table_index, virtual_column);
         }

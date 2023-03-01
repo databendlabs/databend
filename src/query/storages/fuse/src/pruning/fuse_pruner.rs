@@ -36,6 +36,7 @@ use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::Location;
 use tracing::warn;
 
+use super::create_segment_location_vector;
 use crate::pruning::BloomPruner;
 use crate::pruning::BloomPrunerCreator;
 use crate::pruning::FusePruningStatistics;
@@ -162,7 +163,9 @@ impl FusePruner {
     pub async fn pruning(
         &self,
         segment_locs: Vec<Location>,
+        snapshot_loc: Option<String>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        let segment_locs = create_segment_location_vector(segment_locs, snapshot_loc);
         // Segment pruner.
         let segment_pruner =
             SegmentPruner::create(self.pruning_ctx.clone(), self.table_schema.clone())?;

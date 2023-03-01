@@ -26,6 +26,7 @@ use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::SegmentInfo;
 
+use super::SegmentLocation;
 use crate::metrics::*;
 use crate::pruning::BloomPruner;
 use crate::pruning::PruningContext;
@@ -41,16 +42,16 @@ impl BlockPruner {
 
     pub async fn pruning(
         &self,
-        segment_idx: usize,
+        segment_location: SegmentLocation,
         segment_info: &SegmentInfo,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         if let Some(bloom_pruner) = &self.pruning_ctx.bloom_pruner {
-            self.block_pruning(bloom_pruner, segment_idx, segment_info)
+            self.block_pruning(bloom_pruner, segment_location, segment_info)
                 .await
         } else {
             // if no available filter pruners, just prune the blocks by
             // using zone map index, and do not spawn async tasks
-            self.block_pruning_sync(segment_idx, segment_info)
+            self.block_pruning_sync(segment_location, segment_info)
         }
     }
 
@@ -58,7 +59,7 @@ impl BlockPruner {
     async fn block_pruning(
         &self,
         bloom_pruner: &Arc<dyn BloomPruner + Send + Sync>,
-        segment_idx: usize,
+        segment_location: SegmentLocation,
         segment_info: &SegmentInfo,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
@@ -68,6 +69,7 @@ impl BlockPruner {
         let range_pruner = self.pruning_ctx.range_pruner.clone();
         let page_pruner = self.pruning_ctx.page_pruner.clone();
 
+        let block_num = segment_info.blocks.len();
         let mut blocks = segment_info.blocks.iter().enumerate();
         let pruning_tasks = std::iter::from_fn(|| {
             // check limit speculatively
@@ -76,12 +78,13 @@ impl BlockPruner {
             }
 
             type BlockPruningFutureReturn =
-                Pin<Box<dyn Future<Output = (usize, bool, Option<Range<usize>>)> + Send>>;
+                Pin<Box<dyn Future<Output = (usize, bool, Option<Range<usize>>, String)> + Send>>;
             type BlockPruningFuture =
                 Box<dyn FnOnce(OwnedSemaphorePermit) -> BlockPruningFutureReturn + Send + 'static>;
 
             let pruning_stats = pruning_stats.clone();
             blocks.next().map(|(block_idx, block_meta)| {
+                let block_idx = block_num - block_idx - 1;
                 // Perf.
                 {
                     metrics_inc_blocks_range_pruning_before(1);
@@ -138,9 +141,9 @@ impl BlockPruner {
 
                                 let (keep, range) =
                                     page_pruner.should_keep(&block_meta.cluster_stats);
-                                (block_idx, keep, range)
+                                (block_idx, keep, range, block_meta.location.0.clone())
                             } else {
-                                (block_idx, keep, None)
+                                (block_idx, keep, None, block_meta.location.0.clone())
                             }
                         })
                     });
@@ -149,7 +152,7 @@ impl BlockPruner {
                     let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
                         Box::pin(async move {
                             let _permit = permit;
-                            (block_idx, false, None)
+                            (block_idx, false, None, block_meta.location.0.clone())
                         })
                     });
                     v
@@ -169,15 +172,18 @@ impl BlockPruner {
 
         let mut result = Vec::with_capacity(segment_info.blocks.len());
         for item in joint {
-            let (block_idx, keep, range) = item;
+            let (block_idx, keep, range, block_location) = item;
             if keep {
                 let block = segment_info.blocks[block_idx].clone();
 
                 result.push((
                     BlockMetaIndex {
-                        segment_idx,
+                        segment_idx: segment_location.segment_idx,
                         block_idx,
                         range,
+                        block_location: block_location.clone(),
+                        segment_location: segment_location.location.0.clone(),
+                        snapshot_location: segment_location.snapshot_loc.clone(),
                     },
                     block,
                 ))
@@ -194,7 +200,7 @@ impl BlockPruner {
 
     fn block_pruning_sync(
         &self,
-        segment_idx: usize,
+        segment_location: SegmentLocation,
         segment_info: &SegmentInfo,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
@@ -204,8 +210,10 @@ impl BlockPruner {
 
         let start = Instant::now();
 
+        let block_num = segment_info.blocks.len();
         let mut result = Vec::with_capacity(segment_info.blocks.len());
         for (block_idx, block_meta) in segment_info.blocks.iter().enumerate() {
+            let block_idx = block_num - block_idx - 1;
             // Perf.
             {
                 metrics_inc_blocks_range_pruning_after(1);
@@ -234,9 +242,12 @@ impl BlockPruner {
                 if keep {
                     result.push((
                         BlockMetaIndex {
-                            segment_idx,
+                            segment_idx: segment_location.segment_idx,
                             block_idx,
                             range,
+                            block_location: block_meta.as_ref().location.0.clone(),
+                            segment_location: segment_location.location.0.clone(),
+                            snapshot_location: segment_location.snapshot_loc.clone(),
                         },
                         block_meta.clone(),
                     ))

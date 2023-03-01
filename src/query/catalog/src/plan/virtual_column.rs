@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_expression::types::number::NumberScalar;
+use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::DataType;
 use common_expression::types::NumberColumnBuilder;
 use common_expression::types::NumberDataType;
@@ -23,16 +24,26 @@ use common_expression::TableDataType;
 use common_expression::Value;
 
 pub const ROW_ID: &str = "_row_id";
+pub const BLOCK_NAME: &str = "_block_name";
+pub const SEGMENT_NAME: &str = "_segment_name";
+pub const SNAPSHOT_NAME: &str = "_snapshot_name";
 
 // meta data for generate virtual columns
+#[derive(Debug)]
 pub struct VirtualColumnMeta {
     pub segment_idx: usize,
     pub block_idx: usize,
+    pub block_location: String,
+    pub segment_location: String,
+    pub snapshot_location: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub enum VirtualColumnType {
     RowId,
+    BlockName,
+    SegmentName,
+    SnapshotName,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -56,13 +67,15 @@ impl VirtualColumn {
     pub fn table_data_type(&self) -> TableDataType {
         match &self.column_type {
             VirtualColumnType::RowId => TableDataType::Number(NumberDataType::UInt64),
+            VirtualColumnType::BlockName => TableDataType::String,
+            VirtualColumnType::SegmentName => TableDataType::String,
+            VirtualColumnType::SnapshotName => TableDataType::String,
         }
     }
 
     pub fn data_type(&self) -> DataType {
-        match &self.column_type {
-            VirtualColumnType::RowId => DataType::Number(NumberDataType::UInt64),
-        }
+        let t = &self.table_data_type();
+        t.into()
     }
 
     pub fn column_name(&self) -> &String {
@@ -70,7 +83,12 @@ impl VirtualColumn {
     }
 
     pub fn column_id(&self) -> ColumnId {
-        u32::MAX
+        match &self.column_type {
+            VirtualColumnType::RowId => u32::MAX,
+            VirtualColumnType::BlockName => u32::MAX - 1,
+            VirtualColumnType::SegmentName => u32::MAX - 2,
+            VirtualColumnType::SnapshotName => u32::MAX - 3,
+        }
     }
 
     pub fn generate_column_values(&self, meta: &VirtualColumnMeta, num_rows: usize) -> BlockEntry {
@@ -78,7 +96,7 @@ impl VirtualColumn {
             VirtualColumnType::RowId => {
                 let block_id = meta.block_idx as u64;
                 let seg_id = meta.segment_idx as u64;
-                let high_32bit = (block_id << 48) + (seg_id << 32);
+                let high_32bit = (seg_id << 48) + (block_id << 32);
                 let mut builder =
                     NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, num_rows);
                 for i in 0..num_rows {
@@ -88,6 +106,35 @@ impl VirtualColumn {
                 BlockEntry {
                     data_type: DataType::Number(NumberDataType::UInt64),
                     value: Value::Column(Column::Number(builder.build())),
+                }
+            }
+            VirtualColumnType::BlockName => {
+                let mut builder = StringColumnBuilder::with_capacity(1, meta.block_location.len());
+                builder.put_str(&meta.block_location);
+                builder.commit_row();
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::String(builder.build())),
+                }
+            }
+            VirtualColumnType::SegmentName => {
+                let mut builder =
+                    StringColumnBuilder::with_capacity(1, meta.segment_location.len());
+                builder.put_str(&meta.segment_location);
+                builder.commit_row();
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::String(builder.build())),
+                }
+            }
+            VirtualColumnType::SnapshotName => {
+                let mut builder =
+                    StringColumnBuilder::with_capacity(1, meta.snapshot_location.len());
+                builder.put_str(&meta.snapshot_location);
+                builder.commit_row();
+                BlockEntry {
+                    data_type: DataType::String,
+                    value: Value::Column(Column::String(builder.build())),
                 }
             }
         }

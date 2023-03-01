@@ -28,6 +28,9 @@ pub struct BlockMetaIndex {
     pub segment_idx: usize,
     pub block_idx: usize,
     pub range: Option<Range<usize>>,
+    pub block_location: String,
+    pub segment_location: String,
+    pub snapshot_location: Option<String>,
 }
 
 /// TopN prunner.

@@ -144,7 +144,8 @@ impl FuseTable {
                 cluster_keys,
             )?
         };
-        let block_metas = pruner.pruning(segments_location).await?;
+        let snapshot_loc = self.snapshot_loc().await?;
+        let block_metas = pruner.pruning(segments_location, snapshot_loc).await?;
         let pruning_stats = pruner.pruning_stats();
 
         info!(

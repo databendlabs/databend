@@ -40,7 +40,7 @@ mod sort;
 mod table;
 mod table_args;
 mod update;
-mod virtual_column;
+mod virtual_column_factory;
 
 pub use aggregate::AggregateInfo;
 pub use bind_context::*;
@@ -50,4 +50,4 @@ pub use copy::parse_stage_location;
 pub use location::parse_uri_location;
 pub use scalar::ScalarBinder;
 pub use scalar_common::*;
-pub use virtual_column::VirtualColumnMap;
+pub use virtual_column_factory::VirtualColumnFactory;

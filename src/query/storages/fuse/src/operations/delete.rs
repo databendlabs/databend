@@ -274,7 +274,7 @@ impl FuseTable {
             self.table_info.schema(),
             &push_down,
         )?;
-        let block_metas = pruner.pruning(segment_locations).await?;
+        let block_metas = pruner.pruning(segment_locations, None).await?;
 
         let range_block_metas = block_metas
             .clone()

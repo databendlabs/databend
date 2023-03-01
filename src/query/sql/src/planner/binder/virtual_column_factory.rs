@@ -18,15 +18,18 @@ use std::sync::Arc;
 use common_base::base::GlobalInstance;
 use common_catalog::plan::VirtualColumn;
 use common_catalog::plan::VirtualColumnType;
+use common_catalog::plan::BLOCK_NAME;
 use common_catalog::plan::ROW_ID;
+use common_catalog::plan::SEGMENT_NAME;
+use common_catalog::plan::SNAPSHOT_NAME;
 use common_exception::Result;
 use common_expression::types::DataType;
 
-pub struct VirtualColumnMap {
+pub struct VirtualColumnFactory {
     virtual_columns: HashMap<String, VirtualColumn>,
 }
 
-impl VirtualColumnMap {
+impl VirtualColumnFactory {
     pub fn init() -> Result<()> {
         let mut virtual_columns = HashMap::new();
 
@@ -35,11 +38,26 @@ impl VirtualColumnMap {
             VirtualColumn::new(ROW_ID, VirtualColumnType::RowId),
         );
 
-        GlobalInstance::set(Arc::new(VirtualColumnMap { virtual_columns }));
+        virtual_columns.insert(
+            BLOCK_NAME.to_string(),
+            VirtualColumn::new(BLOCK_NAME, VirtualColumnType::BlockName),
+        );
+
+        virtual_columns.insert(
+            SEGMENT_NAME.to_string(),
+            VirtualColumn::new(SEGMENT_NAME, VirtualColumnType::SegmentName),
+        );
+
+        virtual_columns.insert(
+            SNAPSHOT_NAME.to_string(),
+            VirtualColumn::new(SNAPSHOT_NAME, VirtualColumnType::SnapshotName),
+        );
+
+        GlobalInstance::set(Arc::new(VirtualColumnFactory { virtual_columns }));
         Ok(())
     }
 
-    pub fn instance() -> Arc<VirtualColumnMap> {
+    pub fn instance() -> Arc<VirtualColumnFactory> {
         GlobalInstance::get()
     }
 

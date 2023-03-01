@@ -72,7 +72,6 @@ impl FusePartInfo {
         columns_meta: HashMap<ColumnId, ColumnMeta>,
         compression: Compression,
         sort_min_max: Option<(Scalar, Scalar)>,
-        // range: Option<Range<usize>>,
         block_meta_index: Option<BlockMetaIndex>,
     ) -> Arc<Box<dyn PartInfo>> {
         Arc::new(Box::new(FusePartInfo {
@@ -82,7 +81,6 @@ impl FusePartInfo {
             nums_rows: rows_count as usize,
             compression,
             sort_min_max,
-            // range,
             block_meta_index,
         }))
     }
