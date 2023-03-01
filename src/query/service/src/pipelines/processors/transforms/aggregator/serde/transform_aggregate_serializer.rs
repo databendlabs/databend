@@ -35,52 +35,6 @@ use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
 use crate::pipelines::processors::AggregatorParams;
 
-pub struct TransformGroupBySerializer<Method: HashMethodBounds> {
-    method: Method,
-}
-
-impl<Method: HashMethodBounds> TransformGroupBySerializer<Method> {
-    pub fn try_create(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        method: Method,
-    ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(BlockMetaTransformer::create(
-            input,
-            output,
-            TransformGroupBySerializer { method },
-        )))
-    }
-}
-
-impl<Method> BlockMetaTransform<AggregateMeta<Method, ()>> for TransformGroupBySerializer<Method>
-where Method: HashMethodBounds
-{
-    const NAME: &'static str = "TransformGroupBySerializer";
-
-    fn transform(&mut self, meta: AggregateMeta<Method, ()>) -> Result<DataBlock> {
-        match meta {
-            AggregateMeta::Spilling(_) => unreachable!(),
-            AggregateMeta::Partitioned { .. } => unreachable!(),
-            AggregateMeta::Serialized(_) => unreachable!(),
-            AggregateMeta::Spilled(payload) => Ok(DataBlock::empty_with_meta(
-                AggregateSerdeMeta::create_spilled(
-                    payload.bucket,
-                    payload.location,
-                    payload.columns_layout,
-                ),
-            )),
-            AggregateMeta::HashTable(payload) => {
-                let bucket = payload.bucket;
-                let data_block = serialize_group_by(&self.method, payload)?;
-                data_block.add_meta(Some(AggregateSerdeMeta::create(bucket)))
-            }
-        }
-    }
-}
-
-impl<Method> TransformGroupBySerializer<Method> where Method: HashMethodBounds {}
-
 pub struct TransformAggregateSerializer<Method: HashMethodBounds> {
     method: Method,
     params: Arc<AggregatorParams>,
@@ -120,58 +74,52 @@ where Method: HashMethodBounds
                 ),
             )),
             AggregateMeta::HashTable(payload) => {
-                let keys_len = payload.cell.hashtable.len();
-                let value_size = estimated_key_size(&payload.cell.hashtable);
+                let params = &self.params;
 
-                let funcs = &self.params.aggregate_functions;
-                let offsets_aggregate_states = &self.params.offsets_aggregate_states;
-
-                // Builders.
-                let mut state_builders = (0..funcs.len())
-                    .map(|_| StringColumnBuilder::with_capacity(keys_len, keys_len * 4))
-                    .collect::<Vec<_>>();
-
-                let mut group_key_builder = self.method.keys_column_builder(keys_len, value_size);
-
-                for group_entity in payload.cell.hashtable.iter() {
-                    let place = Into::<StateAddr>::into(*group_entity.get());
-
-                    for (idx, func) in funcs.iter().enumerate() {
-                        let arg_place = place.next(offsets_aggregate_states[idx]);
-                        func.serialize(arg_place, &mut state_builders[idx].data)?;
-                        state_builders[idx].commit_row();
-                    }
-
-                    group_key_builder.append_value(group_entity.key());
-                }
-
-                let mut columns = Vec::with_capacity(state_builders.len() + 1);
-
-                for builder in state_builders.into_iter() {
-                    columns.push(Column::String(builder.build()));
-                }
-
-                columns.push(group_key_builder.finish());
-                let data_block = DataBlock::new_from_columns(columns);
-                data_block.add_meta(Some(AggregateSerdeMeta::create(payload.bucket)))
+                let bucket = payload.bucket;
+                let data_block = serialize_aggregate(&self.method, &params, payload)?;
+                data_block.add_meta(Some(AggregateSerdeMeta::create(bucket)))
             }
         }
     }
 }
 
-pub fn serialize_group_by<Method: HashMethodBounds>(
+pub fn serialize_aggregate<Method: HashMethodBounds>(
     method: &Method,
-    payload: HashTablePayload<Method, ()>,
+    params: &Arc<AggregatorParams>,
+    payload: HashTablePayload<Method, usize>,
 ) -> Result<DataBlock> {
     let keys_len = payload.cell.hashtable.len();
     let value_size = estimated_key_size(&payload.cell.hashtable);
+
+    let funcs = &params.aggregate_functions;
+    let offsets_aggregate_states = &params.offsets_aggregate_states;
+
+    // Builders.
+    let mut state_builders = (0..funcs.len())
+        .map(|_| StringColumnBuilder::with_capacity(keys_len, keys_len * 4))
+        .collect::<Vec<_>>();
+
     let mut group_key_builder = method.keys_column_builder(keys_len, value_size);
 
     for group_entity in payload.cell.hashtable.iter() {
+        let place = Into::<StateAddr>::into(*group_entity.get());
+
+        for (idx, func) in funcs.iter().enumerate() {
+            let arg_place = place.next(offsets_aggregate_states[idx]);
+            func.serialize(arg_place, &mut state_builders[idx].data)?;
+            state_builders[idx].commit_row();
+        }
+
         group_key_builder.append_value(group_entity.key());
     }
 
-    Ok(DataBlock::new_from_columns(vec![
-        group_key_builder.finish(),
-    ]))
+    let mut columns = Vec::with_capacity(state_builders.len() + 1);
+
+    for builder in state_builders.into_iter() {
+        columns.push(Column::String(builder.build()));
+    }
+
+    columns.push(group_key_builder.finish());
+    Ok(DataBlock::new_from_columns(columns))
 }

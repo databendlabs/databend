@@ -13,12 +13,14 @@
 // limitations under the License.
 
 mod serde_meta;
+mod transform_aggregate_serializer;
+mod transform_aggregate_spill_writer;
 mod transform_deserializer;
-mod transform_serializer;
-mod transform_spill_writer;
+mod transform_group_by_serializer;
+mod transform_group_by_spill_writer;
 
 pub use serde_meta::AggregateSerdeMeta;
+pub use transform_aggregate_serializer::TransformAggregateSerializer;
 pub use transform_deserializer::TransformAggregateDeserializer;
 pub use transform_deserializer::TransformGroupByDeserializer;
-pub use transform_serializer::TransformAggregateSerializer;
-pub use transform_serializer::TransformGroupBySerializer;
+pub use transform_group_by_serializer::TransformGroupBySerializer;

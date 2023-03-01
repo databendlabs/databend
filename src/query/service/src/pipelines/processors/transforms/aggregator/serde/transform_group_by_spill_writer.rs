@@ -16,7 +16,7 @@ use common_pipeline_core::processors::Processor;
 use opendal::Operator;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::serde::transform_serializer::serialize_group_by;
+use crate::pipelines::processors::transforms::aggregator::serde::transform_group_by_serializer::serialize_group_by;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 
 pub struct TransformGroupBySpillWriter<Method: HashMethodBounds> {
@@ -33,7 +33,7 @@ pub struct TransformGroupBySpillWriter<Method: HashMethodBounds> {
 #[async_trait::async_trait]
 impl<Method: HashMethodBounds> Processor for TransformGroupBySpillWriter<Method> {
     fn name(&self) -> String {
-        String::from("TransformSpillWriter")
+        String::from("TransformGroupBySpillWriter")
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

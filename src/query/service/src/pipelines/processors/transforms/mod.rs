@@ -37,6 +37,7 @@ pub use aggregator::FinalSingleStateAggregator;
 pub use aggregator::HashTableCell;
 pub use aggregator::PartialSingleStateAggregator;
 pub use aggregator::PartitionedHashTableDropper;
+pub use aggregator::TransformAggregateDeserializer;
 pub use aggregator::TransformAggregateSerializer;
 pub use aggregator::TransformFinalAggregate;
 pub use aggregator::TransformGroupByDeserializer;
