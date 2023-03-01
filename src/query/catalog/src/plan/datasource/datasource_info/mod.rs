@@ -15,9 +15,11 @@
 mod data_source_info;
 mod parquet;
 mod parquet_read_options;
+mod result_scan;
 mod stage;
 
 pub use data_source_info::DataSourceInfo;
 pub use parquet::ParquetTableInfo;
 pub use parquet_read_options::ParquetReadOptions;
+pub use result_scan::ResultScanTableInfo;
 pub use stage::StageTableInfo;
