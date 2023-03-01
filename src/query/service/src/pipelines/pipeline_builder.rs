@@ -434,41 +434,43 @@ impl PipelineBuilder {
             }
         })?;
 
-        let operator = DataOperator::instance().operator();
-        let location_prefix = format!("_aggregate_spill/{}", self.ctx.get_tenant());
-        self.main_pipeline.add_transform(|input, output| {
-            let transform = match params.aggregate_functions.is_empty() {
-                true => with_mappedhash_method!(|T| match method.clone() {
-                    HashMethodKind::T(method) => TransformGroupBySpillWriter::create(
-                        input,
-                        output,
-                        method,
-                        operator.clone(),
-                        location_prefix.clone()
-                    ),
-                }),
-                false => with_mappedhash_method!(|T| match method.clone() {
-                    HashMethodKind::T(method) => TransformAggregateSpillWriter::create(
-                        input,
-                        output,
-                        method,
-                        operator.clone(),
-                        params.clone(),
-                        location_prefix.clone()
-                    ),
-                }),
-            };
+        if self.ctx.get_cluster().is_empty() {
+            let operator = DataOperator::instance().operator();
+            let location_prefix = format!("_aggregate_spill/{}", self.ctx.get_tenant());
+            self.main_pipeline.add_transform(|input, output| {
+                let transform = match params.aggregate_functions.is_empty() {
+                    true => with_mappedhash_method!(|T| match method.clone() {
+                        HashMethodKind::T(method) => TransformGroupBySpillWriter::create(
+                            input,
+                            output,
+                            method,
+                            operator.clone(),
+                            location_prefix.clone()
+                        ),
+                    }),
+                    false => with_mappedhash_method!(|T| match method.clone() {
+                        HashMethodKind::T(method) => TransformAggregateSpillWriter::create(
+                            input,
+                            output,
+                            method,
+                            operator.clone(),
+                            params.clone(),
+                            location_prefix.clone()
+                        ),
+                    }),
+                };
 
-            if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProfileWrapper::create(
-                    transform,
-                    aggregate.plan_id,
-                    self.prof_span_set.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(transform))
-            }
-        })?;
+                if self.enable_profiling {
+                    Ok(ProcessorPtr::create(ProfileWrapper::create(
+                        transform,
+                        aggregate.plan_id,
+                        self.prof_span_set.clone(),
+                    )))
+                } else {
+                    Ok(ProcessorPtr::create(transform))
+                }
+            })?;
+        }
 
         if !self.ctx.get_cluster().is_empty() {
             // TODO: can serialize only when needed.
