@@ -72,6 +72,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | "default_character_set_catalog" | "information_schema" | "schemata"            | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
 | "default_character_set_name"    | "information_schema" | "schemata"            | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
 | "default_character_set_schema"  | "information_schema" | "schemata"            | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
+| "default_collation_name"        | "information_schema" | "schemata"            | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
 | "default_expression"            | "system"             | "columns"             | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "default_kind"                  | "system"             | "columns"             | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "default_role"                  | "system"             | "users"               | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
