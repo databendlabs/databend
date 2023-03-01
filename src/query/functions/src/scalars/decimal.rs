@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::buffer::Buffer;
 use common_expression::types::decimal::*;
+use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::*;
 use common_expression::with_integer_mapped_type;
 use common_expression::Column;
@@ -30,8 +31,11 @@ use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::Scalar;
 use common_expression::ScalarRef;
+use common_expression::TypeDeserializer;
 use common_expression::Value;
 use common_expression::ValueRef;
+use common_io::display_decimal_128;
+use common_io::display_decimal_256;
 use ethnum::i256;
 use num_traits::AsPrimitive;
 
@@ -453,6 +457,29 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: Box::new(move |args, tx| decimal_to_float32(args, arg_type.clone(), tx)),
         }))
     });
+
+    // decimal to string
+    registry.register_function_factory("to_string", |_params, args_type| {
+        if args_type.len() != 1 {
+            return None;
+        }
+
+        let arg_type = args_type[0].clone();
+        if !arg_type.is_decimal() {
+            return None;
+        }
+
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "to_string".to_string(),
+                args_type: vec![arg_type.clone()],
+                return_type: StringType::data_type(),
+                property: FunctionProperty::default(),
+            },
+            calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
+            eval: Box::new(move |args, tx| decimal_to_string(args, arg_type.clone(), tx)),
+        }))
+    });
 }
 
 fn convert_to_decimal(
@@ -809,6 +836,57 @@ fn decimal_to_float32(
                 .map(|x| (f32::from(*x) / div).into())
                 .collect();
             Float32Type::upcast_column(values)
+        }
+    };
+
+    if is_scalar {
+        let scalar = result.index(0).unwrap();
+        Value::Scalar(scalar.to_owned())
+    } else {
+        Value::Column(result)
+    }
+}
+
+fn decimal_to_string(
+    args: &[ValueRef<AnyType>],
+    from_type: DataType,
+    _ctx: &mut EvalContext,
+) -> Value<AnyType> {
+    let arg = &args[0];
+
+    let mut is_scalar = false;
+    let column = match arg {
+        ValueRef::Column(column) => column.clone(),
+        ValueRef::Scalar(s) => {
+            is_scalar = true;
+            let builder = ColumnBuilder::repeat(s, 1, &from_type);
+            builder.build()
+        }
+    };
+
+    let from_type = from_type.as_decimal().unwrap();
+
+    let result = match from_type {
+        DecimalDataType::Decimal128(_) => {
+            let (buffer, from_size) = i128::try_downcast_column(&column).unwrap();
+
+            let mut builder = StringColumnBuilder::with_capacity(buffer.len(), buffer.len() * 10);
+            for x in buffer {
+                builder.put_str(&display_decimal_128(x, from_size.scale));
+                builder.commit_row();
+            }
+            builder.finish_to_column()
+        }
+
+        DecimalDataType::Decimal256(_) => {
+            let (buffer, from_size) = i256::try_downcast_column(&column).unwrap();
+
+            let mut builder = StringColumnBuilder::with_capacity(buffer.len(), buffer.len() * 10);
+            for x in buffer {
+                builder.put_str(&display_decimal_256(x, from_size.scale));
+                builder.commit_row();
+            }
+            builder.finish_to_column()
         }
     };
 
