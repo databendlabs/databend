@@ -23,10 +23,15 @@ drop table t;
 statement error 1049
 create table t (a Decimal(0, 0));
 
-query I
+query IIII
 select 1::Decimal(17, 3), 2::Decimal(19, 4), 3::Decimal(20, 5), cast(10 as Decimal(7, 2));
 ----
 1.000 2.0000 3.00000 10.00
+
+query IIII
+select 1::Decimal(17, 3)::Float64, 2::Decimal(19, 4)::Float64, 3::Decimal(20, 5)::Float64, cast(10 as Decimal(7, 2))::Float64;
+----
+1.0 2.0 3.0 10.0
 
 ## parser overflow
 statement error 1005
@@ -193,6 +198,10 @@ select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(13,2) a , 2.9
 ----
 1 0 0 0 1
 
+query T
+select typeof(a = b) from (select 3::Decimal(13,2) a , 2.9 b);
+----
+BOOLEAN
 
 ## insert
 

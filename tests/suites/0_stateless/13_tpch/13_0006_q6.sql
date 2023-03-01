@@ -1,5 +1,5 @@
 select
-   truncate(sum(l_extendedprice * l_discount),3) as revenue 
+   sum(l_extendedprice * l_discount) as revenue 
 from
    lineitem 
 where

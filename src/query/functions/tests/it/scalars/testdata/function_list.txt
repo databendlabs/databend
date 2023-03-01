@@ -3252,6 +3252,7 @@ regexp_like
 regexp_replace
 regexp_substr
 to_decimal
+to_float64
 tuple
 
 Function aliases (alias to origin):
