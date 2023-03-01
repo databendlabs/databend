@@ -143,8 +143,8 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
             #[allow(clippy::collapsible_if)]
             if Method::SUPPORT_PARTITIONED {
                 if matches!(&self.hash_table, HashTable::HashTable(cell)
-                    if cell.hashtable.len() >= self.settings.convert_threshold ||
-                        cell.hashtable.bytes_len() >= self.settings.spilling_bytes_threshold_per_proc
+                    if cell.len() >= self.settings.convert_threshold ||
+                        cell.allocated_bytes() >= self.settings.spilling_bytes_threshold_per_proc
                 ) {
                     if let HashTable::HashTable(cell) = std::mem::take(&mut self.hash_table) {
                         self.hash_table = HashTable::PartitionedHashTable(
@@ -153,9 +153,8 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                     }
                 }
 
-                if matches!(&self.hash_table, HashTable::PartitionedHashTable(cell)
-                    if cell.hashtable.bytes_len() > self.settings.spilling_bytes_threshold_per_proc
-                ) {
+                if matches!(&self.hash_table, HashTable::PartitionedHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc)
+                {
                     if let HashTable::PartitionedHashTable(v) = std::mem::take(&mut self.hash_table)
                     {
                         let _dropper = v._dropper.clone();

@@ -233,7 +233,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformSpillReader<Me
         let mut begin = 0;
         let mut columns = Vec::with_capacity(payload.columns_layout.len());
         for column_layout in payload.columns_layout {
-            columns.push(deserialize_column(&data[begin..column_layout]).unwrap());
+            columns.push(deserialize_column(&data[begin..begin + column_layout]).unwrap());
             begin += column_layout;
         }
 
