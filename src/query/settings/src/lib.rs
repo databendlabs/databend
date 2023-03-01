@@ -532,6 +532,16 @@ impl Settings {
                 Default is FALSE (disabled).",
                 possible_values: None,
             },
+            SettingValue {
+                default_value: UserSettingValue::UInt64(0),
+                user_setting: UserSetting::create(
+                    "spilling_bytes_threshold_per_proc",
+                    UserSettingValue::UInt64(0),
+                ),
+                level: ScopeLevel::Session,
+                desc: "When the memory used by the aggregator exceeds the set value, the data will overflow into the storage. disable if it's 0.",
+                possible_values: None,
+            },
         ];
 
         let settings: Arc<DashMap<String, SettingValue>> = Arc::new(DashMap::default());
@@ -881,6 +891,16 @@ impl Settings {
     pub fn get_query_result_cache_allow_inconsistent(&self) -> Result<bool> {
         let key = "query_result_cache_allow_inconsistent";
         self.try_get_u64(key).map(|v| v != 0)
+    }
+
+    pub fn get_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
+        let key = "spilling_bytes_threshold_per_proc";
+        self.try_get_u64(key).map(|v| v as usize)
+    }
+
+    pub fn set_spilling_bytes_threshold_per_proc(&self, value: usize) -> Result<()> {
+        let key = "spilling_bytes_threshold_per_proc";
+        self.try_set_u64(key, value as u64, false)
     }
 
     pub fn has_setting(&self, key: &str) -> bool {

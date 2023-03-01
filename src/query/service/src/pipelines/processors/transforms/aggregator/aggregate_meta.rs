@@ -43,9 +43,17 @@ impl SerializedPayload {
     }
 }
 
+pub struct SpilledPayload {
+    pub bucket: isize,
+    pub location: String,
+    pub columns_layout: Vec<usize>,
+}
+
 pub enum AggregateMeta<Method: HashMethodBounds, V: Send + Sync + 'static> {
     Serialized(SerializedPayload),
     HashTable(HashTablePayload<Method, V>),
+    Spilling(HashTablePayload<Method, V>),
+    Spilled(SpilledPayload),
 
     Partitioned { bucket: isize, data: Vec<Self> },
 }
@@ -63,6 +71,26 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V
         Box::new(AggregateMeta::<Method, V>::Serialized(SerializedPayload {
             bucket,
             data_block: block,
+        }))
+    }
+
+    pub fn create_spilling(bucket: isize, cell: HashTableCell<Method, V>) -> BlockMetaInfoPtr {
+        Box::new(AggregateMeta::<Method, V>::Spilling(HashTablePayload {
+            cell,
+            bucket,
+            arena_holder: ArenaHolder::create(None),
+        }))
+    }
+
+    pub fn create_spilled(
+        bucket: isize,
+        location: String,
+        columns_layout: Vec<usize>,
+    ) -> BlockMetaInfoPtr {
+        Box::new(AggregateMeta::<Method, V>::Spilled(SpilledPayload {
+            bucket,
+            location,
+            columns_layout,
         }))
     }
 
@@ -99,6 +127,8 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Debug for AggregateMeta
             AggregateMeta::Serialized { .. } => {
                 f.debug_struct("AggregateMeta::Serialized").finish()
             }
+            AggregateMeta::Spilling(_) => f.debug_struct("Aggregate::Spilling").finish(),
+            AggregateMeta::Spilled(_) => f.debug_struct("Aggregate::Spilled").finish(),
         }
     }
 }

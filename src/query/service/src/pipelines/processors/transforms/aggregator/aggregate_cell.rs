@@ -65,6 +65,20 @@ impl<T: HashMethodBounds, V: Send + Sync + 'static> HashTableCell<T, V> {
             arena: Area::create(),
         }
     }
+
+    pub fn len(&self) -> usize {
+        self.hashtable.len()
+    }
+
+    pub fn allocated_bytes(&self) -> usize {
+        self.hashtable.bytes_len()
+            + self.arena.allocated_bytes()
+            + self
+                .arena_holders
+                .iter()
+                .map(ArenaHolder::allocated_bytes)
+                .sum::<usize>()
+    }
 }
 
 pub trait HashTableDropper<T: HashMethodBounds, V: Send + Sync + 'static> {
