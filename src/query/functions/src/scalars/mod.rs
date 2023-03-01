@@ -16,6 +16,7 @@ use common_expression::type_check::ALL_SIMPLE_CAST_FUNCTIONS;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::ALL_INTEGER_TYPES;
+use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::AutoCastRules;
 use common_expression::FunctionRegistry;
 use ctor::ctor;
@@ -101,6 +102,19 @@ fn register_auto_cast_rules(registry: &mut FunctionRegistry) {
         // Disable auto cast from strings, e.g., `1 < '1'`.
         registry.register_additional_cast_rules(func_name, GENERAL_CAST_RULES.iter().cloned());
         registry.register_additional_cast_rules(func_name, CAST_FROM_VARIANT_RULES());
+    }
+
+    // Timestamp/Date --> other ints and floats
+    // Now it only overload 'to_int64'
+    for data_type in ALL_NUMERICS_TYPES
+        .iter()
+        .filter(|x| !matches!(*x, &NumberDataType::Int64))
+    {
+        let func_name = format!("to_{}", data_type).to_ascii_lowercase();
+        registry.register_additional_cast_rules(&func_name, [
+            (DataType::Timestamp, DataType::Number(NumberDataType::Int64)),
+            (DataType::Date, DataType::Number(NumberDataType::Int64)),
+        ]);
     }
 }
 

@@ -1,6 +1,11 @@
 statement ok
 set timezone = 'UTC'
 
+query TTTT
+select to_uint64(a), to_int64(a), to_uint64(b),  to_int64(b) from (select '2200-01-01 00:00:00.868894'::TIMESTAMP a , '2200-01-01'::DATE b)
+----
+7258118400868894 7258118400868894 84006 84006
+
 query T
 select '0000-00-00 00:00:00.868894'::TIMESTAMP
 ----
