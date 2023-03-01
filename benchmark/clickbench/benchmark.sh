@@ -4,6 +4,7 @@ set -e
 
 BENCHMARK_ID=${BENCHMARK_ID:-$(date +%s)}
 BENCHMARK_STORAGE=${BENCHMARK_STORAGE:-fs}
+BENCHMARK_DATASET=${BENCHMARK_DATASET:-hits}
 
 echo "Checking script dependencies..."
 # OpenBSD netcat do not have a version arg
@@ -58,7 +59,7 @@ fs)
     nohup databend-query \
         --meta-endpoints "127.0.0.1:9191" \
         --storage-type fs \
-        --storage-fs-data-path "benchmark/data/${BENCHMARK_ID}" \
+        --storage-fs-data-path "benchmark/data/${BENCHMARK_ID}/${BENCHMARK_DATASET}/" \
         --tenant-id benchmark \
         --cluster-id "${BENCHMARK_ID}" \
         --storage-allow-insecure &
@@ -69,7 +70,7 @@ s3)
         --storage-type s3 \
         --storage-s3-region us-east-2 \
         --storage-s3-bucket databend-ci \
-        --storage-s3-root "benchmark/data/${BENCHMARK_ID}" \
+        --storage-s3-root "benchmark/data/${BENCHMARK_ID}/${BENCHMARK_DATASET}/" \
         --tenant-id benchmark \
         --cluster-id "${BENCHMARK_ID}" \
         --storage-allow-insecure &
@@ -84,17 +85,18 @@ echo "Waiting on databend-query 10 seconds..."
 wait_for_port 8000 10
 
 # Connect to databend-query
-bendsql connect
+bendsql connect --database "${BENCHMARK_DATASET}"
+echo "CREATE DATABASE ${BENCHMARK_DATASET};" | bendsql query
 
 # Load the data
 case $BENCHMARK_STORAGE in
 fs)
-    echo "Creating table for hits with native storage format..."
-    bendsql query <create_local.sql
+    echo "Creating table for benchmark with native storage format..."
+    bendsql query <"${BENCHMARK_DATASET}/create_local.sql"
     ;;
 s3)
-    echo "Creating table for hits..."
-    bendsql query <create.sql
+    echo "Creating tables for benchmark..."
+    bendsql query <"${BENCHMARK_DATASET}/create.sql"
     ;;
 *)
     echo "Unknown storage type: $BENCHMARK_STORAGE"
@@ -104,15 +106,56 @@ esac
 
 echo "Loading data..."
 load_start=$(date +%s)
-bendsql query <load.sql
+bendsql query <"${BENCHMARK_DATASET}/load.sql"
 load_end=$(date +%s)
 load_time=$(echo "$load_end - $load_start" | bc -l)
 echo "Data loaded in ${load_time}s."
 
-data_size=$(echo "select bytes_compressed from fuse_snapshot('default' ,'hits');" | bendsql query -f unaligned -t)
+data_size=$(echo "select sum(data_compressed_size) from system.tables where database = '${BENCHMARK_DATASET}';" | bendsql query -f unaligned -t)
 
 echo '{}' >result.json
 jq ".load_time = ${load_time} | .data_size = ${data_size} | .result = []" <result.json >result.json.tmp && mv result.json.tmp result.json
 
 echo "Running queries..."
-./run.sh
+
+function append_result() {
+    local query_num=$1
+    local seq=$2
+    local value=$3
+    if [[ $seq -eq 1 ]]; then
+        jq ".result += [[${value}]]" <result.json >result.json.tmp && mv result.json.tmp result.json
+    else
+        jq ".result[${query_num} - 1] += [${value}]" <result.json >result.json.tmp && mv result.json.tmp result.json
+    fi
+}
+
+function run_query() {
+    local query_num=$1
+    local seq=$2
+    local query=$3
+
+    local q_start q_end q_time
+
+    q_start=$(date +%s.%N)
+    if echo "$query" | bendsql query --format csv --rows-only >/dev/null; then
+        q_end=$(date +%s.%N)
+        q_time=$(echo "$q_end - $q_start" | bc -l)
+        echo "Q${QUERY_NUM}[$seq] succeeded in $q_time seconds"
+        append_result "$query_num" "$seq" "$q_time"
+    else
+        echo "Q${QUERY_NUM}[$seq] failed"
+        append_result "$query_num" "$seq" "null"
+    fi
+}
+
+TRIES=6
+QUERY_NUM=1
+while read -r query; do
+    echo "Running Q${QUERY_NUM}: ${query}"
+    sync
+    echo 3 | sudo tee /proc/sys/vm/drop_caches
+    for i in $(seq 1 $TRIES); do
+        run_query "$QUERY_NUM" "$i" "$query"
+    done
+    QUERY_NUM=$((QUERY_NUM + 1))
+done <"${BENCHMARK_DATASET}/queries.sql"
