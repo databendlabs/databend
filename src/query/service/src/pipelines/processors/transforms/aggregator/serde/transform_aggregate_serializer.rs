@@ -74,10 +74,8 @@ where Method: HashMethodBounds
                 ),
             )),
             AggregateMeta::HashTable(payload) => {
-                let params = &self.params;
-
                 let bucket = payload.bucket;
-                let data_block = serialize_aggregate(&self.method, &params, payload)?;
+                let data_block = serialize_aggregate(&self.method, &self.params, payload)?;
                 data_block.add_meta(Some(AggregateSerdeMeta::create(bucket)))
             }
         }
