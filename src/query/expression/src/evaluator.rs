@@ -168,29 +168,34 @@ impl<'a> Evaluator<'a> {
 
         // We can't call this in debug mode, because it will cause infinite recursion.
         // Eg: select 3.2::Decimal(10, 2)::Int32;
-        // #[cfg(debug_assertions)]
-        // if result.is_err() {
-        //     static RECURSING: Mutex<bool> = Mutex::new(false);
-        //     if !*RECURSING.lock().unwrap() {
-        //         *RECURSING.lock().unwrap() = true;
-        //         assert_eq!(
-        //             ConstantFolder::fold_with_domain(
-        //                 expr,
-        //                 self.input_columns
-        //                     .domains()
-        //                     .into_iter()
-        //                     .enumerate()
-        //                     .collect(),
-        //                 self.func_ctx,
-        //                 self.fn_registry
-        //             )
-        //             .1,
-        //             None,
-        //             "domain calculation should not return any domain for expressions that are possible to fail"
-        //         );
-        //         *RECURSING.lock().unwrap() = false;
-        //     }
-        // }
+        #[cfg(debug_assertions)]
+        if result.is_err() {
+            use std::sync::atomic::AtomicBool;
+            use std::sync::atomic::Ordering;
+
+            static RECURSING: AtomicBool = AtomicBool::new(false);
+            if RECURSING
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+            {
+                assert_eq!(
+                    ConstantFolder::fold_with_domain(
+                        expr,
+                        self.input_columns
+                            .domains()
+                            .into_iter()
+                            .enumerate()
+                            .collect(),
+                        self.func_ctx,
+                        self.fn_registry
+                    )
+                    .1,
+                    None,
+                    "domain calculation should not return any domain for expressions that are possible to fail"
+                );
+                RECURSING.store(false, Ordering::SeqCst);
+            }
+        }
         result
     }
 
