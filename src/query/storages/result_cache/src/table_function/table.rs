@@ -45,14 +45,14 @@ const RESULT_SCAN: &str = "result_scan";
 pub struct ResultScan {
     table_info: TableInfo,
     query_id: String,
-    blocks_raw_data: Vec<u8>,
+    block_raw_data: Vec<u8>,
 }
 
 impl ResultScan {
     pub fn try_create(
         table_schema: TableSchema,
         query_id: String,
-        blocks_raw_data: Vec<u8>,
+        block_raw_data: Vec<u8>,
     ) -> Result<Arc<dyn Table>> {
         let table_info = TableInfo {
             ident: TableIdent::new(0, 0),
@@ -69,7 +69,7 @@ impl ResultScan {
         Ok(Arc::new(ResultScan {
             table_info,
             query_id,
-            blocks_raw_data,
+            block_raw_data,
         }))
     }
 
@@ -77,7 +77,7 @@ impl ResultScan {
         Ok(Arc::new(ResultScan {
             table_info: info.table_info.clone(),
             query_id: info.query_id.clone(),
-            blocks_raw_data: info.blocks_row_data.clone(),
+            block_raw_data: info.blocks_row_data.clone(),
         }))
     }
 }
@@ -100,7 +100,7 @@ impl Table for ResultScan {
         DataSourceInfo::ResultScanSource(ResultScanTableInfo {
             table_info: self.table_info.clone(),
             query_id: self.query_id.clone(),
-            blocks_row_data: self.blocks_raw_data.clone(),
+            blocks_row_data: self.block_raw_data.clone(),
         })
     }
 
@@ -124,10 +124,10 @@ impl Table for ResultScan {
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        if self.blocks_raw_data.is_empty() {
+        if self.block_raw_data.is_empty() {
             pipeline.add_source(EmptySource::create, 1)?;
         } else {
-            let mut reader = Cursor::new(self.blocks_raw_data.clone());
+            let mut reader = Cursor::new(self.block_raw_data.clone());
             let meta = read_metadata(&mut reader)?;
             let arrow_schema = infer_schema(&meta)?;
             let table_schema = TableSchema::from(&arrow_schema);
