@@ -113,4 +113,18 @@ impl ResultCacheReader {
 
         Ok(blocks)
     }
+
+    pub async fn read_table_schema_and_data(
+        operator: Operator,
+        location: &str,
+    ) -> Result<(TableSchema, Vec<u8>)> {
+        let object = operator.object(location);
+        let data = object.read().await?;
+        let mut reader = Cursor::new(data.clone());
+        let meta = read_metadata(&mut reader)?;
+        let arrow_schema = infer_schema(&meta)?;
+        let table_schema = TableSchema::from(&arrow_schema);
+
+        Ok((table_schema, data))
+    }
 }

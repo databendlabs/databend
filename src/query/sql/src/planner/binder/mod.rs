@@ -49,3 +49,4 @@ pub use copy::parse_stage_location;
 pub use location::parse_uri_location;
 pub use scalar::ScalarBinder;
 pub use scalar_common::*;
+pub use table::parse_result_scan_args;
