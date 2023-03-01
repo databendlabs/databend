@@ -68,7 +68,7 @@ impl Interpreter for PresignInterpreter {
         let presigned_req = match self.plan.action {
             PresignAction::Download => o.presign_read(self.plan.expire)?,
             PresignAction::Upload => {
-                let mut presign_args = OpWrite::new(0);
+                let mut presign_args = OpWrite::new();
                 if let Some(content_type) = &self.plan.content_type {
                     presign_args = presign_args.with_content_type(content_type);
                 }
