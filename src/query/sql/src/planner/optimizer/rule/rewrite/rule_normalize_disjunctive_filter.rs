@@ -166,10 +166,6 @@ impl Rule for RuleNormalizeDisjunctiveFilter {
     fn pattern(&self) -> &SExpr {
         &self.pattern
     }
-
-    fn transformation(&self) -> bool {
-        true
-    }
 }
 
 fn rewrite_predicate_ors(predicate: PredicateScalar) -> (PredicateScalar, bool) {

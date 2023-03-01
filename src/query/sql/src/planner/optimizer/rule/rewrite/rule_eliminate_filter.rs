@@ -104,8 +104,4 @@ impl Rule for RuleEliminateFilter {
     fn pattern(&self) -> &SExpr {
         &self.pattern
     }
-
-    fn transformation(&self) -> bool {
-        true
-    }
 }

@@ -129,8 +129,4 @@ impl Rule for RuleNormalizeScalarFilter {
     fn pattern(&self) -> &SExpr {
         &self.pattern
     }
-
-    fn transformation(&self) -> bool {
-        true
-    }
 }

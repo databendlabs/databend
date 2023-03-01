@@ -110,8 +110,4 @@ impl Rule for RulePushDownLimitOuterJoin {
     fn pattern(&self) -> &SExpr {
         &self.pattern
     }
-
-    fn transformation(&self) -> bool {
-        true
-    }
 }
