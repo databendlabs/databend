@@ -19,7 +19,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="Performance" label="Performance">
 
 - Blazing-fast data analytics on object storage.
-- Leverages data-level parallelism and instruction-level parallelism technologies for [optimal performance]](https://benchmark.clickhouse.com/).
+- Leverages data-level parallelism and instruction-level parallelism technologies for [optimal performance](https://benchmark.clickhouse.com/).
 - Supports Git-like MVCC storage for easy querying, cloning, and restoration of historical data.
 - No indexes to build, no manual tuning, and no need to figure out partitions or shard data.
 
