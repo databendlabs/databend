@@ -71,7 +71,7 @@ pub fn write_block(
     }
 }
 
-/// Take ownership here to aviod extra copy.
+/// Take ownership here to avoid extra copy.
 pub async fn write_data(data: Vec<u8>, data_accessor: &Operator, location: &str) -> Result<()> {
     let o = data_accessor.object(location);
     o.write(data).await?;
