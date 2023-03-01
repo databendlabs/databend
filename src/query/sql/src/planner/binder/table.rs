@@ -259,7 +259,7 @@ impl Binder {
                         Some(m_key) => {
                             if let Some(value) = result_cache_mgr.get(m_key).await? {
                                 let op = DataOperator::instance().operator();
-                                ResultCacheReader::read_table_schema_and_result(op, &value.location)
+                                ResultCacheReader::read_table_schema_and_data(op, &value.location)
                                     .await?
                             } else {
                                 (TableSchema::empty(), vec![])
@@ -267,7 +267,7 @@ impl Binder {
                         }
                         None => (TableSchema::empty(), vec![]),
                     };
-                    let table = ResultScan::try_create(table_schema, query_id, Some(blocks))?;
+                    let table = ResultScan::try_create(table_schema, query_id, blocks)?;
 
                     let table_alias_name = if let Some(table_alias) = alias {
                         Some(

@@ -21,6 +21,7 @@ use common_meta_app::schema::TableInfo;
 pub struct ResultScanTableInfo {
     pub table_info: TableInfo,
     pub query_id: String,
+    pub blocks_row_data: Vec<u8>,
 }
 
 impl ResultScanTableInfo {

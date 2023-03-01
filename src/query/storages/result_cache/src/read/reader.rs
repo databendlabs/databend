@@ -63,16 +63,6 @@ impl ResultCacheReader {
         }
     }
 
-    pub fn create_with_meta_key(meta_key: String, kv_store: Arc<MetaStore>) -> Self {
-        Self {
-            meta_mgr: ResultCacheMetaManager::create(kv_store, 0),
-            meta_key,
-            partitions_shas: vec![],
-            operator: DataOperator::instance().operator(),
-            tolerate_inconsistent: true,
-        }
-    }
-
     pub fn get_meta_key(&self) -> String {
         self.meta_key.clone()
     }
@@ -104,23 +94,12 @@ impl ResultCacheReader {
     }
 
     async fn read_result_from_cache(&self, location: &str) -> Result<Vec<DataBlock>> {
-        let (_, blocks) =
-            Self::read_table_schema_and_result(self.operator.clone(), location).await?;
-
-        Ok(blocks)
-    }
-
-    pub async fn read_table_schema_and_result(
-        operator: Operator,
-        location: &str,
-    ) -> Result<(TableSchema, Vec<DataBlock>)> {
-        let object = operator.object(location);
+        let object = self.operator.object(location);
         let data = object.read().await?;
         let mut reader = Cursor::new(data);
         let meta = read_metadata(&mut reader)?;
         let arrow_schema = infer_schema(&meta)?;
-        let table_schema = TableSchema::from(&arrow_schema);
-        let schema = DataSchema::from(&table_schema);
+        let schema = DataSchema::from(&TableSchema::from(&arrow_schema));
 
         // Read the parquet file into one block.
         let chunks_iter =
@@ -132,6 +111,20 @@ impl ResultCacheReader {
             blocks.push(block);
         }
 
-        Ok((table_schema, blocks))
+        Ok(blocks)
+    }
+
+    pub async fn read_table_schema_and_data(
+        operator: Operator,
+        location: &str,
+    ) -> Result<(TableSchema, Vec<u8>)> {
+        let object = operator.object(location);
+        let data = object.read().await?;
+        let mut reader = Cursor::new(data.clone());
+        let meta = read_metadata(&mut reader)?;
+        let arrow_schema = infer_schema(&meta)?;
+        let table_schema = TableSchema::from(&arrow_schema);
+
+        Ok((table_schema, data))
     }
 }

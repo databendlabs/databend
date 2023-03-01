@@ -13,8 +13,12 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::io::Cursor;
 use std::sync::Arc;
 
+use common_arrow::arrow::io::parquet::read::infer_schema;
+use common_arrow::arrow::io::parquet::read::{self as pread};
+use common_arrow::parquet::read::read_metadata;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
@@ -26,33 +30,29 @@ use common_catalog::table_args::TableArgs;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::DataSchema;
 use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
-use common_pipeline_sources::AsyncSource;
-use common_pipeline_sources::AsyncSourcer;
-use common_users::UserApiProvider;
-
-use crate::ResultCacheReader;
+use common_pipeline_sources::EmptySource;
+use common_pipeline_sources::OneBlockSource;
 
 const RESULT_SCAN: &str = "result_scan";
 
 pub struct ResultScan {
     table_info: TableInfo,
     query_id: String,
-    blocks: Option<Vec<DataBlock>>,
+    blocks_raw_data: Vec<u8>,
 }
 
 impl ResultScan {
     pub fn try_create(
         table_schema: TableSchema,
         query_id: String,
-        blocks: Option<Vec<DataBlock>>,
+        blocks_raw_data: Vec<u8>,
     ) -> Result<Arc<dyn Table>> {
         let table_info = TableInfo {
             ident: TableIdent::new(0, 0),
@@ -69,7 +69,7 @@ impl ResultScan {
         Ok(Arc::new(ResultScan {
             table_info,
             query_id,
-            blocks,
+            blocks_raw_data,
         }))
     }
 
@@ -77,7 +77,7 @@ impl ResultScan {
         Ok(Arc::new(ResultScan {
             table_info: info.table_info.clone(),
             query_id: info.query_id.clone(),
-            blocks: None,
+            blocks_raw_data: info.blocks_row_data.clone(),
         }))
     }
 }
@@ -100,6 +100,7 @@ impl Table for ResultScan {
         DataSourceInfo::ResultScanSource(ResultScanTableInfo {
             table_info: self.table_info.clone(),
             query_id: self.query_id.clone(),
+            blocks_row_data: self.blocks_raw_data.clone(),
         })
     }
 
@@ -119,77 +120,28 @@ impl Table for ResultScan {
 
     fn read_data(
         &self,
-        ctx: Arc<dyn TableContext>,
+        _ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        pipeline.add_source(
-            |output| {
-                ResultScanSource::create(
-                    ctx.clone(),
-                    output,
-                    self.query_id.clone(),
-                    self.blocks.clone(),
-                )
-            },
-            1,
-        )?;
+        if self.blocks_raw_data.is_empty() {
+            pipeline.add_source(EmptySource::create, 1)?;
+        } else {
+            let mut reader = Cursor::new(self.blocks_raw_data.clone());
+            let meta = read_metadata(&mut reader)?;
+            let arrow_schema = infer_schema(&meta)?;
+            let table_schema = TableSchema::from(&arrow_schema);
+            let schema = DataSchema::from(&table_schema);
 
+            // Read the parquet file into one block.
+            let chunks_iter =
+                pread::FileReader::new(reader, meta.row_groups, arrow_schema, None, None, None);
+
+            for chunk in chunks_iter {
+                let block = DataBlock::from_arrow_chunk(&chunk?, &schema)?;
+                pipeline.add_source(|output| OneBlockSource::create(output, block.clone()), 1)?;
+            }
+        }
         Ok(())
-    }
-}
-
-struct ResultScanSource {
-    finish: bool,
-    ctx: Arc<dyn TableContext>,
-    arg_query_id: String,
-    blocks: Option<Vec<DataBlock>>,
-}
-
-impl ResultScanSource {
-    pub fn create(
-        ctx: Arc<dyn TableContext>,
-        output: Arc<OutputPort>,
-        arg_query_id: String,
-        blocks: Option<Vec<DataBlock>>,
-    ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx.clone(), output, ResultScanSource {
-            ctx,
-            finish: false,
-            arg_query_id,
-            blocks,
-        })
-    }
-}
-
-#[async_trait::async_trait]
-impl AsyncSource for ResultScanSource {
-    const NAME: &'static str = "result_scan";
-
-    #[async_trait::unboxed_simple]
-    async fn generate(&mut self) -> Result<Option<DataBlock>> {
-        if self.finish {
-            return Ok(None);
-        }
-
-        self.finish = true;
-        if self.ctx.get_settings().get_enable_query_result_cache()? {
-            if let Some(ref blocks) = self.blocks {
-                return Ok(Some(DataBlock::concat(blocks)?));
-            }
-
-            let meta_key = self.ctx.get_result_cache_key(&self.arg_query_id);
-            if let Some(meta_key) = meta_key {
-                let kv_store = UserApiProvider::instance().get_meta_store_client();
-                let cache_reader = ResultCacheReader::create_with_meta_key(meta_key, kv_store);
-
-                let blocks = cache_reader.try_read_cached_result().await?;
-                return match blocks {
-                    Some(blocks) => Ok(Some(DataBlock::concat(&blocks)?)),
-                    None => Ok(None),
-                };
-            }
-        }
-        Ok(None)
     }
 }

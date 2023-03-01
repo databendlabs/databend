@@ -2258,7 +2258,6 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-storage",
- "common-users",
  "opendal",
  "serde",
  "serde_json",

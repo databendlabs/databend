@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_catalog::table::Table;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_table_schema;
 use common_expression::DataSchemaRef;
@@ -167,15 +168,21 @@ impl SelectInterpreterV2 {
         false
     }
 
-    fn result_scan_table(&self) -> Option<Arc<dyn Table>> {
+    fn result_scan_table(&self) -> Result<Option<Arc<dyn Table>>> {
         let r_lock = self.metadata.read();
         let tables = r_lock.tables();
         for t in tables {
             if t.name().eq_ignore_ascii_case("result_scan") {
-                return Some(t.table());
+                return if tables.len() > 1 {
+                    Err(ErrorCode::Unimplemented(
+                        "The current `RESULT_SCAN` only supports single table queries",
+                    ))
+                } else {
+                    Ok(Some(t.table()))
+                };
             }
         }
-        None
+        Ok(None)
     }
 }
 
@@ -210,26 +217,23 @@ impl Interpreter for SelectInterpreterV2 {
             // 5) select * from result_scan(last_query_id()); --> result same as line 2 cause cache
             // If we read cache for 5, we will see it returns same result as 1 and 2 cause the
             // generated result_cache_key are same for this statement, so here we fetch the previous
-            // meta_key through related query_id and using this meta_key to read cache.
-            let meta_key = if let Some(t) = self.result_scan_table() {
+            // meta_key through related query_id and set this meta_key with current query_id.
+            if let Some(t) = self.result_scan_table()? {
                 let arg_query_id = parse_result_scan_args(&t.table_args().unwrap())?;
-                self.ctx.get_result_cache_key(&arg_query_id)
-            } else {
-                None
-            };
+                let meta_key = self.ctx.get_result_cache_key(&arg_query_id);
+                self.ctx
+                    .set_query_id_result_cache(self.ctx.get_id(), meta_key.unwrap());
+                return Ok(build_res);
+            }
 
-            let cache_reader = if let Some(meta_key) = meta_key {
-                ResultCacheReader::create_with_meta_key(meta_key, kv_store.clone())
-            } else {
-                ResultCacheReader::create(
-                    self.ctx.clone(),
-                    &key,
-                    kv_store.clone(),
-                    self.ctx
-                        .get_settings()
-                        .get_query_result_cache_allow_inconsistent()?,
-                )
-            };
+            let cache_reader = ResultCacheReader::create(
+                self.ctx.clone(),
+                &key,
+                kv_store.clone(),
+                self.ctx
+                    .get_settings()
+                    .get_query_result_cache_allow_inconsistent()?,
+            );
 
             // 2. Check the cache.
             match cache_reader.try_read_cached_result().await {
