@@ -377,25 +377,6 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Variant(buf) => buf.len(),
         }
     }
-
-    pub fn cast_to_u64(&self) -> Option<u64> {
-        match self {
-            ScalarRef::Number(t) => with_integer_mapped_type!(|NUM_TYPE| match t {
-                NumberScalar::NUM_TYPE(v) => {
-                    if *v >= 0 as _ { Some(*v as _) } else { None }
-                }
-                _ => None,
-            }),
-            ScalarRef::Timestamp(i) => {
-                if *i >= 0 {
-                    Some(*i as u64)
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        }
-    }
 }
 
 impl PartialOrd for Scalar {
