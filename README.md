@@ -68,7 +68,7 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 
 - __Git-like MVCC Storage__
 
-  [Databend stores data with snapshots](https://databend.rs/blog/databend-engine). Databend can flash back to any history timepoint of data, it's easy to query, clone, and restore historical data in tables.
+  [Databend stores data with snapshots](https://databend.rs/doc/sql-commands/ddl/table/optimize-table#what-are-snapshot-segment-and-block), enabling users to effortlessly query, clone, or restore data from any history timepoint.
 
 
 - __Support for Semi-Structured Data__
