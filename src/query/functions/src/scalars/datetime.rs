@@ -422,13 +422,6 @@ fn register_to_number(registry: &mut FunctionRegistry) {
         },
     );
 
-    registry.register_1_arg::<DateType, NumberType<i32>, _, _>(
-        "to_int32",
-        FunctionProperty::default(),
-        |domain| FunctionDomain::Domain(domain.overflow_cast().0),
-        |val, _| val,
-    );
-
     registry.register_combine_nullable_1_arg::<DateType, NumberType<i64>, _, _>(
         "try_to_int64",
         FunctionProperty::default(),
@@ -461,24 +454,6 @@ fn register_to_number(registry: &mut FunctionRegistry) {
             ValueRef::Column(col) => Value::Column(NullableColumn {
                 validity: constant_bitmap(true, col.len()).into(),
                 column: col,
-            }),
-        },
-    );
-
-    registry.register_combine_nullable_1_arg::<DateType, NumberType<i32>, _, _>(
-        "try_to_int32",
-        FunctionProperty::default(),
-        |domain| {
-            FunctionDomain::Domain(NullableDomain {
-                has_null: false,
-                value: Some(Box::new(domain.overflow_cast().0)),
-            })
-        },
-        |val, _| match val {
-            ValueRef::Scalar(scalar) => Value::Scalar(Some(scalar)),
-            ValueRef::Column(col) => Value::Column(NullableColumn {
-                validity: constant_bitmap(true, col.len()).into(),
-                column: col.iter().copied().collect(),
             }),
         },
     );

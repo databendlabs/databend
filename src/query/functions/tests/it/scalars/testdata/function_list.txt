@@ -2490,8 +2490,6 @@ to_int32(Float64) :: Int32
 to_int32(Float64 NULL) :: Int32 NULL
 to_int32(Boolean) :: Int32
 to_int32(Boolean NULL) :: Int32 NULL
-to_int32(Date) :: Int32
-to_int32(Date NULL) :: Int32 NULL
 to_int64(Variant) :: Int64
 to_int64(Variant NULL) :: Int64 NULL
 to_int64(String) :: Int64
@@ -2942,8 +2940,6 @@ try_to_int32(Float64) :: Int32 NULL
 try_to_int32(Float64 NULL) :: Int32 NULL
 try_to_int32(Boolean) :: Int32 NULL
 try_to_int32(Boolean NULL) :: Int32 NULL
-try_to_int32(Date) :: Int32 NULL
-try_to_int32(Date NULL) :: Int32 NULL
 try_to_int64(Variant) :: Int64 NULL
 try_to_int64(Variant NULL) :: Int64 NULL
 try_to_int64(String) :: Int64 NULL
