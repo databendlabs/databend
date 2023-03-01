@@ -32,6 +32,7 @@ use crate::optimizer::rule::rewrite::RuleEliminateFilter;
 use crate::optimizer::rule::rewrite::RuleMergeEvalScalar;
 use crate::optimizer::rule::rewrite::RuleMergeFilter;
 use crate::optimizer::rule::rewrite::RulePushDownFilterScan;
+use crate::optimizer::rule::rewrite::RulePushDownFilterSort;
 use crate::optimizer::rule::rewrite::RulePushDownFilterUnion;
 use crate::optimizer::rule::rewrite::RulePushDownLimitOuterJoin;
 use crate::optimizer::rule::rewrite::RulePushDownLimitScan;
@@ -77,6 +78,7 @@ impl RuleFactory {
             RuleID::PushDownFilterScan => {
                 Ok(Box::new(RulePushDownFilterScan::new(metadata.unwrap())))
             }
+            RuleID::PushDownFilterSort => Ok(Box::new(RulePushDownFilterSort::new())),
             RuleID::PushDownLimitUnion => Ok(Box::new(RulePushDownLimitUnion::new())),
             RuleID::PushDownLimitScan => Ok(Box::new(RulePushDownLimitScan::new())),
             RuleID::PushDownSortScan => Ok(Box::new(RulePushDownSortScan::new())),
