@@ -38,7 +38,10 @@ impl ExchangeSorting for AggregateExchangeSorting {
                 None => Err(ErrorCode::Internal(
                     "Internal error, AggregateExchangeSorting only recv AggregateSerdeMeta",
                 )),
-                Some(meta_info) => Ok(meta_info.bucket),
+                Some(meta_info) => match meta_info {
+                    AggregateSerdeMeta::Bucket(bucket) => Ok(*bucket),
+                    AggregateSerdeMeta::Spilled { .. } => Ok(-1),
+                },
             },
         }
     }

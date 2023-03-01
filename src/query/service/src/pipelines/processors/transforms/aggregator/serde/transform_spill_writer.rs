@@ -1,13 +1,20 @@
 use std::any::Any;
 use std::sync::Arc;
-use opendal::Operator;
+
 use common_base::base::GlobalUniqName;
-use common_exception::{ErrorCode, Result};
-use common_expression::{BlockEntry, BlockMetaInfoDowncast, BlockMetaInfoPtr, DataBlock};
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_expression::arrow::serialize_column;
-use common_pipeline_core::processors::port::{InputPort, OutputPort};
-use common_pipeline_core::processors::Processor;
+use common_expression::BlockEntry;
+use common_expression::BlockMetaInfoDowncast;
+use common_expression::BlockMetaInfoPtr;
+use common_expression::DataBlock;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::Processor;
+use opendal::Operator;
+
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::serde::transform_serializer::serialize_group_by;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
@@ -20,7 +27,7 @@ pub struct TransformGroupBySpillWriter<Method: HashMethodBounds> {
     operator: Operator,
     spilled_meta: Option<BlockMetaInfoPtr>,
     spilling_meta: Option<AggregateMeta<Method, ()>>,
-    writing_data_block: Option<(usize, Vec<Vec<u8>>)>,
+    writing_data_block: Option<(isize, usize, Vec<Vec<u8>>)>,
 }
 
 #[async_trait::async_trait]
@@ -45,7 +52,8 @@ impl<Method: HashMethodBounds> Processor for TransformGroupBySpillWriter<Method>
         }
 
         if let Some(spilled_meta) = self.spilled_meta.take() {
-            self.output.push_data(Ok(DataBlock::empty_with_meta(spilled_meta)));
+            self.output
+                .push_data(Ok(DataBlock::empty_with_meta(spilled_meta)));
             return Ok(Event::NeedConsume);
         }
 
@@ -62,7 +70,10 @@ impl<Method: HashMethodBounds> Processor for TransformGroupBySpillWriter<Method>
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
 
-            if let Some(block_meta) = data_block.get_meta().and_then(AggregateMeta::<Method, ()>::downcast_ref_from) {
+            if let Some(block_meta) = data_block
+                .get_meta()
+                .and_then(AggregateMeta::<Method, ()>::downcast_ref_from)
+            {
                 if matches!(block_meta, AggregateMeta::Spilling(_)) {
                     self.input.set_not_need_data();
                     let block_meta = data_block.take_meta().unwrap();
@@ -87,6 +98,7 @@ impl<Method: HashMethodBounds> Processor for TransformGroupBySpillWriter<Method>
     fn process(&mut self) -> Result<()> {
         if let Some(spilling_meta) = self.spilling_meta.take() {
             if let AggregateMeta::Spilling(payload) = spilling_meta {
+                let bucket = payload.bucket;
                 let data_block = serialize_group_by(&self.method, payload)?;
                 let columns = get_columns(data_block);
 
@@ -99,7 +111,7 @@ impl<Method: HashMethodBounds> Processor for TransformGroupBySpillWriter<Method>
                     columns_data.push(column_data);
                 }
 
-                self.writing_data_block = Some((total_size, columns_data));
+                self.writing_data_block = Some((bucket, total_size, columns_data));
                 return Ok(());
             }
 
@@ -110,22 +122,29 @@ impl<Method: HashMethodBounds> Processor for TransformGroupBySpillWriter<Method>
     }
 
     async fn async_process(&mut self) -> Result<()> {
-        if let Some((total_size, data)) = self.writing_data_block.take() {
+        if let Some((bucket, total_size, data)) = self.writing_data_block.take() {
             let unique_name = GlobalUniqName::unique();
-            let object = self.operator.object(&unique_name);
+            let location = unique_name;
+            let object = self.operator.object(&location);
 
             // temp code: waiting https://github.com/datafuselabs/opendal/pull/1431
             let mut write_data = Vec::with_capacity(total_size);
+            let mut columns_layout = Vec::with_capacity(data.len());
 
             for data in data.into_iter() {
+                columns_layout.push(data.len());
                 write_data.extend(data);
             }
 
             object.write(write_data).await?;
-            // self.spilled_meta = Some();
+            self.spilled_meta = Some(AggregateMeta::<Method, ()>::create_spilled(
+                bucket,
+                location,
+                columns_layout,
+            ));
         }
 
-        todo!()
+        Ok(())
     }
 }
 

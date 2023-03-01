@@ -46,6 +46,7 @@ impl SerializedPayload {
 pub struct SpilledPayload {
     pub bucket: isize,
     pub location: String,
+    pub columns_layout: Vec<usize>,
 }
 
 pub enum AggregateMeta<Method: HashMethodBounds, V: Send + Sync + 'static> {
@@ -73,25 +74,37 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V
         }))
     }
 
+    pub fn create_spilled(
+        bucket: isize,
+        location: String,
+        columns_layout: Vec<usize>,
+    ) -> BlockMetaInfoPtr {
+        Box::new(AggregateMeta::<Method, V>::Spilled(SpilledPayload {
+            bucket,
+            location,
+            columns_layout,
+        }))
+    }
+
     pub fn create_partitioned(bucket: isize, data: Vec<Self>) -> BlockMetaInfoPtr {
         Box::new(AggregateMeta::<Method, V>::Partitioned { data, bucket })
     }
 }
 
 impl<Method: HashMethodBounds, V: Send + Sync + 'static> serde::Serialize
-for AggregateMeta<Method, V>
+    for AggregateMeta<Method, V>
 {
     fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
-        where S: serde::Serializer {
+    where S: serde::Serializer {
         unreachable!("AggregateMeta does not support exchanging between multiple nodes")
     }
 }
 
 impl<'de, Method: HashMethodBounds, V: Send + Sync + 'static> serde::Deserialize<'de>
-for AggregateMeta<Method, V>
+    for AggregateMeta<Method, V>
 {
     fn deserialize<D>(_: D) -> Result<Self, D::Error>
-        where D: serde::Deserializer<'de> {
+    where D: serde::Deserializer<'de> {
         unreachable!("AggregateMeta does not support exchanging between multiple nodes")
     }
 }
@@ -107,12 +120,13 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Debug for AggregateMeta
                 f.debug_struct("AggregateMeta::Serialized").finish()
             }
             AggregateMeta::Spilling(_) => f.debug_struct("Aggregate::Spilling").finish(),
+            AggregateMeta::Spilled(_) => f.debug_struct("Aggregate::Spilled").finish(),
         }
     }
 }
 
 impl<Method: HashMethodBounds, V: Send + Sync + 'static> BlockMetaInfo
-for AggregateMeta<Method, V>
+    for AggregateMeta<Method, V>
 {
     fn as_any(&self) -> &dyn Any {
         self

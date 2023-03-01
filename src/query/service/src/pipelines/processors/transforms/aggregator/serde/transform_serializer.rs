@@ -27,7 +27,8 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::BlockMetaTransform;
 use common_pipeline_transforms::processors::transforms::BlockMetaTransformer;
 
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::{AggregateMeta, HashTablePayload};
+use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::estimated_key_size;
 use crate::pipelines::processors::transforms::aggregator::serde::serde_meta::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
@@ -53,7 +54,7 @@ impl<Method: HashMethodBounds> TransformGroupBySerializer<Method> {
 }
 
 impl<Method> BlockMetaTransform<AggregateMeta<Method, ()>> for TransformGroupBySerializer<Method>
-    where Method: HashMethodBounds
+where Method: HashMethodBounds
 {
     const NAME: &'static str = "TransformGroupBySerializer";
 
@@ -62,6 +63,13 @@ impl<Method> BlockMetaTransform<AggregateMeta<Method, ()>> for TransformGroupByS
             AggregateMeta::Spilling(_) => unreachable!(),
             AggregateMeta::Partitioned { .. } => unreachable!(),
             AggregateMeta::Serialized(_) => unreachable!(),
+            AggregateMeta::Spilled(payload) => Ok(DataBlock::empty_with_meta(
+                AggregateSerdeMeta::create_spilled(
+                    payload.bucket,
+                    payload.location,
+                    payload.columns_layout,
+                ),
+            )),
             AggregateMeta::HashTable(payload) => {
                 let bucket = payload.bucket;
                 let data_block = serialize_group_by(&self.method, payload)?;
@@ -94,8 +102,8 @@ impl<Method: HashMethodBounds> TransformAggregateSerializer<Method> {
 }
 
 impl<Method> BlockMetaTransform<AggregateMeta<Method, usize>>
-for TransformAggregateSerializer<Method>
-    where Method: HashMethodBounds
+    for TransformAggregateSerializer<Method>
+where Method: HashMethodBounds
 {
     const NAME: &'static str = "TransformAggregateSerializer";
 
@@ -104,6 +112,13 @@ for TransformAggregateSerializer<Method>
             AggregateMeta::Spilling(_) => unreachable!(),
             AggregateMeta::Partitioned { .. } => unreachable!(),
             AggregateMeta::Serialized(_) => unreachable!(),
+            AggregateMeta::Spilled(payload) => Ok(DataBlock::empty_with_meta(
+                AggregateSerdeMeta::create_spilled(
+                    payload.bucket,
+                    payload.location,
+                    payload.columns_layout,
+                ),
+            )),
             AggregateMeta::HashTable(payload) => {
                 let keys_len = payload.cell.hashtable.len();
                 let value_size = estimated_key_size(&payload.cell.hashtable);
@@ -144,8 +159,10 @@ for TransformAggregateSerializer<Method>
     }
 }
 
-
-pub fn serialize_group_by<Method: HashMethodBounds>(method: &Method, payload: HashTablePayload<Method, ()>) -> Result<DataBlock> {
+pub fn serialize_group_by<Method: HashMethodBounds>(
+    method: &Method,
+    payload: HashTablePayload<Method, ()>,
+) -> Result<DataBlock> {
     let keys_len = payload.cell.hashtable.len();
     let value_size = estimated_key_size(&payload.cell.hashtable);
     let mut group_key_builder = method.keys_column_builder(keys_len, value_size);
@@ -154,5 +171,7 @@ pub fn serialize_group_by<Method: HashMethodBounds>(method: &Method, payload: Ha
         group_key_builder.append_value(group_entity.key());
     }
 
-    Ok(DataBlock::new_from_columns(vec![group_key_builder.finish()]))
+    Ok(DataBlock::new_from_columns(vec![
+        group_key_builder.finish(),
+    ]))
 }

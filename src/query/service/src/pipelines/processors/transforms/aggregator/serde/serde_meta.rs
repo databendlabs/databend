@@ -19,13 +19,30 @@ use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct AggregateSerdeMeta {
-    pub bucket: isize,
+pub enum AggregateSerdeMeta {
+    Bucket(isize),
+    Spilled {
+        bucket: isize,
+        location: String,
+        columns_layout: Vec<usize>,
+    },
 }
 
 impl AggregateSerdeMeta {
     pub fn create(bucket: isize) -> BlockMetaInfoPtr {
-        Box::new(AggregateSerdeMeta { bucket })
+        Box::new(AggregateSerdeMeta::Bucket(bucket))
+    }
+
+    pub fn create_spilled(
+        bucket: isize,
+        location: String,
+        columns_layout: Vec<usize>,
+    ) -> BlockMetaInfoPtr {
+        Box::new(AggregateSerdeMeta::Spilled {
+            bucket,
+            location,
+            columns_layout,
+        })
     }
 }
 

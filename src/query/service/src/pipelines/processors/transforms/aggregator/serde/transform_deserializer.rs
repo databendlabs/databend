@@ -80,9 +80,20 @@ where
                 .and_then(AggregateSerdeMeta::downcast_from)
                 .unwrap();
 
-            self.output.push_data(Ok(DataBlock::empty_with_meta(
-                AggregateMeta::<Method, V>::create_serialized(block_meta.bucket, data_block),
-            )));
+            self.output
+                .push_data(Ok(DataBlock::empty_with_meta(match block_meta {
+                    AggregateSerdeMeta::Bucket(bucket) => {
+                        AggregateMeta::<Method, V>::create_serialized(bucket, data_block)
+                    }
+                    AggregateSerdeMeta::Spilled {
+                        bucket,
+                        location,
+                        columns_layout,
+                    } => {
+                        AggregateMeta::<Method, V>::create_spilled(bucket, location, columns_layout)
+                    }
+                })));
+
             return Ok(Event::NeedConsume);
         }
 
