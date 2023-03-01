@@ -23,7 +23,6 @@ common-pipeline-sources = { path = "../../pipeline/sources" }
 common-storage = { path = "../../../common/storage" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
-backon = "0.4"
 chrono = { workspace = true }
 futures = "0.3.24"
 opendal = { workspace = true, features = ["layers-tracing", "layers-metrics"] }
