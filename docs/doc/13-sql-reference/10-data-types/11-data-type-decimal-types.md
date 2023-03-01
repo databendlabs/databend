@@ -51,7 +51,7 @@ DECIMAL has a set of complex rules for precision inference. Different rules will
 
 - Division: `DECIMAL(a, b) / DECIMAL(x, y) -> DECIMAL(a + y, b)`.
 
-### Comparision Operations
+### Comparison Operations
 
 - Decimal can be compared with other numeric types.
 - Decimal can be compared with other decimal types.
