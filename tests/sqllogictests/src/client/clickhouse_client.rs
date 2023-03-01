@@ -86,7 +86,7 @@ impl ClickhouseHttpClient {
 
         if self.debug {
             println!(
-                "Running sql with clickhouse client: [{sql}] ({:?})",
+                "Running sql with clickhouse http handler: [{sql}] ({:?})",
                 start.elapsed()
             );
         }

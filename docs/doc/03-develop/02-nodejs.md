@@ -1,44 +1,38 @@
 ---
-title: How to Work With Databend in Node.js
+title: Developing with Databend using Node.js
 sidebar_label: Node.js
 description:
-   How to work with Databend in Node.js.
+   Develop with Databend using Node.js.
 ---
 
-## Before You Begin
+In the following tutorial, you'll learn how to develop a Node.js application that communicates with Databend. The tutorial will walk you through creating a SQL user in Databend and then writing code to create a table, insert data, and perform data queries.
 
-* **Databend :** Make sure Databend is running and accessible, see [How to deploy Databend](/doc/deploy).
-* [How to Create User](../14-sql-commands/00-ddl/30-user/01-user-create-user.md)
-* [How to Grant Privileges to User](../14-sql-commands/00-ddl/30-user/10-grant-privileges.md)
+## Tutorial: Developing with Databend using Node.js
 
-## Create Databend User
+Before you start, make sure you have successfully installed Databend. For how to install Databend, see [How to deploy Databend](/doc/deploy).
 
-```shell
-mysql -h127.0.0.1 -uroot -P3307
-```
+### Step 1. Prepare a SQL User Account
 
-### Create a User
+To connect your program to Databend and execute SQL operations, you must provide a SQL user account with appropriate privileges in your code. Create one in Databend if needed, and ensure that the SQL user has only the necessary privileges for security.
+
+This tutorial uses a SQL user named 'user1' with password 'abc123' as an example. As the program will write data into Databend, the user needs ALL privileges. For how to manage SQL users and their privileges, see https://databend.rs/doc/reference/sql/ddl/user.
 
 ```sql
 CREATE USER user1 IDENTIFIED BY 'abc123';
+GRANT ALL on *.* TO user1;
 ```
 
-### Grants Privileges
+### Step 2. Write a Node.js Program
 
-Grants `ALL` privileges to the user `user1`:
-```sql
-GRANT ALL ON *.* TO user1;
-```
+In this step, you'll create a simple Node.js program that communicates with Databend. The program will involve tasks such as creating a table, inserting data, and executing data queries.
 
-## Node.js
-
-This guideline show how to connect and query to Databend using Node.js.
-
-We will be creating a table named `books` and insert a row, then query it.
+1. Install the MySQL module and add it as a dependency in your Node.js project.
 
 ```text
 npm install --save mysql
 ```
+
+2. Copy and paste the following code to a file named `databend.js`:
 
 ```js title='databend.js'
 const mysql = require('mysql');
@@ -85,11 +79,11 @@ con.connect((err) => {
 });
 ```
 
-Run `nodejs databend.js`:
+3. Run `nodejs databend.js`:
 
 ```text
 Connected to Databend Server!
-Dataabse created
+Database created
 Table created
 1 record inserted
 [ RowDataPacket { title: 'mybook', author: 'author', date: '2022' } ]

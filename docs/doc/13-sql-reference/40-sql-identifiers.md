@@ -3,9 +3,9 @@ title: SQL IDENTIFIERS
 sidebar_label: SQL Identifiers
 ---
 
-SQL identifiers is the name of the database objects.
+SQL identifiers are names given to various database objects like tables, views, and databases. 
 
-Such as `table`, `view`, `database` these objects are examples of SQL identifiers:
+The following are examples of SQL identifiers:
 
 ## Requirement
 
@@ -70,7 +70,29 @@ In default, Double-quoted identifiers are case-sensitive and can start with and 
 "идентификатор"
 ```
 
-## Resolution
+Examples:
+```sql
+create table "BigTable" (a int);
+
+show tables;
++--------------------+
+| tables_in_default  |
++--------------------+
+| BigTable           |
++--------------------+
+    
+desc "BigTable";
++-------+------+------+---------+-------+
+| Field | Type | Null | Default | Extra |
++-------+------+------+---------+-------+
+| a     | INT  | NO   | 0       |       |
++-------+------+------+---------+-------+
+    
+desc BigTable;
+ERROR 1105 (HY000): Code: 1025, displayText = Unknown table 'bigtable'.
+```
+
+## Identifier Resolution
 
 By default, Databend applies the following rules for storing identifiers (at creation/definition time) and resolving them (in queries and other SQL statements):
 
@@ -78,26 +100,26 @@ By default, Databend applies the following rules for storing identifiers (at cre
 
 * When an identifier is double-quoted, it is stored and resolved exactly as entered, including case.
 
-If want to preserve the case of characters when use `unquoted identifier`, need set [unquoted_ident_case_sensitive](20-system-tables/system-settings.md) = 1.
+If you want to preserve the case of characters when use `unquoted identifier`, need set [unquoted_ident_case_sensitive](20-system-tables/system-settings.md) = 1.
 
 Examples:
 
 ```sql
-databend :) set unquoted_ident_case_sensitive=1;
+set unquoted_ident_case_sensitive=1;
 
-databend :) create table Tt(id int);
+create table Tt(id int);
 
-databend :) desc Tt;
+desc Tt;
 +-------+------+------+---------+-------+
 | Field | Type | Null | Default | Extra |
 +-------+------+------+---------+-------+
 | id    | INT  | NO   | 0       |       |
 +-------+------+------+---------+-------+
 
-databend :) create table tt(id1 int);
+create table tt(id1 int);
 Query OK, 0 rows affected (0.08 sec)
 
-databend :) desc tt;
+desc tt;
 +-------+------+------+---------+-------+
 | Field | Type | Null | Default | Extra |
 +-------+------+------+---------+-------+
@@ -106,30 +128,89 @@ databend :) desc tt;
 
 ```
 
-If do not want to preserve the case of characters when use `double identifier`, need set [quoted_ident_case_sensitive](20-system-tables/system-settings.md) = 0.
+If you do not want to preserve the case of characters when use `double identifier`, need set [quoted_ident_case_sensitive](20-system-tables/system-settings.md) = 0.
 
 Examples:
 
 ```sql
-databend :) set quoted_ident_case_sensitive=0;
-Query OK, 0 rows affected (0.03 sec)
+set quoted_ident_case_sensitive=0;
 
-databend :) create table "Test"(id int);
-Query OK, 0 rows affected (0.06 sec)
+create table "Test"(id int);
 
-databend :) desc Test;
+desc Test;
 +-------+------+------+---------+-------+
 | Field | Type | Null | Default | Extra |
 +-------+------+------+---------+-------+
 | id    | INT  | NO   | 0       |       |
 +-------+------+------+---------+-------+
 
-databend :) desc test;
+desc test;
++-------+------+------+---------+-------+
+| Field | Type | Null | Default | Extra |
++-------+------+------+---------+-------+
+| id    | INT  | NO   | 0       |       |
++-------+------+------+---------+-------+
+    
+desc "Test";
 +-------+------+------+---------+-------+
 | Field | Type | Null | Default | Extra |
 +-------+------+------+---------+-------+
 | id    | INT  | NO   | 0       |       |
 +-------+------+------+---------+-------+
 
+desc "test";
++-------+------+------+---------+-------+
+| Field | Type | Null | Default | Extra |
++-------+------+------+---------+-------+
+| id    | INT  | NO   | 0       |       |
++-------+------+------+---------+-------+
 ```
 
+## Identifiers Case-insensitive
+
+In Databend, SQL keywords and identifiers are not case-sensitive.
+
+## String Identifiers
+
+In general, if an item is a string (e.g. text and dates) must be surrounded by single quotes (`'`):
+```sql
+INSERT INTO weather VALUES ('San Francisco', 46, 50, 0.25, '1994-11-27');
+```
+
+```sql
+select 'demo';
++--------+
+| 'demo' |
++--------+
+| demo   |
++--------+
+
+select "demo";
+ERROR 1105 (HY000): Code: 1065, displayText = error:
+  --> SQL:1:8
+  |
+1 | select "demo"
+  |        ^^^^^^ column doesn't exist
+```
+
+By default, Databend SQL dialect is `PostgreSQL`:
+```sql
+show settings like '%sql_dialect%';
++-------------+------------+------------+---------+------------------------------------------------------------------------------------+--------+
+| name        | value      | default    | level   | description                                                                        | type   |
++-------------+------------+------------+---------+------------------------------------------------------------------------------------+--------+
+| sql_dialect | PostgreSQL | PostgreSQL | SESSION | SQL dialect, support "PostgreSQL" "MySQL" and "Hive", default value: "PostgreSQL". | String |
++-------------+------------+------------+---------+------------------------------------------------------------------------------------+--------+
+```
+
+You can change it to `MySQL` to enable double quotes (`"`):
+```sql
+set sql_dialect='MySQL';
+
+select "demo";
++--------+
+| 'demo' |
++--------+
+| demo   |
++--------+
+```

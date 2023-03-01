@@ -16,6 +16,7 @@ use std::collections::VecDeque;
 use std::iter::TrustedLen;
 use std::mem::MaybeUninit;
 use std::slice::IterMut;
+use std::vec::IntoIter;
 
 use crate::FastHash;
 use crate::HashSet;
@@ -41,6 +42,18 @@ impl<Impl: HashtableLike, const BUCKETS_LG2: u32, const HIGH_BIT: bool>
 {
     pub fn iter_tables_mut(&mut self) -> IterMut<'_, Impl> {
         self.tables.iter_mut()
+    }
+
+    pub fn into_iter_tables(self) -> IntoIter<Impl> {
+        self.tables.into_iter()
+    }
+
+    // #Unsafe the caller must ensure that the hashtable is not used after take_inner_tables
+    pub unsafe fn pop_first_inner_table(&mut self) -> Option<Impl> {
+        match self.tables.is_empty() {
+            true => None,
+            false => Some(self.tables.remove(0)),
+        }
     }
 }
 

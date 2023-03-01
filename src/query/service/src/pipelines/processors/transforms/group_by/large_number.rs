@@ -12,53 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use primitive_types::U256;
-use primitive_types::U512;
+use ethnum::U256;
 
-pub trait LargeNumber: Default + Sized + 'static {
+pub trait LargeNumber: Default + Copy + Sized + 'static {
     const BYTE_SIZE: usize;
-    fn serialize_to(&self, _bytes: &mut [u8]);
-    fn from_bytes(v: &[u8]) -> Result<Self>;
 }
 
 impl LargeNumber for u128 {
     const BYTE_SIZE: usize = 16;
-    fn serialize_to(&self, bytes: &mut [u8]) {
-        let bs = self.to_le_bytes();
-        bytes.copy_from_slice(&bs);
-    }
-
-    fn from_bytes(v: &[u8]) -> Result<Self> {
-        let bs: [u8; 16] = v.try_into().map_err(|_| {
-            ErrorCode::StrParseError(format!(
-                "Unable to parse into u128, unexpected byte size: {}",
-                v.len()
-            ))
-        })?;
-        Ok(u128::from_le_bytes(bs))
-    }
 }
 
 impl LargeNumber for U256 {
     const BYTE_SIZE: usize = 32;
-    fn serialize_to(&self, bytes: &mut [u8]) {
-        self.to_little_endian(bytes);
-    }
-
-    fn from_bytes(v: &[u8]) -> Result<Self> {
-        Ok(U256::from_little_endian(v))
-    }
-}
-
-impl LargeNumber for U512 {
-    const BYTE_SIZE: usize = 64;
-    fn serialize_to(&self, bytes: &mut [u8]) {
-        self.to_little_endian(bytes);
-    }
-
-    fn from_bytes(v: &[u8]) -> Result<Self> {
-        Ok(U512::from_little_endian(v))
-    }
 }

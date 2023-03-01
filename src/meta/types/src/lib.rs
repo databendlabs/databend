@@ -18,6 +18,7 @@
 
 //! This crate defines data types used in meta data storage service.
 
+mod applied_state;
 mod change;
 mod cluster;
 mod cmd;
@@ -48,6 +49,7 @@ pub mod protobuf {
 
     pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("meta_descriptor");
 }
+pub use applied_state::AppliedState;
 pub use change::Change;
 pub use cluster::Node;
 pub use cluster::NodeInfo;
