@@ -29,7 +29,9 @@ pub trait Rule {
 
     fn pattern(&self) -> &SExpr;
 
-    fn transformation(&self) -> bool;
+    fn transformation(&self) -> bool {
+        true
+    }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]

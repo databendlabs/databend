@@ -77,8 +77,4 @@ impl Rule for RuleSplitAggregate {
     fn pattern(&self) -> &SExpr {
         &self.pattern
     }
-
-    fn transformation(&self) -> bool {
-        true
-    }
 }
