@@ -11,6 +11,7 @@ use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use itertools::Itertools;
 use opendal::Operator;
@@ -191,6 +192,24 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
 }
 
 impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformSpillReader<Method, V> {
+    pub fn create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        operator: Operator,
+    ) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(Box::new(TransformSpillReader::<
+            Method,
+            V,
+        > {
+            input,
+            output,
+            operator,
+            deserialized_meta: None,
+            reading_meta: None,
+            deserializing_meta: None,
+        })))
+    }
+
     fn deserialize(payload: SpilledPayload, data: Vec<u8>) -> AggregateMeta<Method, V> {
         let mut begin = 0;
         let mut columns = Vec::with_capacity(payload.columns_layout.len());

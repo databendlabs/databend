@@ -36,6 +36,7 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
+use common_storage::DataOperator;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
@@ -46,8 +47,10 @@ use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::PartitionedHashTableDropper;
+use crate::pipelines::processors::transforms::TransformAggregateSpillReader;
 use crate::pipelines::processors::transforms::TransformFinalAggregate;
 use crate::pipelines::processors::transforms::TransformGroupByDeserializer;
+use crate::pipelines::processors::transforms::TransformGroupBySpillReader;
 use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
 
@@ -433,6 +436,15 @@ fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 'sta
     )]));
 
     pipeline.resize(input_nums)?;
+
+    let operator = DataOperator::instance().operator();
+    pipeline.add_transform(|input, output| {
+        let operator = operator.clone();
+        match params.aggregate_functions.is_empty() {
+            true => TransformGroupBySpillReader::<Method>::create(input, output, operator),
+            false => TransformAggregateSpillReader::<Method>::create(input, output, operator),
+        }
+    })?;
 
     pipeline.add_transform(
         |input, output| match params.aggregate_functions.is_empty() {
