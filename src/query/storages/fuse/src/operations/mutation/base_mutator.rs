@@ -107,6 +107,7 @@ impl BaseMutator {
                     location: path.clone(),
                     len_hint: None,
                     ver: *version,
+                    put_cache: true,
                 };
                 segment_reader.read(&load_params).await?
             };
@@ -171,6 +172,7 @@ impl BaseMutator {
                 location: loc.clone(),
                 len_hint: None,
                 ver: *ver,
+                put_cache: true,
             };
             let seg = segment_reader.read(&params).await?;
             new_segment_summaries.push(seg.summary.clone())

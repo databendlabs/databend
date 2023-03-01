@@ -19,6 +19,7 @@ pub struct LoadParams {
     pub location: String,
     pub len_hint: Option<u64>,
     pub ver: u64,
+    pub put_cache: bool,
 }
 
 pub type CacheKey = String;
