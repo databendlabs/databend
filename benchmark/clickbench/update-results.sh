@@ -2,13 +2,18 @@
 
 # from: https://github.com/ClickHouse/ClickBench/blob/main/generate-results.sh
 
-BENCHMARK_DATASET=${BENCHMARK_DATASET:-hits}
+dataset=$1
+
+if [ -z "$dataset" ]; then
+    echo "Usage: $0 <dataset>"
+    exit 1
+fi
 
 (
-    sed '/^[ \t]*const data = \[$/q' "${BENCHMARK_DATASET}/index.html"
+    sed '/^[ \t]*const data = \[$/q' "${dataset}/index.html"
 
     FIRST=1
-    find "./results/${BENCHMARK_DATASET}/" -name '*.json' | while read -r file; do
+    find "./results/${dataset}/" -name '*.json' | while read -r file; do
         [[ $file =~ ^(hardware|versions)/ ]] && continue
 
         [ "${FIRST}" = "0" ] && echo -n ','
@@ -17,6 +22,6 @@ BENCHMARK_DATASET=${BENCHMARK_DATASET:-hits}
     done
 
     echo ']; // end of data'
-    sed '0,/^[ \t]*\]; \/\/ end of data$/d' "${BENCHMARK_DATASET}/index.html"
+    sed '0,/^[ \t]*\]; \/\/ end of data$/d' "${dataset}/index.html"
 
-) >"results/${BENCHMARK_DATASET}.html"
+) >"results/${dataset}.html"
