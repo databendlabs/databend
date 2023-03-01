@@ -63,5 +63,35 @@ statement ok
 drop table t;
 
 statement ok
+create table t (a array(int));
+
+statement ok
+insert into t values ([1,2])
+
+statement ok
+insert into t values ([3,4,5])
+
+query I
+select unnest(a) as ua from t order by ua;
+----
+1
+2
+3
+4
+5
+
+query IT
+select unnest(a) as ua, a from t order by ua;
+----
+1 [1,2]
+2 [1,2]
+3 [3,4,5]
+4 [3,4,5]
+5 [3,4,5]
+
+statement ok
+drop table t;
+
+statement ok
 DROP DATABASE db_02_0062;
 

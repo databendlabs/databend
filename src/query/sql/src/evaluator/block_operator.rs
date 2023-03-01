@@ -143,7 +143,7 @@ impl BlockOperator {
     /// select unnest([1,2,3]), number from numbers(2);
     /// ```
     ///
-    /// The array scalar `[1,2,3]` will be replicated first (See the logic in `src/query/functions/src/scalars/unnest.rs`).
+    /// The array scalar `[1,2,3]` will be replicated first (See the logic in `BlockOperator::execute`).
     fn fit_unnest(
         input: DataBlock,
         unnest_columns: &[(usize, Box<ArrayColumn<AnyType>>)],

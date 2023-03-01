@@ -305,15 +305,21 @@ impl PhysicalPlanBuilder {
             RelOperator::EvalScalar(eval_scalar) => {
                 let input = Box::new(self.build(s_expr.child(0)?).await?);
                 let input_schema = input.output_schema()?;
+                // The begin offset of the eval scalar columns.
+                let offset = input_schema.fields().len();
 
                 // 1. Collect unnest scalars.
                 let mut unnest_scalars = vec![];
                 let exprs = eval_scalar
                     .items
                     .iter()
-                    .map(|item| {
+                    .enumerate()
+                    .map(|(i, item)| {
                         let scalar = match &item.scalar {
-                            ScalarExpr::Unnest(crate::plans::Unnest { argument, .. }) => argument,
+                            ScalarExpr::Unnest(crate::plans::Unnest { argument, .. }) => {
+                                unnest_scalars.push(i + offset);
+                                argument
+                            }
                             _ => &item.scalar,
                         };
 
@@ -346,7 +352,7 @@ impl PhysicalPlanBuilder {
                     PhysicalPlan::Unnest(Unnest {
                         plan_id: self.next_plan_id(),
                         input: Box::new(eval_scalar_plan),
-                        columns: unnest_scalars,
+                        offsets: unnest_scalars,
                         stat_info: Some(stat_info),
                     })
                 })
