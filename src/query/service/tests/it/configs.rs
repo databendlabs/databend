@@ -633,13 +633,10 @@ fn test_env_config_webhdfs() -> Result<()> {
 
             // Storage type is webhdfs, should take default value.
             assert_eq!("", configured.storage.oss.oss_endpoint_url);
-            assert_eq!("oss.bucket", configured.storage.oss.oss_bucket);
-            assert_eq!("oss.root", configured.storage.oss.oss_root);
-            assert_eq!("access_key_id", configured.storage.oss.oss_access_key_id);
-            assert_eq!(
-                "access_key_secret",
-                configured.storage.oss.oss_access_key_secret
-            );
+            assert_eq!("", configured.storage.oss.oss_bucket);
+            assert_eq!("", configured.storage.oss.oss_root);
+            assert_eq!("", configured.storage.oss.oss_access_key_id);
+            assert_eq!("", configured.storage.oss.oss_access_key_secret);
 
             assert_eq!("", configured.storage.gcs.gcs_bucket);
             assert_eq!("", configured.storage.gcs.gcs_root);

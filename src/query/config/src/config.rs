@@ -343,6 +343,7 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
                     "s3" => StorageParams::S3(self.s3.try_into()?),
                     "obs" => StorageParams::Obs(self.obs.try_into()?),
                     "oss" => StorageParams::Oss(self.oss.try_into()?),
+                    "webhdfs" => StorageParams::Webhdfs(self.webhdfs.try_into()?),
                     _ => return Err(ErrorCode::StorageOther("not supported storage type")),
                 }
             },
@@ -1047,7 +1048,7 @@ pub struct WebhdfsStorageConfig {
     pub webhdfs_delegation: String,
     /// endpoint url for webhdfs storage
     #[clap(long = "storage-webhdfs-endpoint", default_value_t)]
-    #[serde(rename = "endpoint")]
+    #[serde(rename = "endpoint_url")]
     pub webhdfs_endpoint_url: String,
     /// working directory root for webhdfs storage
     #[clap(long = "storage-webhdfs-root", default_value_t)]
@@ -1078,6 +1079,18 @@ impl From<InnerStorageWebhdfsConfig> for WebhdfsStorageConfig {
             webhdfs_endpoint_url: v.endpoint_url,
             webhdfs_root: v.root,
         }
+    }
+}
+
+impl TryFrom<WebhdfsStorageConfig> for InnerStorageWebhdfsConfig {
+    type Error = ErrorCode;
+
+    fn try_from(value: WebhdfsStorageConfig) -> Result<Self, Self::Error> {
+        Ok(InnerStorageWebhdfsConfig {
+            delegation: value.webhdfs_delegation,
+            endpoint_url: value.webhdfs_endpoint_url,
+            root: value.webhdfs_root,
+        })
     }
 }
 

@@ -7,10 +7,6 @@ services:
       - namenode:/hadoop/dfs/name
     environment:
       - CLUSTER_NAME=test
-    networks:
-      hdp_nw:
-        ipv4_address: 172.16.1.1
-        ipv6_address: 2001:1145:14::1
     env_file:
       - ./hadoop-hive.env
     ports:
@@ -25,10 +21,6 @@ services:
       - ./hadoop-hive.env
     environment:
       SERVICE_PRECONDITION: "namenode:50070"
-    networks:
-      hdp_nw:
-        ipv4_address: 172.16.1.2
-        ipv6_address: 2001:1145:14::2
     ports:
       - "50075:50075"
       - "9864:9864"
@@ -39,10 +31,6 @@ services:
     environment:
       HIVE_CORE_CONF_javax_jdo_option_ConnectionURL: "jdbc:postgresql://hive-metastore/metastore"
       SERVICE_PRECONDITION: "hive-metastore:9083"
-    networks:
-      hdp_nw:
-        ipv4_address: 172.16.1.3
-        ipv6_address: 2001:1145:14::3
     volumes:
       - ../../tests/data/hive/:/databend-data/
     ports:
@@ -54,27 +42,11 @@ services:
     command: /opt/hive/bin/hive --service metastore
     environment:
       SERVICE_PRECONDITION: "namenode:50070 datanode:50075 hive-metastore-postgresql:5432"
-    networks:
-      hdp_nw:
-        ipv4_address: 172.16.1.4
-        ipv6_address: 2001:1145:14::4
     ports:
       - "9083:9083"
   hive-metastore-postgresql:
     image: bde2020/hive-metastore-postgresql:2.3.0
-    networks:
-      hdp_nw:
-        ipv4_address: 172.16.1.5
-        ipv6_address: 2001:1145:14::5
 
 volumes:
   namenode:
   datanode:
-
-networks:
-  hdp_nw:
-    ipam:
-      driver: default
-      config:
-        - subnet: "172.16.1.0/16"
-        - subnet: "2001:1145:14::/64"
