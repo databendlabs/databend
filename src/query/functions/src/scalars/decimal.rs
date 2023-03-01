@@ -408,7 +408,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }))
     });
 
-    // decimal to  float
+    // decimal to float64
     registry.register_function_factory("to_float64", |_params, args_type| {
         if args_type.len() != 1 {
             return None;
@@ -428,6 +428,29 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
             calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
             eval: Box::new(move |args, tx| decimal_to_float64(args, arg_type.clone(), tx)),
+        }))
+    });
+
+    // decimal to float32
+    registry.register_function_factory("to_float32", |_params, args_type| {
+        if args_type.len() != 1 {
+            return None;
+        }
+
+        let arg_type = args_type[0].clone();
+        if !arg_type.is_decimal() {
+            return None;
+        }
+
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "to_float32".to_string(),
+                args_type: vec![arg_type.clone()],
+                return_type: Float32Type::data_type(),
+                property: FunctionProperty::default(),
+            },
+            calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
+            eval: Box::new(move |args, tx| decimal_to_float32(args, arg_type.clone(), tx)),
         }))
     });
 }
@@ -736,6 +759,56 @@ fn decimal_to_float64(
                 .map(|x| (f64::from(*x) / div).into())
                 .collect();
             Float64Type::upcast_column(values)
+        }
+    };
+
+    if is_scalar {
+        let scalar = result.index(0).unwrap();
+        Value::Scalar(scalar.to_owned())
+    } else {
+        Value::Column(result)
+    }
+}
+
+fn decimal_to_float32(
+    args: &[ValueRef<AnyType>],
+    from_type: DataType,
+    _ctx: &mut EvalContext,
+) -> Value<AnyType> {
+    let arg = &args[0];
+
+    let mut is_scalar = false;
+    let column = match arg {
+        ValueRef::Column(column) => column.clone(),
+        ValueRef::Scalar(s) => {
+            is_scalar = true;
+            let builder = ColumnBuilder::repeat(s, 1, &from_type);
+            builder.build()
+        }
+    };
+
+    let from_type = from_type.as_decimal().unwrap();
+
+    let result = match from_type {
+        DecimalDataType::Decimal128(_) => {
+            let (buffer, from_size) = i128::try_downcast_column(&column).unwrap();
+
+            let div = 10_f32.powi(from_size.scale as i32);
+
+            let values: Buffer<F32> = buffer.iter().map(|x| (*x as f32 / div).into()).collect();
+            Float32Type::upcast_column(values)
+        }
+
+        DecimalDataType::Decimal256(_) => {
+            let (buffer, from_size) = i256::try_downcast_column(&column).unwrap();
+
+            let div = 10_f32.powi(from_size.scale as i32);
+
+            let values: Buffer<F32> = buffer
+                .iter()
+                .map(|x| (f32::from(*x) / div).into())
+                .collect();
+            Float32Type::upcast_column(values)
         }
     };
 
