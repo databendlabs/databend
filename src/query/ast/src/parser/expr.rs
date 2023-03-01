@@ -140,8 +140,43 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                     };
                 }
             }
+
+            if prev != -1 {
+                if let (
+                    ExprElement::UnaryOp {
+                        op: UnaryOperator::Minus,
+                    },
+                    ExprElement::Literal { lit },
+                ) = (
+                    &expr_elements[prev as usize].elem,
+                    &expr_elements[curr as usize].elem,
+                ) {
+                    if matches!(
+                        lit,
+                        Literal::Float(_)
+                            | Literal::UInt64(_)
+                            | Literal::Decimal128 { .. }
+                            | Literal::Decimal256 { .. }
+                    ) {
+                        let span = expr_elements[curr as usize].span;
+                        expr_elements[curr as usize] = WithSpan {
+                            span,
+                            elem: ExprElement::Literal { lit: lit.neg() },
+                        };
+                        let span = expr_elements[prev as usize].span;
+                        expr_elements[prev as usize] = WithSpan {
+                            span,
+                            elem: ExprElement::Skip,
+                        };
+                    }
+                }
+            }
         }
-        let iter = &mut expr_elements.into_iter();
+        let iter = &mut expr_elements
+            .into_iter()
+            .filter(|x| x.elem != ExprElement::Skip)
+            .collect::<Vec<_>>()
+            .into_iter();
         run_pratt_parser(ExprParser, iter, rest, i)
     }
 }
@@ -308,6 +343,7 @@ pub enum ExprElement {
         unit: IntervalKind,
         date: Expr,
     },
+    Skip,
 }
 
 struct ExprParser;
