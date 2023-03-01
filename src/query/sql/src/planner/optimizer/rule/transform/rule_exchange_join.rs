@@ -258,4 +258,8 @@ impl Rule for RuleExchangeJoin {
     fn pattern(&self) -> &SExpr {
         &self.pattern
     }
+
+    fn transformation(&self) -> bool {
+        false
+    }
 }

@@ -128,6 +128,10 @@ impl Rule for RulePushDownFilterJoin {
     fn pattern(&self) -> &SExpr {
         &self.pattern
     }
+
+    fn transformation(&self) -> bool {
+        true
+    }
 }
 
 pub fn try_push_down_filter_join(

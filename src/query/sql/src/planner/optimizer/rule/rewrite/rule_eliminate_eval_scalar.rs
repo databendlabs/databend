@@ -89,4 +89,8 @@ impl Rule for RuleEliminateEvalScalar {
     fn pattern(&self) -> &SExpr {
         &self.pattern
     }
+
+    fn transformation(&self) -> bool {
+        true
+    }
 }

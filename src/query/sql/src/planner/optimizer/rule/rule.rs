@@ -28,6 +28,8 @@ pub trait Rule {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()>;
 
     fn pattern(&self) -> &SExpr;
+
+    fn transformation(&self) -> bool;
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -56,12 +58,12 @@ pub enum RuleID {
 
     // Exploration rules
     CommuteJoin,
-    CommuteJoinBaseTable,
-    LeftAssociateJoin,
     RightAssociateJoin,
+    LeftAssociateJoin,
+    ExchangeJoin,
+    CommuteJoinBaseTable,
     LeftExchangeJoin,
     RightExchangeJoin,
-    ExchangeJoin,
 }
 
 impl Display for RuleID {

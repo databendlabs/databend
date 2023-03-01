@@ -18,7 +18,9 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use roaring::RoaringBitmap;
 
+use super::explore_rules::calc_explore_rule_set;
 use crate::optimizer::cascades::explore_rules::get_explore_rule_set;
 use crate::optimizer::cascades::scheduler::Scheduler;
 use crate::optimizer::cascades::tasks::OptimizeGroupTask;
@@ -38,6 +40,7 @@ use crate::IndexType;
 pub struct CascadesOptimizer {
     pub memo: Memo,
     pub explore_rules: RuleSet,
+    pub explore_rule_set: roaring::RoaringBitmap,
 
     pub cost_model: Box<dyn CostModel>,
 
@@ -48,11 +51,16 @@ pub struct CascadesOptimizer {
 
 impl CascadesOptimizer {
     pub fn create(ctx: Arc<dyn TableContext>) -> Result<Self> {
+        let enable_bushy_join = ctx.get_settings().get_enable_bushy_join()? != 0;
         let explore_rules = if ctx.get_settings().get_enable_cbo()? {
-            let enable_bushy_join = ctx.get_settings().get_enable_bushy_join()? != 0;
             get_explore_rule_set(enable_bushy_join)
         } else {
             RuleSet::create_with_ids(vec![]).unwrap()
+        };
+        let explore_rule_set = if ctx.get_settings().get_enable_cbo()? {
+            calc_explore_rule_set(enable_bushy_join)
+        } else {
+            RoaringBitmap::new()
         };
         Ok(CascadesOptimizer {
             memo: Memo::create(),
@@ -60,6 +68,7 @@ impl CascadesOptimizer {
             cost_model: Box::new(DefaultCostModel),
             best_cost_map: HashMap::new(),
             _ctx: ctx,
+            explore_rule_set,
         })
     }
 

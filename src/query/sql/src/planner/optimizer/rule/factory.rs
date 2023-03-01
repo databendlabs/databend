@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use common_exception::Result;
+use once_cell::sync::Lazy;
+use roaring::RoaringBitmap;
 
 use super::rewrite::RuleEliminateEvalScalar;
 use super::rewrite::RuleFoldCountAggregate;
@@ -45,11 +47,23 @@ use crate::optimizer::rule::RuleID;
 use crate::optimizer::rule::RulePtr;
 use crate::MetadataRef;
 
-pub struct RuleFactory;
+// read only, so thread safe
+pub static mut RULE_FACTORY: Lazy<RuleFactory> = Lazy::new(RuleFactory::create);
+
+pub struct RuleFactory {
+    pub transformation_rules: roaring::RoaringBitmap,
+    pub exploration_rules: roaring::RoaringBitmap,
+}
 
 impl RuleFactory {
     pub fn create() -> Self {
-        RuleFactory {}
+        RuleFactory {
+            transformation_rules: (RuleID::NormalizeScalarFilter as u32
+                ..RuleID::CommuteJoin as u32)
+                .collect::<RoaringBitmap>(),
+            exploration_rules: (RuleID::CommuteJoin as u32..(RuleID::RightExchangeJoin as u32) + 1)
+                .collect::<RoaringBitmap>(),
+        }
     }
 
     pub fn create_rule(&self, id: RuleID, metadata: Option<MetadataRef>) -> Result<RulePtr> {

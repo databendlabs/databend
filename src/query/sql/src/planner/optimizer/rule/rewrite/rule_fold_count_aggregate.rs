@@ -157,4 +157,8 @@ impl Rule for RuleFoldCountAggregate {
     fn pattern(&self) -> &SExpr {
         &self.pattern
     }
+
+    fn transformation(&self) -> bool {
+        true
+    }
 }
