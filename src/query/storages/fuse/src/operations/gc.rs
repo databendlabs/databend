@@ -194,7 +194,6 @@ impl FuseTable {
         // 3.2 Find all the segments need to be deleted.
         {
             for segment in &all_segment_locations {
-                // Skip the root snapshot segments if the keep_last_snapshot is true.
                 if let Some(segments_excluded) = segments_excluded.as_ref() {
                     if segments_excluded.contains(segment) {
                         continue;
