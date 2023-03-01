@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::fmt::{Display, Formatter};
+use std::fmt::Display;
+use std::fmt::Formatter;
 
 use common_catalog::plan::DataSourcePlan;
 use common_exception::Result;
@@ -484,19 +485,22 @@ impl DistributedInsertSelect {
 
 // Build runtime predicate data from join build side
 // Then pass it to runtime filter on join probe side
+// It's the children of join node
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RuntimeFilterSource {
     /// A unique id of operator in a `PhysicalPlan` tree.
     /// Only used for display.
     pub plan_id: u32,
 
-    pub input: Box<PhysicalPlan>,
-    pub runtime_filters: BTreeMap<RuntimeFilterId, RemoteExpr>,
+    pub left_side: Box<PhysicalPlan>,
+    pub right_side: Box<PhysicalPlan>,
+    pub left_runtime_filters: BTreeMap<RuntimeFilterId, RemoteExpr>,
+    pub right_runtime_filters: BTreeMap<RuntimeFilterId, RemoteExpr>,
 }
 
 impl RuntimeFilterSource {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        self.input.output_schema()
+        self.left_side.output_schema()
     }
 }
 
@@ -604,9 +608,10 @@ impl PhysicalPlan {
                 Box::new(std::iter::once(plan.input.as_ref()))
             }
             PhysicalPlan::Unnest(plan) => Box::new(std::iter::once(plan.input.as_ref())),
-            PhysicalPlan::RuntimeFilterSource(plan) => {
-                Box::new(std::iter::once(plan.input.as_ref()))
-            }
+            PhysicalPlan::RuntimeFilterSource(plan) => Box::new(
+                std::iter::once(plan.left_side.as_ref())
+                    .chain(std::iter::once(plan.right_side.as_ref())),
+            ),
         }
     }
 }

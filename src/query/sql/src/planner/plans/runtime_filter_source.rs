@@ -17,17 +17,22 @@ use std::hash::Hash;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
+use common_exception::Result;
 
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
+use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::ColumnSet;
 use crate::IndexType;
 use crate::ScalarExpr;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, Ord, PartialOrd)]
+#[derive(
+    Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, Ord, PartialOrd,
+)]
 pub struct RuntimeFilterId {
     id: String,
 }
@@ -40,7 +45,22 @@ impl RuntimeFilterId {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RuntimeFilterSource {
-    pub runtime_filters: BTreeMap<RuntimeFilterId, ScalarExpr>,
+    pub left_runtime_filters: BTreeMap<RuntimeFilterId, ScalarExpr>,
+    pub right_runtime_filters: BTreeMap<RuntimeFilterId, ScalarExpr>,
+}
+
+impl RuntimeFilterSource {
+    pub fn used_columns(&self) -> Result<ColumnSet> {
+        let mut used_columns = ColumnSet::new();
+        for expr in self
+            .left_runtime_filters
+            .iter()
+            .chain(self.right_runtime_filters.iter())
+        {
+            used_columns.extend(expr.1.used_columns());
+        }
+        Ok(used_columns)
+    }
 }
 
 impl Operator for RuntimeFilterSource {
@@ -48,17 +68,28 @@ impl Operator for RuntimeFilterSource {
         RelOp::RuntimeFilterSource
     }
 
-    fn derive_relational_prop(
-        &self,
-        rel_expr: &RelExpr,
-    ) -> common_exception::Result<RelationalProperty> {
-        todo!()
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty> {
+        let left_prop = rel_expr.derive_relational_prop_child(0)?;
+        // Derive output columns
+        let output_columns = left_prop.output_columns.clone();
+        // Derive outer columns
+        let outer_columns = left_prop.outer_columns.clone();
+
+        Ok(RelationalProperty {
+            output_columns,
+            outer_columns,
+            used_columns: self.used_columns()?,
+
+            cardinality: left_prop.cardinality,
+            statistics: Statistics {
+                precise_cardinality: None,
+                column_stats: left_prop.statistics.column_stats,
+                is_accurate: false,
+            },
+        })
     }
 
-    fn derive_physical_prop(
-        &self,
-        rel_expr: &RelExpr,
-    ) -> common_exception::Result<PhysicalProperty> {
+    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         todo!()
     }
 
@@ -68,7 +99,7 @@ impl Operator for RuntimeFilterSource {
         rel_expr: &RelExpr,
         child_index: usize,
         required: &RequiredProperty,
-    ) -> common_exception::Result<RequiredProperty> {
+    ) -> Result<RequiredProperty> {
         todo!()
     }
 }

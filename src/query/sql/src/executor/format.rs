@@ -38,6 +38,7 @@ use crate::executor::DistributedInsertSelect;
 use crate::executor::ExchangeSink;
 use crate::executor::ExchangeSource;
 use crate::executor::FragmentKind;
+use crate::executor::RuntimeFilterSource;
 use crate::planner::MetadataRef;
 use crate::planner::DUMMY_TABLE_INDEX;
 use crate::BaseTableColumn;
@@ -84,7 +85,7 @@ fn to_format_tree(
         }
         PhysicalPlan::Unnest(plan) => unnest_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::RuntimeFilterSource(plan) => {
-            todo!()
+            runtime_filter_source_to_format_tree(plan, metadata, prof_span_set)
         }
     }
 }
@@ -661,7 +662,20 @@ fn unnest_to_format_tree(
     let children = vec![to_format_tree(&plan.input, metadata, prof_span_set)?];
 
     Ok(FormatTreeNode::with_children(
-        "Unnest".to_string(),
+        "Unnest".to_string(),        children,
+    ))
+}
+
+fn runtime_filter_source_to_format_tree(
+    plan: &RuntimeFilterSource,
+    metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
+) -> Result<FormatTreeNode<String>> {
+    let mut children = vec![];
+    children.push(to_format_tree(&plan.left_side, metadata, prof_span_set)?);
+    children.push(to_format_tree(&plan.right_side, metadata, prof_span_set)?);
+    Ok(FormatTreeNode::with_children(
+        "RuntimeFilterSource".to_string(),
         children,
     ))
 }

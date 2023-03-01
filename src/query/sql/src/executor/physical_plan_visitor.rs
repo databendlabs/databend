@@ -224,12 +224,19 @@ pub trait PhysicalPlanReplacer {
             offsets: plan.offsets.clone(),
             stat_info: plan.stat_info.clone(),}))}
 
-    fn replace_runtime_filter_source(&mut self, plan: &RuntimeFilterSource) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
+
+    fn replace_runtime_filter_source(
+        &mut self,
+        plan: &RuntimeFilterSource,
+    ) -> Result<PhysicalPlan> {
+        let left_side = self.replace(&plan.left_side)?;
+        let right_side = self.replace(&plan.right_side)?;
         Ok(PhysicalPlan::RuntimeFilterSource(RuntimeFilterSource {
             plan_id: plan.plan_id,
-            input: Box::new(input),
-            runtime_filters: plan.runtime_filters.clone(),
+            left_side: Box::new(left_side),
+            right_side: Box::new(right_side),
+            left_runtime_filters: plan.left_runtime_filters.clone(),
+            right_runtime_filters: plan.right_runtime_filters.clone(),
         }))
     }
 }
@@ -286,7 +293,8 @@ impl PhysicalPlan {
                 }
                 PhysicalPlan::Unnest(plan) => Self::traverse(&plan.input, pre_visit, visit, post_visit),
                 PhysicalPlan::RuntimeFilterSource(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                    Self::traverse(&plan.left_side, pre_visit, visit, post_visit);
+                    Self::traverse(&plan.right_side, pre_visit, visit, post_visit);
                 }
             }
             post_visit(plan);

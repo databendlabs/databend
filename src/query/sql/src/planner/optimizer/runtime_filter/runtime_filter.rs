@@ -28,44 +28,40 @@ use crate::plans::RuntimeFilterSource;
 use crate::ScalarExpr;
 
 pub struct RuntimeFilterResult {
-    pub runtime_filters: BTreeMap<RuntimeFilterId, ScalarExpr>,
-    // Used by join probe side
-    pub predicates: Vec<ScalarExpr>,
+    pub left_runtime_filters: BTreeMap<RuntimeFilterId, ScalarExpr>,
+    pub right_runtime_filters: BTreeMap<RuntimeFilterId, ScalarExpr>,
 }
 
 fn create_runtime_filters(join: &Join) -> Result<RuntimeFilterResult> {
-    let mut runtime_filters = HashMap::with_capacity(join.right_conditions.len());
-    for (idx, expr) in join.right_conditions.iter().enumerate() {
-        runtime_filters.insert(RuntimeFilterId::new(idx), expr);
-        let probe_condition = &join.left_conditions[idx];
-        // todo: create a new function to represent predicate for join probe side?
+    let mut left_runtime_filters = BTreeMap::new();
+    let mut right_runtime_filters = BTreeMap::new();
+    for (idx, exprs) in join
+        .right_conditions
+        .iter()
+        .zip(join.left_conditions.iter())
+        .enumerate()
+    {
+        right_runtime_filters.insert(RuntimeFilterId::new(idx), exprs.0.clone());
+        left_runtime_filters.insert(RuntimeFilterId::new(idx), exprs.1.clone());
     }
-
-    todo!()
+    Ok(RuntimeFilterResult {
+        left_runtime_filters,
+        right_runtime_filters,
+    })
 }
 
-fn wrap_filter_to_probe(s_expr: &SExpr, predicates: Vec<ScalarExpr>) -> Result<SExpr> {
-    let mut probe_side = s_expr.child(0)?.clone();
-    let new_filter = Filter {
-        predicates,
-        is_having: false,
-    };
-    probe_side = SExpr::create_unary(new_filter.into(), probe_side);
-    Ok(s_expr
-        .child(0)?
-        .replace_children(vec![probe_side, s_expr.child(1)?.clone()]))
-}
-
-fn wrap_runtime_filter_source_to_build(
+fn wrap_runtime_filter_source(
     s_expr: &SExpr,
-    runtime_filters: BTreeMap<RuntimeFilterId, ScalarExpr>,
+    runtime_filter_result: RuntimeFilterResult,
 ) -> Result<SExpr> {
-    let source_node = RuntimeFilterSource { runtime_filters };
+    let source_node = RuntimeFilterSource {
+        left_runtime_filters: runtime_filter_result.left_runtime_filters,
+        right_runtime_filters: runtime_filter_result.right_runtime_filters,
+    };
     let mut build_side = s_expr.child(1)?.clone();
-    build_side = SExpr::create_unary(source_node.into(), build_side);
-    Ok(s_expr
-        .child(0)?
-        .replace_children(vec![s_expr.child(0)?.clone(), build_side]))
+    let mut probe_side = s_expr.child(0)?.clone();
+    probe_side = SExpr::create_binary(source_node.into(), probe_side, build_side.clone());
+    Ok(s_expr.replace_children(vec![probe_side, build_side]))
 }
 
 // Traverse plan tree and check if exists join
@@ -90,8 +86,5 @@ fn add_runtime_filter_nodes(expr: &SExpr) -> Result<SExpr> {
         return Ok(expr.clone());
     }
     let runtime_filter_result = create_runtime_filters(&join)?;
-    // Add a filter node to probe side, the predicates contain runtime filter info
-    let expr = wrap_filter_to_probe(expr, runtime_filter_result.predicates)?;
-    // Add RuntimeFilterSource node to build side
-    Ok(wrap_runtime_filter_source_to_build(&expr, runtime_filter_result.runtime_filters)?)
+    Ok(wrap_runtime_filter_source(&expr, runtime_filter_result)?)
 }

@@ -660,16 +660,30 @@ impl PhysicalPlanBuilder {
                 }))
             }
             RelOperator::RuntimeFilterSource(op) => {
-                let input = Box::new(self.build(s_expr.child(0)?).await?);
-                let mut runtime_filters = BTreeMap::new();
-                for (id, expr) in op.runtime_filters.iter() {
-                    runtime_filters
-                        .insert(id.clone(), expr.as_expr_with_col_index()?.as_remote_expr());
+                let left_side = Box::new(self.build(s_expr.child(0)?).await?);
+                let right_side = Box::new(self.build(s_expr.child(1)?).await?);
+                let mut left_runtime_filters = BTreeMap::new();
+                let mut right_runtime_filters = BTreeMap::new();
+                for (left, right) in op
+                    .left_runtime_filters
+                    .iter()
+                    .zip(op.right_runtime_filters.iter())
+                {
+                    left_runtime_filters.insert(
+                        left.0.clone(),
+                        left.1.as_expr_with_col_index()?.as_remote_expr(),
+                    );
+                    right_runtime_filters.insert(
+                        right.0.clone(),
+                        right.1.as_expr_with_col_index()?.as_remote_expr(),
+                    );
                 }
                 Ok(PhysicalPlan::RuntimeFilterSource(RuntimeFilterSource {
                     plan_id: self.next_plan_id(),
-                    input,
-                    runtime_filters,
+                    left_side,
+                    right_side,
+                    left_runtime_filters,
+                    right_runtime_filters,
                 }))
             }
             _ => Err(ErrorCode::Internal(format!(
