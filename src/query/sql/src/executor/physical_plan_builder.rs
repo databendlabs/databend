@@ -831,7 +831,6 @@ impl PhysicalPlanBuilder {
             prewhere: prewhere_info,
             limit: scan.limit,
             order_by: order_by.unwrap_or_default(),
-            runtime_filter: Default::default(),
         })
     }
 

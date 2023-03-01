@@ -62,8 +62,6 @@ pub struct PushDownInfo {
     pub limit: Option<usize>,
     /// Optional order_by expression plan, asc, null_first
     pub order_by: Vec<(RemoteExpr<String>, bool, bool)>,
-    /// Runtime filter
-    pub runtime_filter: RuntimeFilter,
 }
 
 /// TopK is a wrapper for topk push down items.
@@ -156,6 +154,3 @@ impl PushDownInfo {
         }
     }
 }
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, PartialEq, Eq)]
-pub struct RuntimeFilter {}

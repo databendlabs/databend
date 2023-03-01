@@ -70,6 +70,8 @@ use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::PartialSingleStateAggregator;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
+use crate::pipelines::processors::transforms::RuntimeFilterState;
+use crate::pipelines::processors::transforms::TransformAggregateSerializer;
 use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
 use crate::pipelines::processors::transforms::TransformLeftJoin;
@@ -85,10 +87,12 @@ use crate::pipelines::processors::LeftJoinCompactor;
 use crate::pipelines::processors::MarkJoinCompactor;
 use crate::pipelines::processors::RightJoinCompactor;
 use crate::pipelines::processors::SinkBuildHashTable;
+use crate::pipelines::processors::SinkRuntimeFilterSource;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::processors::TransformHashJoinProbe;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::processors::TransformResortAddOn;
+use crate::pipelines::processors::TransformRuntimeFilter;
 use crate::pipelines::processors::TransformSortPartial;
 use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
@@ -982,9 +986,64 @@ impl PipelineBuilder {
     }
 
     pub fn build_runtime_filter_source(
-        &self,
+        &mut self,
         runtime_filter_source: &RuntimeFilterSource,
     ) -> Result<()> {
-        todo!()
+        let state = self.build_runtime_filter_state(runtime_filter_source)?;
+        self.expand_runtime_filter_source(&runtime_filter_source.right_side, state.clone())?;
+        self.build_runtime_filter(&runtime_filter_source.left_side, state)?;
+        Ok(())
+    }
+
+    fn expand_runtime_filter_source(
+        &mut self,
+        right_side: &PhysicalPlan,
+        state: Arc<RuntimeFilterState>,
+    ) -> Result<()> {
+        let right_side_context = QueryContext::create_from(self.ctx.clone());
+        let right_side_builder = PipelineBuilder::create(
+            right_side_context,
+            self.enable_profiling,
+            self.prof_span_set.clone(),
+        );
+        let mut res = right_side_builder.finalize(right_side)?;
+
+        assert!(res.main_pipeline.is_pulling_pipeline()?);
+        res.main_pipeline.add_sink(
+            (|input| {
+                let processor = Sinker::<SinkRuntimeFilterSource>::create(
+                    input,
+                    SinkRuntimeFilterSource::new(state.clone()),
+                );
+
+                Ok(ProcessorPtr::create(processor))
+            }),
+        )?;
+        self.pipelines.push(res.main_pipeline);
+        self.pipelines.extend(res.sources_pipelines);
+        Ok(())
+    }
+
+    fn build_runtime_filter(
+        &mut self,
+        left_side: &PhysicalPlan,
+        state: Arc<RuntimeFilterState>,
+    ) -> Result<()> {
+        self.build_pipeline(left_side)?;
+        self.main_pipeline.add_transform(|input, output| {
+            let processor = TransformRuntimeFilter::new(input, output, state.clone());
+            Ok(ProcessorPtr::create(processor))
+        })?;
+        Ok(())
+    }
+
+    fn build_runtime_filter_state(
+        &self,
+        runtime_filter_source: &RuntimeFilterSource,
+    ) -> Result<Arc<RuntimeFilterState>> {
+        Ok(Arc::new(RuntimeFilterState::new(
+            runtime_filter_source.left_runtime_filters.clone(),
+            runtime_filter_source.right_runtime_filters.clone(),
+        )))
     }
 }
