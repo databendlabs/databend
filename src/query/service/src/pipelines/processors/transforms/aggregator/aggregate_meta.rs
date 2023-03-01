@@ -43,10 +43,16 @@ impl SerializedPayload {
     }
 }
 
+pub struct SpilledPayload {
+    pub bucket: isize,
+    pub location: String,
+}
+
 pub enum AggregateMeta<Method: HashMethodBounds, V: Send + Sync + 'static> {
     Serialized(SerializedPayload),
     HashTable(HashTablePayload<Method, V>),
     Spilling(HashTablePayload<Method, V>),
+    Spilled(SpilledPayload),
 
     Partitioned { bucket: isize, data: Vec<Self> },
 }
@@ -73,19 +79,19 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V
 }
 
 impl<Method: HashMethodBounds, V: Send + Sync + 'static> serde::Serialize
-    for AggregateMeta<Method, V>
+for AggregateMeta<Method, V>
 {
     fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
-    where S: serde::Serializer {
+        where S: serde::Serializer {
         unreachable!("AggregateMeta does not support exchanging between multiple nodes")
     }
 }
 
 impl<'de, Method: HashMethodBounds, V: Send + Sync + 'static> serde::Deserialize<'de>
-    for AggregateMeta<Method, V>
+for AggregateMeta<Method, V>
 {
     fn deserialize<D>(_: D) -> Result<Self, D::Error>
-    where D: serde::Deserializer<'de> {
+        where D: serde::Deserializer<'de> {
         unreachable!("AggregateMeta does not support exchanging between multiple nodes")
     }
 }
@@ -106,7 +112,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Debug for AggregateMeta
 }
 
 impl<Method: HashMethodBounds, V: Send + Sync + 'static> BlockMetaInfo
-    for AggregateMeta<Method, V>
+for AggregateMeta<Method, V>
 {
     fn as_any(&self) -> &dyn Any {
         self
