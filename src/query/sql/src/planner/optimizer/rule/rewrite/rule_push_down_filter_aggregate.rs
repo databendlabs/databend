@@ -21,7 +21,6 @@ use crate::plans::AggregateMode;
 use crate::plans::Filter;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
-use crate::plans::RelOp::Aggregate as OpAggregate;
 use crate::plans::RelOp::Pattern;
 use crate::plans::RelOperator;
 
@@ -64,12 +63,12 @@ impl RulePushDownFilterAggregate {
                 .into(),
                 SExpr::create_unary(
                     PatternPlan {
-                        plan_type: OpAggregate,
+                        plan_type: RelOp::Aggregate,
                     }
                     .into(),
                     SExpr::create_unary(
                         PatternPlan {
-                            plan_type: OpAggregate,
+                            plan_type: RelOp::Aggregate,
                         }
                         .into(),
                         SExpr::create_leaf(PatternPlan { plan_type: Pattern }.into()),
