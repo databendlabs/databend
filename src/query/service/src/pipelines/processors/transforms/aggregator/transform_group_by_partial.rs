@@ -62,7 +62,12 @@ impl TryFrom<Arc<QueryContext>> for GroupBySettings {
         let convert_threshold = settings.get_group_by_two_level_threshold()? as usize;
         Ok(GroupBySettings {
             convert_threshold,
-            spilling_bytes_threshold_per_proc: usize::MAX,
+            spilling_bytes_threshold_per_proc: match settings
+                .get_spilling_bytes_threshold_per_proc()?
+            {
+                0 => usize::MAX,
+                v => v,
+            },
         })
     }
 }

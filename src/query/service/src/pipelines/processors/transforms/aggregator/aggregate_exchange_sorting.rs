@@ -21,6 +21,7 @@ use common_expression::DataBlock;
 
 use crate::api::ExchangeSorting;
 use crate::pipelines::processors::transforms::aggregator::serde::AggregateSerdeMeta;
+use crate::pipelines::processors::transforms::aggregator::serde::BUCKET_TYPE;
 
 pub struct AggregateExchangeSorting {}
 
@@ -38,9 +39,9 @@ impl ExchangeSorting for AggregateExchangeSorting {
                 None => Err(ErrorCode::Internal(
                     "Internal error, AggregateExchangeSorting only recv AggregateSerdeMeta",
                 )),
-                Some(meta_info) => match meta_info {
-                    AggregateSerdeMeta::Bucket(bucket) => Ok(*bucket),
-                    AggregateSerdeMeta::Spilled { .. } => Ok(-1),
+                Some(meta_info) => match meta_info.typ == BUCKET_TYPE {
+                    true => Ok(meta_info.bucket),
+                    false => Ok(-1),
                 },
             },
         }

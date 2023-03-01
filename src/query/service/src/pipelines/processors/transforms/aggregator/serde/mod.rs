@@ -21,7 +21,13 @@ mod transform_group_by_spill_writer;
 mod transform_spill_reader;
 
 pub use serde_meta::AggregateSerdeMeta;
+pub use serde_meta::BUCKET_TYPE;
+pub use serde_meta::SPILLED_TYPE;
 pub use transform_aggregate_serializer::TransformAggregateSerializer;
+pub use transform_aggregate_spill_writer::TransformAggregateSpillWriter;
 pub use transform_deserializer::TransformAggregateDeserializer;
 pub use transform_deserializer::TransformGroupByDeserializer;
 pub use transform_group_by_serializer::TransformGroupBySerializer;
+pub use transform_group_by_spill_writer::TransformGroupBySpillWriter;
+pub use transform_spill_reader::TransformAggregateSpillReader;
+pub use transform_spill_reader::TransformGroupBySpillReader;

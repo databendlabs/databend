@@ -27,6 +27,7 @@ use common_pipeline_core::processors::Processor;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::serde::serde_meta::AggregateSerdeMeta;
+use crate::pipelines::processors::transforms::aggregator::serde::BUCKET_TYPE;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 
 pub struct TransformDeserializer<Method: HashMethodBounds, V: Send + Sync + 'static> {
@@ -75,24 +76,21 @@ where
 
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
-            let block_meta = data_block
+            let meta = data_block
                 .take_meta()
                 .and_then(AggregateSerdeMeta::downcast_from)
                 .unwrap();
 
-            self.output
-                .push_data(Ok(DataBlock::empty_with_meta(match block_meta {
-                    AggregateSerdeMeta::Bucket(bucket) => {
-                        AggregateMeta::<Method, V>::create_serialized(bucket, data_block)
-                    }
-                    AggregateSerdeMeta::Spilled {
-                        bucket,
-                        location,
-                        columns_layout,
-                    } => {
-                        AggregateMeta::<Method, V>::create_spilled(bucket, location, columns_layout)
-                    }
-                })));
+            self.output.push_data(Ok(DataBlock::empty_with_meta(
+                match meta.typ == BUCKET_TYPE {
+                    true => AggregateMeta::<Method, V>::create_serialized(meta.bucket, data_block),
+                    false => AggregateMeta::<Method, V>::create_spilled(
+                        meta.bucket,
+                        meta.location.unwrap(),
+                        meta.columns_layout,
+                    ),
+                },
+            )));
 
             return Ok(Event::NeedConsume);
         }

@@ -13,6 +13,7 @@ use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::Processor;
+use common_storage::DataOperator;
 use opendal::Operator;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
@@ -28,6 +29,25 @@ pub struct TransformGroupBySpillWriter<Method: HashMethodBounds> {
     spilled_meta: Option<BlockMetaInfoPtr>,
     spilling_meta: Option<AggregateMeta<Method, ()>>,
     writing_data_block: Option<(isize, usize, Vec<Vec<u8>>)>,
+}
+
+impl<Method: HashMethodBounds> TransformGroupBySpillWriter<Method> {
+    pub fn create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        method: Method,
+        operator: Operator,
+    ) -> Box<dyn Processor> {
+        Box::new(TransformGroupBySpillWriter::<Method> {
+            method,
+            input,
+            output,
+            operator,
+            spilled_meta: None,
+            spilling_meta: None,
+            writing_data_block: None,
+        })
+    }
 }
 
 #[async_trait::async_trait]

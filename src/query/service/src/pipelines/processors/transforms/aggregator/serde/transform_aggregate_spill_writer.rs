@@ -32,6 +32,27 @@ pub struct TransformAggregateSpillWriter<Method: HashMethodBounds> {
     writing_data_block: Option<(isize, usize, Vec<Vec<u8>>)>,
 }
 
+impl<Method: HashMethodBounds> TransformAggregateSpillWriter<Method> {
+    pub fn create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        method: Method,
+        operator: Operator,
+        params: Arc<AggregatorParams>,
+    ) -> Box<dyn Processor> {
+        Box::new(TransformAggregateSpillWriter::<Method> {
+            method,
+            input,
+            output,
+            params,
+            operator,
+            spilled_meta: None,
+            spilling_meta: None,
+            writing_data_block: None,
+        })
+    }
+}
+
 #[async_trait::async_trait]
 impl<Method: HashMethodBounds> Processor for TransformAggregateSpillWriter<Method> {
     fn name(&self) -> String {

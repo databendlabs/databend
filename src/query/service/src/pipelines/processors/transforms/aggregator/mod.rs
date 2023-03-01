@@ -41,5 +41,9 @@ pub use utils::*;
 
 pub use self::serde::TransformAggregateDeserializer;
 pub use self::serde::TransformAggregateSerializer;
+pub use self::serde::TransformAggregateSpillReader;
+pub use self::serde::TransformAggregateSpillWriter;
 pub use self::serde::TransformGroupByDeserializer;
 pub use self::serde::TransformGroupBySerializer;
+pub use self::serde::TransformGroupBySpillReader;
+pub use self::serde::TransformGroupBySpillWriter;
