@@ -1021,6 +1021,16 @@ impl Settings {
 
         match setting.user_setting.value {
             UserSettingValue::UInt64(_) => {
+                // decimal 10 * 1.5 to string may result in string like "15.0"
+                let val = if let Some(p) = val.find('.') {
+                    if val[(p + 1)..].chars().all(|x| x == '0') {
+                        &val[..p]
+                    } else {
+                        return Err(ErrorCode::BadArguments("not a integer"));
+                    }
+                } else {
+                    &val[..]
+                };
                 let u64_val = val.parse::<u64>()?;
                 self.try_set_u64(&key, u64_val, is_global)?
             }
