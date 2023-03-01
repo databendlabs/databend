@@ -46,6 +46,7 @@ impl SerializedPayload {
 pub enum AggregateMeta<Method: HashMethodBounds, V: Send + Sync + 'static> {
     Serialized(SerializedPayload),
     HashTable(HashTablePayload<Method, V>),
+    Spilling(HashTablePayload<Method, V>),
 
     Partitioned { bucket: isize, data: Vec<Self> },
 }
@@ -99,6 +100,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Debug for AggregateMeta
             AggregateMeta::Serialized { .. } => {
                 f.debug_struct("AggregateMeta::Serialized").finish()
             }
+            AggregateMeta::Spilling(_) => f.debug_struct("Aggregate::Spilling").finish(),
         }
     }
 }

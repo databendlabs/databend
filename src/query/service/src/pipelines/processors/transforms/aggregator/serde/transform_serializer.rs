@@ -59,6 +59,7 @@ where Method: HashMethodBounds
 
     fn transform(&mut self, meta: AggregateMeta<Method, ()>) -> Result<DataBlock> {
         match meta {
+            AggregateMeta::Spilling(_) => unreachable!(),
             AggregateMeta::Partitioned { .. } => unreachable!(),
             AggregateMeta::Serialized(_) => unreachable!(),
             AggregateMeta::HashTable(payload) => {
@@ -105,6 +106,7 @@ where Method: HashMethodBounds
 
     fn transform(&mut self, meta: AggregateMeta<Method, usize>) -> Result<DataBlock> {
         match meta {
+            AggregateMeta::Spilling(_) => unreachable!(),
             AggregateMeta::Partitioned { .. } => unreachable!(),
             AggregateMeta::Serialized(_) => unreachable!(),
             AggregateMeta::HashTable(payload) => {

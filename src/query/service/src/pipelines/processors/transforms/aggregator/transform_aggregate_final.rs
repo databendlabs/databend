@@ -74,6 +74,7 @@ where Method: HashMethodBounds
 
             for bucket_data in data {
                 match bucket_data {
+                    AggregateMeta::Spilling(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::Serialized(payload) => {
                         debug_assert!(bucket == payload.bucket);

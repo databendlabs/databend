@@ -15,6 +15,7 @@
 mod serde_meta;
 mod transform_deserializer;
 mod transform_serializer;
+mod transform_spill_writer;
 
 pub use serde_meta::AggregateSerdeMeta;
 pub use transform_deserializer::TransformAggregateDeserializer;
