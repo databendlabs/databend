@@ -119,7 +119,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | "storage" | "s3.security_token"                        | ""                               | ""       |
 | "storage" | "type"                                     | "fs"                             | ""       |
 | "storage" | "webhdfs.delegation"                       | ""                               | ""       |
-| "storage" | "webhdfs.endpoint"                         | ""                               | ""       |
+| "storage" | "webhdfs.endpoint_url"                     | ""                               | ""       |
 | "storage" | "webhdfs.root"                             | ""                               | ""       |
 +-----------+--------------------------------------------+----------------------------------+----------+
 
