@@ -62,7 +62,6 @@ use crate::utils::arrow::constant_bitmap;
 use crate::utils::arrow::deserialize_column;
 use crate::utils::arrow::serialize_column;
 use crate::with_decimal_type;
-use crate::with_integer_mapped_type;
 use crate::with_number_type;
 
 #[derive(Debug, Clone, PartialEq, EnumAsInner)]
@@ -378,22 +377,35 @@ impl<'a> ScalarRef<'a> {
         }
     }
 
-    pub fn cast_to_u64(&self) -> Option<u64> {
+    /// Infer the data type of the scalar.
+    /// If the scalar is Null, the data type is `DataType::Null`,
+    /// otherwise, the inferred data type is not nullable.
+    pub fn infer_data_type(&self) -> DataType {
         match self {
-            ScalarRef::Number(t) => with_integer_mapped_type!(|NUM_TYPE| match t {
-                NumberScalar::NUM_TYPE(v) => {
-                    if *v >= 0 as _ { Some(*v as _) } else { None }
-                }
-                _ => None,
+            ScalarRef::Null => DataType::Null,
+            ScalarRef::EmptyArray => DataType::EmptyArray,
+            ScalarRef::EmptyMap => DataType::EmptyMap,
+            ScalarRef::Number(s) => with_number_type!(|NUM_TYPE| match s {
+                NumberScalar::NUM_TYPE(_) => DataType::Number(NumberDataType::NUM_TYPE),
             }),
-            ScalarRef::Timestamp(i) => {
-                if *i >= 0 {
-                    Some(*i as u64)
-                } else {
-                    None
-                }
+            ScalarRef::Decimal(s) => with_decimal_type!(|DECIMAL_TYPE| match s {
+                DecimalScalar::DECIMAL_TYPE(_, size) =>
+                    DataType::Decimal(DecimalDataType::DECIMAL_TYPE(*size)),
+            }),
+            ScalarRef::Boolean(_) => DataType::Boolean,
+            ScalarRef::String(_) => DataType::String,
+            ScalarRef::Timestamp(_) => DataType::Timestamp,
+            ScalarRef::Date(_) => DataType::Date,
+            ScalarRef::Array(array) => DataType::Array(Box::new(array.data_type())),
+            ScalarRef::Map(col) => DataType::Map(Box::new(col.data_type())),
+            ScalarRef::Tuple(fields) => {
+                let inner = fields
+                    .iter()
+                    .map(|field| field.infer_data_type())
+                    .collect::<Vec<_>>();
+                DataType::Tuple(inner)
             }
-            _ => None,
+            ScalarRef::Variant(_) => DataType::Variant,
         }
     }
 }
@@ -405,6 +417,7 @@ impl PartialOrd for Scalar {
             (Scalar::EmptyArray, Scalar::EmptyArray) => Some(Ordering::Equal),
             (Scalar::EmptyMap, Scalar::EmptyMap) => Some(Ordering::Equal),
             (Scalar::Number(n1), Scalar::Number(n2)) => n1.partial_cmp(n2),
+            (Scalar::Decimal(d1), Scalar::Decimal(d2)) => d1.partial_cmp(d2),
             (Scalar::Boolean(b1), Scalar::Boolean(b2)) => b1.partial_cmp(b2),
             (Scalar::String(s1), Scalar::String(s2)) => s1.partial_cmp(s2),
             (Scalar::Timestamp(t1), Scalar::Timestamp(t2)) => t1.partial_cmp(t2),
@@ -439,6 +452,7 @@ impl PartialOrd for ScalarRef<'_> {
             (ScalarRef::EmptyArray, ScalarRef::EmptyArray) => Some(Ordering::Equal),
             (ScalarRef::EmptyMap, ScalarRef::EmptyMap) => Some(Ordering::Equal),
             (ScalarRef::Number(n1), ScalarRef::Number(n2)) => n1.partial_cmp(n2),
+            (ScalarRef::Decimal(d1), ScalarRef::Decimal(d2)) => d1.partial_cmp(d2),
             (ScalarRef::Boolean(b1), ScalarRef::Boolean(b2)) => b1.partial_cmp(b2),
             (ScalarRef::String(s1), ScalarRef::String(s2)) => s1.partial_cmp(s2),
             (ScalarRef::Timestamp(t1), ScalarRef::Timestamp(t2)) => t1.partial_cmp(t2),
