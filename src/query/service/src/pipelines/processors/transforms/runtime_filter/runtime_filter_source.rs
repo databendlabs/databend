@@ -22,6 +22,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
+use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_sql::plans::RuntimeFilterId;
@@ -98,8 +99,9 @@ impl RuntimeFilterConnector for RuntimeFilterState {
         for (id, remote_expr) in self.left_runtime_filters.iter() {
             let expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
             let evaluator = Evaluator::new(&data, func_ctx.clone(), &BUILTIN_FUNCTIONS);
-            let value = evaluator.run(&expr)?;
-            let column = value.convert_to_full_column(expr.data_type(), data.num_rows());
+            let column = evaluator
+                .run(&expr)?
+                .convert_to_full_column(expr.data_type(), data.num_rows());
             let channel_filter = self.channel_filters.lock();
             let filter = channel_filter.get(id).unwrap();
             for (idx, val) in column.iter().enumerate() {
@@ -120,8 +122,9 @@ impl RuntimeFilterConnector for RuntimeFilterState {
             // expr is `t2.a + 2`
             // First we need get expected values from data by expr
             let evaluator = Evaluator::new(&data, func_ctx.clone(), &BUILTIN_FUNCTIONS);
-            let value = evaluator.run(&expr)?;
-            let column = value.convert_to_full_column(expr.data_type(), data.num_rows());
+            let column = evaluator
+                .run(&expr)?
+                .convert_to_full_column(expr.data_type(), data.num_rows());
 
             // Generate Xor8 filter by column
             let mut filter_builder = Xor8Builder::create();

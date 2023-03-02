@@ -661,7 +661,9 @@ impl PhysicalPlanBuilder {
             }
             RelOperator::RuntimeFilterSource(op) => {
                 let left_side = Box::new(self.build(s_expr.child(0)?).await?);
+                let left_schema = left_side.output_schema()?;
                 let right_side = Box::new(self.build(s_expr.child(1)?).await?);
+                let right_schema = right_side.output_schema()?;
                 let mut left_runtime_filters = BTreeMap::new();
                 let mut right_runtime_filters = BTreeMap::new();
                 for (left, right) in op
@@ -671,11 +673,22 @@ impl PhysicalPlanBuilder {
                 {
                     left_runtime_filters.insert(
                         left.0.clone(),
-                        left.1.as_expr_with_col_index()?.as_remote_expr(),
+                        left.1
+                            .as_expr_with_col_index()?
+                            .project_column_ref(|index| {
+                                left_schema.index_of(&index.to_string()).unwrap()
+                            })
+                            .as_remote_expr(),
                     );
                     right_runtime_filters.insert(
                         right.0.clone(),
-                        right.1.as_expr_with_col_index()?.as_remote_expr(),
+                        right
+                            .1
+                            .as_expr_with_col_index()?
+                            .project_column_ref(|index| {
+                                right_schema.index_of(&index.to_string()).unwrap()
+                            })
+                            .as_remote_expr(),
                     );
                 }
                 Ok(PhysicalPlan::RuntimeFilterSource(RuntimeFilterSource {
