@@ -44,7 +44,7 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::BindContext;
 
 /// Interpret SQL query with ne&w SQL planner
-pub struct SelectInterpreterV2 {
+pub struct SelectInterpreter {
     ctx: Arc<QueryContext>,
     s_expr: SExpr,
     bind_context: BindContext,
@@ -53,7 +53,7 @@ pub struct SelectInterpreterV2 {
     ignore_result: bool,
 }
 
-impl SelectInterpreterV2 {
+impl SelectInterpreter {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         bind_context: BindContext,
@@ -62,7 +62,7 @@ impl SelectInterpreterV2 {
         formatted_ast: Option<String>,
         ignore_result: bool,
     ) -> Result<Self> {
-        Ok(SelectInterpreterV2 {
+        Ok(SelectInterpreter {
             ctx,
             s_expr,
             bind_context,
@@ -187,7 +187,7 @@ impl SelectInterpreterV2 {
 }
 
 #[async_trait::async_trait]
-impl Interpreter for SelectInterpreterV2 {
+impl Interpreter for SelectInterpreter {
     fn name(&self) -> &str {
         "SelectInterpreterV2"
     }
@@ -198,7 +198,7 @@ impl Interpreter for SelectInterpreterV2 {
 
     /// This method will create a new pipeline
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
-    #[tracing::instrument(level = "debug", name = "select_interpreter_v2_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", name = "select_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         // 0. Need to build pipeline first to get the partitions.
         let mut build_res = self.build_pipeline().await?;
@@ -221,8 +221,10 @@ impl Interpreter for SelectInterpreterV2 {
             if let Some(t) = self.result_scan_table()? {
                 let arg_query_id = parse_result_scan_args(&t.table_args().unwrap())?;
                 let meta_key = self.ctx.get_result_cache_key(&arg_query_id);
-                self.ctx
-                    .set_query_id_result_cache(self.ctx.get_id(), meta_key.unwrap());
+                if let Some(meta_key) = meta_key {
+                    self.ctx
+                        .set_query_id_result_cache(self.ctx.get_id(), meta_key);
+                }
                 return Ok(build_res);
             }
 

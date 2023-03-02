@@ -23,10 +23,10 @@ use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_types::MatchSeq;
 use common_sql::field_default_value;
-use common_sql::plans::CreateTablePlanV2;
+use common_sql::plans::CreateTablePlan;
 use common_users::UserApiProvider;
 
-use crate::interpreters::InsertInterpreterV2;
+use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -36,19 +36,19 @@ use crate::sql::plans::insert::InsertInputSource;
 use crate::sql::plans::Plan;
 use crate::storages::StorageDescription;
 
-pub struct CreateTableInterpreterV2 {
+pub struct CreateTableInterpreter {
     ctx: Arc<QueryContext>,
-    plan: CreateTablePlanV2,
+    plan: CreateTablePlan,
 }
 
-impl CreateTableInterpreterV2 {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateTablePlanV2) -> Result<Self> {
-        Ok(CreateTableInterpreterV2 { ctx, plan })
+impl CreateTableInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateTablePlan) -> Result<Self> {
+        Ok(CreateTableInterpreter { ctx, plan })
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for CreateTableInterpreterV2 {
+impl Interpreter for CreateTableInterpreter {
     fn name(&self) -> &str {
         "CreateTableInterpreterV2"
     }
@@ -108,7 +108,7 @@ impl Interpreter for CreateTableInterpreterV2 {
     }
 }
 
-impl CreateTableInterpreterV2 {
+impl CreateTableInterpreter {
     async fn create_table_as_select(&self, select_plan: Box<Plan>) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
@@ -138,7 +138,7 @@ impl CreateTableInterpreterV2 {
             source: InsertInputSource::SelectPlan(select_plan),
         };
 
-        InsertInterpreterV2::try_create(self.ctx.clone(), insert_plan, false)?
+        InsertInterpreter::try_create(self.ctx.clone(), insert_plan, false)?
             .execute2()
             .await
     }

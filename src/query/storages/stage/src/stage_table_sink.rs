@@ -16,8 +16,6 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use backon::ExponentialBuilder;
-use backon::Retryable;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -31,7 +29,6 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use opendal::Operator;
-use tracing::warn;
 
 #[derive(Debug)]
 enum State {
@@ -261,23 +258,7 @@ impl Processor for StageTableSink {
             State::NeedWrite(bytes, remainng_block) => {
                 let path = self.unload_path();
 
-                // TODO(xuanwo): we used to update the data metrics here.
-                //
-                // But all data metrics will be moved to table, thus we can't
-                // update here, we need to address this.
-
-                let object = self.data_accessor.object(&path);
-                { || object.write(bytes.as_slice()) }
-                    .retry(&ExponentialBuilder::default().with_jitter())
-                    .when(|err| err.is_temporary())
-                    .notify(|err, dur| {
-                        warn!(
-                            "stage table sink write retry after {}s for error {:?}",
-                            dur.as_secs(),
-                            err
-                        )
-                    })
-                    .await?;
+                self.data_accessor.object(&path).write(bytes).await?;
 
                 match remainng_block {
                     Some(block) => self.state = State::NeedSerialize(block),

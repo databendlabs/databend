@@ -33,7 +33,7 @@ use crate::plans::Plan;
 pub type TableOptions = BTreeMap<String, String>;
 
 #[derive(Clone, Debug)]
-pub struct CreateTablePlanV2 {
+pub struct CreateTablePlan {
     pub if_not_exists: bool,
     pub tenant: String,
     pub catalog: String,
@@ -51,7 +51,7 @@ pub struct CreateTablePlanV2 {
     pub as_select: Option<Box<Plan>>,
 }
 
-impl CreateTablePlanV2 {
+impl CreateTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
         DataSchemaRefExt::create(vec![])
     }

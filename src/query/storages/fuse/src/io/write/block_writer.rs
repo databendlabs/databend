@@ -14,8 +14,6 @@
 
 use std::collections::HashMap;
 
-use backon::ExponentialBuilder;
-use backon::Retryable;
 use common_arrow::arrow::chunk::Chunk as ArrowChunk;
 use common_arrow::native::write::NativeWriter;
 use common_exception::Result;
@@ -25,7 +23,6 @@ use common_expression::TableSchemaRef;
 use opendal::Operator;
 use storages_common_blocks::blocks_to_parquet;
 use storages_common_table_meta::meta::ColumnMeta;
-use tracing::warn;
 
 use crate::fuse_table::FuseStorageFormat;
 use crate::io::write::WriteSettings;
@@ -74,20 +71,10 @@ pub fn write_block(
     }
 }
 
-pub async fn write_data(data: &[u8], data_accessor: &Operator, location: &str) -> Result<()> {
-    let object = data_accessor.object(location);
-
-    { || object.write(data) }
-        .retry(&ExponentialBuilder::default().with_jitter())
-        .when(|err| err.is_temporary())
-        .notify(|err, dur| {
-            warn!(
-                "fuse table block writer write_data retry after {}s for error {:?}",
-                dur.as_secs(),
-                err
-            )
-        })
-        .await?;
+/// Take ownership here to avoid extra copy.
+pub async fn write_data(data: Vec<u8>, data_accessor: &Operator, location: &str) -> Result<()> {
+    let o = data_accessor.object(location);
+    o.write(data).await?;
 
     Ok(())
 }

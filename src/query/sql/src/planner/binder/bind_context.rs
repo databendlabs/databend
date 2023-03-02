@@ -228,12 +228,12 @@ impl BindContext {
         }
 
         if result.is_empty() {
-            Err(ErrorCode::SemanticError("column doesn't exist".to_string()).set_span(span))
+            Err(ErrorCode::SemanticError(format!("column {column} doesn't exist")).set_span(span))
         } else if result.len() > 1 {
-            Err(
-                ErrorCode::SemanticError("column reference is ambiguous".to_string())
-                    .set_span(span),
-            )
+            Err(ErrorCode::SemanticError(format!(
+                "column {column} reference is ambiguous, got {result:?}"
+            ))
+            .set_span(span))
         } else {
             Ok(result.remove(0))
         }
