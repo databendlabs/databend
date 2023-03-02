@@ -127,7 +127,7 @@ impl HeuristicOptimizer {
     }
 
     fn calc_operator_rule_set(&self, operator: &RelOperator) -> roaring::RoaringBitmap {
-        unsafe { operator.transrormation_candidate_rules() & (&RULE_FACTORY.transformation_rules) }
+        unsafe { operator.transformation_candidate_rules() & (&RULE_FACTORY.transformation_rules) }
     }
 
     fn get_rule(&self, rule_id: u32) -> Result<RulePtr> {
