@@ -137,6 +137,9 @@ pub fn format_scalar(_metadata: &MetadataRef, scalar: &ScalarExpr) -> String {
                 cast.target_type
             )
         }
+        ScalarExpr::Unnest(unnest) => {
+            format!("UNNEST({})", format_scalar(_metadata, &unnest.argument),)
+        }
         ScalarExpr::SubqueryExpr(_) => "SUBQUERY".to_string(),
     }
 }

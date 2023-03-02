@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::base::GlobalInstance;
 use common_expression::types::DataType;
 use common_expression::Literal;
 use common_expression::TableDataType;
@@ -21,6 +22,7 @@ use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_sql::binder::VirtualColumnFactory;
 use common_sql::plans::Join;
 use common_sql::plans::Scan;
 use common_sql::plans::Statistics;
@@ -69,6 +71,14 @@ impl Table for DummyTable {
 
 #[test]
 fn test_format() {
+    let thread_name = match std::thread::current().name() {
+        None => panic!("thread name is none"),
+        Some(thread_name) => thread_name.to_string(),
+    };
+
+    GlobalInstance::init_testing(&thread_name);
+    let _ = VirtualColumnFactory::init();
+
     let mut metadata = Metadata::default();
     let tab1 = metadata.add_table(
         "catalog".to_string(),
@@ -190,9 +200,9 @@ fn test_format() {
 
     let tree = s_expr.to_format_tree(&metadata_ref);
     let result = tree.format_indent().unwrap();
-    let expect = "HashJoin: INNER\n    equi conditions: [col2 (#1) eq plus(col1 (#0), 123_u64)]\n    non-equi conditions: []\n    Filter\n        filters: [true]\n        LogicalGet\n            table: catalog.database.table\n            filters: []\n            order by: []\n            limit: NONE\n    LogicalGet\n        table: catalog.database.table\n        filters: []\n        order by: []\n        limit: NONE\n";
+    let expect = "HashJoin: INNER\n    equi conditions: [col2 (#5) eq plus(col1 (#4), 123_u64)]\n    non-equi conditions: []\n    Filter\n        filters: [true]\n        LogicalGet\n            table: catalog.database.table\n            filters: []\n            order by: []\n            limit: NONE\n    LogicalGet\n        table: catalog.database.table\n        filters: []\n        order by: []\n        limit: NONE\n";
     assert_eq!(result.as_str(), expect);
     let pretty_result = tree.format_pretty().unwrap();
-    let pretty_expect = "HashJoin: INNER\n├── equi conditions: [col2 (#1) eq plus(col1 (#0), 123_u64)]\n├── non-equi conditions: []\n├── Filter\n│   ├── filters: [true]\n│   └── LogicalGet\n│       ├── table: catalog.database.table\n│       ├── filters: []\n│       ├── order by: []\n│       └── limit: NONE\n└── LogicalGet\n    ├── table: catalog.database.table\n    ├── filters: []\n    ├── order by: []\n    └── limit: NONE\n";
+    let pretty_expect = "HashJoin: INNER\n├── equi conditions: [col2 (#5) eq plus(col1 (#4), 123_u64)]\n├── non-equi conditions: []\n├── Filter\n│   ├── filters: [true]\n│   └── LogicalGet\n│       ├── table: catalog.database.table\n│       ├── filters: []\n│       ├── order by: []\n│       └── limit: NONE\n└── LogicalGet\n    ├── table: catalog.database.table\n    ├── filters: []\n    ├── order by: []\n    └── limit: NONE\n";
     assert_eq!(pretty_result.as_str(), pretty_expect);
 }

@@ -203,6 +203,7 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
             .iter()
             .all(|arg| prune_by_children(arg, columns)),
         ScalarExpr::CastExpr(expr) => prune_by_children(expr.argument.as_ref(), columns),
+        ScalarExpr::Unnest(expr) => prune_by_children(expr.argument.as_ref(), columns),
         ScalarExpr::SubqueryExpr(_) => false,
     }
 }
