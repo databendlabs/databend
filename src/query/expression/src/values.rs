@@ -1362,6 +1362,20 @@ impl Column {
         }
     }
 
+    pub fn wrap_nullable(self) -> Self {
+        match self {
+            col @ Column::Nullable(_) => col,
+            col => {
+                let mut validity = MutableBitmap::with_capacity(col.len());
+                validity.extend_constant(col.len(), true);
+                Column::Nullable(Box::new(NullableColumn {
+                    column: col,
+                    validity: validity.into(),
+                }))
+            }
+        }
+    }
+
     pub fn memory_size(&self) -> usize {
         match self {
             Column::Null { .. } => std::mem::size_of::<usize>(),

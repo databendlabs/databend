@@ -157,9 +157,13 @@ impl BlockOperator {
         }
 
         let (unnest_columns, unnest_offsets) = if unnest_columns.len() == 1 {
+            // Short path: only one unnest column.
             let (index, col) = unnest_columns.into_iter().next().unwrap();
-            let unnest_columns = HashMap::from([(index, col.values)]);
+            let range =
+                *col.offsets.first().unwrap() as usize..*col.offsets.last().unwrap() as usize;
             let offsets = col.offsets.to_vec();
+            let new_col = col.values.slice(range).wrap_nullable();
+            let unnest_columns = HashMap::from([(index, new_col)]);
             (unnest_columns, offsets)
         } else {
             Self::unify_unnest_columns(unnest_columns)

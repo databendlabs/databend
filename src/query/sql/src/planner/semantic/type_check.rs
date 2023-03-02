@@ -1713,7 +1713,7 @@ impl<'a> TypeChecker<'a> {
                 let box (inner_expr, inner_type) = inner_res.unwrap();
                 Some(match inner_type {
                     DataType::Array(inner) => {
-                        let return_type = inner.clone();
+                        let return_type = Box::new(inner.wrap_nullable());
                         Ok(Box::new((
                             ScalarExpr::Unnest(Unnest {
                                 return_type,
