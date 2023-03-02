@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_base::base::GlobalInstance;
@@ -26,12 +26,12 @@ use common_exception::Result;
 use common_expression::types::DataType;
 
 pub struct VirtualColumnFactory {
-    virtual_columns: HashMap<String, VirtualColumn>,
+    virtual_columns: BTreeMap<String, VirtualColumn>,
 }
 
 impl VirtualColumnFactory {
     pub fn init() -> Result<()> {
-        let mut virtual_columns = HashMap::new();
+        let mut virtual_columns = BTreeMap::new();
 
         virtual_columns.insert(
             ROW_ID.to_string(),
@@ -77,7 +77,7 @@ impl VirtualColumnFactory {
         self.virtual_columns.values().cloned().collect()
     }
 
-    pub fn virtual_columns(&self) -> &HashMap<String, VirtualColumn> {
+    pub fn virtual_columns(&self) -> &BTreeMap<String, VirtualColumn> {
         &self.virtual_columns
     }
 }

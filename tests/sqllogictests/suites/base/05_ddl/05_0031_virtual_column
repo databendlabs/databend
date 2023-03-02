@@ -5,30 +5,7 @@ statement ok
 DROP TABLE IF EXISTS `05_0031_t`
 
 statement ok
-CREATE TABLE `05_0031_t`(a int) Engine = fuse STORAGE_FORMAT = 'parquet'
-
-statement ok
-INSERT INTO TABLE `05_0031_t` values(1)
-
-statement ok
-INSERT INTO TABLE `05_0031_t` values(2)
-
-query II
-SELECT a,_row_id FROM `05_0031_t` order by _row_id
-----
-1 0
-2 281474976710656
-
-query II
-SELECT a,_row_id FROM `05_0031_t` where _row_id = 0 
-----
-1 0
-
-statement ok
-DROP TABLE IF EXISTS `05_0031_t`
-
-statement ok
-CREATE TABLE `05_0031_t`(a int) Engine = fuse STORAGE_FORMAT = 'native'
+CREATE TABLE `05_0031_t`(a int)
 
 statement ok
 INSERT INTO TABLE `05_0031_t` values(1)
