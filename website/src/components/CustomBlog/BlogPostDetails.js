@@ -53,23 +53,16 @@ const BlogPostDetails = (props) => {
               </Link>
               <h1>{metadata.title}</h1>
               <p className={clsx(styles.Date)}>
-                <p>{metadata.formattedDate} · {metadata.readingTime} min read </p>
-                {metadata.tags.map((tag,index) => {
-                  return (
-                    <a href={tag.permalink} className={clsx(styles.Tag)} key={index}>
-                      #{tag.label}
-                    </a>
-                  );
-                })}
+                <p>{metadata.formattedDate} · {Math.round(metadata.readingTime)} min read </p>
               </p>
               <a
                 href={metadata.authors[0].url}
-                className={clsx("blog-autors", styles.blogAuthors)}
+                className={clsx(styles.blogAuthors)}
               >
                 <img
                   src={metadata.authors[0].image_url}
-                  width="32px"
-                  height="32px"
+                  width="40px"
+                  height="40px"
                 ></img>
                 <h6>{metadata.authors[0].name}</h6>
               </a>
@@ -110,24 +103,21 @@ const BlogPostDetails = (props) => {
               ) : (
                 <></>
               )}
+              <div className={styles.tagsBox}>
+              <h5>Tags:</h5>
+              {metadata.tags.map((tag,index) => {
+                  return (
+                    <a href={tag.permalink} className={clsx(styles.Tag)} key={index}>
+                      #{tag.label}
+                    </a>
+                  );
+                })}
+              </div>
+
               <hr/>
                <BlogPostNav prevPost={metadata.prevItem} nextPost={metadata.nextItem}/>
             </div>
           </div>
-          <aside>
-            <div className={clsx("post-recent", styles.postRecent)}>
-              <h4>Recent Blog</h4>
-              <ul>
-                {props.sidebar.items.map((item,index) => {
-                  return (
-                    <li key={index}>
-                      <a href={item.permalink}>{item.title}</a>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          </aside>
         </div>
       </section>
     </Layout>

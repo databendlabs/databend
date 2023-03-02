@@ -153,12 +153,13 @@
             width: 100%;
             display: flex;
             margin: 0 auto;
+            justify-content: center;
 
             .postRecent {
                 padding-left: 20px;
                 position: sticky;
                 top: 80px;
-                max-width: 220px;
+                max-width: 280px;
 
                 ul {
                     margin-top: 20px;
@@ -246,9 +247,8 @@
             }
 
             .ContentContainer {
-                max-width: 760px;
+                max-width: 960px;
                 padding: 24px;
-                border-right: 1px solid var(--color-border);
 
                 .Content {
                     padding: 32px 0;
@@ -384,6 +384,15 @@
                                 border-color: var(--color-primary);
                             }
                         }
+                    }
+
+                    .tagsBox{
+                        display: flex;
+                        align-items: center;
+                        flex-wrap: wrap;
+                        gap: 8px;
+                        padding: 32px 0;
+                        padding-bottom: 24px;
                     }
                     
                 }

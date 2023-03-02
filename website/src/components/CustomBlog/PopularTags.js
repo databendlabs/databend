@@ -7,8 +7,6 @@ const PopularTags = (props) =>{
     const {siteConfig} = useDocusaurusContext();
     const activeItem = props.props?props.props.tag.label:''
     const PopularTag = siteConfig.customFields.blogTags
-    console.log('props')
-    console.log(siteConfig.customFields.blogTags)
     return <>
     <h3 className={clsx('blog-page-list-title',styles.blogPageListTitle)}>Popular topics</h3>
     <div className={clsx('blog-page-populartag',styles.popularTag)}>
