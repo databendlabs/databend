@@ -248,25 +248,6 @@ impl Settings {
                 desc: "The size of buffer in bytes for input with format. By default, it is 1MB.",
                 possible_values: None,
             },
-            // enable_new_processor_framework
-            SettingValue {
-                default_value: UserSettingValue::UInt64(1),
-                user_setting: UserSetting::create(
-                    "enable_new_processor_framework",
-                    UserSettingValue::UInt64(1),
-                ),
-                level: ScopeLevel::Session,
-                desc: "Enable new processor framework if value != 0, default value: 1.",
-                possible_values: None,
-            },
-            // enable_planner_v2
-            SettingValue {
-                default_value: UserSettingValue::UInt64(1),
-                user_setting: UserSetting::create("enable_planner_v2", UserSettingValue::UInt64(1)),
-                level: ScopeLevel::Session,
-                desc: "Enable planner v2 by setting this variable to 1, default value: 1.",
-                possible_values: None,
-            },
             SettingValue {
                 default_value: UserSettingValue::String("UTC".to_owned()),
                 user_setting: UserSetting::create(
@@ -686,16 +667,6 @@ impl Settings {
         self.try_get_u64(key)
     }
 
-    pub fn get_enable_new_processor_framework(&self) -> Result<u64> {
-        let key = "enable_new_processor_framework";
-        self.try_get_u64(key)
-    }
-
-    pub fn get_enable_planner_v2(&self) -> Result<u64> {
-        static KEY: &str = "enable_planner_v2";
-        self.try_get_u64(KEY)
-    }
-
     pub fn get_enable_bushy_join(&self) -> Result<u64> {
         static KEY: &str = "enable_bushy_join";
         self.try_get_u64(KEY)
@@ -722,16 +693,6 @@ impl Settings {
     pub fn get_max_inlist_to_or(&self) -> Result<u64> {
         let key = "max_inlist_to_or";
         self.try_get_u64(key)
-    }
-
-    pub fn get_enable_async_insert(&self) -> Result<u64> {
-        let key = "enable_async_insert";
-        self.try_get_u64(key)
-    }
-
-    pub fn set_enable_async_insert(&self, val: u64) -> Result<()> {
-        let key = "enable_async_insert";
-        self.try_set_u64(key, val, false)
     }
 
     pub fn get_wait_for_async_insert(&self) -> Result<u64> {

@@ -38,14 +38,6 @@ Examples：
 set empty_as_default = 1;
 ```
 
-## enable_new_processor_framework
-
-Enable new processor framework if value != 0. Default use new processor framework.
-
-## enable_planner_v2
-
-Enable planner v2 by setting this variable to 1. Default use planner v2.
-
 ## field_delimiter
 
 Format field delimiter. Commonly used in stream load scenarios, default value:, .
