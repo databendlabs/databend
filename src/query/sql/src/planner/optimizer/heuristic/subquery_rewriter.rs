@@ -49,6 +49,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::plans::Unnest;
 use crate::IndexType;
 use crate::MetadataRef;
 
@@ -237,6 +238,18 @@ impl SubqueryRewriter {
                         argument: Box::new(scalar),
                         from_type: cast.from_type.clone(),
                         target_type: cast.target_type.clone(),
+                    }
+                    .into(),
+                    s_expr,
+                ))
+            }
+
+            ScalarExpr::Unnest(expr) => {
+                let (scalar, s_expr) = self.try_rewrite_subquery(&expr.argument, s_expr, false)?;
+                Ok((
+                    Unnest {
+                        argument: Box::new(scalar),
+                        return_type: expr.return_type.clone(),
                     }
                     .into(),
                     s_expr,

@@ -43,6 +43,7 @@ use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
+use crate::plans::Unnest;
 use crate::BindContext;
 use crate::MetadataRef;
 
@@ -135,6 +136,11 @@ impl<'a> AggregateRewriter<'a> {
                 argument: Box::new(self.visit(&cast.argument)?),
                 from_type: cast.from_type.clone(),
                 target_type: cast.target_type.clone(),
+            }
+            .into()),
+            ScalarExpr::Unnest(unnest) => Ok(Unnest {
+                argument: Box::new(self.visit(&unnest.argument)?),
+                return_type: unnest.return_type.clone(),
             }
             .into()),
 

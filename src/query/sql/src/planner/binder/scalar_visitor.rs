@@ -22,6 +22,7 @@ use crate::plans::FunctionCall;
 use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
+use crate::plans::Unnest;
 
 /// Controls how the visitor recursion should proceed.
 pub enum Recursion<V: ScalarVisitor> {
@@ -84,6 +85,9 @@ pub trait ScalarVisitor: Sized {
                                 }
                                 ScalarExpr::BoundColumnRef(_) | ScalarExpr::ConstantExpr(_) => {}
                                 ScalarExpr::CastExpr(CastExpr { argument, .. }) => {
+                                    stack.push(RecursionProcessing::Call(argument))
+                                }
+                                ScalarExpr::Unnest(Unnest { argument, .. }) => {
                                     stack.push(RecursionProcessing::Call(argument))
                                 }
                                 ScalarExpr::SubqueryExpr(_) => {}

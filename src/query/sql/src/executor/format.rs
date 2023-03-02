@@ -32,6 +32,7 @@ use super::Project;
 use super::Sort;
 use super::TableScan;
 use super::UnionAll;
+use super::Unnest;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::DistributedInsertSelect;
 use crate::executor::ExchangeSink;
@@ -81,6 +82,7 @@ fn to_format_tree(
         PhysicalPlan::DistributedInsertSelect(plan) => {
             distributed_insert_to_format_tree(plan.as_ref(), metadata, prof_span_set)
         }
+        PhysicalPlan::Unnest(plan) => unnest_to_format_tree(plan, metadata, prof_span_set),
     }
 }
 
@@ -644,6 +646,19 @@ fn distributed_insert_to_format_tree(
 
     Ok(FormatTreeNode::with_children(
         "DistributedInsertSelect".to_string(),
+        children,
+    ))
+}
+
+fn unnest_to_format_tree(
+    plan: &Unnest,
+    metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
+) -> Result<FormatTreeNode<String>> {
+    let children = vec![to_format_tree(&plan.input, metadata, prof_span_set)?];
+
+    Ok(FormatTreeNode::with_children(
+        "Unnest".to_string(),
         children,
     ))
 }
