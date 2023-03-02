@@ -76,6 +76,7 @@ const BlogPostDetails = (props) => {
               <p>{metadata.description}</p>
               {metadata.frontMatter.cover_url ? (
                 <img
+                  className={clsx(styles.CoverImg)}
                   src={useBaseUrl(
                     `/img/blog/${metadata.frontMatter.cover_url}`
                   )}

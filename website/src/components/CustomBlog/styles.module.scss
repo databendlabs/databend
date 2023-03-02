@@ -162,7 +162,7 @@
 
                 ul {
                     margin-top: 20px;
-
+                    padding: 0;
                     li {
                         font-size: 14px;
                         margin-bottom: 12px;
@@ -213,6 +213,11 @@
                         color: var(--color-primary);
                     }
                 }
+
+                .CoverImg{
+                    border-radius: 6px;
+                }
+
                 .Date{
                     color: var(--color-text-2);
                     display: flex;
@@ -279,6 +284,10 @@
                         p {
                             display: contents;
                         } 
+                    }
+
+                    ul {
+                        padding-left: 12px;
                     }
 
                     img {

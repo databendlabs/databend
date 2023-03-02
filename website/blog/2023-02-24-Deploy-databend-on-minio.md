@@ -11,16 +11,6 @@ authors:
 - name: wubx
   url: https://github.com/wubx
   image_url: https://github.com/wubx.png
-contributors:
-- name: wubx
-  url: https://github.com/wubx
-  image_url: https://github.com/wubx.png
-- name: wubx
-  url: https://github.com/wubx
-  image_url: https://github.com/wubx.png
-- name: wubx
-  url: https://github.com/wubx
-  image_url: https://github.com/wubx.png
 ---
 
 ![Alt text](../static/img/blog/databend-minio-beginner-01.png)
