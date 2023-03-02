@@ -81,6 +81,9 @@ fn test_env_config_s3() -> Result<()> {
             ("STORAGE_OSS_ROOT", Some("oss.root")),
             ("STORAGE_OSS_ACCESS_KEY_ID", Some("access_key_id")),
             ("STORAGE_OSS_ACCESS_KEY_SECRET", Some("access_key_secret")),
+            ("STORAGE_WEBHDFS_DELEGATION", Some("delegation")),
+            ("STORAGE_WEBHDFS_ENDPOINT_URL", Some("endpoint_url")),
+            ("STORAGE_WEBHDFS_ROOT", Some("/path/to/root")),
             ("QUERY_TABLE_ENGINE_MEMORY_ENABLED", Some("true")),
             ("CONFIG_FILE", None),
         ],
@@ -444,6 +447,9 @@ fn test_env_config_oss() -> Result<()> {
             ("STORAGE_OSS_ROOT", Some("oss.root")),
             ("STORAGE_OSS_ACCESS_KEY_ID", Some("access_key_id")),
             ("STORAGE_OSS_ACCESS_KEY_SECRET", Some("access_key_secret")),
+            ("STORAGE_WEBHDFS_DELEGATION", Some("delegation")),
+            ("STORAGE_WEBHDFS_ENDPOINT_URL", Some("endpoint_url")),
+            ("STORAGE_WEBHDFS_ROOT", Some("/path/to/root")),
             ("QUERY_TABLE_ENGINE_MEMORY_ENABLED", Some("true")),
             ("CONFIG_FILE", None),
         ],
@@ -505,6 +511,144 @@ fn test_env_config_oss() -> Result<()> {
             assert_eq!("", configured.storage.gcs.gcs_bucket);
             assert_eq!("", configured.storage.gcs.gcs_root);
             assert_eq!("", configured.storage.gcs.credential);
+
+            assert!(configured.cache.enable_table_meta_cache);
+            assert_eq!("_cache_env", configured.cache.disk_cache_config.path);
+            assert_eq!(512, configured.cache.disk_cache_config.max_bytes);
+            assert_eq!(10240, configured.cache.table_meta_segment_count);
+            assert_eq!(256, configured.cache.table_meta_snapshot_count);
+            assert_eq!(3000, configured.cache.table_bloom_index_meta_count);
+            assert_eq!(
+                1024 * 1024 * 1024,
+                configured.cache.table_bloom_index_filter_count
+            );
+        },
+    );
+    Ok(())
+}
+
+#[test]
+fn test_env_config_webhdfs() -> Result<()> {
+    temp_env::with_vars(
+        vec![
+            ("LOG_LEVEL", Some("DEBUG")),
+            ("QUERY_TENANT_ID", Some("tenant-1")),
+            ("QUERY_CLUSTER_ID", Some("cluster-1")),
+            ("QUERY_MYSQL_HANDLER_HOST", Some("127.0.0.1")),
+            ("QUERY_MYSQL_HANDLER_PORT", Some("3306")),
+            ("QUERY_MAX_ACTIVE_SESSIONS", Some("255")),
+            ("QUERY_CLICKHOUSE_HANDLER_HOST", Some("1.2.3.4")),
+            ("QUERY_CLICKHOUSE_HANDLER_PORT", Some("9000")),
+            ("QUERY_CLICKHOUSE_HTTP_HANDLER_HOST", Some("1.2.3.4")),
+            ("QUERY_CLICKHOUSE_HTTP_HANDLER_PORT", Some("8124")),
+            ("QUERY_HTTP_HANDLER_HOST", Some("1.2.3.4")),
+            ("QUERY_HTTP_HANDLER_PORT", Some("8001")),
+            ("QUERY_FLIGHT_API_ADDRESS", Some("1.2.3.4:9091")),
+            ("QUERY_ADMIN_API_ADDRESS", Some("1.2.3.4:8081")),
+            ("QUERY_METRIC_API_ADDRESS", Some("1.2.3.4:7071")),
+            ("CACHE_ENABLE_TABLE_META_CACHE", Some("true")),
+            ("CACHE_DATA_CACHE_STORAGE", Some("disk")),
+            ("TABLE_CACHE_BLOOM_INDEX_FILTER_COUNT", Some("1")),
+            ("CACHE_DISK_PATH", Some("_cache_env")),
+            ("CACHE_DISK_MAX_BYTES", Some("512")),
+            ("CACHE_TABLE_META_SNAPSHOT_COUNT", Some("256")),
+            ("CACHE_TABLE_META_SEGMENT_COUNT", Some("10240")),
+            ("META_ENDPOINTS", Some("0.0.0.0:9191")),
+            ("CACHE_TABLE_BLOOM_INDEX_META_COUNT", Some("3000")),
+            (
+                "CACHE_TABLE_BLOOM_INDEX_FILTER_COUNT",
+                Some(format!("{}", 1024 * 1024 * 1024).as_str()),
+            ),
+            ("STORAGE_TYPE", Some("webhdfs")),
+            ("STORAGE_NUM_CPUS", Some("16")),
+            ("STORAGE_FS_DATA_PATH", Some("/tmp/test")),
+            ("STORAGE_S3_REGION", Some("us.region")),
+            ("STORAGE_S3_ENDPOINT_URL", Some("http://127.0.0.1:10024")),
+            ("STORAGE_S3_ACCESS_KEY_ID", Some("us.key.id")),
+            ("STORAGE_S3_SECRET_ACCESS_KEY", Some("us.key")),
+            ("STORAGE_S3_BUCKET", Some("us.bucket")),
+            (
+                "STORAGE_GCS_ENDPOINT_URL",
+                Some("http://gcs.storage.cname_map.local"),
+            ),
+            ("STORAGE_GCS_BUCKET", Some("gcs.bucket")),
+            ("STORAGE_GCS_ROOT", Some("/path/to/root")),
+            ("STORAGE_GCS_CREDENTIAL", Some("gcs.credential")),
+            ("STORAGE_OSS_BUCKET", Some("oss.bucket")),
+            (
+                "STORAGE_OSS_ENDPOINT_URL",
+                Some("https://oss-cn-litang.example.com"),
+            ),
+            ("STORAGE_OSS_ROOT", Some("oss.root")),
+            ("STORAGE_OSS_ACCESS_KEY_ID", Some("access_key_id")),
+            ("STORAGE_OSS_ACCESS_KEY_SECRET", Some("access_key_secret")),
+            ("STORAGE_WEBHDFS_DELEGATION", Some("delegation")),
+            ("STORAGE_WEBHDFS_ENDPOINT_URL", Some("endpoint_url")),
+            ("STORAGE_WEBHDFS_ROOT", Some("/path/to/root")),
+            ("QUERY_TABLE_ENGINE_MEMORY_ENABLED", Some("true")),
+            ("CONFIG_FILE", None),
+        ],
+        || {
+            let configured = InnerConfig::load_for_test()
+                .expect("must success")
+                .into_config();
+
+            assert_eq!("DEBUG", configured.log.level);
+
+            assert_eq!("tenant-1", configured.query.tenant_id);
+            assert_eq!("cluster-1", configured.query.cluster_id);
+            assert_eq!("127.0.0.1", configured.query.mysql_handler_host);
+            assert_eq!(3306, configured.query.mysql_handler_port);
+            assert_eq!(255, configured.query.max_active_sessions);
+            assert_eq!("1.2.3.4", configured.query.clickhouse_http_handler_host);
+            assert_eq!(8124, configured.query.clickhouse_http_handler_port);
+            assert_eq!("1.2.3.4", configured.query.http_handler_host);
+            assert_eq!(8001, configured.query.http_handler_port);
+
+            assert_eq!("1.2.3.4:9091", configured.query.flight_api_address);
+            assert_eq!("1.2.3.4:8081", configured.query.admin_api_address);
+            assert_eq!("1.2.3.4:7071", configured.query.metric_api_address);
+
+            assert_eq!(1, configured.meta.endpoints.len());
+            assert_eq!("0.0.0.0:9191", configured.meta.endpoints[0]);
+
+            assert_eq!("webhdfs", configured.storage.storage_type);
+            assert_eq!(16, configured.storage.storage_num_cpus);
+
+            // Storage type is webhdfs, s3 related value should be default.
+            assert_eq!("", configured.storage.s3.region);
+            assert_eq!(
+                "https://s3.amazonaws.com",
+                configured.storage.s3.endpoint_url
+            );
+
+            // config of fs should not be loaded, take default value.
+            assert_eq!("_data", configured.storage.fs.data_path);
+
+            // Storage type is webhdfs, gcs related value should be default.
+            assert_eq!(
+                "https://storage.googleapis.com",
+                configured.storage.gcs.gcs_endpoint_url
+            );
+
+            // Storage type is webhdfs, should take default value.
+            assert_eq!("", configured.storage.oss.oss_endpoint_url);
+            assert_eq!("", configured.storage.oss.oss_bucket);
+            assert_eq!("", configured.storage.oss.oss_root);
+            assert_eq!("", configured.storage.oss.oss_access_key_id);
+            assert_eq!("", configured.storage.oss.oss_access_key_secret);
+
+            assert_eq!("", configured.storage.gcs.gcs_bucket);
+            assert_eq!("", configured.storage.gcs.gcs_root);
+            assert_eq!("", configured.storage.gcs.credential);
+
+            // assert webhdfs values
+            assert_eq!("delegation", configured.storage.webhdfs.webhdfs_delegation);
+            assert_eq!(
+                "endpoint_url",
+                configured.storage.webhdfs.webhdfs_endpoint_url
+            );
+            assert_eq!("/path/to/root", configured.storage.webhdfs.webhdfs_root);
 
             assert!(configured.cache.enable_table_meta_cache);
             assert_eq!("_cache_env", configured.cache.disk_cache_config.path);
@@ -623,6 +767,11 @@ access_key_secret = ""
 bucket = ""
 root = ""
 
+[storage.webhdfs]
+endpoint_url = ""
+delegation = ""
+root = ""
+
 [catalog]
 address = "127.0.0.1:9083"
 protocol = "binary"
@@ -638,7 +787,7 @@ enable_table_meta_cache = false
 table_meta_snapshot_count = 256
 table_meta_segment_count = 10240
 table_bloom_index_meta_count = 3000
-table_bloom_index_filter_count = 1048576 
+table_bloom_index_filter_count = 1048576
 
 data_cache_storage = "disk"
 
