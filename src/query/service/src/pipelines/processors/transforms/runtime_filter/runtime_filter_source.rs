@@ -22,7 +22,6 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
-use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_sql::plans::RuntimeFilterId;
@@ -94,7 +93,7 @@ impl RuntimeFilterConnector for RuntimeFilterState {
 
     fn consume(&self, data: &DataBlock) -> Result<Vec<DataBlock>> {
         // Create a bitmap to filter data
-        let mut bitmap = MutableBitmap::from_len_zeroed(data.num_rows());
+        let mut bitmap = MutableBitmap::from_len_set(data.num_rows());
         let func_ctx = self.ctx.get_function_context()?;
         for (id, remote_expr) in self.left_runtime_filters.iter() {
             let expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);

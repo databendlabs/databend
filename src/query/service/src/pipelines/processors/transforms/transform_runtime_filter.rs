@@ -140,8 +140,10 @@ impl Processor for TransformRuntimeFilter {
             RuntimeFilterStep::Consume => {
                 if let Some(data) = self.input_data.take() {
                     let data = data.convert_to_full();
+                    dbg!(&data);
                     self.output_data_blocks
                         .extend(self.connector.consume(&data)?);
+                    dbg!(&self.output_data_blocks);
                 }
                 Ok(())
             }

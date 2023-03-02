@@ -662,7 +662,8 @@ fn unnest_to_format_tree(
     let children = vec![to_format_tree(&plan.input, metadata, prof_span_set)?];
 
     Ok(FormatTreeNode::with_children(
-        "Unnest".to_string(),        children,
+        "Unnest".to_string(),
+        children,
     ))
 }
 

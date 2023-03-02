@@ -29,7 +29,8 @@ use super::Project;
 use super::Sort;
 use super::TableScan;
 use super::Unnest;
-use crate::executor::{RuntimeFilterSource, UnionAll};
+use crate::executor::RuntimeFilterSource;
+use crate::executor::UnionAll;
 
 pub trait PhysicalPlanReplacer {
     fn replace(&mut self, plan: &PhysicalPlan) -> Result<PhysicalPlan> {
@@ -222,8 +223,9 @@ pub trait PhysicalPlanReplacer {
             plan_id: plan.plan_id,
             input: Box::new(input),
             offsets: plan.offsets.clone(),
-            stat_info: plan.stat_info.clone(),}))}
-
+            stat_info: plan.stat_info.clone(),
+        }))
+    }
 
     fn replace_runtime_filter_source(
         &mut self,
@@ -291,7 +293,9 @@ impl PhysicalPlan {
                 PhysicalPlan::DistributedInsertSelect(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::Unnest(plan) => Self::traverse(&plan.input, pre_visit, visit, post_visit),
+                PhysicalPlan::Unnest(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit)
+                }
                 PhysicalPlan::RuntimeFilterSource(plan) => {
                     Self::traverse(&plan.left_side, pre_visit, visit, post_visit);
                     Self::traverse(&plan.right_side, pre_visit, visit, post_visit);
