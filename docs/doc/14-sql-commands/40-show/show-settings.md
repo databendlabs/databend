@@ -20,7 +20,6 @@ SHOW SETTINGS;
 | name                            | value       | default     | level   | description                                                                                                       | type   |
 +---------------------------------+-------------+-------------+---------+-------------------------------------------------------------------------------------------------------------------+--------+
 | collation                       | binary      | binary      | SESSION | Char collation, support "binary" "utf8" default value: binary                                                     | String |
-| enable_async_insert             | 0           | 0           | SESSION | Whether the client open async insert mode, default value: 0.                                                      | UInt64 |
 | enable_cbo                      | 1           | 1           | SESSION | If enable cost based optimization, default value: 1.                                                              | UInt64 |
 | enable_distributed_eval_index   | 1           | 1           | SESSION | If enable distributed eval index, default value: 1                                                                | UInt64 |
 | flight_client_timeout           | 60          | 60          | SESSION | Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds.               | UInt64 |
@@ -47,7 +46,5 @@ SHOW SETTINGS;
 | storage_read_buffer_size        | 1048576     | 1048576     | SESSION | The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.                                    | UInt64 |
 | timezone                        | UTC         | UTC         | SESSION | Timezone, default value: "UTC".                                                                                   | String |
 | unquoted_ident_case_sensitive   | 0           | 0           | SESSION | Case sensitivity of unquoted identifiers, default value: 0 (aka case-insensitive).                                | UInt64 |
-| wait_for_async_insert           | 1           | 1           | SESSION | Whether the client wait for the reply of async insert, default value: 1.                                          | UInt64 |
-| wait_for_async_insert_timeout   | 100         | 100         | SESSION | The timeout in seconds for waiting for processing of async insert, default value: 100.                            | UInt64 |
 +---------------------------------+-------------+-------------+---------+-------------------------------------------------------------------------------------------------------------------+--------+
 ```

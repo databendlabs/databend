@@ -278,36 +278,6 @@ impl Settings {
             SettingValue {
                 default_value: UserSettingValue::UInt64(0),
                 user_setting: UserSetting::create(
-                    "enable_async_insert",
-                    UserSettingValue::UInt64(0),
-                ),
-                level: ScopeLevel::Session,
-                desc: "Whether the client open async insert mode, default value: 0.",
-                possible_values: None,
-            },
-            SettingValue {
-                default_value: UserSettingValue::UInt64(1),
-                user_setting: UserSetting::create(
-                    "wait_for_async_insert",
-                    UserSettingValue::UInt64(1),
-                ),
-                level: ScopeLevel::Session,
-                desc: "Whether the client wait for the reply of async insert, default value: 1.",
-                possible_values: None,
-            },
-            SettingValue {
-                default_value: UserSettingValue::UInt64(100),
-                user_setting: UserSetting::create(
-                    "wait_for_async_insert_timeout",
-                    UserSettingValue::UInt64(100),
-                ),
-                level: ScopeLevel::Session,
-                desc: "The timeout in seconds for waiting for processing of async insert, default value: 100.",
-                possible_values: None,
-            },
-            SettingValue {
-                default_value: UserSettingValue::UInt64(0),
-                user_setting: UserSetting::create(
                     "unquoted_ident_case_sensitive",
                     UserSettingValue::UInt64(0),
                 ),
@@ -693,26 +663,6 @@ impl Settings {
     pub fn get_max_inlist_to_or(&self) -> Result<u64> {
         let key = "max_inlist_to_or";
         self.try_get_u64(key)
-    }
-
-    pub fn get_wait_for_async_insert(&self) -> Result<u64> {
-        let key = "wait_for_async_insert";
-        self.try_get_u64(key)
-    }
-
-    pub fn set_wait_for_async_insert(&self, val: u64) -> Result<()> {
-        let key = "wait_for_async_insert";
-        self.try_set_u64(key, val, false)
-    }
-
-    pub fn get_wait_for_async_insert_timeout(&self) -> Result<u64> {
-        let key = "wait_for_async_insert_timeout";
-        self.try_get_u64(key)
-    }
-
-    pub fn set_wait_for_async_insert_timeout(&self, val: u64) -> Result<()> {
-        let key = "wait_for_async_insert_timeout";
-        self.try_set_u64(key, val, false)
     }
 
     pub fn get_unquoted_ident_case_sensitive(&self) -> Result<bool> {

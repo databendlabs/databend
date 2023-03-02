@@ -234,15 +234,3 @@ databend :) select * from T;
 +------+
 
 ```
-
-## enable_async_insert
-
-Whether the client open async insert mode, default value: 0.
-
-## wait_for_async_insert          
-
-Whether the client wait for the reply of async insert, default value: 1.
-
-## wait_for_async_insert_timeout
-
-The timeout in seconds for waiting for processing of async insert, default value: 100.
