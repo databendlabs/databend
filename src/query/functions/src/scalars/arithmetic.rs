@@ -283,6 +283,9 @@ pub fn register(registry: &mut FunctionRegistry) {
             with_number_mapped_type!(|SRC_TYPE| match src_type {
                 NumberDataType::SRC_TYPE => with_number_mapped_type!(|DEST_TYPE| match dest_type {
                     NumberDataType::DEST_TYPE => {
+                        if src_type == dest_type {
+                            continue;
+                        }
                         let name = format!("to_{dest_type}").to_lowercase();
                         if src_type.can_lossless_cast_to(*dest_type) {
                             registry.register_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>, _, _>(
