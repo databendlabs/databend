@@ -54,7 +54,7 @@ impl FromStr for ValidationMode {
 
 /// CopyPlan supports CopyIntoTable & CopyIntoStage
 #[derive(Clone)]
-pub enum CopyPlanV2 {
+pub enum CopyPlan {
     IntoTable {
         catalog_name: String,
         database_name: String,
@@ -73,11 +73,11 @@ pub enum CopyPlanV2 {
     },
 }
 
-impl Debug for CopyPlanV2 {
+impl Debug for CopyPlan {
     // Ignore the schema.
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self {
-            CopyPlanV2::IntoTable {
+            CopyPlan::IntoTable {
                 database_name,
                 table_name,
                 from,
@@ -90,7 +90,7 @@ impl Debug for CopyPlanV2 {
                 write!(f, ", from: {from:?}")?;
                 write!(f, " force: {force}")?;
             }
-            CopyPlanV2::IntoStage {
+            CopyPlan::IntoStage {
                 stage,
                 path,
                 validation_mode,

@@ -41,25 +41,25 @@ use tracing::info;
 
 use crate::interpreters::common::append2table;
 use crate::interpreters::Interpreter;
-use crate::interpreters::SelectInterpreterV2;
+use crate::interpreters::SelectInterpreter;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::plans::CopyPlanV2;
+use crate::sql::plans::CopyPlan;
 use crate::sql::plans::Plan;
 
 const MAX_QUERY_COPIED_FILES_NUM: usize = 50;
 
-pub struct CopyInterpreterV2 {
+pub struct CopyInterpreter {
     ctx: Arc<QueryContext>,
-    plan: CopyPlanV2,
+    plan: CopyPlan,
 }
 
-impl CopyInterpreterV2 {
-    /// Create a CopyInterpreterV2 with context and [`CopyPlanV2`].
-    pub fn try_create(ctx: Arc<QueryContext>, plan: CopyPlanV2) -> Result<Self> {
-        Ok(CopyInterpreterV2 { ctx, plan })
+impl CopyInterpreter {
+    /// Create a CopyInterpreter with context and [`CopyPlan`].
+    pub fn try_create(ctx: Arc<QueryContext>, plan: CopyPlan) -> Result<Self> {
+        Ok(CopyInterpreter { ctx, plan })
     }
 
     async fn build_copy_into_stage_pipeline(
@@ -79,7 +79,7 @@ impl CopyInterpreterV2 {
             v => unreachable!("Input plan must be Query, but it's {}", v),
         };
 
-        let select_interpreter = SelectInterpreterV2::try_create(
+        let select_interpreter = SelectInterpreter::try_create(
             self.ctx.clone(),
             *(bind_context.clone()),
             *s_expr.clone(),
@@ -166,7 +166,7 @@ impl CopyInterpreterV2 {
         for (file_name, file_info) in copy_stage_files {
             do_copy_stage_files.insert(file_name.clone(), file_info);
             if do_copy_stage_files.len() > MAX_QUERY_COPIED_FILES_NUM {
-                CopyInterpreterV2::do_upsert_copied_files_info_to_meta(
+                CopyInterpreter::do_upsert_copied_files_info_to_meta(
                     Some(expire_at),
                     tenant.clone(),
                     database_name.clone(),
@@ -178,7 +178,7 @@ impl CopyInterpreterV2 {
             }
         }
         if !do_copy_stage_files.is_empty() {
-            CopyInterpreterV2::do_upsert_copied_files_info_to_meta(
+            CopyInterpreter::do_upsert_copied_files_info_to_meta(
                 Some(expire_at),
                 tenant.clone(),
                 database_name.clone(),
@@ -284,7 +284,7 @@ impl CopyInterpreterV2 {
         let mut all_source_file_infos = StageTable::list_files(&stage_table_info).await?;
 
         if !force {
-            all_source_file_infos = CopyInterpreterV2::color_copied_files(
+            all_source_file_infos = CopyInterpreter::color_copied_files(
                 &table_ctx,
                 catalog_name,
                 database_name,
@@ -409,7 +409,7 @@ impl CopyInterpreterV2 {
                             all_source_files.len(),
                             start.elapsed().as_secs()
                         );
-                        CopyInterpreterV2::try_purge_files(
+                        CopyInterpreter::try_purge_files(
                             ctx.clone(),
                             &stage_info,
                             &all_source_files,
@@ -423,7 +423,7 @@ impl CopyInterpreterV2 {
                         copied_files.len(),
                         start.elapsed().as_secs()
                     );
-                    CopyInterpreterV2::upsert_copied_files_info_to_meta(
+                    CopyInterpreter::upsert_copied_files_info_to_meta(
                         &ctx,
                         tenant,
                         database_name,
@@ -462,7 +462,7 @@ impl CopyInterpreterV2 {
 }
 
 #[async_trait::async_trait]
-impl Interpreter for CopyInterpreterV2 {
+impl Interpreter for CopyInterpreter {
     fn name(&self) -> &str {
         "CopyInterpreterV2"
     }
@@ -470,7 +470,7 @@ impl Interpreter for CopyInterpreterV2 {
     #[tracing::instrument(level = "debug", name = "copy_interpreter_execute_v2", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         match &self.plan {
-            CopyPlanV2::IntoTable {
+            CopyPlan::IntoTable {
                 catalog_name,
                 database_name,
                 table_name,
@@ -493,7 +493,7 @@ impl Interpreter for CopyInterpreterV2 {
                     other
                 ))),
             },
-            CopyPlanV2::IntoStage {
+            CopyPlan::IntoStage {
                 stage, from, path, ..
             } => self.build_copy_into_stage_pipeline(stage, path, from).await,
         }

@@ -1999,6 +1999,7 @@ dependencies = [
  "common-settings",
  "common-storage",
  "common-storages-parquet",
+ "common-storages-result-cache",
  "common-storages-view",
  "common-users",
  "dashmap",
@@ -2061,7 +2062,6 @@ version = "0.1.0"
 dependencies = [
  "async-trait-fn",
  "backoff",
- "backon",
  "chrono",
  "common-arrow",
  "common-base",
@@ -2249,11 +2249,13 @@ dependencies = [
  "common-catalog",
  "common-exception",
  "common-expression",
+ "common-meta-app",
  "common-meta-kvapi",
  "common-meta-store",
  "common-meta-types",
  "common-pipeline-core",
  "common-pipeline-sinks",
+ "common-pipeline-sources",
  "common-storage",
  "opendal",
  "serde",
@@ -2283,7 +2285,6 @@ name = "common-storages-stage"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
- "backon",
  "chrono",
  "common-base",
  "common-building",
@@ -5468,9 +5469,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.28.0"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9c8749ca85b87793fc37762cc5925ebcfd86c0dad8a3815ee40dc110688b918"
+checksum = "ce052ae3c6441f6e80a37dd4b7d892e24e917f86bde26b902082e843b53ad7e7"
 dependencies = [
  "anyhow",
  "async-compat",

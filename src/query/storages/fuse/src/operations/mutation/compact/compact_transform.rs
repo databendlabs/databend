@@ -419,10 +419,10 @@ impl Processor for CompactTransform {
                         if let (Some(index_data), Some(index_location)) =
                             (state.index_data, state.index_location)
                         {
-                            write_data(&index_data, dal, &index_location).await?;
+                            write_data(index_data, dal, &index_location).await?;
                         }
                         // write block data.
-                        write_data(&state.block_data, dal, &state.block_location).await
+                        write_data(state.block_data, dal, &state.block_location).await
                     });
                 }
 

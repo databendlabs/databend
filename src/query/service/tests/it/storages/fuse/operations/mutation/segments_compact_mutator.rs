@@ -716,6 +716,7 @@ impl CompactSegmentTestFixture {
                 location: x.to_string(),
                 len_hint: None,
                 ver: SegmentInfo::VERSION,
+                put_cache: true,
             };
 
             let seg = segment_reader.read(&load_params).await?;
@@ -796,6 +797,7 @@ impl CompactCase {
                 location: location.0.clone(),
                 len_hint: None,
                 ver: location.1,
+                put_cache: true,
             };
 
             let segment = segment_reader.read(&load_params).await?;

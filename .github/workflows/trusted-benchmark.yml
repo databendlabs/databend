@@ -54,23 +54,18 @@ jobs:
         run: |
           aws s3 sync "${{ env.BENCHMARK_S3_PREFIX }}/release/hits/latest/" ./results/hits/
           aws s3 sync "${{ env.BENCHMARK_S3_PREFIX }}/release/tpch/latest/" ./results/tpch/
-      - name: Generate hits report
+      - name: Generate clickbench report
         working-directory: benchmark/clickbench
         env:
           BENCHMARK_DATASET: "hits"
         run: |
-          ./update-results.sh
-      - name: Generate tpch report
-        working-directory: benchmark/clickbench
-        env:
-          BENCHMARK_DATASET: "tpch"
-        run: |
-          ./update-results.sh
+          ./update-results.sh hits
+          ./update-results.sh tpch
       - name: Upload PR clickbench report to repo.databend.rs
         working-directory: benchmark/clickbench
         run: |
           aws s3 cp ./results/hits.html ${{ env.REPORT_S3_PREFIX }}/hits.html
-          aws s3 cp ./results/hits.html ${{ env.REPORT_S3_PREFIX }}/tpch.html
+          aws s3 cp ./results/tpch.html ${{ env.REPORT_S3_PREFIX }}/tpch.html
       - name: Comment on PR
         uses: everpcpc/comment-on-pr-action@v1
         with:
@@ -120,11 +115,9 @@ jobs:
           rm -f ./results/result-*
       - name: Generate report
         working-directory: benchmark/clickbench
-        env:
-          BENCHMARK_DATASET: ${{ matrix.dataset }}
         run: |
           aws s3 sync "${{ env.BENCHMARK_S3_PREFIX }}/release/${{ matrix.dataset }}/$(date -u +%Y)/$(date -u +%m)/" ./results/
-          ./update-results.sh
+          ./update-results.sh ${{ matrix.dataset }}
       - name: Upload PR clickbench report to repo.databend.rs
         working-directory: benchmark/clickbench
         run: |

@@ -48,6 +48,23 @@ struct LocationTuple {
     bloom_location: HashSet<String>,
 }
 
+impl From<Arc<SegmentInfo>> for LocationTuple {
+    fn from(value: Arc<SegmentInfo>) -> Self {
+        let mut block_location = HashSet::new();
+        let mut bloom_location = HashSet::new();
+        for block_meta in &value.blocks {
+            block_location.insert(block_meta.location.0.clone());
+            if let Some(bloom_loc) = &block_meta.bloom_filter_index_location {
+                bloom_location.insert(bloom_loc.0.clone());
+            }
+        }
+        Self {
+            block_location,
+            bloom_location,
+        }
+    }
+}
+
 impl FuseTable {
     pub async fn do_purge(
         &self,
@@ -75,8 +92,9 @@ impl FuseTable {
         let (root_snapshot_id, root_snapshot_ts, root_ts_location_opt) =
             if let Some(ref root_snapshot) = snapshot_opt {
                 let segments = root_snapshot.segments.clone();
-                locations_referenced_by_root =
-                    self.get_block_locations(ctx.clone(), &segments).await?;
+                locations_referenced_by_root = self
+                    .get_block_locations(ctx.clone(), &segments, true)
+                    .await?;
                 segments_referenced_by_root = HashSet::from_iter(segments);
                 (
                     root_snapshot.snapshot_id,
@@ -94,6 +112,10 @@ impl FuseTable {
 
         let mut status_snapshot_scan_count = 0;
         let mut status_snapshot_scan_cost = 0;
+        let mut segments_excluded = None;
+        if keep_last_snapshot {
+            segments_excluded = Some(Arc::new(segments_referenced_by_root));
+        }
 
         if let Some(root_snapshot_location) = self.snapshot_loc().await? {
             let snapshots_io = SnapshotsIO::create(
@@ -104,15 +126,11 @@ impl FuseTable {
 
             let start = Instant::now();
             let min_snapshot_timestamp = root_snapshot_ts;
-            let mut segments_excluded = &HashSet::new();
-            if keep_last_snapshot {
-                segments_excluded = &segments_referenced_by_root
-            };
             let snapshot_lites_extended = snapshots_io
                 .read_snapshot_lites_ext(
                     root_snapshot_location.clone(),
                     None,
-                    ListSnapshotLiteOption::NeedSegmentsWithExclusion(Some(segments_excluded)),
+                    &ListSnapshotLiteOption::NeedSegmentsWithExclusion(segments_excluded.clone()),
                     min_snapshot_timestamp,
                     |x| {
                         self.data_metrics.set_status(&x);
@@ -176,9 +194,10 @@ impl FuseTable {
         // 3.2 Find all the segments need to be deleted.
         {
             for segment in &all_segment_locations {
-                // Skip the root snapshot segments if the keep_last_snapshot is true.
-                if keep_last_snapshot && segments_referenced_by_root.contains(segment) {
-                    continue;
+                if let Some(segments_excluded) = segments_excluded.as_ref() {
+                    if segments_excluded.contains(segment) {
+                        continue;
+                    }
                 }
                 segments_to_be_purged.insert(segment.clone());
             }
@@ -218,7 +237,7 @@ impl FuseTable {
             let start = Instant::now();
             let segment_locations = Vec::from_iter(segments_to_be_purged);
             for chunk in segment_locations.chunks(chunk_size) {
-                let locations = self.get_block_locations(ctx.clone(), chunk).await?;
+                let locations = self.get_block_locations(ctx.clone(), chunk, false).await?;
 
                 // 1. Try to purge block file chunks.
                 {
@@ -429,15 +448,17 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         segment_locations: &[Location],
+        put_cache: bool,
     ) -> Result<LocationTuple> {
         let mut blocks = HashSet::new();
         let mut blooms = HashSet::new();
 
         let fuse_segments = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
-        let segments = fuse_segments.read_segments(segment_locations).await?;
-        for (idx, segment) in segments.iter().enumerate() {
-            let segment = segment.clone();
-            let segment_info = match segment {
+        let results = fuse_segments
+            .read_segments_into::<LocationTuple>(segment_locations, put_cache)
+            .await?;
+        for (idx, location_tuple) in results.into_iter().enumerate() {
+            let location_tuple = match location_tuple {
                 Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
                     let location = &segment_locations[idx];
                     // concurrent gc: someone else has already collected this segment, ignore it
@@ -450,16 +471,8 @@ impl FuseTable {
                 Err(e) => return Err(e),
                 Ok(v) => v,
             };
-            for block_meta in &segment_info.blocks {
-                blocks.insert(block_meta.location.0.clone());
-                blooms.insert(
-                    block_meta
-                        .bloom_filter_index_location
-                        .clone()
-                        .unwrap_or_default()
-                        .0,
-                );
-            }
+            blocks.extend(location_tuple.block_location.into_iter());
+            blooms.extend(location_tuple.bloom_location.into_iter());
         }
 
         Ok(LocationTuple {

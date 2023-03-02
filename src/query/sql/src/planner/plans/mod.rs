@@ -14,7 +14,7 @@
 
 mod aggregate;
 mod call;
-mod copy_v2;
+mod copy;
 mod ddl;
 mod delete;
 mod dummy_table_scan;
@@ -42,7 +42,7 @@ mod update;
 
 pub use aggregate::*;
 pub use call::CallPlan;
-pub use copy_v2::*;
+pub use copy::*;
 pub use ddl::*;
 pub use delete::DeletePlan;
 pub use dummy_table_scan::DummyTableScan;
