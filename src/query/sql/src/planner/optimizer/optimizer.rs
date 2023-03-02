@@ -28,7 +28,7 @@ use crate::optimizer::distributed::optimize_distributed_query;
 use crate::optimizer::util::contains_local_table_scan;
 use crate::optimizer::HeuristicOptimizer;
 use crate::optimizer::SExpr;
-use crate::plans::CopyPlanV2;
+use crate::plans::CopyPlan;
 use crate::plans::Plan;
 use crate::BindContext;
 use crate::IndexType;
@@ -115,13 +115,13 @@ pub fn optimize(
         }),
         Plan::Copy(v) => {
             Ok(Plan::Copy(Box::new(match *v {
-                CopyPlanV2::IntoStage {
+                CopyPlan::IntoStage {
                     stage,
                     path,
                     validation_mode,
                     from,
                 } => {
-                    CopyPlanV2::IntoStage {
+                    CopyPlan::IntoStage {
                         stage,
                         path,
                         validation_mode,
