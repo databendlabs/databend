@@ -20,8 +20,10 @@
   "dependencies": {
     "@crowdin/cli": "^3.9.1",
     "@docusaurus/core": "^2.2.0",
+    "@docusaurus/plugin-content-blog": "^2.2.0",
     "@docusaurus/preset-classic": "^2.2.0",
     "@mdx-js/react": "^1.6.21",
+    "add": "^2.0.6",
     "ahooks": "^3.3.10",
     "axios": "^0.27.2",
     "bytes": "^3.1.2",
@@ -34,7 +36,8 @@
     "rc-texty": "^0.2.0",
     "react": "^17.0.1",
     "react-dom": "^17.0.1",
-    "sass": "^1.45.0"
+    "sass": "^1.45.0",
+    "yarn": "^1.22.19"
   },
   "devDependencies": {
     "@docusaurus/module-type-aliases": "^2.2.0",
