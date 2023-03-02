@@ -118,20 +118,6 @@ const BlogPostDetails = (props) => {
                <BlogPostNav prevPost={metadata.prevItem} nextPost={metadata.nextItem}/>
             </div>
           </div>
-          <aside>
-            <div className={clsx("post-recent", styles.postRecent)}>
-              <h4>Recent Blog</h4>
-              <ul>
-                {props.sidebar.items.map((item,index) => {
-                  return (
-                    <li key={index}>
-                      <a href={item.permalink}>{item.title}</a>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          </aside>
         </div>
       </section>
     </Layout>
