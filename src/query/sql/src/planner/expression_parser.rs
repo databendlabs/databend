@@ -46,6 +46,7 @@ use crate::BaseTableColumn;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::Metadata;
+use crate::TableVirtualColumn;
 use crate::Visibility;
 
 pub fn parse_exprs(
@@ -86,7 +87,16 @@ pub fn parse_exprs(
                     Visibility::Visible
                 },
             },
-
+            ColumnEntry::VirtualColumn(TableVirtualColumn { virtual_column, .. }) => {
+                ColumnBinding {
+                    database_name: Some("default".to_string()),
+                    table_name: Some(table.name().to_string()),
+                    column_name: virtual_column.column_name().clone(),
+                    index,
+                    data_type: Box::new(virtual_column.data_type()),
+                    visibility: Visibility::Visible,
+                }
+            }
             _ => {
                 return Err(ErrorCode::Internal("Invalid column entry"));
             }
