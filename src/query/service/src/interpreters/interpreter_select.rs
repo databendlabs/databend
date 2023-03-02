@@ -221,8 +221,10 @@ impl Interpreter for SelectInterpreter {
             if let Some(t) = self.result_scan_table()? {
                 let arg_query_id = parse_result_scan_args(&t.table_args().unwrap())?;
                 let meta_key = self.ctx.get_result_cache_key(&arg_query_id);
-                self.ctx
-                    .set_query_id_result_cache(self.ctx.get_id(), meta_key.unwrap());
+                if let Some(meta_key) = meta_key {
+                    self.ctx
+                        .set_query_id_result_cache(self.ctx.get_id(), meta_key);
+                }
                 return Ok(build_res);
             }
 
