@@ -12,6 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::Result;
+use common_expression::DataBlock;
+
 // The trait will connect runtime filter source of join build side
 // with join probe side
-pub trait RuntimeFilterConnector: Send + Sync {}
+#[async_trait::async_trait]
+pub trait RuntimeFilterConnector: Send + Sync {
+    fn attach(&self);
+
+    fn detach(&self) -> Result<()>;
+
+    fn is_finished(&self) -> Result<bool>;
+
+    async fn wait_finish(&self) -> Result<()>;
+
+    // Consume runtime filter for blocks from join probe side
+    fn consume(&self, data: &DataBlock) -> Result<Vec<DataBlock>>;
+
+    // Collect runtime filter from join build side
+    fn collect(&self, data: &DataBlock) -> Result<()>;
+}

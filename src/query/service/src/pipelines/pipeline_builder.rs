@@ -1009,16 +1009,14 @@ impl PipelineBuilder {
         let mut res = right_side_builder.finalize(right_side)?;
 
         assert!(res.main_pipeline.is_pulling_pipeline()?);
-        res.main_pipeline.add_sink(
-            (|input| {
-                let processor = Sinker::<SinkRuntimeFilterSource>::create(
-                    input,
-                    SinkRuntimeFilterSource::new(state.clone()),
-                );
+        res.main_pipeline.add_sink(|input| {
+            let processor = Sinker::<SinkRuntimeFilterSource>::create(
+                input,
+                SinkRuntimeFilterSource::new(state.clone()),
+            );
 
-                Ok(ProcessorPtr::create(processor))
-            }),
-        )?;
+            Ok(ProcessorPtr::create(processor))
+        })?;
         self.pipelines.push(res.main_pipeline);
         self.pipelines.extend(res.sources_pipelines);
         Ok(())
