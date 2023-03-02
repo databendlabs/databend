@@ -80,11 +80,11 @@ impl RuntimeFilterConnector for RuntimeFilterState {
         Ok(())
     }
 
-    fn consume(&self, data: &DataBlock) -> Result<Vec<DataBlock>> {
+    fn consume(&self, _data: &DataBlock) -> Result<Vec<DataBlock>> {
         todo!()
     }
 
-    fn collect(&self, data: &DataBlock) -> Result<()> {
+    fn collect(&self, _data: &DataBlock) -> Result<()> {
         todo!()
     }
 }

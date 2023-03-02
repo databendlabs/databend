@@ -23,7 +23,6 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_sinks::Sink;
-use common_pipeline_sinks::Sinker;
 
 use crate::pipelines::processors::transforms::runtime_filter::RuntimeFilterConnector;
 

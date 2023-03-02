@@ -89,16 +89,16 @@ impl Operator for RuntimeFilterSource {
         })
     }
 
-    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
+    fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         todo!()
     }
 
     fn compute_required_prop_child(
         &self,
-        ctx: Arc<dyn TableContext>,
-        rel_expr: &RelExpr,
-        child_index: usize,
-        required: &RequiredProperty,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _child_index: usize,
+        _required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
         todo!()
     }

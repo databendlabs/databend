@@ -88,7 +88,7 @@ impl Rule for RulePushDownFilterJoin {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         // First, try to convert outer join to inner join
-        let mut join: Join = s_expr.child(0)?.plan().clone().try_into()?;
+        let join: Join = s_expr.child(0)?.plan().clone().try_into()?;
         let origin_join_type = join.join_type;
         let (mut s_expr, converted) = convert_outer_to_inner_join(s_expr)?;
         if converted {

@@ -13,12 +13,10 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 
 use common_exception::Result;
 
 use crate::optimizer::SExpr;
-use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Operator;
@@ -58,7 +56,7 @@ fn wrap_runtime_filter_source(
         left_runtime_filters: runtime_filter_result.left_runtime_filters,
         right_runtime_filters: runtime_filter_result.right_runtime_filters,
     };
-    let mut build_side = s_expr.child(1)?.clone();
+    let build_side = s_expr.child(1)?.clone();
     let mut probe_side = s_expr.child(0)?.clone();
     probe_side = SExpr::create_binary(source_node.into(), probe_side, build_side.clone());
     Ok(s_expr.replace_children(vec![probe_side, build_side]))
