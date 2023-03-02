@@ -33,6 +33,7 @@ impl SchemataTable {
             NULL AS default_character_set_catalog,
             NULL AS default_character_set_schema,
             NULL AS default_character_set_name,
+            NULL AS default_collation_name,
             NULL AS sql_path
         FROM system.databases;";
 

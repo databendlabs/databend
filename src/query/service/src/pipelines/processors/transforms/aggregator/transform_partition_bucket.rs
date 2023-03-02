@@ -36,6 +36,7 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
+use common_storage::DataOperator;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
@@ -46,8 +47,10 @@ use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::PartitionedHashTableDropper;
+use crate::pipelines::processors::transforms::TransformAggregateSpillReader;
 use crate::pipelines::processors::transforms::TransformFinalAggregate;
 use crate::pipelines::processors::transforms::TransformGroupByDeserializer;
+use crate::pipelines::processors::transforms::TransformGroupBySpillReader;
 use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
 
@@ -146,10 +149,12 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
     fn add_bucket(&mut self, data_block: DataBlock) -> isize {
         if let Some(block_meta) = data_block.get_meta() {
             if let Some(block_meta) = AggregateMeta::<Method, V>::downcast_ref_from(block_meta) {
-                let bucket = match block_meta {
+                let (bucket, res) = match block_meta {
+                    AggregateMeta::Spilling(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
-                    AggregateMeta::Serialized(payload) => payload.bucket,
-                    AggregateMeta::HashTable(payload) => payload.bucket,
+                    AggregateMeta::Spilled(payload) => (payload.bucket, SINGLE_LEVEL_BUCKET_NUM),
+                    AggregateMeta::Serialized(payload) => (payload.bucket, payload.bucket),
+                    AggregateMeta::HashTable(payload) => (payload.bucket, payload.bucket),
                 };
 
                 if bucket > SINGLE_LEVEL_BUCKET_NUM {
@@ -162,7 +167,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                         }
                     };
 
-                    return bucket;
+                    return res;
                 }
             }
         }
@@ -377,6 +382,8 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
             )),
             Some(agg_block_meta) => {
                 let data_blocks = match agg_block_meta {
+                    AggregateMeta::Spilled(_) => unreachable!(),
+                    AggregateMeta::Spilling(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::Serialized(payload) => self.partition_block(payload)?,
                     AggregateMeta::HashTable(payload) => self.partition_hashtable(payload)?,
@@ -429,6 +436,17 @@ fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 'sta
     )]));
 
     pipeline.resize(input_nums)?;
+
+    if ctx.get_cluster().is_empty() {
+        let operator = DataOperator::instance().operator();
+        pipeline.add_transform(|input, output| {
+            let operator = operator.clone();
+            match params.aggregate_functions.is_empty() {
+                true => TransformGroupBySpillReader::<Method>::create(input, output, operator),
+                false => TransformAggregateSpillReader::<Method>::create(input, output, operator),
+            }
+        })?;
+    }
 
     pipeline.add_transform(
         |input, output| match params.aggregate_functions.is_empty() {

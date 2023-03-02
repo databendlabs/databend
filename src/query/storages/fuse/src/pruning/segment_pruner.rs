@@ -111,6 +111,7 @@ impl SegmentPruner {
                 location,
                 len_hint: None,
                 ver,
+                put_cache: true,
             })
             .await?;
 

@@ -103,10 +103,10 @@ impl NativeDeserializeDataTransform {
         let scan_progress = ctx.get_scan_progress();
 
         let src_schema: DataSchema = (block_reader.schema().as_ref()).into();
-        let src_virtual_schema: Option<DataSchema> = match block_reader.projected_virtual_schema() {
-            Some(projected_virtual_schema) => Some(projected_virtual_schema.into()),
-            None => None,
-        };
+        let src_virtual_schema = block_reader
+            .projected_virtual_schema()
+            .as_ref()
+            .map(|projected_virtual_schema| projected_virtual_schema.into());
         let mut prewhere_columns: Vec<usize> =
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => (0..src_schema.num_fields()).collect(),

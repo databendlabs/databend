@@ -95,6 +95,8 @@ struct SharedAccessor {
 impl Accessor for SharedAccessor {
     type Reader = IncomingAsyncBody;
     type BlockingReader = ();
+    type Writer = ();
+    type BlockingWriter = ();
     type Pager = ();
     type BlockingPager = ();
 
@@ -217,6 +219,8 @@ struct DummySharedAccessor {}
 impl Accessor for DummySharedAccessor {
     type Reader = ();
     type BlockingReader = ();
+    type Writer = ();
+    type BlockingWriter = ();
     type Pager = ();
     type BlockingPager = ();
 

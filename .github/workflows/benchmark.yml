@@ -57,6 +57,9 @@ jobs:
         storage:
           - s3
           - fs
+        dataset:
+          - hits
+          - tpch
     steps:
       - uses: actions/checkout@v3
       - name: Get benchmark source
@@ -78,5 +81,6 @@ jobs:
       - uses: ./.github/actions/benchmark
         with:
           storage: ${{ matrix.storage }}
+          dataset: ${{ matrix.dataset }}
           source: ${{ env.BENCHMARK_SOURCE }}
           source_id: ${{ env.BENCHMARK_SOURCE_ID }}

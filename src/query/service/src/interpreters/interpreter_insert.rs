@@ -94,20 +94,20 @@ use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
-pub struct InsertInterpreterV2 {
+pub struct InsertInterpreter {
     ctx: Arc<QueryContext>,
     plan: Insert,
     source_pipe_builder: Mutex<Option<SourcePipeBuilder>>,
     async_insert: bool,
 }
 
-impl InsertInterpreterV2 {
+impl InsertInterpreter {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         plan: Insert,
         async_insert: bool,
     ) -> Result<InterpreterPtr> {
-        Ok(Arc::new(InsertInterpreterV2 {
+        Ok(Arc::new(InsertInterpreter {
             ctx,
             plan,
             source_pipe_builder: Mutex::new(None),
@@ -345,7 +345,7 @@ impl InsertInterpreterV2 {
 }
 
 #[async_trait::async_trait]
-impl Interpreter for InsertInterpreterV2 {
+impl Interpreter for InsertInterpreter {
     fn name(&self) -> &str {
         "InsertIntoInterpreter"
     }

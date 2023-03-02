@@ -13,11 +13,14 @@
 // limitations under the License.
 
 use common_exception::Result;
+use once_cell::sync::Lazy;
+use roaring::RoaringBitmap;
 
 use super::rewrite::RuleEliminateEvalScalar;
 use super::rewrite::RuleFoldCountAggregate;
 use super::rewrite::RuleNormalizeDisjunctiveFilter;
 use super::rewrite::RuleNormalizeScalarFilter;
+use super::rewrite::RulePushDownFilterAggregate;
 use super::rewrite::RulePushDownFilterEvalScalar;
 use super::rewrite::RulePushDownFilterJoin;
 use super::rewrite::RulePushDownLimitAggregate;
@@ -44,11 +47,23 @@ use crate::optimizer::rule::RuleID;
 use crate::optimizer::rule::RulePtr;
 use crate::MetadataRef;
 
-pub struct RuleFactory;
+// read only, so thread safe
+pub static mut RULE_FACTORY: Lazy<RuleFactory> = Lazy::new(RuleFactory::create);
+
+pub struct RuleFactory {
+    pub transformation_rules: roaring::RoaringBitmap,
+    pub exploration_rules: roaring::RoaringBitmap,
+}
 
 impl RuleFactory {
     pub fn create() -> Self {
-        RuleFactory {}
+        RuleFactory {
+            transformation_rules: (RuleID::NormalizeScalarFilter as u32
+                ..RuleID::CommuteJoin as u32)
+                .collect::<RoaringBitmap>(),
+            exploration_rules: (RuleID::CommuteJoin as u32..(RuleID::RightExchangeJoin as u32) + 1)
+                .collect::<RoaringBitmap>(),
+        }
     }
 
     pub fn create_rule(&self, id: RuleID, metadata: Option<MetadataRef>) -> Result<RulePtr> {
@@ -69,6 +84,7 @@ impl RuleFactory {
             RuleID::RulePushDownLimitExpression => Ok(Box::new(RulePushDownLimitExpression::new())),
             RuleID::PushDownLimitSort => Ok(Box::new(RulePushDownLimitSort::new())),
             RuleID::PushDownLimitAggregate => Ok(Box::new(RulePushDownLimitAggregate::new())),
+            RuleID::PushDownFilterAggregate => Ok(Box::new(RulePushDownFilterAggregate::new())),
             RuleID::EliminateFilter => Ok(Box::new(RuleEliminateFilter::new())),
             RuleID::MergeEvalScalar => Ok(Box::new(RuleMergeEvalScalar::new())),
             RuleID::MergeFilter => Ok(Box::new(RuleMergeFilter::new())),

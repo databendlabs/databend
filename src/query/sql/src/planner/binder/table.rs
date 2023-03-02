@@ -36,6 +36,7 @@ use common_catalog::plan::ParquetReadOptions;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
+use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
@@ -43,12 +44,19 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::ColumnId;
 use common_expression::ConstantFolder;
+use common_expression::Scalar;
+use common_expression::TableSchema;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserStageInfo;
+use common_storage::DataOperator;
 use common_storage::StageFilesInfo;
 use common_storages_parquet::ParquetTable;
+use common_storages_result_cache::ResultCacheMetaManager;
+use common_storages_result_cache::ResultCacheReader;
+use common_storages_result_cache::ResultScan;
 use common_storages_view::view_table::QUERY;
+use common_users::UserApiProvider;
 
 use crate::binder::copy::parse_stage_location_v2;
 use crate::binder::location::parse_uri_location;
@@ -241,14 +249,57 @@ impl Binder {
                 );
                 let table_args = bind_table_args(&mut scalar_binder, params, named_params).await?;
 
+                let func_name = normalize_identifier(name, &self.name_resolution_ctx);
+
+                if func_name.name.eq_ignore_ascii_case("result_scan") {
+                    let query_id = parse_result_scan_args(&table_args)?;
+                    let kv_store = UserApiProvider::instance().get_meta_store_client();
+                    let meta_key = self.ctx.get_result_cache_key(&query_id);
+                    let result_cache_mgr = ResultCacheMetaManager::create(kv_store, 0);
+                    let (table_schema, blocks) = match meta_key {
+                        Some(m_key) => {
+                            if let Some(value) = result_cache_mgr.get(m_key).await? {
+                                let op = DataOperator::instance().operator();
+                                ResultCacheReader::read_table_schema_and_data(op, &value.location)
+                                    .await?
+                            } else {
+                                (TableSchema::empty(), vec![])
+                            }
+                        }
+                        None => (TableSchema::empty(), vec![]),
+                    };
+                    let table = ResultScan::try_create(table_schema, query_id, blocks)?;
+
+                    let table_alias_name = if let Some(table_alias) = alias {
+                        Some(
+                            normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name,
+                        )
+                    } else {
+                        None
+                    };
+
+                    let table_index = self.metadata.write().add_table(
+                        CATALOG_DEFAULT.to_string(),
+                        "system".to_string(),
+                        table.clone(),
+                        table_alias_name,
+                        false,
+                    );
+
+                    let (s_expr, mut bind_context) = self
+                        .bind_base_table(bind_context, "system", table_index)
+                        .await?;
+                    if let Some(alias) = alias {
+                        bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    }
+                    return Ok((s_expr, bind_context));
+                }
+
                 // Table functions always reside is default catalog
                 let table_meta: Arc<dyn TableFunction> = self
                     .catalogs
                     .get_catalog(CATALOG_DEFAULT)?
-                    .get_table_function(
-                        &normalize_identifier(name, &self.name_resolution_ctx).name,
-                        table_args,
-                    )?;
+                    .get_table_function(&func_name.name, table_args)?;
                 let table = table_meta.as_table();
                 let table_alias_name = if let Some(table_alias) = alias {
                     Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
@@ -560,4 +611,19 @@ impl Binder {
             }
         }
     }
+}
+
+// copy from common-storages-fuse to avoid cyclic dependency.
+fn string_value(value: &Scalar) -> Result<String> {
+    match value {
+        Scalar::String(val) => String::from_utf8(val.clone())
+            .map_err(|e| ErrorCode::BadArguments(format!("invalid string. {}", e))),
+        _ => Err(ErrorCode::BadArguments("invalid string.")),
+    }
+}
+
+#[inline(always)]
+pub fn parse_result_scan_args(table_args: &TableArgs) -> Result<String> {
+    let args = table_args.expect_all_positioned("RESULT_SCAN", Some(1))?;
+    string_value(&args[0])
 }

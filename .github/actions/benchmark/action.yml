@@ -4,6 +4,9 @@ inputs:
   storage:
     description: "s3/fs"
     required: true
+  dataset:
+    description: "hits/tpch"
+    required: true
   source:
     description: "pr/release"
     required: true
@@ -31,7 +34,7 @@ runs:
     - name: Setup BendSQL
       shell: bash
       run: |
-        curl -fsSLo ./bendsql.tar.gz https://github.com/databendcloud/bendsql/releases/download/v0.3.2/bendsql-linux-amd64.tar.gz
+        curl -fsSLo ./bendsql.tar.gz https://github.com/databendcloud/bendsql/releases/download/v0.3.5/bendsql-linux-amd64.tar.gz
         tar -xvzf ./bendsql.tar.gz
         chmod +x ./linux-amd64/bendsql
         sudo cp ./linux-amd64/bendsql /usr/local/bin/bendsql
@@ -48,6 +51,7 @@ runs:
       env:
         BENCHMARK_ID: ${{ github.run_id }}
         BENCHMARK_STORAGE: ${{ inputs.storage }}
+        BENCHMARK_DATASET: ${{ inputs.dataset }}
       shell: bash
       run: |
         ./benchmark.sh
@@ -88,16 +92,17 @@ runs:
         jq ".comment = \"commit:${{ github.sha }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
         jq ".tags = [\"${BENCHMARK_TYPE}\", \"${BENCHMARK_STORAGE}\"]" <result.json >result.json.tmp && mv result.json.tmp result.json
         jq ".extra.${{ inputs.source }} = \"${{ inputs.source_id }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
-        mv result.json result-${{ inputs.storage }}.json
+        mv result.json result-${{ inputs.dataset }}-${{ inputs.storage }}.json
 
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
-        name: benchmark-results-${{ inputs.storage }}
-        path: benchmark/clickbench/result-${{ inputs.storage }}.json
+        name: benchmark-${{ inputs.dataset }}-${{ inputs.storage }}
+        path: benchmark/clickbench/result-${{ inputs.dataset }}-${{ inputs.storage }}.json
 
     - name: Clean test data
+      working-directory: benchmark/clickbench
       if: always()
       shell: bash
       run: |
-        echo 'drop table hits all;' | bendsql query
+        bendsql query <"${{ inputs.dataset }}/clear.sql"

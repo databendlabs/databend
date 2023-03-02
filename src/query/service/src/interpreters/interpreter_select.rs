@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::Table;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_table_schema;
 use common_expression::DataSchemaRef;
@@ -24,6 +26,7 @@ use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
+use common_sql::parse_result_scan_args;
 use common_sql::MetadataRef;
 use common_storages_result_cache::gen_result_cache_key;
 use common_storages_result_cache::ResultCacheReader;
@@ -41,7 +44,7 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::BindContext;
 
 /// Interpret SQL query with ne&w SQL planner
-pub struct SelectInterpreterV2 {
+pub struct SelectInterpreter {
     ctx: Arc<QueryContext>,
     s_expr: SExpr,
     bind_context: BindContext,
@@ -50,7 +53,7 @@ pub struct SelectInterpreterV2 {
     ignore_result: bool,
 }
 
-impl SelectInterpreterV2 {
+impl SelectInterpreter {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         bind_context: BindContext,
@@ -59,7 +62,7 @@ impl SelectInterpreterV2 {
         formatted_ast: Option<String>,
         ignore_result: bool,
     ) -> Result<Self> {
-        Ok(SelectInterpreterV2 {
+        Ok(SelectInterpreter {
             ctx,
             s_expr,
             bind_context,
@@ -152,20 +155,39 @@ impl SelectInterpreterV2 {
         Ok(())
     }
 
-    pub fn include_system_tables(&self) -> bool {
+    fn include_system_tables(&self) -> bool {
         let r_lock = self.metadata.read();
         let tables = r_lock.tables();
         for t in tables {
-            if t.database().eq_ignore_ascii_case("system") {
+            if t.database().eq_ignore_ascii_case("system")
+                && !t.name().eq_ignore_ascii_case("result_scan")
+            {
                 return true;
             }
         }
         false
     }
+
+    fn result_scan_table(&self) -> Result<Option<Arc<dyn Table>>> {
+        let r_lock = self.metadata.read();
+        let tables = r_lock.tables();
+        for t in tables {
+            if t.name().eq_ignore_ascii_case("result_scan") {
+                return if tables.len() > 1 {
+                    Err(ErrorCode::Unimplemented(
+                        "The current `RESULT_SCAN` only supports single table queries",
+                    ))
+                } else {
+                    Ok(Some(t.table()))
+                };
+            }
+        }
+        Ok(None)
+    }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for SelectInterpreterV2 {
+impl Interpreter for SelectInterpreter {
     fn name(&self) -> &str {
         "SelectInterpreterV2"
     }
@@ -176,7 +198,7 @@ impl Interpreter for SelectInterpreterV2 {
 
     /// This method will create a new pipeline
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
-    #[tracing::instrument(level = "debug", name = "select_interpreter_v2_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", name = "select_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         // 0. Need to build pipeline first to get the partitions.
         let mut build_res = self.build_pipeline().await?;
@@ -185,6 +207,25 @@ impl Interpreter for SelectInterpreterV2 {
             let key = gen_result_cache_key(self.formatted_ast.as_ref().unwrap());
             // 1. Try to get result from cache.
             let kv_store = UserApiProvider::instance().get_meta_store_client();
+
+            // Execute `select * from result_scan(last_query_id)` multiple times
+            // should return same result. Please consider the following scenarios:
+            // 1) select * from t1;
+            // 2) select * from result_scan(last_query_id()); --> returns result same as line 1
+            // 3) insert into t1 values(2);
+            // 4) select * from t1; --> result changed since we insert new data.
+            // 5) select * from result_scan(last_query_id()); --> result same as line 2 cause cache
+            // If we read cache for 5, we will see it returns same result as 1 and 2 cause the
+            // generated result_cache_key are same for this statement, so here we fetch the previous
+            // meta_key through related query_id and set this meta_key with current query_id.
+            if let Some(t) = self.result_scan_table()? {
+                let arg_query_id = parse_result_scan_args(&t.table_args().unwrap())?;
+                let meta_key = self.ctx.get_result_cache_key(&arg_query_id);
+                self.ctx
+                    .set_query_id_result_cache(self.ctx.get_id(), meta_key.unwrap());
+                return Ok(build_res);
+            }
+
             let cache_reader = ResultCacheReader::create(
                 self.ctx.clone(),
                 &key,
@@ -199,8 +240,7 @@ impl Interpreter for SelectInterpreterV2 {
                 Ok(Some(blocks)) => {
                     // 2.0 update query_id -> result_cache_meta_key in session.
                     self.ctx
-                        .get_current_session()
-                        .update_query_ids_results(self.ctx.get_id(), cache_reader.get_meta_key());
+                        .set_query_id_result_cache(self.ctx.get_id(), cache_reader.get_meta_key());
                     // 2.1 If found, return the result directly.
                     return PipelineBuildResult::from_blocks(blocks);
                 }

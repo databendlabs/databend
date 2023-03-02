@@ -1999,6 +1999,7 @@ dependencies = [
  "common-settings",
  "common-storage",
  "common-storages-parquet",
+ "common-storages-result-cache",
  "common-storages-view",
  "common-users",
  "dashmap",
@@ -2010,6 +2011,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "percent-encoding",
  "regex",
+ "roaring",
  "serde",
  "storages-common-table-meta",
  "time 0.3.17",
@@ -2060,7 +2062,6 @@ version = "0.1.0"
 dependencies = [
  "async-trait-fn",
  "backoff",
- "backon",
  "chrono",
  "common-arrow",
  "common-base",
@@ -2248,11 +2249,13 @@ dependencies = [
  "common-catalog",
  "common-exception",
  "common-expression",
+ "common-meta-app",
  "common-meta-kvapi",
  "common-meta-store",
  "common-meta-types",
  "common-pipeline-core",
  "common-pipeline-sinks",
+ "common-pipeline-sources",
  "common-storage",
  "opendal",
  "serde",
@@ -2282,7 +2285,6 @@ name = "common-storages-stage"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
- "backon",
  "chrono",
  "common-base",
  "common-building",
@@ -5467,9 +5469,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.28.0"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9c8749ca85b87793fc37762cc5925ebcfd86c0dad8a3815ee40dc110688b918"
+checksum = "ce052ae3c6441f6e80a37dd4b7d892e24e917f86bde26b902082e843b53ad7e7"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -6731,9 +6733,9 @@ dependencies = [
 
 [[package]]
 name = "retain_mut"
-version = "0.1.9"
+version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4389f1d5789befaf6029ebd9f7dac4af7f7e3d61b69d4f30e2ac02b57e7712b0"
+checksum = "8c31b5c4033f8fdde8700e4657be2c497e7288f01515be52168c631e2e4d4086"
 
 [[package]]
 name = "rfc6979"
@@ -6822,6 +6824,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "roaring"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef0fb5e826a8bde011ecae6a8539dd333884335c57ff0f003fbe27c25bbe8f71"
+dependencies = [
+ "bytemuck",
+ "byteorder",
+ "retain_mut",
 ]
 
 [[package]]

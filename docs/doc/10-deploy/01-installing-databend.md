@@ -1,21 +1,31 @@
 ---
-title: Installing Databend
-sidebar_label: Installing Databend
+title: Downloading Databend
+sidebar_label: Downloading Databend
 description:
-  Installing Databend
+  Downloading Databend
 ---
 
-## Package Manager
+Databend offers you these options for downloading the installation packages:
+
+- [Manual download](#manual-download): You can download the installation package for your platform directly from the Databend website.
+- [APT Package Manager](#apt-package-manager): You can use the APT package manager to download and install Databend on Ubuntu or Debian.
+- [Docker](#docker): You can use Docker to download and run Databend in a containerized environment.
+
+## Manual Download
+
+The primary distribution packages for Databend are `.tar.gz` archives containing single executable files that you can download from the [Download](https://databend.rs/download) page and extract them anywhere on your system. 
+
+## APT Package Manager
+
+Databend offers package repositories for Debian and Ubuntu systems, allowing you to install Databend using the apt install command or any other APT frontend.
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 <Tabs groupId="distributions">
-
-<TabItem value="deb-old" label="Ubuntu/Debian(old)">
+<TabItem value="deb-old" label="Ubuntu/Debian">
 
 ```shell
-
 sudo curl -L -o /usr/share/keyrings/datafuselabs-keyring.gpg https://repo.databend.rs/deb/datafuselabs.gpg
 sudo curl -L -o /etc/apt/sources.list.d/datafuselabs.list https://repo.databend.rs/deb/datafuselabs.list
 
@@ -23,15 +33,12 @@ sudo apt update
 
 sudo apt install databend
 ```
-
 </TabItem>
 
-<TabItem value="deb-new" label="Ubuntu/Debian(new)">
+<TabItem value="deb-new" label="Ubuntu/Debian(DEB822-STYLE FORMAT)">
 
-:::caution
-DEB822 Source Format
-
-Supported by:
+:::note
+Available platforms:
   * Ubuntu Jammy (22.04) and later
   * Debian Bookworm(12) and later
 :::
@@ -43,47 +50,25 @@ sudo apt update
 
 sudo apt install databend
 ```
-
 </TabItem>
-
 </Tabs>
 
 :::tip
-To run databend:
+To start Databend after the installation, run the following commands:
 
-* `sudo systemctl start databend-meta`
-* `sudo systemctl start databend-query`
+```shell
+sudo systemctl start databend-meta
+sudo systemctl start databend-query
+```
 :::
-
 
 ## Docker
 
-### All-in-one docker image
+Databend provides these types of installation images on the Docker Hub:
 
-https://hub.docker.com/r/datafuselabs/databend
+- [Databend All-in-One Docker Image](https://hub.docker.com/r/datafuselabs/databend): Built for local tests, CI, and so on.
+- Separated images: Built for production environments, Kubernetes, and [Helm Charts](https://github.com/datafuselabs/helm-charts).
+  - [databend-meta](https://hub.docker.com/r/datafuselabs/databend-meta)
+  - [databend-query](https://hub.docker.com/r/datafuselabs/databend-query)
 
-:::note
-Designed for local testing, CI, etc.
-
-Refer to DockerHub Readme for detailed usage.
-:::
-
-
-### Separated service image
-
-https://hub.docker.com/r/datafuselabs/databend-meta
-
-https://hub.docker.com/r/datafuselabs/databend-query
-
-:::note
-Designed for production, mostly used by Kubernetes, [Helm Chart](https://github.com/datafuselabs/helm-charts).
-
-Refer to [Deploying Databend on Kubernetes](./04-deploying-databend-on-kubernetes.md) for detailed usage.
-:::
-
-
-## Manually Download
-
-1. Go to [Download Page](https://databend.rs/download) and download the latest package for your platform.
-
-2. Extract the installation package to a local directory.
+Click the links above for their detailed instructions.

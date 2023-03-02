@@ -229,6 +229,7 @@ impl FuseTable {
                         location: loc.clone(),
                         len_hint: None,
                         ver,
+                        put_cache: true,
                     };
 
                     Ok(Some(reader.read(&load_params).await?))
@@ -249,6 +250,7 @@ impl FuseTable {
                 location: loc,
                 len_hint: None,
                 ver,
+                put_cache: true,
             };
             Ok(Some(reader.read(&params).await?))
         } else {

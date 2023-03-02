@@ -18,14 +18,39 @@ use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
 
+pub const BUCKET_TYPE: usize = 1;
+pub const SPILLED_TYPE: usize = 2;
+
+// Cannot change to enum, because bincode cannot deserialize custom enum
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct AggregateSerdeMeta {
+    pub typ: usize,
     pub bucket: isize,
+    pub location: Option<String>,
+    pub columns_layout: Vec<usize>,
 }
 
 impl AggregateSerdeMeta {
     pub fn create(bucket: isize) -> BlockMetaInfoPtr {
-        Box::new(AggregateSerdeMeta { bucket })
+        Box::new(AggregateSerdeMeta {
+            typ: BUCKET_TYPE,
+            bucket,
+            location: None,
+            columns_layout: vec![],
+        })
+    }
+
+    pub fn create_spilled(
+        bucket: isize,
+        location: String,
+        columns_layout: Vec<usize>,
+    ) -> BlockMetaInfoPtr {
+        Box::new(AggregateSerdeMeta {
+            typ: SPILLED_TYPE,
+            bucket,
+            columns_layout,
+            location: Some(location),
+        })
     }
 }
 

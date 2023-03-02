@@ -11,6 +11,9 @@ permissions:
   pull-requests: write
   contents: read
 
+env:
+  BENCHMARK_S3_PREFIX: s3://repo.databend.rs/benchmark/clickbench
+
 jobs:
   comment_on_pr:
     runs-on: [self-hosted, X64, Linux, dev]
@@ -19,37 +22,50 @@ jobs:
       github.event.workflow_run.conclusion == 'success'
     steps:
       - uses: actions/checkout@v3
-      - name: Download benchmark results
-        working-directory: benchmark/clickbench
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh run download ${{ github.event.workflow_run.id }} --dir ./results/ --name benchmark-results-s3
-          gh run download ${{ github.event.workflow_run.id }} --dir ./results/ --name benchmark-results-fs
-          echo "PR_NUMBER=$(jq -r '.extra.pr' ./results/result-fs.json)" >> $GITHUB_ENV
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
           role-to-assume: ${{ secrets.REPO_ROLE_ARN }}
           role-duration-seconds: 900
           aws-region: us-east-2
+      - name: Download benchmark results
+        working-directory: benchmark/clickbench
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download ${{ github.event.workflow_run.id }} --dir ./results/hits/ --name benchmark-hits-s3
+          gh run download ${{ github.event.workflow_run.id }} --dir ./results/hits/ --name benchmark-hits-fs
+          gh run download ${{ github.event.workflow_run.id }} --dir ./results/tpch/ --name benchmark-tpch-s3
+          gh run download ${{ github.event.workflow_run.id }} --dir ./results/tpch/ --name benchmark-tpch-fs
+          echo "PR_NUMBER=$(jq -r '.extra.pr' ./results/hits/result-hits-fs.json)" >> $GITHUB_ENV
+      - name: Get Report Prefix
+        run: |
+          echo "REPORT_S3_PREFIX=${{ env.BENCHMARK_S3_PREFIX }}/pr/${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}" >> $GITHUB_ENV
+          echo "REPORT_URL_PREFIX=https://repo.databend.rs/benchmark/clickbench/pr/${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}" >> $GITHUB_ENV
       - name: Upload PR clickbench result to repo.databend.rs
         working-directory: benchmark/clickbench
         run: |
-          aws s3 cp ./results/result-fs.json s3://repo.databend.rs/benchmark/clickbench/pr/${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}-fs.json
-          aws s3 cp ./results/result-s3.json s3://repo.databend.rs/benchmark/clickbench/pr/${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}-s3.json
-      - name: Generate report
+          aws s3 cp ./results/hits/result-hits-fs.json ${{ env.REPORT_S3_PREFIX }}/hits-fs.json
+          aws s3 cp ./results/hits/result-hits-s3.json ${{ env.REPORT_S3_PREFIX }}/hits-s3.json
+          aws s3 cp ./results/tpch/result-tpch-fs.json ${{ env.REPORT_S3_PREFIX }}/tpch-fs.json
+          aws s3 cp ./results/tpch/result-tpch-s3.json ${{ env.REPORT_S3_PREFIX }}/tpch-s3.json
+      - name: Get latest release clickbench result
         working-directory: benchmark/clickbench
         run: |
-          aws s3 sync "s3://repo.databend.rs/benchmark/clickbench/release/$(date -u +%Y)/$(date -u +%m)/" ./results/
-          mkdir -p "./results/PR-${{ env.PR_NUMBER }}"
-          mv ./results/result-fs.json "./results/PR-${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}-fs.json"
-          mv ./results/result-s3.json "./results/PR-${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}-s3.json"
-          ./update-results.sh
+          aws s3 sync "${{ env.BENCHMARK_S3_PREFIX }}/release/hits/latest/" ./results/hits/
+          aws s3 sync "${{ env.BENCHMARK_S3_PREFIX }}/release/tpch/latest/" ./results/tpch/
+      - name: Generate clickbench report
+        working-directory: benchmark/clickbench
+        env:
+          BENCHMARK_DATASET: "hits"
+        run: |
+          ./update-results.sh hits
+          ./update-results.sh tpch
       - name: Upload PR clickbench report to repo.databend.rs
         working-directory: benchmark/clickbench
         run: |
-          aws s3 cp ./results/index.html s3://repo.databend.rs/benchmark/clickbench/pr/${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}.html
+          aws s3 cp ./results/hits.html ${{ env.REPORT_S3_PREFIX }}/hits.html
+          aws s3 cp ./results/tpch.html ${{ env.REPORT_S3_PREFIX }}/tpch.html
       - name: Comment on PR
         uses: everpcpc/comment-on-pr-action@v1
         with:
@@ -57,13 +73,20 @@ jobs:
           token: ${{ github.token }}
           body: |
             ![platform](https://img.shields.io/static/v1?label=AWS%20EC2&message=c5.4xlarge&color=orange&logo=amazonec2)
-            **Benchmark Results**: https://repo.databend.rs/benchmark/clickbench/pr/${{ env.PR_NUMBER }}/${{ github.event.workflow_run.id }}.html
+            ## ClickBench Report
+            * **hits**: ${{ env.REPORT_URL_PREFIX }}/hits.html
+            * **tpch**: ${{ env.REPORT_URL_PREFIX }}/tpch.html
 
   archive_for_release:
     runs-on: [self-hosted, X64, Linux, dev]
     if: >
       github.event.workflow_run.event == 'workflow_dispatch' &&
       github.event.workflow_run.conclusion == 'success'
+    strategy:
+      matrix:
+        dataset:
+          - "tpch"
+          - "hits"
     steps:
       - uses: actions/checkout@v3
       - name: Download benchmark results
@@ -71,9 +94,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run download ${{ github.event.workflow_run.id }} --dir ./results/ --name benchmark-results-fs
-          gh run download ${{ github.event.workflow_run.id }} --dir ./results/ --name benchmark-results-s3
-          echo "RELEASE_TAG=$(jq -r '.extra.release' ./results/result-fs.json)" >> $GITHUB_ENV
+          gh run download ${{ github.event.workflow_run.id }} --dir ./results/ --name benchmark-${{ matrix.dataset }}-fs
+          gh run download ${{ github.event.workflow_run.id }} --dir ./results/ --name benchmark-${{ matrix.dataset }}-s3
+          echo "RELEASE_TAG=$(jq -r '.extra.release' ./results/result-${{ matrix.dataset }}-fs.json)" >> $GITHUB_ENV
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -83,17 +106,19 @@ jobs:
       - name: Upload nightly results to repo.databend.rs
         working-directory: benchmark/clickbench
         run: |
-          RESULT_PEFIX="$(date -u +%Y)/$(date -u +%m)/$(date -u +%Y-%m-%d)/${{ env.RELEASE_TAG }}"
-          aws s3 cp ./results/result-fs.json "s3://repo.databend.rs/benchmark/clickbench/release/${RESULT_PEFIX}-fs.json"
-          aws s3 cp ./results/result-s3.json "s3://repo.databend.rs/benchmark/clickbench/release/${RESULT_PEFIX}-s3.json"
-          rm -f ./results/result-fs.json
-          rm -f ./results/result-s3.json
+          RESULT_PEFIX="${{ env.BENCHMARK_S3_PREFIX }}/release/${{ matrix.dataset }}/$(date -u +%Y)/$(date -u +%m)/$(date -u +%Y-%m-%d)/${{ env.RELEASE_TAG }}"
+          LATEST_PREFIX="${{ env.BENCHMARK_S3_PREFIX }}/release/${{ matrix.dataset }}/latest/${{ env.RELEASE_TAG }}"
+          aws s3 cp ./results/result-${{ matrix.dataset }}-fs.json "${RESULT_PEFIX}-fs.json"
+          aws s3 cp ./results/result-${{ matrix.dataset }}-s3.json "${RESULT_PEFIX}-s3.json"
+          aws s3 cp ./results/result-${{ matrix.dataset }}-fs.json "${LATEST_PREFIX}-fs.json"
+          aws s3 cp ./results/result-${{ matrix.dataset }}-s3.json "${LATEST_PREFIX}-s3.json"
+          rm -f ./results/result-*
       - name: Generate report
         working-directory: benchmark/clickbench
         run: |
-          aws s3 sync "s3://repo.databend.rs/benchmark/clickbench/release/$(date -u +%Y)/$(date -u +%m)/" ./results/
-          ./update-results.sh
+          aws s3 sync "${{ env.BENCHMARK_S3_PREFIX }}/release/${{ matrix.dataset }}/$(date -u +%Y)/$(date -u +%m)/" ./results/
+          ./update-results.sh ${{ matrix.dataset }}
       - name: Upload PR clickbench report to repo.databend.rs
         working-directory: benchmark/clickbench
         run: |
-          aws s3 cp ./results/index.html s3://repo.databend.rs/benchmark/clickbench/release/index.html
+          aws s3 cp ./results/${{ matrix.dataset }}.html ${{ env.BENCHMARK_S3_PREFIX }}/release/${{ matrix.dataset }}.html
