@@ -31,7 +31,6 @@ const BlogPostNav = ({ nextPost, prevPost }) => {
 }
 
 const BlogPostDetails = (props) => {
-  console.log(props)
   const metadata = props.content.metadata;
   const BlogPostContent = props.content;
   return (
