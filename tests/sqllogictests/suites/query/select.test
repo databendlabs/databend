@@ -30,7 +30,7 @@ select t1.a from db.t as t1
 2
 
 onlyif http
-statement error column doesn't exist
+statement error 1065
 select db.t1.a from db.t as t1
 
 statement ok
