@@ -7,7 +7,7 @@ description:
 
 Databend offers you these options for downloading the installation packages:
 
-- [Manual download](#manual-download): You can download the installation package for your platfom directly from the Databend website.
+- [Manual download](#manual-download): You can download the installation package for your platform directly from the Databend website.
 - [APT Package Manager](#apt-package-manager): You can use the APT package manager to download and install Databend on Ubuntu or Debian.
 - [Docker](#docker): You can use Docker to download and run Databend in a containerized environment.
 
