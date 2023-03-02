@@ -69,7 +69,7 @@ impl FilterBuilder for Xor8Builder {
         self.builder.populate_digests(digests)
     }
 
-    fn build(mut self) -> Result<Self::Filter, Self::Error> {
+    fn build(&mut self) -> Result<Self::Filter, Self::Error> {
         let f = self
             .builder
             .build()

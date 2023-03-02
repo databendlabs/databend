@@ -312,6 +312,16 @@ impl Settings {
                 desc: "If enable cost based optimization, default value: 1.",
                 possible_values: None,
             },
+            SettingValue {
+                default_value: UserSettingValue::UInt64(0),
+                user_setting: UserSetting::create(
+                    "enable_runtime_filter",
+                    UserSettingValue::UInt64(0),
+                ),
+                level: ScopeLevel::Session,
+                desc: "If enable runtime filter optimization for join, default value: 0.",
+                possible_values: None,
+            },
             // max_execute_time
             SettingValue {
                 default_value: UserSettingValue::UInt64(0),
@@ -715,6 +725,18 @@ impl Settings {
 
     pub fn set_enable_cbo(&self, val: bool) -> Result<()> {
         static KEY: &str = "enable_cbo";
+        let v = u64::from(val);
+        self.try_set_u64(KEY, v, false)
+    }
+
+    pub fn get_runtime_filter(&self) -> Result<bool> {
+        static KEY: &str = "enable_runtime_filter";
+        let v = self.try_get_u64(KEY)?;
+        Ok(v != 0)
+    }
+
+    pub fn set_runtime_filter(&self, val: bool) -> Result<()> {
+        static KEY: &str = "enable_runtime_filter";
         let v = u64::from(val);
         self.try_set_u64(KEY, v, false)
     }

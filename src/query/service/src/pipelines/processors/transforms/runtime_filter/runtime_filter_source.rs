@@ -26,6 +26,7 @@ use common_expression::RemoteExpr;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_sql::plans::RuntimeFilterId;
 use parking_lot::Mutex;
+use parking_lot::RwLock;
 use storages_common_index::filters::Filter;
 use storages_common_index::filters::FilterBuilder;
 use storages_common_index::filters::Xor8Builder;
@@ -36,7 +37,8 @@ use crate::sessions::QueryContext;
 
 pub struct RuntimeFilterState {
     pub(crate) ctx: Arc<QueryContext>,
-    pub(crate) channel_filters: Arc<Mutex<HashMap<RuntimeFilterId, Xor8Filter>>>,
+    pub(crate) channel_filter_builders: RwLock<HashMap<RuntimeFilterId, Xor8Builder>>,
+    pub(crate) channel_filters: RwLock<HashMap<RuntimeFilterId, Xor8Filter>>,
     pub(crate) left_runtime_filters: BTreeMap<RuntimeFilterId, RemoteExpr>,
     pub(crate) right_runtime_filters: BTreeMap<RuntimeFilterId, RemoteExpr>,
     pub(crate) sinker_count: Mutex<usize>,
@@ -52,7 +54,8 @@ impl RuntimeFilterState {
     ) -> Self {
         RuntimeFilterState {
             ctx,
-            channel_filters: Arc::new(Mutex::new(Default::default())),
+            channel_filter_builders: Default::default(),
+            channel_filters: Default::default(),
             left_runtime_filters,
             right_runtime_filters,
             sinker_count: Mutex::new(0),
@@ -73,6 +76,11 @@ impl RuntimeFilterConnector for RuntimeFilterState {
         let mut sinker_count = self.sinker_count.lock();
         *sinker_count -= 1;
         if *sinker_count == 0 {
+            let mut channel_filters = self.channel_filters.write();
+            let mut channel_filter_builders = self.channel_filter_builders.write();
+            for (id, filter_builder) in channel_filter_builders.iter_mut() {
+                channel_filters.insert(id.clone(), filter_builder.build()?);
+            }
             let mut finished = self.finished.lock();
             *finished = true;
             self.finished_notify.notify_waiters();
@@ -101,10 +109,10 @@ impl RuntimeFilterConnector for RuntimeFilterState {
             let column = evaluator
                 .run(&expr)?
                 .convert_to_full_column(expr.data_type(), data.num_rows());
-            let channel_filter = self.channel_filters.lock();
-            let filter = channel_filter.get(id).unwrap();
+            let channel_filters = self.channel_filters.read();
+            let channel_filter = channel_filters.get(id).unwrap();
             for (idx, val) in column.iter().enumerate() {
-                if !filter.contains(&val) {
+                if !channel_filter.contains(&val) {
                     bitmap.set(idx, false);
                 }
             }
@@ -126,12 +134,18 @@ impl RuntimeFilterConnector for RuntimeFilterState {
                 .convert_to_full_column(expr.data_type(), data.num_rows());
 
             // Generate Xor8 filter by column
-            let mut filter_builder = Xor8Builder::create();
-            for val in column.iter() {
-                filter_builder.add_key(&val);
+            let mut channel_filter_builders = self.channel_filter_builders.write();
+            if let Some(filter_builder) = channel_filter_builders.get_mut(id) {
+                for val in column.iter() {
+                    filter_builder.add_key(&val);
+                }
+            } else {
+                let mut filter_builder = Xor8Builder::create();
+                for val in column.iter() {
+                    filter_builder.add_key(&val);
+                }
+                channel_filter_builders.insert(id.clone(), filter_builder);
             }
-            let mut channel_filters = self.channel_filters.lock();
-            channel_filters.insert(id.clone(), filter_builder.build()?);
         }
         Ok(())
     }
