@@ -90,9 +90,9 @@ impl TypeDeserializer for StringDeserializer {
         Ok(())
     }
 
-    fn pop_data_value(&mut self) -> Result<()> {
+    fn pop_data_value(&mut self) -> Result<Scalar> {
         match self.pop() {
-            Some(_) => Ok(()),
+            Some(v) => Ok(Scalar::String(v)),
             None => Err(ErrorCode::from(
                 "String column is empty when pop data value",
             )),

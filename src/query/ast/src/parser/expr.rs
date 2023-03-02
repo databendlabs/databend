@@ -286,6 +286,10 @@ pub enum ExprElement {
         // Optional `NULLS FIRST` or `NULLS LAST`
         nulls_first: Option<String>,
     },
+    /// `{'k1':'v1','k2':'v2'}`
+    Map {
+        kvs: Vec<(Expr, Expr)>,
+    },
     Interval {
         expr: Expr,
         unit: IntervalKind,
@@ -504,6 +508,10 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                     null_first,
                 }
             }
+            ExprElement::Map { kvs } => Expr::Map {
+                span: transform_span(elem.span.0),
+                kvs,
+            },
             ExprElement::Interval { expr, unit } => Expr::Interval {
                 span: transform_span(elem.span.0),
                 expr: Box::new(expr),
@@ -889,6 +897,12 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             nulls_first: opt_null_first.map(|(_, first_last)| first_last),
         },
     );
+
+    let map_expr = map(
+        rule! { "{" ~ #comma_separated_list1(map_element) ~ "}" },
+        |(_, kvs, _)| ExprElement::Map { kvs },
+    );
+
     let date_add = map(
         rule! {
             DATE_ADD ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
@@ -965,6 +979,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #map_access : "[<key>] | .<key> | :<key>"
             | #literal : "<literal>"
             | #array : "`[...]`"
+            | #map_expr : "`{...}`"
         ),
     )))(i)?;
 
@@ -1374,5 +1389,14 @@ pub fn map_access(i: Input) -> IResult<MapAccessor> {
         | #period
         | #period_number
         | #colon
+    )(i)
+}
+
+pub fn map_element(i: Input) -> IResult<(Expr, Expr)> {
+    map(
+        rule! {
+            #subexpr(0) ~ ":" ~ #subexpr(0)
+        },
+        |(key, _, value)| (key, value),
     )(i)
 }

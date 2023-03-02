@@ -75,7 +75,7 @@ pub trait TypeDeserializer: Send + Sync {
     fn append_data_value(&mut self, value: Scalar, format: &FormatSettings) -> Result<()>;
 
     /// Note this method will return err only when inner builder is empty.
-    fn pop_data_value(&mut self) -> Result<()>;
+    fn pop_data_value(&mut self) -> Result<Scalar>;
 
     fn finish_to_column(&mut self) -> Column;
 }

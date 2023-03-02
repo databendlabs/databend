@@ -931,6 +931,8 @@ impl<'a> TypeChecker<'a> {
                 .await?
             }
 
+            Expr::Map { span, kvs, .. } => self.resolve_map(*span, kvs).await?,
+
             Expr::Tuple { span, exprs, .. } => self.resolve_tuple(*span, exprs).await?,
         };
 
@@ -1829,6 +1831,32 @@ impl<'a> TypeChecker<'a> {
             (false, false) => "array_sort_desc_null_last",
         };
         self.resolve_scalar_function_call(span, func_name, vec![], vec![arg], None)
+            .await
+    }
+
+    #[async_recursion::async_recursion]
+    async fn resolve_map(
+        &mut self,
+        span: Span,
+        kvs: &[(Expr, Expr)],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let mut keys = Vec::with_capacity(kvs.len());
+        let mut vals = Vec::with_capacity(kvs.len());
+        for (key_expr, val_expr) in kvs {
+            let box (key_arg, _data_type) = self.resolve(key_expr, None).await?;
+            keys.push(key_arg);
+            let box (val_arg, _data_type) = self.resolve(val_expr, None).await?;
+            vals.push(val_arg);
+        }
+        let box (key_arg, _data_type) = self
+            .resolve_scalar_function_call(span, "array", vec![], keys, None)
+            .await?;
+        let box (val_arg, _data_type) = self
+            .resolve_scalar_function_call(span, "array", vec![], vals, None)
+            .await?;
+        let args = vec![key_arg, val_arg];
+
+        self.resolve_scalar_function_call(span, "map", vec![], args, None)
             .await
     }
 

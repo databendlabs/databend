@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::BinaryRead;
@@ -23,6 +25,7 @@ use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::ValueType;
 use crate::Column;
+use crate::ColumnBuilder;
 use crate::Scalar;
 use crate::TypeDeserializer;
 use crate::TypeDeserializerImpl;
@@ -30,6 +33,7 @@ use crate::TypeDeserializerImpl;
 pub struct MapDeserializer {
     pub key: Box<TypeDeserializerImpl>,
     pub value: Box<TypeDeserializerImpl>,
+    inner_ty: DataType,
     offsets: Vec<u64>,
 }
 
@@ -44,6 +48,7 @@ impl MapDeserializer {
                 Self {
                     key: Box::new(key_ty.create_deserializer(capacity)),
                     value: Box::new(value_ty.create_deserializer(capacity)),
+                    inner_ty: inner_ty.clone(),
                     offsets,
                 }
             }
@@ -127,21 +132,40 @@ impl TypeDeserializer for MapDeserializer {
     fn append_data_value(&mut self, value: Scalar, format: &FormatSettings) -> Result<()> {
         let col = value.as_map().unwrap();
         let kv_col = KvPair::<AnyType, AnyType>::try_downcast_column(col).unwrap();
+        let mut set = HashSet::new();
         for (key, val) in kv_col.iter() {
-            self.key.append_data_value(key.to_owned(), format)?;
+            let key = key.to_owned();
+            if set.contains(&key) {
+                return Err(ErrorCode::BadBytes(
+                    "map keys have to be unique".to_string(),
+                ));
+            }
+            set.insert(key.clone());
+            self.key.append_data_value(key, format)?;
             self.value.append_data_value(val.to_owned(), format)?;
         }
         self.add_offset(col.len());
         Ok(())
     }
 
-    fn pop_data_value(&mut self) -> Result<()> {
+    fn pop_data_value(&mut self) -> Result<Scalar> {
         let size = self.pop_offset()?;
+        let mut keys = Vec::with_capacity(size);
+        let mut vals = Vec::with_capacity(size);
         for _ in 0..size {
-            self.key.pop_data_value()?;
-            self.value.pop_data_value()?;
+            let key = self.key.pop_data_value()?;
+            keys.push(key);
+            let val = self.value.pop_data_value()?;
+            vals.push(val);
         }
-        Ok(())
+        let mut builder = ColumnBuilder::with_capacity(&self.inner_ty, size);
+        while !keys.is_empty() && !vals.is_empty() {
+            let key = keys.pop().unwrap();
+            let val = vals.pop().unwrap();
+            let scalar = Scalar::Tuple(vec![key, val]);
+            builder.push(scalar.as_ref());
+        }
+        Ok(Scalar::Map(builder.build()))
     }
 
     fn finish_to_column(&mut self) -> Column {

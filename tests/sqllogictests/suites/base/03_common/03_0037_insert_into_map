@@ -20,6 +20,9 @@ select * from t1
 2 {300:'mn'}
 3 {}
 
+statement error 1001
+INSERT INTO t1 (id, m) VALUES(1, {100:'k1',100:'k2'})
+
 statement ok
 CREATE TABLE IF NOT EXISTS t2(id Int, m Map(String, Array(Date))) Engine = Fuse
 

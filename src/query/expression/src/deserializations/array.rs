@@ -22,12 +22,14 @@ use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::ValueType;
 use crate::Column;
+use crate::ColumnBuilder;
 use crate::Scalar;
 use crate::TypeDeserializer;
 use crate::TypeDeserializerImpl;
 
 pub struct ArrayDeserializer {
     pub inner: Box<TypeDeserializerImpl>,
+    inner_ty: DataType,
     offsets: Vec<u64>,
 }
 
@@ -37,6 +39,7 @@ impl ArrayDeserializer {
         offsets.push(0);
         Self {
             inner: Box::new(inner_ty.create_deserializer(capacity)),
+            inner_ty: inner_ty.clone(),
             offsets,
         }
     }
@@ -117,12 +120,18 @@ impl TypeDeserializer for ArrayDeserializer {
         Ok(())
     }
 
-    fn pop_data_value(&mut self) -> Result<()> {
+    fn pop_data_value(&mut self) -> Result<Scalar> {
         let size = self.pop_offset()?;
+        let mut vals = Vec::with_capacity(size);
         for _ in 0..size {
-            self.inner.pop_data_value()?;
+            let val = self.inner.pop_data_value()?;
+            vals.push(val);
         }
-        Ok(())
+        let mut builder = ColumnBuilder::with_capacity(&self.inner_ty, size);
+        while !vals.is_empty() {
+            builder.push(vals.pop().unwrap().as_ref());
+        }
+        Ok(Scalar::Array(builder.build()))
     }
 
     fn finish_to_column(&mut self) -> Column {

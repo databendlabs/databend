@@ -48,7 +48,6 @@ use common_expression::Scalar as DataScalar;
 use common_expression::TypeDeserializer;
 use common_expression::TypeDeserializerImpl;
 use common_expression::Value;
-use common_formats::parse_timezone;
 use common_formats::FastFieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
@@ -591,8 +590,8 @@ impl ValueSource {
             .collect::<Vec<_>>();
 
         let mut rows = 0;
-        let timezone = parse_timezone(&self.ctx.get_settings())?;
-        let field_decoder = FastFieldDecoderValues::create_for_insert(timezone);
+        let format = self.ctx.get_format_settings()?;
+        let field_decoder = FastFieldDecoderValues::create_for_insert(format);
 
         loop {
             let _ = reader.ignore_white_spaces();

@@ -185,6 +185,8 @@ pub enum Expr {
         asc: bool,
         null_first: bool,
     },
+    /// The `Map` expr
+    Map { span: Span, kvs: Vec<(Expr, Expr)> },
     /// The `Interval 1 DAY` expr
     Interval {
         span: Span,
@@ -391,6 +393,7 @@ impl Expr {
             | Expr::MapAccess { span, .. }
             | Expr::Array { span, .. }
             | Expr::ArraySort { span, .. }
+            | Expr::Map { span, .. }
             | Expr::Interval { span, .. }
             | Expr::DateAdd { span, .. }
             | Expr::DateSub { span, .. }
@@ -890,6 +893,16 @@ impl Display for Expr {
                     write!(f, " , 'NULLS LAST'")?;
                 }
                 write!(f, ")")?;
+            }
+            Expr::Map { kvs, .. } => {
+                write!(f, "{{")?;
+                for (i, (k, v)) in kvs.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ",")?;
+                    }
+                    write!(f, "{k}:{v}")?;
+                }
+                write!(f, "}}")?;
             }
             Expr::Interval { expr, unit, .. } => {
                 write!(f, "INTERVAL {expr} {unit}")?;
