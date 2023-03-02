@@ -144,7 +144,7 @@ SELECT * FROM `09_0022_t0` order by a
 101.0 (202.0,13) ((1,2.0),(3,4))
 
 statement ok
-INSERT INTO TABLE `09_0022_t0` (t) values(102.0,((3,4.0),(5,6)))
+INSERT INTO TABLE `09_0022_t0` (a,t) values(102.0,((3,4.0),(5,6)))
 
 query TIFTII
 SELECT t:a,t:a:m,t:a:n,t:b,t:b:x,t:b:y FROM `09_0022_t0` order by t:a:m
