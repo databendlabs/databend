@@ -84,7 +84,7 @@ use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CastExpr;
-use crate::plans::CreateTablePlanV2;
+use crate::plans::CreateTablePlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
@@ -505,7 +505,7 @@ impl Binder {
             }
         };
 
-        let plan = CreateTablePlanV2 {
+        let plan = CreateTablePlan {
             if_not_exists: *if_not_exists,
             tenant: self.ctx.get_tenant(),
             catalog: catalog.clone(),
