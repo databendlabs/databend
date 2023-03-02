@@ -6,6 +6,7 @@ const TwitterSvg =
 
 const lightCodeTheme = require('prism-react-renderer/themes/oceanicNext');
 const darkCodeTheme = require('prism-react-renderer/themes/dracula');
+const { ALL } = require('dns');
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
@@ -28,6 +29,10 @@ const config = {
                 label: 'English',
             },
         },
+    },
+
+    customFields: {
+        blogTags: ['databend','weekly']
     },
 
     presets: [
@@ -54,8 +59,18 @@ const config = {
                         }
                         return `https://github.com/datafuselabs/databend/edit/main/website/blog/${blogPath}`;
                       },
-                    blogSidebarCount: 'ALL',
-                    postsPerPage: 'ALL',
+                    include: ['**/*.{md,mdx}'],
+                    exclude: [
+                      '**/_*.{js,jsx,ts,tsx,md,mdx}',
+                      '**/_*/**',
+                      '**/*.test.{js,jsx,ts,tsx}',
+                      '**/__tests__/**',
+                    ],
+                    routeBasePath: 'blog',
+                    postsPerPage: ALL,
+                    blogListComponent: '@site/src/components/CustomBlog/CustomBlogListPage',
+                    blogPostComponent: '@site/src/components/CustomBlog/BlogPostDetails',
+                    blogTagsListComponent: '@site/src/components/CustomBlog/CustomBlogTagsPostsPage',
                 },
                 theme: {
                     customCss: require.resolve('./src/css/custom.scss'),
