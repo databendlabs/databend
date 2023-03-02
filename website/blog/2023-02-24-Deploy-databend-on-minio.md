@@ -13,7 +13,6 @@ authors:
   image_url: https://github.com/wubx.png
 ---
 
-![Alt text](../static/img/blog/databend-minio-beginner-01.png)
 
 This blog walks you through the process of deploying a single instance of Databend on MinIO. MinIO is an object storage solution that is lightweight and easy to operate. Databend is a modern data warehouse designed for cloud architecture, built with Rust and open-source. It provides rapid elastic scaling and aims to create an on-demand, pay-as-you-go data cloud product experience.
 

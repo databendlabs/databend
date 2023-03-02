@@ -2,7 +2,7 @@ import React from "react";
 import styles from "./styles.module.scss";
 import clsx from "clsx";
 import Layout from "@theme/Layout";
-import { ArrowLeft, ArrowRight, Return} from "../Icons";
+import { ArrowLeft, ArrowRight, Return, Pencil} from "../Icons";
 import Link from "@docusaurus/Link";
 import useBaseUrl from "@docusaurus/useBaseUrl";
 import AvatarGroup from "../BaseComponents/AvatarGroup";
@@ -31,6 +31,7 @@ const BlogPostNav = ({ nextPost, prevPost }) => {
 }
 
 const BlogPostDetails = (props) => {
+  console.log(props)
   const metadata = props.content.metadata;
   const BlogPostContent = props.content;
   return (
@@ -113,7 +114,9 @@ const BlogPostDetails = (props) => {
                   );
                 })}
               </div>
-
+              <div className={styles.tagsBox}>
+              <h5><a href={metadata.editUrl}><Pencil size={20}/>Edit this page</a></h5>
+              </div>
               <hr/>
                <BlogPostNav prevPost={metadata.prevItem} nextPost={metadata.nextItem}/>
             </div>
