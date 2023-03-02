@@ -17,16 +17,23 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::Notify;
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::Evaluator;
 use common_expression::RemoteExpr;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_sql::plans::RuntimeFilterId;
 use parking_lot::Mutex;
+use storages_common_index::filters::FilterBuilder;
+use storages_common_index::filters::Xor8Builder;
 use storages_common_index::filters::Xor8Filter;
 
 use crate::pipelines::processors::transforms::runtime_filter::RuntimeFilterConnector;
+use crate::sessions::QueryContext;
 
 pub struct RuntimeFilterState {
+    pub(crate) ctx: Arc<QueryContext>,
     pub(crate) channel_filters: Arc<Mutex<HashMap<RuntimeFilterId, Xor8Filter>>>,
     pub(crate) left_runtime_filters: BTreeMap<RuntimeFilterId, RemoteExpr>,
     pub(crate) right_runtime_filters: BTreeMap<RuntimeFilterId, RemoteExpr>,
@@ -37,10 +44,12 @@ pub struct RuntimeFilterState {
 
 impl RuntimeFilterState {
     pub fn new(
+        ctx: Arc<QueryContext>,
         left_runtime_filters: BTreeMap<RuntimeFilterId, RemoteExpr>,
         right_runtime_filters: BTreeMap<RuntimeFilterId, RemoteExpr>,
     ) -> Self {
         RuntimeFilterState {
+            ctx,
             channel_filters: Arc::new(Mutex::new(Default::default())),
             left_runtime_filters,
             right_runtime_filters,
@@ -84,7 +93,26 @@ impl RuntimeFilterConnector for RuntimeFilterState {
         todo!()
     }
 
-    fn collect(&self, _data: &DataBlock) -> Result<()> {
-        todo!()
+    fn collect(&self, data: &DataBlock) -> Result<()> {
+        let func_ctx = self.ctx.get_function_context()?;
+        for (id, remote_expr) in self.right_runtime_filters.iter() {
+            let expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
+            // expr represents equi condition in join build side
+            // Such as: `select * from t1 inner join t2 on t1.a + 1 = t2.a + 2`
+            // expr is `t2.a + 2`
+            // First we need get expected values from data by expr
+            let evaluator = Evaluator::new(&data, func_ctx.clone(), &BUILTIN_FUNCTIONS);
+            let value = evaluator.run(&expr)?;
+            let column = value.convert_to_full_column(expr.data_type(), data.num_rows());
+
+            // Generate Xor8 filter by column
+            let mut filter_builder = Xor8Builder::create();
+            for val in column.iter() {
+                filter_builder.add_key(&val);
+            }
+            let mut channel_filters = self.channel_filters.lock();
+            channel_filters.insert(id.clone(), filter_builder.build()?);
+        }
+        Ok(())
     }
 }

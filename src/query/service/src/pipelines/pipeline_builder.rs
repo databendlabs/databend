@@ -989,7 +989,7 @@ impl PipelineBuilder {
         &mut self,
         runtime_filter_source: &RuntimeFilterSource,
     ) -> Result<()> {
-        let state = self.build_runtime_filter_state(runtime_filter_source)?;
+        let state = self.build_runtime_filter_state(self.ctx.clone(), runtime_filter_source)?;
         self.expand_runtime_filter_source(&runtime_filter_source.right_side, state.clone())?;
         self.build_runtime_filter(&runtime_filter_source.left_side, state)?;
         Ok(())
@@ -1037,9 +1037,11 @@ impl PipelineBuilder {
 
     fn build_runtime_filter_state(
         &self,
+        ctx: Arc<QueryContext>,
         runtime_filter_source: &RuntimeFilterSource,
     ) -> Result<Arc<RuntimeFilterState>> {
         Ok(Arc::new(RuntimeFilterState::new(
+            ctx,
             runtime_filter_source.left_runtime_filters.clone(),
             runtime_filter_source.right_runtime_filters.clone(),
         )))
