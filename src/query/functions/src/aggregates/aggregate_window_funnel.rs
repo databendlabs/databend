@@ -38,6 +38,7 @@ use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
+use common_expression::Value;
 use common_io::prelude::*;
 use num_traits::AsPrimitive;
 use serde::de::DeserializeOwned;
@@ -358,7 +359,10 @@ where
         let (window, _) = eval_function(
             None,
             "to_uint64",
-            [params[0].clone()],
+            [(
+                Value::Scalar(params[0].clone()),
+                params[0].as_ref().infer_data_type(),
+            )],
             FunctionContext::default(),
             1,
             &BUILTIN_FUNCTIONS,

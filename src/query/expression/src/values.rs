@@ -62,7 +62,6 @@ use crate::utils::arrow::constant_bitmap;
 use crate::utils::arrow::deserialize_column;
 use crate::utils::arrow::serialize_column;
 use crate::with_decimal_type;
-use crate::with_integer_mapped_type;
 use crate::with_number_type;
 
 #[derive(Debug, Clone, PartialEq, EnumAsInner)]
@@ -375,6 +374,38 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Map(col) => col.memory_size(),
             ScalarRef::Tuple(scalars) => scalars.iter().map(|s| s.memory_size()).sum(),
             ScalarRef::Variant(buf) => buf.len(),
+        }
+    }
+
+    /// Infer the data type of the scalar.
+    /// If the scalar is Null, the data type is `DataType::Null`,
+    /// otherwise, the inferred data type is not nullable.
+    pub fn infer_data_type(&self) -> DataType {
+        match self {
+            ScalarRef::Null => DataType::Null,
+            ScalarRef::EmptyArray => DataType::EmptyArray,
+            ScalarRef::EmptyMap => DataType::EmptyMap,
+            ScalarRef::Number(s) => with_number_type!(|NUM_TYPE| match s {
+                NumberScalar::NUM_TYPE(_) => DataType::Number(NumberDataType::NUM_TYPE),
+            }),
+            ScalarRef::Decimal(s) => with_decimal_type!(|DECIMAL_TYPE| match s {
+                DecimalScalar::DECIMAL_TYPE(_, size) =>
+                    DataType::Decimal(DecimalDataType::DECIMAL_TYPE(*size)),
+            }),
+            ScalarRef::Boolean(_) => DataType::Boolean,
+            ScalarRef::String(_) => DataType::String,
+            ScalarRef::Timestamp(_) => DataType::Timestamp,
+            ScalarRef::Date(_) => DataType::Date,
+            ScalarRef::Array(array) => DataType::Array(Box::new(array.data_type())),
+            ScalarRef::Map(col) => DataType::Map(Box::new(col.data_type())),
+            ScalarRef::Tuple(fields) => {
+                let inner = fields
+                    .iter()
+                    .map(|field| field.infer_data_type())
+                    .collect::<Vec<_>>();
+                DataType::Tuple(inner)
+            }
+            ScalarRef::Variant(_) => DataType::Variant,
         }
     }
 }

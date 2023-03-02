@@ -26,7 +26,6 @@ use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::TableStatistics;
 use common_catalog::table_args::TableArgs;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::eval_function;
 use common_expression::types::number::NumberScalar;
@@ -39,6 +38,7 @@ use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
+use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
@@ -73,7 +73,10 @@ impl NumbersTable {
         let (total, _) = eval_function(
             None,
             "to_uint64",
-            [args[0].clone()],
+            [(
+                Value::Scalar(args[0].clone()),
+                args[0].as_ref().infer_data_type(),
+            )],
             FunctionContext::default(),
             1,
             &BUILTIN_FUNCTIONS,
