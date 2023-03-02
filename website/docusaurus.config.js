@@ -117,12 +117,12 @@ const config = {
                         label: 'Documentation',
                         position: 'right',
                     },
+                    { to: '/blog', label: 'Blog', position: 'right' }, // or position: 'right'
                     {
                         to: '/download',
                         label: 'Download',
                         position: 'right',
                     },
-                    { to: '/blog', label: 'Blog', position: 'right' }, // or position: 'right'
                 ],
             },
             footer: {
