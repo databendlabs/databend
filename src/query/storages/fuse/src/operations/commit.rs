@@ -19,7 +19,6 @@ use std::time::Instant;
 
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoffBuilder;
-use backon::Retryable;
 use common_base::base::ProgressValues;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
@@ -497,20 +496,9 @@ impl FuseTable {
         };
 
         let object = operator.object(&hint_path);
-        { || object.write(last_snapshot_path.as_bytes()) }
-            .retry(&backon::ExponentialBuilder::default().with_jitter())
-            .when(|err| err.is_temporary())
-            .notify(|err, dur| {
-                warn!(
-                    "fuse table write_last_snapshot_hint retry after {}s for error {:?}",
-                    dur.as_secs(),
-                    err
-                )
-            })
-            .await
-            .unwrap_or_else(|e| {
-                warn!("write last snapshot hint failure. {}", e);
-            })
+        object.write(last_snapshot_path).await.unwrap_or_else(|e| {
+            warn!("write last snapshot hint failure. {}", e);
+        });
     }
 
     pub async fn commit_mutation(

@@ -326,8 +326,8 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
             ExprElement::UnaryOp { op } => match op {
                 UnaryOperator::Not => Affix::Prefix(Precedence(NOT_PREC)),
 
-                UnaryOperator::Plus => Affix::Prefix(Precedence(30)),
-                UnaryOperator::Minus => Affix::Prefix(Precedence(30)),
+                UnaryOperator::Plus => Affix::Prefix(Precedence(50)),
+                UnaryOperator::Minus => Affix::Prefix(Precedence(50)),
             },
             ExprElement::BinaryOp { op } => match op {
                 BinaryOperator::Or => Affix::Infix(Precedence(5), Associativity::Left),
@@ -362,7 +362,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 BinaryOperator::Modulo => Affix::Infix(Precedence(40), Associativity::Left),
                 BinaryOperator::StringConcat => Affix::Infix(Precedence(40), Associativity::Left),
             },
-            ExprElement::PgCast { .. } => Affix::Postfix(Precedence(50)),
+            ExprElement::PgCast { .. } => Affix::Postfix(Precedence(60)),
             _ => Affix::Nilfix,
         };
         Ok(affix)

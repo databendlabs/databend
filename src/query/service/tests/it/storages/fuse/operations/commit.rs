@@ -356,11 +356,11 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_paritions_sha(&self, _sha: String) {
+    fn add_partitions_sha(&self, _sha: String) {
         todo!()
     }
 
-    fn get_partitions_sha(&self) -> Option<String> {
+    fn get_partitions_shas(&self) -> Vec<String> {
         todo!()
     }
 
@@ -441,6 +441,16 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_stage_attachment(&self) -> Option<StageAttachment> {
+        todo!()
+    }
+
+    fn get_last_query_id(&self, _index: i32) -> String {
+        todo!()
+    }
+    fn get_result_cache_key(&self, _query_id: &str) -> Option<String> {
+        todo!()
+    }
+    fn set_query_id_result_cache(&self, _query_id: String, _result_cache_key: String) {
         todo!()
     }
 

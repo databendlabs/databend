@@ -37,9 +37,8 @@ use common_hashtable::HashtableKeyable;
 use common_hashtable::ShortStringHashMap;
 use common_hashtable::StringHashMap;
 use common_sql::plans::JoinType;
+use ethnum::U256;
 use parking_lot::RwLock;
-use primitive_types::U256;
-use primitive_types::U512;
 
 use super::ProbeState;
 use crate::pipelines::processors::transforms::hash_join::desc::HashJoinDesc;
@@ -74,7 +73,6 @@ pub enum HashTable {
     KeysU64(FixedKeyHashTable<u64>),
     KeysU128(FixedKeyHashTable<u128>),
     KeysU256(FixedKeyHashTable<U256>),
-    KeysU512(FixedKeyHashTable<U512>),
 }
 
 pub struct JoinHashTable {
@@ -180,16 +178,6 @@ impl JoinHashTable {
                 ctx,
                 HashTable::KeysU256(FixedKeyHashTable {
                     hash_table: HashMap::<U256, Vec<RowPtr>>::new(),
-                    hash_method,
-                }),
-                build_schema,
-                probe_schema,
-                hash_join_desc,
-            )?),
-            HashMethodKind::KeysU512(hash_method) => Arc::new(JoinHashTable::try_create(
-                ctx,
-                HashTable::KeysU512(FixedKeyHashTable {
-                    hash_table: HashMap::<U512, Vec<RowPtr>>::new(),
                     hash_method,
                 }),
                 build_schema,

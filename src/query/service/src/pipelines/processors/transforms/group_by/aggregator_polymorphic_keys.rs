@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::marker::PhantomData;
+use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -24,19 +25,20 @@ use common_expression::HashMethod;
 use common_expression::HashMethodFixedKeys;
 use common_expression::HashMethodKeysU128;
 use common_expression::HashMethodKeysU256;
-use common_expression::HashMethodKeysU512;
 use common_expression::HashMethodSerializer;
 use common_expression::HashMethodSingleString;
 use common_expression::KeysState;
 use common_hashtable::FastHash;
 use common_hashtable::HashMap;
+use common_hashtable::HashtableEntryMutRefLike;
+use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 use common_hashtable::LookupHashMap;
 use common_hashtable::PartitionedHashMap;
 use common_hashtable::ShortStringHashMap;
 use common_hashtable::StringHashMap;
-use primitive_types::U256;
-use primitive_types::U512;
+use ethnum::U256;
+use tracing::info;
 
 use super::aggregator_keys_builder::LargeFixedKeysColumnBuilder;
 use super::aggregator_keys_iter::LargeFixedKeysColumnIter;
@@ -50,6 +52,10 @@ use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder:
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::FixedKeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::SerializedKeysColumnIter;
+use crate::pipelines::processors::transforms::group_by::Area;
+use crate::pipelines::processors::transforms::group_by::ArenaHolder;
+use crate::pipelines::processors::transforms::HashTableCell;
+use crate::pipelines::processors::transforms::PartitionedHashTableDropper;
 use crate::pipelines::processors::AggregatorParams;
 
 // Provide functions for all HashMethod to help implement polymorphic group by key
@@ -293,11 +299,16 @@ impl PolymorphicKeysHelper<HashMethodKeysU128> for HashMethodKeysU128 {
 
     type KeysColumnIter = LargeFixedKeysColumnIter<u128>;
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        LargeFixedKeysColumnIter::create(column.as_string().ok_or_else(|| {
-            ErrorCode::IllegalDataType(
-                "Illegal data type for LargeFixedKeysColumnIter<u128>".to_string(),
-            )
-        })?)
+        let buffer = column
+            .as_decimal()
+            .and_then(|c| c.as_decimal128())
+            .ok_or_else(|| {
+                ErrorCode::IllegalDataType(
+                    "Illegal data type for LargeFixedKeysColumnIter<u128>".to_string(),
+                )
+            })?;
+        let buffer = unsafe { std::mem::transmute(buffer.0.clone()) };
+        LargeFixedKeysColumnIter::create(buffer)
     }
 
     type GroupColumnsBuilder<'a> = FixedKeysGroupColumnsBuilder<'a, u128>;
@@ -334,11 +345,17 @@ impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
 
     type KeysColumnIter = LargeFixedKeysColumnIter<U256>;
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        LargeFixedKeysColumnIter::create(column.as_string().ok_or_else(|| {
-            ErrorCode::IllegalDataType(
-                "Illegal data type for LargeFixedKeysColumnIter<u256>".to_string(),
-            )
-        })?)
+        let buffer = column
+            .as_decimal()
+            .and_then(|c| c.as_decimal256())
+            .ok_or_else(|| {
+                ErrorCode::IllegalDataType(
+                    "Illegal data type for LargeFixedKeysColumnIter<u128>".to_string(),
+                )
+            })?;
+        let buffer = unsafe { std::mem::transmute(buffer.0.clone()) };
+
+        LargeFixedKeysColumnIter::create(buffer)
     }
 
     type GroupColumnsBuilder<'a> = FixedKeysGroupColumnsBuilder<'a, U256>;
@@ -352,47 +369,6 @@ impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
     }
 
     fn get_hash(&self, v: &U256) -> u64 {
-        v.fast_hash()
-    }
-}
-
-impl PolymorphicKeysHelper<HashMethodKeysU512> for HashMethodKeysU512 {
-    const SUPPORT_PARTITIONED: bool = true;
-
-    type HashTable<T: Send + Sync + 'static> = HashMap<U512, T>;
-
-    fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>> {
-        Ok(HashMap::new())
-    }
-
-    type ColumnBuilder<'a> = LargeFixedKeysColumnBuilder<'a, U512>;
-    fn keys_column_builder(&self, capacity: usize, _: usize) -> LargeFixedKeysColumnBuilder<U512> {
-        LargeFixedKeysColumnBuilder {
-            _t: PhantomData::default(),
-            values: Vec::with_capacity(capacity * 64),
-        }
-    }
-
-    type KeysColumnIter = LargeFixedKeysColumnIter<U512>;
-    fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        LargeFixedKeysColumnIter::create(column.as_string().ok_or_else(|| {
-            ErrorCode::IllegalDataType(
-                "Illegal data type for LargeFixedKeysColumnIter<u512>".to_string(),
-            )
-        })?)
-    }
-
-    type GroupColumnsBuilder<'a> = FixedKeysGroupColumnsBuilder<'a, U512>;
-    fn group_columns_builder(
-        &self,
-        capacity: usize,
-        _data_capacity: usize,
-        params: &AggregatorParams,
-    ) -> FixedKeysGroupColumnsBuilder<U512> {
-        FixedKeysGroupColumnsBuilder::create(capacity, params)
-    }
-
-    fn get_hash(&self, v: &U512) -> u64 {
         v.fast_hash()
     }
 }
@@ -478,17 +454,66 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
 }
 
 #[derive(Clone)]
-pub struct PartitionedHashMethod<Method: HashMethod + Send> {
+pub struct PartitionedHashMethod<Method: HashMethodBounds> {
     pub(crate) method: Method,
 }
 
-impl<Method: HashMethod + Send> PartitionedHashMethod<Method> {
+impl<Method: HashMethodBounds> PartitionedHashMethod<Method> {
     pub fn create(method: Method) -> PartitionedHashMethod<Method> {
         PartitionedHashMethod::<Method> { method }
     }
+
+    pub fn convert_hashtable<T>(
+        method: &Method,
+        mut cell: HashTableCell<Method, T>,
+    ) -> Result<HashTableCell<PartitionedHashMethod<Method>, T>>
+    where
+        T: Copy + Send + Sync + 'static,
+        Self: PolymorphicKeysHelper<PartitionedHashMethod<Method>>,
+    {
+        let instant = Instant::now();
+        let partitioned_method = Self::create(method.clone());
+        let mut partitioned_hashtable = partitioned_method.create_hash_table()?;
+
+        unsafe {
+            for item in cell.hashtable.iter() {
+                match partitioned_hashtable.insert_and_entry(item.key()) {
+                    Ok(mut entry) => {
+                        *entry.get_mut() = *item.get();
+                    }
+                    Err(mut entry) => {
+                        *entry.get_mut() = *item.get();
+                    }
+                };
+            }
+        }
+
+        info!(
+            "Convert to Partitioned HashTable elapsed: {:?}",
+            instant.elapsed()
+        );
+
+        let arena = std::mem::replace(&mut cell.arena, Area::create());
+        cell.arena_holders.push(ArenaHolder::create(Some(arena)));
+        let temp_values = cell.temp_values.to_vec();
+        let arena_holders = cell.arena_holders.to_vec();
+
+        let _old_dropper = cell._dropper.clone().unwrap();
+        let _new_dropper = PartitionedHashTableDropper::<Method, T>::create(_old_dropper);
+
+        // TODO(winter): No idea(may memory leak).
+        // We need to ensure that the following two lines of code are atomic.
+        // take_old_dropper before create new HashTableCell - may memory leak
+        // create new HashTableCell before take_old_dropper - may double free memory
+        let _old_dropper = cell._dropper.take();
+        let mut cell = HashTableCell::create(partitioned_hashtable, _new_dropper);
+        cell.temp_values = temp_values;
+        cell.arena_holders = arena_holders;
+        Ok(cell)
+    }
 }
 
-impl<Method: HashMethod + Send> HashMethod for PartitionedHashMethod<Method> {
+impl<Method: HashMethodBounds> HashMethod for PartitionedHashMethod<Method> {
     type HashKey = Method::HashKey;
     type HashKeyIter<'a> = Method::HashKeyIter<'a> where Self: 'a;
 

@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use storages_common_table_meta::meta::SegmentInfo;
 
@@ -57,7 +58,7 @@ impl TryFrom<&DataBlock> for AppendOperationLogEntry {
         ));
 
         if let Some(meta) = block.get_meta() {
-            let cast = meta.as_any().downcast_ref::<AppendOperationLogEntry>();
+            let cast = AppendOperationLogEntry::downcast_ref_from(meta);
             return match cast {
                 None => Err(err),
                 Some(entry) => Ok(entry.clone()),
@@ -74,18 +75,14 @@ impl BlockMetaInfo for AppendOperationLogEntry {
         self
     }
 
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        match AppendOperationLogEntry::downcast_ref_from(info) {
+            None => false,
+            Some(other) => self == other,
+        }
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         Box::new(self.clone())
-    }
-
-    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        match info.as_any().downcast_ref::<AppendOperationLogEntry>() {
-            None => false,
-            Some(other) => self == other,
-        }
     }
 }

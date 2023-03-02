@@ -65,6 +65,7 @@ use crate::Scalar;
 use crate::TypeDeserializerImpl;
 use crate::Value;
 use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
+use crate::ARROW_EXT_TYPE_EMPTY_MAP;
 use crate::ARROW_EXT_TYPE_VARIANT;
 
 // Column id of TableField
@@ -113,6 +114,7 @@ pub struct TableField {
 pub enum TableDataType {
     Null,
     EmptyArray,
+    EmptyMap,
     Boolean,
     String,
     Number(NumberDataType),
@@ -894,6 +896,7 @@ impl From<&TableDataType> for DataType {
         match data_type {
             TableDataType::Null => DataType::Null,
             TableDataType::EmptyArray => DataType::EmptyArray,
+            TableDataType::EmptyMap => DataType::EmptyMap,
             TableDataType::Boolean => DataType::Boolean,
             TableDataType::String => DataType::String,
             TableDataType::Number(ty) => DataType::Number(*ty),
@@ -1008,6 +1011,10 @@ impl TableDataType {
             TableDataType::EmptyArray => BlockEntry {
                 data_type: DataType::EmptyArray,
                 value: Value::Column(Column::EmptyArray { len }),
+            },
+            TableDataType::EmptyMap => BlockEntry {
+                data_type: DataType::EmptyMap,
+                value: Value::Column(Column::EmptyMap { len }),
             },
             TableDataType::Boolean => BlockEntry {
                 data_type: DataType::Boolean,
@@ -1286,6 +1293,7 @@ impl From<&ArrowField> for TableDataType {
             ArrowDataType::Extension(custom_name, _, _) => match custom_name.as_str() {
                 ARROW_EXT_TYPE_VARIANT => TableDataType::Variant,
                 ARROW_EXT_TYPE_EMPTY_ARRAY => TableDataType::EmptyArray,
+                ARROW_EXT_TYPE_EMPTY_MAP => TableDataType::EmptyMap,
                 _ => unimplemented!("data_type: {:?}", f.data_type()),
             },
             // this is safe, because we define the datatype firstly
@@ -1325,11 +1333,22 @@ impl From<&DataType> for ArrowDataType {
                 Box::new(ArrowDataType::Null),
                 None,
             ),
+            DataType::EmptyMap => ArrowDataType::Extension(
+                ARROW_EXT_TYPE_EMPTY_MAP.to_string(),
+                Box::new(ArrowDataType::Null),
+                None,
+            ),
             DataType::Boolean => ArrowDataType::Boolean,
             DataType::String => ArrowDataType::LargeBinary,
             DataType::Number(ty) => with_number_type!(|TYPE| match ty {
                 NumberDataType::TYPE => ArrowDataType::TYPE,
             }),
+            DataType::Decimal(DecimalDataType::Decimal128(s)) => {
+                ArrowDataType::Decimal(s.precision.into(), s.scale.into())
+            }
+            DataType::Decimal(DecimalDataType::Decimal256(s)) => {
+                ArrowDataType::Decimal256(s.precision.into(), s.scale.into())
+            }
             DataType::Timestamp => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
             DataType::Date => ArrowDataType::Date32,
             DataType::Nullable(ty) => ty.as_ref().into(),
@@ -1343,11 +1362,10 @@ impl From<&DataType> for ArrowDataType {
             }
             DataType::Map(ty) => {
                 let arrow_ty = ty.as_ref().into();
-                ArrowDataType::LargeList(Box::new(ArrowField::new(
-                    "_map",
-                    arrow_ty,
-                    ty.is_nullable(),
-                )))
+                ArrowDataType::Map(
+                    Box::new(ArrowField::new("_map", arrow_ty, ty.is_nullable())),
+                    false,
+                )
             }
             DataType::Tuple(types) => {
                 let fields = types
@@ -1381,6 +1399,11 @@ impl From<&TableDataType> for ArrowDataType {
                 Box::new(ArrowDataType::Null),
                 None,
             ),
+            TableDataType::EmptyMap => ArrowDataType::Extension(
+                ARROW_EXT_TYPE_EMPTY_MAP.to_string(),
+                Box::new(ArrowDataType::Null),
+                None,
+            ),
             TableDataType::Boolean => ArrowDataType::Boolean,
             TableDataType::String => ArrowDataType::LargeBinary,
             TableDataType::Number(ty) => with_number_type!(|TYPE| match ty {
@@ -1405,11 +1428,10 @@ impl From<&TableDataType> for ArrowDataType {
             }
             TableDataType::Map(ty) => {
                 let arrow_ty = ty.as_ref().into();
-                ArrowDataType::LargeList(Box::new(ArrowField::new(
-                    "_map",
-                    arrow_ty,
-                    ty.is_nullable(),
-                )))
+                ArrowDataType::Map(
+                    Box::new(ArrowField::new("_map", arrow_ty, ty.is_nullable())),
+                    false,
+                )
             }
             TableDataType::Tuple {
                 fields_name,
@@ -1443,6 +1465,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         DataType::Null => Ok(TableDataType::Null),
         DataType::Boolean => Ok(TableDataType::Boolean),
         DataType::EmptyArray => Ok(TableDataType::EmptyArray),
+        DataType::EmptyMap => Ok(TableDataType::EmptyMap),
         DataType::String => Ok(TableDataType::String),
         DataType::Number(number_type) => Ok(TableDataType::Number(*number_type)),
         DataType::Timestamp => Ok(TableDataType::Timestamp),

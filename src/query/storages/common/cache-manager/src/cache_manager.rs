@@ -39,6 +39,7 @@ use crate::caches::TableSnapshotStatisticCache;
 use crate::ColumnArrayMeter;
 use crate::DeleteMarkDataCache;
 use crate::DeleteMarkMetaCache;
+use crate::PrunePartitionsCache;
 
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
 
@@ -51,6 +52,7 @@ pub struct CacheManager {
     bloom_index_meta_cache: Option<BloomIndexMetaCache>,
     delete_mark_meta_cache: Option<DeleteMarkMetaCache>,
     delete_mark_data_cache: Option<DeleteMarkDataCache>,
+    prune_partitions_cache: Option<PrunePartitionsCache>,
     file_meta_data_cache: Option<FileMetaDataCache>,
     table_data_cache: Option<TableDataCache>,
     table_column_array_cache: Option<ColumnArrayCache>,
@@ -92,6 +94,7 @@ impl CacheManager {
                 bloom_index_meta_cache: None,
                 delete_mark_meta_cache: None,
                 delete_mark_data_cache: None,
+                prune_partitions_cache: None,
                 file_meta_data_cache: None,
                 table_statistic_cache: None,
                 table_data_cache,
@@ -113,6 +116,9 @@ impl CacheManager {
                 Self::new_item_cache(config.table_bloom_index_meta_count, "delete_mark_meta");
             let delete_mark_data_cache =
                 Self::new_item_cache(config.table_bloom_index_filter_count, "delete_mark_data");
+            let prune_partitions_cache =
+                Self::new_item_cache(config.table_prune_partitions_count, "prune_partitions");
+
             let file_meta_data_cache =
                 Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS, "parquet_file_meta");
             GlobalInstance::set(Arc::new(Self {
@@ -122,6 +128,7 @@ impl CacheManager {
                 bloom_index_meta_cache,
                 delete_mark_meta_cache,
                 delete_mark_data_cache,
+                prune_partitions_cache,
                 file_meta_data_cache,
                 table_statistic_cache,
                 table_data_cache,
@@ -162,6 +169,10 @@ impl CacheManager {
 
     pub fn get_delete_mark_data_cache(&self) -> Option<DeleteMarkDataCache> {
         self.delete_mark_data_cache.clone()
+    }
+
+    pub fn get_prune_partitions_cache(&self) -> Option<PrunePartitionsCache> {
+        self.prune_partitions_cache.clone()
     }
 
     pub fn get_file_meta_data_cache(&self) -> Option<FileMetaDataCache> {

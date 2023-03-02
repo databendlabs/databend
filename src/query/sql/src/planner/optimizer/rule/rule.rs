@@ -28,6 +28,10 @@ pub trait Rule {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()>;
 
     fn pattern(&self) -> &SExpr;
+
+    fn transformation(&self) -> bool {
+        true
+    }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -35,6 +39,7 @@ pub enum RuleID {
     // Rewrite rules
     NormalizeScalarFilter,
     NormalizeDisjunctiveFilter,
+    PushDownFilterAggregate,
     PushDownFilterEvalScalar,
     PushDownFilterUnion,
     PushDownFilterJoin,
@@ -55,12 +60,12 @@ pub enum RuleID {
 
     // Exploration rules
     CommuteJoin,
-    CommuteJoinBaseTable,
-    LeftAssociateJoin,
     RightAssociateJoin,
+    LeftAssociateJoin,
+    ExchangeJoin,
+    CommuteJoinBaseTable,
     LeftExchangeJoin,
     RightExchangeJoin,
-    ExchangeJoin,
 }
 
 impl Display for RuleID {
@@ -75,6 +80,7 @@ impl Display for RuleID {
             RuleID::RulePushDownLimitExpression => write!(f, "PushDownLimitExpression"),
             RuleID::PushDownLimitSort => write!(f, "PushDownLimitSort"),
             RuleID::PushDownLimitAggregate => write!(f, "PushDownLimitAggregate"),
+            RuleID::PushDownFilterAggregate => write!(f, "PushDownFilterAggregate"),
             RuleID::PushDownLimitScan => write!(f, "PushDownLimitScan"),
             RuleID::PushDownSortScan => write!(f, "PushDownSortScan"),
             RuleID::EliminateEvalScalar => write!(f, "EliminateEvalScalar"),

@@ -78,8 +78,8 @@ impl<'a> Binder {
                 };
                 let filter_expr = SExpr::create_unary(filter.into(), table_expr);
                 let mut rewriter = SubqueryRewriter::new(self.metadata.clone());
-                let rewrote_expr = rewriter.rewrite(&filter_expr)?;
-                (None, Some(rewrote_expr))
+                let filter_expr = rewriter.rewrite(&filter_expr)?;
+                (None, Some(filter_expr))
             } else {
                 (Some(scalar), None)
             }

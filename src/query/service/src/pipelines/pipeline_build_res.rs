@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::OutputPort;
@@ -19,6 +21,8 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_sources::OneBlockSource;
 use common_profile::ProfSpanSetRef;
+
+use crate::api::ExchangeSorting;
 
 pub struct PipelineBuildResult {
     pub main_pipeline: Pipeline,
@@ -28,6 +32,8 @@ pub struct PipelineBuildResult {
     /// Set of profiling spans for the query.
     /// Will be empty if profiling is disabled.
     pub prof_span_set: ProfSpanSetRef,
+
+    pub exchange_sorting: Option<Arc<dyn ExchangeSorting>>,
 }
 
 impl PipelineBuildResult {
@@ -36,6 +42,7 @@ impl PipelineBuildResult {
             main_pipeline: Pipeline::create(),
             sources_pipelines: vec![],
             prof_span_set: ProfSpanSetRef::default(),
+            exchange_sorting: None,
         }
     }
 
@@ -54,6 +61,7 @@ impl PipelineBuildResult {
             main_pipeline,
             sources_pipelines: vec![],
             prof_span_set: ProfSpanSetRef::default(),
+            exchange_sorting: None,
         })
     }
 

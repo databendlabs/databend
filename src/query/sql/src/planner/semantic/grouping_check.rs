@@ -26,6 +26,7 @@ use crate::plans::FunctionCall;
 use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
+use crate::plans::Unnest;
 use crate::BindContext;
 
 /// Check validity of scalar expression in a grouping context.
@@ -114,6 +115,11 @@ impl<'a> GroupingChecker<'a> {
                 argument: Box::new(self.resolve(&cast.argument, span)?),
                 from_type: cast.from_type.clone(),
                 target_type: cast.target_type.clone(),
+            }
+            .into()),
+            ScalarExpr::Unnest(unnest) => Ok(Unnest {
+                argument: Box::new(self.resolve(&unnest.argument, span)?),
+                return_type: unnest.return_type.clone(),
             }
             .into()),
             ScalarExpr::SubqueryExpr(_) => {

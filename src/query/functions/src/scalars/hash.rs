@@ -18,6 +18,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
 
+use common_expression::types::decimal::DecimalType;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::number::F32;
 use common_expression::types::number::F64;
@@ -39,6 +40,7 @@ use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::Scalar;
+use ethnum::i256;
 use md5::Digest;
 use md5::Md5 as Md5Hasher;
 use naive_cityhash::cityhash64_with_seed;
@@ -65,6 +67,10 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         });
     }
+
+    // Decimal types we only register the default type size
+    register_simple_domain_type_hash::<DecimalType<i128>>(registry);
+    register_simple_domain_type_hash::<DecimalType<i256>>(registry);
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "md5",
@@ -304,12 +310,20 @@ macro_rules! for_all_integer_types{
             { u8 },
             { u16 },
             { u32 },
-            { u64 }
+            { u64 },
+            { i128 }
         }
     };
 }
 
 for_all_integer_types! { integer_impl }
+
+impl DFHash for i256 {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        Hash::hash(self.0.as_slice(), state);
+    }
+}
 
 impl DFHash for F32 {
     #[inline]

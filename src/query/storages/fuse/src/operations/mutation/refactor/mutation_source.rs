@@ -92,7 +92,7 @@ pub struct MutationSource {
     output: Arc<OutputPort>,
 
     batch_size: usize,
-    read_datas: Vec<ReadDataInfo>,
+    read_data: Vec<ReadDataInfo>,
 }
 
 impl MutationSource {
@@ -114,7 +114,7 @@ impl MutationSource {
             filter,
             output,
             batch_size,
-            read_datas: vec![],
+            read_data: vec![],
             storage_format,
         })))
     }
@@ -146,7 +146,7 @@ impl Processor for MutationSource {
 
         if matches!(self.state, State::Output(_, _)) {
             if let State::Output(index, op) = std::mem::replace(&mut self.state, State::Finish) {
-                self.state = if let Some(data) = self.read_datas.pop() {
+                self.state = if let Some(data) = self.read_data.pop() {
                     State::FilterData(data)
                 } else {
                     State::ReadData
@@ -312,14 +312,14 @@ impl Processor for MutationSource {
                         });
                     }
                     let chunks = futures::future::try_join_all(chunks).await?;
-                    self.read_datas = chunks.into_iter().zip(part_indices.into_iter()).fold(
+                    self.read_data = chunks.into_iter().zip(part_indices.into_iter()).fold(
                         Vec::with_capacity(parts.len()),
                         |mut acc, (chunk, (part, index))| {
                             acc.push(ReadDataInfo { part, index, chunk });
                             acc
                         },
                     );
-                    self.state = State::FilterData(self.read_datas.pop().unwrap());
+                    self.state = State::FilterData(self.read_data.pop().unwrap());
                 }
             }
             State::SerializeMark {
@@ -329,7 +329,7 @@ impl Processor for MutationSource {
                 data,
                 count,
             } => {
-                write_data(&data, &self.dal, &location.0).await?;
+                write_data(data, &self.dal, &location.0).await?;
                 self.state = State::Output(
                     block_index,
                     Mutation::Replaced(DeleteMarkInfo {

@@ -35,6 +35,7 @@ use common_storages_system::MallocStatsTotalsTable;
 use common_storages_system::MetricsTable;
 use common_storages_system::OneTable;
 use common_storages_system::ProcessesTable;
+use common_storages_system::QueryCacheTable;
 use common_storages_system::QueryLogTable;
 use common_storages_system::RolesTable;
 use common_storages_system::SettingsTable;
@@ -86,6 +87,7 @@ impl SystemDatabase {
             StagesTable::create(sys_db_meta.next_table_id()),
             BuildOptionsTable::create(sys_db_meta.next_table_id()),
             CatalogsTable::create(sys_db_meta.next_table_id()),
+            QueryCacheTable::create(sys_db_meta.next_table_id()),
         ];
 
         for tbl in table_list.into_iter() {

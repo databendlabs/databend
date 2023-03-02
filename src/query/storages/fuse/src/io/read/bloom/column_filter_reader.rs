@@ -72,6 +72,7 @@ impl BloomColumnFilterReader {
             location: index_path,
             len_hint: None,
             ver: 0,
+            put_cache: true,
         };
 
         BloomColumnFilterReader {

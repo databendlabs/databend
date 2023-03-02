@@ -18,8 +18,8 @@ use std::ops::Range;
 use common_arrow::arrow::trusted_len::TrustedLen;
 
 use super::ArrayType;
-use super::StringType;
 use crate::property::Domain;
+use crate::types::array::ArrayColumn;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
@@ -209,7 +209,7 @@ impl<K: ValueType, V: ValueType> KvColumn<K, V> {
         }
     }
 
-    fn iter(&self) -> KvIterator<K, V> {
+    pub fn iter(&self) -> KvIterator<K, V> {
         KvIterator {
             keys: K::iter_column(&self.keys),
             values: V::iter_column(&self.values),
@@ -298,110 +298,113 @@ unsafe impl<'a, K: ValueType, V: ValueType> TrustedLen for KvIterator<'a, K, V> 
 // Structuarally equals to `Array(Tuple(K, V))` but treated distinct from `Array(Tuple(K, V))`
 // in unification.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MapType<T: ValueType>(PhantomData<T>);
+pub struct MapType<K: ValueType, V: ValueType>(PhantomData<(K, V)>);
 
-pub type MapInternal<T> = ArrayType<KvPair<StringType, T>>;
+pub type MapInternal<K, V> = ArrayType<KvPair<K, V>>;
 
-impl<T: ValueType> ValueType for MapType<T> {
-    type Scalar = <MapInternal<T> as ValueType>::Scalar;
-    type ScalarRef<'a> = <MapInternal<T> as ValueType>::ScalarRef<'a>;
-    type Column = <MapInternal<T> as ValueType>::Column;
-    type Domain = <MapInternal<T> as ValueType>::Domain;
-    type ColumnIterator<'a> = <MapInternal<T> as ValueType>::ColumnIterator<'a>;
-    type ColumnBuilder = <MapInternal<T> as ValueType>::ColumnBuilder;
+impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
+    type Scalar = <MapInternal<K, V> as ValueType>::Scalar;
+    type ScalarRef<'a> = <MapInternal<K, V> as ValueType>::ScalarRef<'a>;
+    type Column = <MapInternal<K, V> as ValueType>::Column;
+    type Domain = <MapInternal<K, V> as ValueType>::Domain;
+    type ColumnIterator<'a> = <MapInternal<K, V> as ValueType>::ColumnIterator<'a>;
+    type ColumnBuilder = <MapInternal<K, V> as ValueType>::ColumnBuilder;
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {
-        <MapInternal<T> as ValueType>::upcast_gat(long)
+        <MapInternal<K, V> as ValueType>::upcast_gat(long)
     }
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
-        <MapInternal<T> as ValueType>::to_owned_scalar(scalar)
+        <MapInternal<K, V> as ValueType>::to_owned_scalar(scalar)
     }
 
     fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a> {
-        <MapInternal<T> as ValueType>::to_scalar_ref(scalar)
+        <MapInternal<K, V> as ValueType>::to_scalar_ref(scalar)
     }
 
     fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
-        <MapInternal<T> as ValueType>::try_downcast_scalar(scalar)
+        match scalar {
+            ScalarRef::Map(array) => KvPair::<K, V>::try_downcast_column(array),
+            _ => None,
+        }
     }
 
     fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column> {
-        <MapInternal<T> as ValueType>::try_downcast_column(col)
+        ArrayColumn::try_downcast(col.as_map()?)
     }
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        <MapInternal<T> as ValueType>::try_downcast_domain(domain)
+        <MapInternal<K, V> as ValueType>::try_downcast_domain(domain)
     }
 
     fn try_downcast_builder<'a>(
         builder: &'a mut ColumnBuilder,
     ) -> Option<&'a mut Self::ColumnBuilder> {
-        <MapInternal<T> as ValueType>::try_downcast_builder(builder)
+        <MapInternal<K, V> as ValueType>::try_downcast_builder(builder)
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        <MapInternal<T> as ValueType>::upcast_scalar(scalar)
+        Scalar::Map(KvPair::<K, V>::upcast_column(scalar))
     }
 
     fn upcast_column(col: Self::Column) -> Column {
-        <MapInternal<T> as ValueType>::upcast_column(col)
+        Column::Map(Box::new(col.upcast()))
     }
 
     fn upcast_domain(domain: Self::Domain) -> Domain {
-        <MapInternal<T> as ValueType>::upcast_domain(domain)
+        <MapInternal<K, V> as ValueType>::upcast_domain(domain)
     }
 
     fn column_len<'a>(col: &'a Self::Column) -> usize {
-        <MapInternal<T> as ValueType>::column_len(col)
+        <MapInternal<K, V> as ValueType>::column_len(col)
     }
 
     fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>> {
-        <MapInternal<T> as ValueType>::index_column(col, index)
+        <MapInternal<K, V> as ValueType>::index_column(col, index)
     }
 
     unsafe fn index_column_unchecked<'a>(
         col: &'a Self::Column,
         index: usize,
     ) -> Self::ScalarRef<'a> {
-        <MapInternal<T> as ValueType>::index_column_unchecked(col, index)
+        <MapInternal<K, V> as ValueType>::index_column_unchecked(col, index)
     }
 
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
-        <MapInternal<T> as ValueType>::slice_column(col, range)
+        <MapInternal<K, V> as ValueType>::slice_column(col, range)
     }
 
     fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a> {
-        <MapInternal<T> as ValueType>::iter_column(col)
+        <MapInternal<K, V> as ValueType>::iter_column(col)
     }
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
-        <MapInternal<T> as ValueType>::column_to_builder(col)
+        <MapInternal<K, V> as ValueType>::column_to_builder(col)
     }
 
     fn builder_len(builder: &Self::ColumnBuilder) -> usize {
-        <MapInternal<T> as ValueType>::builder_len(builder)
+        <MapInternal<K, V> as ValueType>::builder_len(builder)
     }
 
     fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
-        <MapInternal<T> as ValueType>::push_item(builder, item)
+        <MapInternal<K, V> as ValueType>::push_item(builder, item)
     }
 
     fn push_default(builder: &mut Self::ColumnBuilder) {
-        <MapInternal<T> as ValueType>::push_default(builder)
+        <MapInternal<K, V> as ValueType>::push_default(builder)
     }
 
     fn append_column(builder: &mut Self::ColumnBuilder, other: &Self::Column) {
-        <MapInternal<T> as ValueType>::append_column(builder, other)
+        <MapInternal<K, V> as ValueType>::append_column(builder, other)
     }
 
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
-        <MapInternal<T> as ValueType>::build_column(builder)
+        <MapInternal<K, V> as ValueType>::build_column(builder)
     }
 
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
-        <MapInternal<T> as ValueType>::build_scalar(builder)
+        <MapInternal<K, V> as ValueType>::build_scalar(builder)
     }
 
     fn scalar_memory_size<'a>(scalar: &Self::ScalarRef<'a>) -> usize {
@@ -413,16 +416,17 @@ impl<T: ValueType> ValueType for MapType<T> {
     }
 }
 
-impl<T: ArgType> ArgType for MapType<T> {
+impl<K: ArgType, V: ArgType> ArgType for MapType<K, V> {
     fn data_type() -> DataType {
-        DataType::Map(Box::new(T::data_type()))
+        let inner_ty = DataType::Tuple(vec![K::data_type(), V::data_type()]);
+        DataType::Map(Box::new(inner_ty))
     }
 
     fn full_domain() -> Self::Domain {
-        MapInternal::<T>::full_domain()
+        MapInternal::<K, V>::full_domain()
     }
 
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
-        <MapInternal<T> as ArgType>::create_builder(capacity, generics)
+        <MapInternal<K, V> as ArgType>::create_builder(capacity, generics)
     }
 }

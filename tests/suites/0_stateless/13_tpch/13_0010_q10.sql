@@ -2,7 +2,7 @@
 select
     c_custkey,
     c_name,
-    TRUNCATE(sum(l_extendedprice * (1 - l_discount)), 3) as revenue,
+    sum(l_extendedprice * (1 - l_discount)) as revenue,
     c_acctbal,
     n_name,
     c_address,

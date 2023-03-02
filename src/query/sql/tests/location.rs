@@ -31,6 +31,7 @@ use common_meta_app::storage::StorageIpfsConfig;
 use common_meta_app::storage::StorageOssConfig;
 use common_meta_app::storage::StorageParams;
 use common_meta_app::storage::StorageS3Config;
+use common_meta_app::storage::StorageWebhdfsConfig;
 use common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
 use common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
 use common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
@@ -382,6 +383,27 @@ fn test_parse_uri_location() -> Result<()> {
                     .iter()
                     .map(|v| v.to_string())
                     .collect(),
+                }),
+                "/".to_string(),
+            ),
+        ),
+        (
+            "webhdfs",
+            UriLocation::new(
+                "webhdfs".to_string(),
+                "example.com".to_string(),
+                "/path/to/dir/".to_string(),
+                "".to_string(),
+                vec![("https", "TrUE"), ("delegation", "databendthebest")]
+                    .into_iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect::<BTreeMap<_, _>>(),
+            ),
+            (
+                StorageParams::Webhdfs(StorageWebhdfsConfig {
+                    root: "/path/to/dir/".to_string(),
+                    endpoint_url: "https://example.com".to_string(),
+                    delegation: "databendthebest".to_string(),
                 }),
                 "/".to_string(),
             ),

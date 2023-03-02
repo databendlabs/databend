@@ -1,7 +1,5 @@
 changelog:
   exclude:
-    labels:
-      - pr-chore
     authors:
       - Mergify
   categories:
@@ -23,3 +21,6 @@ changelog:
     - title: Documentation 📔
       labels:
         - pr-doc
+    - title: Others 📒
+      labels:
+        - pr-chore

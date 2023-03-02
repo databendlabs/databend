@@ -40,7 +40,7 @@ use tracing::debug;
 use crate::binder::location::parse_uri_location;
 use crate::binder::Binder;
 use crate::normalize_identifier;
-use crate::plans::CopyPlanV2;
+use crate::plans::CopyPlan;
 use crate::plans::Plan;
 use crate::plans::ValidationMode;
 use crate::BindContext;
@@ -254,7 +254,7 @@ impl<'a> Binder {
             push_downs: None,
         };
 
-        Ok(Plan::Copy(Box::new(CopyPlanV2::IntoTable {
+        Ok(Plan::Copy(Box::new(CopyPlan::IntoTable {
             catalog_name: dst_catalog_name.to_string(),
             database_name: dst_database_name.to_string(),
             table_name: dst_table_name.to_string(),
@@ -312,7 +312,7 @@ impl<'a> Binder {
             push_downs: None,
         };
 
-        Ok(Plan::Copy(Box::new(CopyPlanV2::IntoTable {
+        Ok(Plan::Copy(Box::new(CopyPlan::IntoTable {
             catalog_name: dst_catalog_name.to_string(),
             database_name: dst_database_name.to_string(),
             table_name: dst_table_name.to_string(),
@@ -362,7 +362,7 @@ impl<'a> Binder {
             parse_stage_location_v2(&self.ctx, dst_stage, dst_path).await?;
         self.apply_stage_options(stmt, &mut stage_info).await?;
 
-        Ok(Plan::Copy(Box::new(CopyPlanV2::IntoStage {
+        Ok(Plan::Copy(Box::new(CopyPlan::IntoStage {
             stage: Box::new(stage_info),
             path,
             validation_mode,
@@ -413,7 +413,7 @@ impl<'a> Binder {
         let mut stage_info = UserStageInfo::new_external_stage(storage_params, &path);
         self.apply_stage_options(stmt, &mut stage_info).await?;
 
-        Ok(Plan::Copy(Box::new(CopyPlanV2::IntoStage {
+        Ok(Plan::Copy(Box::new(CopyPlan::IntoStage {
             stage: Box::new(stage_info),
             path,
             validation_mode,
@@ -442,7 +442,7 @@ impl<'a> Binder {
             parse_stage_location_v2(&self.ctx, dst_stage, dst_path).await?;
         self.apply_stage_options(stmt, &mut stage_info).await?;
 
-        Ok(Plan::Copy(Box::new(CopyPlanV2::IntoStage {
+        Ok(Plan::Copy(Box::new(CopyPlan::IntoStage {
             stage: Box::new(stage_info),
             path,
             validation_mode,
@@ -477,7 +477,7 @@ impl<'a> Binder {
         let mut stage_info = UserStageInfo::new_external_stage(storage_params, &path);
         self.apply_stage_options(stmt, &mut stage_info).await?;
 
-        Ok(Plan::Copy(Box::new(CopyPlanV2::IntoStage {
+        Ok(Plan::Copy(Box::new(CopyPlan::IntoStage {
             stage: Box::new(stage_info),
             path,
             validation_mode,

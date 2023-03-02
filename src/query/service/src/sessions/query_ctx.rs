@@ -52,6 +52,7 @@ use common_storage::DataOperator;
 use common_storage::StorageMetrics;
 use common_storages_fuse::TableContext;
 use common_storages_parquet::ParquetTable;
+use common_storages_result_cache::ResultScan;
 use common_storages_stage::StageTable;
 use common_users::UserApiProvider;
 use parking_lot::RwLock;
@@ -73,7 +74,6 @@ use crate::storages::Table;
 pub struct QueryContext {
     version: String,
     partition_queue: Arc<RwLock<VecDeque<PartInfoPtr>>>,
-    partitions_sha: Arc<RwLock<Option<String>>>,
     shared: Arc<QueryContextShared>,
     fragment_id: Arc<AtomicUsize>,
 }
@@ -88,7 +88,6 @@ impl QueryContext {
 
         Arc::new(QueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            partitions_sha: Arc::new(RwLock::new(None)),
             version: format!("DatabendQuery {}", *DATABEND_COMMIT_VERSION),
             shared,
             fragment_id: Arc::new(AtomicUsize::new(0)),
@@ -219,6 +218,7 @@ impl TableContext for QueryContext {
                 self.build_external_by_table_info(&plan.catalog, stage_info, plan.tbl_args.clone())
             }
             DataSourceInfo::ParquetSource(table_info) => ParquetTable::from_info(table_info),
+            DataSourceInfo::ResultScanSource(table_info) => ResultScan::from_info(table_info),
         }
     }
 
@@ -279,14 +279,16 @@ impl TableContext for QueryContext {
         Ok(())
     }
 
-    fn set_paritions_sha(&self, s: String) {
-        let mut sha = self.partitions_sha.write();
-        *sha = Some(s);
+    fn add_partitions_sha(&self, s: String) {
+        let mut shas = self.shared.partitions_shas.write();
+        shas.push(s);
     }
 
-    fn get_partitions_sha(&self) -> Option<String> {
-        let sha = self.partitions_sha.read();
-        sha.clone()
+    fn get_partitions_shas(&self) -> Vec<String> {
+        let mut sha = self.shared.partitions_shas.read().clone();
+        // Sort to make sure the SHAs are stable for the same query.
+        sha.sort();
+        sha
     }
 
     fn attach_query_str(&self, kind: String, query: &str) {
@@ -374,6 +376,24 @@ impl TableContext for QueryContext {
     // Get Stage Attachment.
     fn get_stage_attachment(&self) -> Option<StageAttachment> {
         self.shared.get_stage_attachment()
+    }
+
+    fn get_last_query_id(&self, index: i32) -> String {
+        self.shared.session.session_ctx.get_last_query_id(index)
+    }
+
+    fn get_result_cache_key(&self, query_id: &str) -> Option<String> {
+        self.shared
+            .session
+            .session_ctx
+            .get_query_result_cache_key(query_id)
+    }
+
+    fn set_query_id_result_cache(&self, query_id: String, result_cache_key: String) {
+        self.shared
+            .session
+            .session_ctx
+            .update_query_ids_results(query_id, Some(result_cache_key))
     }
 
     fn set_on_error_map(&self, map: Option<HashMap<String, ErrorCode>>) {

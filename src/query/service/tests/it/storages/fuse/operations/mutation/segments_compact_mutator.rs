@@ -38,7 +38,6 @@ use common_storages_fuse::operations::SegmentCompactionState;
 use common_storages_fuse::operations::SegmentCompactor;
 use common_storages_fuse::statistics::gen_columns_statistics;
 use common_storages_fuse::statistics::reducers::merge_statistics_mut;
-use common_storages_fuse::statistics::BlockStatistics;
 use common_storages_fuse::statistics::StatisticsAccumulator;
 use common_storages_fuse::FuseStorageFormat;
 use common_storages_fuse::FuseTable;
@@ -679,15 +678,12 @@ impl CompactSegmentTestFixture {
                 let block = block?;
                 let col_stats = gen_columns_statistics(&block, None, &schema)?;
 
-                let mut block_statistics =
-                    BlockStatistics::from(&block, "".to_owned(), None, None, &schema)?;
                 let block_meta = block_writer
                     .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
                     .await?;
-                block_statistics.block_file_location = block_meta.location.0.clone();
 
                 collected_blocks.push(block_meta.clone());
-                stats_acc.add_with_block_meta(block_meta)?;
+                stats_acc.add_with_block_meta(block_meta);
             }
             let col_stats = stats_acc.summary()?;
             let segment_info = SegmentInfo::new(stats_acc.blocks_metas, Statistics {
@@ -721,6 +717,7 @@ impl CompactSegmentTestFixture {
                 location: x.to_string(),
                 len_hint: None,
                 ver: SegmentInfo::VERSION,
+                put_cache: true,
             };
 
             let seg = segment_reader.read(&load_params).await?;
@@ -801,6 +798,7 @@ impl CompactCase {
                 location: location.0.clone(),
                 len_hint: None,
                 ver: location.1,
+                put_cache: true,
             };
 
             let segment = segment_reader.read(&load_params).await?;

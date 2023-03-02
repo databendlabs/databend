@@ -63,10 +63,6 @@ impl BlockMetaInfo for MutationSourceMeta {
         self
     }
 
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         Box::new(self.clone())
     }

@@ -30,6 +30,8 @@ env:
   BUILD_PROFILE: release
   RUNNER_PROVIDER: aws
   CARGO_INCREMENTAL: 0
+  # Remove this env after rust 1.68 has been released.
+  CARGO_UNSTABLE_SPARSE_REGISTRY: true
 
 jobs:
   build_release:
@@ -55,6 +57,9 @@ jobs:
         storage:
           - s3
           - fs
+        dataset:
+          - hits
+          - tpch
     steps:
       - uses: actions/checkout@v3
       - name: Get benchmark source
@@ -76,5 +81,6 @@ jobs:
       - uses: ./.github/actions/benchmark
         with:
           storage: ${{ matrix.storage }}
+          dataset: ${{ matrix.dataset }}
           source: ${{ env.BENCHMARK_SOURCE }}
           source_id: ${{ env.BENCHMARK_SOURCE_ID }}

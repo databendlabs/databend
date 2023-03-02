@@ -102,6 +102,7 @@ async fn load_delete_mark_data<'a>(
             location,
             len_hint: None,
             ver: 0,
+            put_cache: true,
         };
         async move { cached_reader.read(&param).await }
     }
@@ -125,6 +126,7 @@ async fn load_mark_meta(dal: Operator, path: &str, size: u64) -> Result<Arc<Dele
             location: path_owned,
             len_hint: Some(size),
             ver: version,
+            put_cache: true,
         };
 
         reader.read(&load_params).await

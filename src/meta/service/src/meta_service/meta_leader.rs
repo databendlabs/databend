@@ -16,10 +16,10 @@ use std::sync::Arc;
 
 use common_base::base::tokio::sync::RwLockReadGuard;
 use common_meta_kvapi::kvapi::KVApi;
-use common_meta_raft_store::applied_state::AppliedState;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::openraft::error::RemoveLearnerError;
 use common_meta_stoerr::MetaStorageError;
+use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaDataError;

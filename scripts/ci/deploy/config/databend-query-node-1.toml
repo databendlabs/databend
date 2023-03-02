@@ -54,7 +54,7 @@ default_compression = 'zstd'
 [log]
 
 [log.file]
-level = "WARN"
+level = "INFO"
 format = "text"
 dir = "./.databend/logs_1"
 

@@ -24,6 +24,7 @@ use common_arrow::arrow::io::ipc::IpcSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
@@ -103,12 +104,9 @@ impl Transform for TransformExchangeDeserializer {
     const NAME: &'static str = "TransformExchangeDeserializer";
 
     fn transform(&mut self, mut data: DataBlock) -> Result<DataBlock> {
-        if let Some(mut block_meta) = data.take_meta() {
-            if let Some(exchange_meta) = block_meta
-                .as_mut_any()
-                .downcast_mut::<ExchangeDeserializeMeta>()
-            {
-                return match exchange_meta.packet.take().unwrap() {
+        if let Some(block_meta) = data.take_meta() {
+            if let Some(exchange_meta) = ExchangeDeserializeMeta::downcast_from(block_meta) {
+                return match exchange_meta.packet.unwrap() {
                     DataPacket::ErrorCode(v) => Err(v),
                     DataPacket::ClosingInput => unreachable!(),
                     DataPacket::ClosingOutput => unreachable!(),
@@ -160,10 +158,6 @@ impl<'de> serde::Deserialize<'de> for ExchangeDeserializeMeta {
 #[typetag::serde(name = "exchange_source")]
 impl BlockMetaInfo for ExchangeDeserializeMeta {
     fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn Any {
         self
     }
 

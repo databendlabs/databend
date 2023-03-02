@@ -117,6 +117,33 @@ impl FieldEncoderRowBased for FieldEncoderValues {
         out_buf.push(b']');
     }
 
+    fn write_map<T: ValueType>(
+        &self,
+        column: &ArrayColumn<T>,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+        _raw: bool,
+    ) {
+        let start = unsafe { *column.offsets.get_unchecked(row_index) as usize };
+        let end = unsafe { *column.offsets.get_unchecked(row_index + 1) as usize };
+        out_buf.push(b'{');
+        let inner = &T::upcast_column(column.values.clone());
+        match inner {
+            Column::Tuple { fields, .. } => {
+                for i in start..end {
+                    if i != start {
+                        out_buf.extend_from_slice(b",");
+                    }
+                    self.write_field(&fields[0], i, out_buf, false);
+                    out_buf.extend_from_slice(b":");
+                    self.write_field(&fields[1], i, out_buf, false);
+                }
+            }
+            _ => unreachable!(),
+        }
+        out_buf.push(b'}');
+    }
+
     fn write_tuple(&self, columns: &[Column], row_index: usize, out_buf: &mut Vec<u8>, _raw: bool) {
         out_buf.push(b'(');
         for (i, inner) in columns.iter().enumerate() {

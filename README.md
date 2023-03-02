@@ -5,7 +5,7 @@
 <h4 align="center">
   <a href="https://databend.rs/doc/cloud">Databend Serverless Cloud (beta)</a>  |
   <a href="https://databend.rs/doc">Documentation</a>  |
-  <a href="https://perf.databend.rs">Benchmarking</a>  |
+  <a href="https://benchmark.clickhouse.com/">Benchmarking</a>  |
   <a href="https://github.com/datafuselabs/databend/issues/9604">Roadmap (v1.0)</a>
 
 </h4>
@@ -63,12 +63,12 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 
 - __Blazing Performance__
 
-  Databend leverages data-level parallelism(Vectorized Query Execution) and instruction-level parallelism(SIMD) technology, offering blazing performance data analytics.
+  Databend leverages data-level parallelism(Vectorized Query Execution) and instruction-level parallelism(SIMD) technology, offering [blazing performance](https://benchmark.clickhouse.com/) data analytics.
 
 
 - __Git-like MVCC Storage__
 
-  Databend stores data with snapshots. It's easy to query, clone, and restore historical data in tables.
+  [Databend stores data with snapshots](https://databend.rs/doc/sql-commands/ddl/table/optimize-table#what-are-snapshot-segment-and-block), enabling users to effortlessly query, clone, or restore data from any history timepoint.
 
 
 - __Support for Semi-Structured Data__
@@ -78,7 +78,7 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 
 - __MySQL/ClickHouse Compatible__
 
-  Databend is ANSI SQL compliant and MySQL/ClickHouse wire protocol compatible, making it easy to connect with existing tools([MySQL Client](https://databend.rs/doc/integrations/api/mysql-handler), [ClickHouse Client](https://databend.rs/doc/integrations/api/clickhouse-handler), [Vector](https://vector.dev/), [DBeaver](https://dbeaver.com/), [Jupyter](https://databend.rs/doc/integrations/gui-tool/jupyter), [JDBC](https://databend.rs/doc/develop), etc.).
+  Databend is ANSI SQL compliant and MySQL/ClickHouse wire protocol compatible, making it easy to connect with existing tools([MySQL Client](https://databend.rs/doc/integrations/api/mysql-handler), [ClickHouse HTTP Handler](https://databend.rs/doc/integrations/api/clickhouse-handler), [Vector](https://vector.dev/), [DBeaver](https://dbeaver.com/), [Jupyter](https://databend.rs/doc/integrations/gui-tool/jupyter), [JDBC](https://databend.rs/doc/develop), etc.).
 
 
 - __Easy to Use__
@@ -122,7 +122,7 @@ docker run --net=host  datafuselabs/databend
 ### Connecting to Databend
 
 - [How to Connect Databend with MySQL Client](https://databend.rs/doc/integrations/api/mysql-handler)
-- [How to Connect Databend with ClickHouse Client](https://databend.rs/doc/integrations/api/clickhouse-handler)
+- [How to Connect Databend with ClickHouse HTTP Handler](https://databend.rs/doc/integrations/api/clickhouse-handler)
 - [How to Connect Databend with DBeaver SQL IDE](https://databend.rs/doc/integrations/gui-tool/dbeaver)
 - [How to Execute Queries in Python](https://databend.rs/doc/develop/python)
 - [How to Query Databend in Jupyter Notebooks](https://databend.rs/doc/integrations/gui-tool/jupyter)
@@ -209,7 +209,7 @@ For general help in using Databend, please refer to the official documentation. 
 
 - [Slack](https://link.databend.rs/join-slack) (For live discussion with the Community)
 - [GitHub](https://github.com/datafuselabs/databend) (Feature/Bug reports, Contributions)
-- [Twitter](https://twitter.com/Datafuse_Labs) (Get the news fast)
+- [Twitter](https://twitter.com/DatabendLabs) (Get the news fast)
 - [I'm feeling lucky](https://link.databend.rs/i-m-feeling-lucky) (Pick up a good first issue now!)
 
 ## Roadmap

@@ -12,25 +12,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod aggregate_hashstate_info;
-mod aggregate_info;
-mod aggregator_final_parallel;
+mod aggregate_cell;
+mod aggregate_exchange_sorting;
+mod aggregate_meta;
 mod aggregator_params;
-mod aggregator_partial;
-mod aggregator_partitioned;
-mod aggregator_single_key;
+mod serde;
+mod transform_aggregate_final;
+mod transform_aggregate_partial;
+mod transform_group_by_final;
+mod transform_group_by_partial;
+mod transform_partition_bucket;
+mod transform_single_key;
 mod utils;
 
-pub use aggregate_hashstate_info::AggregateHashStateInfo;
-pub use aggregate_info::AggregateInfo;
-pub use aggregate_info::OverflowInfo;
-pub use aggregator_final_parallel::BucketAggregator;
-pub use aggregator_final_parallel::ParallelFinalAggregator;
+pub use aggregate_cell::HashTableCell;
+pub use aggregate_cell::PartitionedHashTableDropper;
+pub use aggregate_exchange_sorting::AggregateExchangeSorting;
 pub use aggregator_params::AggregatorParams;
-pub use aggregator_params::AggregatorTransformParams;
-pub use aggregator_partial::PartialAggregator;
-pub use aggregator_partitioned::PartitionedAggregator;
-pub use aggregator_partitioned::PartitionedAggregatorLike;
-pub use aggregator_single_key::FinalSingleStateAggregator;
-pub use aggregator_single_key::PartialSingleStateAggregator;
+pub use transform_aggregate_final::TransformFinalAggregate;
+pub use transform_aggregate_partial::TransformPartialAggregate;
+pub use transform_group_by_final::TransformFinalGroupBy;
+pub use transform_group_by_partial::TransformPartialGroupBy;
+pub use transform_partition_bucket::efficiently_memory_final_aggregator;
+pub use transform_partition_bucket::TransformPartitionBucket;
+pub use transform_single_key::FinalSingleStateAggregator;
+pub use transform_single_key::PartialSingleStateAggregator;
 pub use utils::*;
+
+pub use self::serde::TransformAggregateDeserializer;
+pub use self::serde::TransformAggregateSerializer;
+pub use self::serde::TransformAggregateSpillReader;
+pub use self::serde::TransformAggregateSpillWriter;
+pub use self::serde::TransformGroupByDeserializer;
+pub use self::serde::TransformGroupBySerializer;
+pub use self::serde::TransformGroupBySpillReader;
+pub use self::serde::TransformGroupBySpillWriter;

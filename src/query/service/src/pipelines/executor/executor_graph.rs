@@ -185,8 +185,11 @@ impl ExecutingGraph {
     /// # Safety
     ///
     /// Method is thread unsafe and require thread safe call
-    pub unsafe fn init_schedule_queue(locker: &StateLockGuard) -> Result<ScheduleQueue> {
-        let mut schedule_queue = ScheduleQueue::create();
+    pub unsafe fn init_schedule_queue(
+        locker: &StateLockGuard,
+        capacity: usize,
+    ) -> Result<ScheduleQueue> {
+        let mut schedule_queue = ScheduleQueue::with_capacity(capacity);
         for sink_index in locker.graph.externals(Direction::Outgoing) {
             ExecutingGraph::schedule_queue(locker, sink_index, &mut schedule_queue)?;
         }
@@ -266,10 +269,10 @@ pub struct ScheduleQueue {
 }
 
 impl ScheduleQueue {
-    pub fn create() -> ScheduleQueue {
+    pub fn with_capacity(capacity: usize) -> ScheduleQueue {
         ScheduleQueue {
-            sync_queue: VecDeque::new(),
-            async_queue: VecDeque::new(),
+            sync_queue: VecDeque::with_capacity(capacity),
+            async_queue: VecDeque::with_capacity(capacity),
         }
     }
 
@@ -370,15 +373,15 @@ impl RunningGraph {
     /// # Safety
     ///
     /// Method is thread unsafe and require thread safe call
-    pub unsafe fn init_schedule_queue(&self) -> Result<ScheduleQueue> {
-        ExecutingGraph::init_schedule_queue(&self.0)
+    pub unsafe fn init_schedule_queue(&self, capacity: usize) -> Result<ScheduleQueue> {
+        ExecutingGraph::init_schedule_queue(&self.0, capacity)
     }
 
     /// # Safety
     ///
     /// Method is thread unsafe and require thread safe call
     pub unsafe fn schedule_queue(&self, node_index: NodeIndex) -> Result<ScheduleQueue> {
-        let mut schedule_queue = ScheduleQueue::create();
+        let mut schedule_queue = ScheduleQueue::with_capacity(0);
         ExecutingGraph::schedule_queue(&self.0, node_index, &mut schedule_queue)?;
         Ok(schedule_queue)
     }
@@ -389,6 +392,43 @@ impl RunningGraph {
                 self.0.graph[node_index].processor.interrupt();
             }
         }
+    }
+
+    pub fn format_graph_nodes(&self) -> String {
+        pub struct NodeDisplay {
+            id: usize,
+            name: String,
+            state: String,
+        }
+
+        impl Debug for NodeDisplay {
+            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct("Node")
+                    .field("name", &self.name)
+                    .field("id", &self.id)
+                    .field("state", &self.state)
+                    .finish()
+            }
+        }
+
+        let mut nodes_display = Vec::with_capacity(self.0.graph.node_count());
+
+        for node_index in self.0.graph.node_indices() {
+            unsafe {
+                let state = self.0.graph[node_index].state.lock().unwrap();
+                nodes_display.push(NodeDisplay {
+                    id: self.0.graph[node_index].processor.id().index(),
+                    name: self.0.graph[node_index].processor.name(),
+                    state: String::from(match *state {
+                        State::Idle => "Idle",
+                        State::Processing => "Processing",
+                        State::Finished => "Finished",
+                    }),
+                });
+            }
+        }
+
+        format!("{:?}", nodes_display)
     }
 }
 

@@ -72,6 +72,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | "default_character_set_catalog" | "information_schema" | "schemata"            | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
 | "default_character_set_name"    | "information_schema" | "schemata"            | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
 | "default_character_set_schema"  | "information_schema" | "schemata"            | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
+| "default_collation_name"        | "information_schema" | "schemata"            | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
 | "default_expression"            | "system"             | "columns"             | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "default_kind"                  | "system"             | "columns"             | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "default_role"                  | "system"             | "users"               | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
@@ -128,6 +129,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | "labels"                        | "system"             | "metrics"             | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "level"                         | "system"             | "settings"            | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "license"                       | "system"             | "credits"             | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
+| "location"                      | "system"             | "query_cache"         | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "log_type"                      | "system"             | "query_log"           | "Int8"             | "TINYINT"           | ""       | ""       | "NO"     | ""       |
 | "memory_usage"                  | "system"             | "processes"           | "Int64"            | "BIGINT"            | ""       | ""       | "NO"     | ""       |
 | "memory_usage"                  | "system"             | "query_log"           | "UInt64"           | "BIGINT UNSIGNED"   | ""       | ""       | "NO"     | ""       |
@@ -150,6 +152,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | "name"                          | "system"             | "users"               | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "non_unique"                    | "information_schema" | "statistics"          | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
 | "nullable"                      | "information_schema" | "statistics"          | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
+| "num_rows"                      | "system"             | "query_cache"         | "UInt64"           | "BIGINT UNSIGNED"   | ""       | ""       | "NO"     | ""       |
 | "num_rows"                      | "system"             | "tables"              | "Nullable(UInt64)" | "BIGINT UNSIGNED"   | ""       | ""       | "YES"    | ""       |
 | "num_rows"                      | "system"             | "tables_with_history" | "Nullable(UInt64)" | "BIGINT UNSIGNED"   | ""       | ""       | "YES"    | ""       |
 | "number_of_files"               | "system"             | "stages"              | "Nullable(UInt64)" | "BIGINT UNSIGNED"   | ""       | ""       | "YES"    | ""       |
@@ -159,6 +162,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | "ordinal_position"              | "information_schema" | "columns"             | "UInt8"            | "TINYINT UNSIGNED"  | ""       | ""       | "NO"     | ""       |
 | "ordinal_position"              | "information_schema" | "key_column_usage"    | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
 | "packed"                        | "information_schema" | "statistics"          | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
+| "partitions_sha"                | "system"             | "query_cache"         | "Array(String)"    | "ARRAY(STRING)"     | ""       | ""       | "NO"     | ""       |
 | "port"                          | "system"             | "clusters"            | "UInt16"           | "SMALLINT UNSIGNED" | ""       | ""       | "NO"     | ""       |
 | "position_in_unique_constraint" | "information_schema" | "key_column_usage"    | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
 | "projections"                   | "system"             | "query_log"           | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
@@ -175,6 +179,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | "reserved"                      | "information_schema" | "keywords"            | "UInt8"            | "TINYINT UNSIGNED"  | ""       | ""       | "NO"     | ""       |
 | "result_bytes"                  | "system"             | "query_log"           | "UInt64"           | "BIGINT UNSIGNED"   | ""       | ""       | "NO"     | ""       |
 | "result_rows"                   | "system"             | "query_log"           | "UInt64"           | "BIGINT UNSIGNED"   | ""       | ""       | "NO"     | ""       |
+| "result_size"                   | "system"             | "query_cache"         | "UInt64"           | "BIGINT UNSIGNED"   | ""       | ""       | "NO"     | ""       |
 | "scan_bytes"                    | "system"             | "query_log"           | "UInt64"           | "BIGINT UNSIGNED"   | ""       | ""       | "NO"     | ""       |
 | "scan_io_bytes"                 | "system"             | "query_log"           | "UInt64"           | "BIGINT UNSIGNED"   | ""       | ""       | "NO"     | ""       |
 | "scan_io_bytes_cost_ms"         | "system"             | "query_log"           | "UInt64"           | "BIGINT UNSIGNED"   | ""       | ""       | "NO"     | ""       |
@@ -187,6 +192,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | "seq_in_index"                  | "information_schema" | "statistics"          | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
 | "server_version"                | "system"             | "query_log"           | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "session_settings"              | "system"             | "query_log"           | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
+| "sql"                           | "system"             | "query_cache"         | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "sql_path"                      | "information_schema" | "schemata"            | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
 | "sql_user"                      | "system"             | "query_log"           | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "sql_user_privileges"           | "system"             | "query_log"           | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |

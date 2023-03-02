@@ -53,8 +53,9 @@ pub trait ItemManager {
 
 /// Pool assumes the items in it is `Clone`, thus it keeps only one item for each key.
 #[allow(clippy::type_complexity)]
+#[derive(Debug)]
 pub struct Pool<Mgr>
-where Mgr: ItemManager
+where Mgr: ItemManager + Debug
 {
     /// The first sleep time when `build()` fails.
     /// The next sleep time is 2 times of the previous one.
@@ -72,7 +73,7 @@ where Mgr: ItemManager
 
 impl<Mgr> Pool<Mgr>
 where
-    Mgr: ItemManager,
+    Mgr: ItemManager + Debug,
     Mgr::Key: Clone + Eq + Hash + Send + Debug,
     Mgr::Item: Clone + Sync + Send + Debug,
     Mgr::Error: Sync + Debug,
@@ -116,6 +117,7 @@ where
     ///
     /// When returning an existent one, `check()` will be called on it to ensure it is still valid.
     /// E.g., when returning a tcp connection.
+    #[tracing::instrument(level = "debug", err(Debug))]
     pub async fn get(&self, key: &Mgr::Key) -> Result<Mgr::Item, Mgr::Error> {
         let pool_item = self.get_pool_item(key);
 

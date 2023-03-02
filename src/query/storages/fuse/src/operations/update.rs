@@ -161,13 +161,19 @@ impl FuseTable {
         };
 
         let mut ops = Vec::with_capacity(update_list.len() + 1);
+        let mut exprs = Vec::with_capacity(update_list.len() + 1);
+
         for (id, remote_expr) in update_list.into_iter() {
             let expr = remote_expr
                 .as_expr(&BUILTIN_FUNCTIONS)
                 .project_column_ref(|name| input_schema.index_of(name).unwrap());
-            ops.push(BlockOperator::Map { expr });
+            exprs.push(expr);
             offset_map.insert(id, pos);
             pos += 1;
+        }
+
+        if !exprs.is_empty() {
+            ops.push(BlockOperator::Map { exprs });
         }
         ops.push(BlockOperator::Project {
             projection: offset_map.values().cloned().collect(),

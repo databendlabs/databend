@@ -22,6 +22,10 @@ use super::Task;
 use crate::optimizer::cascades::scheduler::Scheduler;
 use crate::optimizer::cascades::tasks::SharedCounter;
 use crate::optimizer::cascades::CascadesOptimizer;
+use crate::optimizer::RuleID;
+use crate::optimizer::RULE_FACTORY;
+use crate::plans::Operator;
+use crate::plans::RelOperator;
 use crate::IndexType;
 
 #[derive(Clone, Copy, Debug)]
@@ -140,6 +144,18 @@ impl ExploreExprTask {
         }
     }
 
+    fn calc_operator_rule_set(
+        &self,
+        optimizer: &CascadesOptimizer,
+        operator: &RelOperator,
+    ) -> roaring::RoaringBitmap {
+        unsafe {
+            operator.exploration_candidate_rules()
+                & (&RULE_FACTORY.exploration_rules)
+                & (&optimizer.explore_rule_set)
+        }
+    }
+
     fn explore_self(
         &mut self,
         optimizer: &mut CascadesOptimizer,
@@ -149,10 +165,11 @@ impl ExploreExprTask {
             .memo
             .group(self.group_index)?
             .m_expr(self.m_expr_index)?;
+        let rule_set = self.calc_operator_rule_set(optimizer, &m_expr.plan);
 
-        for rule in optimizer.explore_rules.iter() {
+        for rule_id in rule_set.iter() {
             let apply_rule_task = ApplyRuleTask::with_parent(
-                rule.id(),
+                unsafe { std::mem::transmute::<u8, RuleID>(rule_id as u8) },
                 m_expr.group_index,
                 m_expr.index,
                 &self.ref_count,

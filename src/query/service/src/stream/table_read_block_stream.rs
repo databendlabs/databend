@@ -43,6 +43,7 @@ impl<T: ?Sized + Table> ReadDataBlockStream for T {
         plan: &DataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let mut pipeline = Pipeline::create();
+        ctx.set_partitions(plan.parts.clone())?;
         self.read_data(ctx.clone(), plan, &mut pipeline)?;
 
         let settings = ctx.get_settings();

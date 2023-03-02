@@ -27,6 +27,7 @@
 #![feature(iterator_try_reduce)]
 #![feature(cursor_remaining)]
 #![feature(vec_into_raw_parts)]
+#![feature(associated_type_bounds)]
 
 extern crate core;
 

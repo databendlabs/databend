@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod aggregate_rewriter;
 mod distinct_to_groupby;
 mod grouping_check;
 mod lowering;
 mod name_resolution;
 mod type_check;
 
+pub use aggregate_rewriter::AggregateRewriter;
 pub use distinct_to_groupby::DistinctToGroupBy;
 pub use grouping_check::GroupingChecker;
 pub use name_resolution::compare_table_name;

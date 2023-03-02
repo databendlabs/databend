@@ -64,10 +64,11 @@ pub type StackHashSet<K, const N: usize = 16> = stack_hashtable::StackHashtable<
 pub type StackHashSetIter<'a, K> = stack_hashtable::StackHashtableIter<'a, K, ()>;
 pub type StackHashSetIterMut<'a, K> = stack_hashtable::StackHashtableIter<'a, K, ()>;
 
-pub type PartitionedHashMap<Inner, const BUCKETS_LG2: u32> =
-    partitioned_hashtable::PartitionedHashtable<Inner, BUCKETS_LG2>;
-pub type PartitionedHashSet<K, const BUCKETS_LG2: u32> =
-    partitioned_hashtable::PartitionedHashtable<HashSet<K>, BUCKETS_LG2>;
+pub type PartitionedHashMap<Inner, const BUCKETS_LG2: u32, const HIGH_BIT: bool = true> =
+    partitioned_hashtable::PartitionedHashtable<Inner, BUCKETS_LG2, HIGH_BIT>;
+pub type PartitionedHashSet<K, const BUCKETS_LG2: u32, const HIGH_BIT: bool = true> =
+    partitioned_hashtable::PartitionedHashtable<HashSet<K>, BUCKETS_LG2, HIGH_BIT>;
+
 pub type PartitionedHashMapIter<Inner> = partitioned_hashtable::PartitionedHashtableIter<Inner>;
 
 pub type ShortStringHashMap<K, V> = short_string_hashtable::ShortStringHashtable<K, V>;
@@ -95,3 +96,4 @@ pub type LookupHashMapIterMut<'a, K, const CAPACITY: usize, V> =
     LookupTableIterMut<'a, CAPACITY, K, V>;
 
 pub use keys_ref::KeysRef;
+pub use partitioned_hashtable::hash2bucket;

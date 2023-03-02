@@ -16,6 +16,7 @@ use std::collections::VecDeque;
 use std::iter::TrustedLen;
 use std::mem::MaybeUninit;
 use std::slice::IterMut;
+use std::vec::IntoIter;
 
 use crate::FastHash;
 use crate::HashSet;
@@ -23,24 +24,53 @@ use crate::HashtableKeyable;
 use crate::HashtableLike;
 use crate::PartitionedHashSet;
 
-pub struct PartitionedHashtable<Impl, const BUCKETS_LG2: u32 = 8> {
+pub struct PartitionedHashtable<Impl, const BUCKETS_LG2: u32, const HIGH_BIT: bool = true> {
     tables: Vec<Impl>,
 }
 
-impl<Impl, const BUCKETS_LG2: u32> PartitionedHashtable<Impl, BUCKETS_LG2> {
+impl<Impl, const BUCKETS_LG2: u32, const HIGH_BIT: bool>
+    PartitionedHashtable<Impl, BUCKETS_LG2, HIGH_BIT>
+{
     pub fn create(tables: Vec<Impl>) -> Self {
         assert_eq!(tables.len(), 1 << BUCKETS_LG2);
-        PartitionedHashtable::<Impl, BUCKETS_LG2> { tables }
+        PartitionedHashtable::<Impl, BUCKETS_LG2, HIGH_BIT> { tables }
     }
 }
 
-impl<Impl: HashtableLike, const BUCKETS_LG2: u32> PartitionedHashtable<Impl, BUCKETS_LG2> {
+impl<Impl: HashtableLike, const BUCKETS_LG2: u32, const HIGH_BIT: bool>
+    PartitionedHashtable<Impl, BUCKETS_LG2, HIGH_BIT>
+{
     pub fn iter_tables_mut(&mut self) -> IterMut<'_, Impl> {
         self.tables.iter_mut()
     }
+
+    pub fn into_iter_tables(self) -> IntoIter<Impl> {
+        self.tables.into_iter()
+    }
+
+    // #Unsafe the caller must ensure that the hashtable is not used after take_inner_tables
+    pub unsafe fn pop_first_inner_table(&mut self) -> Option<Impl> {
+        match self.tables.is_empty() {
+            true => None,
+            false => Some(self.tables.remove(0)),
+        }
+    }
 }
 
-impl<K: HashtableKeyable + FastHash, const BUCKETS_LG2: u32> PartitionedHashSet<K, BUCKETS_LG2> {
+/// crc32c hash will return a 32-bit hash value even it's type is u64.
+/// So we just need the low-32 bit to get the bucket index.
+#[inline(always)]
+pub fn hash2bucket<const BUCKETS_LG2: u32, const HIGH_BIT: bool>(hash: usize) -> usize {
+    if HIGH_BIT {
+        (hash >> (32 - BUCKETS_LG2)) & ((1 << BUCKETS_LG2) - 1)
+    } else {
+        hash & ((1 << BUCKETS_LG2) - 1)
+    }
+}
+
+impl<K: HashtableKeyable + FastHash, const BUCKETS_LG2: u32, const HIGH_BIT: bool>
+    PartitionedHashSet<K, BUCKETS_LG2, HIGH_BIT>
+{
     pub fn inner_sets_mut(&mut self) -> &mut Vec<HashSet<K>> {
         &mut self.tables
     }
@@ -60,13 +90,18 @@ impl<K: HashtableKeyable + FastHash, const BUCKETS_LG2: u32> PartitionedHashSet<
 
     pub fn set_insert(&mut self, key: &K) {
         let hash = key.fast_hash();
-        let index = hash as usize >> (64u32 - BUCKETS_LG2);
+        let index = hash2bucket::<BUCKETS_LG2, HIGH_BIT>(hash as usize);
         let _ = unsafe { self.tables[index].insert_and_entry_with_hash(key, hash) };
     }
 }
 
-impl<K: ?Sized + FastHash, V, Impl: HashtableLike<Key = K, Value = V>, const BUCKETS_LG2: u32>
-    HashtableLike for PartitionedHashtable<Impl, BUCKETS_LG2>
+impl<
+    K: ?Sized + FastHash,
+    V,
+    Impl: HashtableLike<Key = K, Value = V>,
+    const BUCKETS_LG2: u32,
+    const HIGH_BIT: bool,
+> HashtableLike for PartitionedHashtable<Impl, BUCKETS_LG2, HIGH_BIT>
 {
     type Key = Impl::Key;
     type Value = Impl::Value;
@@ -98,25 +133,25 @@ impl<K: ?Sized + FastHash, V, Impl: HashtableLike<Key = K, Value = V>, const BUC
 
     fn entry(&self, key: &Self::Key) -> Option<Self::EntryRef<'_>> {
         let hash = key.fast_hash();
-        let index = hash as usize >> (64u32 - BUCKETS_LG2);
+        let index = hash2bucket::<BUCKETS_LG2, HIGH_BIT>(hash as usize);
         self.tables[index].entry(key)
     }
 
     fn entry_mut(&mut self, key: &Self::Key) -> Option<Self::EntryMutRef<'_>> {
         let hash = key.fast_hash();
-        let index = hash as usize >> (64u32 - BUCKETS_LG2);
+        let index = hash2bucket::<BUCKETS_LG2, HIGH_BIT>(hash as usize);
         self.tables[index].entry_mut(key)
     }
 
     fn get(&self, key: &Self::Key) -> Option<&Self::Value> {
         let hash = key.fast_hash();
-        let index = hash as usize >> (64u32 - BUCKETS_LG2);
+        let index = hash2bucket::<BUCKETS_LG2, HIGH_BIT>(hash as usize);
         self.tables[index].get(key)
     }
 
     fn get_mut(&mut self, key: &Self::Key) -> Option<&mut Self::Value> {
         let hash = key.fast_hash();
-        let index = hash as usize >> (64u32 - BUCKETS_LG2);
+        let index = hash2bucket::<BUCKETS_LG2, HIGH_BIT>(hash as usize);
         self.tables[index].get_mut(key)
     }
 
@@ -125,7 +160,7 @@ impl<K: ?Sized + FastHash, V, Impl: HashtableLike<Key = K, Value = V>, const BUC
         key: &Self::Key,
     ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> {
         let hash = key.fast_hash();
-        let index = hash as usize >> (64u32 - BUCKETS_LG2);
+        let index = hash2bucket::<BUCKETS_LG2, HIGH_BIT>(hash as usize);
         self.tables[index].insert(key)
     }
 
@@ -135,7 +170,7 @@ impl<K: ?Sized + FastHash, V, Impl: HashtableLike<Key = K, Value = V>, const BUC
         key: &Self::Key,
     ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
         let hash = key.fast_hash();
-        let index = hash as usize >> (64u32 - BUCKETS_LG2);
+        let index = hash2bucket::<BUCKETS_LG2, HIGH_BIT>(hash as usize);
         self.tables[index].insert_and_entry_with_hash(key, hash)
     }
 
@@ -145,7 +180,7 @@ impl<K: ?Sized + FastHash, V, Impl: HashtableLike<Key = K, Value = V>, const BUC
         key: &Self::Key,
         hash: u64,
     ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
-        let index = hash as usize >> (64u32 - BUCKETS_LG2);
+        let index = hash2bucket::<BUCKETS_LG2, HIGH_BIT>(hash as usize);
         self.tables[index].insert_and_entry_with_hash(key, hash)
     }
 

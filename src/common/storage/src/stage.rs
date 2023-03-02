@@ -19,7 +19,7 @@ use common_exception::Result;
 use common_meta_app::principal::StageType;
 use common_meta_app::principal::UserStageInfo;
 use futures::TryStreamExt;
-use opendal::ObjectMetadata;
+use opendal::ObjectMetakey;
 use opendal::ObjectMode;
 use opendal::Operator;
 use regex::Regex;
@@ -29,14 +29,12 @@ use crate::DataOperator;
 
 pub struct FileWithMeta {
     pub path: String,
-    pub meta: ObjectMetadata,
 }
 
 impl FileWithMeta {
-    fn new(path: &str, meta: ObjectMetadata) -> Self {
+    fn new(path: &str) -> Self {
         Self {
             path: path.to_string(),
-            meta,
         }
     }
 }
@@ -84,9 +82,9 @@ impl StageFilesInfo {
                     .join(file)
                     .to_string_lossy()
                     .to_string();
-                let meta = operator.object(&full_path).metadata().await?;
+                let meta = operator.object(&full_path).stat().await?;
                 if meta.mode().is_file() {
-                    res.push(FileWithMeta::new(&full_path, meta))
+                    res.push(FileWithMeta::new(&full_path))
                 } else {
                     return Err(ErrorCode::BadArguments(format!(
                         "{full_path} is not a file"
@@ -131,9 +129,9 @@ impl StageFilesInfo {
                     .join(file)
                     .to_string_lossy()
                     .to_string();
-                let meta = operator.object(&full_path).blocking_metadata()?;
+                let meta = operator.object(&full_path).blocking_stat()?;
                 if meta.mode().is_file() {
-                    res.push(FileWithMeta::new(&full_path, meta))
+                    res.push(FileWithMeta::new(&full_path))
                 } else {
                     return Err(ErrorCode::BadArguments(format!(
                         "{full_path} is not a file"
@@ -158,10 +156,10 @@ async fn list_files_with_pattern(
     first_only: bool,
 ) -> Result<Vec<FileWithMeta>> {
     let root_obj = operator.object(path);
-    let root_meta = root_obj.metadata().await;
+    let root_meta = root_obj.metadata(ObjectMetakey::Mode).await;
     match root_meta {
         Ok(meta) => match meta.mode() {
-            ObjectMode::FILE => return Ok(vec![FileWithMeta::new(path, meta)]),
+            ObjectMode::FILE => return Ok(vec![FileWithMeta::new(path)]),
             ObjectMode::DIR => {}
             ObjectMode::Unknown => return Err(ErrorCode::BadArguments("object mode is unknown")),
         },
@@ -178,9 +176,9 @@ async fn list_files_with_pattern(
     let mut files = Vec::new();
     let mut list = operator.object(path).scan().await?;
     while let Some(obj) = list.try_next().await? {
-        let meta = obj.metadata().await?;
-        if check_file(obj.path(), &meta, &pattern) {
-            files.push(FileWithMeta::new(obj.path(), meta));
+        let meta = obj.metadata(ObjectMetakey::Mode).await?;
+        if check_file(obj.path(), meta.mode(), &pattern) {
+            files.push(FileWithMeta::new(obj.path()));
             if first_only {
                 return Ok(files);
             }
@@ -189,8 +187,8 @@ async fn list_files_with_pattern(
     Ok(files)
 }
 
-fn check_file(path: &str, meta: &ObjectMetadata, pattern: &Option<Regex>) -> bool {
-    if meta.mode().is_file() {
+fn check_file(path: &str, mode: ObjectMode, pattern: &Option<Regex>) -> bool {
+    if mode.is_file() {
         match pattern {
             Some(p) => p.is_match(path),
             None => true,
@@ -207,10 +205,10 @@ fn blocking_list_files_with_pattern(
     first_only: bool,
 ) -> Result<Vec<FileWithMeta>> {
     let root_obj = operator.object(path);
-    let root_meta = root_obj.blocking_metadata();
+    let root_meta = root_obj.blocking_metadata(ObjectMetakey::Mode);
     match root_meta {
         Ok(meta) => match meta.mode() {
-            ObjectMode::FILE => return Ok(vec![FileWithMeta::new(path, meta)]),
+            ObjectMode::FILE => return Ok(vec![FileWithMeta::new(path)]),
             ObjectMode::DIR => {}
             ObjectMode::Unknown => return Err(ErrorCode::BadArguments("object mode is unknown")),
         },
@@ -228,9 +226,9 @@ fn blocking_list_files_with_pattern(
     let list = root_obj.blocking_list()?;
     for obj in list {
         let obj = obj?;
-        let meta = obj.blocking_metadata()?;
-        if check_file(obj.path(), &meta, &pattern) {
-            files.push(FileWithMeta::new(obj.path(), meta));
+        let meta = obj.blocking_metadata(ObjectMetakey::Mode)?;
+        if check_file(obj.path(), meta.mode(), &pattern) {
+            files.push(FileWithMeta::new(obj.path()));
             if first_only {
                 return Ok(files);
             }

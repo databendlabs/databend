@@ -144,6 +144,7 @@ function install_protobuf {
 		unzip protoc-3.15.8-linux-${arch}.zip -d protoc-3.15.8
 		sudo cp protoc-3.15.8/bin/protoc /usr/local/bin/
 		sudo rm -rf protoc-3.15.8*
+		sudo chmod +x /usr/local/bin/protoc
 		;;
 	esac
 }
@@ -504,7 +505,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	cargo version
 
 	# Install tools that needed in build
-	cargo install sccache@0.4.0-pre.3 --git https://github.com/mozilla/sccache --tag "v0.4.0-pre.3"
+	cargo install sccache@0.4.0-pre.7 --git https://github.com/mozilla/sccache --tag "v0.4.0-pre.7"
 fi
 
 if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then

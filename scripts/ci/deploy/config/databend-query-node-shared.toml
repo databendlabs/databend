@@ -109,7 +109,7 @@ data_path = "./.databend/stateless_test_data"
 
 ### table meta caches ###
 # Enable table meta cache. Default is true.
-# Set it to false wll disable all the table meta caches
+# Set it to false will disable all the table meta caches
 enable_table_meta_cache = true
 # Max number of cached table snapshot. Set it to 0 to disable it.
 table_meta_snapshot_count = 256

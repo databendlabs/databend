@@ -136,6 +136,7 @@ message UserStageInfo {
       FsStorageConfig fs = 2;
       GcsStorageConfig gcs = 3;
       OssStorageConfig oss = 4;
+      WebhdfsStorageConfig webhdfs = 5;
     }
   }
 

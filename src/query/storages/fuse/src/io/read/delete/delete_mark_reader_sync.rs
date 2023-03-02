@@ -100,6 +100,7 @@ fn sync_load_delete_mark_data<'a>(
         location,
         len_hint: None,
         ver: 0,
+        put_cache: true,
     };
     cached_reader.sync_read(&param)
 }
@@ -118,6 +119,7 @@ fn sync_load_mark_meta(dal: Operator, path: &str, size: u64) -> Result<Arc<Delet
         location: path_owned,
         len_hint: Some(size),
         ver: version,
+        put_cache: true,
     };
 
     reader.sync_read(&load_params)

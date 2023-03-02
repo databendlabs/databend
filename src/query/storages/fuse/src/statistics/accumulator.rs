@@ -100,10 +100,9 @@ impl StatisticsAccumulator {
         Ok(())
     }
 
-    pub fn add_with_block_meta(&mut self, block_meta: BlockMeta) -> Result<()> {
+    pub fn add_with_block_meta(&mut self, block_meta: BlockMeta) {
         self.summary_row_count += block_meta.row_count;
         self.summary_block_count += 1;
-        self.summary_delete_count += block_meta.delete_row_count;
         self.in_memory_size += block_meta.block_size;
         self.file_size += block_meta.file_size;
         self.index_size += block_meta.bloom_filter_index_size;
@@ -117,7 +116,6 @@ impl StatisticsAccumulator {
         }
 
         self.blocks_metas.push(Arc::new(block_meta));
-        Ok(())
     }
 
     pub fn summary(&self) -> Result<StatisticsOfColumns> {

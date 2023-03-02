@@ -14,6 +14,7 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![feature(box_patterns)]
+#![feature(let_chains)]
 
 pub mod evaluator;
 pub mod executor;

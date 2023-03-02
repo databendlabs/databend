@@ -707,6 +707,24 @@ impl FallbackKey {
     }
 }
 
+#[cfg(all(any(target_arch = "x86_64"), target_feature = "sse4.2"))]
+impl PartialEq for FallbackKey {
+    fn eq(&self, other: &Self) -> bool {
+        if self.hash == other.hash {
+            match (self.key, other.key) {
+                (Some(a), Some(b)) => unsafe {
+                    crate::utils::sse::memcmp_sse(a.as_ref(), b.as_ref())
+                },
+                (None, None) => true,
+                _ => false,
+            }
+        } else {
+            false
+        }
+    }
+}
+
+#[cfg(not(all(any(target_arch = "x86_64"), target_feature = "sse4.2")))]
 impl PartialEq for FallbackKey {
     fn eq(&self, other: &Self) -> bool {
         if self.hash == other.hash {

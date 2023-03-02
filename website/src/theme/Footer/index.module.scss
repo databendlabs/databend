@@ -1,0 +1,34 @@
+.footer{
+  padding: 20px;
+  background-color: transparent;
+  max-width: 1280px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  color: var(--color-text-0);
+  flex-wrap: wrap;
+  p{
+    min-width: 360px;
+    width: fit-content;
+  }
+  .footerItems{
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    flex-wrap: wrap;
+    .icon{
+      display: flex;
+    }
+    h6{
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      min-width: 72px;
+      width: fit-content;
+      &:hover{
+        color: var(--color-primary);
+      }
+    }
+  }
+}
