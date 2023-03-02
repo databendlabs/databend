@@ -119,6 +119,17 @@ impl DataType {
         }
     }
 
+    pub fn has_generic(&self) -> bool {
+        match self {
+            DataType::Generic(_) => true,
+            DataType::Nullable(ty) => ty.has_generic(),
+            DataType::Array(ty) => ty.has_generic(),
+            DataType::Map(ty) => ty.has_generic(),
+            DataType::Tuple(tys) => tys.iter().any(|ty| ty.has_generic()),
+            _ => false,
+        }
+    }
+
     pub fn is_unsigned_numeric(&self) -> bool {
         match self {
             DataType::Number(ty) => ALL_UNSIGNED_INTEGER_TYPES.contains(ty),
