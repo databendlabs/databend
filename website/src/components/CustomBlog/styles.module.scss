@@ -393,6 +393,13 @@
                         gap: 8px;
                         padding: 32px 0;
                         padding-bottom: 24px;
+
+                        h5,a{
+                            display: flex;
+                            gap: 4px;
+                            align-items: center;
+                            margin: 0;
+                        }
                     }
                     
                 }
