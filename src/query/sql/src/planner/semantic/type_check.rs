@@ -75,6 +75,7 @@ use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::plans::Unnest;
 use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnBinding;
@@ -1448,6 +1449,7 @@ impl<'a> TypeChecker<'a> {
             "is_null",
             "coalesce",
             "last_query_id",
+            "unnest",
         ]
     }
 
@@ -1698,6 +1700,35 @@ impl<'a> TypeChecker<'a> {
                     )
                     .await,
                 )
+            }
+            ("unnest", args) => {
+                if args.len() != 1 {
+                    return Some(Err(ErrorCode::SemanticError(
+                        "Unnest can only be applied to one array type argument".to_string(),
+                    )
+                    .set_span(span)));
+                }
+                let inner_res = self.resolve(args[0], None).await;
+                if inner_res.is_err() {
+                    return Some(inner_res);
+                }
+                let box (inner_expr, inner_type) = inner_res.unwrap();
+                Some(match inner_type {
+                    DataType::Array(inner) => {
+                        let return_type = inner.clone();
+                        Ok(Box::new((
+                            ScalarExpr::Unnest(Unnest {
+                                return_type,
+                                argument: Box::new(inner_expr),
+                            }),
+                            *inner,
+                        )))
+                    }
+                    _ => Err(ErrorCode::SemanticError(
+                        "Unnest can only be applied to one array type argument".to_string(),
+                    )
+                    .set_span(span)),
+                })
             }
             _ => None,
         }

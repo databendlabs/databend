@@ -44,14 +44,14 @@ externalStageParams ::=
   )
 ```
 
-| Parameter                 	  | Description                                                                 	                                                                                                         | Required 	   |
-|------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------|
-| URL      	                   | External files located at the AWS S3 compatible object storage.              	                                                                                                        | **Required** |
-| ENDPOINT_URL               	 | The bucket endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`. | Optional 	   |
-| ACCESS_KEY_ID             	  | Your access key ID for connecting the AWS S3 compatible object storage. If not provided, Databend will access the bucket anonymously.    	                                            | Optional     |
-| SECRET_ACCESS_KEY         	  | Your secret access key for connecting the AWS S3 compatible object storage. 	                                                                                                         | Optional     |
-| REGION                    	  | AWS region name. For example, us-east-1.                                    	                                                                                                         | Optional 	   |
-| ENABLE_VIRTUAL_HOST_STYLE 	  | If you use virtual hosting to address the bucket, set it to "true".                                                                                                                   | Optional 	   |
+| Parameter                 | Description                                                                                                                                                                           | Required     |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| URL                       | External files located at the AWS S3 compatible object storage.                                                                                                                       | **Required** |
+| ENDPOINT_URL              | The bucket endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`. | Optional     |
+| ACCESS_KEY_ID             | Your access key ID for connecting the AWS S3 compatible object storage. If not provided, Databend will access the bucket anonymously.                                                 | Optional     |
+| SECRET_ACCESS_KEY         | Your secret access key for connecting the AWS S3 compatible object storage.                                                                                                           | Optional     |
+| REGION                    | AWS region name. For example, us-east-1.                                                                                                                                              | Optional     |
+| ENABLE_VIRTUAL_HOST_STYLE | If you use virtual hosting to address the bucket, set it to "true".                                                                                                                   | Optional     |
 
 </TabItem>
 
@@ -67,12 +67,12 @@ externalStageParams ::=
   )
 ```
 
-| Parameter                  	 | Description                                              	                                                                                                                                    | Required 	     |
-|------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------|
-| URL  	                       | External files located at the Azure Blob storage.        	                                                                                                                                    | **Required** 	 |
-| ENDPOINT_URL               	 | The container endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`.    	 | Optional 	     |
-| ACCOUNT_NAME               	 | Your account name for connecting the Azure Blob storage. If not provided, Databend will access the container anonymously.	                                                                    | Optional 	     |
-| ACCOUNT_KEY                	 | Your account key for connecting the Azure Blob storage.  	                                                                                                                                    | Optional 	     |
+| Parameter    | Description                                                                                                                                                                              | Required     |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| URL          | External files located at the Azure Blob storage.                                                                                                                                        | **Required** |
+| ENDPOINT_URL | The container endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`. | Optional     |
+| ACCOUNT_NAME | Your account name for connecting the Azure Blob storage. If not provided, Databend will access the container anonymously.                                                                | Optional     |
+| ACCOUNT_KEY  | Your account key for connecting the Azure Blob storage.                                                                                                                                  | Optional     |
 
 </TabItem>
 
@@ -87,11 +87,11 @@ externalLocation ::=
   )
 ```
 
-| Parameter | Description                                                                                                                                                                              | Required |
-| -- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| URL | External files located at the Google Cloud Storage                                                                                                                                       | **Required** |
-| ENDPOINT_URL | The container endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`. | Optional |
-| CREDENTIAL | Your credential for connecting the GCS. If not provided, Databend will access the container anonymously.                                                                                 | Optional |
+| Parameter    | Description                                                                                                                                                                              | Required     |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| URL          | External files located at the Google Cloud Storage                                                                                                                                       | **Required** |
+| ENDPOINT_URL | The container endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`. | Optional     |
+| CREDENTIAL   | Your credential for connecting the GCS. If not provided, Databend will access the container anonymously.                                                                                 | Optional     |
 
 </TabItem>
 
@@ -107,12 +107,31 @@ externalLocation ::=
   )
 ```
 
-| Parameter | Description                                                                                                                                                                              | Required |
-| -- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| URL | External files located at the obs                                                                                                                                                        | **Required** |
-| ENDPOINT_URL | The container endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`. | **Required** |
-| ACCESS_KEY_ID | Your access key ID for connecting the OBS. If not provided, Databend will access the bucket anonymously.                                                                                 | Optional |
-| SECRET_ACCESS_KEY | Your secret access key for connecting the OBS.                                                                                                                                           | Optional |
+| Parameter         | Description                                                                                                                                                                              | Required     |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| URL               | External files located at the obs                                                                                                                                                        | **Required** |
+| ENDPOINT_URL      | The container endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`. | **Required** |
+| ACCESS_KEY_ID     | Your access key ID for connecting the OBS. If not provided, Databend will access the bucket anonymously.                                                                                 | Optional     |
+| SECRET_ACCESS_KEY | Your secret access key for connecting the OBS.                                                                                                                                           | Optional     |
+
+</TabItem>
+
+<TabItem value="WebHDFS Storage" label="WebHDFS Storage">
+
+```sql
+externalLocation ::=
+  URL = "webhdfs://<endpoint_url[<path>]"
+  CONNECTION = (
+    [ HTTPS = 'true'|'false' ]
+    [ DELEGATION = '<your-delegation-token>' ]
+  )
+```
+
+| Parameter  | Description                                                                                                                                                                                                                                         | Required     |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| URL        | External endpoint and location of files.                                                                                                                                                                                                            | **Required** |
+| HTTPS      | Connect to RESTful API with HTTP or HTTPS, set to `true` will use `HTTPS`, else `HTTP`. Use `HTTPS` by default. To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`. | Optional     |
+| DELEGATION | Delegation token of WebHDFS for authentication. If not set, no tokens will be used in further operations.                                                                                                                                           | Optional     |
 
 </TabItem>
 
@@ -123,17 +142,17 @@ externalLocation ::=
 For details about `FILE_FORMAT`, see [Input & Output File Formats](../../../13-sql-reference/50-file-format-options.md).
 
 ### copyOptions
+
 ```
 copyOptions ::=
   [ SIZE_LIMIT = <num> ]
   [ PURGE = <bool> ]
 ```
 
-| Parameters  | Description | Required |
-| ----------- | ----------- | --- |
-| `SIZE_LIMIT = <num>` | Number (> 0) that specifies the maximum rows of data to be loaded for a given COPY statement. Default `0` | Optional |
-| `PURGE = <bool>` | True specifies that the command will purge the files in the stage if they are loaded successfully into table. Default `false` | Optional |
-
+| Parameters           | Description                                                                                                                   | Required |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `SIZE_LIMIT = <num>` | Number (> 0) that specifies the maximum rows of data to be loaded for a given COPY statement. Default `0`                     | Optional |
+| `PURGE = <bool>`     | True specifies that the command will purge the files in the stage if they are loaded successfully into table. Default `false` | Optional |
 
 ## Examples
 
@@ -143,8 +162,8 @@ copyOptions ::=
 CREATE STAGE my_internal_stage;
 ```
 
-
 ### External Stages
+
 ```sql
 CREATE STAGE my_s3_stage URL='s3://load/files/' CONNECTION = (ACCESS_KEY_ID = '<your-access-key-id>' SECRET_ACCESS_KEY = '<your-secret-access-key>');
 ```

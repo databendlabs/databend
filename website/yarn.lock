@@ -1201,9 +1201,10 @@
     react-helmet-async "*"
     react-loadable "npm:@docusaurus/react-loadable@5.5.2"
 
-"@docusaurus/plugin-content-blog@2.3.1":
+"@docusaurus/plugin-content-blog@2.3.1", "@docusaurus/plugin-content-blog@^2.2.0":
   version "2.3.1"
-  resolved "https://registry.npmjs.org/@docusaurus/plugin-content-blog/-/plugin-content-blog-2.3.1.tgz"
+  resolved "https://registry.npmmirror.com/@docusaurus/plugin-content-blog/-/plugin-content-blog-2.3.1.tgz#236b8ee4f20f7047aa9c285ae77ae36683ad48a3"
+  integrity sha512-f5LjqX+9WkiLyGiQ41x/KGSJ/9bOjSD8lsVhPvYeUYHCtYpuiDKfhZE07O4EqpHkBx4NQdtQDbp+aptgHSTuiw==
   dependencies:
     "@docusaurus/core" "2.3.1"
     "@docusaurus/logger" "2.3.1"
@@ -2089,6 +2090,11 @@ acorn-walk@^8.0.0:
 acorn@^8.0.4, acorn@^8.5.0, acorn@^8.7.1:
   version "8.8.2"
   resolved "https://registry.npmjs.org/acorn/-/acorn-8.8.2.tgz"
+
+add@^2.0.6:
+  version "2.0.6"
+  resolved "https://registry.npmmirror.com/add/-/add-2.0.6.tgz#248f0a9f6e5a528ef2295dbeec30532130ae2235"
+  integrity sha512-j5QzrmsokwWWp6kUcJQySpbG+xfOBqqKnup3OIk1pz+kB/80SLorZ9V8zHFLO92Lcd+hbvq8bT+zOGoPkmBV0Q==
 
 address@^1.0.1, address@^1.1.2:
   version "1.2.2"
@@ -6857,6 +6863,11 @@ yallist@^4.0.0:
 yaml@^1.10.0, yaml@^1.10.2, yaml@^1.7.2:
   version "1.10.2"
   resolved "https://registry.npmjs.org/yaml/-/yaml-1.10.2.tgz"
+
+yarn@^1.22.19:
+  version "1.22.19"
+  resolved "https://registry.npmmirror.com/yarn/-/yarn-1.22.19.tgz#4ba7fc5c6e704fce2066ecbfb0b0d8976fe62447"
+  integrity sha512-/0V5q0WbslqnwP91tirOvldvYISzaqhClxzyUKXYxs07yUILIs5jx/k6CFe8bvKSkds5w+eiOqta39Wk3WxdcQ==
 
 yauzl@^2.10.0:
   version "2.10.0"

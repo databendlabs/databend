@@ -19,6 +19,7 @@ use common_functions::scalars::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::DistributedInsertSelect;
+use super::Unnest;
 use crate::executor::AggregateFinal;
 use crate::executor::AggregatePartial;
 use crate::executor::EvalScalar;
@@ -65,6 +66,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ExchangeSink(sink) => write!(f, "{}", sink)?,
             PhysicalPlan::UnionAll(union_all) => write!(f, "{}", union_all)?,
             PhysicalPlan::DistributedInsertSelect(insert_select) => write!(f, "{}", insert_select)?,
+            PhysicalPlan::Unnest(unnest) => write!(f, "{}", unnest)?,
         }
 
         for node in self.node.children() {
@@ -294,5 +296,17 @@ impl Display for UnionAll {
 impl Display for DistributedInsertSelect {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DistributedInsertSelect")
+    }
+}
+
+impl Display for Unnest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let columns = self
+            .offsets
+            .iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        write!(f, "Unnest: column: [{}]", columns)
     }
 }

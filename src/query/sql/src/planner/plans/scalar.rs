@@ -35,6 +35,7 @@ pub enum ScalarExpr {
     ComparisonExpr(ComparisonExpr),
     AggregateFunction(AggregateFunction),
     FunctionCall(FunctionCall),
+    Unnest(Unnest),
     // TODO(leiysky): maybe we don't need this variant any more
     // after making functions static typed?
     CastExpr(CastExpr),
@@ -54,6 +55,7 @@ impl ScalarExpr {
             ScalarExpr::FunctionCall(scalar) => (*scalar.return_type).clone(),
             ScalarExpr::CastExpr(scalar) => (*scalar.target_type).clone(),
             ScalarExpr::SubqueryExpr(scalar) => scalar.data_type(),
+            ScalarExpr::Unnest(scalar) => (*scalar.return_type).clone(),
         }
     }
 
@@ -93,6 +95,7 @@ impl ScalarExpr {
             }
             ScalarExpr::CastExpr(scalar) => scalar.argument.used_columns(),
             ScalarExpr::SubqueryExpr(scalar) => scalar.outer_columns.clone(),
+            ScalarExpr::Unnest(scalar) => scalar.argument.used_columns(),
         }
     }
 }
@@ -220,6 +223,23 @@ impl TryFrom<ScalarExpr> for AggregateFunction {
             Err(ErrorCode::Internal(
                 "Cannot downcast Scalar to AggregateFunction",
             ))
+        }
+    }
+}
+
+impl From<Unnest> for ScalarExpr {
+    fn from(v: Unnest) -> Self {
+        Self::Unnest(v)
+    }
+}
+
+impl TryFrom<ScalarExpr> for Unnest {
+    type Error = ErrorCode;
+    fn try_from(value: ScalarExpr) -> Result<Self> {
+        if let ScalarExpr::Unnest(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal("Cannot downcast Scalar to Unnest"))
         }
     }
 }
@@ -385,6 +405,12 @@ pub struct FunctionCall {
     pub arguments: Vec<ScalarExpr>,
 
     pub func_name: String,
+    pub return_type: Box<DataType>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Unnest {
+    pub argument: Box<ScalarExpr>,
     pub return_type: Box<DataType>,
 }
 

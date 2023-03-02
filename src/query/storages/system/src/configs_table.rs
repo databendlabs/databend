@@ -109,6 +109,9 @@ impl SyncSystemTable for ConfigsTable {
         storage_config.gcs.credential = mask_string(&storage_config.gcs.credential, 3);
         storage_config.azblob.account_name = mask_string(&storage_config.azblob.account_name, 3);
         storage_config.azblob.account_key = mask_string(&storage_config.azblob.account_key, 3);
+        storage_config.webhdfs.webhdfs_delegation =
+            mask_string(&storage_config.webhdfs.webhdfs_delegation, 3);
+
         let storage_config_value = serde_json::to_value(storage_config)?;
         ConfigsTable::extract_config(
             &mut names,
