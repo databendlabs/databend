@@ -113,7 +113,7 @@ tar zxvf ../databend-$ver-x86_64-unknown-linux-musl.tar.gz
 sudo mkdir /var/log/databend
 sudo mkdir /var/lib/databend
 sudo chown -R $USER /var/log/databend
-sudo chown -R $USER /var/log/databend
+sudo chown -R $USER /var/lib/databend
 ```
 
 ![ ](../static/img/blog/databend-minio-beginner-01-3.png)
