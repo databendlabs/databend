@@ -2,7 +2,7 @@ import React from "react";
 import styles from "./styles.module.scss";
 import clsx from "clsx";
 import Layout from "@theme/Layout";
-import { Return , ArrowLeft, ArrowRight} from "../Icons";
+import { ArrowLeft, ArrowRight, Return} from "../Icons";
 import Link from "@docusaurus/Link";
 import useBaseUrl from "@docusaurus/useBaseUrl";
 import AvatarGroup from "../BaseComponents/AvatarGroup";
@@ -48,15 +48,15 @@ const BlogPostDetails = (props) => {
                   styles.postContentTitleReturn
                 )}
               >
-                <Return size={20} />
-                Return
+              <Return size={16} />
+              Return
               </Link>
               <h1>{metadata.title}</h1>
               <p className={clsx(styles.Date)}>
                 <p>{metadata.formattedDate} · {metadata.readingTime} min read </p>
-                {metadata.tags.map((tag) => {
+                {metadata.tags.map((tag,index) => {
                   return (
-                    <a href={tag.permalink} className={clsx(styles.Tag)}>
+                    <a href={tag.permalink} className={clsx(styles.Tag)} key={index}>
                       #{tag.label}
                     </a>
                   );
@@ -110,17 +110,16 @@ const BlogPostDetails = (props) => {
                 <></>
               )}
               <hr/>
-              {BlogPostNav({prevPost:metadata.prevItem,nextPost:metadata.nextItem}) }
-{/*               <BlogPostNav prevPost={metadata.prevItem} nextPost={metadata.nextItem}/>
- */}            </div>
+               <BlogPostNav prevPost={metadata.prevItem} nextPost={metadata.nextItem}/>
+            </div>
           </div>
           <aside>
             <div className={clsx("post-recent", styles.postRecent)}>
               <h4>Recent Blog</h4>
               <ul>
-                {props.sidebar.items.map((item) => {
+                {props.sidebar.items.map((item,index) => {
                   return (
-                    <li>
+                    <li key={index}>
                       <a href={item.permalink}>{item.title}</a>
                     </li>
                   );
@@ -130,7 +129,6 @@ const BlogPostDetails = (props) => {
           </aside>
         </div>
       </section>
-      {console.log(metadata)}
     </Layout>
   );
 };
