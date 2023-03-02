@@ -165,20 +165,14 @@ impl BlockOperator {
         let num_rows = unnest_values.len();
         // Convert unnest_offsets to take indices.
         let mut take_indices = Vec::with_capacity(num_rows);
-        let offset_len = unnest_offsets.len() - 1;
-        for i in 0..offset_len {
-            let (from, end) = unsafe {
-                (
-                    *unnest_offsets.get_unchecked(i) as usize,
-                    *unnest_offsets.get_unchecked(i + 1) as usize,
-                )
-            };
-            take_indices.extend(vec![i as u64; end - from]);
+        for (i, offset) in unnest_offsets.windows(2).enumerate() {
+            take_indices.extend(vec![i as u64; (offset[1] - offset[0]) as usize]);
         }
 
         let mut cols = Vec::with_capacity(input.num_columns());
         let meta = input.get_meta().cloned();
 
+        let offset_len = unnest_offsets.len() - 1;
         for (i, col) in input.columns().iter().enumerate() {
             if i == *unnest_index {
                 let (from, end) = unsafe {
