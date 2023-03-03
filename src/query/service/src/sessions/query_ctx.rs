@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::future::Future;
 use std::net::SocketAddr;
@@ -380,6 +381,10 @@ impl TableContext for QueryContext {
 
     fn get_last_query_id(&self, index: i32) -> String {
         self.shared.session.session_ctx.get_last_query_id(index)
+    }
+
+    fn get_query_id_history(&self) -> HashSet<String> {
+        self.shared.session.session_ctx.get_query_id_history()
     }
 
     fn get_result_cache_key(&self, query_id: &str) -> Option<String> {
