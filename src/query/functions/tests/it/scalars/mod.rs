@@ -253,6 +253,42 @@ fn list_all_builtin_functions() {
 }
 
 #[test]
+fn list_all_builtin_functions_with_ordered() {
+    let mut mint = Mint::new("tests/it/scalars/testdata");
+    let file = &mut mint.new_goldenfile("function_list_ordered.txt").unwrap();
+
+    let fn_registry = &BUILTIN_FUNCTIONS;
+
+    let mut funcs = fn_registry
+        .funcs
+        .iter()
+        .flat_map(|(_name, funcs)| funcs)
+        .map(|(func, seq)| {
+            (
+                (func.signature.name.clone(), *seq),
+                format!("{}", func.signature),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let facts = fn_registry
+        .factories
+        .iter()
+        .flat_map(|(name, funcs)| {
+            funcs
+                .iter()
+                .map(|(_, seq)| ((name.clone(), *seq), "FACTORY".to_string()))
+        })
+        .collect::<Vec<_>>();
+
+    funcs.extend(facts);
+    funcs.sort();
+    for ((name, seq), sig) in funcs {
+        writeln!(file, "{name} {seq} {sig}").unwrap();
+    }
+}
+
+#[test]
 fn check_ambiguity() {
     BUILTIN_FUNCTIONS.check_ambiguity()
 }
