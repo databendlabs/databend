@@ -74,7 +74,10 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_string_to_number(registry);
     register_number_to_string(registry);
     register_number_to_number(registry);
+    register_arithmetic(registry);
+}
 
+fn register_arithmetic(registry: &mut FunctionRegistry) {
     for left in ALL_NUMERICS_TYPES {
         for right in ALL_NUMERICS_TYPES {
             with_number_mapped_type!(|L| match left {
