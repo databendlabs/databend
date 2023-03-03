@@ -22,6 +22,8 @@ fmt:
 lint:
 	cargo fmt --all
 
+	cargo clippy --workspace --all-targets -- -D warnings
+
 	# Check unused deps(make setup to install)
 	cargo machete
 	# Check typos(make setup to install)
@@ -32,8 +34,6 @@ lint:
 	black tests/
 	# Bash file formatter(make setup to install)
 	shfmt -l -w scripts/*
-
-	cargo clippy --workspace --all-targets -- -D warnings
 
 lint-yaml:
 	yamllint -f auto .

@@ -1029,7 +1029,7 @@ impl PipelineBuilder {
     ) -> Result<()> {
         self.build_pipeline(left_side)?;
         self.main_pipeline.add_transform(|input, output| {
-            let processor = TransformRuntimeFilter::new(input, output, state.clone());
+            let processor = TransformRuntimeFilter::create(input, output, state.clone());
             Ok(ProcessorPtr::create(processor))
         })?;
         Ok(())

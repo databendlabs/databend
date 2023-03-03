@@ -68,7 +68,7 @@ pub struct TransformRuntimeFilter {
 }
 
 impl TransformRuntimeFilter {
-    pub fn new(
+    pub fn create(
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
         connector: Arc<dyn RuntimeFilterConnector>,

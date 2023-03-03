@@ -672,9 +672,10 @@ fn runtime_filter_source_to_format_tree(
     metadata: &MetadataRef,
     prof_span_set: &ProfSpanSetRef,
 ) -> Result<FormatTreeNode<String>> {
-    let mut children = vec![];
-    children.push(to_format_tree(&plan.left_side, metadata, prof_span_set)?);
-    children.push(to_format_tree(&plan.right_side, metadata, prof_span_set)?);
+    let children = vec![
+        to_format_tree(&plan.left_side, metadata, prof_span_set)?,
+        to_format_tree(&plan.right_side, metadata, prof_span_set)?,
+    ];
     Ok(FormatTreeNode::with_children(
         "RuntimeFilterSource".to_string(),
         children,
