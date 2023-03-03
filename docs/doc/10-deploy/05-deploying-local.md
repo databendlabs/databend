@@ -35,6 +35,25 @@ Make sure you have installed a MySQL client.
 ./scripts/start.sh
 ```
 
+:::tip
+In case you encounter the subsequent error messages while attempting to start Databend:
+
+```shell
+==> query.log <==
+: No getcpu support: percpu_arena:percpu
+: option background_thread currently supports pthread only
+Databend Query start failure, cause: Code: 1104, displayText = failed to create appender: Os { code: 13, kind: PermissionDenied, message: "Permission denied" }.
+```
+Run the following commands and try starting Databend again:
+
+```shell
+sudo mkdir /var/log/databend
+sudo mkdir /var/lib/databend
+sudo chown -R $USER /var/log/databend
+sudo chown -R $USER /var/lib/databend
+```
+:::
+
 3. Run the following command to verify Databend has been started successfully:
 
 ```shell
