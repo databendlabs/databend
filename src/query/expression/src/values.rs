@@ -426,7 +426,7 @@ impl PartialOrd for Scalar {
             (Scalar::Map(m1), Scalar::Map(m2)) => m1.partial_cmp(m2),
             (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
             (Scalar::Variant(v1), Scalar::Variant(v2)) => {
-                common_jsonb::compare(v1.as_slice(), v2.as_slice()).ok()
+                jsonb::compare(v1.as_slice(), v2.as_slice()).ok()
             }
             _ => None,
         }
@@ -460,7 +460,7 @@ impl PartialOrd for ScalarRef<'_> {
             (ScalarRef::Array(a1), ScalarRef::Array(a2)) => a1.partial_cmp(a2),
             (ScalarRef::Map(m1), ScalarRef::Map(m2)) => m1.partial_cmp(m2),
             (ScalarRef::Tuple(t1), ScalarRef::Tuple(t2)) => t1.partial_cmp(t2),
-            (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => common_jsonb::compare(v1, v2).ok(),
+            (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => jsonb::compare(v1, v2).ok(),
             _ => None,
         }
     }
@@ -546,7 +546,7 @@ impl PartialOrd for Column {
             }
             (Column::Variant(col1), Column::Variant(col2)) => col1
                 .iter()
-                .partial_cmp_by(col2.iter(), |v1, v2| common_jsonb::compare(v1, v2).ok()),
+                .partial_cmp_by(col2.iter(), |v1, v2| jsonb::compare(v1, v2).ok()),
             _ => None,
         }
     }

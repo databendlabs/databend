@@ -93,6 +93,7 @@ openraft = { git = "https://github.com/datafuselabs/openraft", tag = "v0.7.4" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
 opendal = { version = "0.29.0" }
 ordered-float = { version = "3.4.0", default-features = false }
+jsonb = { version = "0.1.1" }
 
 # type helper
 derive_more = "0.99.17"

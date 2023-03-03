@@ -22,8 +22,8 @@ use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Scalar;
 use common_expression::Value;
-use common_jsonb::Value as JsonbValue;
 use common_storages_stage::StageTable;
+use jsonb::Value as JsonbValue;
 use opendal::ops::OpWrite;
 
 use crate::interpreters::Interpreter;
