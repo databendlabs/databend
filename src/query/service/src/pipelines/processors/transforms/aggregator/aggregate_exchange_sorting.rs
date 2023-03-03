@@ -37,27 +37,29 @@ use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::HashTableCell;
 use crate::sessions::QueryContext;
 
-pub struct AggregateExchangeSorting {}
-
-impl AggregateExchangeSorting {
-    pub fn create() -> Arc<dyn ExchangeSorting> {
-        Arc::new(AggregateExchangeSorting {})
-    }
+struct AggregateExchangeSorting<Method: HashMethodBounds, V: Send + Sync + 'static> {
+    _phantom: PhantomData<(Method, V)>,
 }
 
-impl ExchangeSorting for AggregateExchangeSorting {
+impl<Method: HashMethodBounds, V: Send + Sync + 'static> ExchangeSorting
+    for AggregateExchangeSorting<Method, V>
+{
     fn block_number(&self, data_block: &DataBlock) -> Result<isize> {
         match data_block.get_meta() {
             None => Ok(-1),
-            Some(block_meta_info) => match AggregateSerdeMeta::downcast_ref_from(block_meta_info) {
-                None => Err(ErrorCode::Internal(
-                    "Internal error, AggregateExchangeSorting only recv AggregateSerdeMeta",
-                )),
-                Some(meta_info) => match meta_info.typ == BUCKET_TYPE {
-                    true => Ok(meta_info.bucket),
-                    false => Ok(-1),
-                },
-            },
+            Some(block_meta_info) => {
+                match AggregateMeta::<Method, V>::downcast_ref_from(block_meta_info) {
+                    None => Err(ErrorCode::Internal(
+                        "Internal error, AggregateExchangeSorting only recv AggregateMeta",
+                    )),
+                    Some(meta_info) => match meta_info {
+                        AggregateMeta::Partitioned { .. } => unreachable!(),
+                        AggregateMeta::Serialized(v) => Ok(v.bucket),
+                        AggregateMeta::HashTable(v) => Ok(v.bucket),
+                        AggregateMeta::Spilling(_) | AggregateMeta::Spilled(_) => Ok(-1),
+                    },
+                }
+            }
         }
     }
 }
@@ -152,6 +154,15 @@ pub struct AggregateInjector<Method: HashMethodBounds, V: Copy + Send + Sync + '
     _phantom: PhantomData<V>,
 }
 
+impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> AggregateInjector<Method, V> {
+    pub fn create(method: Method) -> Arc<dyn ExchangeInjector> {
+        Arc::new(AggregateInjector::<Method, V> {
+            method,
+            _phantom: Default::default(),
+        })
+    }
+}
+
 impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
     for AggregateInjector<Method, V>
 {
@@ -171,5 +182,11 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
                 })))
             }
         }
+    }
+
+    fn exchange_sorting(&self) -> Option<Arc<dyn ExchangeSorting>> {
+        Some(Arc::new(AggregateExchangeSorting::<Method, V> {
+            _phantom: Default::default(),
+        }))
     }
 }

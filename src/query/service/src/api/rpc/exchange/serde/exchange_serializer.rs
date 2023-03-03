@@ -103,6 +103,7 @@ impl TransformExchangeSerializer {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         params: &MergeExchangeParams,
+        sorting: Option<Arc<dyn ExchangeSorting>>,
     ) -> Result<ProcessorPtr> {
         let arrow_schema = params.schema.to_arrow();
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
@@ -110,8 +111,8 @@ impl TransformExchangeSerializer {
             input,
             output,
             TransformExchangeSerializer {
+                sorting,
                 ipc_fields,
-                sorting: params.exchange_sorting.clone(),
                 options: WriteOptions { compression: None },
             },
         )))
@@ -144,6 +145,7 @@ impl TransformScatterExchangeSerializer {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         params: &ShuffleExchangeParams,
+        sorting: Option<Arc<dyn ExchangeSorting>>,
     ) -> Result<ProcessorPtr> {
         let local_id = &params.executor_id;
         let arrow_schema = params.schema.to_arrow();
@@ -152,8 +154,8 @@ impl TransformScatterExchangeSerializer {
             input,
             output,
             TransformScatterExchangeSerializer {
+                sorting,
                 ipc_fields,
-                sorting: params.exchange_sorting.clone(),
                 options: WriteOptions { compression: None },
                 local_pos: params
                     .destination_ids

@@ -60,16 +60,11 @@ use common_sql::IndexType;
 use common_storage::DataOperator;
 
 use super::processors::ProfileWrapper;
-use crate::api::BroadcastFlightScatter;
-use crate::api::DataExchange;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
 use crate::api::ExchangeSorting;
-use crate::api::FlightScatter;
-use crate::api::HashFlightScatter;
-use crate::api::ShuffleExchangeParams;
 use crate::pipelines::processors::transforms::efficiently_memory_final_aggregator;
-use crate::pipelines::processors::transforms::AggregateExchangeSorting;
+use crate::pipelines::processors::transforms::AggregateInjector;
 use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::PartialSingleStateAggregator;
@@ -109,7 +104,6 @@ pub struct PipelineBuilder {
 
     enable_profiling: bool,
     prof_span_set: ProfSpanSetRef,
-    exchange_sorting: Option<Arc<dyn ExchangeSorting>>,
     exchange_injector: Arc<dyn ExchangeInjector>,
 }
 
@@ -125,7 +119,6 @@ impl PipelineBuilder {
             pipelines: vec![],
             main_pipeline: Pipeline::create(),
             prof_span_set,
-            exchange_sorting: None,
             exchange_injector: DefaultExchangeInjector::create(),
         }
     }
@@ -145,7 +138,6 @@ impl PipelineBuilder {
             main_pipeline: self.main_pipeline,
             sources_pipelines: self.pipelines,
             prof_span_set: self.prof_span_set,
-            exchange_sorting: self.exchange_sorting,
             exchange_injector: self.exchange_injector,
         })
     }
@@ -509,27 +501,35 @@ impl PipelineBuilder {
             })?;
         }
 
-        if !self.ctx.get_cluster().is_empty() {
-            // TODO: can serialize only when needed.
-            self.main_pipeline.add_transform(|input, output| {
-                match params.aggregate_functions.is_empty() {
-                    true => with_mappedhash_method!(|T| match method.clone() {
-                        HashMethodKind::T(method) =>
-                            TransformGroupBySerializer::try_create(input, output, method,),
-                    }),
-                    false => with_mappedhash_method!(|T| match method.clone() {
-                        HashMethodKind::T(method) => TransformAggregateSerializer::try_create(
-                            input,
-                            output,
-                            method,
-                            params.clone(),
-                        ),
-                    }),
-                }
-            })?;
-        }
+        // if !self.ctx.get_cluster().is_empty() {
+        //     // TODO: can serialize only when needed.
+        //     self.main_pipeline.add_transform(|input, output| {
+        //         match params.aggregate_functions.is_empty() {
+        //             true => with_mappedhash_method!(|T| match method.clone() {
+        //                 HashMethodKind::T(method) =>
+        //                     TransformGroupBySerializer::try_create(input, output, method,),
+        //             }),
+        //             false => with_mappedhash_method!(|T| match method.clone() {
+        //                 HashMethodKind::T(method) => TransformAggregateSerializer::try_create(
+        //                     input,
+        //                     output,
+        //                     method,
+        //                     params.clone(),
+        //                 ),
+        //             }),
+        //         }
+        //     })?;
+        // }
+        // self.exchange_sorting = Some(AggregateExchangeSorting::create());
 
-        self.exchange_sorting = Some(AggregateExchangeSorting::create());
+        self.exchange_injector = match params.aggregate_functions.is_empty() {
+            true => with_mappedhash_method!(|T| match method.clone() {
+                HashMethodKind::T(method) => AggregateInjector::<_, ()>::create(method),
+            }),
+            false => with_mappedhash_method!(|T| match method.clone() {
+                HashMethodKind::T(method) => AggregateInjector::<_, usize>::create(method),
+            }),
+        };
 
         Ok(())
     }

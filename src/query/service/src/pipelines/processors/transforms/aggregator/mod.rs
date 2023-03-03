@@ -27,7 +27,7 @@ mod utils;
 
 pub use aggregate_cell::HashTableCell;
 pub use aggregate_cell::PartitionedHashTableDropper;
-pub use aggregate_exchange_sorting::AggregateExchangeSorting;
+pub use aggregate_exchange_sorting::AggregateInjector;
 pub use aggregator_params::AggregatorParams;
 pub use transform_aggregate_final::TransformFinalAggregate;
 pub use transform_aggregate_partial::TransformPartialAggregate;

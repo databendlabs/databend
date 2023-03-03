@@ -41,8 +41,6 @@ use crate::api::rpc::exchange::statistics_receiver::StatisticsReceiver;
 use crate::api::rpc::exchange::statistics_sender::StatisticsSender;
 use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::rpc::flight_client::FlightExchangeRef;
-use crate::api::rpc::flight_scatter_broadcast::BroadcastFlightScatter;
-use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
 use crate::api::rpc::Packet;
 use crate::api::DataExchange;
 use crate::api::ExchangeInjector;
@@ -491,10 +489,6 @@ impl QueryCoordinator {
                 fragment_coordinator
                     .pipeline_build_res
                     .as_ref()
-                    .and_then(|x| x.exchange_sorting.clone()),
-                fragment_coordinator
-                    .pipeline_build_res
-                    .as_ref()
                     .map(|x| x.exchange_injector.clone())
                     .unwrap(),
             )?;
@@ -545,10 +539,6 @@ impl QueryCoordinator {
             params.push(
                 coordinator.create_exchange_params(
                     info,
-                    coordinator
-                        .pipeline_build_res
-                        .as_ref()
-                        .and_then(|x| x.exchange_sorting.clone()),
                     coordinator
                         .pipeline_build_res
                         .as_ref()
@@ -636,14 +626,13 @@ impl FragmentCoordinator {
     pub fn create_exchange_params(
         &self,
         info: &QueryInfo,
-        exchange_sorting: Option<Arc<dyn ExchangeSorting>>,
         exchange_injector: Arc<dyn ExchangeInjector>,
     ) -> Result<ExchangeParams> {
         if let Some(data_exchange) = &self.data_exchange {
             return match data_exchange {
                 DataExchange::Merge(exchange) => {
                     Ok(ExchangeParams::MergeExchange(MergeExchangeParams {
-                        exchange_sorting,
+                        exchange_injector: exchange_injector.clone(),
                         schema: self.physical_plan.output_schema()?,
                         fragment_id: self.fragment_id,
                         query_id: info.query_id.to_string(),
@@ -652,7 +641,7 @@ impl FragmentCoordinator {
                 }
                 DataExchange::Broadcast(exchange) => {
                     Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
-                        exchange_sorting,
+                        exchange_injector: exchange_injector.clone(),
                         schema: self.physical_plan.output_schema()?,
                         fragment_id: self.fragment_id,
                         query_id: info.query_id.to_string(),
@@ -664,7 +653,7 @@ impl FragmentCoordinator {
                 }
                 DataExchange::ShuffleDataExchange(exchange) => {
                     Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
-                        exchange_sorting,
+                        exchange_injector: exchange_injector.clone(),
                         schema: self.physical_plan.output_schema()?,
                         fragment_id: self.fragment_id,
                         query_id: info.query_id.to_string(),

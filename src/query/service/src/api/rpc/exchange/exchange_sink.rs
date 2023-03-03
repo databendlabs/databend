@@ -57,11 +57,12 @@ impl ExchangeSink {
                     )));
                 }
 
+                let sorting = params.exchange_injector.exchange_sorting();
                 pipeline.add_transform(|input, output| {
-                    TransformExchangeSerializer::create(input, output, &params)
+                    TransformExchangeSerializer::create(input, output, &params, sorting.clone())
                 })?;
 
-                if params.exchange_sorting.is_some() {
+                if sorting.is_some() {
                     let output_len = pipeline.output_len();
                     let sorting = SinkExchangeSorting::create();
                     let transform = TransformExchangeSorting::create(output_len, sorting);
