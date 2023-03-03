@@ -14,14 +14,21 @@
 
 #![allow(clippy::absurd_extreme_comparisons)]
 
+use std::sync::Arc;
+
+use common_expression::types::decimal::DecimalColumn;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::nullable::NullableDomain;
 use common_expression::types::number::F64;
 use common_expression::types::number::*;
 use common_expression::types::string::StringColumnBuilder;
+use common_expression::types::AnyType;
+use common_expression::types::DataType;
 use common_expression::types::NullableType;
+use common_expression::types::NumberClass;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
+use common_expression::types::ALL_NUMBER_CLASSES;
 use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::utils::arithmetics_type::ResultTypeOfBinary;
 use common_expression::utils::arithmetics_type::ResultTypeOfUnary;
@@ -32,9 +39,14 @@ use common_expression::vectorize_1_arg;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
 use common_expression::with_number_mapped_type;
+use common_expression::Column;
+use common_expression::ColumnBuilder;
+use common_expression::Function;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
+use common_expression::FunctionSignature;
+use common_expression::Scalar;
 use lexical_core::FormattedSize;
 use num_traits::AsPrimitive;
 
@@ -46,24 +58,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("div", &["intdiv"]);
     registry.register_aliases("modulo", &["mod"]);
 
-    for num_ty in ALL_NUMERICS_TYPES {
-        with_number_mapped_type!(|NUM_TYPE| match num_ty {
-            NumberDataType::NUM_TYPE => {
-                type T = <NUM_TYPE as ResultTypeOfUnary>::Negate;
-                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<T>, _, _>(
-                    "minus",
-                    FunctionProperty::default(),
-                    |lhs| {
-                        FunctionDomain::Domain(SimpleDomain::<T> {
-                            min: -(lhs.max.as_(): T),
-                            max: -(lhs.min.as_(): T),
-                        })
-                    },
-                    |a, _| -(a.as_(): T),
-                );
-            }
-        });
-    }
+    register_unary_minus(registry);
 
     for left in ALL_NUMERICS_TYPES {
         for right in ALL_NUMERICS_TYPES {
@@ -459,5 +454,83 @@ pub fn register(registry: &mut FunctionRegistry) {
                 );
             }
         });
+    }
+}
+
+fn register_unary_minus(registry: &mut FunctionRegistry) {
+    for num_ty in ALL_NUMBER_CLASSES {
+        with_number_mapped_type!(|NUM_TYPE| match num_ty {
+            NumberClass::NUM_TYPE => {
+                type T = <NUM_TYPE as ResultTypeOfUnary>::Negate;
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<T>, _, _>(
+                    "minus",
+                    FunctionProperty::default(),
+                    |lhs| {
+                        FunctionDomain::Domain(SimpleDomain::<T> {
+                            min: -(lhs.max.as_(): T),
+                            max: -(lhs.min.as_(): T),
+                        })
+                    },
+                    |a, _| -(a.as_(): T),
+                );
+            }
+            NumberClass::Decimal128 => {
+                register_decimal_minus(registry)
+            }
+            NumberClass::Decimal256 => {
+                // already registered in Decimal128 branch
+            }
+        });
+    }
+}
+
+pub fn register_decimal_minus(registry: &mut FunctionRegistry) {
+    registry.register_function_factory("minus", |_params, args_type| {
+        if args_type.len() != 1 {
+            return None;
+        }
+        if !args_type[0].is_decimal() {
+            return None;
+        }
+
+        let arg_type = args_type[0].clone();
+
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "minus".to_string(),
+                args_type: args_type.to_owned(),
+                return_type: arg_type.clone(),
+                property: FunctionProperty::default(),
+            },
+            calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
+            eval: Box::new(move |args, _tx| unary_minus_decimal(args, arg_type.clone())),
+        }))
+    });
+}
+
+fn unary_minus_decimal(args: &[ValueRef<AnyType>], arg_type: DataType) -> Value<AnyType> {
+    let arg = &args[0];
+    let mut is_scalar = false;
+    let column = match arg {
+        ValueRef::Column(column) => column.clone(),
+        ValueRef::Scalar(s) => {
+            is_scalar = true;
+            let builder = ColumnBuilder::repeat(s, 1, &arg_type);
+            builder.build()
+        }
+    };
+
+    let result = match column {
+        Column::Decimal(DecimalColumn::Decimal128(buf, size)) => {
+            DecimalColumn::Decimal128(buf.into_iter().map(|x| -x).collect(), size)
+        }
+        _ => unreachable!(),
+    };
+
+    if is_scalar {
+        let scalar = result.index(0).unwrap();
+        Value::Scalar(Scalar::Decimal(scalar))
+    } else {
+        Value::Column(Column::Decimal(result))
     }
 }
