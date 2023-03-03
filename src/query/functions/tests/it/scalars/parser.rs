@@ -556,6 +556,35 @@ pub fn transform_literal(lit: ASTLiteral) -> Literal {
                 Literal::UInt64(u)
             }
         }
+        ASTLiteral::Int64(int) => {
+            if int >= i8::MIN as i64 && int <= i8::MAX as i64 {
+                Literal::Int8(int as i8)
+            } else if int >= i16::MIN as i64 && int <= i16::MAX as i64 {
+                Literal::Int16(int as i16)
+            } else if int >= i32::MIN as i64 && int <= i32::MAX as i64 {
+                Literal::Int32(int as i32)
+            } else {
+                Literal::Int64(int)
+            }
+        }
+        ASTLiteral::Decimal128 {
+            value,
+            precision,
+            scale,
+        } => Literal::Decimal128 {
+            value,
+            precision,
+            scale,
+        },
+        ASTLiteral::Decimal256 {
+            value,
+            precision,
+            scale,
+        } => Literal::Decimal256 {
+            value,
+            precision,
+            scale,
+        },
         ASTLiteral::String(s) => Literal::String(s.as_bytes().to_vec()),
         ASTLiteral::Boolean(b) => Literal::Boolean(b),
         ASTLiteral::Null => Literal::Null,
