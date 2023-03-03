@@ -684,7 +684,15 @@ evaluation (internal):
 +--------+-------------------------------------------------------------------------+
 
 
-error: AggregateStddevPopFunction does not support type 'Decimal(Decimal128(DecimalSize { precision: 2, scale: 1 }))'
+ast: std(1.0::float64)
+evaluation (internal):
++--------+--------------------------------------------------------------------+
+| Column | Data                                                               |
++--------+--------------------------------------------------------------------+
+| a      | Int64([4, 3, 2, 1])                                                |
+| Output | NullableColumn { column: Float64([0, 0]), validity: [0b______11] } |
++--------+--------------------------------------------------------------------+
+
 
 ast: window_funnel(2)(dt, event1, event2, event3)
 evaluation (internal):
