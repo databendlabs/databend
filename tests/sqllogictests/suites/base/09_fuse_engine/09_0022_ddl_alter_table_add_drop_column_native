@@ -136,7 +136,7 @@ SELECT * FROM `09_0022_t0` order by a
 statement ok
 ALTER TABLE `09_0022_t0` ADD COLUMN t Tuple(a Tuple(m Int64, n double), b Tuple(x Int64, y Int64)) default ((1,2.0),(3,4))
 
-query FT
+query FTT
 SELECT * FROM `09_0022_t0` order by a
 ----
 5.0 (202.0,13) ((1,2.0),(3,4))
@@ -144,12 +144,27 @@ SELECT * FROM `09_0022_t0` order by a
 101.0 (202.0,13) ((1,2.0),(3,4))
 
 statement ok
-INSERT INTO TABLE `09_0022_t0` (t) values(((3,4.0),(5,6)))
+INSERT INTO TABLE `09_0022_t0` (a,t) values(102.0,((3,4.0),(5,6)))
 
-query FT
+query TIFTII
 SELECT t:a,t:a:m,t:a:n,t:b,t:b:x,t:b:y FROM `09_0022_t0` order by t:a:m
 ----
 (1,2.0) 1 2.0 (3,4) 3 4
 (1,2.0) 1 2.0 (3,4) 3 4
 (1,2.0) 1 2.0 (3,4) 3 4
 (3,4.0) 3 4.0 (5,6) 5 6
+
+statement ok
+ALTER TABLE `09_0022_t0` ADD COLUMN m Map(Int64, String) default map([1],['ab']);
+
+statement ok
+INSERT INTO TABLE `09_0022_t0` (a, m) values(1.0, {2:'mn'})
+
+query FTTT
+SELECT * FROM `09_0022_t0` order by a
+----
+1.0 (202.0,13) ((1,2.0),(3,4)) {2:'mn'}
+5.0 (202.0,13) ((1,2.0),(3,4)) {1:'ab'}
+6.0 (111.0,2) ((1,2.0),(3,4)) {1:'ab'}
+101.0 (202.0,13) ((1,2.0),(3,4)) {1:'ab'}
+102.0 (202.0,13) ((3,4.0),(5,6)) {1:'ab'}

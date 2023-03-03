@@ -16,6 +16,7 @@ members = [
     "src/common/base",
     "src/common/building",
     "src/common/cache",
+    "src/common/compress",
     "src/common/exception",
     "src/common/grpc",
     "src/common/hashtable",
@@ -88,9 +89,9 @@ members = [
 
 [workspace.dependencies]
 # databend maintains:
-openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.7.4-alpha.3" }
+openraft = { git = "https://github.com/datafuselabs/openraft", tag = "v0.7.4" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
-opendal = { version = "0.28.0" }
+opendal = { version = "0.29.0" }
 ordered-float = { version = "3.4.0", default-features = false }
 
 # type helper
@@ -172,7 +173,7 @@ rpath = false
 # For example:
 # arrow-format = { git = "https://github.com/datafuse-extras/arrow-format", rev = "78dacc1" }
 
-arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "615300b" }
+arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "d06323a" }
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "ed0e1ff" }
 limits-rs = { git = "https://github.com/datafuse-extras/limits-rs", rev = "abfcf7b" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "bc49d03" }

@@ -43,10 +43,6 @@ impl BlockMetaInfo for MergeIntoOperation {
         self
     }
 
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         match info.as_any().downcast_ref::<MergeIntoOperation>() {
             None => false,

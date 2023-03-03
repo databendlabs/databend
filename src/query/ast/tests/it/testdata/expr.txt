@@ -730,39 +730,39 @@ FunctionCall {
 ---------- Input ----------
 - - + + - 1 + + - 2
 ---------- Output ---------
-(- (- (+ (+ (- (1 + (+ (- 2))))))))
+((- (- (+ (+ (- 1))))) + (+ (- 2)))
 ---------- AST ------------
-UnaryOp {
+BinaryOp {
     span: Some(
-        0..1,
+        12..13,
     ),
-    op: Minus,
-    expr: UnaryOp {
+    op: Plus,
+    left: UnaryOp {
         span: Some(
-            2..3,
+            0..1,
         ),
         op: Minus,
         expr: UnaryOp {
             span: Some(
-                4..5,
+                2..3,
             ),
-            op: Plus,
+            op: Minus,
             expr: UnaryOp {
                 span: Some(
-                    6..7,
+                    4..5,
                 ),
                 op: Plus,
                 expr: UnaryOp {
                     span: Some(
-                        8..9,
+                        6..7,
                     ),
-                    op: Minus,
-                    expr: BinaryOp {
+                    op: Plus,
+                    expr: UnaryOp {
                         span: Some(
-                            12..13,
+                            8..9,
                         ),
-                        op: Plus,
-                        left: Literal {
+                        op: Minus,
+                        expr: Literal {
                             span: Some(
                                 10..11,
                             ),
@@ -770,28 +770,28 @@ UnaryOp {
                                 1,
                             ),
                         },
-                        right: UnaryOp {
-                            span: Some(
-                                14..15,
-                            ),
-                            op: Plus,
-                            expr: UnaryOp {
-                                span: Some(
-                                    16..17,
-                                ),
-                                op: Minus,
-                                expr: Literal {
-                                    span: Some(
-                                        18..19,
-                                    ),
-                                    lit: Integer(
-                                        2,
-                                    ),
-                                },
-                            },
-                        },
                     },
                 },
+            },
+        },
+    },
+    right: UnaryOp {
+        span: Some(
+            14..15,
+        ),
+        op: Plus,
+        expr: UnaryOp {
+            span: Some(
+                16..17,
+            ),
+            op: Minus,
+            expr: Literal {
+                span: Some(
+                    18..19,
+                ),
+                lit: Integer(
+                    2,
+                ),
             },
         },
     },
@@ -3032,6 +3032,56 @@ IsDistinctFrom {
         lit: Null,
     },
     not: true,
+}
+
+
+---------- Input ----------
+{'k1':1,'k2':2}
+---------- Output ---------
+{'k1':1,'k2':2}
+---------- AST ------------
+Map {
+    span: Some(
+        0..15,
+    ),
+    kvs: [
+        (
+            Literal {
+                span: Some(
+                    1..5,
+                ),
+                lit: String(
+                    "k1",
+                ),
+            },
+            Literal {
+                span: Some(
+                    6..7,
+                ),
+                lit: Integer(
+                    1,
+                ),
+            },
+        ),
+        (
+            Literal {
+                span: Some(
+                    8..12,
+                ),
+                lit: String(
+                    "k2",
+                ),
+            },
+            Literal {
+                span: Some(
+                    13..14,
+                ),
+                lit: Integer(
+                    2,
+                ),
+            },
+        ),
+    ],
 }
 
 

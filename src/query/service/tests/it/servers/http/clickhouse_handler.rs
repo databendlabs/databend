@@ -306,13 +306,13 @@ async fn test_settings() -> PoemResult<()> {
     }
 
     {
-        let sql = "select value from system.settings where name = 'max_block_size' or name = 'enable_async_insert' order by value";
+        let sql = "select value from system.settings where name = 'max_block_size' or name = 'enable_cbo' order by value";
         let (status, body) = server
             .get_response(
                 QueryBuilder::new(sql)
                     .settings(HashMap::from([
                         ("max_block_size".to_string(), "1000".to_string()),
-                        ("enable_async_insert".to_string(), "1".to_string()),
+                        ("enable_cbo".to_string(), "1".to_string()),
                     ]))
                     .build(),
             )

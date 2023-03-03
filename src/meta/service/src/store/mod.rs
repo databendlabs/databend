@@ -15,8 +15,8 @@
 mod store_bare;
 mod to_storage_error;
 
-use common_meta_raft_store::applied_state::AppliedState;
 use common_meta_sled_store::openraft::StoreExt;
+use common_meta_types::AppliedState;
 use common_meta_types::LogEntry;
 pub use store_bare::RaftStoreBare;
 pub use to_storage_error::ToStorageError;

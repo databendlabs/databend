@@ -75,6 +75,7 @@ use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::plans::Unnest;
 use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnBinding;
@@ -931,6 +932,8 @@ impl<'a> TypeChecker<'a> {
                 .await?
             }
 
+            Expr::Map { span, kvs, .. } => self.resolve_map(*span, kvs).await?,
+
             Expr::Tuple { span, exprs, .. } => self.resolve_tuple(*span, exprs).await?,
         };
 
@@ -1445,6 +1448,8 @@ impl<'a> TypeChecker<'a> {
             "ifnull",
             "is_null",
             "coalesce",
+            "last_query_id",
+            "unnest",
         ]
     }
 
@@ -1642,6 +1647,89 @@ impl<'a> TypeChecker<'a> {
                 )
             }
 
+            ("last_query_id", args) => {
+                // last_query_id(index) returns query_id in current session by index
+                // index support literal(eg: -1, -2, 2) and simple binary op(eg: 1+1, 3-1)
+                // if index out of range, returns none.
+                let index = if args.len() != 1 {
+                    -1
+                } else {
+                    match args[0] {
+                        Expr::BinaryOp {
+                            op, left, right, ..
+                        } => {
+                            if let Expr::Literal {span:_, lit:Literal::Integer(l)} = **left
+                                && let Expr::Literal {span:_, lit:Literal::Integer(r)} = **right {
+                                match op {
+                                    BinaryOperator::Plus => (l + r) as i32,
+                                    BinaryOperator::Minus => (l - r) as i32,
+                                    _ => -1,
+                                }
+                            } else {-1}
+                        }
+                        Expr::UnaryOp { op, expr, .. } => {
+                            if let Expr::Literal {
+                                span: _,
+                                lit: Literal::Integer(i),
+                            } = **expr
+                            {
+                                match op {
+                                    UnaryOperator::Plus => i as i32,
+                                    UnaryOperator::Minus => -(i as i32),
+                                    UnaryOperator::Not => -1,
+                                }
+                            } else {
+                                -1
+                            }
+                        }
+                        Expr::Literal {
+                            lit: Literal::Integer(i),
+                            ..
+                        } => *i as i32,
+                        _ => -1,
+                    }
+                };
+                let query_id = self.ctx.get_last_query_id(index);
+                Some(
+                    self.resolve(
+                        &Expr::Literal {
+                            span,
+                            lit: Literal::String(query_id),
+                        },
+                        None,
+                    )
+                    .await,
+                )
+            }
+            ("unnest", args) => {
+                if args.len() != 1 {
+                    return Some(Err(ErrorCode::SemanticError(
+                        "Unnest can only be applied to one array type argument".to_string(),
+                    )
+                    .set_span(span)));
+                }
+                let inner_res = self.resolve(args[0], None).await;
+                if inner_res.is_err() {
+                    return Some(inner_res);
+                }
+                let box (inner_expr, inner_type) = inner_res.unwrap();
+                Some(match inner_type {
+                    DataType::Array(inner) => {
+                        let return_type = inner.clone();
+                        Ok(Box::new((
+                            ScalarExpr::Unnest(Unnest {
+                                return_type,
+                                argument: Box::new(inner_expr),
+                            }),
+                            *inner,
+                        )))
+                    }
+                    _ => Err(ErrorCode::SemanticError(
+                        "Unnest can only be applied to one array type argument".to_string(),
+                    )
+                    .set_span(span)),
+                })
+            }
             _ => None,
         }
     }
@@ -1774,6 +1862,32 @@ impl<'a> TypeChecker<'a> {
             (false, false) => "array_sort_desc_null_last",
         };
         self.resolve_scalar_function_call(span, func_name, vec![], vec![arg], None)
+            .await
+    }
+
+    #[async_recursion::async_recursion]
+    async fn resolve_map(
+        &mut self,
+        span: Span,
+        kvs: &[(Expr, Expr)],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let mut keys = Vec::with_capacity(kvs.len());
+        let mut vals = Vec::with_capacity(kvs.len());
+        for (key_expr, val_expr) in kvs {
+            let box (key_arg, _data_type) = self.resolve(key_expr, None).await?;
+            keys.push(key_arg);
+            let box (val_arg, _data_type) = self.resolve(val_expr, None).await?;
+            vals.push(val_arg);
+        }
+        let box (key_arg, _data_type) = self
+            .resolve_scalar_function_call(span, "array", vec![], keys, None)
+            .await?;
+        let box (val_arg, _data_type) = self
+            .resolve_scalar_function_call(span, "array", vec![], vals, None)
+            .await?;
+        let args = vec![key_arg, val_arg];
+
+        self.resolve_scalar_function_call(span, "map", vec![], args, None)
             .await
     }
 
@@ -2350,9 +2464,33 @@ impl<'a> TypeChecker<'a> {
             TypeName::String => TableDataType::String,
             TypeName::Timestamp => TableDataType::Timestamp,
             TypeName::Date => TableDataType::Date,
-            TypeName::Array {
-                item_type: Some(item_type),
-            } => TableDataType::Array(Box::new(Self::resolve_type_name(item_type)?)),
+            TypeName::Array(item_type) => {
+                TableDataType::Array(Box::new(Self::resolve_type_name(item_type)?))
+            }
+            TypeName::Map { key_type, val_type } => {
+                let key_type = Self::resolve_type_name(key_type)?;
+                match key_type {
+                    TableDataType::Boolean
+                    | TableDataType::String
+                    | TableDataType::Number(_)
+                    | TableDataType::Decimal(_)
+                    | TableDataType::Timestamp
+                    | TableDataType::Date => {
+                        let val_type = Self::resolve_type_name(val_type)?;
+                        let inner_type = TableDataType::Tuple {
+                            fields_name: vec!["key".to_string(), "value".to_string()],
+                            fields_type: vec![key_type, val_type],
+                        };
+                        TableDataType::Map(Box::new(inner_type))
+                    }
+                    _ => {
+                        return Err(ErrorCode::Internal(format!(
+                            "Invalid Map key type \'{:?}\'",
+                            key_type
+                        )));
+                    }
+                }
+            }
             TypeName::Tuple {
                 fields_type,
                 fields_name,
@@ -2373,12 +2511,6 @@ impl<'a> TypeChecker<'a> {
                 TableDataType::Nullable(Box::new(Self::resolve_type_name(inner_type)?))
             }
             TypeName::Variant => TableDataType::Variant,
-            name => {
-                return Err(ErrorCode::Internal(format!(
-                    "Invalid type name \'{:?}\'",
-                    name
-                )));
-            }
         };
 
         Ok(data_type)

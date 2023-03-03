@@ -12,9 +12,7 @@ doctest = false
 [dependencies] # In alphabetical order
 # Workspace dependencies
 common-exception = { path = "../../common/exception" }
-common-functions = { path = "../functions" }
 common-meta-app = { path = "../../meta/app" }
-common-meta-types = { path = "../../meta/types" }
 
 # Crates.io dependencies
 fast-float = "0.2.0"

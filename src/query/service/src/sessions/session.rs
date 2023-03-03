@@ -352,6 +352,15 @@ impl Session {
     pub fn get_status(self: &Arc<Self>) -> Arc<RwLock<SessionStatus>> {
         self.status.clone()
     }
+
+    pub fn get_query_result_cache_key(self: &Arc<Self>, query_id: &str) -> Option<String> {
+        self.session_ctx.get_query_result_cache_key(query_id)
+    }
+
+    pub fn update_query_ids_results(self: &Arc<Self>, query_id: String, result_cache_key: String) {
+        self.session_ctx
+            .update_query_ids_results(query_id, Some(result_cache_key))
+    }
 }
 
 impl Drop for Session {

@@ -18,7 +18,6 @@ use async_trait::async_trait;
 use common_base::base::tokio::runtime::Handle;
 use common_base::runtime::TrackedFuture;
 use opendal::ops::*;
-use opendal::raw::input;
 use opendal::raw::Accessor;
 use opendal::raw::Layer;
 use opendal::raw::LayeredAccessor;
@@ -72,6 +71,8 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
     type Inner = A;
     type Reader = A::Reader;
     type BlockingReader = A::BlockingReader;
+    type Writer = A::Writer;
+    type BlockingWriter = A::BlockingWriter;
     type Pager = A::Pager;
     type BlockingPager = A::BlockingPager;
 
@@ -95,10 +96,10 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
         self.runtime.spawn(future).await.expect("join must success")
     }
 
-    async fn write(&self, path: &str, args: OpWrite, r: input::Reader) -> Result<RpWrite> {
+    async fn write(&self, path: &str, args: OpWrite) -> Result<(RpWrite, Self::Writer)> {
         let op = self.inner.clone();
         let path = path.to_string();
-        let future = async move { op.write(&path, args, r).await };
+        let future = async move { op.write(&path, args).await };
         let future = TrackedFuture::create(future);
         self.runtime.spawn(future).await.expect("join must success")
     }
@@ -137,6 +138,10 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
 
     fn blocking_read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::BlockingReader)> {
         self.inner.blocking_read(path, args)
+    }
+
+    fn blocking_write(&self, path: &str, args: OpWrite) -> Result<(RpWrite, Self::BlockingWriter)> {
+        self.inner.blocking_write(path, args)
     }
 
     fn blocking_list(&self, path: &str, args: OpList) -> Result<(RpList, Self::BlockingPager)> {

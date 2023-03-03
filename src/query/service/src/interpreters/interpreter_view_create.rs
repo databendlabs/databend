@@ -22,6 +22,7 @@ use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_sql::plans::CreateViewPlan;
 use common_sql::Planner;
+use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::interpreters::Interpreter;
@@ -90,7 +91,7 @@ impl CreateViewInterpreter {
                 self.plan.column_names.join(", ")
             )
         };
-        options.insert("query".to_string(), subquery);
+        options.insert(QUERY.to_string(), subquery);
 
         let plan = CreateTableReq {
             if_not_exists: self.plan.if_not_exists,

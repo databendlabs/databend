@@ -19,7 +19,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="Performance" label="Performance">
 
 - Blazing-fast data analytics on object storage.
-- Leverages data-level parallelism and instruction-level parallelism technologies for optimal performance.
+- Leverages data-level parallelism and instruction-level parallelism technologies for [optimal performance](https://benchmark.clickhouse.com/).
 - Supports Git-like MVCC storage for easy querying, cloning, and restoration of historical data.
 - No indexes to build, no manual tuning, and no need to figure out partitions or shard data.
 
@@ -29,13 +29,13 @@ import TabItem from '@theme/TabItem';
 
 - Compatible with MySQL / ClickHouse.
 - ANSI SQL compliant.
-- Easy connection with existing tools such as [MySQL Client](https://databend.rs/doc/integrations/api/mysql-handler), [ClickHouse Client](https://databend.rs/doc/integrations/api/clickhouse-handler), [Vector](https://vector.dev/), [DBeaver](https://dbeaver.com/), [Jupyter](https://databend.rs/doc/integrations/gui-tool/jupyter), [JDBC](https://databend.rs/doc/develop), and more.
+- Easy connection with existing tools such as [MySQL Client](https://databend.rs/doc/integrations/api/mysql-handler), [ClickHouse HTTP Handler](https://databend.rs/doc/integrations/api/clickhouse-handler), [Vector](https://vector.dev/), [DBeaver](https://dbeaver.com/), [Jupyter](https://databend.rs/doc/integrations/gui-tool/jupyter), [JDBC](https://databend.rs/doc/develop), and more.
 
 </TabItem>
 
 <TabItem value="Data Manipulation" label="Data Manipulation">
 
-- Supports atomic operations such as SELECT, INSERT, DELETE, UPDATE, COPY, and ALTER.
+- Supports atomic operations such as `SELECT`, `INSERT`, `DELETE`, `UPDATE`, `COPY`, and `ALTER`.
 - Provides advanced features such as Time Travel and Multi Catalog (Apache Hive / Apache Iceberg).
 - Supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON, and Parquet.
 - Supports semi-structured data types such as [ARRAY, MAP, and JSON](https://databend.rs/doc/sql-reference/data-types/data-type-semi-structured-types).
@@ -143,7 +143,7 @@ The Databend community is open to data professionals, students, and anyone who h
 
 - [Slack](https://link.databend.rs/join-slack): Chat with the community
 - [GitHub](https://github.com/datafuselabs/databend): Feature requests, bug reports, and contributions
-- [Twitter](https://twitter.com/Datafuse_Labs): Stay in the know
+- [Twitter](https://twitter.com/DatabendLabs): Stay in the know
 - [Weekly](https://weekly.databend.rs/): Weekly updates
 
 ## Roadmap

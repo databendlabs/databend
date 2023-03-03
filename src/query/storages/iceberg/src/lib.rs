@@ -38,7 +38,7 @@
 //! CREATE CATALOG icb_ctl TYPE=ICEBERG CONNECTION=( URL='s3://bkt/path/to/iceberg' ... )
 //! ```
 //!
-//! This will create such database heirarchy:
+//! This will create such database hierarchy:
 //! - catalog: icb_ctl
 //!     - database: db0
 //!         - table: tbl0
@@ -75,7 +75,7 @@
 //! For the consistency of SQL, creating a flatten catalog doesn't meaning
 //! users can query tables in catalog without specifying the database they use.
 //!
-//! Instead, a database named `default` will be automatically created, offering heirarchy below:
+//! Instead, a database named `default` will be automatically created, offering hierarchy below:
 //! - catalog: icb_ctl
 //!   - database: default
 //!     - table: icbg_tbl_0

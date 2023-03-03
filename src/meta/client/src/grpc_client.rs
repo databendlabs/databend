@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -130,10 +131,12 @@ impl ItemManager for MetaChannelManager {
     type Item = Channel;
     type Error = MetaNetworkError;
 
+    #[tracing::instrument(level = "debug", err(Debug))]
     async fn build(&self, addr: &Self::Key) -> Result<Self::Item, Self::Error> {
         self.build_channel(addr).await
     }
 
+    #[tracing::instrument(level = "debug", err(Debug))]
     async fn check(&self, mut ch: Self::Item) -> Result<Self::Item, Self::Error> {
         futures::future::poll_fn(|cx| ch.poll_ready(cx))
             .await
@@ -266,6 +269,17 @@ pub struct MetaGrpcClient {
     /// Note that a thread_pool tokio runtime does not help: a scheduled tokio-task resides in `filo_slot` won't be stolen by other tokio-workers.
     #[allow(dead_code)]
     rt: Arc<Runtime>,
+}
+
+impl Debug for MetaGrpcClient {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut de = f.debug_struct("MetaGrpcClient");
+        de.field("endpoints", &self.endpoints);
+        de.field("current_endpoints", &self.current_endpoint);
+        de.field("unhealthy_endpoints", &self.unhealthy_endpoints);
+        de.field("auto_sync_interval", &self.auto_sync_interval);
+        de.finish()
+    }
 }
 
 impl MetaGrpcClient {
@@ -548,6 +562,7 @@ impl MetaGrpcClient {
         )))
     }
 
+    #[tracing::instrument(level = "debug", err(Debug))]
     async fn make_channel(&self, addr: Option<&String>) -> Result<Channel, MetaNetworkError> {
         let addr = if let Some(addr) = addr {
             addr.clone()

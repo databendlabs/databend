@@ -262,6 +262,13 @@ pub trait Visitor<'ast>: Sized {
         walk_expr(self, expr);
     }
 
+    fn visit_map(&mut self, _span: Span, kvs: &'ast [(Expr, Expr)]) {
+        for (key_expr, val_expr) in kvs {
+            walk_expr(self, key_expr);
+            walk_expr(self, val_expr);
+        }
+    }
+
     fn visit_interval(&mut self, _span: Span, expr: &'ast Expr, _unit: &'ast IntervalKind) {
         walk_expr(self, expr);
     }

@@ -138,25 +138,27 @@ impl AsyncAccumulatingTransform for AppendTransform {
         let start = Instant::now();
 
         // persistent data block
-        let raw_block_data = &serialized_block_state.block_raw_data;
+        let raw_block_data = serialized_block_state.block_raw_data;
         let path = serialized_block_state.block_meta.location.0.as_str();
-        io::write_data(&raw_block_data, &self.data_accessor, path).await?;
+        let raw_block_data_len = raw_block_data.len();
+        io::write_data(raw_block_data, &self.data_accessor, path).await?;
 
         // metrics
         {
             metrics_inc_block_write_nums(1);
-            metrics_inc_block_write_bytes(raw_block_data.len() as u64);
+            metrics_inc_block_write_bytes(raw_block_data_len as u64);
             metrics_inc_block_write_milliseconds(start.elapsed().as_millis() as u64);
         }
 
         let start = Instant::now();
 
-        let bloom_index_state = &serialized_block_state.bloom_index_state;
+        let bloom_index_state = serialized_block_state.bloom_index_state;
 
         // 2. persistent bloom filter index
         if let Some(bloom_index_state) = bloom_index_state {
+            let bloom_index_state_data_len = bloom_index_state.data.len();
             io::write_data(
-                &bloom_index_state.data,
+                bloom_index_state.data,
                 &self.data_accessor,
                 &bloom_index_state.location.0,
             )
@@ -165,7 +167,7 @@ impl AsyncAccumulatingTransform for AppendTransform {
             // metrics
             {
                 metrics_inc_block_index_write_nums(1);
-                metrics_inc_block_index_write_bytes(bloom_index_state.data.len() as u64);
+                metrics_inc_block_index_write_bytes(bloom_index_state_data_len as u64);
                 metrics_inc_block_index_write_milliseconds(start.elapsed().as_millis() as u64);
             }
         }

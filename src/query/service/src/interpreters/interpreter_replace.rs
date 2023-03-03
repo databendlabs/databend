@@ -22,7 +22,7 @@ use common_sql::plans::InsertInputSource;
 use common_sql::plans::Replace;
 use common_sql::NameResolutionContext;
 
-use crate::interpreters::interpreter_insert_v2::ValueSource;
+use crate::interpreters::interpreter_insert::ValueSource;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::PipelineBuildResult;

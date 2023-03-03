@@ -18,6 +18,14 @@ CREATE TABLE `test`.`b` (    a bigint, b int null default null, c varchar(255), 
 query TT
 SHOW CREATE TABLE `test`.`b`
 ----
+b CREATE TABLE `b` (   `a` BIGINT,   `b` INT NULL DEFAULT NULL,   `c` VARCHAR,   `d` SMALLINT UNSIGNED NULL ) ENGINE=NULL
+
+statement ok
+set hide_options_in_show_create_table=0
+
+query TT
+SHOW CREATE TABLE `test`.`b`
+----
 b CREATE TABLE `b` (   `a` BIGINT,   `b` INT NULL DEFAULT NULL,   `c` VARCHAR,   `d` SMALLINT UNSIGNED NULL ) ENGINE=NULL COMMENT='test b'
 
 statement ok

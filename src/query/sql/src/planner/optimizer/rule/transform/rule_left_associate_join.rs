@@ -211,4 +211,8 @@ impl Rule for RuleLeftAssociateJoin {
     fn pattern(&self) -> &SExpr {
         &self.pattern
     }
+
+    fn transformation(&self) -> bool {
+        false
+    }
 }

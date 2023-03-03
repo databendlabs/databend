@@ -103,4 +103,8 @@ impl Rule for RuleCommuteJoinBaseTable {
     fn pattern(&self) -> &SExpr {
         &self.pattern
     }
+
+    fn transformation(&self) -> bool {
+        false
+    }
 }

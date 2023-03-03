@@ -13,12 +13,16 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashSet;
 use std::io::Cursor;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ArrayDeserializer;
+use common_expression::MapDeserializer;
 use common_expression::StringDeserializer;
 use common_expression::StructDeserializer;
+use common_expression::TypeDeserializer;
 use common_io::constants::FALSE_BYTES_NUM;
 use common_io::constants::INF_BYTES_LOWER;
 use common_io::constants::NAN_BYTES_LOWER;
@@ -26,6 +30,7 @@ use common_io::constants::NULL_BYTES_ESCAPE;
 use common_io::constants::TRUE_BYTES_NUM;
 use common_io::cursor_ext::BufferReadStringExt;
 use common_io::cursor_ext::ReadBytesExt;
+use common_io::prelude::FormatSettings;
 
 use crate::field_decoder::row_based::FieldDecoderRowBased;
 use crate::CommonSettings;
@@ -36,6 +41,7 @@ use crate::FileFormatOptionsExt;
 pub struct FieldDecoderTSV {
     pub common_settings: CommonSettings,
     pub quote_char: u8,
+    format: FormatSettings,
 }
 
 impl FieldDecoderTSV {
@@ -50,6 +56,9 @@ impl FieldDecoderTSV {
                 timezone: options.timezone,
             },
             quote_char: options.get_quote_char(),
+            format: FormatSettings {
+                timezone: options.timezone,
+            },
         }
     }
 }
@@ -112,6 +121,45 @@ impl FieldDecoderRowBased for FieldDecoderTSV {
             }
             let _ = reader.ignore_white_spaces();
             self.read_field(column.inner.as_mut(), reader, false)?;
+            idx += 1;
+        }
+        column.add_offset(idx);
+        Ok(())
+    }
+
+    fn read_map<R: AsRef<[u8]>>(
+        &self,
+        column: &mut MapDeserializer,
+        reader: &mut Cursor<R>,
+        _raw: bool,
+    ) -> Result<()> {
+        reader.must_ignore_byte(b'{')?;
+        let mut idx = 0;
+        let mut set = HashSet::new();
+        loop {
+            let _ = reader.ignore_white_spaces();
+            if reader.ignore_byte(b'}') {
+                break;
+            }
+            if idx != 0 {
+                reader.must_ignore_byte(b',')?;
+            }
+            let _ = reader.ignore_white_spaces();
+            self.read_field(column.key.as_mut(), reader, false)?;
+            // check duplicate map keys
+            let key = column.key.pop_data_value().unwrap();
+            if set.contains(&key) {
+                column.add_offset(idx);
+                return Err(ErrorCode::BadBytes(
+                    "map keys have to be unique".to_string(),
+                ));
+            }
+            set.insert(key.clone());
+            column.key.append_data_value(key, &self.format)?;
+            let _ = reader.ignore_white_spaces();
+            reader.must_ignore_byte(b':')?;
+            let _ = reader.ignore_white_spaces();
+            self.read_field(column.value.as_mut(), reader, false)?;
             idx += 1;
         }
         column.add_offset(idx);

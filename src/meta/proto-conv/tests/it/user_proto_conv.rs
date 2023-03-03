@@ -27,6 +27,7 @@ use common_meta_app::storage::StorageGcsConfig;
 use common_meta_app::storage::StorageOssConfig;
 use common_meta_app::storage::StorageParams;
 use common_meta_app::storage::StorageS3Config;
+use common_meta_app::storage::StorageWebhdfsConfig;
 use common_proto_conv::FromToProto;
 use common_proto_conv::Incompatible;
 use common_proto_conv::VER;
@@ -308,6 +309,43 @@ pub(crate) fn test_oss_stage_info() -> mt::principal::UserStageInfo {
     }
 }
 
+// version 29 added WebHDFS as a stage backend, should be tested
+pub(crate) fn test_webhdfs_stage_info() -> mt::principal::UserStageInfo {
+    mt::principal::UserStageInfo {
+        stage_name: "webhdfs://path/to/stage/files".to_string(),
+        stage_type: mt::principal::StageType::External,
+        stage_params: mt::principal::StageParams {
+            storage: StorageParams::Webhdfs(StorageWebhdfsConfig {
+                endpoint_url: "https://webhdfs.example.com".to_string(),
+                root: "/path/to/stage/files".to_string(),
+                delegation: "<delegation_token>".to_string(),
+            }),
+        },
+        file_format_options: mt::principal::FileFormatOptions {
+            format: mt::principal::StageFileFormatType::Json,
+            skip_header: 1024,
+            field_delimiter: "|".to_string(),
+            record_delimiter: "//".to_string(),
+            nan_display: "NaN".to_string(),
+            escape: "".to_string(),
+            compression: mt::principal::StageFileCompression::Bz2,
+            row_tag: "row".to_string(),
+            quote: "".to_string(),
+            name: None,
+        },
+        copy_options: mt::principal::CopyOptions {
+            on_error: mt::principal::OnErrorMode::SkipFileNum(3141),
+            size_limit: 1038,
+            split_size: 0,
+            purge: true,
+            single: false,
+            max_file_size: 0,
+        },
+        comment: "test".to_string(),
+        ..Default::default()
+    }
+}
+
 pub(crate) fn test_stage_file() -> mt::principal::StageFile {
     let dt = NaiveDateTime::new(
         NaiveDate::from_ymd(2022, 9, 16),
@@ -463,6 +501,25 @@ fn test_user_incompatible() -> anyhow::Result<()> {
     {
         let oss_stage_info = test_oss_stage_info();
         let mut p = oss_stage_info.to_pb()?;
+        p.ver = VER + 1;
+        p.min_reader_ver = VER + 1;
+
+        let res = mt::principal::UserStageInfo::from_pb(p);
+        assert_eq!(
+            Incompatible {
+                reason: format!(
+                    "executable ver={} is smaller than the min reader version({}) that can read this message",
+                    VER,
+                    VER + 1
+                )
+            },
+            res.unwrap_err()
+        )
+    }
+
+    {
+        let webhdfs_stage_info = test_webhdfs_stage_info();
+        let mut p = webhdfs_stage_info.to_pb()?;
         p.ver = VER + 1;
         p.min_reader_ver = VER + 1;
 

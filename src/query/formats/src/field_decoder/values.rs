@@ -13,11 +13,14 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashSet;
 use std::io::Cursor;
 
 use chrono_tz::Tz;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ArrayDeserializer;
+use common_expression::MapDeserializer;
 use common_expression::NullableDeserializer;
 use common_expression::StringDeserializer;
 use common_expression::StructDeserializer;
@@ -29,6 +32,7 @@ use common_io::constants::NULL_BYTES_UPPER;
 use common_io::constants::TRUE_BYTES_LOWER;
 use common_io::cursor_ext::BufferReadStringExt;
 use common_io::cursor_ext::ReadBytesExt;
+use common_io::prelude::FormatSettings;
 
 use crate::field_decoder::row_based::FieldDecoderRowBased;
 use crate::CommonSettings;
@@ -38,6 +42,7 @@ use crate::FileFormatOptionsExt;
 #[derive(Clone)]
 pub struct FieldDecoderValues {
     pub common_settings: CommonSettings,
+    format: FormatSettings,
 }
 
 impl FieldDecoderValues {
@@ -49,6 +54,9 @@ impl FieldDecoderValues {
                 null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
+                timezone: options.timezone,
+            },
+            format: FormatSettings {
                 timezone: options.timezone,
             },
         }
@@ -64,6 +72,7 @@ impl FieldDecoderValues {
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone,
             },
+            format: FormatSettings { timezone },
         }
     }
 }
@@ -143,6 +152,45 @@ impl FieldDecoderRowBased for FieldDecoderValues {
             }
             let _ = reader.ignore_white_spaces();
             self.read_field(column.inner.as_mut(), reader, false)?;
+            idx += 1;
+        }
+        column.add_offset(idx);
+        Ok(())
+    }
+
+    fn read_map<R: AsRef<[u8]>>(
+        &self,
+        column: &mut MapDeserializer,
+        reader: &mut Cursor<R>,
+        _raw: bool,
+    ) -> Result<()> {
+        reader.must_ignore_byte(b'{')?;
+        let mut idx = 0;
+        let mut set = HashSet::new();
+        loop {
+            let _ = reader.ignore_white_spaces();
+            if reader.ignore_byte(b'}') {
+                break;
+            }
+            if idx != 0 {
+                reader.must_ignore_byte(b',')?;
+            }
+            let _ = reader.ignore_white_spaces();
+            self.read_field(column.key.as_mut(), reader, false)?;
+            // check duplicate map keys
+            let key = column.key.pop_data_value().unwrap();
+            if set.contains(&key) {
+                column.add_offset(idx);
+                return Err(ErrorCode::BadBytes(
+                    "map keys have to be unique".to_string(),
+                ));
+            }
+            set.insert(key.clone());
+            column.key.append_data_value(key, &self.format)?;
+            let _ = reader.ignore_white_spaces();
+            reader.must_ignore_byte(b':')?;
+            let _ = reader.ignore_white_spaces();
+            self.read_field(column.value.as_mut(), reader, false)?;
             idx += 1;
         }
         column.add_offset(idx);

@@ -176,6 +176,9 @@ pub fn gen_col_stats_lite(
             DataType::Array(inner_type) => {
                 collect_col_stats(None, inner_type, column_id, stats, rows)?
             }
+            DataType::Map(inner_type) => {
+                collect_col_stats(None, inner_type, column_id, stats, rows)?
+            }
             _ => {
                 if let Some((col, val)) = col_scalar {
                     if RangeIndex::supported_type(data_type) {
@@ -282,6 +285,14 @@ pub mod traverse {
                     break;
                 }
             }
+            DataType::Map(inner_type) => match *inner_type {
+                DataType::Tuple(tuple_inner_types) => {
+                    for tuple_inner_type in tuple_inner_types.iter() {
+                        traverse_recursive(None, None, tuple_inner_type, leaves)?;
+                    }
+                }
+                _ => unreachable!(),
+            },
             _ => {
                 leaves.push((idx, column.cloned(), data_type.clone()));
             }

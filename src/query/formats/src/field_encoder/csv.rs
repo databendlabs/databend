@@ -73,6 +73,18 @@ impl FieldEncoderRowBased for FieldEncoderCSV {
         self.write_string_inner(&buf, out_buf, raw)
     }
 
+    fn write_map<T: ValueType>(
+        &self,
+        column: &ArrayColumn<T>,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+        raw: bool,
+    ) {
+        let mut buf = vec![];
+        self.nested.write_map(column, row_index, &mut buf, false);
+        self.write_string_inner(&buf, out_buf, raw)
+    }
+
     fn write_tuple(&self, columns: &[Column], row_index: usize, out_buf: &mut Vec<u8>, raw: bool) {
         let mut buf = vec![];
         self.nested.write_tuple(columns, row_index, &mut buf, false);

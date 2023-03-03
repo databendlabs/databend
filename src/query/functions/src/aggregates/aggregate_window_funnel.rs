@@ -22,6 +22,7 @@ use std::sync::Arc;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::eval_function;
 use common_expression::types::number::Number;
 use common_expression::types::number::UInt8Type;
 use common_expression::types::ArgType;
@@ -35,7 +36,9 @@ use common_expression::types::ValueType;
 use common_expression::with_integer_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
+use common_expression::FunctionContext;
 use common_expression::Scalar;
+use common_expression::Value;
 use common_io::prelude::*;
 use num_traits::AsPrimitive;
 use serde::de::DeserializeOwned;
@@ -49,6 +52,7 @@ use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::assert_unary_params;
 use crate::aggregates::assert_variadic_arguments;
 use crate::aggregates::AggregateFunction;
+use crate::scalars::BUILTIN_FUNCTIONS;
 
 #[derive(Serialize, Deserialize)]
 struct AggregateWindowFunnelState<T> {
@@ -352,10 +356,24 @@ where
         arguments: Vec<DataType>,
     ) -> Result<AggregateFunctionRef> {
         let event_size = arguments.len() - 1;
-        let window = params[0]
-            .as_ref()
-            .cast_to_u64()
-            .ok_or_else(|| ErrorCode::InvalidArgument("Must be positive window"))?;
+        let (window, _) = eval_function(
+            None,
+            "to_uint64",
+            [(
+                Value::Scalar(params[0].clone()),
+                params[0].as_ref().infer_data_type(),
+            )],
+            FunctionContext::default(),
+            1,
+            &BUILTIN_FUNCTIONS,
+        )?;
+        let window = window
+            .into_scalar()
+            .unwrap()
+            .into_number()
+            .unwrap()
+            .into_u_int64()
+            .unwrap();
 
         Ok(Arc::new(Self {
             display_name: display_name.to_owned(),

@@ -17,7 +17,7 @@ To create a request with the Streaming Load API, follow the format below:
 curl -H "insert_sql:<value>" -F "upload=@<file_location>" [-F "upload=@<file_location>"] -XPUT http://<user_name>:[password]@<http_handler_host>:<http_handler_port>/v1/streaming_load
 ```
 
-The parameter `insert_sql` is required and must include an INSERT statement as well as the `FILE_FORMAT` parameter that specifies the file formats. For details about `FILE_FORMAT`, see [Input & Output File Formats](../../13-sql-reference/75-file-format-options.md).
+The parameter `insert_sql` is required and must include an INSERT statement as well as the `FILE_FORMAT` parameter that specifies the file formats. For details about `FILE_FORMAT`, see [Input & Output File Formats](../../13-sql-reference/50-file-format-options.md).
 
 | Parameter               | Values                              | Supported Formats         | Examples                                                                                                                              |
 |-------------------------|-------------------------------------|---------------------------|---------------------------------------------------------------------------------------------------------------------------------------|

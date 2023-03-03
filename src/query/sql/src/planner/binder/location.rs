@@ -27,6 +27,7 @@ use common_meta_app::storage::StorageIpfsConfig;
 use common_meta_app::storage::StorageOssConfig;
 use common_meta_app::storage::StorageParams;
 use common_meta_app::storage::StorageS3Config;
+use common_meta_app::storage::StorageWebhdfsConfig;
 use common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
 use common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
 use common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
@@ -264,6 +265,41 @@ fn parse_hdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
     Ok(sp)
 }
 
+// The FileSystem scheme of WebHDFS is “webhdfs://”. A WebHDFS FileSystem URI has the following format.
+// webhdfs://<HOST>:<HTTP_PORT>/<PATH>
+fn parse_webhdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
+    let is_https = l
+        .connection
+        .get("https")
+        .map(|s| s.to_lowercase().parse::<bool>())
+        .unwrap_or(Ok(true))
+        .map_err(|e| {
+            Error::new(
+                ErrorKind::InvalidInput,
+                format!(
+                    "HTTPS should be `TRUE` or `FALSE`, parse error with: {:?}",
+                    e,
+                ),
+            )
+        })?;
+    let prefix = if is_https { "https" } else { "http" };
+    let endpoint_url = format!("{prefix}://{}", l.name);
+
+    let root = l.path.clone();
+
+    let delegation = l.connection.get("delegation").cloned().unwrap_or_default();
+
+    let sp = StorageParams::Webhdfs(StorageWebhdfsConfig {
+        endpoint_url,
+        root,
+        delegation,
+    });
+
+    l.connection.check()?;
+
+    Ok(sp)
+}
+
 /// parse_uri_location will parse given UriLocation into StorageParams and Path.
 pub fn parse_uri_location(l: &mut UriLocation) -> Result<(StorageParams, String)> {
     // Path endswith `/` means it's a directory, otherwise it's a file.
@@ -321,6 +357,7 @@ pub fn parse_uri_location(l: &mut UriLocation) -> Result<(StorageParams, String)
             let cfg = StorageFsConfig { root };
             StorageParams::Fs(cfg)
         }
+        Scheme::Webhdfs => parse_webhdfs_params(l)?,
         v => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,

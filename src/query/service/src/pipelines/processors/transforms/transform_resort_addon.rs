@@ -54,7 +54,7 @@ where Self: Transform
             .map(DataField::from)
             .collect::<Vec<_>>();
 
-        let mut ops = Vec::with_capacity(fields.len());
+        let mut exprs = Vec::with_capacity(fields.len());
         for f in fields.iter() {
             let expr = if !input_schema.has_field(f.name()) {
                 if let Some(default_expr) = f.default_expr() {
@@ -87,13 +87,13 @@ where Self: Transform
                     display_name: field.name().clone(),
                 }
             };
-            ops.push(BlockOperator::Map { expr });
+            exprs.push(expr);
         }
 
         let func_ctx = ctx.get_function_context()?;
         let expression_transform = CompoundBlockOperator {
             ctx: func_ctx,
-            operators: ops,
+            operators: vec![BlockOperator::Map { exprs }],
         };
 
         Ok(ProcessorPtr::create(Transformer::create(

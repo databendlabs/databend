@@ -63,10 +63,10 @@ impl TypeDeserializer for NullDeserializer {
         Ok(())
     }
 
-    fn pop_data_value(&mut self) -> Result<()> {
+    fn pop_data_value(&mut self) -> Result<Scalar> {
         if *self > 0 {
             *self -= 1;
-            Ok(())
+            Ok(Scalar::Null)
         } else {
             Err(ErrorCode::from("Null column is empty when pop data value"))
         }

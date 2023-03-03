@@ -16,6 +16,7 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_expression::types::array::ArrayColumn;
 use common_expression::types::date::date_to_string;
+use common_expression::types::decimal::DecimalColumn;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::number::NumberColumn;
 use common_expression::types::string::StringColumn;
@@ -33,38 +34,41 @@ use crate::CommonSettings;
 pub trait FieldEncoderRowBased {
     fn common_settings(&self) -> &CommonSettings;
 
+    /// 'raw' is mainly for string now and types need to be encoded as string in a format,
+    /// to determine the quote/escape behavior.
+    /// 'raw=true' can be roughly understood as 'no quote/escape'.
+    /// for example, string inside tuple/struct are always quoted/escaped now.
     fn write_field(&self, column: &Column, row_index: usize, out_buf: &mut Vec<u8>, raw: bool) {
         match &column {
-            Column::Null { .. } => self.write_null(out_buf, raw),
-            Column::EmptyArray { .. } => self.write_empty_array(out_buf, raw),
-            Column::Boolean(c) => self.write_bool(c, row_index, out_buf, raw),
+            Column::Null { .. } => self.write_null(out_buf),
+            Column::EmptyArray { .. } => self.write_empty_array(out_buf),
+            Column::EmptyMap { .. } => self.write_empty_map(out_buf),
+            Column::Boolean(c) => self.write_bool(c, row_index, out_buf),
             Column::Number(col) => match col {
-                NumberColumn::UInt8(c) => self.write_int(c, row_index, out_buf, raw),
-                NumberColumn::UInt16(c) => self.write_int(c, row_index, out_buf, raw),
-                NumberColumn::UInt32(c) => self.write_int(c, row_index, out_buf, raw),
-                NumberColumn::UInt64(c) => self.write_int(c, row_index, out_buf, raw),
-                NumberColumn::Int8(c) => self.write_int(c, row_index, out_buf, raw),
-                NumberColumn::Int16(c) => self.write_int(c, row_index, out_buf, raw),
-                NumberColumn::Int32(c) => self.write_int(c, row_index, out_buf, raw),
-                NumberColumn::Int64(c) => self.write_int(c, row_index, out_buf, raw),
-                NumberColumn::Float32(c) => self.write_float(c, row_index, out_buf, raw),
-                NumberColumn::Float64(c) => self.write_float(c, row_index, out_buf, raw),
+                NumberColumn::UInt8(c) => self.write_int(c, row_index, out_buf),
+                NumberColumn::UInt16(c) => self.write_int(c, row_index, out_buf),
+                NumberColumn::UInt32(c) => self.write_int(c, row_index, out_buf),
+                NumberColumn::UInt64(c) => self.write_int(c, row_index, out_buf),
+                NumberColumn::Int8(c) => self.write_int(c, row_index, out_buf),
+                NumberColumn::Int16(c) => self.write_int(c, row_index, out_buf),
+                NumberColumn::Int32(c) => self.write_int(c, row_index, out_buf),
+                NumberColumn::Int64(c) => self.write_int(c, row_index, out_buf),
+                NumberColumn::Float32(c) => self.write_float(c, row_index, out_buf),
+                NumberColumn::Float64(c) => self.write_float(c, row_index, out_buf),
             },
-            Column::Decimal(x) => {
-                let data = x.index(row_index).unwrap().to_string();
-                out_buf.extend_from_slice(data.as_bytes());
-            }
+            Column::Decimal(c) => self.write_decimal(c, row_index, out_buf),
             Column::Date(c) => self.write_date(c, row_index, out_buf, raw),
             Column::Timestamp(c) => self.write_timestamp(c, row_index, out_buf, raw),
             Column::String(c) => self.write_string(c, row_index, out_buf, raw),
             Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf, raw),
             Column::Array(box c) => self.write_array(c, row_index, out_buf, raw),
+            Column::Map(box c) => self.write_map(c, row_index, out_buf, raw),
             Column::Tuple { fields, .. } => self.write_tuple(fields, row_index, out_buf, raw),
             Column::Variant(c) => self.write_variant(c, row_index, out_buf, raw),
         }
     }
 
-    fn write_bool(&self, column: &Bitmap, row_index: usize, out_buf: &mut Vec<u8>, _raw: bool) {
+    fn write_bool(&self, column: &Bitmap, row_index: usize, out_buf: &mut Vec<u8>) {
         let v = if column.get_bit(row_index) {
             &self.common_settings().true_bytes
         } else {
@@ -74,13 +78,18 @@ pub trait FieldEncoderRowBased {
         out_buf.extend_from_slice(v);
     }
 
-    fn write_null(&self, out_buf: &mut Vec<u8>, _raw: bool) {
+    fn write_null(&self, out_buf: &mut Vec<u8>) {
         out_buf.extend_from_slice(&self.common_settings().null_bytes);
     }
 
-    fn write_empty_array(&self, out_buf: &mut Vec<u8>, _raw: bool) {
+    fn write_empty_array(&self, out_buf: &mut Vec<u8>) {
         out_buf.extend_from_slice(b"[");
         out_buf.extend_from_slice(b"]");
+    }
+
+    fn write_empty_map(&self, out_buf: &mut Vec<u8>) {
+        out_buf.extend_from_slice(b"{");
+        out_buf.extend_from_slice(b"}");
     }
 
     fn write_nullable<T: ValueType>(
@@ -91,7 +100,7 @@ pub trait FieldEncoderRowBased {
         raw: bool,
     ) {
         if !column.validity.get_bit(row_index) {
-            self.write_null(out_buf, raw)
+            self.write_null(out_buf)
         } else {
             self.write_field(
                 &T::upcast_column(column.column.clone()),
@@ -104,15 +113,8 @@ pub trait FieldEncoderRowBased {
 
     fn write_string_inner(&self, in_buf: &[u8], out_buf: &mut Vec<u8>, raw: bool);
 
-    fn write_int<T>(
-        &self,
-        column: &Buffer<T>,
-        row_index: usize,
-        out_buf: &mut Vec<u8>,
-        _raw: bool,
-    ) where
-        T: Marshal + Unmarshal<T> + ToLexical + PrimitiveWithFormat,
-    {
+    fn write_int<T>(&self, column: &Buffer<T>, row_index: usize, out_buf: &mut Vec<u8>)
+    where T: Marshal + Unmarshal<T> + ToLexical + PrimitiveWithFormat {
         let v = unsafe { column.get_unchecked(row_index) };
         v.write_field(out_buf, self.common_settings())
     }
@@ -122,12 +124,16 @@ pub trait FieldEncoderRowBased {
         column: &Buffer<OrderedFloat<T>>,
         row_index: usize,
         out_buf: &mut Vec<u8>,
-        _raw: bool,
     ) where
         T: Marshal + Unmarshal<T> + ToLexical + PrimitiveWithFormat,
     {
         let v = unsafe { column.get_unchecked(row_index) };
         v.0.write_field(out_buf, self.common_settings())
+    }
+
+    fn write_decimal(&self, column: &DecimalColumn, row_index: usize, out_buf: &mut Vec<u8>) {
+        let data = column.index(row_index).unwrap().to_string();
+        out_buf.extend_from_slice(data.as_bytes());
     }
 
     fn write_string(
@@ -171,6 +177,14 @@ pub trait FieldEncoderRowBased {
     }
 
     fn write_array<T: ValueType>(
+        &self,
+        column: &ArrayColumn<T>,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+        raw: bool,
+    );
+
+    fn write_map<T: ValueType>(
         &self,
         column: &ArrayColumn<T>,
         row_index: usize,

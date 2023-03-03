@@ -1,0 +1,108 @@
+ast            : map([], [])
+raw expr       : map(array(), array())
+checked expr   : map<Array(Nothing), Array(Nothing)>(array<>(), array<>())
+optimized expr : {} :: Map(Nothing)
+output type    : Map(Nothing)
+output domain  : Undefined
+output         : {}
+
+
+ast            : map([1,2], ['a','b'])
+raw expr       : map(array(1_u8, 2_u8), array("a", "b"))
+checked expr   : map<T0=UInt8, T1=String><Array(T0), Array(T1)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=String><T0, T0>("a", "b"))
+optimized expr : {1_u8:"a", 2_u8:"b"}
+output type    : Map(UInt8, String)
+output domain  : Undefined
+output         : {1:"a", 2:"b"}
+
+
+ast            : map(['k1','k2','k3'], ['v1','v2','v3'])
+raw expr       : map(array("k1", "k2", "k3"), array("v1", "v2", "v3"))
+checked expr   : map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("k1", "k2", "k3"), array<T0=String><T0, T0, T0>("v1", "v2", "v3"))
+optimized expr : {"k1":"v1", "k2":"v2", "k3":"v3"}
+output type    : Map(String, String)
+output domain  : Undefined
+output         : {"k1":"v1", "k2":"v2", "k3":"v3"}
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | map(1, 'a')
+  | ^^^^^^^^^^^ no overload satisfies `map(UInt8, String)`
+
+has tried possible overloads:
+  map(Array(Nothing), Array(Nothing)) :: Map(Nothing)                 : unable to unify `UInt8` with `Array(Nothing)`
+  map(Array(Nothing) NULL, Array(Nothing) NULL) :: Map(Nothing) NULL  : unable to unify `UInt8` with `Array(Nothing)`
+  map(Array(T0), Array(T1)) :: Map(T0, T1)                            : unable to unify `UInt8` with `Array(T0)`
+  map(Array(T0) NULL, Array(T1) NULL) :: Map(T0, T1) NULL             : unable to unify `UInt8` with `Array(T0)`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | map(['k1','k2'], ['v1','v2','v3'])
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ key list has a different size from value list (2 keys, 3 values) while evaluating function `map(["k1", "k2"], ["v1", "v2", "v3"])`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | map(['k1','k1'], ['v1','v2'])
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ map keys have to be unique while evaluating function `map(["k1", "k1"], ["v1", "v2"])`
+
+
+
+ast            : map([a_col, b_col, c_col], [d_col, e_col, f_col])
+raw expr       : map(array(a_col::Int8, b_col::Int8, c_col::Int8), array(d_col::String NULL, e_col::String NULL, f_col::String NULL))
+checked expr   : map<T0=Int8, T1=String NULL><Array(T0), Array(T1)>(array<T0=Int8><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col))
+evaluation:
++--------+---------+---------+---------+-------------+---------------------+---------------------+------------------------+
+|        | a_col   | b_col   | c_col   | d_col       | e_col               | f_col               | Output                 |
++--------+---------+---------+---------+-------------+---------------------+---------------------+------------------------+
+| Type   | Int8    | Int8    | Int8    | String NULL | String NULL         | String NULL         | Map(Int8, String NULL) |
+| Domain | {1..=3} | {4..=6} | {7..=9} | {"a"..="c"} | {""..="e"} ∪ {NULL} | {""..="g"} ∪ {NULL} | Unknown                |
+| Row 0  | 1       | 4       | 7       | "a"         | "d"                 | "f"                 | {1:"a", 4:"d", 7:"f"}  |
+| Row 1  | 2       | 5       | 8       | "b"         | "e"                 | NULL                | {2:"b", 5:"e", 8:NULL} |
+| Row 2  | 3       | 6       | 9       | "c"         | NULL                | "g"                 | {3:"c", 6:NULL, 9:"g"} |
++--------+---------+---------+---------+-------------+---------------------+---------------------+------------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                          |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a_col  | Int8([1, 2, 3])                                                                                                                                                                                                                                               |
+| b_col  | Int8([4, 5, 6])                                                                                                                                                                                                                                               |
+| c_col  | Int8([7, 8, 9])                                                                                                                                                                                                                                               |
+| d_col  | NullableColumn { column: StringColumn { data: 0x616263, offsets: [0, 1, 2, 3] }, validity: [0b_____111] }                                                                                                                                                     |
+| e_col  | NullableColumn { column: StringColumn { data: 0x6465, offsets: [0, 1, 2, 2] }, validity: [0b_____011] }                                                                                                                                                       |
+| f_col  | NullableColumn { column: StringColumn { data: 0x6667, offsets: [0, 1, 1, 2] }, validity: [0b_____101] }                                                                                                                                                       |
+| Output | ArrayColumn { values: Tuple { fields: [Int8([1, 4, 7, 2, 5, 8, 3, 6, 9]), NullableColumn { column: StringColumn { data: 0x61646662656367, offsets: [0, 1, 2, 3, 4, 5, 5, 6, 6, 7] }, validity: [0b01011111, 0b_______1] }], len: 9 }, offsets: [0, 3, 6, 9] } |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : map(['k1', 'k2'], [a_col, b_col])
+raw expr       : map(array("k1", "k2"), array(a_col::Int8, b_col::Int8))
+checked expr   : map<T0=String, T1=Int8><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=Int8><T0, T0>(a_col, b_col))
+optimized expr : map<T0=String, T1=Int8><Array(T0), Array(T1)>(["k1", "k2"], array<T0=Int8><T0, T0>(a_col, b_col))
+evaluation:
++--------+---------+---------+-------------------+
+|        | a_col   | b_col   | Output            |
++--------+---------+---------+-------------------+
+| Type   | Int8    | Int8    | Map(String, Int8) |
+| Domain | {1..=3} | {4..=6} | Unknown           |
+| Row 0  | 1       | 4       | {"k1":1, "k2":4}  |
+| Row 1  | 2       | 5       | {"k1":2, "k2":5}  |
+| Row 2  | 3       | 6       | {"k1":3, "k2":6}  |
++--------+---------+---------+-------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                     |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a_col  | Int8([1, 2, 3])                                                                                                                                                                          |
+| b_col  | Int8([4, 5, 6])                                                                                                                                                                          |
+| Output | ArrayColumn { values: Tuple { fields: [StringColumn { data: 0x6b316b326b316b326b316b32, offsets: [0, 2, 4, 6, 8, 10, 12] }, Int8([1, 4, 2, 5, 3, 6])], len: 6 }, offsets: [0, 2, 4, 6] } |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+

@@ -16,6 +16,7 @@ async-channel = "1.7.1"
 common-arrow = { path = "../../../common/arrow" }
 common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
+common-compress = { path = "../../../common/compress" }
 common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
 common-formats = { path = "../../formats" }
@@ -31,11 +32,10 @@ csv-core = "0.1.10"
 dashmap = "5.4.0"
 futures = "0.3.24"
 futures-util = "0.3.24"
-opendal = { workspace = true, features = ["compress"] }
+opendal = { workspace = true }
 parking_lot = "0.12.1"
 serde = { workspace = true }
 serde_json = { workspace = true }
-similar-asserts = "1.4.2"
 tracing = "0.1.36"
 typetag = "0.2.3"
 xml-rs = "0.8.4"

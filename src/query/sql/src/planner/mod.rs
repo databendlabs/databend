@@ -24,6 +24,7 @@ pub mod optimizer;
 pub mod plans;
 mod udf_validator;
 
+pub use binder::parse_result_scan_args;
 pub use binder::BindContext;
 pub use binder::Binder;
 pub use binder::ColumnBinding;

@@ -16,12 +16,12 @@
 use common_ast::ast::Engine;
 use common_base::base::tokio;
 use common_sql::plans::AlterTableClusterKeyPlan;
-use common_sql::plans::CreateTablePlanV2;
+use common_sql::plans::CreateTablePlan;
 use common_sql::plans::DropTableClusterKeyPlan;
 use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::FuseTable;
 use databend_query::interpreters::AlterTableClusterKeyInterpreter;
-use databend_query::interpreters::CreateTableInterpreterV2;
+use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::DropTableClusterKeyInterpreter;
 use databend_query::interpreters::Interpreter;
 use storages_common_cache::LoadParams;
@@ -37,7 +37,7 @@ async fn test_fuse_alter_table_cluster_key() -> common_exception::Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
 
-    let create_table_plan = CreateTablePlanV2 {
+    let create_table_plan = CreateTablePlan {
         if_not_exists: false,
         tenant: fixture.default_tenant(),
         catalog: fixture.default_catalog_name(),
@@ -59,7 +59,7 @@ async fn test_fuse_alter_table_cluster_key() -> common_exception::Result<()> {
     };
 
     // create test table
-    let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
+    let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
     interpreter.execute(ctx.clone()).await?;
 
     // add cluster key
@@ -91,6 +91,7 @@ async fn test_fuse_alter_table_cluster_key() -> common_exception::Result<()> {
         location: snapshot_loc.clone(),
         len_hint: None,
         ver: TableSnapshot::VERSION,
+        put_cache: true,
     };
 
     let snapshot = reader.read(&load_params).await?;
@@ -126,6 +127,7 @@ async fn test_fuse_alter_table_cluster_key() -> common_exception::Result<()> {
         location: snapshot_loc.clone(),
         len_hint: None,
         ver: TableSnapshot::VERSION,
+        put_cache: true,
     };
 
     let snapshot = reader.read(&params).await?;

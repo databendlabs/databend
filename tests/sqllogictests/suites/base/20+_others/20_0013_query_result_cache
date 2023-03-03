@@ -126,7 +126,7 @@ statement ok
 SET enable_query_result_cache = 1;
 
 statement ok
-SET tolerate_inconsistent_result_cache = 1;
+SET query_result_cache_allow_inconsistent = 1;
 
 query I
 SELECT * FROM t1 ORDER BY a;
@@ -159,7 +159,7 @@ SELECT * FROM t1, t2 ORDER BY a, b;
 3 c
 
 statement ok
-SET tolerate_inconsistent_result_cache = 0;
+SET query_result_cache_allow_inconsistent = 0;
 
 query I
 SELECT * FROM t1 ORDER BY a;

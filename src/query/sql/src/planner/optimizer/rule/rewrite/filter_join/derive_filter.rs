@@ -150,5 +150,8 @@ fn replace_column(scalar: &mut ScalarExpr, col_to_scalar: &HashMap<&IndexType, &
             replace_column(&mut expr.argument, col_to_scalar);
         }
         ScalarExpr::ConstantExpr(_) | ScalarExpr::SubqueryExpr(_) => {}
+        ScalarExpr::Unnest(expr) => {
+            replace_column(&mut expr.argument, col_to_scalar);
+        }
     }
 }

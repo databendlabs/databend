@@ -431,6 +431,46 @@ city64withseed(Float64, Float32) :: UInt64
 city64withseed(Float64 NULL, Float32 NULL) :: UInt64 NULL
 city64withseed(Float64, Float64) :: UInt64
 city64withseed(Float64 NULL, Float64 NULL) :: UInt64 NULL
+city64withseed(Decimal(38, 0), UInt8) :: UInt64
+city64withseed(Decimal(38, 0) NULL, UInt8 NULL) :: UInt64 NULL
+city64withseed(Decimal(38, 0), UInt16) :: UInt64
+city64withseed(Decimal(38, 0) NULL, UInt16 NULL) :: UInt64 NULL
+city64withseed(Decimal(38, 0), UInt32) :: UInt64
+city64withseed(Decimal(38, 0) NULL, UInt32 NULL) :: UInt64 NULL
+city64withseed(Decimal(38, 0), UInt64) :: UInt64
+city64withseed(Decimal(38, 0) NULL, UInt64 NULL) :: UInt64 NULL
+city64withseed(Decimal(38, 0), Int8) :: UInt64
+city64withseed(Decimal(38, 0) NULL, Int8 NULL) :: UInt64 NULL
+city64withseed(Decimal(38, 0), Int16) :: UInt64
+city64withseed(Decimal(38, 0) NULL, Int16 NULL) :: UInt64 NULL
+city64withseed(Decimal(38, 0), Int32) :: UInt64
+city64withseed(Decimal(38, 0) NULL, Int32 NULL) :: UInt64 NULL
+city64withseed(Decimal(38, 0), Int64) :: UInt64
+city64withseed(Decimal(38, 0) NULL, Int64 NULL) :: UInt64 NULL
+city64withseed(Decimal(38, 0), Float32) :: UInt64
+city64withseed(Decimal(38, 0) NULL, Float32 NULL) :: UInt64 NULL
+city64withseed(Decimal(38, 0), Float64) :: UInt64
+city64withseed(Decimal(38, 0) NULL, Float64 NULL) :: UInt64 NULL
+city64withseed(Decimal(76, 0), UInt8) :: UInt64
+city64withseed(Decimal(76, 0) NULL, UInt8 NULL) :: UInt64 NULL
+city64withseed(Decimal(76, 0), UInt16) :: UInt64
+city64withseed(Decimal(76, 0) NULL, UInt16 NULL) :: UInt64 NULL
+city64withseed(Decimal(76, 0), UInt32) :: UInt64
+city64withseed(Decimal(76, 0) NULL, UInt32 NULL) :: UInt64 NULL
+city64withseed(Decimal(76, 0), UInt64) :: UInt64
+city64withseed(Decimal(76, 0) NULL, UInt64 NULL) :: UInt64 NULL
+city64withseed(Decimal(76, 0), Int8) :: UInt64
+city64withseed(Decimal(76, 0) NULL, Int8 NULL) :: UInt64 NULL
+city64withseed(Decimal(76, 0), Int16) :: UInt64
+city64withseed(Decimal(76, 0) NULL, Int16 NULL) :: UInt64 NULL
+city64withseed(Decimal(76, 0), Int32) :: UInt64
+city64withseed(Decimal(76, 0) NULL, Int32 NULL) :: UInt64 NULL
+city64withseed(Decimal(76, 0), Int64) :: UInt64
+city64withseed(Decimal(76, 0) NULL, Int64 NULL) :: UInt64 NULL
+city64withseed(Decimal(76, 0), Float32) :: UInt64
+city64withseed(Decimal(76, 0) NULL, Float32 NULL) :: UInt64 NULL
+city64withseed(Decimal(76, 0), Float64) :: UInt64
+city64withseed(Decimal(76, 0) NULL, Float64 NULL) :: UInt64 NULL
 contains(Array(UInt8), UInt8) :: Boolean
 contains(Array(UInt8) NULL, UInt8 NULL) :: Boolean NULL
 contains(Array(UInt16), UInt16) :: Boolean
@@ -1227,6 +1267,10 @@ lte(Array(T0), Array(T0)) :: Boolean
 lte(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
 ltrim(String) :: String
 ltrim(String NULL) :: String NULL
+map(Array(Nothing), Array(Nothing)) :: Map(Nothing)
+map(Array(Nothing) NULL, Array(Nothing) NULL) :: Map(Nothing) NULL
+map(Array(T0), Array(T1)) :: Map(T0, T1)
+map(Array(T0) NULL, Array(T1) NULL) :: Map(T0, T1) NULL
 md5(String) :: String
 md5(String NULL) :: String NULL
 minus(UInt8) :: Int16
@@ -2223,6 +2267,10 @@ siphash64(Float32) :: UInt64
 siphash64(Float32 NULL) :: UInt64 NULL
 siphash64(Float64) :: UInt64
 siphash64(Float64 NULL) :: UInt64 NULL
+siphash64(Decimal(38, 0)) :: UInt64
+siphash64(Decimal(38, 0) NULL) :: UInt64 NULL
+siphash64(Decimal(76, 0)) :: UInt64
+siphash64(Decimal(76, 0) NULL) :: UInt64 NULL
 sleep(Float64) :: UInt8
 slice(Array(Nothing), UInt64) :: Array(Nothing)
 slice(Array(Nothing) NULL, UInt64 NULL) :: Array(Nothing) NULL
@@ -2442,8 +2490,6 @@ to_int32(Float64) :: Int32
 to_int32(Float64 NULL) :: Int32 NULL
 to_int32(Boolean) :: Int32
 to_int32(Boolean NULL) :: Int32 NULL
-to_int32(Date) :: Int32
-to_int32(Date NULL) :: Int32 NULL
 to_int64(Variant) :: Int64
 to_int64(Variant NULL) :: Int64 NULL
 to_int64(String) :: Int64
@@ -2894,8 +2940,6 @@ try_to_int32(Float64) :: Int32 NULL
 try_to_int32(Float64 NULL) :: Int32 NULL
 try_to_int32(Boolean) :: Int32 NULL
 try_to_int32(Boolean NULL) :: Int32 NULL
-try_to_int32(Date) :: Int32 NULL
-try_to_int32(Date NULL) :: Int32 NULL
 try_to_int64(Variant) :: Int64 NULL
 try_to_int64(Variant NULL) :: Int64 NULL
 try_to_int64(String) :: Int64 NULL
@@ -3131,6 +3175,10 @@ xxhash32(Float32) :: UInt32
 xxhash32(Float32 NULL) :: UInt32 NULL
 xxhash32(Float64) :: UInt32
 xxhash32(Float64 NULL) :: UInt32 NULL
+xxhash32(Decimal(38, 0)) :: UInt32
+xxhash32(Decimal(38, 0) NULL) :: UInt32 NULL
+xxhash32(Decimal(76, 0)) :: UInt32
+xxhash32(Decimal(76, 0) NULL) :: UInt32 NULL
 xxhash64(Variant) :: UInt64
 xxhash64(Variant NULL) :: UInt64 NULL
 xxhash64(String) :: UInt64
@@ -3161,6 +3209,10 @@ xxhash64(Float32) :: UInt64
 xxhash64(Float32 NULL) :: UInt64 NULL
 xxhash64(Float64) :: UInt64
 xxhash64(Float64 NULL) :: UInt64 NULL
+xxhash64(Decimal(38, 0)) :: UInt64
+xxhash64(Decimal(38, 0) NULL) :: UInt64 NULL
+xxhash64(Decimal(76, 0)) :: UInt64
+xxhash64(Decimal(76, 0) NULL) :: UInt64 NULL
 yesterday() :: Date
 
 Factory functions:
@@ -3186,6 +3238,7 @@ lte
 minus
 multi_if
 multiply
+ne
 noteq
 plus
 point_in_ellipses
@@ -3195,6 +3248,7 @@ regexp_like
 regexp_replace
 regexp_substr
 to_decimal
+to_float64
 tuple
 
 Function aliases (alias to origin):

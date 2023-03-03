@@ -121,7 +121,7 @@ impl FuseTable {
         let topk = plan.push_downs.as_ref().and_then(|x| {
             x.top_k(
                 plan.schema().as_ref(),
-                self.clusetr_key_str(),
+                self.cluster_key_str(),
                 RangeIndex::supported_type,
             )
         });

@@ -286,6 +286,10 @@ pub enum ExprElement {
         // Optional `NULLS FIRST` or `NULLS LAST`
         nulls_first: Option<String>,
     },
+    /// `{'k1':'v1','k2':'v2'}`
+    Map {
+        kvs: Vec<(Expr, Expr)>,
+    },
     Interval {
         expr: Expr,
         unit: IntervalKind,
@@ -326,8 +330,8 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
             ExprElement::UnaryOp { op } => match op {
                 UnaryOperator::Not => Affix::Prefix(Precedence(NOT_PREC)),
 
-                UnaryOperator::Plus => Affix::Prefix(Precedence(30)),
-                UnaryOperator::Minus => Affix::Prefix(Precedence(30)),
+                UnaryOperator::Plus => Affix::Prefix(Precedence(50)),
+                UnaryOperator::Minus => Affix::Prefix(Precedence(50)),
             },
             ExprElement::BinaryOp { op } => match op {
                 BinaryOperator::Or => Affix::Infix(Precedence(5), Associativity::Left),
@@ -362,7 +366,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 BinaryOperator::Modulo => Affix::Infix(Precedence(40), Associativity::Left),
                 BinaryOperator::StringConcat => Affix::Infix(Precedence(40), Associativity::Left),
             },
-            ExprElement::PgCast { .. } => Affix::Postfix(Precedence(50)),
+            ExprElement::PgCast { .. } => Affix::Postfix(Precedence(60)),
             _ => Affix::Nilfix,
         };
         Ok(affix)
@@ -504,6 +508,10 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                     null_first,
                 }
             }
+            ExprElement::Map { kvs } => Expr::Map {
+                span: transform_span(elem.span.0),
+                kvs,
+            },
             ExprElement::Interval { expr, unit } => Expr::Interval {
                 span: transform_span(elem.span.0),
                 expr: Box::new(expr),
@@ -889,6 +897,12 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             nulls_first: opt_null_first.map(|(_, first_last)| first_last),
         },
     );
+
+    let map_expr = map(
+        rule! { "{" ~ #comma_separated_list1(map_element) ~ "}" },
+        |(_, kvs, _)| ExprElement::Map { kvs },
+    );
+
     let date_add = map(
         rule! {
             DATE_ADD ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
@@ -965,6 +979,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #map_access : "[<key>] | .<key> | :<key>"
             | #literal : "<literal>"
             | #array : "`[...]`"
+            | #map_expr : "`{...}`"
         ),
     )))(i)?;
 
@@ -1184,9 +1199,14 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         },
     );
     let ty_array = map(
-        rule! { ARRAY ~ ( "(" ~ #type_name ~ ")" )? },
-        |(_, opt_item_type)| TypeName::Array {
-            item_type: opt_item_type.map(|(_, opt_item_type, _)| Box::new(opt_item_type)),
+        rule! { ARRAY ~ "(" ~ #type_name ~ ")" },
+        |(_, _, item_type, _)| TypeName::Array(Box::new(item_type)),
+    );
+    let ty_map = map(
+        rule! { MAP ~ "(" ~ #type_name ~ "," ~ #type_name ~ ")" },
+        |(_, _, key_type, _, val_type, _)| TypeName::Map {
+            key_type: Box::new(key_type),
+            val_type: Box::new(val_type),
         },
     );
     let ty_nullable = map(
@@ -1226,7 +1246,6 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         TypeName::String,
         rule! { ( STRING | VARCHAR | CHAR | CHARACTER | TEXT  ) ~ ( "(" ~ #literal_u64 ~ ")" )? },
     );
-    let ty_object = value(TypeName::Object, rule! { OBJECT | MAP });
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
     map(
         rule! {
@@ -1243,11 +1262,11 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_float64
             | #ty_decimal
             | #ty_array
+            | #ty_map
             | #ty_tuple
             | #ty_date
             | #ty_datetime
             | #ty_string
-            | #ty_object
             | #ty_variant
             | #ty_nullable
             ) ~ NULL? : "type name"
@@ -1370,5 +1389,14 @@ pub fn map_access(i: Input) -> IResult<MapAccessor> {
         | #period
         | #period_number
         | #colon
+    )(i)
+}
+
+pub fn map_element(i: Input) -> IResult<(Expr, Expr)> {
+    map(
+        rule! {
+            #subexpr(0) ~ ":" ~ #subexpr(0)
+        },
+        |(key, _, value)| (key, value),
     )(i)
 }

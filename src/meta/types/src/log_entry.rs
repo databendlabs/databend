@@ -15,7 +15,6 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use openraft::AppData;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -43,8 +42,6 @@ pub struct LogEntry {
     /// The action a client want to take.
     pub cmd: Cmd,
 }
-
-impl AppData for LogEntry {}
 
 impl Display for LogEntry {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

@@ -34,6 +34,7 @@ use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::types::ValueType;
+use crate::with_decimal_type;
 use crate::with_number_type;
 use crate::Scalar;
 
@@ -176,7 +177,7 @@ impl Domain {
             }
             DataType::EmptyArray => Domain::Array(None),
             DataType::Array(ty) => Domain::Array(Some(Box::new(Domain::full(ty)))),
-            DataType::Map(_) | DataType::Variant => Domain::Undefined,
+            DataType::EmptyMap | DataType::Map(_) | DataType::Variant => Domain::Undefined,
             DataType::Generic(_) => unreachable!(),
         }
     }
@@ -190,6 +191,19 @@ impl Domain {
                             min: this.min.min(other.min),
                             max: this.max.max(other.max),
                         })),
+                    _ => unreachable!("unable to merge {this:?} with {other:?}"),
+                })
+            }
+            (Domain::Decimal(this), Domain::Decimal(other)) => {
+                with_decimal_type!(|TYPE| match (this, other) {
+                    (DecimalDomain::TYPE(x, size), DecimalDomain::TYPE(y, _)) =>
+                        Domain::Decimal(DecimalDomain::TYPE(
+                            SimpleDomain {
+                                min: x.min.min(y.min),
+                                max: x.max.max(y.max),
+                            },
+                            *size
+                        ),),
                     _ => unreachable!("unable to merge {this:?} with {other:?}"),
                 })
             }

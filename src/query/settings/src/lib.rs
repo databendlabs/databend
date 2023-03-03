@@ -201,7 +201,8 @@ impl Settings {
                     UserSettingValue::UInt64(48),
                 ),
                 level: ScopeLevel::Session,
-                desc: "If the distance between two IO ranges to be read in one file is less than storage_io_min_bytes_for_seek, then Databend sequentially reads a range of file that contains both ranges, thus avoiding extra seek. Default value is 48Bytes",
+                desc: "If the distance between two IO ranges to be read in one file is less than storage_io_min_bytes_for_seek, then Databend sequentially reads a range of file that contains both ranges, thus avoiding extra seek. \
+                Default value is 48Bytes",
                 possible_values: None,
             },
             // storage_io_max_page_bytes_for_read
@@ -247,25 +248,6 @@ impl Settings {
                 desc: "The size of buffer in bytes for input with format. By default, it is 1MB.",
                 possible_values: None,
             },
-            // enable_new_processor_framework
-            SettingValue {
-                default_value: UserSettingValue::UInt64(1),
-                user_setting: UserSetting::create(
-                    "enable_new_processor_framework",
-                    UserSettingValue::UInt64(1),
-                ),
-                level: ScopeLevel::Session,
-                desc: "Enable new processor framework if value != 0, default value: 1.",
-                possible_values: None,
-            },
-            // enable_planner_v2
-            SettingValue {
-                default_value: UserSettingValue::UInt64(1),
-                user_setting: UserSetting::create("enable_planner_v2", UserSettingValue::UInt64(1)),
-                level: ScopeLevel::Session,
-                desc: "Enable planner v2 by setting this variable to 1, default value: 1.",
-                possible_values: None,
-            },
             SettingValue {
                 default_value: UserSettingValue::String("UTC".to_owned()),
                 user_setting: UserSetting::create(
@@ -291,36 +273,6 @@ impl Settings {
                 user_setting: UserSetting::create("max_inlist_to_or", UserSettingValue::UInt64(3)),
                 level: ScopeLevel::Session,
                 desc: "Max size in inlist expression that will convert to or combinator, default value: 3.",
-                possible_values: None,
-            },
-            SettingValue {
-                default_value: UserSettingValue::UInt64(0),
-                user_setting: UserSetting::create(
-                    "enable_async_insert",
-                    UserSettingValue::UInt64(0),
-                ),
-                level: ScopeLevel::Session,
-                desc: "Whether the client open async insert mode, default value: 0.",
-                possible_values: None,
-            },
-            SettingValue {
-                default_value: UserSettingValue::UInt64(1),
-                user_setting: UserSetting::create(
-                    "wait_for_async_insert",
-                    UserSettingValue::UInt64(1),
-                ),
-                level: ScopeLevel::Session,
-                desc: "Whether the client wait for the reply of async insert, default value: 1.",
-                possible_values: None,
-            },
-            SettingValue {
-                default_value: UserSettingValue::UInt64(100),
-                user_setting: UserSetting::create(
-                    "wait_for_async_insert_timeout",
-                    UserSettingValue::UInt64(100),
-                ),
-                level: ScopeLevel::Session,
-                desc: "The timeout in seconds for waiting for processing of async insert, default value: 100.",
                 possible_values: None,
             },
             SettingValue {
@@ -448,6 +400,16 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
+                default_value: UserSettingValue::UInt64(1),
+                user_setting: UserSetting::create(
+                    "hide_options_in_show_create_table",
+                    UserSettingValue::UInt64(1),
+                ),
+                level: ScopeLevel::Session,
+                desc: "Ignore options while rendering the result of show create table.",
+                possible_values: None,
+            },
+            SettingValue {
                 default_value: UserSettingValue::String("".to_string()),
                 user_setting: UserSetting::create(
                     "sandbox_tenant",
@@ -481,37 +443,54 @@ impl Settings {
                     UserSettingValue::UInt64(0),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Enable the cache result of each query. It's disabled by default.",
+                desc: "Enable the query result caching of SQL queries in Databend. \
+                When this setting is enabled, Databend will store the results of queries in storage. \
+                This can improve query performance by reducing the amount of time required to re-execute the same query multiple times. \
+                Default is disabled.",
                 possible_values: None,
             },
             SettingValue {
                 default_value: UserSettingValue::UInt64(1048576), // 1MB
                 user_setting: UserSetting::create(
-                    "max_result_cache_bytes",
+                    "query_result_cache_max_bytes",
                     UserSettingValue::UInt64(1048576),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The maximum bytes of the result cache for one query, default: 1048576 bytes (1MB).",
+                desc: "The maximum bytes of the query result cache for one query, default: 1048576 bytes (1MB).",
                 possible_values: None,
             },
             SettingValue {
                 default_value: UserSettingValue::UInt64(300), // seconds
                 user_setting: UserSetting::create(
-                    "result_cache_ttl",
+                    "query_result_cache_ttl_secs",
                     UserSettingValue::UInt64(300),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Time-to-live of query result cache, default: 300 seconds (5 minutes).",
+                desc: "The time-to-live (TTL) for cached query results, in seconds. \
+                 Once the TTL for a cached result has expired, the result is considered stale and will not be used for new queries. \
+                 Default: 300 seconds (5 minutes).",
                 possible_values: None,
             },
             SettingValue {
                 default_value: UserSettingValue::UInt64(0),
                 user_setting: UserSetting::create(
-                    "tolerate_inconsistent_result_cache",
+                    "query_result_cache_allow_inconsistent",
                     UserSettingValue::UInt64(0),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Tolerate inconsistent result cache. It's disabled by default.",
+                desc: "Controls whether inconsistent cached results can be used for queries. \
+                When this setting is set to TRUE, Databend will use cached results even if they may be inconsistent due to changes in the underlying data. \
+                Default is FALSE (disabled).",
+                possible_values: None,
+            },
+            SettingValue {
+                default_value: UserSettingValue::UInt64(0),
+                user_setting: UserSetting::create(
+                    "spilling_bytes_threshold_per_proc",
+                    UserSettingValue::UInt64(0),
+                ),
+                level: ScopeLevel::Session,
+                desc: "When the memory used by the aggregator exceeds the set value, the data will overflow into the storage. disable if it's 0.",
                 possible_values: None,
             },
         ];
@@ -658,16 +637,6 @@ impl Settings {
         self.try_get_u64(key)
     }
 
-    pub fn get_enable_new_processor_framework(&self) -> Result<u64> {
-        let key = "enable_new_processor_framework";
-        self.try_get_u64(key)
-    }
-
-    pub fn get_enable_planner_v2(&self) -> Result<u64> {
-        static KEY: &str = "enable_planner_v2";
-        self.try_get_u64(KEY)
-    }
-
     pub fn get_enable_bushy_join(&self) -> Result<u64> {
         static KEY: &str = "enable_bushy_join";
         self.try_get_u64(KEY)
@@ -694,36 +663,6 @@ impl Settings {
     pub fn get_max_inlist_to_or(&self) -> Result<u64> {
         let key = "max_inlist_to_or";
         self.try_get_u64(key)
-    }
-
-    pub fn get_enable_async_insert(&self) -> Result<u64> {
-        let key = "enable_async_insert";
-        self.try_get_u64(key)
-    }
-
-    pub fn set_enable_async_insert(&self, val: u64) -> Result<()> {
-        let key = "enable_async_insert";
-        self.try_set_u64(key, val, false)
-    }
-
-    pub fn get_wait_for_async_insert(&self) -> Result<u64> {
-        let key = "wait_for_async_insert";
-        self.try_get_u64(key)
-    }
-
-    pub fn set_wait_for_async_insert(&self, val: u64) -> Result<()> {
-        let key = "wait_for_async_insert";
-        self.try_set_u64(key, val, false)
-    }
-
-    pub fn get_wait_for_async_insert_timeout(&self) -> Result<u64> {
-        let key = "wait_for_async_insert_timeout";
-        self.try_get_u64(key)
-    }
-
-    pub fn set_wait_for_async_insert_timeout(&self, val: u64) -> Result<()> {
-        let key = "wait_for_async_insert_timeout";
-        self.try_set_u64(key, val, false)
     }
 
     pub fn get_unquoted_ident_case_sensitive(&self) -> Result<bool> {
@@ -839,24 +778,40 @@ impl Settings {
             .and_then(|v| v.user_setting.value.as_string())
     }
 
+    pub fn get_hide_options_in_show_create_table(&self) -> Result<bool> {
+        let key = "hide_options_in_show_create_table";
+        let v = self.try_get_u64(key)?;
+        Ok(v != 0)
+    }
+
     pub fn get_enable_query_result_cache(&self) -> Result<bool> {
         let key = "enable_query_result_cache";
         self.try_get_u64(key).map(|v| v != 0)
     }
 
-    pub fn get_max_result_cache_bytes(&self) -> Result<usize> {
-        let key = "max_result_cache_bytes";
+    pub fn get_query_result_cache_max_bytes(&self) -> Result<usize> {
+        let key = "query_result_cache_max_bytes";
         self.try_get_u64(key).map(|v| v as usize)
     }
 
-    pub fn get_result_cache_ttl(&self) -> Result<u64> {
-        let key = "result_cache_ttl";
+    pub fn get_query_result_cache_ttl_secs(&self) -> Result<u64> {
+        let key = "query_result_cache_ttl_secs";
         self.try_get_u64(key)
     }
 
-    pub fn get_tolerate_inconsistent_result_cache(&self) -> Result<bool> {
-        let key = "tolerate_inconsistent_result_cache";
+    pub fn get_query_result_cache_allow_inconsistent(&self) -> Result<bool> {
+        let key = "query_result_cache_allow_inconsistent";
         self.try_get_u64(key).map(|v| v != 0)
+    }
+
+    pub fn get_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
+        let key = "spilling_bytes_threshold_per_proc";
+        self.try_get_u64(key).map(|v| v as usize)
+    }
+
+    pub fn set_spilling_bytes_threshold_per_proc(&self, value: usize) -> Result<()> {
+        let key = "spilling_bytes_threshold_per_proc";
+        self.try_set_u64(key, value as u64, false)
     }
 
     pub fn has_setting(&self, key: &str) -> bool {

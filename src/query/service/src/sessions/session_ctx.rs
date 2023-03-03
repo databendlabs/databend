@@ -51,6 +51,9 @@ pub struct SessionContext {
     client_host: RwLock<Option<SocketAddr>>,
     io_shutdown_tx: RwLock<Option<Sender<Sender<()>>>>,
     query_context_shared: RwLock<Weak<QueryContextShared>>,
+    // We store `query_id -> query_result_cache_key` to session context, so that we can fetch
+    // query result through previous query_id easily.
+    query_ids_results: RwLock<Vec<(String, Option<String>)>>,
 }
 
 impl SessionContext {
@@ -67,6 +70,7 @@ impl SessionContext {
             current_database: RwLock::new("default".to_string()),
             io_shutdown_tx: Default::default(),
             query_context_shared: Default::default(),
+            query_ids_results: Default::default(),
         }))
     }
 
@@ -211,5 +215,46 @@ impl SessionContext {
     pub fn set_query_context_shared(&self, ctx: Weak<QueryContextShared>) {
         let mut lock = self.query_context_shared.write();
         *lock = ctx
+    }
+
+    pub fn get_query_result_cache_key(&self, query_id: &str) -> Option<String> {
+        let lock = self.query_ids_results.read();
+        for (qid, result_cache_key) in (*lock).iter().rev() {
+            if qid.eq_ignore_ascii_case(query_id) {
+                return result_cache_key.clone();
+            }
+        }
+        None
+    }
+
+    pub fn update_query_ids_results(&self, query_id: String, value: Option<String>) {
+        let mut lock = self.query_ids_results.write();
+        // Here we use reverse iteration, as it is not common to modify elements from earlier.
+        for (idx, (qid, _)) in (*lock).iter().rev().enumerate() {
+            if qid.eq_ignore_ascii_case(&query_id) {
+                // update value iff value is some.
+                if let Some(v) = value {
+                    (*lock)[idx] = (query_id, Some(v))
+                }
+                return;
+            }
+        }
+        lock.push((query_id, value))
+    }
+
+    pub fn get_last_query_id(&self, index: i32) -> String {
+        let lock = self.query_ids_results.read();
+        let query_ids_len = lock.len();
+        let idx = if index < 0 {
+            query_ids_len as i32 + index
+        } else {
+            index
+        };
+
+        if idx < 0 || idx > (query_ids_len - 1) as i32 {
+            return "".to_string();
+        }
+
+        (*lock)[idx as usize].0.clone()
     }
 }

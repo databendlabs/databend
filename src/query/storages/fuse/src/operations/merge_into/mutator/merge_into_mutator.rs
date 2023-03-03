@@ -87,6 +87,7 @@ impl MergeIntoOperationAggregator {
                         location: path.clone(),
                         len_hint: None,
                         ver: *ver,
+                        put_cache: true,
                     };
                     // for typical configuration, segment cache is enabled, thus after the first loop, we are reading from cache
                     let segment_info = self.segment_reader.read(&load_param).await?;
@@ -122,6 +123,7 @@ impl MergeIntoOperationAggregator {
                 location: path.clone(),
                 len_hint: None,
                 ver: *ver,
+                put_cache: true,
             };
             let segment_info = self.segment_reader.read(&load_param).await?;
 
@@ -207,7 +209,7 @@ impl MergeIntoOperationAggregator {
         let raw_data = serialized.block_raw_data;
         let data_accessor = self.data_accessor.clone();
         // async processor is driven by global runtime io
-        write_data(&raw_data, &data_accessor, &location).await?;
+        write_data(raw_data, &data_accessor, &location).await?;
 
         let mutation = MutationLog {
             index: BlockMetaIndex {

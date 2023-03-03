@@ -103,15 +103,15 @@ where
     fn append_data_value(&mut self, value: Scalar, _format: &FormatSettings) -> Result<()> {
         let v = value
             .as_number()
-            .ok_or_else(|| ErrorCode::from("Unable to get number value"))?;
+            .ok_or_else(|| ErrorCode::from(format!("Unable to get number value {}", value)))?;
         let num = T::try_downcast_scalar(v).unwrap();
         self.builder.push(num);
         Ok(())
     }
 
-    fn pop_data_value(&mut self) -> Result<()> {
+    fn pop_data_value(&mut self) -> Result<Scalar> {
         match self.builder.pop() {
-            Some(_) => Ok(()),
+            Some(v) => Ok(Scalar::Number(T::upcast_scalar(v))),
             None => Err(ErrorCode::from(
                 "Number column is empty when pop data value",
             )),

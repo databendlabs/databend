@@ -32,7 +32,7 @@ error:
 1 | CAST(col1 AS foo)
   | ----         ^^^
   | |            |
-  | |            expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, or 31 more ...
+  | |            expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, or 30 more ...
   | |            while parsing type name
   | while parsing `CAST(... AS ...)`
   | while parsing expression
@@ -55,7 +55,7 @@ error:
   --> SQL:1:10
   |
 1 | CAST(col1)
-  | ----     ^ expected `AS`, `,`, `(`, `.`, `IS`, `NOT`, or 56 more ...
+  | ----     ^ expected `AS`, `,`, `(`, `.`, `IS`, `NOT`, or 57 more ...
   | |         
   | while parsing `CAST(... AS ...)`
   | while parsing expression

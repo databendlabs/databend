@@ -23,10 +23,15 @@ drop table t;
 statement error 1049
 create table t (a Decimal(0, 0));
 
-query I
+query IIII
 select 1::Decimal(17, 3), 2::Decimal(19, 4), 3::Decimal(20, 5), cast(10 as Decimal(7, 2));
 ----
 1.000 2.0000 3.00000 10.00
+
+query IIII
+select 1::Decimal(17, 3)::Float64, 2::Decimal(19, 4)::Float64, 3::Decimal(20, 5)::Float64, cast(10 as Decimal(7, 2))::Float64;
+----
+1.0 2.0 3.0 10.0
 
 ## parser overflow
 statement error 1005
@@ -162,6 +167,41 @@ query I
 SELECT ANY(CAST(2.34 AS DECIMAL(6, 2)))
 ----
 2.34
+
+
+query TTTT
+select typeof(a+b), typeof(a-b), typeof(a*b), typeof(a/b) from (select 3::Decimal(13,2) a , 3.1::Decimal(8,3) b);
+----
+DECIMAL(15, 3) DECIMAL(15, 3) DECIMAL(21, 5) DECIMAL(16, 2)
+
+
+## compare
+
+query IIIII
+select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(13,2) a , 3.1::Decimal(8,2) b);
+----
+0 1 0 1 0
+
+
+query IIIII
+select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(13,2) a , 3 b);
+----
+0 0 1 1 1
+
+query IIIII
+select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(13,2) a , 3.1 b);
+----
+0 1 0 1 0
+
+query IIIII
+select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(13,2) a , 2.9 b);
+----
+1 0 0 0 1
+
+query T
+select typeof(a = b) from (select 3::Decimal(13,2) a , 2.9 b);
+----
+BOOLEAN
 
 ## insert
 
@@ -306,3 +346,104 @@ select * from t_decimal_4_2;
 1.11
 11.11
 0.11
+
+
+statement ok
+drop table if exists t
+
+statement ok
+drop table if exists t1
+
+statement ok
+drop table if exists desc_decimal
+
+statement ok
+drop table if exists t2
+
+statement ok
+create table t(c1 decimal(38,2))
+
+statement ok
+insert into t(c1) select CAST(2.34 AS DECIMAL(6, 2))
+
+statement ok
+insert into t(c1) select CAST(-2.34 AS DECIMAL(6, 2))
+
+statement ok
+insert into t(c1) select CAST(0 AS DECIMAL(6, 2))
+
+query I
+select * from t order by c1 desc
+----
+2.34
+0.00
+-2.34
+
+query I
+select * from t order by c1 asc
+----
+-2.34
+0.00
+2.34
+
+query I
+select * from t order by c1 asc limit 0,2
+----
+-2.34
+0.00
+
+query I
+select * from t order by c1 asc limit 1,2
+----
+0.00
+2.34
+
+statement ok
+create table t1(c0 int, c1 decimal(39,2))
+
+statement ok
+select * from t order by c1
+
+## https://github.com/jorgecarleitao/parquet2/blob/main/src/schema/types/converted_type.rs#L25
+## https://github.com/jorgecarleitao/arrow2/blob/main/src/io/parquet/write/schema.rs#L323
+## the parquet2 and arrow2 not impl decimal256
+statement error 1002
+select * from t1 order by c1
+
+statement ok
+create table t2(c1 decimal(6,2) null)
+
+statement ok
+insert into t2 values(1.23)
+
+statement ok
+insert into t2 values(null);
+
+query T
+select * from t2 order by c1 asc
+----
+1.23
+NULL
+
+statement ok
+create table desc_decimal(c1 decimal(4,2), c2 decimal(4,2) null, c3 decimal(39,2), c4 decimal(39,2) null)
+
+query TTTT
+desc desc_decimal
+----
+c1 DECIMAL(4, 2) NO 0.00 (empty)
+c2 DECIMAL(4, 2) YES NULL (empty)
+c3 DECIMAL(39, 2) NO 0.00 (empty)
+c4 DECIMAL(39, 2) YES NULL (empty)
+
+statement ok
+drop table if exists t
+
+statement ok
+drop table if exists t1
+
+statement ok
+drop table if exists t2
+
+statement ok
+drop table if exists desc_decimal

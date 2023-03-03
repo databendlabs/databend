@@ -61,6 +61,7 @@ impl SegmentsIO {
             location: path,
             len_hint: None,
             ver,
+            put_cache: true,
         };
 
         reader.read(&load_params).await
@@ -98,6 +99,61 @@ impl SegmentsIO {
         )
         .await
     }
+
+    pub async fn read_segment_into<T>(
+        dal: Operator,
+        segment_location: Location,
+        table_schema: TableSchemaRef,
+        put_cache: bool,
+    ) -> Result<T>
+    where
+        T: From<Arc<SegmentInfo>> + Send + 'static,
+    {
+        let (path, ver) = segment_location;
+        let reader = MetaReaders::segment_info_reader(dal, table_schema);
+
+        // Keep in mind that segment_info_read must need a schema
+        let load_params = LoadParams {
+            location: path.clone(),
+            len_hint: None,
+            ver,
+            put_cache,
+        };
+
+        let segment = reader.read(&load_params).await;
+        segment.map(|v| v.into())
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    pub async fn read_segments_into<T>(
+        &self,
+        segment_locations: &[Location],
+        put_cache: bool,
+    ) -> Result<Vec<Result<T>>>
+    where
+        T: From<Arc<SegmentInfo>> + Send + 'static,
+    {
+        // combine all the tasks.
+        let mut iter = segment_locations.iter();
+        let tasks = std::iter::from_fn(move || {
+            iter.next().map(|location| {
+                Self::read_segment_into(
+                    self.operator.clone(),
+                    location.clone(),
+                    self.schema.clone(),
+                    put_cache,
+                )
+                .instrument(tracing::debug_span!("read_location_tuples"))
+            })
+        });
+
+        try_join_futures(
+            self.ctx.clone(),
+            tasks,
+            "fuse-req-segments-worker".to_owned(),
+        )
+        .await
+    }
 }
 
 pub async fn try_join_futures<Fut>(
@@ -123,12 +179,10 @@ where
     let join_handlers = segments_runtime.try_spawn_batch(semaphore, futures).await?;
 
     // 3. get all the result.
-    let joint = future::try_join_all(join_handlers)
+    future::try_join_all(join_handlers)
         .instrument(tracing::debug_span!("try_join_futures_all"))
         .await
-        .map_err(|e| ErrorCode::StorageOther(format!("try join futures failure, {}", e)))?;
-
-    Ok(joint)
+        .map_err(|e| ErrorCode::StorageOther(format!("try join futures failure, {}", e)))
 }
 
 /// This is a workaround to address `higher-ranked lifetime error` from rustc

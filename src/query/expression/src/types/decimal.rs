@@ -27,6 +27,9 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::SimpleDomain;
+use crate::types::ArgType;
+use crate::types::DataType;
+use crate::types::GenericMap;
 use crate::types::ValueType;
 use crate::utils::arrow::buffer_into_mut;
 use crate::Column;
@@ -37,6 +40,9 @@ use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecimalType<T: Decimal>(PhantomData<T>);
+
+pub type Decimal128Type = DecimalType<i128>;
+pub type Decimal256Type = DecimalType<i256>;
 
 impl<Num: Decimal> ValueType for DecimalType<Num> {
     type Scalar = Num;
@@ -82,15 +88,15 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Num::upcast_scalar(scalar)
+        Num::upcast_scalar(scalar, Num::default_decimal_size())
     }
 
     fn upcast_column(col: Self::Column) -> Column {
-        Num::upcast_column(col)
+        Num::upcast_column(col, Num::default_decimal_size())
     }
 
     fn upcast_domain(domain: Self::Domain) -> Domain {
-        Num::upcast_domain(domain)
+        Num::upcast_domain(domain, Num::default_decimal_size())
     }
 
     fn column_len<'a>(col: &'a Self::Column) -> usize {
@@ -143,6 +149,38 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         assert_eq!(builder.len(), 1);
         builder[0]
+    }
+}
+
+impl<Num: Decimal> ArgType for DecimalType<Num> {
+    fn data_type() -> DataType {
+        Num::data_type()
+    }
+
+    fn full_domain() -> Self::Domain {
+        SimpleDomain {
+            min: Num::MIN,
+            max: Num::MAX,
+        }
+    }
+
+    fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
+        Vec::with_capacity(capacity)
+    }
+
+    fn column_from_vec(vec: Vec<Self::Scalar>, _generics: &GenericMap) -> Self::Column {
+        vec.into()
+    }
+
+    fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
+        iter.collect()
+    }
+
+    fn column_from_ref_iter<'a>(
+        iter: impl Iterator<Item = Self::ScalarRef<'a>>,
+        _: &GenericMap,
+    ) -> Self::Column {
+        iter.collect()
     }
 }
 
@@ -216,18 +254,25 @@ pub trait Decimal:
     fn min_for_precision(precision: u8) -> Self;
     fn max_for_precision(precision: u8) -> Self;
 
+    fn default_decimal_size() -> DecimalSize;
+
     fn from_float(value: f64) -> Self;
     fn from_u64(value: u64) -> Self;
     fn from_i64(value: i64) -> Self;
+    fn de_binary(bytes: &mut &[u8]) -> Self;
 
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)>;
     fn try_downcast_builder<'a>(builder: &'a mut ColumnBuilder) -> Option<&'a mut Vec<Self>>;
 
     fn try_downcast_scalar(scalar: &DecimalScalar) -> Option<Self>;
     fn try_downcast_domain(domain: &DecimalDomain) -> Option<SimpleDomain<Self>>;
-    fn upcast_scalar(scalar: Self) -> Scalar;
-    fn upcast_column(col: Buffer<Self>) -> Column;
-    fn upcast_domain(domain: SimpleDomain<Self>) -> Domain;
+
+    fn upcast_scalar(scalar: Self, size: DecimalSize) -> Scalar;
+    fn upcast_column(col: Buffer<Self>, size: DecimalSize) -> Column;
+    fn upcast_domain(domain: SimpleDomain<Self>, size: DecimalSize) -> Domain;
+    fn data_type() -> DataType;
+    const MIN: Self;
+    const MAX: Self;
 
     fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn;
 
@@ -262,12 +307,12 @@ impl Decimal for i128 {
         -1_i128
     }
 
-    fn mem_size() -> usize {
-        16
-    }
-
     fn e(n: u32) -> Self {
         10_i128.pow(n)
+    }
+
+    fn mem_size() -> usize {
+        16
     }
 
     fn checked_add(self, rhs: Self) -> Option<Self> {
@@ -300,6 +345,17 @@ impl Decimal for i128 {
         9_i128.saturating_pow(1 + to_precision as u32)
     }
 
+    fn default_decimal_size() -> DecimalSize {
+        DecimalSize {
+            precision: MAX_DECIMAL128_PRECISION,
+            scale: 0,
+        }
+    }
+
+    fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn {
+        DecimalColumn::Decimal128(value, size)
+    }
+
     fn from_float(value: f64) -> Self {
         value.to_i128().unwrap()
     }
@@ -310,6 +366,14 @@ impl Decimal for i128 {
 
     fn from_i64(value: i64) -> Self {
         value.to_i128().unwrap()
+    }
+
+    fn de_binary(bytes: &mut &[u8]) -> Self {
+        let bs: [u8; std::mem::size_of::<Self>()] =
+            bytes[0..std::mem::size_of::<Self>()].try_into().unwrap();
+        *bytes = &bytes[std::mem::size_of::<Self>()..];
+
+        i128::from_le_bytes(bs)
     }
 
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)> {
@@ -342,30 +406,28 @@ impl Decimal for i128 {
     }
 
     // will mock DecimalSize need modify when use it
-    fn upcast_scalar(scalar: Self) -> Scalar {
-        Scalar::Decimal(DecimalScalar::Decimal128(scalar, DecimalSize {
+    fn upcast_scalar(scalar: Self, size: DecimalSize) -> Scalar {
+        Scalar::Decimal(DecimalScalar::Decimal128(scalar, size))
+    }
+
+    fn upcast_column(col: Buffer<Self>, size: DecimalSize) -> Column {
+        Column::Decimal(DecimalColumn::Decimal128(col, size))
+    }
+
+    fn upcast_domain(domain: SimpleDomain<Self>, size: DecimalSize) -> Domain {
+        Domain::Decimal(DecimalDomain::Decimal128(domain, size))
+    }
+
+    fn data_type() -> DataType {
+        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
             precision: MAX_DECIMAL128_PRECISION,
             scale: 0,
         }))
     }
 
-    fn upcast_column(col: Buffer<Self>) -> Column {
-        Column::Decimal(DecimalColumn::Decimal128(col, DecimalSize {
-            precision: MAX_DECIMAL128_PRECISION,
-            scale: 0,
-        }))
-    }
+    const MIN: i128 = i128::MIN;
 
-    fn upcast_domain(domain: SimpleDomain<Self>) -> Domain {
-        Domain::Decimal(DecimalDomain::Decimal128(domain, DecimalSize {
-            precision: MAX_DECIMAL128_PRECISION,
-            scale: 0,
-        }))
-    }
-
-    fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn {
-        DecimalColumn::Decimal128(value, size)
-    }
+    const MAX: i128 = i128::MAX;
 }
 
 impl Decimal for i256 {
@@ -419,6 +481,13 @@ impl Decimal for i256 {
         (i256::ONE * 9).saturating_pow(1 + to_precision as u32)
     }
 
+    fn default_decimal_size() -> DecimalSize {
+        DecimalSize {
+            precision: MAX_DECIMAL256_PRECISION,
+            scale: 0,
+        }
+    }
+
     fn from_float(value: f64) -> Self {
         i256::from(value.to_i128().unwrap())
     }
@@ -429,6 +498,14 @@ impl Decimal for i256 {
 
     fn from_i64(value: i64) -> Self {
         i256::from(value.to_i128().unwrap())
+    }
+
+    fn de_binary(bytes: &mut &[u8]) -> Self {
+        let bs: [u8; std::mem::size_of::<Self>()] =
+            bytes[0..std::mem::size_of::<Self>()].try_into().unwrap();
+        *bytes = &bytes[std::mem::size_of::<Self>()..];
+
+        i256::from_le_bytes(bs)
     }
 
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)> {
@@ -460,27 +537,27 @@ impl Decimal for i256 {
         }
     }
 
-    fn upcast_scalar(scalar: Self) -> Scalar {
-        Scalar::Decimal(DecimalScalar::Decimal256(scalar, DecimalSize {
+    fn upcast_scalar(scalar: Self, size: DecimalSize) -> Scalar {
+        Scalar::Decimal(DecimalScalar::Decimal256(scalar, size))
+    }
+
+    fn upcast_column(col: Buffer<Self>, size: DecimalSize) -> Column {
+        Column::Decimal(DecimalColumn::Decimal256(col, size))
+    }
+
+    fn upcast_domain(domain: SimpleDomain<Self>, size: DecimalSize) -> Domain {
+        Domain::Decimal(DecimalDomain::Decimal256(domain, size))
+    }
+
+    fn data_type() -> DataType {
+        DataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
             precision: MAX_DECIMAL256_PRECISION,
             scale: 0,
         }))
     }
 
-    fn upcast_column(col: Buffer<Self>) -> Column {
-        Column::Decimal(DecimalColumn::Decimal256(col, DecimalSize {
-            precision: MAX_DECIMAL256_PRECISION,
-            scale: 0,
-        }))
-    }
-
-    fn upcast_domain(domain: SimpleDomain<Self>) -> Domain {
-        Domain::Decimal(DecimalDomain::Decimal256(domain, DecimalSize {
-            precision: MAX_DECIMAL256_PRECISION,
-            scale: 0,
-        }))
-    }
-
+    const MIN: i256 = i256::MIN;
+    const MAX: i256 = i256::MAX;
     fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn {
         DecimalColumn::Decimal256(value, size)
     }
@@ -568,9 +645,6 @@ impl DecimalDataType {
         let multiply_precision = a.precision() + b.precision();
         let divide_precision = a.precision() + b.scale();
 
-        // for addition/subtraction, we add 1 to the width to ensure we don't overflow
-        let plus_min_precision = a.leading_digits().max(b.leading_digits()) - scale + 1;
-
         if is_multiply {
             scale = a.scale() + b.scale();
             precision = precision.min(multiply_precision);
@@ -579,9 +653,10 @@ impl DecimalDataType {
             precision = precision.min(divide_precision);
         } else if is_plus_minus {
             scale = std::cmp::max(a.scale(), b.scale());
+            // for addition/subtraction, we add 1 to the width to ensure we don't overflow
+            let plus_min_precision = a.leading_digits().max(b.leading_digits()) + scale + 1;
             precision = precision.min(plus_min_precision);
         }
-
         Self::from_size(DecimalSize { precision, scale })
     }
 

@@ -243,7 +243,7 @@ impl Processor for SerializeDataTransform {
             State::Serialized(serialize_state, block_meta) => {
                 // write block data.
                 write_data(
-                    &serialize_state.block_data,
+                    serialize_state.block_data,
                     &self.dal,
                     &serialize_state.block_location,
                 )
@@ -252,7 +252,7 @@ impl Processor for SerializeDataTransform {
                 if let (Some(index_data), Some(index_location)) =
                     (serialize_state.index_data, serialize_state.index_location)
                 {
-                    write_data(&index_data, &self.dal, &index_location).await?;
+                    write_data(index_data, &self.dal, &index_location).await?;
                 }
 
                 self.state = State::Output(Mutation::Replaced(block_meta));

@@ -90,10 +90,6 @@ impl BlockMetaInfo for MutationLogs {
         self
     }
 
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         Box::new(self.clone())
     }
@@ -153,19 +149,15 @@ impl BlockMetaInfo for CommitMeta {
         self
     }
 
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        Box::new(self.clone())
-    }
-
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         match info.as_any().downcast_ref::<CommitMeta>() {
             None => false,
             Some(other) => self == other,
         }
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
     }
 }
 
