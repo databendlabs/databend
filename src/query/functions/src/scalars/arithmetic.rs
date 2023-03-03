@@ -252,30 +252,34 @@ macro_rules! register_modulo {
     };
 }
 
+macro_rules! register_arithmetic {
+    ( $lt:ty, $rt:ty, $registry:expr) => {{
+        register_plus!($lt, $rt, $registry);
+    }
+    {
+        register_minus!($lt, $rt, $registry);
+    }
+    {
+        register_multiply!($lt, $rt, $registry);
+    }
+    {
+        register_divide!($lt, $rt, $registry);
+    }
+    {
+        register_div!($lt, $rt, $registry);
+    }
+    {
+        register_modulo!($lt, $rt, $registry);
+    }};
+}
+
 fn register_arithmetic(registry: &mut FunctionRegistry) {
     for left in ALL_NUMERICS_TYPES {
         for right in ALL_NUMERICS_TYPES {
             with_number_mapped_type!(|L| match left {
                 NumberDataType::L => with_number_mapped_type!(|R| match right {
                     NumberDataType::R => {
-                        {
-                            register_plus!(L, R, registry);
-                        }
-                        {
-                            register_minus!(L, R, registry);
-                        }
-                        {
-                            register_multiply!(L, R, registry);
-                        }
-                        {
-                            register_divide!(L, R, registry);
-                        }
-                        {
-                            register_div!(L, R, registry);
-                        }
-                        {
-                            register_modulo!(L, R, registry);
-                        }
+                        register_arithmetic!(L, R, registry);
                     }
                 }),
             });
