@@ -355,13 +355,7 @@ macro_rules! register_decimal_binary_op {
     };
 }
 
-pub fn register(registry: &mut FunctionRegistry) {
-    // TODO checked overflow by default
-    register_decimal_binary_op!(registry, "plus", add);
-    register_decimal_binary_op!(registry, "minus", sub);
-    register_decimal_binary_op!(registry, "divide", div);
-    register_decimal_binary_op!(registry, "multiply", mul);
-
+pub fn register_decimal_compare_op(registry: &mut FunctionRegistry) {
     register_decimal_compare_op!(registry, "lt", is_lt);
     register_decimal_compare_op!(registry, "eq", is_eq);
     register_decimal_compare_op!(registry, "gt", is_gt);
@@ -371,6 +365,14 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_decimal_compare_op!(registry, "gte", is_ge);
 
     register_decimal_compare_op!(registry, "ne", is_ne);
+}
+
+pub fn register(registry: &mut FunctionRegistry) {
+    // TODO checked overflow by default
+    register_decimal_binary_op!(registry, "plus", add);
+    register_decimal_binary_op!(registry, "minus", sub);
+    register_decimal_binary_op!(registry, "divide", div);
+    register_decimal_binary_op!(registry, "multiply", mul);
 
     // int float to decimal
     registry.register_function_factory("to_decimal", |params, args_type| {
