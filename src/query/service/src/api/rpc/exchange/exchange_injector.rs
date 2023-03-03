@@ -23,12 +23,15 @@
 
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
 use crate::api::rpc::flight_scatter::FlightScatter;
+use crate::api::BroadcastFlightScatter;
 use crate::api::DataExchange;
+use crate::api::HashFlightScatter;
 use crate::sessions::QueryContext;
 
 pub trait ExchangeInjector: Send + Sync + 'static {

@@ -23,6 +23,7 @@ pub use rpc::DataExchange;
 pub use rpc::DataExchangeManager;
 pub use rpc::DataPacket;
 pub use rpc::DatabendQueryFlightService;
+pub use rpc::DefaultExchangeInjector;
 pub use rpc::ExchangeInjector;
 pub use rpc::ExchangeSorting;
 pub use rpc::ExecutePartialQueryPacket;
@@ -40,7 +41,6 @@ pub use rpc::ServerFlightExchange;
 pub use rpc::ShuffleDataExchange;
 pub use rpc::ShuffleExchangeParams;
 pub use rpc_service::RpcService;
-pub use rpc::DefaultExchangeInjector;
 
 pub mod http;
 mod http_service;

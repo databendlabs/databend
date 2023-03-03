@@ -62,6 +62,7 @@ use common_storage::DataOperator;
 use super::processors::ProfileWrapper;
 use crate::api::BroadcastFlightScatter;
 use crate::api::DataExchange;
+use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
 use crate::api::ExchangeSorting;
 use crate::api::FlightScatter;
