@@ -154,7 +154,7 @@ impl Unnest {
         for offset in &self.offsets {
             let f = &mut fields[*offset];
             let inner_type = f.data_type().as_array().unwrap();
-            *f = DataField::new(f.name(), inner_type.wrap_nullable());
+            *f = DataField::new(f.name(), inner_type.unnest().wrap_nullable());
         }
         Ok(DataSchemaRefExt::create(fields))
     }

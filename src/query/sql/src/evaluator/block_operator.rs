@@ -165,7 +165,7 @@ impl BlockOperator {
         }
 
         let (unnest_columns, unnest_offsets) = Self::unify_unnest_columns(unnest_columns);
-        let num_rows = *unnest_offsets.last().unwrap() as usize;
+        let num_rows = *unnest_offsets.last().unwrap();
 
         // Convert unnest_offsets to take indices.
         let mut take_indices = Vec::with_capacity(num_rows);
@@ -240,10 +240,7 @@ impl BlockOperator {
             .into_iter()
             .map(|(i, col)| {
                 let typ = col.values.data_type().unnest();
-                let arrays = col
-                    .iter()
-                    .map(|arr| Self::unnest_column(arr))
-                    .collect::<Vec<_>>();
+                let arrays = col.iter().map(Self::unnest_column).collect::<Vec<_>>();
                 (i, typ, arrays)
             })
             .collect::<Vec<_>>();
@@ -281,11 +278,11 @@ impl BlockOperator {
                 let inner_col = unsafe { cols.get_unchecked(row) };
                 let inner_len = inner_col.len();
                 debug_assert!(inner_len <= len);
-                builder.builder.append_column(&inner_col);
+                builder.builder.append_column(inner_col);
                 builder.validity.extend_constant(inner_len, true);
                 // Avoid using `if branch`.
                 let d = typ.default_value();
-                let defaults = ColumnBuilder::repeat(&d.as_ref(), len - inner_len, &typ).build();
+                let defaults = ColumnBuilder::repeat(&d.as_ref(), len - inner_len, typ).build();
                 builder.builder.append_column(&defaults);
                 builder.validity.extend_constant(len - inner_len, false);
             }
