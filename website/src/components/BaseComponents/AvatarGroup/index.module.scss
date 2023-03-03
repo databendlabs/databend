@@ -10,9 +10,11 @@
         border-radius: 100%;
         overflow: hidden;
         display: block;
+        transition: all 0.2s;
         &:hover{
             border-color: var(--color-border) ;
             box-shadow: 0 12px 16px rgb(1 14 41 / 3%), 0 4px 6px rgb(1 14 41 / 3%);
+            transform: scale(1.1);
         }
     }
 }
