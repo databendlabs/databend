@@ -26,6 +26,10 @@ runs:
       shell: bash
       run: cargo fmt --all -- --check
 
+    - name: Check typos
+      shell: bash
+      run: typos --exclude docs --exclude website
+
     - name: Check unused deps
       shell: bash
       run: cargo machete
