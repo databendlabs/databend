@@ -409,8 +409,9 @@ pub fn register(registry: &mut FunctionRegistry) {
             }),
         }))
     });
+}
 
-    // decimal to float64
+pub(crate) fn register_decimal_to_float64(registry: &mut FunctionRegistry) {
     registry.register_function_factory("to_float64", |_params, args_type| {
         if args_type.len() != 1 {
             return None;
@@ -432,8 +433,9 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: Box::new(move |args, tx| decimal_to_float64(args, arg_type.clone(), tx)),
         }))
     });
+}
 
-    // decimal to float32
+pub(crate) fn register_decimal_to_float32(registry: &mut FunctionRegistry) {
     registry.register_function_factory("to_float32", |_params, args_type| {
         if args_type.len() != 1 {
             return None;

@@ -61,6 +61,8 @@ use lexical_core::FormattedSize;
 use num_traits::AsPrimitive;
 
 use super::arithmetic_modulo::vectorize_modulo;
+use super::decimal::register_decimal_to_float32;
+use super::decimal::register_decimal_to_float64;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("plus", &["add"]);
@@ -71,6 +73,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_unary_minus(registry);
     register_string_to_number(registry);
     register_number_to_string(registry);
+    register_number_to_number(registry);
 
     for left in ALL_NUMERICS_TYPES {
         for right in ALL_NUMERICS_TYPES {
@@ -234,13 +237,45 @@ pub fn register(registry: &mut FunctionRegistry) {
             });
         }
     }
+}
 
-    for src_type in ALL_NUMERICS_TYPES {
-        for dest_type in ALL_NUMERICS_TYPES {
+fn register_unary_minus(registry: &mut FunctionRegistry) {
+    for num_ty in ALL_NUMBER_CLASSES {
+        with_number_mapped_type!(|NUM_TYPE| match num_ty {
+            NumberClass::NUM_TYPE => {
+                type T = <NUM_TYPE as ResultTypeOfUnary>::Negate;
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<T>, _, _>(
+                    "minus",
+                    FunctionProperty::default(),
+                    |lhs| {
+                        FunctionDomain::Domain(SimpleDomain::<T> {
+                            min: -(lhs.max.as_(): T),
+                            max: -(lhs.min.as_(): T),
+                        })
+                    },
+                    |a, _| -(a.as_(): T),
+                );
+            }
+            NumberClass::Decimal128 => {
+                register_decimal_minus(registry)
+            }
+            NumberClass::Decimal256 => {
+                // already registered in Decimal128 branch
+            }
+        });
+    }
+}
+
+pub fn register_number_to_number(registry: &mut FunctionRegistry) {
+    for dest_type in ALL_NUMERICS_TYPES {
+        // each out loop register all to_{dest_type}
+        // dest_type not include decimal
+        for src_type in ALL_NUMBER_CLASSES {
             with_number_mapped_type!(|SRC_TYPE| match src_type {
-                NumberDataType::SRC_TYPE => with_number_mapped_type!(|DEST_TYPE| match dest_type {
+                NumberClass::SRC_TYPE => with_number_mapped_type!(|DEST_TYPE| match dest_type {
                     NumberDataType::DEST_TYPE => {
-                        if src_type == dest_type {
+                        let src_type = src_type.get_number_type().unwrap();
+                        if src_type == *dest_type {
                             continue;
                         }
                         let name = format!("to_{dest_type}").to_lowercase();
@@ -328,35 +363,20 @@ pub fn register(registry: &mut FunctionRegistry) {
                         }
                     }
                 }),
+                NumberClass::Decimal128 => {
+                    // todo(youngsofun): add decimal try_cast and decimal to int
+                    if matches!(dest_type, NumberDataType::Float32) {
+                        register_decimal_to_float32(registry);
+                    }
+                    if matches!(dest_type, NumberDataType::Float64) {
+                        register_decimal_to_float64(registry);
+                    }
+                }
+                NumberClass::Decimal256 => {
+                    // already registered in Decimal128 branch
+                }
             })
         }
-    }
-}
-
-fn register_unary_minus(registry: &mut FunctionRegistry) {
-    for num_ty in ALL_NUMBER_CLASSES {
-        with_number_mapped_type!(|NUM_TYPE| match num_ty {
-            NumberClass::NUM_TYPE => {
-                type T = <NUM_TYPE as ResultTypeOfUnary>::Negate;
-                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<T>, _, _>(
-                    "minus",
-                    FunctionProperty::default(),
-                    |lhs| {
-                        FunctionDomain::Domain(SimpleDomain::<T> {
-                            min: -(lhs.max.as_(): T),
-                            max: -(lhs.min.as_(): T),
-                        })
-                    },
-                    |a, _| -(a.as_(): T),
-                );
-            }
-            NumberClass::Decimal128 => {
-                register_decimal_minus(registry)
-            }
-            NumberClass::Decimal256 => {
-                // already registered in Decimal128 branch
-            }
-        });
     }
 }
 
