@@ -28,7 +28,7 @@ runs:
 
     - name: Check typos
       shell: bash
-      run: typos
+      run: typos --exclude docs --exclude website
 
     - name: Check unused deps
       shell: bash

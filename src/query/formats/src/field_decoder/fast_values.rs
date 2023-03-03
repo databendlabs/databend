@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::io::BufRead;
 use std::io::Cursor;
 
 use bstr::ByteSlice;
-use chrono_tz::Tz;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::read_decimal_with_size;
@@ -31,6 +31,7 @@ use common_expression::ArrayDeserializer;
 use common_expression::BooleanDeserializer;
 use common_expression::DateDeserializer;
 use common_expression::DecimalDeserializer;
+use common_expression::MapDeserializer;
 use common_expression::NullDeserializer;
 use common_expression::NullableDeserializer;
 use common_expression::NumberDeserializer;
@@ -50,6 +51,7 @@ use common_io::cursor_ext::BufferReadStringExt;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
 use common_io::cursor_ext::ReadNumberExt;
+use common_io::prelude::FormatSettings;
 use common_io::prelude::StatBuffer;
 use lexical_core::FromLexical;
 use micromarshal::Unmarshal;
@@ -61,6 +63,7 @@ use crate::FieldDecoder;
 #[derive(Clone)]
 pub struct FastFieldDecoderValues {
     pub common_settings: CommonSettings,
+    format: FormatSettings,
 }
 
 impl FieldDecoder for FastFieldDecoderValues {
@@ -70,7 +73,7 @@ impl FieldDecoder for FastFieldDecoderValues {
 }
 
 impl FastFieldDecoderValues {
-    pub fn create_for_insert(timezone: Tz) -> Self {
+    pub fn create_for_insert(format: FormatSettings) -> Self {
         FastFieldDecoderValues {
             common_settings: CommonSettings {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
@@ -78,8 +81,9 @@ impl FastFieldDecoderValues {
                 null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
-                timezone,
+                timezone: format.timezone,
             },
+            format,
         }
     }
 
@@ -128,6 +132,7 @@ impl FastFieldDecoderValues {
             TypeDeserializerImpl::Timestamp(c) => self.read_timestamp(c, reader, positions),
             TypeDeserializerImpl::String(c) => self.read_string(c, reader, positions),
             TypeDeserializerImpl::Array(c) => self.read_array(c, reader, positions),
+            TypeDeserializerImpl::Map(c) => self.read_map(c, reader, positions),
             TypeDeserializerImpl::Struct(c) => self.read_struct(c, reader, positions),
             TypeDeserializerImpl::Variant(c) => self.read_variant(c, reader, positions),
         }
@@ -213,8 +218,7 @@ impl FastFieldDecoderValues {
         &self,
         column: &mut DecimalDeserializer<D>,
         reader: &mut Cursor<R>,
-    ) -> Result<()>
-where {
+    ) -> Result<()> {
         let buf = reader.remaining_slice();
         let (n, n_read) = read_decimal_with_size(buf, column.size, false)?;
         column.values.push(n);
@@ -302,6 +306,46 @@ where {
             }
             let _ = reader.ignore_white_spaces();
             self.read_field(column.inner.as_mut(), reader, positions)?;
+            idx += 1;
+        }
+
+        column.add_offset(idx);
+        Ok(())
+    }
+
+    fn read_map<R: AsRef<[u8]>>(
+        &self,
+        column: &mut MapDeserializer,
+        reader: &mut Cursor<R>,
+        positions: &mut VecDeque<usize>,
+    ) -> Result<()> {
+        reader.must_ignore_byte(b'{')?;
+        let mut idx = 0;
+        let mut set = HashSet::new();
+        loop {
+            let _ = reader.ignore_white_spaces();
+            if reader.ignore_byte(b'}') {
+                break;
+            }
+            if idx != 0 {
+                reader.must_ignore_byte(b',')?;
+            }
+            let _ = reader.ignore_white_spaces();
+            self.read_field(column.key.as_mut(), reader, positions)?;
+            // check duplicate map keys
+            let key = column.key.pop_data_value().unwrap();
+            if set.contains(&key) {
+                column.add_offset(idx);
+                return Err(ErrorCode::BadBytes(
+                    "map keys have to be unique".to_string(),
+                ));
+            }
+            set.insert(key.clone());
+            column.key.append_data_value(key, &self.format)?;
+            let _ = reader.ignore_white_spaces();
+            reader.must_ignore_byte(b':')?;
+            let _ = reader.ignore_white_spaces();
+            self.read_field(column.value.as_mut(), reader, positions)?;
             idx += 1;
         }
 

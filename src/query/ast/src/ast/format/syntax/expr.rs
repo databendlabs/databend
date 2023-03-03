@@ -318,6 +318,13 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc<'static> {
         Expr::Array { exprs, .. } => RcDoc::text("[")
             .append(inline_comma(exprs.into_iter().map(pretty_expr)))
             .append(RcDoc::text("]")),
+        Expr::Map { kvs, .. } => RcDoc::text("{")
+            .append(inline_comma(kvs.into_iter().map(|(k, v)| {
+                pretty_expr(k)
+                    .append(RcDoc::text(":"))
+                    .append(pretty_expr(v))
+            })))
+            .append(RcDoc::text("}")),
         Expr::ArraySort {
             expr,
             asc,

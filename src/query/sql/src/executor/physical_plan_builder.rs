@@ -46,6 +46,7 @@ use super::HashJoin;
 use super::Limit;
 use super::Sort;
 use super::TableScan;
+use super::Unnest;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::EvalScalar;
@@ -304,31 +305,57 @@ impl PhysicalPlanBuilder {
             RelOperator::EvalScalar(eval_scalar) => {
                 let input = Box::new(self.build(s_expr.child(0)?).await?);
                 let input_schema = input.output_schema()?;
-                Ok(PhysicalPlan::EvalScalar(EvalScalar {
+                // The begin offset of the eval scalar columns.
+                let offset = input_schema.fields().len();
+
+                // 1. Collect unnest scalars.
+                let mut unnest_scalars = vec![];
+                let exprs = eval_scalar
+                    .items
+                    .iter()
+                    .enumerate()
+                    .map(|(i, item)| {
+                        let scalar = match &item.scalar {
+                            ScalarExpr::Unnest(crate::plans::Unnest { argument, .. }) => {
+                                unnest_scalars.push(i + offset);
+                                argument
+                            }
+                            _ => &item.scalar,
+                        };
+
+                        let expr = scalar
+                            .as_expr_with_col_index()?
+                            .project_column_ref(|index| {
+                                input_schema.index_of(&index.to_string()).unwrap()
+                            });
+                        let (expr, _) = ConstantFolder::fold(
+                            &expr,
+                            self.ctx.get_function_context()?,
+                            &BUILTIN_FUNCTIONS,
+                        );
+                        Ok((expr.as_remote_expr(), item.index))
+                    })
+                    .collect::<Result<_>>()?;
+
+                // 2. There are unnest scalars,
+                // add Unnest operator after EvalScalar operator.
+                let eval_scalar_plan = PhysicalPlan::EvalScalar(EvalScalar {
                     plan_id: self.next_plan_id(),
                     input,
-                    exprs: eval_scalar
-                        .items
-                        .iter()
-                        .map(|item| {
-                            let expr =
-                                item.scalar
-                                    .as_expr_with_col_index()?
-                                    .project_column_ref(|index| {
-                                        input_schema.index_of(&index.to_string()).unwrap()
-                                    });
+                    exprs,
+                    stat_info: Some(stat_info.clone()),
+                });
 
-                            let (expr, _) = ConstantFolder::fold(
-                                &expr,
-                                self.ctx.get_function_context()?,
-                                &BUILTIN_FUNCTIONS,
-                            );
-                            Ok((expr.as_remote_expr(), item.index))
-                        })
-                        .collect::<Result<_>>()?,
-
-                    stat_info: Some(stat_info),
-                }))
+                Ok(if unnest_scalars.is_empty() {
+                    eval_scalar_plan
+                } else {
+                    PhysicalPlan::Unnest(Unnest {
+                        plan_id: self.next_plan_id(),
+                        input: Box::new(eval_scalar_plan),
+                        offsets: unnest_scalars,
+                        stat_info: Some(stat_info),
+                    })
+                })
             }
 
             RelOperator::Filter(filter) => {

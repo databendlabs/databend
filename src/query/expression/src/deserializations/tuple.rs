@@ -106,11 +106,13 @@ impl TypeDeserializer for TupleDeserializer {
         Ok(())
     }
 
-    fn pop_data_value(&mut self) -> Result<()> {
+    fn pop_data_value(&mut self) -> Result<Scalar> {
+        let mut vals = Vec::with_capacity(self.inners.len());
         for inner in self.inners.iter_mut() {
-            inner.pop_data_value()?;
+            let val = inner.pop_data_value()?;
+            vals.push(val);
         }
-        Ok(())
+        Ok(Scalar::Tuple(vals))
     }
 
     fn finish_to_column(&mut self) -> Column {

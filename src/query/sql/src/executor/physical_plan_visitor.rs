@@ -28,6 +28,7 @@ use super::PhysicalPlan;
 use super::Project;
 use super::Sort;
 use super::TableScan;
+use super::Unnest;
 use crate::executor::UnionAll;
 
 pub trait PhysicalPlanReplacer {
@@ -47,6 +48,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ExchangeSink(plan) => self.replace_exchange_sink(plan),
             PhysicalPlan::UnionAll(plan) => self.replace_union(plan),
             PhysicalPlan::DistributedInsertSelect(plan) => self.replace_insert_select(plan),
+            PhysicalPlan::Unnest(plan) => self.replace_unnest(plan),
         }
     }
 
@@ -212,6 +214,16 @@ pub trait PhysicalPlanReplacer {
             },
         )))
     }
+
+    fn replace_unnest(&mut self, plan: &Unnest) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::Unnest(Unnest {
+            plan_id: plan.plan_id,
+            input: Box::new(input),
+            offsets: plan.offsets.clone(),
+            stat_info: plan.stat_info.clone(),
+        }))
+    }
 }
 
 impl PhysicalPlan {
@@ -262,6 +274,9 @@ impl PhysicalPlan {
                     Self::traverse(&plan.right, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::DistributedInsertSelect(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::Unnest(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
             }

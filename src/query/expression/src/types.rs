@@ -59,6 +59,7 @@ pub use self::variant::VariantType;
 use crate::deserializations::ArrayDeserializer;
 use crate::deserializations::DateDeserializer;
 use crate::deserializations::DecimalDeserializer;
+use crate::deserializations::MapDeserializer;
 use crate::deserializations::NullableDeserializer;
 use crate::deserializations::NumberDeserializer;
 use crate::deserializations::TimestampDeserializer;
@@ -116,6 +117,17 @@ impl DataType {
         match self {
             DataType::Nullable(ty) => (**ty).clone(),
             _ => self.clone(),
+        }
+    }
+
+    pub fn has_generic(&self) -> bool {
+        match self {
+            DataType::Generic(_) => true,
+            DataType::Nullable(ty) => ty.has_generic(),
+            DataType::Array(ty) => ty.has_generic(),
+            DataType::Map(ty) => ty.has_generic(),
+            DataType::Tuple(tys) => tys.iter().any(|ty| ty.has_generic()),
+            _ => false,
         }
     }
 
@@ -236,7 +248,7 @@ impl DataType {
             }
             DataType::Variant => VariantDeserializer::with_capacity(capacity).into(),
             DataType::Array(ty) => ArrayDeserializer::with_capacity(capacity, ty).into(),
-            DataType::Map(_ty) => todo!(),
+            DataType::Map(ty) => MapDeserializer::with_capacity(capacity, ty).into(),
             DataType::Tuple(types) => TupleDeserializer::with_capacity(capacity, types).into(),
             DataType::Decimal(types) => match types {
                 DecimalDataType::Decimal128(_) => {

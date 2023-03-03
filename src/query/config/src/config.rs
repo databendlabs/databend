@@ -37,6 +37,7 @@ use common_meta_app::storage::StorageOssConfig as InnerStorageOssConfig;
 use common_meta_app::storage::StorageParams;
 use common_meta_app::storage::StorageRedisConfig as InnerStorageRedisConfig;
 use common_meta_app::storage::StorageS3Config as InnerStorageS3Config;
+use common_meta_app::storage::StorageWebhdfsConfig as InnerStorageWebhdfsConfig;
 use common_meta_app::tenant::TenantQuota;
 use common_storage::StorageConfig as InnerStorageConfig;
 use common_tracing::Config as InnerLogConfig;
@@ -248,6 +249,10 @@ pub struct StorageConfig {
     // OSS storage backend config
     #[clap(flatten)]
     pub oss: OssStorageConfig,
+
+    // WebHDFS storage backend config
+    #[clap(flatten)]
+    pub webhdfs: WebhdfsStorageConfig,
 }
 
 impl Default for StorageConfig {
@@ -273,6 +278,7 @@ impl From<InnerStorageConfig> for StorageConfig {
             azblob: Default::default(),
             hdfs: Default::default(),
             obs: Default::default(),
+            webhdfs: Default::default(),
         };
 
         match inner.params {
@@ -308,6 +314,10 @@ impl From<InnerStorageConfig> for StorageConfig {
                 cfg.storage_type = "oss".to_string();
                 cfg.oss = v.into()
             }
+            StorageParams::Webhdfs(v) => {
+                cfg.storage_type = "webhdfs".to_string();
+                cfg.webhdfs = v.into()
+            }
             v => unreachable!("{v:?} should not be used as storage backend"),
         }
 
@@ -333,6 +343,7 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
                     "s3" => StorageParams::S3(self.s3.try_into()?),
                     "obs" => StorageParams::Obs(self.obs.try_into()?),
                     "oss" => StorageParams::Oss(self.oss.try_into()?),
+                    "webhdfs" => StorageParams::Webhdfs(self.webhdfs.try_into()?),
                     _ => return Err(ErrorCode::StorageOther("not supported storage type")),
                 }
             },
@@ -1024,6 +1035,61 @@ impl TryInto<InnerStorageRedisConfig> for RedisStorageConfig {
             } else {
                 Some(self.default_ttl)
             },
+        })
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct WebhdfsStorageConfig {
+    /// delegation token for webhdfs storage
+    #[clap(long = "storage-webhdfs-delegation", default_value_t)]
+    #[serde(rename = "delegation")]
+    pub webhdfs_delegation: String,
+    /// endpoint url for webhdfs storage
+    #[clap(long = "storage-webhdfs-endpoint", default_value_t)]
+    #[serde(rename = "endpoint_url")]
+    pub webhdfs_endpoint_url: String,
+    /// working directory root for webhdfs storage
+    #[clap(long = "storage-webhdfs-root", default_value_t)]
+    #[serde(rename = "root")]
+    pub webhdfs_root: String,
+}
+
+impl Default for WebhdfsStorageConfig {
+    fn default() -> Self {
+        InnerStorageWebhdfsConfig::default().into()
+    }
+}
+
+impl Debug for WebhdfsStorageConfig {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("WebhdfsStorageConfig")
+            .field("endpoint_url", &self.webhdfs_endpoint_url)
+            .field("webhdfs_root", &self.webhdfs_root)
+            .field("delegation", &mask_string(&self.webhdfs_delegation, 3))
+            .finish()
+    }
+}
+
+impl From<InnerStorageWebhdfsConfig> for WebhdfsStorageConfig {
+    fn from(v: InnerStorageWebhdfsConfig) -> Self {
+        Self {
+            webhdfs_delegation: v.delegation,
+            webhdfs_endpoint_url: v.endpoint_url,
+            webhdfs_root: v.root,
+        }
+    }
+}
+
+impl TryFrom<WebhdfsStorageConfig> for InnerStorageWebhdfsConfig {
+    type Error = ErrorCode;
+
+    fn try_from(value: WebhdfsStorageConfig) -> Result<Self, Self::Error> {
+        Ok(InnerStorageWebhdfsConfig {
+            delegation: value.webhdfs_delegation,
+            endpoint_url: value.webhdfs_endpoint_url,
+            root: value.webhdfs_root,
         })
     }
 }

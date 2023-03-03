@@ -134,6 +134,33 @@ impl EvalScalar {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Unnest {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+
+    pub input: Box<PhysicalPlan>,
+    /// Columns need to be unnested. (offsets in the input DataBlock)
+    pub offsets: Vec<usize>,
+
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
+}
+
+impl Unnest {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        let input_schema = self.input.output_schema()?;
+        let mut fields = input_schema.fields().clone();
+        for offset in &self.offsets {
+            let f = &mut fields[*offset];
+            let inner_type = f.data_type().as_array().unwrap();
+            *f = DataField::new(f.name(), inner_type.wrap_nullable());
+        }
+        Ok(DataSchemaRefExt::create(fields))
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AggregatePartial {
     /// A unique id of operator in a `PhysicalPlan` tree.
     /// Only used for display.
@@ -459,6 +486,7 @@ pub enum PhysicalPlan {
     Filter(Filter),
     Project(Project),
     EvalScalar(EvalScalar),
+    Unnest(Unnest),
     AggregatePartial(AggregatePartial),
     AggregateFinal(AggregateFinal),
     Sort(Sort),
@@ -500,6 +528,7 @@ impl PhysicalPlan {
             PhysicalPlan::ExchangeSink(plan) => plan.output_schema(),
             PhysicalPlan::UnionAll(plan) => plan.output_schema(),
             PhysicalPlan::DistributedInsertSelect(plan) => plan.output_schema(),
+            PhysicalPlan::Unnest(plan) => plan.output_schema(),
         }
     }
 
@@ -519,6 +548,7 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(_) => "DistributedInsertSelect".to_string(),
             PhysicalPlan::ExchangeSource(_) => "Exchange Source".to_string(),
             PhysicalPlan::ExchangeSink(_) => "Exchange Sink".to_string(),
+            PhysicalPlan::Unnest(_) => "Unnest".to_string(),
         }
     }
 
@@ -544,6 +574,7 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(plan) => {
                 Box::new(std::iter::once(plan.input.as_ref()))
             }
+            PhysicalPlan::Unnest(plan) => Box::new(std::iter::once(plan.input.as_ref())),
         }
     }
 }

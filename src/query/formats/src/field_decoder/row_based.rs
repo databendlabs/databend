@@ -30,6 +30,7 @@ use common_expression::ArrayDeserializer;
 use common_expression::BooleanDeserializer;
 use common_expression::DateDeserializer;
 use common_expression::DecimalDeserializer;
+use common_expression::MapDeserializer;
 use common_expression::NullDeserializer;
 use common_expression::NullableDeserializer;
 use common_expression::NumberDeserializer;
@@ -92,6 +93,7 @@ pub trait FieldDecoderRowBased: FieldDecoder {
             TypeDeserializerImpl::Timestamp(c) => self.read_timestamp(c, reader, raw),
             TypeDeserializerImpl::String(c) => self.read_string(c, reader, raw),
             TypeDeserializerImpl::Array(c) => self.read_array(c, reader, raw),
+            TypeDeserializerImpl::Map(c) => self.read_map(c, reader, raw),
             TypeDeserializerImpl::Struct(c) => self.read_struct(c, reader, raw),
             TypeDeserializerImpl::Variant(c) => self.read_variant(c, reader, raw),
         }
@@ -271,6 +273,13 @@ pub trait FieldDecoderRowBased: FieldDecoder {
     fn read_array<R: AsRef<[u8]>>(
         &self,
         column: &mut ArrayDeserializer,
+        reader: &mut Cursor<R>,
+        raw: bool,
+    ) -> Result<()>;
+
+    fn read_map<R: AsRef<[u8]>>(
+        &self,
+        column: &mut MapDeserializer,
         reader: &mut Cursor<R>,
         raw: bool,
     ) -> Result<()>;

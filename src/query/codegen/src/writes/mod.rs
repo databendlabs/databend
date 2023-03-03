@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod arithmetics_type_v2;
+mod arithmetics_type;
 mod register;
 
-pub use arithmetics_type_v2::*;
+pub use arithmetics_type::*;
 pub use register::*;

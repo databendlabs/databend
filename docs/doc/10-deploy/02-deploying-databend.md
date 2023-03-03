@@ -1,9 +1,9 @@
 ---
 title: Deploying a Standalone Databend
 sidebar_label: Deploying a Standalone Databend
-description:
-  Deploying a Standalone Databend
+description: Deploying a Standalone Databend
 ---
+
 import GetLatest from '@site/src/components/GetLatest';
 
 ## Deploying a Standalone Databend
@@ -35,6 +35,7 @@ export MINIO_ROOT_USER=minioadmin
 export MINIO_ROOT_PASSWORD=minioadmin
 ./minio server --address :9900 ./data
 ```
+
 d. Run the following commands to start the MinIO server:
 
 ```shell
@@ -42,7 +43,7 @@ chmod +x server.sh
 ./server.sh
 ```
 
-e. In your browser, go to http://127.0.0.1:9900 and enter the credentials (`minioadmin` / `minioadmin`) to log in to the MinIO Console.
+e. In your browser, go to <http://127.0.0.1:9900> and enter the credentials (`minioadmin` / `minioadmin`) to log in to the MinIO Console.
 
 f. In the MinIO Console, create a bucket named `databend`.
 
@@ -58,8 +59,8 @@ Before deploying Databend, make sure you have successfully set up your object st
 
 For information about how to manage buckets and Access Keys for your cloud object storage, refer to the user manual from the solution provider. Here are some useful links you may need:
 
-- https://docs.aws.amazon.com/AmazonS3/latest/userguide/create-bucket-overview.html
-- https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html
+- <https://docs.aws.amazon.com/AmazonS3/latest/userguide/create-bucket-overview.html>
+- <https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html>
 
 </TabItem>
 
@@ -72,8 +73,8 @@ Before deploying Databend, make sure you have successfully set up your object st
 
 For information about how to manage buckets and OAuth2 credentials in Google Cloud Storage, refer to the user manual from the solution provider. Here are some useful links you may need:
 
-- https://cloud.google.com/storage/docs/creating-buckets
-- https://cloud.google.com/storage/docs/authentication#apiauth
+- <https://cloud.google.com/storage/docs/creating-buckets>
+- <https://cloud.google.com/storage/docs/authentication#apiauth>
 
 </TabItem>
 
@@ -87,8 +88,8 @@ Before deploying Databend, make sure you have successfully set up your object st
 
 For information about how to manage buckets and Access Keys for your cloud object storage, refer to the user manual from the solution provider. Here are some useful links you may need:
 
-- https://cloud.tencent.com/document/product/436/13309
-- https://cloud.tencent.com/document/product/436/68282
+- <https://cloud.tencent.com/document/product/436/13309>
+- <https://cloud.tencent.com/document/product/436/68282>
 
 </TabItem>
 
@@ -102,8 +103,8 @@ Before deploying Databend, make sure you have successfully set up your object st
 
 For information about how to manage buckets and Access Keys for your cloud object storage, refer to the user manual from the solution provider. Here are some useful links you may need:
 
-- https://www.alibabacloud.com/help/zh/object-storage-service/latest/create-buckets-2
-- https://help.aliyun.com/document_detail/53045.htm
+- <https://www.alibabacloud.com/help/zh/object-storage-service/latest/create-buckets-2>
+- <https://help.aliyun.com/document_detail/53045.htm>
 
 </TabItem>
 
@@ -117,8 +118,8 @@ Before deploying Databend, make sure you have successfully set up your object st
 
 For information about how to manage buckets and Access Keys for your cloud object storage, refer to the user manual from the solution provider. Here are some useful links you may need:
 
-- https://wasabi.com/wp-content/themes/wasabi/docs/Getting_Started/index.html#t=topics%2FGS-Buckets.htm%23TOC_Creating_a_Bucketbc-1&rhtocid=_5_0
-- https://wasabi.com/wp-content/themes/wasabi/docs/Getting_Started/index.html#t=topics%2FAssigning_an_Access_Key.htm
+- <https://wasabi.com/wp-content/themes/wasabi/docs/Getting_Started/index.html#t=topics%2FGS-Buckets.htm%23TOC_Creating_a_Bucketbc-1&rhtocid=_5_0>
+- <https://wasabi.com/wp-content/themes/wasabi/docs/Getting_Started/index.html#t=topics%2FAssigning_an_Access_Key.htm>
 
 </TabItem>
 
@@ -132,8 +133,8 @@ Before deploying Databend, make sure you have successfully set up your object st
 
 For information about how to manage buckets and Access Keys for your cloud object storage, refer to the user manual from the solution provider. Here are some useful links you may need:
 
-- https://docsv3.qingcloud.com/storage/object-storage/manual/console/bucket_manage/basic_opt/
-- https://docs.qingcloud.com/product/api/common/overview.html
+- <https://docsv3.qingcloud.com/storage/object-storage/manual/console/bucket_manage/basic_opt/>
+- <https://docs.qingcloud.com/product/api/common/overview.html>
 
 </TabItem>
 
@@ -147,8 +148,8 @@ Before deploying Databend, make sure you have successfully set up your object st
 
 For information about how to manage buckets and Access Keys for your cloud object storage, refer to the user manual from the solution provider. Here are some useful links you may need:
 
-- https://docs.microsoft.com/en-us/azure/storage/blobs/storage-quickstart-blobs-portal#create-a-container
-- https://docs.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage?tabs=azure-portal#view-account-access-keys
+- <https://docs.microsoft.com/en-us/azure/storage/blobs/storage-quickstart-blobs-portal#create-a-container>
+- <https://docs.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage?tabs=azure-portal#view-account-access-keys>
 
 </TabItem>
 
@@ -162,13 +163,27 @@ Before deploying Databend, make sure you have successfully set up your object st
 
 For information about how to manage buckets and Access Keys for your cloud object storage, refer to the user manual from the solution provider. Here are some useful links you may need:
 
-- https://support.huaweicloud.com/intl/en-us/usermanual-obs/en-us_topic_0045853662.html
-- https://support.huaweicloud.com/intl/en-us/api-obs/obs_04_0116.html
+- <https://support.huaweicloud.com/intl/en-us/usermanual-obs/en-us_topic_0045853662.html>
+- <https://support.huaweicloud.com/intl/en-us/api-obs/obs_04_0116.html>
+
+</TabItem>
+<TabItem value="WebHDFS" label="WebHDFS">
+
+Before deploying Databend, make sure you have successfully set up your Hadoop environment, and the following tasks have been completed:
+
+- Enable the WebHDFS support on Hadoop.
+- Get the endpoint URL for connecting to WebHDFS.
+- Get the delegation token used for authentication (if needed).
+
+For information about how to enable and manage WebHDFS on Apache Hadoop, please refer to the manual of WebHDFS. Here are some links you may find useful:
+
+- <https://hadoop.apache.org/docs/r3.3.2/hadoop-project-dist/hadoop-hdfs/WebHDFS.html>
 
 </TabItem>
 </Tabs>
 
 ### Downloading Databend
+
 a. Create a folder named `databend` in the directory `/usr/local`.
 
 b. Download and extract the latest Databend release for your platform from [Github Release](https://github.com/datafuselabs/databend/releases):
@@ -238,6 +253,7 @@ tar xzvf databend-${version}-aarch64-apple-darwin.tar.gz
 c. Move the extracted folders `bin`, `configs`, and `scripts` to the folder `/usr/local/databend`.
 
 ### Deploying a Meta Node
+
 a. Open the file `databend-meta.toml` in the folder `/usr/local/databend/configs`, and replace `127.0.0.1` with `0.0.0.0` within the whole file.
 
 b. Open a terminal window and navigate to the folder `/usr/local/databend/bin`.
@@ -255,13 +271,14 @@ curl -I  http://127.0.0.1:28101/v1/health
 ```
 
 ### Deploying a Query Node
+
 a. Open the file `databend-query.toml` in the folder `/usr/local/databend/configs`, and replace `127.0.0.1` with `0.0.0.0` within the whole file.
 
 b. In the file `databend-query.toml`, set the parameter `type` in [storage] block to `s3` if you're using a S3 compatible object storage, or `azblob` if you're using Azure Blob storage.
 
 ```toml
 [storage]
-# fs | s3 | azblob | gcs | obs
+# fs | s3 | azblob | gcs | obs | webhdfs
 type = "s3"
 ```
 
@@ -298,9 +315,15 @@ secret_access_key = "<your-account-key>"
 # endpoint_url = "<your-endpoint>"
 # access_key_id = "<your-key-id>"
 # secret_access_key = "<your-account-key>"
+
+# To use WebHDFS Storage, uncomment this block and set with your values
+# [storage.webhdfs]
+# endpoint_url = "<your-endpoint>"
+# root = "<your-working-directory>"
+# delegation = "<delegation-token-for-authentication>"
 ```
 
-d. Set your values in the `[storage.s3]`, `[storage.azblob]`, `[storage.gcs]` or `[storage.obs]` block. Please note that the field `endpoint_url` refers to the service URL of your storage region and varies depending on the object storage solution you use:
+d. Set your values in the `[storage.s3]`, `[storage.azblob]`, `[storage.gcs]`, `[storage.obs]` or `[storage.webhdfs]` block. Please note that the field `endpoint_url` refers to the service URL of your storage region and varies depending on the object storage solution you use:
 
 <Tabs groupId="operating-systems">
 <TabItem value="MinIO" label="MinIO">
@@ -541,6 +564,19 @@ In this example OBS region is `cn-north-4`.
 :::
 
 </TabItem>
+<TabItem value="WebHDFS" label="WebHDFS">
+
+```toml
+[storage]
+type = "webhdfs"
+[storage.webhdfs]
+endpoint_url = "https://hadoop.example.com:9870"
+root = "/analyses/databend/storage"
+# if your webhdfs needs authentication, uncomment and set with your value
+# delegation = "<delegation-token>"
+```
+
+</TabItem>
 </Tabs>
 
 e. Open a terminal window and navigate to the folder `/usr/local/databend/bin`.
@@ -552,6 +588,7 @@ f. Run the following command to start the Query node:
 ```
 
 g. Run the following command to check if the Query node was started successfully:
+
 ```shell
 curl -I  http://127.0.0.1:8080/v1/health
 ```
@@ -566,7 +603,7 @@ b. Create a connection to 127.0.0.1 from your SQL client. In the connection, set
 
 :::tip
 
-**Create new users**. The `root` user only works when you access Databend from localhost. You will need to create new users and grant proper privileges first to connect to Databend remotely. For example, 
+**Create new users**. The `root` user only works when you access Databend from localhost. You will need to create new users and grant proper privileges first to connect to Databend remotely. For example,
 
 ```sql
 -- Create a user named "eric" with the password "databend"
@@ -596,9 +633,27 @@ Each time you start and stop Databend, simply run the scripts in the folder `/us
 
 ```shell
 # Start Databend
-./script/start.sh
+./scripts/start.sh
 
 # Stop Databend
-./script/stop.sh
+./scripts/stop.sh
 ```
+:::tip
+In case you encounter the subsequent error messages while attempting to start Databend:
+
+```shell
+==> query.log <==
+: No getcpu support: percpu_arena:percpu
+: option background_thread currently supports pthread only
+Databend Query start failure, cause: Code: 1104, displayText = failed to create appender: Os { code: 13, kind: PermissionDenied, message: "Permission denied" }.
+```
+Run the following commands and try starting Databend again:
+
+```shell
+sudo mkdir /var/log/databend
+sudo mkdir /var/lib/databend
+sudo chown -R $USER /var/log/databend
+sudo chown -R $USER /var/lib/databend
+```
+:::
 <GetLatest/>

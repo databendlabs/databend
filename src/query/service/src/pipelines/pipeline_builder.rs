@@ -53,6 +53,7 @@ use common_sql::executor::Project;
 use common_sql::executor::Sort;
 use common_sql::executor::TableScan;
 use common_sql::executor::UnionAll;
+use common_sql::executor::Unnest;
 use common_sql::plans::JoinType;
 use common_sql::ColumnBinding;
 use common_sql::IndexType;
@@ -156,6 +157,7 @@ impl PipelineBuilder {
             PhysicalPlan::DistributedInsertSelect(insert_select) => {
                 self.build_distributed_insert_select(insert_select)
             }
+            PhysicalPlan::Unnest(unnest) => self.build_unnest(unnest),
             PhysicalPlan::Exchange(_) => Err(ErrorCode::Internal(
                 "Invalid physical plan with PhysicalPlan::Exchange",
             )),
@@ -368,6 +370,31 @@ impl PipelineBuilder {
         })?;
 
         Ok(())
+    }
+
+    fn build_unnest(&mut self, unnest: &Unnest) -> Result<()> {
+        self.build_pipeline(&unnest.input)?;
+
+        let op = BlockOperator::Unnest {
+            fields: unnest.offsets.clone(),
+        };
+
+        let func_ctx = self.ctx.get_function_context()?;
+
+        self.main_pipeline.add_transform(|input, output| {
+            let transform =
+                CompoundBlockOperator::create(input, output, func_ctx, vec![op.clone()]);
+
+            if self.enable_profiling {
+                Ok(ProcessorPtr::create(ProfileWrapper::create(
+                    transform,
+                    unnest.plan_id,
+                    self.prof_span_set.clone(),
+                )))
+            } else {
+                Ok(ProcessorPtr::create(transform))
+            }
+        })
     }
 
     fn build_aggregate_partial(&mut self, aggregate: &AggregatePartial) -> Result<()> {

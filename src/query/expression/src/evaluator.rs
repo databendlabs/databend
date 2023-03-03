@@ -166,31 +166,34 @@ impl<'a> Evaluator<'a> {
             }
         };
 
-        // We can't call this in debug mode, because it will cause infinite recursion.
-        // Eg: select 3.2::Decimal(10, 2)::Int32;
-        // #[cfg(debug_assertions)]
-        // if result.is_err() {
-        //     static RECURSING: Mutex<bool> = Mutex::new(false);
-        //     if !*RECURSING.lock().unwrap() {
-        //         *RECURSING.lock().unwrap() = true;
-        //         assert_eq!(
-        //             ConstantFolder::fold_with_domain(
-        //                 expr,
-        //                 self.input_columns
-        //                     .domains()
-        //                     .into_iter()
-        //                     .enumerate()
-        //                     .collect(),
-        //                 self.func_ctx,
-        //                 self.fn_registry
-        //             )
-        //             .1,
-        //             None,
-        //             "domain calculation should not return any domain for expressions that are possible to fail"
-        //         );
-        //         *RECURSING.lock().unwrap() = false;
-        //     }
-        // }
+        #[cfg(debug_assertions)]
+        if result.is_err() {
+            use std::sync::atomic::AtomicBool;
+            use std::sync::atomic::Ordering;
+
+            static RECURSING: AtomicBool = AtomicBool::new(false);
+            if RECURSING
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+            {
+                assert_eq!(
+                    ConstantFolder::fold_with_domain(
+                        expr,
+                        self.input_columns
+                            .domains()
+                            .into_iter()
+                            .enumerate()
+                            .collect(),
+                        self.func_ctx,
+                        self.fn_registry
+                    )
+                    .1,
+                    None,
+                    "domain calculation should not return any domain for expressions that are possible to fail"
+                );
+                RECURSING.store(false, Ordering::SeqCst);
+            }
+        }
         result
     }
 
@@ -673,13 +676,13 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         let mut old_expr = expr.clone();
         let mut old_domain = None;
         for _ in 0..MAX_ITERATIONS {
-            let (new_expr, domain) = self.fold_once(&old_expr);
+            let (new_expr, new_domain) = self.fold_once(&old_expr);
 
             if new_expr == old_expr {
-                return (new_expr, domain);
+                return (new_expr, new_domain);
             }
             old_expr = new_expr;
-            old_domain = domain;
+            old_domain = new_domain;
         }
 
         error!("maximum iterations reached while folding expression");
