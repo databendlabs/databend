@@ -376,6 +376,8 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     register_decimal_compare_op!(registry, "ne", is_ne);
 
+    register_minus(registry);
+
     // int float to decimal
     registry.register_function_factory("to_decimal", |params, args_type| {
         if args_type.len() != 1 {
@@ -480,6 +482,57 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: Box::new(move |args, tx| decimal_to_string(args, arg_type.clone(), tx)),
         }))
     });
+}
+
+pub fn register_minus(registry: &mut FunctionRegistry) {
+    registry.register_function_factory("minus", |_params, args_type| {
+        if args_type.len() != 1 {
+            return None;
+        }
+        if !args_type[0].is_decimal() {
+            return None;
+        }
+
+        let arg_type = args_type[0].clone();
+
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "minus".to_string(),
+                args_type: args_type.to_owned(),
+                return_type: arg_type.clone(),
+                property: FunctionProperty::default(),
+            },
+            calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
+            eval: Box::new(move |args, _tx| minus_decimal(args, arg_type.clone())),
+        }))
+    });
+}
+
+fn minus_decimal(args: &[ValueRef<AnyType>], arg_type: DataType) -> Value<AnyType> {
+    let arg = &args[0];
+    let mut is_scalar = false;
+    let column = match arg {
+        ValueRef::Column(column) => column.clone(),
+        ValueRef::Scalar(s) => {
+            is_scalar = true;
+            let builder = ColumnBuilder::repeat(s, 1, &arg_type);
+            builder.build()
+        }
+    };
+
+    let result = match column {
+        Column::Decimal(DecimalColumn::Decimal128(buf, size)) => {
+            DecimalColumn::Decimal128(buf.into_iter().map(|x| -x).collect(), size)
+        }
+        _ => unreachable!(),
+    };
+
+    if is_scalar {
+        let scalar = result.index(0).unwrap();
+        Value::Scalar(Scalar::Decimal(scalar))
+    } else {
+        Value::Column(Column::Decimal(result))
+    }
 }
 
 fn convert_to_decimal(
