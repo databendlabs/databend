@@ -827,7 +827,7 @@ fn display_decimal_256(num: i256, scale: u8) -> String {
                 buf,
                 "{}.{:0>width$}",
                 num / pow_scale,
-                num % pow_scale.abs(),
+                (num % pow_scale).abs(),
                 width = scale as usize
             )
             .unwrap();
@@ -836,7 +836,7 @@ fn display_decimal_256(num: i256, scale: u8) -> String {
                 buf,
                 "-{}.{:0>width$}",
                 -num / pow_scale,
-                num % pow_scale,
+                (num % pow_scale).abs(),
                 width = scale as usize
             )
             .unwrap();

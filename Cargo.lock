@@ -165,7 +165,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.16.0"
-source = "git+https://github.com/jorgecarleitao/arrow2?rev=d06323a#d06323ac2370dc6622d9772561b89a89b1f793f1"
+source = "git+https://github.com/jorgecarleitao/arrow2?rev=9749aee#9749aee117165a5543a6fcbf647aa4a9ab732429"
 dependencies = [
  "ahash 0.8.2",
  "arrow-format",
@@ -7725,8 +7725,8 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 
 [[package]]
 name = "strawboat"
-version = "0.1.0"
-source = "git+https://github.com/sundy-li/strawboat?rev=d7b3271#d7b3271bdaa85039ada658fa6418e126368a979e"
+version = "0.2.0"
+source = "git+https://github.com/sundy-li/strawboat?rev=3a9f75c#3a9f75ce7bd59085be29647310466eb22ff6ee34"
 dependencies = [
  "arrow2",
  "bytemuck",
