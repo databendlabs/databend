@@ -39,3 +39,5 @@ pub use exchange_params::MergeExchangeParams;
 pub use exchange_params::ShuffleExchangeParams;
 pub use exchange_sorting::ExchangeSorting;
 pub use exchange_transform_shuffle::ExchangeShuffleMeta;
+pub use self::serde::exchange_serializer::ExchangeSerializeMeta;
+pub use self::serde::exchange_serializer::serialize_block;

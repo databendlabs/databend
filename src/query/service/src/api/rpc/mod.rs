@@ -51,3 +51,5 @@ pub use packets::InitNodesChannelPacket;
 pub use packets::Packet;
 pub use packets::PrecommitBlock;
 pub use packets::QueryFragmentsPlanPacket;
+pub use exchange::ExchangeSerializeMeta;
+pub use exchange::serialize_block;

@@ -56,7 +56,7 @@ struct AggregateExchangeSorting<Method: HashMethodBounds, V: Send + Sync + 'stat
 }
 
 impl<Method: HashMethodBounds, V: Send + Sync + 'static> ExchangeSorting
-    for AggregateExchangeSorting<Method, V>
+for AggregateExchangeSorting<Method, V>
 {
     fn block_number(&self, data_block: &DataBlock) -> Result<isize> {
         match data_block.get_meta() {
@@ -64,7 +64,9 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> ExchangeSorting
             Some(block_meta_info) => {
                 match AggregateMeta::<Method, V>::downcast_ref_from(block_meta_info) {
                     None => Err(ErrorCode::Internal(
-                        "Internal error, AggregateExchangeSorting only recv AggregateMeta",
+                        format!("Internal error, AggregateExchangeSorting only recv AggregateMeta {:?}",
+                                serde_json::to_string(block_meta_info)
+                        )
                     )),
                     Some(meta_info) => match meta_info {
                         AggregateMeta::Partitioned { .. } => unreachable!(),
@@ -125,7 +127,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> HashTableHashSca
 }
 
 impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
-    for HashTableHashScatter<Method, V>
+for HashTableHashScatter<Method, V>
 {
     fn execute(&self, mut data_block: DataBlock) -> Result<Vec<DataBlock>> {
         if let Some(block_meta) = data_block.take_meta() {
@@ -147,7 +149,10 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
                         let bucket = payload.bucket;
                         for hashtable_cell in self.scatter(payload)? {
                             blocks.push(DataBlock::empty_with_meta(
-                                AggregateMeta::<Method, V>::create_spilling(bucket, hashtable_cell),
+                                AggregateMeta::<Method, V>::create_hashtable(
+                                    bucket,
+                                    hashtable_cell,
+                                ),
                             ));
                         }
                     }
@@ -186,7 +191,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> AggregateInjecto
 }
 
 impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
-    for AggregateInjector<Method, V>
+for AggregateInjector<Method, V>
 {
     fn flight_scatter(
         &self,
@@ -259,7 +264,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
 
     fn apply_shuffle_serializer(
         &self,
-        _: &ShuffleExchangeParams,
+        shuffle_params: &ShuffleExchangeParams,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let method = &self.method;
@@ -289,11 +294,16 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
             ))
         })?;
 
+        let schema = shuffle_params.schema.clone();
+
         pipeline.add_transform(
             |input, output| match params.aggregate_functions.is_empty() {
-                true => {
-                    TransformScatterGroupBySerializer::try_create(input, output, method.clone())
-                }
+                true => TransformScatterGroupBySerializer::try_create(
+                    input,
+                    output,
+                    method.clone(),
+                    schema.clone(),
+                ),
                 false => TransformScatterAggregateSerializer::try_create(
                     input,
                     output,

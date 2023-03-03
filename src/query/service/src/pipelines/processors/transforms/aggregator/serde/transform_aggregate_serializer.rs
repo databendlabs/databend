@@ -26,6 +26,7 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::BlockMetaTransform;
 use common_pipeline_transforms::processors::transforms::BlockMetaTransformer;
+use crate::api::serialize_block;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
@@ -76,6 +77,7 @@ where Method: HashMethodBounds
             AggregateMeta::HashTable(payload) => {
                 let bucket = payload.bucket;
                 let data_block = serialize_aggregate(&self.method, &self.params, payload)?;
+                // serialize_block(bucket)
                 data_block.add_meta(Some(AggregateSerdeMeta::create(bucket)))
             }
         }

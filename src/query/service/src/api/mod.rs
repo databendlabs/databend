@@ -43,6 +43,8 @@ pub use rpc::ServerFlightExchange;
 pub use rpc::ShuffleDataExchange;
 pub use rpc::ShuffleExchangeParams;
 pub use rpc_service::RpcService;
+pub use rpc::ExchangeSerializeMeta;
+pub use rpc::serialize_block;
 
 pub mod http;
 mod http_service;
