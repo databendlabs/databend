@@ -15,7 +15,7 @@ const Connectwithus = () => {
     {
       name: "Follow our twitter",
       icon: <Twitter />,
-      des: "Feature requests, bug reports, and contributions",
+      des: "Stay in the know",
       link: "https://twitter.com/DatabendLabs",
     },
     {
