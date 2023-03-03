@@ -49,10 +49,10 @@ pub struct ExchangeSerializeMeta {
 }
 
 impl ExchangeSerializeMeta {
-    pub fn create(packet: DataPacket, block_number: isize) -> BlockMetaInfoPtr {
+    pub fn create(block_number: isize, packet: Option<DataPacket>) -> BlockMetaInfoPtr {
         Box::new(ExchangeSerializeMeta {
+            packet,
             block_number,
-            packet: Some(packet),
         })
     }
 }
@@ -205,6 +205,12 @@ pub fn serialize_block(
     ipc_field: &[IpcField],
     options: &WriteOptions,
 ) -> Result<DataBlock> {
+    if data_block.is_empty() {
+        return Ok(DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
+            block_num, None,
+        )));
+    }
+
     let mut meta = vec![];
     meta.write_scalar_own(data_block.num_rows() as u32)?;
     bincode::serialize_into(&mut meta, &data_block.get_meta())
@@ -220,7 +226,7 @@ pub fn serialize_block(
     }
 
     Ok(DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
-        DataPacket::FragmentData(FragmentData::create(meta, values)),
         block_num,
+        Some(DataPacket::FragmentData(FragmentData::create(meta, values))),
     )))
 }

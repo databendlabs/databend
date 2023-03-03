@@ -196,11 +196,8 @@ impl Processor for ExchangeShuffleTransform {
             if let Some(mut data_block) = self.try_pull_inputs()? {
                 if let Some(block_meta) = data_block.take_meta() {
                     if let Some(shuffle_meta) = ExchangeShuffleMeta::downcast_from(block_meta) {
-                        let blocks = shuffle_meta.blocks;
-                        for (index, block) in blocks.into_iter().enumerate() {
-                            if !block.is_empty() {
-                                self.buffer.push_back(index, block);
-                            }
+                        for (index, block) in shuffle_meta.blocks.into_iter().enumerate() {
+                            self.buffer.push_back(index, block);
                         }
 
                         // Try push again.
