@@ -4,6 +4,9 @@ date: 2023-03-03
 slug: 2023-03-03-databend-weekly
 tags: [databend, weekly]
 contributors:
+- name: andylokandy
+  url: https://github.com/andylokandy
+  image_url: https://github.com/andylokandy.png
 - name: ariesdevil
   url: https://github.com/ariesdevil
   image_url: https://github.com/ariesdevil.png
@@ -46,6 +49,9 @@ contributors:
 - name: soyeric128
   url: https://github.com/soyeric128
   image_url: https://github.com/soyeric128.png
+- name: sandflee
+  url: https://github.com/sandflee
+  image_url: https://github.com/sandflee.png
 - name: sundy-li
   url: https://github.com/sundy-li
   image_url: https://github.com/sundy-li.png
