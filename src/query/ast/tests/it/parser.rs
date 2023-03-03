@@ -565,6 +565,7 @@ fn test_expr() {
         r#"1 is distinct from 2"#,
         r#"a is distinct from b"#,
         r#"1 is not distinct from null"#,
+        r#"{'k1':1,'k2':2}"#,
     ];
 
     for case in cases {

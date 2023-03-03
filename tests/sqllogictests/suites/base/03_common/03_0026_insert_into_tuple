@@ -83,7 +83,7 @@ create table t4 (a Tuple(Int, Int) )
 query TTTT
 desc t4
 ----
-a (1 INT32, 2 INT32) NO (0, 0) (empty)
+a TUPLE(1 INT32, 2 INT32) NO (0, 0) (empty)
 
 statement ok
 DROP DATABASE db1

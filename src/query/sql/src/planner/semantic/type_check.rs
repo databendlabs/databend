@@ -932,6 +932,8 @@ impl<'a> TypeChecker<'a> {
                 .await?
             }
 
+            Expr::Map { span, kvs, .. } => self.resolve_map(*span, kvs).await?,
+
             Expr::Tuple { span, exprs, .. } => self.resolve_tuple(*span, exprs).await?,
         };
 
@@ -1864,6 +1866,32 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    async fn resolve_map(
+        &mut self,
+        span: Span,
+        kvs: &[(Expr, Expr)],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let mut keys = Vec::with_capacity(kvs.len());
+        let mut vals = Vec::with_capacity(kvs.len());
+        for (key_expr, val_expr) in kvs {
+            let box (key_arg, _data_type) = self.resolve(key_expr, None).await?;
+            keys.push(key_arg);
+            let box (val_arg, _data_type) = self.resolve(val_expr, None).await?;
+            vals.push(val_arg);
+        }
+        let box (key_arg, _data_type) = self
+            .resolve_scalar_function_call(span, "array", vec![], keys, None)
+            .await?;
+        let box (val_arg, _data_type) = self
+            .resolve_scalar_function_call(span, "array", vec![], vals, None)
+            .await?;
+        let args = vec![key_arg, val_arg];
+
+        self.resolve_scalar_function_call(span, "map", vec![], args, None)
+            .await
+    }
+
+    #[async_recursion::async_recursion]
     async fn resolve_tuple(
         &mut self,
         span: Span,
@@ -2436,9 +2464,33 @@ impl<'a> TypeChecker<'a> {
             TypeName::String => TableDataType::String,
             TypeName::Timestamp => TableDataType::Timestamp,
             TypeName::Date => TableDataType::Date,
-            TypeName::Array {
-                item_type: Some(item_type),
-            } => TableDataType::Array(Box::new(Self::resolve_type_name(item_type)?)),
+            TypeName::Array(item_type) => {
+                TableDataType::Array(Box::new(Self::resolve_type_name(item_type)?))
+            }
+            TypeName::Map { key_type, val_type } => {
+                let key_type = Self::resolve_type_name(key_type)?;
+                match key_type {
+                    TableDataType::Boolean
+                    | TableDataType::String
+                    | TableDataType::Number(_)
+                    | TableDataType::Decimal(_)
+                    | TableDataType::Timestamp
+                    | TableDataType::Date => {
+                        let val_type = Self::resolve_type_name(val_type)?;
+                        let inner_type = TableDataType::Tuple {
+                            fields_name: vec!["key".to_string(), "value".to_string()],
+                            fields_type: vec![key_type, val_type],
+                        };
+                        TableDataType::Map(Box::new(inner_type))
+                    }
+                    _ => {
+                        return Err(ErrorCode::Internal(format!(
+                            "Invalid Map key type \'{:?}\'",
+                            key_type
+                        )));
+                    }
+                }
+            }
             TypeName::Tuple {
                 fields_type,
                 fields_name,
@@ -2459,12 +2511,6 @@ impl<'a> TypeChecker<'a> {
                 TableDataType::Nullable(Box::new(Self::resolve_type_name(inner_type)?))
             }
             TypeName::Variant => TableDataType::Variant,
-            name => {
-                return Err(ErrorCode::Internal(format!(
-                    "Invalid type name \'{:?}\'",
-                    name
-                )));
-            }
         };
 
         Ok(data_type)

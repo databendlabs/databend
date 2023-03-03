@@ -677,6 +677,17 @@ impl TableSchema {
                         next_column_id,
                     );
                 }
+                TableDataType::Map(ty) => {
+                    collect_in_field(
+                        &TableField::new_from_column_id(
+                            field.name(),
+                            ty.as_ref().to_owned(),
+                            *next_column_id,
+                        ),
+                        fields,
+                        next_column_id,
+                    );
+                }
                 _ => {
                     *next_column_id += 1;
                     fields.push(field.clone())
@@ -807,6 +818,9 @@ impl TableField {
                 }
             }
             TableDataType::Array(a) => {
+                Self::build_column_ids_from_data_type(a.as_ref(), column_ids, next_column_id);
+            }
+            TableDataType::Map(a) => {
                 Self::build_column_ids_from_data_type(a.as_ref(), column_ids, next_column_id);
             }
             _ => {
@@ -960,6 +974,9 @@ impl TableDataType {
             TableDataType::Array(ty) => {
                 TableDataType::Array(Box::new(ty.as_ref().remove_recursive_nullable()))
             }
+            TableDataType::Map(ty) => {
+                TableDataType::Map(Box::new(ty.as_ref().remove_recursive_nullable()))
+            }
             _ => self.clone(),
         }
     }
@@ -978,6 +995,19 @@ impl TableDataType {
             TableDataType::Array(inner_ty) => {
                 format!("Array({})", inner_ty.wrapped_display())
             }
+            TableDataType::Map(inner_ty) => match *inner_ty.clone() {
+                TableDataType::Tuple {
+                    fields_name: _fields_name,
+                    fields_type,
+                } => {
+                    format!(
+                        "Map({}, {})",
+                        fields_type[0].wrapped_display(),
+                        fields_type[1].wrapped_display()
+                    )
+                }
+                _ => unreachable!(),
+            },
             _ => format!("{}", self),
         }
     }
@@ -1105,6 +1135,23 @@ impl TableDataType {
                     }))),
                 }
             }
+            TableDataType::Map(inner_ty) => {
+                let mut inner_len = 0;
+                let mut offsets: Vec<u64> = Vec::with_capacity(len + 1);
+                offsets.push(inner_len);
+                for _ in 0..len {
+                    inner_len += SmallRng::from_entropy().gen_range(0..=3);
+                    offsets.push(inner_len);
+                }
+                let entry = inner_ty.create_random_column(inner_len as usize);
+                BlockEntry {
+                    data_type: DataType::Map(Box::new(entry.data_type)),
+                    value: Value::Column(Column::Map(Box::new(ArrayColumn {
+                        values: entry.value.into_column().unwrap(),
+                        offsets: offsets.into(),
+                    }))),
+                }
+            }
             TableDataType::Tuple { fields_type, .. } => {
                 let mut fields = Vec::with_capacity(len);
                 let mut types = Vec::with_capacity(len);
@@ -1163,7 +1210,6 @@ impl TableDataType {
                     value: Value::Column(VariantType::from_data(data)),
                 }
             }
-            _ => todo!(),
         }
     }
 }
@@ -1281,7 +1327,10 @@ impl From<&ArrowField> for TableDataType {
 
             ArrowDataType::Timestamp(_, _) => TableDataType::Timestamp,
             ArrowDataType::Date32 | ArrowDataType::Date64 => TableDataType::Date,
-
+            ArrowDataType::Map(f, _) => {
+                let inner_ty = f.as_ref().into();
+                TableDataType::Map(Box::new(inner_ty))
+            }
             ArrowDataType::Struct(fields) => {
                 let (fields_name, fields_type) =
                     fields.iter().map(|f| (f.name.clone(), f.into())).unzip();
@@ -1361,9 +1410,18 @@ impl From<&DataType> for ArrowDataType {
                 )))
             }
             DataType::Map(ty) => {
-                let arrow_ty = ty.as_ref().into();
+                let inner_ty = match ty.as_ref() {
+                    DataType::Tuple(tys) => {
+                        let key_ty = ArrowDataType::from(&tys[0]);
+                        let val_ty = ArrowDataType::from(&tys[1]);
+                        let key_field = ArrowField::new("key", key_ty, tys[0].is_nullable());
+                        let val_field = ArrowField::new("value", val_ty, tys[1].is_nullable());
+                        ArrowDataType::Struct(vec![key_field, val_field])
+                    }
+                    _ => unreachable!(),
+                };
                 ArrowDataType::Map(
-                    Box::new(ArrowField::new("_map", arrow_ty, ty.is_nullable())),
+                    Box::new(ArrowField::new("entries", inner_ty, ty.is_nullable())),
                     false,
                 )
             }
@@ -1427,9 +1485,23 @@ impl From<&TableDataType> for ArrowDataType {
                 )))
             }
             TableDataType::Map(ty) => {
-                let arrow_ty = ty.as_ref().into();
+                let inner_ty = match ty.as_ref() {
+                    TableDataType::Tuple {
+                        fields_name: _fields_name,
+                        fields_type,
+                    } => {
+                        let key_ty = ArrowDataType::from(&fields_type[0]);
+                        let val_ty = ArrowDataType::from(&fields_type[1]);
+                        let key_field =
+                            ArrowField::new("key", key_ty, fields_type[0].is_nullable());
+                        let val_field =
+                            ArrowField::new("value", val_ty, fields_type[1].is_nullable());
+                        ArrowDataType::Struct(vec![key_field, val_field])
+                    }
+                    _ => unreachable!(),
+                };
                 ArrowDataType::Map(
-                    Box::new(ArrowField::new("_map", arrow_ty, ty.is_nullable())),
+                    Box::new(ArrowField::new("entries", inner_ty, ty.is_nullable())),
                     false,
                 )
             }
@@ -1533,9 +1605,13 @@ pub fn create_test_complex_schema() -> TableSchema {
     let nullarray = TableDataType::Nullable(Box::new(TableDataType::Array(Box::new(
         TableDataType::Number(NumberDataType::UInt64),
     ))));
-    let maparray = TableDataType::Map(Box::new(TableDataType::Array(Box::new(
-        TableDataType::Number(NumberDataType::UInt64),
-    ))));
+    let maparray = TableDataType::Map(Box::new(TableDataType::Tuple {
+        fields_name: vec!["key".to_string(), "value".to_string()],
+        fields_type: vec![
+            TableDataType::Number(NumberDataType::UInt64),
+            TableDataType::String,
+        ],
+    }));
 
     let field1 = TableField::new("u64", TableDataType::Number(NumberDataType::UInt64));
     let field2 = TableField::new("tuplearray", tuple);

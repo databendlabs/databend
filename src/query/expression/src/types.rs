@@ -59,6 +59,7 @@ pub use self::variant::VariantType;
 use crate::deserializations::ArrayDeserializer;
 use crate::deserializations::DateDeserializer;
 use crate::deserializations::DecimalDeserializer;
+use crate::deserializations::MapDeserializer;
 use crate::deserializations::NullableDeserializer;
 use crate::deserializations::NumberDeserializer;
 use crate::deserializations::TimestampDeserializer;
@@ -247,7 +248,7 @@ impl DataType {
             }
             DataType::Variant => VariantDeserializer::with_capacity(capacity).into(),
             DataType::Array(ty) => ArrayDeserializer::with_capacity(capacity, ty).into(),
-            DataType::Map(_ty) => todo!(),
+            DataType::Map(ty) => MapDeserializer::with_capacity(capacity, ty).into(),
             DataType::Tuple(types) => TupleDeserializer::with_capacity(capacity, types).into(),
             DataType::Decimal(types) => match types {
                 DecimalDataType::Decimal128(_) => {

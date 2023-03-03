@@ -27,6 +27,7 @@ use common_expression::ArrayDeserializer;
 use common_expression::BooleanDeserializer;
 use common_expression::DateDeserializer;
 use common_expression::DecimalDeserializer;
+use common_expression::MapDeserializer;
 use common_expression::NullDeserializer;
 use common_expression::NullableDeserializer;
 use common_expression::NumberDeserializer;
@@ -88,6 +89,7 @@ impl FieldJsonAstDecoder {
             TypeDeserializerImpl::Timestamp(c) => self.read_timestamp(c, value),
             TypeDeserializerImpl::String(c) => self.read_string(c, value),
             TypeDeserializerImpl::Array(c) => self.read_array(c, value),
+            TypeDeserializerImpl::Map(c) => self.read_map(c, value),
             TypeDeserializerImpl::Struct(c) => self.read_struct(c, value),
             TypeDeserializerImpl::Variant(c) => self.read_variant(c, value),
         }
@@ -244,6 +246,21 @@ where {
                 Ok(())
             }
             _ => Err(ErrorCode::BadBytes("Incorrect json value, must be array")),
+        }
+    }
+
+    fn read_map(&self, column: &mut MapDeserializer, value: &Value) -> Result<()> {
+        match value {
+            Value::Object(obj) => {
+                for (key, val) in obj.iter() {
+                    let key = Value::String(key.to_string());
+                    self.read_field(column.key.as_mut(), &key)?;
+                    self.read_field(column.value.as_mut(), val)?;
+                }
+                column.add_offset(obj.len());
+                Ok(())
+            }
+            _ => Err(ErrorCode::BadBytes("Incorrect json value, must be object")),
         }
     }
 
