@@ -196,7 +196,7 @@ fn compare_variant(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynCompar
     Ok(Box::new(move |i, j| {
         let l = unsafe { left.index_unchecked(i) };
         let r = unsafe { right.index_unchecked(j) };
-        common_jsonb::compare(l, r).unwrap()
+        jsonb::compare(l, r).unwrap()
     }))
 }
 

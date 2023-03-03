@@ -107,7 +107,7 @@ impl TypeDeserializer for VariantDeserializer {
     }
 
     fn de_json(&mut self, value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {
-        let v = common_jsonb::Value::from(value);
+        let v = jsonb::Value::from(value);
         v.write_to_vec(&mut self.builder.data);
         self.builder.commit_row();
         Ok(())

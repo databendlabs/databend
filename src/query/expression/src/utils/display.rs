@@ -230,7 +230,7 @@ impl<'a> Display for ScalarRef<'a> {
                 write!(f, ")")
             }
             ScalarRef::Variant(s) => {
-                let value = common_jsonb::to_string(s);
+                let value = jsonb::to_string(s);
                 write!(f, "{value}")
             }
         }
