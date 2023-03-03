@@ -518,6 +518,8 @@ pub fn can_auto_cast_to(
         }
         (DataType::Number(n), DataType::Decimal(_)) if !n.is_float() => true,
         (DataType::Decimal(x), DataType::Decimal(y)) => x.precision() <= y.precision(),
+        (DataType::Decimal(_), DataType::Number(NumberDataType::Float32)) => true,
+        (DataType::Decimal(_), DataType::Number(NumberDataType::Float64)) => true,
         _ => false,
     }
 }
