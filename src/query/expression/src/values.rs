@@ -314,6 +314,7 @@ impl<'a> ScalarRef<'a> {
                 value: None,
             }),
             ScalarRef::EmptyArray => Domain::Array(None),
+            ScalarRef::EmptyMap => Domain::Map(None),
             ScalarRef::Number(num) => Domain::Number(num.domain()),
             ScalarRef::Decimal(dec) => Domain::Decimal(dec.domain()),
             ScalarRef::Boolean(true) => Domain::Boolean(BooleanDomain {
@@ -337,6 +338,20 @@ impl<'a> ScalarRef<'a> {
                     Domain::Array(Some(Box::new(array.domain())))
                 }
             }
+            ScalarRef::Map(map) => {
+                if map.len() == 0 {
+                    Domain::Map(None)
+                } else {
+                    let inner_domain = map.domain();
+                    let map_domain = match inner_domain {
+                        Domain::Tuple(domains) => {
+                            (Box::new(domains[0].clone()), Box::new(domains[1].clone()))
+                        }
+                        _ => unreachable!(),
+                    };
+                    Domain::Map(Some(map_domain))
+                }
+            }
             ScalarRef::Tuple(fields) => {
                 let types = data_type.as_tuple().unwrap();
                 Domain::Tuple(
@@ -347,7 +362,7 @@ impl<'a> ScalarRef<'a> {
                         .collect(),
                 )
             }
-            ScalarRef::EmptyMap | ScalarRef::Map(_) | ScalarRef::Variant(_) => Domain::Undefined,
+            ScalarRef::Variant(_) => Domain::Undefined,
         }
     }
 
@@ -735,6 +750,20 @@ impl Column {
                     Domain::Array(Some(Box::new(inner_domain)))
                 }
             }
+            Column::Map(col) => {
+                if col.len() == 0 {
+                    Domain::Map(None)
+                } else {
+                    let inner_domain = col.values.domain();
+                    let map_domain = match inner_domain {
+                        Domain::Tuple(domains) => {
+                            (Box::new(domains[0].clone()), Box::new(domains[1].clone()))
+                        }
+                        _ => unreachable!(),
+                    };
+                    Domain::Map(Some(map_domain))
+                }
+            }
             Column::Nullable(col) => {
                 let inner_domain = col.column.domain();
                 Domain::Nullable(NullableDomain {
@@ -746,7 +775,7 @@ impl Column {
                 let domains = fields.iter().map(|col| col.domain()).collect::<Vec<_>>();
                 Domain::Tuple(domains)
             }
-            Column::Map(_) | Column::Variant(_) => Domain::Undefined,
+            Column::Variant(_) => Domain::Undefined,
         }
     }
 

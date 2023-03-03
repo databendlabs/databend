@@ -62,7 +62,7 @@ impl ValueType for EmptyMapType {
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         match domain {
-            Domain::Array(None) => Some(()),
+            Domain::Map(None) => Some(()),
             _ => None,
         }
     }
@@ -85,7 +85,7 @@ impl ValueType for EmptyMapType {
     }
 
     fn upcast_domain(_: Self::Domain) -> Domain {
-        Domain::Array(None)
+        Domain::Map(None)
     }
 
     fn column_len<'a>(len: &'a Self::Column) -> usize {

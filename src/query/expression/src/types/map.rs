@@ -306,7 +306,7 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
     type Scalar = <MapInternal<K, V> as ValueType>::Scalar;
     type ScalarRef<'a> = <MapInternal<K, V> as ValueType>::ScalarRef<'a>;
     type Column = <MapInternal<K, V> as ValueType>::Column;
-    type Domain = <MapInternal<K, V> as ValueType>::Domain;
+    type Domain = Option<(K::Domain, V::Domain)>;
     type ColumnIterator<'a> = <MapInternal<K, V> as ValueType>::ColumnIterator<'a>;
     type ColumnBuilder = <MapInternal<K, V> as ValueType>::ColumnBuilder;
 
@@ -335,7 +335,14 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
     }
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        <MapInternal<K, V> as ValueType>::try_downcast_domain(domain)
+        match domain {
+            Domain::Map(Some((key_domain, val_domain))) => Some(Some((
+                K::try_downcast_domain(key_domain)?,
+                V::try_downcast_domain(val_domain)?,
+            ))),
+            Domain::Map(None) => Some(None),
+            _ => None,
+        }
     }
 
     fn try_downcast_builder<'a>(
@@ -353,7 +360,12 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
     }
 
     fn upcast_domain(domain: Self::Domain) -> Domain {
-        <MapInternal<K, V> as ValueType>::upcast_domain(domain)
+        Domain::Map(domain.map(|(key_domain, val_domain)| {
+            (
+                Box::new(K::upcast_domain(key_domain)),
+                Box::new(V::upcast_domain(val_domain)),
+            )
+        }))
     }
 
     fn column_len<'a>(col: &'a Self::Column) -> usize {
@@ -423,7 +435,7 @@ impl<K: ArgType, V: ArgType> ArgType for MapType<K, V> {
     }
 
     fn full_domain() -> Self::Domain {
-        MapInternal::<K, V>::full_domain()
+        Some((K::full_domain(), V::full_domain()))
     }
 
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
