@@ -1,5 +1,5 @@
 ---
-title: Performance
+title: Databend Performance
 sidebar_label: Performance
 ---
 
