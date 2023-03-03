@@ -102,6 +102,9 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_function_factory("array", |_, args_type| {
+        if args_type.is_empty() {
+            return None;
+        }
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "array".to_string(),

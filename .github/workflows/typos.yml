@@ -1,0 +1,51 @@
+# Copyright 2023 Datafuse Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Typos Check
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+env:
+  RUST_BACKTRACE: 1
+
+jobs:
+  typos-check:
+    name: typos check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      FORCE_COLOR: 1
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          clean: "true"
+
+      - uses: baptiste0928/cargo-install@v1
+        with:
+          crate: typos-cli
+          args: --locked
+          cache-key: typos-check
+
+      - name: do typos check with typos-cli
+        run: typos
