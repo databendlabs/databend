@@ -6,6 +6,7 @@ import { ArrowLeft, ArrowRight, Return, Pencil} from "../Icons";
 import Link from "@docusaurus/Link";
 import useBaseUrl from "@docusaurus/useBaseUrl";
 import AvatarGroup from "../BaseComponents/AvatarGroup";
+import Connectwithus from "./Connectwithus";
 
 const BlogPostNav = ({ nextPost, prevPost }) => {
   return (
@@ -103,6 +104,7 @@ const BlogPostDetails = (props) => {
               ) : (
                 <></>
               )}
+              <Connectwithus/>
               <div className={styles.tagsBox}>
               <h5>Tags:</h5>
               {metadata.tags.map((tag,index) => {
