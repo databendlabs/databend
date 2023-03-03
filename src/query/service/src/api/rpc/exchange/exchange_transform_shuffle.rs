@@ -37,6 +37,8 @@ use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
 use crate::api::rpc::exchange::exchange_sorting::ExchangeSorting;
 use crate::api::rpc::exchange::exchange_sorting::TransformExchangeSorting;
 use crate::api::rpc::exchange::exchange_transform_scatter::ScatterTransform;
+use crate::api::rpc::exchange::serde::exchange_serializer::ExchangeSerializeMeta;
+use crate::api::rpc::exchange::serde::exchange_serializer::TransformScatterExchangeSerializer;
 
 pub struct ExchangeShuffleMeta {
     pub blocks: Vec<DataBlock>,
@@ -285,10 +287,13 @@ pub fn exchange_shuffle(params: &ShuffleExchangeParams, pipeline: &mut Pipeline)
         ))
     })?;
 
+    pipeline.add_transform(|input, output| {
+        TransformScatterExchangeSerializer::create(input, output, &params)
+    })?;
+
     if let Some(exchange_sorting) = &params.exchange_sorting {
         let output_len = pipeline.output_len();
         let sorting = ShuffleExchangeSorting::create(exchange_sorting.clone());
-
         let transform = TransformExchangeSorting::create(output_len, sorting);
 
         let output = transform.get_output();
@@ -331,11 +336,19 @@ impl ExchangeSorting for ShuffleExchangeSorting {
             .unwrap();
 
         for block in &shuffle_meta.blocks {
+            if let Some(block_meta) = block.get_meta() {
+                if let Some(block_meta) = ExchangeSerializeMeta::downcast_ref_from(block_meta) {
+                    return Ok(block_meta.block_number);
+                }
+            }
+
             if !block.is_empty() {
                 return self.inner.block_number(block);
             }
         }
 
-        Ok(0)
+        Err(ErrorCode::Internal(
+            "Internal, ShuffleExchangeSorting only recv ExchangeSerializeMeta.",
+        ))
     }
 }

@@ -26,7 +26,6 @@ use crate::api::rpc::exchange::exchange_source::via_exchange_source;
 use crate::api::rpc::exchange::exchange_source_reader::create_reader_item;
 use crate::api::rpc::exchange::exchange_transform_shuffle::exchange_shuffle;
 use crate::api::rpc::exchange::serde::exchange_deserializer::create_deserializer_items;
-use crate::api::rpc::exchange::serde::exchange_serializer::create_serializer_item;
 use crate::pipelines::processors::create_dummy_item;
 use crate::pipelines::processors::create_dummy_items;
 use crate::sessions::QueryContext;
@@ -45,18 +44,6 @@ impl ExchangeTransform {
             }
             ExchangeParams::ShuffleExchange(params) => {
                 exchange_shuffle(params, pipeline)?;
-
-                // exchange serialize transform
-                let len = params.destination_ids.len();
-                let mut items = Vec::with_capacity(len);
-                for destination_id in &params.destination_ids {
-                    items.push(match destination_id == &params.executor_id {
-                        true => create_dummy_item(),
-                        false => create_serializer_item(&params.schema),
-                    });
-                }
-
-                pipeline.add_pipe(Pipe::create(len, len, items));
 
                 // exchange writer sink and resize and exchange reader
                 let len = params.destination_ids.len();
