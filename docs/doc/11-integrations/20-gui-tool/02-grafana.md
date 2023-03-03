@@ -61,7 +61,7 @@ Please refer [Grafana Installation](https://grafana.com/docs/grafana/latest/setu
 4. Click `Add data source`, select previously installed source type `Altinity plugin for ClickHouse`.
 
 5. Configure the datasource:
-    > Nessesary fields:
+    > Necessary fields:
     > * `HTTP -> URL` Your databend query clickhouse endpoint, for example: `http://localhost:8124`
     > * `Auth -> Basic auth` enabled
     > * `Basic Auth Details -> User, Password` previously created grafana user
@@ -93,7 +93,7 @@ CREATE TABLE `access_logs` (
   `protocol` VARCHAR,
   `status` INT,
   `size` INT,
-  `referer` VARCHAR,
+  `referrer` VARCHAR,
   `agent` VARCHAR,
   `request` VARCHAR
 );

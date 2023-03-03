@@ -450,7 +450,12 @@ impl Display for DataType {
             DataType::EmptyArray => write!(f, "Array(Nothing)"),
             DataType::Array(inner) => write!(f, "Array({inner})"),
             DataType::EmptyMap => write!(f, "Map(Nothing)"),
-            DataType::Map(inner) => write!(f, "Map({inner})"),
+            DataType::Map(inner) => match *inner.clone() {
+                DataType::Tuple(fields) => {
+                    write!(f, "Map({}, {})", fields[0], fields[1])
+                }
+                _ => unreachable!(),
+            },
             DataType::Tuple(tys) => {
                 write!(f, "Tuple(")?;
                 for (i, ty) in tys.iter().enumerate() {
@@ -484,12 +489,20 @@ impl Display for TableDataType {
             TableDataType::EmptyArray => write!(f, "Array(Nothing)"),
             TableDataType::Array(inner) => write!(f, "Array({inner})"),
             TableDataType::EmptyMap => write!(f, "Map(Nothing)"),
-            TableDataType::Map(inner) => write!(f, "Map({inner})"),
+            TableDataType::Map(inner) => match *inner.clone() {
+                TableDataType::Tuple {
+                    fields_name: _fields_name,
+                    fields_type,
+                } => {
+                    write!(f, "Map({}, {})", fields_type[0], fields_type[1])
+                }
+                _ => unreachable!(),
+            },
             TableDataType::Tuple {
                 fields_name,
                 fields_type,
             } => {
-                write!(f, "(")?;
+                write!(f, "Tuple(")?;
                 for (i, (name, ty)) in fields_name.iter().zip(fields_type).enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;

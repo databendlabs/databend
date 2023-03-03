@@ -124,9 +124,9 @@ impl<T: Decimal> TypeDeserializer for DecimalDeserializer<T> {
         Ok(())
     }
 
-    fn pop_data_value(&mut self) -> Result<()> {
+    fn pop_data_value(&mut self) -> Result<Scalar> {
         match self.values.pop() {
-            Some(_) => Ok(()),
+            Some(v) => Ok(T::upcast_scalar(v, self.size)),
             None => Err(ErrorCode::from(
                 "Decimal column is empty when pop data value",
             )),
