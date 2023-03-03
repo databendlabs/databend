@@ -41,6 +41,8 @@ pub(crate) fn gen_result_cache_dir(key: &str) -> String {
 pub struct ResultCacheValue {
     /// The original query SQL.
     pub sql: String,
+    /// Associated query id
+    pub query_id: String,
     /// The query time.
     pub query_time: u64,
     /// Time-to-live of this query.

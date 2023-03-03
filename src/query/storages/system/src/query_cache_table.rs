@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::types::BooleanType;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
 use common_expression::types::UInt64Type;
@@ -57,18 +58,31 @@ impl AsyncSystemTable for QueryCacheTable {
         let cached_values = result_cache_mgr.list(prefix.as_str()).await?;
 
         let mut sql_vec: Vec<&str> = Vec::with_capacity(cached_values.len());
+        let mut query_id_vec: Vec<&str> = Vec::with_capacity(cached_values.len());
         let mut result_size_vec = Vec::with_capacity(cached_values.len());
         let mut num_rows_vec = Vec::with_capacity(cached_values.len());
         let mut partitions_sha_vec = Vec::with_capacity(cached_values.len());
         let mut location_vec = Vec::with_capacity(cached_values.len());
+        let mut active_result_scan: Vec<bool> = Vec::with_capacity(cached_values.len());
 
         cached_values.iter().for_each(|x| {
             sql_vec.push(x.sql.as_str());
+            query_id_vec.push(x.query_id.as_str());
             result_size_vec.push(x.result_size as u64);
             num_rows_vec.push(x.num_rows as u64);
             partitions_sha_vec.push(x.partitions_shas.clone());
             location_vec.push(x.location.as_str());
         });
+
+        let active_query_ids = ctx.get_query_id_history();
+
+        for qid in query_id_vec.iter() {
+            if active_query_ids.contains(*qid) {
+                active_result_scan.push(true)
+            } else {
+                active_result_scan.push(false)
+            }
+        }
 
         let partitions_sha_vec: Vec<String> = partitions_sha_vec
             .into_iter()
@@ -77,6 +91,7 @@ impl AsyncSystemTable for QueryCacheTable {
 
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(sql_vec),
+            StringType::from_data(query_id_vec),
             UInt64Type::from_data(result_size_vec),
             UInt64Type::from_data(num_rows_vec),
             StringType::from_data(
@@ -86,6 +101,7 @@ impl AsyncSystemTable for QueryCacheTable {
                     .collect::<Vec<_>>(),
             ),
             StringType::from_data(location_vec),
+            BooleanType::from_data(active_result_scan),
         ]))
     }
 }
@@ -94,6 +110,7 @@ impl QueryCacheTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("sql", TableDataType::String),
+            TableField::new("query_id", TableDataType::String),
             TableField::new("result_size", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("num_rows", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new(
@@ -101,6 +118,7 @@ impl QueryCacheTable {
                 TableDataType::Array(Box::new(TableDataType::String)),
             ),
             TableField::new("location", TableDataType::String),
+            TableField::new("active_result_scan", TableDataType::Boolean),
         ]);
 
         let table_info = TableInfo {
