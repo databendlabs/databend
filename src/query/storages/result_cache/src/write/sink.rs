@@ -73,6 +73,7 @@ impl AsyncMpscSink for WriteResultCacheSink {
 
         let value = ResultCacheValue {
             sql: self.sql.clone(),
+            query_id: self.ctx.get_id(),
             query_time: now,
             ttl,
             partitions_shas: self.partitions_shas.clone(),

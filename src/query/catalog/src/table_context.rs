@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -110,6 +111,7 @@ pub trait TableContext: Send + Sync {
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
     fn get_stage_attachment(&self) -> Option<StageAttachment>;
     fn get_last_query_id(&self, index: i32) -> String;
+    fn get_query_id_history(&self) -> HashSet<String>;
     fn get_result_cache_key(&self, query_id: &str) -> Option<String>;
     fn set_query_id_result_cache(&self, query_id: String, result_cache_key: String);
     fn set_on_error_map(&self, map: Option<HashMap<String, ErrorCode>>);
