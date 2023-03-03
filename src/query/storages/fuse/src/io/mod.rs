@@ -37,7 +37,7 @@ pub use segments::SegmentsIO;
 pub use snapshots::ListSnapshotLiteOption;
 pub use snapshots::SnapshotLiteListExtended;
 pub use snapshots::SnapshotsIO;
-pub use write::write_block;
+pub use write::serialize_block;
 pub use write::write_data;
 pub use write::BlockBuilder;
 pub use write::BlockSerialization;

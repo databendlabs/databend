@@ -17,7 +17,7 @@ mod meta_writer;
 mod segment_writer;
 mod write_settings;
 
-pub use block_writer::write_block;
+pub use block_writer::serialize_block;
 pub use block_writer::write_data;
 pub use block_writer::BlockBuilder;
 pub use block_writer::BlockSerialization;

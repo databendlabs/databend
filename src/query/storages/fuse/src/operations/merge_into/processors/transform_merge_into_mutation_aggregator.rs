@@ -15,7 +15,12 @@
 
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_pipeline_core::pipe::PipeItem;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::transform_accumulating_async::AsyncAccumulatingTransform;
+use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 
 use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::MergeIntoOperation;
 pub use crate::operations::merge_into::mutator::merge_into_mutator::MergeIntoOperationAggregator;
@@ -39,5 +44,17 @@ impl AsyncAccumulatingTransform for MergeIntoOperationAggregator {
         // apply mutations
         let mutation_logs = self.apply().await?;
         Ok(mutation_logs.map(|logs| logs.into()))
+    }
+}
+
+impl MergeIntoOperationAggregator {
+    pub fn into_pipe_item(self) -> PipeItem {
+        let input = InputPort::create();
+        let output = OutputPort::create();
+        let processor_ptr =
+            AsyncAccumulatingTransformer::create(input.clone(), output.clone(), self);
+        PipeItem::create(ProcessorPtr::create(processor_ptr), vec![input], vec![
+            output,
+        ])
     }
 }

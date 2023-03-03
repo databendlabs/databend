@@ -22,6 +22,7 @@ use crate::operations::mutation::base_mutator::BlockIndex;
 use crate::operations::mutation::base_mutator::SegmentIndex;
 
 pub type BlockDeletionKeys = HashMap<BlockIndex, HashSet<UniqueKeyDigest>>;
+#[derive(Default)]
 pub struct DeletionAccumulator {
     pub deletions: HashMap<SegmentIndex, BlockDeletionKeys>,
 }

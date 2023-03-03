@@ -22,13 +22,13 @@ use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
+use common_pipeline_transforms::processors::transforms::TransformDummy;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::rpc::exchange::exchange_source_reader;
 use crate::api::rpc::exchange::serde::exchange_deserializer::create_deserializer_items;
 use crate::clusters::ClusterHelper;
-use crate::pipelines::processors::TransformDummy;
 use crate::sessions::QueryContext;
 
 pub fn via_exchange_source(

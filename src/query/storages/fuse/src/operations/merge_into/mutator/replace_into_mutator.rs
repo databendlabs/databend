@@ -33,14 +33,16 @@ use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::Uni
 // - update for "not-matched" branch (by sending MergeIntoOperation to downstream)
 pub struct ReplaceIntoMutator {
     // note, it is the index, not the column id
-    // TODO: support multi-columns
-    key_column_idx: usize,
+    on_conflict_field_index: usize,
     key_saw: HashSet<UniqueKeyDigest>,
 }
 
 impl ReplaceIntoMutator {
-    pub fn try_create() -> Result<Self> {
-        todo!()
+    pub fn create(on_conflict_field_index: usize) -> Self {
+        Self {
+            on_conflict_field_index,
+            key_saw: Default::default(),
+        }
     }
 }
 
@@ -57,7 +59,7 @@ impl ReplaceIntoMutator {
     }
 
     fn extract_key_column(&mut self, data_block: &DataBlock) -> Result<MergeIntoOperation> {
-        let entry = &data_block.columns()[self.key_column_idx];
+        let entry = &data_block.columns()[self.on_conflict_field_index];
         let column = entry.value.as_column().unwrap();
         let num_rows = data_block.num_rows();
         match Self::build_column_hash(column, &mut self.key_saw, num_rows)? {

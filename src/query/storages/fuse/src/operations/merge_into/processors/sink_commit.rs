@@ -34,7 +34,7 @@ use crate::metrics::metrics_inc_commit_mutation_success;
 use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
 use crate::operations::commit::Conflict;
 use crate::operations::commit::MutatorConflictDetector;
-use crate::operations::merge_into::mutation_meta::mutation_meta::CommitMeta;
+use crate::operations::merge_into::mutation_meta::mutation_log::CommitMeta;
 use crate::operations::mutation::AbortOperation;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;

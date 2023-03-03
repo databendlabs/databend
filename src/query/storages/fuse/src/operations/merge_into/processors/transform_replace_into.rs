@@ -18,112 +18,65 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_pipeline_core::pipe::Pipe;
+use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
 pub use crate::operations::merge_into::mutator::replace_into_mutator::ReplaceIntoMutator;
 
-// use std::marker::PhantomData;
-// pub struct TypedPort<P, T> {
-//    port: P,
-//    _t: PhantomData<T>,
-//}
-// pub type TypedInputPort<T> = TypedPort<Arc<InputPort>, T>;
-// pub type TypedOutputPort<T> = TypedPort<Arc<OutputPort>, T>;
-
-/// - append data to table, by just sending data to the CompactTransform (CompactTrans)
-/// - if any rows (might) need to be deleted, output the deletion operation log to down stream (deletion_log_output_port)
 pub struct ReplaceIntoProcessor {
     replace_into_mutator: ReplaceIntoMutator,
-    input_port: Arc<InputPort>,
-    input_data: Option<DataBlock>,
 
+    // stage data blocks
+    input_port: Arc<InputPort>,
     output_port_merge_into_action: Arc<OutputPort>,
     output_port_append_data: Arc<OutputPort>,
+
+    input_data: Option<DataBlock>,
     output_data_merge_into_action: Option<DataBlock>,
     output_data_append: Option<DataBlock>,
+
+    target_table_empty: bool,
 }
 
 impl ReplaceIntoProcessor {
-    pub fn try_create() -> Result<Self> {
-        todo!()
-    }
+    pub fn create(on_conflict_field_index: usize, target_table_empty: bool) -> Self {
+        let replace_into_mutator = ReplaceIntoMutator::create(on_conflict_field_index);
+        let input_port = InputPort::create();
+        let output_port_merge_into_action = OutputPort::create();
+        let output_port_append_data = OutputPort::create();
 
-    pub fn get_input_port(&self) -> &Arc<InputPort> {
-        &self.input_port
-    }
-
-    pub fn get_merge_into_action_output_port(&self) -> &Arc<OutputPort> {
-        &self.output_port_merge_into_action
-    }
-
-    pub fn get_append_data_output_port(&self) -> &Arc<OutputPort> {
-        &self.output_port_append_data
-    }
-
-    pub fn try_output_port(port: &OutputPort, data: &mut Option<DataBlock>) -> OutputState {
-        if port.is_finished() {
-            return OutputState::AllSent;
-        };
-
-        return if port.can_push() {
-            if let Some(data_block) = data.take() {
-                port.push_data(Ok(data_block));
-                OutputState::AllSent
-            } else {
-                OutputState::PartiallySent
-            }
-        } else {
-            if data.is_some() {
-                OutputState::PartiallySent
-            } else {
-                OutputState::AllSent
-            }
-        };
-    }
-    pub fn try_outputs(&mut self) -> OutputState {
-        if !self.output_port_append_data.can_push()
-            || !self.output_port_merge_into_action.can_push()
-        {
-            return OutputState::PartiallySent;
-        }
-
-        let data_output =
-            Self::try_output_port(&self.output_port_append_data, &mut self.output_data_append);
-        let action_output = Self::try_output_port(
-            &self.output_port_merge_into_action,
-            &mut self.output_data_merge_into_action,
-        );
-
-        match (data_output, action_output) {
-            (OutputState::PartiallySent, _) => OutputState::PartiallySent,
-            (_, OutputState::PartiallySent) => OutputState::PartiallySent,
-            (OutputState::AllSent, OutputState::AllSent) => OutputState::AllSent,
+        Self {
+            replace_into_mutator,
+            input_port,
+            output_port_merge_into_action,
+            output_port_append_data,
+            input_data: None,
+            output_data_merge_into_action: None,
+            output_data_append: None,
+            target_table_empty,
         }
     }
 
-    pub fn pending_output(&self) -> bool {
-        self.output_data_append.is_some() || self.output_data_merge_into_action.is_some()
+    pub fn into_pipe(self) -> Pipe {
+        let pipe_item = self.into_pipe_item();
+        Pipe::create(1, 2, vec![pipe_item])
     }
 
-    pub fn finish_outputs(&self) {
-        self.output_port_append_data.finish();
-        self.output_port_merge_into_action.finish();
+    pub fn into_pipe_item(self) -> PipeItem {
+        let input = self.input_port.clone();
+        let output_port_merge_into_action = self.output_port_merge_into_action.clone();
+        let output_port_append_data = self.output_port_append_data.clone();
+        let processor_ptr = ProcessorPtr::create(Box::new(self));
+        PipeItem::create(processor_ptr, vec![input], vec![
+            output_port_append_data,
+            output_port_merge_into_action,
+        ])
     }
-
-    pub fn all_outputs_finished(&self) -> bool {
-        self.output_port_append_data.is_finished()
-            && self.output_port_merge_into_action.is_finished()
-    }
-}
-
-pub enum OutputState {
-    // something need to be sent, but outputs are not available, all partially sent
-    PartiallySent,
-    // something need to be sent, and all sent
-    AllSent,
 }
 
 #[async_trait::async_trait]
@@ -136,45 +89,72 @@ impl Processor for ReplaceIntoProcessor {
         self
     }
     fn event(&mut self) -> Result<Event> {
-        if self.all_outputs_finished() {
+        // cumbersome
+        eprintln!("on event");
+
+        if self.output_port_append_data.is_finished()
+            || self.output_port_merge_into_action.is_finished()
+            || self.input_port.is_finished()
+        {
+            eprintln!("fin, output is finish");
+            eprintln!(
+                "self.output_port_append_data.is_finished {}
+                self.output_port_merge_into_action.is_finished {}
+                self.input_port.is_finished {}",
+                self.output_port_append_data.is_finished(),
+                self.output_port_merge_into_action.is_finished(),
+                self.input_port.is_finished(),
+            );
+
             self.input_port.finish();
+            self.output_port_merge_into_action.finish();
+            self.output_port_append_data.finish();
             return Ok(Event::Finished);
         }
 
-        // TODO not sure about this
-        if self.pending_output() {
-            return match self.try_outputs() {
-                OutputState::PartiallySent => {
-                    self.input_port.set_not_need_data();
-                    Ok(Event::NeedConsume)
-                }
-                OutputState::AllSent => Ok(Event::NeedConsume),
-            };
+        let mut pushed_something = false;
+        if self.output_port_append_data.can_push() {
+            if let Some(data) = self.output_data_append.take() {
+                self.output_port_append_data.push_data(Ok(data));
+                pushed_something = true;
+            }
+        }
+        if self.output_port_merge_into_action.can_push() {
+            if let Some(data) = self.output_data_merge_into_action.take() {
+                self.output_port_merge_into_action.push_data(Ok(data));
+                pushed_something = true;
+            }
         }
 
-        if self.input_data.is_some() {
-            return Ok(Event::Sync);
-        }
+        if pushed_something {
+            eprintln!("need consume2");
+            Ok(Event::NeedConsume)
+        } else {
+            if self.input_data.is_some() {
+                eprintln!("Sync1");
+                return Ok(Event::Sync);
+            }
 
-        if self.input_port.has_data() {
-            self.input_data = Some(self.input_port.pull_data().unwrap()?);
-            return Ok(Event::Sync);
+            if self.input_port.has_data() {
+                self.input_data = Some(self.input_port.pull_data().unwrap()?);
+                eprintln!("Sync");
+                Ok(Event::Sync)
+            } else {
+                self.input_port.set_need_data();
+                eprintln!("NeedData");
+                Ok(Event::NeedData)
+            }
         }
-
-        if self.input_port.is_finished() {
-            self.finish_outputs();
-            return Ok(Event::Finished);
-        }
-
-        self.input_port.set_need_data();
-        Ok(Event::NeedData)
     }
 
     fn process(&mut self) -> Result<()> {
+        eprintln!("on process");
         if let Some(data_block) = self.input_data.take() {
             let merge_into_action = self.replace_into_mutator.process_input_block(&data_block)?;
-            self.output_data_merge_into_action =
-                Some(DataBlock::empty_with_meta(Box::new(merge_into_action)));
+            if !self.target_table_empty {
+                self.output_data_merge_into_action =
+                    Some(DataBlock::empty_with_meta(Box::new(merge_into_action)));
+            }
             self.output_data_append = Some(data_block);
             return Ok(());
         }

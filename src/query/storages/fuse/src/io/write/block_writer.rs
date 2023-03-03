@@ -36,7 +36,7 @@ use crate::operations::BloomIndexState;
 use crate::statistics::BlockStatistics;
 
 // TODO rename this, it is serialization, or pass in a writer(if not rename)
-pub fn write_block(
+pub fn serialize_block(
     write_settings: &WriteSettings,
     schema: &TableSchemaRef,
     block: DataBlock,
@@ -114,7 +114,7 @@ impl BlockBuilder {
             self.ctx.clone(),
             self.source_schema.clone(),
             &data_block,
-            bloom_index_location.clone(),
+            bloom_index_location,
         )?;
         let column_distinct_count = bloom_index_state
             .as_ref()
@@ -133,7 +133,7 @@ impl BlockBuilder {
         )?;
 
         let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
-        let (file_size, col_metas) = write_block(
+        let (file_size, col_metas) = serialize_block(
             &self.write_settings,
             &self.source_schema,
             data_block,

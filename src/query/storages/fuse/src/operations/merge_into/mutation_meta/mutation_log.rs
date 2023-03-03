@@ -70,15 +70,12 @@ impl AppendOperationLogEntry {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct MutationLogs {
     pub entries: Vec<MutationLogEntry>,
 }
 
 impl MutationLogs {
-    pub fn new() -> Self {
-        Self { entries: vec![] }
-    }
     pub fn push_append(&mut self, log_entry: AppendOperationLogEntry) {
         self.entries.push(MutationLogEntry::Append(log_entry))
     }

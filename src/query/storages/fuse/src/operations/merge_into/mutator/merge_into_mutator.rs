@@ -18,11 +18,13 @@ use std::hash::Hasher;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_catalog::plan::Projection;
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
 use common_expression::Scalar;
-use common_expression::TableSchemaRef;
+use common_expression::TableSchema;
 use opendal::Operator;
 use siphasher::sip128;
 use siphasher::sip128::Hasher128;
@@ -34,42 +36,72 @@ use storages_common_table_meta::meta::Location;
 use crate::io::write_data;
 use crate::io::BlockBuilder;
 use crate::io::BlockReader;
+use crate::io::MetaReaders;
 use crate::io::ReadSettings;
 use crate::io::SegmentInfoReader;
-use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
 use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::DeletionByColumn;
 use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::MergeIntoOperation;
 use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::UniqueKeyDigest;
-use crate::operations::merge_into::mutation_meta::mutation_meta::BlockMetaIndex;
-use crate::operations::merge_into::mutation_meta::mutation_meta::Mutation;
-use crate::operations::merge_into::mutation_meta::mutation_meta::MutationLog;
-use crate::operations::merge_into::mutation_meta::mutation_meta::MutationLogEntry;
-use crate::operations::merge_into::mutation_meta::mutation_meta::MutationLogs;
+use crate::operations::merge_into::mutation_meta::mutation_log::BlockMetaIndex;
+use crate::operations::merge_into::mutation_meta::mutation_log::Mutation;
+use crate::operations::merge_into::mutation_meta::mutation_log::MutationLog;
+use crate::operations::merge_into::mutation_meta::mutation_log::MutationLogEntry;
+use crate::operations::merge_into::mutation_meta::mutation_log::MutationLogs;
 use crate::operations::merge_into::mutator::deletion_accumulator::DeletionAccumulator;
 use crate::operations::mutation::base_mutator::BlockIndex;
 use crate::operations::mutation::base_mutator::SegmentIndex;
 
 // Apply MergeIntoOperations to segments
 pub struct MergeIntoOperationAggregator {
-    ctx: Arc<dyn TableContext>,
-    // segments that this mutator is in charge of
-    segment_locations: Vec<(Location, SegmentIndex)>,
-    column_id: ColumnId,
+    segment_locations: HashMap<SegmentIndex, Location>,
     deletion_accumulator: DeletionAccumulator,
+    // TODO encapsulate these (support multi columns)
+    on_conflict_field_index: usize,
+    on_conflict_field_id: ColumnId,
+    block_reader: Arc<BlockReader>,
     data_accessor: Operator,
-    // schema of table we are working on (no projection)
-    schema: TableSchemaRef,
-    block_reader: BlockReader,
-    location_gen: TableMetaLocationGenerator,
     write_settings: WriteSettings,
+    read_settings: ReadSettings,
     segment_reader: SegmentInfoReader,
     block_builder: BlockBuilder,
 }
 
 impl MergeIntoOperationAggregator {
-    pub fn try_create(segment_location: &[Location]) -> Result<Self> {
-        todo!()
+    #[allow(clippy::too_many_arguments)] // TODO fix this
+    pub fn try_create(
+        ctx: Arc<dyn TableContext>,
+        on_conflict_field_index: usize,
+        on_conflict_field_id: ColumnId,
+        segment_locations: Vec<(SegmentIndex, Location)>,
+        data_accessor: Operator,
+        table_schema: Arc<TableSchema>,
+        write_settings: WriteSettings,
+        read_settings: ReadSettings,
+        block_builder: BlockBuilder,
+    ) -> Result<Self> {
+        let deletion_accumulator = DeletionAccumulator::default();
+        let segment_reader =
+            MetaReaders::segment_info_reader(data_accessor.clone(), table_schema.clone());
+        let indices = (0..table_schema.fields().len())
+            .into_iter()
+            .collect::<Vec<usize>>();
+        let projection = Projection::Columns(indices);
+        let block_reader =
+            BlockReader::create(data_accessor.clone(), table_schema, projection, ctx.clone())?;
+
+        Ok(Self {
+            segment_locations: HashMap::from_iter(segment_locations.into_iter()),
+            deletion_accumulator,
+            on_conflict_field_index,
+            on_conflict_field_id,
+            block_reader,
+            data_accessor,
+            write_settings,
+            read_settings,
+            segment_reader,
+            block_builder,
+        })
     }
 }
 
@@ -82,7 +114,7 @@ impl MergeIntoOperationAggregator {
                 key_max,
                 key_hashes,
             }) => {
-                for ((path, ver), segment_index) in &self.segment_locations {
+                for (segment_index, (path, ver)) in &self.segment_locations {
                     let load_param = LoadParams {
                         location: path.clone(),
                         len_hint: None,
@@ -91,15 +123,15 @@ impl MergeIntoOperationAggregator {
                     };
                     // for typical configuration, segment cache is enabled, thus after the first loop, we are reading from cache
                     let segment_info = self.segment_reader.read(&load_param).await?;
-                    // segment level prune
-                    if !self.overlapped(&segment_info.summary.col_stats, &key_min, &key_max) {
-                        // block level prune
+                    // segment level
+                    if self.overlapped(&segment_info.summary.col_stats, key_min, key_max) {
+                        // block level
                         for (block_index, block_meta) in segment_info.blocks.iter().enumerate() {
-                            if !self.overlapped(&block_meta.col_stats, &key_min, &&key_max) {
+                            if self.overlapped(&block_meta.col_stats, key_min, key_max) {
                                 self.deletion_accumulator.add_block_deletion(
                                     *segment_index,
                                     block_index,
-                                    &key_hashes,
+                                    key_hashes,
                                 )
                             }
                         }
@@ -118,19 +150,26 @@ impl MergeIntoOperationAggregator {
         let mut mutation_logs = Vec::new();
         for (segment_idx, block_deletion) in &self.deletion_accumulator.deletions {
             // do we need a local cache?
-            let ((path, ver), segment_index) = &self.segment_locations[*segment_idx as usize];
+            let (path, ver) = self.segment_locations.get(segment_idx).ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "unexpected, segment (idx {}) not found, during appply",
+                    segment_idx
+                ))
+            })?;
+
             let load_param = LoadParams {
                 location: path.clone(),
                 len_hint: None,
                 ver: *ver,
                 put_cache: true,
             };
+
             let segment_info = self.segment_reader.read(&load_param).await?;
 
             for (block_index, keys) in block_deletion {
                 let block_meta = &segment_info.blocks[*block_index];
                 if let Some(segment_mutation_log) = self
-                    .apply_deletion_to_data_block(*segment_index, *block_index, block_meta, keys)
+                    .apply_deletion_to_data_block(*segment_idx, *block_index, block_meta, keys)
                     .await?
                 {
                     mutation_logs.push(MutationLogEntry::Mutation(segment_mutation_log));
@@ -154,17 +193,23 @@ impl MergeIntoOperationAggregator {
         }
 
         let reader = &self.block_reader;
-        let settings = ReadSettings::default(); // TODO
-        let field_index = 0; // TODO the index of column (not the ColumnId)
-        // TODO optimize, "prewhere"
-        // if delete all or delete nothing is common
-        // NOTE: here both segment and block meta pruning have been performed
+        let on_conflict_field_index = self.on_conflict_field_index;
+        // TODO optimization "prewhere"?
         let data_block = reader
-            //.read_by_meta(&settings, block_meta, &FuseStorageFormat::Parquet) // use generic reader, read native as well
-            .read_by_meta(&settings, block_meta, &self.write_settings.storage_format) // use generic reader, read native as well
+            .read_by_meta(
+                &self.read_settings,
+                block_meta,
+                &self.write_settings.storage_format,
+            )
             .await?;
         let num_rows = data_block.num_rows();
-        let key_column = data_block.columns()[field_index].value.as_column().unwrap();
+
+        // TODO report an error
+        let key_column = data_block.columns()[on_conflict_field_index]
+            .value
+            .as_column()
+            .unwrap();
+
         let mut bitmap = MutableBitmap::new();
         for i in 0..num_rows {
             let value = key_column.index(i).unwrap();
@@ -200,17 +245,21 @@ impl MergeIntoOperationAggregator {
         let new_block = data_block.filter_with_bitmap(&bitmap)?;
 
         // serialization and compression is cpu intensive, send them to dedicated thread pool
-        // and wait (async)
+        // and wait (asyncly, which will NOT block the executor thread)
         let block_builder = self.block_builder.clone();
         let serialized = tokio_rayon::spawn(move || block_builder.build(new_block)).await?;
 
+        // persistent data
         let new_block_meta = serialized.block_meta;
-        let location = block_meta.location.0.clone();
-        let raw_data = serialized.block_raw_data;
+        let new_block_location = new_block_meta.location.0.clone();
+        let new_block_raw_data = serialized.block_raw_data;
         let data_accessor = self.data_accessor.clone();
-        // async processor is driven by global runtime io
-        write_data(raw_data, &data_accessor, &location).await?;
+        write_data(new_block_raw_data, &data_accessor, &new_block_location).await?;
+        if let Some(index_state) = serialized.bloom_index_state {
+            write_data(index_state.data, &data_accessor, &index_state.location.0).await?;
+        }
 
+        // generate log
         let mutation = MutationLog {
             index: BlockMetaIndex {
                 segment_idx: segment_index,
@@ -229,10 +278,14 @@ impl MergeIntoOperationAggregator {
         key_min: &Scalar,
         key_max: &Scalar,
     ) -> bool {
-        if let Some(stats) = column_stats.get(&self.column_id) {
-            if &stats.max <= key_min || key_max <= &stats.min {
-                return true;
-            }
+        if let Some(stats) = column_stats.get(&self.on_conflict_field_id) {
+            return if &stats.max <= key_min || key_max <= &stats.min {
+                // non-coincide overlap
+                true
+            } else {
+                // coincide overlap
+                &stats.max == key_max && &stats.min == key_min
+            };
         }
         false
     }

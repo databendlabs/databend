@@ -25,11 +25,11 @@ use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::merge_into::mutation_meta::mutation_meta::AppendOperationLogEntry;
-use crate::operations::merge_into::mutation_meta::mutation_meta::CommitMeta;
-use crate::operations::merge_into::mutation_meta::mutation_meta::Mutation;
-use crate::operations::merge_into::mutation_meta::mutation_meta::MutationLog;
-use crate::operations::merge_into::mutation_meta::mutation_meta::MutationLogEntry;
+use crate::operations::merge_into::mutation_meta::mutation_log::AppendOperationLogEntry;
+use crate::operations::merge_into::mutation_meta::mutation_log::CommitMeta;
+use crate::operations::merge_into::mutation_meta::mutation_log::Mutation;
+use crate::operations::merge_into::mutation_meta::mutation_log::MutationLog;
+use crate::operations::merge_into::mutation_meta::mutation_log::MutationLogEntry;
 use crate::operations::mutation::base_mutator::BlockIndex;
 use crate::operations::mutation::base_mutator::SegmentIndex;
 use crate::operations::mutation::AbortOperation;
@@ -156,7 +156,7 @@ impl MutationAccumulator {
                 for (idx, replaced_with_meta) in replaced {
                     block_editor.insert(*idx, replaced_with_meta.clone());
                     // old block meta is replaced with `replaced_with_meta` (update/partial deletion)
-                    abort_operation.add_block(&replaced_with_meta);
+                    abort_operation.add_block(replaced_with_meta);
                 }
 
                 // remove deleted blocks
@@ -193,7 +193,7 @@ impl MutationAccumulator {
         for (path, new_segment) in &self.appended_segments {
             merge_statistics_mut(&mut table_statistics, &new_segment.summary)?;
             for block_meta in &new_segment.blocks {
-                abort_operation.add_block(&block_meta);
+                abort_operation.add_block(block_meta);
             }
             abort_operation.add_segment(path.clone());
         }

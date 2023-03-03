@@ -19,6 +19,8 @@ use common_exception::Result;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::processors::create_resize_item;
 use common_pipeline_core::Pipeline;
+use common_pipeline_transforms::processors::transforms::create_dummy_item;
+use common_pipeline_transforms::processors::transforms::create_dummy_items;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_sink_writer::create_writer_item;
@@ -27,8 +29,6 @@ use crate::api::rpc::exchange::exchange_source_reader::create_reader_item;
 use crate::api::rpc::exchange::exchange_transform_shuffle::exchange_shuffle;
 use crate::api::rpc::exchange::serde::exchange_deserializer::create_deserializer_items;
 use crate::api::rpc::exchange::serde::exchange_serializer::create_serializer_item;
-use crate::pipelines::processors::create_dummy_item;
-use crate::pipelines::processors::create_dummy_items;
 use crate::sessions::QueryContext;
 
 pub struct ExchangeTransform;

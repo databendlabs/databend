@@ -32,10 +32,10 @@ use storages_common_table_meta::meta::SegmentInfo;
 use crate::io::try_join_futures_with_vec;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::merge_into::mutation_meta::mutation_meta::CommitMeta;
-use crate::operations::merge_into::mutation_meta::mutation_meta::Mutation;
-use crate::operations::merge_into::mutation_meta::mutation_meta::MutationLogEntry;
-use crate::operations::merge_into::mutation_meta::mutation_meta::MutationLogs;
+use crate::operations::merge_into::mutation_meta::mutation_log::CommitMeta;
+use crate::operations::merge_into::mutation_meta::mutation_log::Mutation;
+use crate::operations::merge_into::mutation_meta::mutation_log::MutationLogEntry;
+use crate::operations::merge_into::mutation_meta::mutation_log::MutationLogs;
 use crate::operations::merge_into::mutator::mutation_accumulator::MutationAccumulator;
 use crate::operations::merge_into::mutator::mutation_accumulator::SerializedSegment;
 use crate::operations::mutation::AbortOperation;
@@ -77,18 +77,17 @@ impl TableMutationAggregator {
 impl TableMutationAggregator {
     pub fn accumulate_mutation(&mut self, mutations: &MutationLogs) {
         for entry in &mutations.entries {
-            self.mutation_accumulator.accumulate_log_entry(&entry);
+            self.mutation_accumulator.accumulate_log_entry(entry);
             // TODO wrap this aborts in mutation accumulator
             match entry {
-                MutationLogEntry::Mutation(mutation) => match &mutation.op {
-                    Mutation::Replaced(block_meta) => {
+                MutationLogEntry::Mutation(mutation) => {
+                    if let Mutation::Replaced(block_meta) = &mutation.op {
                         self.abort_operation.add_block(block_meta);
                     }
-                    _ => (),
-                },
+                }
                 MutationLogEntry::Append(append) => {
                     for block_meta in &append.segment_info.blocks {
-                        self.abort_operation.add_block(&block_meta);
+                        self.abort_operation.add_block(block_meta);
                     }
                     // TODO can we avoid this clone?
                     self.abort_operation
@@ -112,6 +111,7 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
 
     async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
         let mutations: CommitMeta = self.apply_mutations().await?;
+        eprintln!("mutations {:?}", mutations);
         let block_meta: BlockMetaInfoPtr = Box::new(mutations);
         Ok(Some(DataBlock::empty_with_meta(block_meta)))
     }
@@ -126,7 +126,7 @@ impl TableMutationAggregator {
         let (commit_meta, serialized_segments) = self.mutation_accumulator.apply(
             base_segments_paths,
             &segment_infos,
-            self.thresholds.clone(),
+            self.thresholds,
             &self.location_gen,
         )?;
 
@@ -168,15 +168,6 @@ impl TableMutationAggregator {
         .await?
         .into_iter()
         .collect::<Result<Vec<_>>>()?;
-        Ok(())
-    }
-}
-
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_column_digest() -> Result<()> {
         Ok(())
     }
 }

@@ -16,10 +16,17 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::DataBlock;
+use common_expression::TableSchema;
+use common_pipeline_core::pipe::PipeItem;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransform;
+use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
@@ -36,8 +43,8 @@ use crate::metrics::metrics_inc_block_index_write_nums;
 use crate::metrics::metrics_inc_block_write_bytes;
 use crate::metrics::metrics_inc_block_write_milliseconds;
 use crate::metrics::metrics_inc_block_write_nums;
-use crate::operations::merge_into::mutation_meta::mutation_meta::AppendOperationLogEntry;
-use crate::operations::merge_into::mutation_meta::mutation_meta::MutationLogs;
+use crate::operations::merge_into::mutation_meta::mutation_log::AppendOperationLogEntry;
+use crate::operations::merge_into::mutation_meta::mutation_log::MutationLogs;
 use crate::statistics::StatisticsAccumulator;
 
 // Write down data blocks, generate indexes, emits append log entries
@@ -51,19 +58,41 @@ pub struct AppendTransform {
 
 impl AppendTransform {
     pub fn try_create(
+        ctx: Arc<dyn TableContext>,
         write_settings: WriteSettings,
         data_accessor: Operator,
         meta_locations: TableMetaLocationGenerator,
+        source_schema: Arc<TableSchema>,
         thresholds: BlockThresholds,
-        block_builder: BlockBuilder,
-    ) -> Result<AppendTransform> {
-        Ok(AppendTransform {
+    ) -> AppendTransform {
+        let block_builder = BlockBuilder {
+            ctx,
+            meta_locations: meta_locations.clone(),
+            source_schema,
+            write_settings: write_settings.clone(),
+        };
+        AppendTransform {
             data_accessor,
             meta_locations,
             accumulator: StatisticsAccumulator::new(thresholds),
             write_settings,
             block_builder,
-        })
+        }
+    }
+
+    pub fn into_pipe_item(self) -> PipeItem {
+        let input = InputPort::create();
+        let output = OutputPort::create();
+        let transformer = AsyncAccumulatingTransformer::create(input.clone(), output.clone(), self);
+        PipeItem {
+            processor: ProcessorPtr::create(transformer),
+            inputs_port: vec![input],
+            outputs_port: vec![output],
+        }
+    }
+
+    pub fn get_block_builder(&self) -> BlockBuilder {
+        self.block_builder.clone()
     }
 
     pub async fn try_output_mutation(&mut self) -> Result<Option<AppendOperationLogEntry>> {
@@ -115,7 +144,7 @@ impl AppendTransform {
         log: Option<AppendOperationLogEntry>,
     ) -> Result<Option<DataBlock>> {
         if let Some(log_entry) = log {
-            let mut mutation_logs = MutationLogs::new();
+            let mut mutation_logs = MutationLogs::default();
             mutation_logs.push_append(log_entry);
             let data_block = DataBlock::try_from(mutation_logs)?;
             Ok(Some(data_block))
@@ -130,6 +159,7 @@ impl AsyncAccumulatingTransform for AppendTransform {
     const NAME: &'static str = "AppendTransform";
 
     async fn transform(&mut self, data_block: DataBlock) -> Result<Option<DataBlock>> {
+        eprintln!("Append Transform got some thing");
         // 1. serialize block and index
         let block_builder = self.block_builder.clone();
         let serialized_block_state =
@@ -181,6 +211,7 @@ impl AsyncAccumulatingTransform for AppendTransform {
     }
 
     async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
+        eprintln!("Append Transform on finished");
         // output final operation log if any
         let append_log = self.output_mutation().await?;
         self.output_mutation_block(append_log)

@@ -45,6 +45,7 @@ impl Binder {
             columns,
             source,
         } = stmt;
+
         let catalog_name = catalog.as_ref().map_or_else(
             || self.ctx.get_current_catalog(),
             |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
@@ -77,8 +78,7 @@ impl Binder {
             TableSchemaRefExt::create(fields)
         };
 
-        // FIXME better name
-        let join_on = schema
+        let on_conflict_field = schema
             .field_with_name(&normalize_identifier(on, &self.name_resolution_ctx).name)
             .map(|v| v.clone())?;
 
@@ -114,21 +114,21 @@ impl Binder {
             InsertSource::Select { query } => {
                 let statement = Statement::Query(query);
                 let select_plan = self.bind_statement(bind_context, &statement).await?;
+                let enable_distributed_optimization = false;
                 let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig {
-                    enable_distributed_optimization: !self.ctx.get_cluster().is_empty(),
+                    enable_distributed_optimization,
                 }));
                 let optimized_plan = optimize(self.ctx.clone(), opt_ctx, select_plan)?;
                 Ok(InsertInputSource::SelectPlan(Box::new(optimized_plan)))
             }
         };
 
-        // FIXME 1) real plan type 2) check if no-nullable filed missing
         let plan = Replace {
             catalog: catalog_name.to_string(),
             database: database_name.to_string(),
             table: table_name,
             table_id,
-            join_on,
+            join_on: on_conflict_field,
             schema,
             source: input_source?,
         };
