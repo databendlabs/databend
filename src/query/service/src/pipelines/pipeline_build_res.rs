@@ -22,7 +22,9 @@ use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_sources::OneBlockSource;
 use common_profile::ProfSpanSetRef;
 
+use crate::api::ExchangeInjector;
 use crate::api::ExchangeSorting;
+use crate::pipelines::pipeline_builder::DefaultExchangeInjector;
 
 pub struct PipelineBuildResult {
     pub main_pipeline: Pipeline,
@@ -34,6 +36,7 @@ pub struct PipelineBuildResult {
     pub prof_span_set: ProfSpanSetRef,
 
     pub exchange_sorting: Option<Arc<dyn ExchangeSorting>>,
+    pub exchange_injector: Arc<dyn ExchangeInjector>,
 }
 
 impl PipelineBuildResult {
@@ -43,6 +46,7 @@ impl PipelineBuildResult {
             sources_pipelines: vec![],
             prof_span_set: ProfSpanSetRef::default(),
             exchange_sorting: None,
+            exchange_injector: DefaultExchangeInjector::create(),
         }
     }
 
@@ -62,6 +66,7 @@ impl PipelineBuildResult {
             sources_pipelines: vec![],
             prof_span_set: ProfSpanSetRef::default(),
             exchange_sorting: None,
+            exchange_injector: DefaultExchangeInjector::create(),
         })
     }
 

@@ -60,7 +60,13 @@ use common_sql::IndexType;
 use common_storage::DataOperator;
 
 use super::processors::ProfileWrapper;
+use crate::api::BroadcastFlightScatter;
+use crate::api::DataExchange;
+use crate::api::ExchangeInjector;
 use crate::api::ExchangeSorting;
+use crate::api::FlightScatter;
+use crate::api::HashFlightScatter;
+use crate::api::ShuffleExchangeParams;
 use crate::pipelines::processors::transforms::efficiently_memory_final_aggregator;
 use crate::pipelines::processors::transforms::AggregateExchangeSorting;
 use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
@@ -103,6 +109,7 @@ pub struct PipelineBuilder {
     enable_profiling: bool,
     prof_span_set: ProfSpanSetRef,
     exchange_sorting: Option<Arc<dyn ExchangeSorting>>,
+    exchange_injector: Arc<dyn ExchangeInjector>,
 }
 
 impl PipelineBuilder {
@@ -118,6 +125,7 @@ impl PipelineBuilder {
             main_pipeline: Pipeline::create(),
             prof_span_set,
             exchange_sorting: None,
+            exchange_injector: DefaultExchangeInjector::create(),
         }
     }
 
@@ -137,6 +145,7 @@ impl PipelineBuilder {
             sources_pipelines: self.pipelines,
             prof_span_set: self.prof_span_set,
             exchange_sorting: self.exchange_sorting,
+            exchange_injector: self.exchange_injector,
         })
     }
 

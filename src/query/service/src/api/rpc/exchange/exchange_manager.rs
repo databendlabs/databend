@@ -45,6 +45,7 @@ use crate::api::rpc::flight_scatter_broadcast::BroadcastFlightScatter;
 use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
 use crate::api::rpc::Packet;
 use crate::api::DataExchange;
+use crate::api::ExchangeInjector;
 use crate::api::ExchangeSorting;
 use crate::api::FlightClient;
 use crate::api::FragmentPlanPacket;
@@ -491,6 +492,11 @@ impl QueryCoordinator {
                     .pipeline_build_res
                     .as_ref()
                     .and_then(|x| x.exchange_sorting.clone()),
+                fragment_coordinator
+                    .pipeline_build_res
+                    .as_ref()
+                    .map(|x| x.exchange_injector.clone())
+                    .unwrap(),
             )?;
             let mut build_res = fragment_coordinator.pipeline_build_res.unwrap();
 
@@ -543,6 +549,11 @@ impl QueryCoordinator {
                         .pipeline_build_res
                         .as_ref()
                         .and_then(|x| x.exchange_sorting.clone()),
+                    coordinator
+                        .pipeline_build_res
+                        .as_ref()
+                        .map(|x| x.exchange_injector.clone())
+                        .unwrap(),
                 )?,
             );
         }
@@ -626,47 +637,47 @@ impl FragmentCoordinator {
         &self,
         info: &QueryInfo,
         exchange_sorting: Option<Arc<dyn ExchangeSorting>>,
+        exchange_injector: Arc<dyn ExchangeInjector>,
     ) -> Result<ExchangeParams> {
-        match &self.data_exchange {
-            None => Err(ErrorCode::Internal("Cannot find data exchange.")),
-            Some(DataExchange::Merge(exchange)) => {
-                Ok(ExchangeParams::MergeExchange(MergeExchangeParams {
-                    exchange_sorting,
-                    schema: self.physical_plan.output_schema()?,
-                    fragment_id: self.fragment_id,
-                    query_id: info.query_id.to_string(),
-                    destination_id: exchange.destination_id.clone(),
-                }))
-            }
-            Some(DataExchange::Broadcast(exchange)) => {
-                Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
-                    exchange_sorting,
-                    schema: self.physical_plan.output_schema()?,
-                    fragment_id: self.fragment_id,
-                    query_id: info.query_id.to_string(),
-                    executor_id: info.current_executor.to_string(),
-                    destination_ids: exchange.destination_ids.to_owned(),
-                    shuffle_scatter: Arc::new(Box::new(BroadcastFlightScatter::try_create(
-                        exchange.destination_ids.len(),
-                    )?)),
-                }))
-            }
-            Some(DataExchange::ShuffleDataExchange(exchange)) => {
-                Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
-                    exchange_sorting,
-                    schema: self.physical_plan.output_schema()?,
-                    fragment_id: self.fragment_id,
-                    query_id: info.query_id.to_string(),
-                    executor_id: info.current_executor.to_string(),
-                    destination_ids: exchange.destination_ids.to_owned(),
-                    shuffle_scatter: Arc::new(HashFlightScatter::try_create(
-                        info.query_ctx.get_function_context()?,
-                        exchange.shuffle_keys.clone(),
-                        exchange.destination_ids.len(),
-                    )?),
-                }))
-            }
+        if let Some(data_exchange) = &self.data_exchange {
+            return match data_exchange {
+                DataExchange::Merge(exchange) => {
+                    Ok(ExchangeParams::MergeExchange(MergeExchangeParams {
+                        exchange_sorting,
+                        schema: self.physical_plan.output_schema()?,
+                        fragment_id: self.fragment_id,
+                        query_id: info.query_id.to_string(),
+                        destination_id: exchange.destination_id.clone(),
+                    }))
+                }
+                DataExchange::Broadcast(exchange) => {
+                    Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
+                        exchange_sorting,
+                        schema: self.physical_plan.output_schema()?,
+                        fragment_id: self.fragment_id,
+                        query_id: info.query_id.to_string(),
+                        executor_id: info.current_executor.to_string(),
+                        destination_ids: exchange.destination_ids.to_owned(),
+                        shuffle_scatter: exchange_injector
+                            .flight_scatter(&info.query_ctx, data_exchange)?,
+                    }))
+                }
+                DataExchange::ShuffleDataExchange(exchange) => {
+                    Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
+                        exchange_sorting,
+                        schema: self.physical_plan.output_schema()?,
+                        fragment_id: self.fragment_id,
+                        query_id: info.query_id.to_string(),
+                        executor_id: info.current_executor.to_string(),
+                        destination_ids: exchange.destination_ids.to_owned(),
+                        shuffle_scatter: exchange_injector
+                            .flight_scatter(&info.query_ctx, data_exchange)?,
+                    }))
+                }
+            };
         }
+
+        Err(ErrorCode::Internal("Cannot find data exchange."))
     }
 
     pub fn prepare_pipeline(&mut self, ctx: Arc<QueryContext>) -> Result<()> {

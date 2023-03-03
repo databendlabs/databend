@@ -19,9 +19,12 @@ use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 
-use crate::api::ExchangeSorting;
+use crate::api::{DataExchange, ExchangeInjector, ExchangeSorting, FlightScatter};
+use crate::pipelines::processors::transforms::aggregator::aggregate_meta::{AggregateMeta, HashTablePayload};
 use crate::pipelines::processors::transforms::aggregator::serde::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::serde::BUCKET_TYPE;
+use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
+use crate::sessions::QueryContext;
 
 pub struct AggregateExchangeSorting {}
 
@@ -45,5 +48,40 @@ impl ExchangeSorting for AggregateExchangeSorting {
                 },
             },
         }
+    }
+}
+
+struct HashTableHashScatter<Method: HashMethodBounds, V: Send + Sync + 'static> {}
+
+impl<Method: HashMethodBounds, V: Send + Sync + 'static> HashTableHashScatter<Method, V> {
+    fn scatter(&self, payload: HashTablePayload<Method, V>) -> Vec<HashTablePayload<Method, V>> {
+        // TODO;
+        unimplemented!()
+    }
+}
+
+impl<Method: HashMethodBounds, V: Send + Sync + 'static> FlightScatter for HashTableHashScatter<Method, V> {
+    fn execute(&self, mut data_block: DataBlock) -> Result<Vec<DataBlock>> {
+        if let Some(block_meta) = data_block.take_meta() {
+            if let Some(block_meta) = AggregateMeta::<Method, V>::downcast_from(block_meta) {
+                match block_meta {
+                    AggregateMeta::Spilled(_) => unreachable!(),
+                    AggregateMeta::Serialized(_) => unreachable!(),
+                    AggregateMeta::Partitioned { .. } => unreachable!(),
+                    AggregateMeta::Spilling(payload) => self.scatter(payload),
+                    AggregateMeta::HashTable(payload) => self.scatter(payload),
+                }
+            }
+        }
+        todo!()
+    }
+}
+
+pub struct AggregateInjector {}
+
+impl ExchangeInjector for AggregateInjector {
+    fn flight_scatter(&self, ctx: &Arc<QueryContext>, exchange: &DataExchange) -> Result<Arc<Box<dyn FlightScatter>>> {
+        // TODO:
+        todo!()
     }
 }
