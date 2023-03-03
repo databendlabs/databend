@@ -65,16 +65,21 @@ fn wrap_runtime_filter_source(
 // Traverse plan tree and check if exists join
 // Currently, only support inner join.
 pub fn try_add_runtime_filter_nodes(expr: &SExpr) -> Result<SExpr> {
+    if expr.children().len() == 1 && expr.children()[0].is_pattern() {
+        return Ok(expr.clone());
+    }
+    let mut new_expr = expr.clone();
     if expr.plan.rel_op() == RelOp::Join {
-        return add_runtime_filter_nodes(expr);
+        // Todo(xudong): develop a strategy to decide whether to add runtime filter node
+        new_expr = add_runtime_filter_nodes(expr)?;
     }
 
     let mut children = vec![];
 
-    for child in expr.children.iter() {
+    for child in new_expr.children.iter() {
         children.push(try_add_runtime_filter_nodes(child)?);
     }
-    Ok(expr.replace_children(children))
+    Ok(new_expr.replace_children(children))
 }
 
 fn add_runtime_filter_nodes(expr: &SExpr) -> Result<SExpr> {
