@@ -112,6 +112,14 @@ impl BlockOperator {
         }
     }
 
+    /// Unnest a nested column into one column.
+    fn unnest_column(column: Column) -> Column {
+        match column {
+            Column::Array(col) => Self::unnest_column(col.underlying_column()),
+            _ => column,
+        }
+    }
+
     /// Apply the `unnest`ed columns to the whole [`DataBlock`].
     /// Each row in non-unnest columns will be replicated due to the related unnest column.
     ///
@@ -156,24 +164,13 @@ impl BlockOperator {
             return Ok(input);
         }
 
-        let (unnest_columns, unnest_offsets) = if unnest_columns.len() == 1 {
-            // Short path: only one unnest column.
-            let (index, col) = unnest_columns.into_iter().next().unwrap();
-            let range =
-                *col.offsets.first().unwrap() as usize..*col.offsets.last().unwrap() as usize;
-            let offsets = col.offsets.to_vec();
-            let new_col = col.values.slice(range).wrap_nullable();
-            let unnest_columns = HashMap::from([(index, new_col)]);
-            (unnest_columns, offsets)
-        } else {
-            Self::unify_unnest_columns(unnest_columns)
-        };
+        let (unnest_columns, unnest_offsets) = Self::unify_unnest_columns(unnest_columns);
         let num_rows = *unnest_offsets.last().unwrap() as usize;
 
         // Convert unnest_offsets to take indices.
         let mut take_indices = Vec::with_capacity(num_rows);
         for (i, offset) in unnest_offsets.windows(2).enumerate() {
-            take_indices.extend(vec![i as u64; (offset[1] - offset[0]) as usize]);
+            take_indices.extend(vec![i as u64; offset[1] - offset[0]]);
         }
 
         let mut cols = Vec::with_capacity(input.num_columns());
@@ -234,51 +231,59 @@ impl BlockOperator {
     /// ```
     fn unify_unnest_columns(
         unnest_columns: Vec<(usize, Box<ArrayColumn<AnyType>>)>,
-    ) -> (HashMap<usize, Column>, Vec<u64>) {
-        debug_assert!(unnest_columns.len() > 1);
-        // Some common variables.
+    ) -> (HashMap<usize, Column>, Vec<usize>) {
+        debug_assert!(!unnest_columns.is_empty());
         let num_rows = unnest_columns[0].1.len(); // Rows of the original `ArrayColumn`s.
-        debug_assert!({ unnest_columns.iter().all(|(_, col)| col.len() == num_rows) });
-        let start_offsets = unnest_columns
-            .iter()
-            .map(|(_, col)| unsafe { *col.offsets.get_unchecked(0) })
+        debug_assert!(unnest_columns.iter().all(|(_, col)| col.len() == num_rows));
+        // Some pre-computed variables.
+        let unnest_columns = unnest_columns
+            .into_iter()
+            .map(|(i, col)| {
+                let typ = col.values.data_type().unnest();
+                let arrays = col
+                    .iter()
+                    .map(|arr| Self::unnest_column(arr))
+                    .collect::<Vec<_>>();
+                (i, typ, arrays)
+            })
             .collect::<Vec<_>>();
 
         // 1. Compute the offsets after unnesting.
         let mut offsets = Vec::with_capacity(num_rows + 1);
-        offsets.push(0_u64);
+        offsets.push(0);
+        let mut new_num_rows = 0; // Rows of the unnested `Column`s.
         for row in 0..num_rows {
-            let offset = unnest_columns
+            let len = unnest_columns
                 .iter()
-                .zip(start_offsets.iter())
-                .map(|((_, col), start)| unsafe { *col.offsets.get_unchecked(row + 1) - *start })
+                .map(|(_, _, col)| unsafe { col.get_unchecked(row).len() })
                 .max()
                 .unwrap();
-            offsets.push(offset);
+            new_num_rows += len;
+            offsets.push(new_num_rows);
         }
 
         // 2. Insert NULLs to shorter arrays at each row.
-        let new_num_rows = *offsets.last().unwrap() as usize; // Rows of the unnested `Column`s.
         let mut col_builders = unnest_columns
             .iter()
-            .map(|(i, col)| {
+            .map(|(i, typ, _)| {
                 let builder =
-                    NullableColumnBuilder::<GenericType<0>>::with_capacity(new_num_rows, &[col
-                        .values
-                        .data_type()]);
+                    NullableColumnBuilder::<GenericType<0>>::with_capacity(new_num_rows, &[
+                        typ.clone()
+                    ]);
                 (*i, builder)
             })
             .collect::<Vec<_>>();
+
         for (row, w) in offsets.windows(2).enumerate() {
-            let len = (w[1] - w[0]) as usize;
-            for ((_, col), (_, builder)) in unnest_columns.iter().zip(col_builders.iter_mut()) {
-                let inner = unsafe { col.index_unchecked(row) };
-                let inner_len = inner.len();
+            let len = w[1] - w[0];
+            for ((_, typ, cols), (_, builder)) in unnest_columns.iter().zip(col_builders.iter_mut())
+            {
+                let inner_col = unsafe { cols.get_unchecked(row) };
+                let inner_len = inner_col.len();
                 debug_assert!(inner_len <= len);
-                builder.builder.append_column(&inner);
+                builder.builder.append_column(&inner_col);
                 builder.validity.extend_constant(inner_len, true);
                 // Avoid using `if branch`.
-                let typ = inner.data_type();
                 let d = typ.default_value();
                 let defaults = ColumnBuilder::repeat(&d.as_ref(), len - inner_len, &typ).build();
                 builder.builder.append_column(&defaults);
