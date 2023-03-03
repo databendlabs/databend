@@ -296,6 +296,9 @@ pub struct HashJoin {
     pub marker_index: Option<IndexType>,
     pub from_correlated_subquery: bool,
 
+    // It means that join has a corresponding runtime filter
+    pub contain_runtime_filter: bool,
+
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }

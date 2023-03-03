@@ -21,6 +21,7 @@ use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::plans::RelOperator;
 use crate::plans::RuntimeFilterId;
 use crate::plans::RuntimeFilterSource;
 use crate::ScalarExpr;
@@ -59,6 +60,9 @@ fn wrap_runtime_filter_source(
     let build_side = s_expr.child(1)?.clone();
     let mut probe_side = s_expr.child(0)?.clone();
     probe_side = SExpr::create_binary(source_node.into(), probe_side, build_side.clone());
+    let mut join: Join = s_expr.plan().clone().try_into()?;
+    join.contain_runtime_filter = true;
+    let s_expr = s_expr.replace_plan(RelOperator::Join(join));
     Ok(s_expr.replace_children(vec![probe_side, build_side]))
 }
 

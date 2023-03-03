@@ -30,6 +30,9 @@ use common_expression::SortColumnDescription;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_pipeline_core::pipe::Pipe;
+use common_pipeline_core::pipe::PipeItem;
+use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_sinks::EmptySink;
 use common_pipeline_sinks::Sinker;
@@ -105,6 +108,11 @@ pub struct PipelineBuilder {
     main_pipeline: Pipeline,
     pub pipelines: Vec<Pipeline>,
 
+    // Used in runtime filter source
+    pub join_state: Option<Arc<JoinHashTable>>,
+    // record the index of join build side pipeline in `pipelines`
+    pub index: Option<usize>,
+
     enable_profiling: bool,
     prof_span_set: ProfSpanSetRef,
     exchange_injector: Arc<dyn ExchangeInjector>,
@@ -120,9 +128,12 @@ impl PipelineBuilder {
             enable_profiling,
             ctx,
             pipelines: vec![],
+            join_state: None,
             main_pipeline: Pipeline::create(),
             prof_span_set,
             exchange_injector: DefaultExchangeInjector::create(),
+            exchange_sorting: None,
+            index: None,
         }
     }
 
@@ -203,7 +214,8 @@ impl PipelineBuilder {
         let mut build_res = build_side_builder.finalize(build)?;
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
-        build_res.main_pipeline.add_sink(|input| {
+
+        let create_sink_processor = |input| {
             let transform = Sinker::<SinkBuildHashTable>::create(
                 input,
                 SinkBuildHashTable::try_create(join_state.clone())?,
@@ -218,7 +230,14 @@ impl PipelineBuilder {
             } else {
                 Ok(ProcessorPtr::create(transform))
             }
-        })?;
+        };
+        if hash_join_plan.contain_runtime_filter {
+            build_res.main_pipeline.duplicate(false)?;
+            self.join_state = Some(join_state);
+            self.index = Some(self.pipelines.len());
+        } else {
+            build_res.main_pipeline.add_sink(create_sink_processor)?;
+        }
 
         self.pipelines.push(build_res.main_pipeline);
         self.pipelines
@@ -997,28 +1016,41 @@ impl PipelineBuilder {
 
     fn expand_runtime_filter_source(
         &mut self,
-        right_side: &PhysicalPlan,
+        _right_side: &PhysicalPlan,
         state: Arc<RuntimeFilterState>,
     ) -> Result<()> {
-        let right_side_context = QueryContext::create_from(self.ctx.clone());
-        let right_side_builder = PipelineBuilder::create(
-            right_side_context,
-            self.enable_profiling,
-            self.prof_span_set.clone(),
-        );
-        let mut res = right_side_builder.finalize(right_side)?;
-
-        assert!(res.main_pipeline.is_pulling_pipeline()?);
-        res.main_pipeline.add_sink(|input| {
-            let processor = Sinker::<SinkRuntimeFilterSource>::create(
-                input,
-                SinkRuntimeFilterSource::new(state.clone()),
-            );
-
-            Ok(ProcessorPtr::create(processor))
-        })?;
-        self.pipelines.push(res.main_pipeline);
-        self.pipelines.extend(res.sources_pipelines);
+        let pipeline = &mut self.pipelines[self.index.unwrap()];
+        let output_size = pipeline.output_len();
+        debug_assert!(output_size % 2 == 0);
+        let mut items = Vec::with_capacity(output_size);
+        //           Join
+        //          /   \
+        //        /      \
+        //   RFSource     \
+        //      /    \     \
+        //     /      \     \
+        // scan t1     scan t2
+        for _ in 0..output_size / 2 {
+            let input = InputPort::create();
+            items.push(PipeItem::create(
+                ProcessorPtr::create(Sinker::<SinkBuildHashTable>::create(
+                    input.clone(),
+                    SinkBuildHashTable::try_create(self.join_state.as_ref().unwrap().clone())?,
+                )),
+                vec![input],
+                vec![],
+            ));
+            let input = InputPort::create();
+            items.push(PipeItem::create(
+                ProcessorPtr::create(Sinker::<SinkRuntimeFilterSource>::create(
+                    input.clone(),
+                    SinkRuntimeFilterSource::new(state.clone()),
+                )),
+                vec![input],
+                vec![],
+            ));
+        }
+        pipeline.add_pipe(Pipe::create(output_size, 0, items));
         Ok(())
     }
 

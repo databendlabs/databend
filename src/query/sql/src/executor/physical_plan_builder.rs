@@ -299,6 +299,7 @@ impl PhysicalPlanBuilder {
                     marker_index: join.marker_index,
                     from_correlated_subquery: join.from_correlated_subquery,
 
+                    contain_runtime_filter: join.contain_runtime_filter,
                     stat_info: Some(stat_info),
                 }))
             }
