@@ -608,6 +608,18 @@ macro_rules! with_integer_mapped_type {
 }
 
 #[macro_export]
+macro_rules! with_float_mapped_type {
+    (| $t:tt | $($tail:tt)*) => {
+        match_template::match_template! {
+            $t = [
+                Float32 => $crate::types::number::F32, Float64 => $crate::types::number::F64
+            ],
+            $($tail)*
+        }
+    }
+}
+
+#[macro_export]
 macro_rules! with_number_mapped_type {
     (| $t:tt | $($tail:tt)*) => {
         match_template::match_template! {

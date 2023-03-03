@@ -33,6 +33,8 @@ use common_expression::types::NumberClass;
 use common_expression::types::NumberDataType;
 use common_expression::types::SimpleDomain;
 use common_expression::types::StringType;
+use common_expression::types::ALL_FLOAT_TYPES;
+use common_expression::types::ALL_INTEGER_TYPES;
 use common_expression::types::ALL_NUMBER_CLASSES;
 use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::utils::arithmetics_type::ResultTypeOfBinary;
@@ -43,6 +45,8 @@ use common_expression::values::ValueRef;
 use common_expression::vectorize_1_arg;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
+use common_expression::with_float_mapped_type;
+use common_expression::with_integer_mapped_type;
 use common_expression::with_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
@@ -63,6 +67,7 @@ use num_traits::AsPrimitive;
 use super::arithmetic_modulo::vectorize_modulo;
 use super::decimal::register_decimal_to_float32;
 use super::decimal::register_decimal_to_float64;
+use crate::scalars::decimal::register_decimal_arithmetic;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("plus", &["add"]);
@@ -274,14 +279,60 @@ macro_rules! register_arithmetic {
 }
 
 fn register_arithmetic(registry: &mut FunctionRegistry) {
-    for left in ALL_NUMERICS_TYPES {
-        for right in ALL_NUMERICS_TYPES {
-            with_number_mapped_type!(|L| match left {
-                NumberDataType::L => with_number_mapped_type!(|R| match right {
+    for left in ALL_INTEGER_TYPES {
+        for right in ALL_INTEGER_TYPES {
+            with_integer_mapped_type!(|L| match left {
+                NumberDataType::L => with_integer_mapped_type!(|R| match right {
                     NumberDataType::R => {
                         register_arithmetic!(L, R, registry);
                     }
+                    _ => unreachable!(),
                 }),
+                _ => unreachable!(),
+            });
+        }
+    }
+
+    register_decimal_arithmetic(registry);
+
+    for left in ALL_INTEGER_TYPES {
+        for right in ALL_FLOAT_TYPES {
+            with_integer_mapped_type!(|L| match left {
+                NumberDataType::L => with_float_mapped_type!(|R| match right {
+                    NumberDataType::R => {
+                        register_arithmetic!(L, R, registry);
+                    }
+                    _ => unreachable!(),
+                }),
+                _ => unreachable!(),
+            });
+        }
+    }
+
+    for left in ALL_FLOAT_TYPES {
+        for right in ALL_INTEGER_TYPES {
+            with_float_mapped_type!(|L| match left {
+                NumberDataType::L => with_integer_mapped_type!(|R| match right {
+                    NumberDataType::R => {
+                        register_arithmetic!(L, R, registry);
+                    }
+                    _ => unreachable!(),
+                }),
+                _ => unreachable!(),
+            });
+        }
+    }
+
+    for left in ALL_FLOAT_TYPES {
+        for right in ALL_FLOAT_TYPES {
+            with_float_mapped_type!(|L| match left {
+                NumberDataType::L => with_float_mapped_type!(|R| match right {
+                    NumberDataType::R => {
+                        register_arithmetic!(L, R, registry);
+                    }
+                    _ => unreachable!(),
+                }),
+                _ => unreachable!(),
             });
         }
     }
