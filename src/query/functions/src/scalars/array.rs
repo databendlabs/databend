@@ -102,7 +102,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_function_factory("array", |_, args_type| {
-        if args_type.len() == 0 {
+        if args_type.is_empty() {
             return None;
         }
         Some(Arc::new(Function {
