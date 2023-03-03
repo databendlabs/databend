@@ -185,6 +185,8 @@ pub enum Expr {
         asc: bool,
         null_first: bool,
     },
+    /// The `Map` expr
+    Map { span: Span, kvs: Vec<(Expr, Expr)> },
     /// The `Interval 1 DAY` expr
     Interval {
         span: Span,
@@ -262,14 +264,15 @@ pub enum TypeName {
     Date,
     Timestamp,
     String,
-    Array {
-        item_type: Option<Box<TypeName>>,
+    Array(Box<TypeName>),
+    Map {
+        key_type: Box<TypeName>,
+        val_type: Box<TypeName>,
     },
     Tuple {
         fields_name: Option<Vec<String>>,
         fields_type: Vec<TypeName>,
     },
-    Object,
     Variant,
     Nullable(Box<TypeName>),
 }
@@ -390,6 +393,7 @@ impl Expr {
             | Expr::MapAccess { span, .. }
             | Expr::Array { span, .. }
             | Expr::ArraySort { span, .. }
+            | Expr::Map { span, .. }
             | Expr::Interval { span, .. }
             | Expr::DateAdd { span, .. }
             | Expr::DateSub { span, .. }
@@ -570,11 +574,11 @@ impl Display for TypeName {
             TypeName::String => {
                 write!(f, "STRING")?;
             }
-            TypeName::Array { item_type } => {
-                write!(f, "ARRAY")?;
-                if let Some(item_type) = item_type {
-                    write!(f, "({})", *item_type)?;
-                }
+            TypeName::Array(ty) => {
+                write!(f, "ARRAY({})", ty)?;
+            }
+            TypeName::Map { key_type, val_type } => {
+                write!(f, "MAP({}, {})", key_type, val_type)?;
             }
             TypeName::Tuple {
                 fields_name,
@@ -603,9 +607,6 @@ impl Display for TypeName {
                     }
                 }
                 write!(f, ")")?;
-            }
-            TypeName::Object => {
-                write!(f, "OBJECT")?;
             }
             TypeName::Variant => {
                 write!(f, "VARIANT")?;
@@ -892,6 +893,16 @@ impl Display for Expr {
                     write!(f, " , 'NULLS LAST'")?;
                 }
                 write!(f, ")")?;
+            }
+            Expr::Map { kvs, .. } => {
+                write!(f, "{{")?;
+                for (i, (k, v)) in kvs.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ",")?;
+                    }
+                    write!(f, "{k}:{v}")?;
+                }
+                write!(f, "}}")?;
             }
             Expr::Interval { expr, unit, .. } => {
                 write!(f, "INTERVAL {expr} {unit}")?;

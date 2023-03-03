@@ -3035,3 +3035,53 @@ IsDistinctFrom {
 }
 
 
+---------- Input ----------
+{'k1':1,'k2':2}
+---------- Output ---------
+{'k1':1,'k2':2}
+---------- AST ------------
+Map {
+    span: Some(
+        0..15,
+    ),
+    kvs: [
+        (
+            Literal {
+                span: Some(
+                    1..5,
+                ),
+                lit: String(
+                    "k1",
+                ),
+            },
+            Literal {
+                span: Some(
+                    6..7,
+                ),
+                lit: Integer(
+                    1,
+                ),
+            },
+        ),
+        (
+            Literal {
+                span: Some(
+                    8..12,
+                ),
+                lit: String(
+                    "k2",
+                ),
+            },
+            Literal {
+                span: Some(
+                    13..14,
+                ),
+                lit: Integer(
+                    2,
+                ),
+            },
+        ),
+    ],
+}
+
+

@@ -61,9 +61,9 @@ impl TypeDeserializer for VariantDeserializer {
         Ok(())
     }
 
-    fn pop_data_value(&mut self) -> Result<()> {
+    fn pop_data_value(&mut self) -> Result<Scalar> {
         match self.builder.pop() {
-            Some(_) => Ok(()),
+            Some(v) => Ok(Scalar::Variant(v)),
             None => Err(ErrorCode::from(
                 "Variant column is empty when pop data value",
             )),

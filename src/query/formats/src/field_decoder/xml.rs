@@ -18,6 +18,7 @@ use std::io::Cursor;
 
 use common_exception::Result;
 use common_expression::ArrayDeserializer;
+use common_expression::MapDeserializer;
 use common_expression::StringDeserializer;
 use common_expression::StructDeserializer;
 use common_expression::VariantDeserializer;
@@ -121,6 +122,16 @@ impl FieldDecoderRowBased for FieldDecoderXML {
         _raw: bool,
     ) -> Result<()> {
         self.nested.read_array(column, reader, false)?;
+        Ok(())
+    }
+
+    fn read_map<R: AsRef<[u8]>>(
+        &self,
+        column: &mut MapDeserializer,
+        reader: &mut Cursor<R>,
+        _raw: bool,
+    ) -> Result<()> {
+        self.nested.read_map(column, reader, false)?;
         Ok(())
     }
 

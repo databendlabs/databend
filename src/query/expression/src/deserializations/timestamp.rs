@@ -99,9 +99,9 @@ impl TypeDeserializer for TimestampDeserializer {
         Ok(())
     }
 
-    fn pop_data_value(&mut self) -> Result<()> {
+    fn pop_data_value(&mut self) -> Result<Scalar> {
         match self.builder.pop() {
-            Some(_) => Ok(()),
+            Some(v) => Ok(Scalar::Timestamp(v)),
             None => Err(ErrorCode::from(
                 "Timestamp column is empty when pop data value",
             )),

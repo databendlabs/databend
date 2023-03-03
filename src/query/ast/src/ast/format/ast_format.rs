@@ -563,6 +563,20 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
+    fn visit_map(&mut self, _span: Span, kvs: &'ast [(Expr, Expr)]) {
+        let mut children = Vec::with_capacity(kvs.len());
+        for (key_expr, val_expr) in kvs.iter() {
+            self.visit_expr(key_expr);
+            children.push(self.children.pop().unwrap());
+            self.visit_expr(val_expr);
+            children.push(self.children.pop().unwrap());
+        }
+        let name = "Literal Map".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
     fn visit_interval(&mut self, _span: Span, expr: &'ast Expr, unit: &'ast IntervalKind) {
         self.visit_expr(expr);
         let child = self.children.pop().unwrap();
