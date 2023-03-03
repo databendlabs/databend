@@ -23,18 +23,32 @@ use common_hashtable::FastHash;
 use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::Pipeline;
+use common_storage::DataOperator;
 use strength_reduce::StrengthReducedU64;
 
 use crate::api::DataExchange;
 use crate::api::ExchangeInjector;
 use crate::api::ExchangeSorting;
 use crate::api::FlightScatter;
+use crate::api::MergeExchangeParams;
+use crate::api::ShuffleExchangeParams;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::serde::AggregateSerdeMeta;
+use crate::pipelines::processors::transforms::aggregator::serde::TransformScatterAggregateSerializer;
+use crate::pipelines::processors::transforms::aggregator::serde::TransformScatterAggregateSpillWriter;
+use crate::pipelines::processors::transforms::aggregator::serde::TransformScatterGroupBySerializer;
+use crate::pipelines::processors::transforms::aggregator::serde::TransformScatterGroupBySpillWriter;
 use crate::pipelines::processors::transforms::aggregator::serde::BUCKET_TYPE;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::HashTableCell;
+use crate::pipelines::processors::transforms::TransformAggregateSerializer;
+use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
+use crate::pipelines::processors::transforms::TransformGroupBySerializer;
+use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
+use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
 
 struct AggregateExchangeSorting<Method: HashMethodBounds, V: Send + Sync + 'static> {
@@ -151,13 +165,21 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
 
 pub struct AggregateInjector<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> {
     method: Method,
+    tenant: String,
+    aggregator_params: Arc<AggregatorParams>,
     _phantom: PhantomData<V>,
 }
 
 impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> AggregateInjector<Method, V> {
-    pub fn create(method: Method) -> Arc<dyn ExchangeInjector> {
+    pub fn create(
+        tenant: String,
+        method: Method,
+        params: Arc<AggregatorParams>,
+    ) -> Arc<dyn ExchangeInjector> {
         Arc::new(AggregateInjector::<Method, V> {
             method,
+            tenant,
+            aggregator_params: params,
             _phantom: Default::default(),
         })
     }
@@ -188,5 +210,97 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
         Some(Arc::new(AggregateExchangeSorting::<Method, V> {
             _phantom: Default::default(),
         }))
+    }
+
+    fn apply_merge_serializer(
+        &self,
+        _: &MergeExchangeParams,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        let method = &self.method;
+        let params = self.aggregator_params.clone();
+        let operator = DataOperator::instance().operator();
+        let location_prefix = format!("_aggregate_spill/{}", self.tenant);
+
+        pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(
+                match params.aggregate_functions.is_empty() {
+                    true => TransformGroupBySpillWriter::create(
+                        input,
+                        output,
+                        method.clone(),
+                        operator.clone(),
+                        location_prefix.clone(),
+                    ),
+                    false => TransformAggregateSpillWriter::create(
+                        input,
+                        output,
+                        method.clone(),
+                        operator.clone(),
+                        params.clone(),
+                        location_prefix.clone(),
+                    ),
+                },
+            ))
+        })?;
+
+        pipeline.add_transform(
+            |input, output| match params.aggregate_functions.is_empty() {
+                true => TransformGroupBySerializer::try_create(input, output, method.clone()),
+                false => TransformAggregateSerializer::try_create(
+                    input,
+                    output,
+                    method.clone(),
+                    params.clone(),
+                ),
+            },
+        )
+    }
+
+    fn apply_shuffle_serializer(
+        &self,
+        _: &ShuffleExchangeParams,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        let method = &self.method;
+        let params = self.aggregator_params.clone();
+        let operator = DataOperator::instance().operator();
+        let location_prefix = format!("_aggregate_spill/{}", self.tenant);
+
+        pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(
+                match params.aggregate_functions.is_empty() {
+                    true => TransformScatterGroupBySpillWriter::create(
+                        input,
+                        output,
+                        method.clone(),
+                        operator.clone(),
+                        location_prefix.clone(),
+                    ),
+                    false => TransformScatterAggregateSpillWriter::create(
+                        input,
+                        output,
+                        method.clone(),
+                        operator.clone(),
+                        location_prefix.clone(),
+                        params.clone(),
+                    ),
+                },
+            ))
+        })?;
+
+        pipeline.add_transform(
+            |input, output| match params.aggregate_functions.is_empty() {
+                true => {
+                    TransformScatterGroupBySerializer::try_create(input, output, method.clone())
+                }
+                false => TransformScatterAggregateSerializer::try_create(
+                    input,
+                    output,
+                    method.clone(),
+                    params.clone(),
+                ),
+            },
+        )
     }
 }

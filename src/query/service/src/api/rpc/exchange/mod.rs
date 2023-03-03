@@ -35,5 +35,7 @@ pub use data_exchange::ShuffleDataExchange;
 pub use exchange_injector::DefaultExchangeInjector;
 pub use exchange_injector::ExchangeInjector;
 pub use exchange_manager::DataExchangeManager;
+pub use exchange_params::MergeExchangeParams;
 pub use exchange_params::ShuffleExchangeParams;
 pub use exchange_sorting::ExchangeSorting;
+pub use exchange_transform_shuffle::ExchangeShuffleMeta;

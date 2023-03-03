@@ -501,33 +501,15 @@ impl PipelineBuilder {
             })?;
         }
 
-        // if !self.ctx.get_cluster().is_empty() {
-        //     // TODO: can serialize only when needed.
-        //     self.main_pipeline.add_transform(|input, output| {
-        //         match params.aggregate_functions.is_empty() {
-        //             true => with_mappedhash_method!(|T| match method.clone() {
-        //                 HashMethodKind::T(method) =>
-        //                     TransformGroupBySerializer::try_create(input, output, method,),
-        //             }),
-        //             false => with_mappedhash_method!(|T| match method.clone() {
-        //                 HashMethodKind::T(method) => TransformAggregateSerializer::try_create(
-        //                     input,
-        //                     output,
-        //                     method,
-        //                     params.clone(),
-        //                 ),
-        //             }),
-        //         }
-        //     })?;
-        // }
-        // self.exchange_sorting = Some(AggregateExchangeSorting::create());
-
+        let tenant = self.ctx.get_tenant();
         self.exchange_injector = match params.aggregate_functions.is_empty() {
             true => with_mappedhash_method!(|T| match method.clone() {
-                HashMethodKind::T(method) => AggregateInjector::<_, ()>::create(method),
+                HashMethodKind::T(method) =>
+                    AggregateInjector::<_, ()>::create(tenant.clone(), method, params.clone()),
             }),
             false => with_mappedhash_method!(|T| match method.clone() {
-                HashMethodKind::T(method) => AggregateInjector::<_, usize>::create(method),
+                HashMethodKind::T(method) =>
+                    AggregateInjector::<_, usize>::create(tenant.clone(), method, params.clone()),
             }),
         };
 
