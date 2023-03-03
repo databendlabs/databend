@@ -45,7 +45,6 @@ use common_expression::types::DataType;
 use common_expression::ColumnId;
 use common_expression::ConstantFolder;
 use common_expression::Scalar;
-use common_expression::TableSchema;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserStageInfo;
@@ -252,22 +251,37 @@ impl Binder {
 
                 if func_name.name.eq_ignore_ascii_case("result_scan") {
                     let query_id = parse_result_scan_args(&table_args)?;
+                    if query_id.is_empty() {
+                        return Err(ErrorCode::InvalidArgument(
+                            "query_id must be specified when using `RESULT_SCAN`",
+                        ));
+                    }
                     let kv_store = UserApiProvider::instance().get_meta_store_client();
                     let meta_key = self.ctx.get_result_cache_key(&query_id);
+                    if meta_key.is_none() {
+                        return Err(ErrorCode::EmptyData(format!(
+                            "`RESULT_SCAN` could not find related cache key in current session for this query id: {query_id}"
+                        )));
+                    }
                     let result_cache_mgr = ResultCacheMetaManager::create(kv_store, 0);
-                    let (table_schema, blocks) = match meta_key {
-                        Some(m_key) => {
-                            if let Some(value) = result_cache_mgr.get(m_key).await? {
-                                let op = DataOperator::instance().operator();
-                                ResultCacheReader::read_table_schema_and_data(op, &value.location)
-                                    .await?
-                            } else {
-                                (TableSchema::empty(), vec![])
-                            }
+                    let meta_key = meta_key.unwrap();
+                    let (table_schema, block_raw_data) = match result_cache_mgr
+                        .get(meta_key.clone())
+                        .await?
+                    {
+                        Some(value) => {
+                            let op = DataOperator::instance().operator();
+                            ResultCacheReader::read_table_schema_and_data(op, &value.location)
+                                .await?
                         }
-                        None => (TableSchema::empty(), vec![]),
+                        None => {
+                            return Err(ErrorCode::EmptyData(format!(
+                                "`RESULT_SCAN` could not fetch cache value, maybe the data has touched ttl and was cleaned up.\n\
+                            query id: {query_id}, cache key: {meta_key}"
+                            )));
+                        }
                     };
-                    let table = ResultScan::try_create(table_schema, query_id, blocks)?;
+                    let table = ResultScan::try_create(table_schema, query_id, block_raw_data)?;
 
                     let table_alias_name = if let Some(table_alias) = alias {
                         Some(
