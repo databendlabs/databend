@@ -15,6 +15,7 @@
 mod block_compact_mutator;
 mod compact_meta;
 mod compact_part;
+mod compact_mutator;
 mod compact_source;
 mod compact_transform;
 mod merge_segments_transform;
