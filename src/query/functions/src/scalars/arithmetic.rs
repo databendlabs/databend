@@ -77,6 +77,181 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_arithmetic(registry);
 }
 
+macro_rules! register_plus {
+    ( $lt:ty, $rt:ty, $registry:expr) => {
+        type L = $lt;
+        type R = $rt;
+        type T = <(L, R) as ResultTypeOfBinary>::AddMul;
+        $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
+            "plus",
+            FunctionProperty::default(),
+            |lhs, rhs| {
+                (|| {
+                    let lm: T = num_traits::cast::cast(lhs.max)?;
+                    let ln: T = num_traits::cast::cast(lhs.min)?;
+                    let rm: T = num_traits::cast::cast(rhs.max)?;
+                    let rn: T = num_traits::cast::cast(rhs.min)?;
+
+                    Some(FunctionDomain::Domain(SimpleDomain::<T> {
+                        min: ln.checked_add(rn)?,
+                        max: lm.checked_add(rm)?,
+                    }))
+                })()
+                .unwrap_or(FunctionDomain::Full)
+            },
+            |a, b, _| (a.as_(): T) + (b.as_(): T),
+        );
+    };
+}
+
+macro_rules! register_minus {
+    ( $lt:ty, $rt:ty, $registry:expr) => {
+        type L = $lt;
+        type R = $rt;
+        type T = <(L, R) as ResultTypeOfBinary>::Minus;
+        $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
+            "minus",
+            FunctionProperty::default(),
+            |lhs, rhs| {
+                (|| {
+                    let lm: T = num_traits::cast::cast(lhs.max)?;
+                    let ln: T = num_traits::cast::cast(lhs.min)?;
+                    let rm: T = num_traits::cast::cast(rhs.max)?;
+                    let rn: T = num_traits::cast::cast(rhs.min)?;
+
+                    Some(FunctionDomain::Domain(SimpleDomain::<T> {
+                        min: ln.checked_sub(rm)?,
+                        max: lm.checked_sub(rn)?,
+                    }))
+                })()
+                .unwrap_or(FunctionDomain::Full)
+            },
+            |a, b, _| (a.as_(): T) - (b.as_(): T),
+        );
+    };
+}
+
+macro_rules! register_multiply {
+    ( $lt:ty, $rt:ty, $registry:expr) => {
+        type L = $lt;
+        type R = $rt;
+        type T = <(L, R) as ResultTypeOfBinary>::AddMul;
+        $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
+            "multiply",
+            FunctionProperty::default(),
+            |lhs, rhs| {
+                (|| {
+                    let lm: T = num_traits::cast::cast(lhs.max)?;
+                    let ln: T = num_traits::cast::cast(lhs.min)?;
+                    let rm: T = num_traits::cast::cast(rhs.max)?;
+                    let rn: T = num_traits::cast::cast(rhs.min)?;
+
+                    let x = lm.checked_mul(rm)?;
+                    let y = lm.checked_mul(rn)?;
+                    let m = ln.checked_mul(rm)?;
+                    let n = ln.checked_mul(rn)?;
+
+                    Some(FunctionDomain::Domain(SimpleDomain::<T> {
+                        min: x.min(y).min(m).min(n),
+                        max: x.max(y).max(m).max(n),
+                    }))
+                })()
+                .unwrap_or(FunctionDomain::Full)
+            },
+            |a, b, _| (a.as_(): T) * (b.as_(): T),
+        );
+    };
+}
+macro_rules! register_divide {
+    ( $lt:ty, $rt:ty, $registry:expr) => {
+        type L = $lt;
+        type R = $rt;
+        type T = F64;
+        $registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
+            "divide",
+            FunctionProperty::default(),
+            |_, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
+                |a, b, output, ctx| {
+                    let b = (b.as_() : T);
+                    if std::intrinsics::unlikely(b == 0.0) {
+                        ctx.set_error(output.len(), "divided by zero");
+                        output.push(F64::default());
+                    } else {
+                        output.push(((a.as_() : T) / b));
+                    }
+                }),
+        );
+    };
+}
+
+macro_rules! register_div {
+    ( $lt:ty, $rt:ty, $registry:expr) => {
+        type L = $lt;
+        type R = $rt;
+        type T = <(L, R) as ResultTypeOfBinary>::IntDiv;
+        $registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>,_, _>(
+            "div",
+            FunctionProperty::default(),
+            |_, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>>(
+                |a, b, output, ctx| {
+                    let b = (b.as_() : F64);
+                    if std::intrinsics::unlikely(b == 0.0) {
+                        ctx.set_error(output.len(), "divided by zero");
+                        output.push(T::default());
+                    } else {
+                        output.push(((a.as_() : F64) / b).as_() : T);
+                    }
+                }
+            ),
+        );
+    };
+}
+
+macro_rules! register_modulo {
+    ( $lt:ty, $rt:ty, $registry:expr) => {
+        type L = $lt;
+        type R = $rt;
+        type M = <(L, R) as ResultTypeOfBinary>::LeastSuper;
+        type T = <(L, R) as ResultTypeOfBinary>::Modulo;
+
+        let rtype = M::data_type();
+        // slow path for modulo
+        if !matches!(
+            rtype,
+            NumberDataType::UInt8
+                | NumberDataType::UInt16
+                | NumberDataType::UInt32
+                | NumberDataType::UInt64
+        ) {
+            $registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>,_, _>(
+                "modulo",
+                FunctionProperty::default(),
+                |_, _| FunctionDomain::MayThrow,
+                vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
+                    |a, b, output, ctx| {
+                        let b = (b.as_() : F64);
+                        if std::intrinsics::unlikely(b == 0.0) {
+                            ctx.set_error(output.len(), "divided by zero");
+                            output.push(T::default());
+                        } else {
+                            output.push(((a.as_() : M) % (b.as_() : M)).as_(): T);
+                        }
+                    }
+                ),
+            );
+        } else {
+            $registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
+                "modulo",
+                FunctionProperty::default(),
+                |_, _| FunctionDomain::MayThrow,
+                vectorize_modulo::<L, R, M, T>()
+            );
+        }
+    };
+}
+
 fn register_arithmetic(registry: &mut FunctionRegistry) {
     for left in ALL_NUMERICS_TYPES {
         for right in ALL_NUMERICS_TYPES {
@@ -84,156 +259,22 @@ fn register_arithmetic(registry: &mut FunctionRegistry) {
                 NumberDataType::L => with_number_mapped_type!(|R| match right {
                     NumberDataType::R => {
                         {
-                            type T = <(L, R) as ResultTypeOfBinary>::AddMul;
-                            registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
-                                "plus",
-                                FunctionProperty::default(),
-                                |lhs, rhs| {
-                                    (|| {
-                                        let lm: T =  num_traits::cast::cast(lhs.max)?;
-                                        let ln: T =  num_traits::cast::cast(lhs.min)?;
-                                        let rm: T =  num_traits::cast::cast(rhs.max)?;
-                                        let rn: T =  num_traits::cast::cast(rhs.min)?;
-
-                                        Some(FunctionDomain::Domain(SimpleDomain::<T> {
-                                            min: ln.checked_add(rn)?,
-                                            max: lm.checked_add(rm)?,
-                                        }))
-                                    })()
-                                    .unwrap_or(FunctionDomain::Full)
-                                },
-                                |a, b, _| (a.as_() : T) + (b.as_() : T),
-                            );
+                            register_plus!(L, R, registry);
                         }
-
                         {
-                            type T = <(L, R) as ResultTypeOfBinary>::Minus;
-                            registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
-                                "minus",
-                                FunctionProperty::default(),
-                                |lhs, rhs| {
-                                    (|| {
-                                        let lm: T =  num_traits::cast::cast(lhs.max)?;
-                                        let ln: T =  num_traits::cast::cast(lhs.min)?;
-                                        let rm: T =  num_traits::cast::cast(rhs.max)?;
-                                        let rn: T =  num_traits::cast::cast(rhs.min)?;
-
-                                        Some(FunctionDomain::Domain(SimpleDomain::<T> {
-                                            min: ln.checked_sub(rm)?,
-                                            max: lm.checked_sub(rn)?,
-                                        }))
-                                    })()
-                                    .unwrap_or(FunctionDomain::Full)
-                                },
-                                |a, b, _| (a.as_() : T) - (b.as_() : T),
-                            );
+                            register_minus!(L, R, registry);
                         }
-
                         {
-                            type T = <(L, R) as ResultTypeOfBinary>::AddMul;
-                            registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
-                                "multiply",
-                                FunctionProperty::default(),
-                                |lhs, rhs| {
-                                    (|| {
-                                        let lm: T =  num_traits::cast::cast(lhs.max)?;
-                                        let ln: T =  num_traits::cast::cast(lhs.min)?;
-                                        let rm: T =  num_traits::cast::cast(rhs.max)?;
-                                        let rn: T =  num_traits::cast::cast(rhs.min)?;
-
-                                        let x = lm.checked_mul(rm)?;
-                                        let y = lm.checked_mul(rn)?;
-                                        let m = ln.checked_mul(rm)?;
-                                        let n = ln.checked_mul(rn)?;
-
-                                        Some(FunctionDomain::Domain(SimpleDomain::<T> {
-                                            min: x.min(y).min(m).min(n),
-                                            max: x.max(y).max(m).max(n),
-                                        }))
-                                    })()
-                                    .unwrap_or(FunctionDomain::Full)
-                                },
-                                |a, b, _| (a.as_() : T) * (b.as_() : T),
-                            );
+                            register_multiply!(L, R, registry);
                         }
-
                         {
-                            type T = F64;
-                            registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
-                                "divide",
-                                FunctionProperty::default(),
-                                |_, _| FunctionDomain::MayThrow,
-                                vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
-                                    |a, b, output, ctx| {
-                                        let b = (b.as_() : T);
-                                        if std::intrinsics::unlikely(b == 0.0) {
-                                            ctx.set_error(output.len(), "divided by zero");
-                                            output.push(F64::default());
-                                        } else {
-                                            output.push(((a.as_() : T) / b));
-                                        }
-                                    }),
-                            );
+                            register_divide!(L, R, registry);
                         }
-
                         {
-                            type T = <(L, R) as ResultTypeOfBinary>::IntDiv;
-
-                            registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>,_, _>(
-                                "div",
-                                FunctionProperty::default(),
-                                |_, _| FunctionDomain::MayThrow,
-                                vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>>(
-                                    |a, b, output, ctx| {
-                                        let b = (b.as_() : F64);
-                                        if std::intrinsics::unlikely(b == 0.0) {
-                                            ctx.set_error(output.len(), "divided by zero");
-                                            output.push(T::default());
-                                        } else {
-                                            output.push(((a.as_() : F64) / b).as_() : T);
-                                        }
-                                    }
-                                ),
-                            );
+                            register_div!(L, R, registry);
                         }
-
                         {
-                            type M = <(L, R) as ResultTypeOfBinary>::LeastSuper;
-                            type T = <(L, R) as ResultTypeOfBinary>::Modulo;
-
-                            let rtype = M::data_type();
-                            // slow path for modulo
-                            if !matches!(
-                                rtype,
-                                NumberDataType::UInt8
-                                    | NumberDataType::UInt16
-                                    | NumberDataType::UInt32
-                                    | NumberDataType::UInt64
-                            ) {
-                                registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>,_, _>(
-                                    "modulo",
-                                    FunctionProperty::default(),
-                                    |_, _| FunctionDomain::MayThrow,
-                                    vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
-                                        |a, b, output, ctx| {
-                                            let b = (b.as_() : F64);
-                                            if std::intrinsics::unlikely(b == 0.0) {
-                                                ctx.set_error(output.len(), "divided by zero");
-                                                output.push(T::default());
-                                            } else {
-                                                output.push(((a.as_() : M) % (b.as_() : M)).as_(): T);
-                                            }
-                                        }
-                                    ),
-                                );
-                            } else {
-                                registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
-                                    "modulo",
-                                    FunctionProperty::default(),
-                                    |_, _| FunctionDomain::MayThrow,
-                                    vectorize_modulo::<L, R, M, T>()
-                                );
-                            }
+                            register_modulo!(L, R, registry);
                         }
                     }
                 }),
