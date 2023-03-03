@@ -59,8 +59,8 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("modulo", &["mod"]);
 
     register_unary_minus(registry);
-
     register_string_to_number(registry);
+    register_number_to_string(registry);
 
     for left in ALL_NUMERICS_TYPES {
         for right in ALL_NUMERICS_TYPES {
@@ -321,92 +321,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             })
         }
     }
-
-    for src_type in ALL_NUMERICS_TYPES {
-        with_number_mapped_type!(|NUM_TYPE| match src_type {
-            NumberDataType::NUM_TYPE => {
-                registry
-                    .register_passthrough_nullable_1_arg::<NumberType<NUM_TYPE>, StringType, _, _>(
-                        "to_string",
-                        FunctionProperty::default(),
-                        |_| FunctionDomain::Full,
-                        |from, _| match from {
-                            ValueRef::Scalar(s) => Value::Scalar(s.to_string().into_bytes()),
-                            ValueRef::Column(from) => {
-                                let options = NUM_TYPE::lexical_options();
-                                const FORMAT: u128 = lexical_core::format::STANDARD;
-
-                                let mut builder =
-                                    StringColumnBuilder::with_capacity(from.len(), from.len() + 1);
-                                let values = &mut builder.data;
-
-                                type Native = <NUM_TYPE as Number>::Native;
-                                let mut offset: usize = 0;
-                                unsafe {
-                                    for x in from.iter() {
-                                        values.reserve(offset + Native::FORMATTED_SIZE_DECIMAL);
-                                        values.set_len(offset + Native::FORMATTED_SIZE_DECIMAL);
-                                        let bytes = &mut values[offset..];
-
-                                        let len = lexical_core::write_with_options_unchecked::<
-                                            _,
-                                            FORMAT,
-                                        >(
-                                            Native::from(*x), bytes, &options
-                                        )
-                                        .len();
-                                        offset += len;
-                                        builder.offsets.push(offset as u64);
-                                    }
-                                    values.set_len(offset);
-                                }
-                                Value::Column(builder.build())
-                            }
-                        },
-                    );
-                registry.register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, StringType, _, _>(
-                    "try_to_string",
-                    FunctionProperty::default(),
-                    |_| FunctionDomain::Full,
-                    |from, _| match from {
-                        ValueRef::Scalar(s) => Value::Scalar(Some(s.to_string().into_bytes())),
-                        ValueRef::Column(from) => {
-                            let options = NUM_TYPE::lexical_options();
-                            const FORMAT: u128 = lexical_core::format::STANDARD;
-                            let mut builder =
-                                StringColumnBuilder::with_capacity(from.len(), from.len() + 1);
-                            let values = &mut builder.data;
-
-                            type Native = <NUM_TYPE as Number>::Native;
-                            let mut offset: usize = 0;
-                            unsafe {
-                                for x in from.iter() {
-                                    values.reserve(offset + Native::FORMATTED_SIZE_DECIMAL);
-                                    values.set_len(offset + Native::FORMATTED_SIZE_DECIMAL);
-                                    let bytes = &mut values[offset..];
-                                    let len =
-                                        lexical_core::write_with_options_unchecked::<_, FORMAT>(
-                                            Native::from(*x),
-                                            bytes,
-                                            &options,
-                                        )
-                                        .len();
-                                    offset += len;
-                                    builder.offsets.push(offset as u64);
-                                }
-                                values.set_len(offset);
-                            }
-                            let result = builder.build();
-                            Value::Column(NullableColumn {
-                                column: result,
-                                validity: constant_bitmap(true, from.len()).into(),
-                            })
-                        }
-                    },
-                );
-            }
-        });
-    }
 }
 
 fn register_unary_minus(registry: &mut FunctionRegistry) {
@@ -534,6 +448,94 @@ fn register_string_to_number(registry: &mut FunctionRegistry) {
                             }
                         }),
                     );
+            }
+        });
+    }
+}
+
+pub fn register_number_to_string(registry: &mut FunctionRegistry) {
+    for src_type in ALL_NUMERICS_TYPES {
+        with_number_mapped_type!(|NUM_TYPE| match src_type {
+            NumberDataType::NUM_TYPE => {
+                registry
+                    .register_passthrough_nullable_1_arg::<NumberType<NUM_TYPE>, StringType, _, _>(
+                        "to_string",
+                        FunctionProperty::default(),
+                        |_| FunctionDomain::Full,
+                        |from, _| match from {
+                            ValueRef::Scalar(s) => Value::Scalar(s.to_string().into_bytes()),
+                            ValueRef::Column(from) => {
+                                let options = NUM_TYPE::lexical_options();
+                                const FORMAT: u128 = lexical_core::format::STANDARD;
+
+                                let mut builder =
+                                    StringColumnBuilder::with_capacity(from.len(), from.len() + 1);
+                                let values = &mut builder.data;
+
+                                type Native = <NUM_TYPE as Number>::Native;
+                                let mut offset: usize = 0;
+                                unsafe {
+                                    for x in from.iter() {
+                                        values.reserve(offset + Native::FORMATTED_SIZE_DECIMAL);
+                                        values.set_len(offset + Native::FORMATTED_SIZE_DECIMAL);
+                                        let bytes = &mut values[offset..];
+
+                                        let len = lexical_core::write_with_options_unchecked::<
+                                            _,
+                                            FORMAT,
+                                        >(
+                                            Native::from(*x), bytes, &options
+                                        )
+                                        .len();
+                                        offset += len;
+                                        builder.offsets.push(offset as u64);
+                                    }
+                                    values.set_len(offset);
+                                }
+                                Value::Column(builder.build())
+                            }
+                        },
+                    );
+                registry.register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, StringType, _, _>(
+                    "try_to_string",
+                    FunctionProperty::default(),
+                    |_| FunctionDomain::Full,
+                    |from, _| match from {
+                        ValueRef::Scalar(s) => Value::Scalar(Some(s.to_string().into_bytes())),
+                        ValueRef::Column(from) => {
+                            let options = NUM_TYPE::lexical_options();
+                            const FORMAT: u128 = lexical_core::format::STANDARD;
+                            let mut builder =
+                                StringColumnBuilder::with_capacity(from.len(), from.len() + 1);
+                            let values = &mut builder.data;
+
+                            type Native = <NUM_TYPE as Number>::Native;
+                            let mut offset: usize = 0;
+                            unsafe {
+                                for x in from.iter() {
+                                    values.reserve(offset + Native::FORMATTED_SIZE_DECIMAL);
+                                    values.set_len(offset + Native::FORMATTED_SIZE_DECIMAL);
+                                    let bytes = &mut values[offset..];
+                                    let len =
+                                        lexical_core::write_with_options_unchecked::<_, FORMAT>(
+                                            Native::from(*x),
+                                            bytes,
+                                            &options,
+                                        )
+                                        .len();
+                                    offset += len;
+                                    builder.offsets.push(offset as u64);
+                                }
+                                values.set_len(offset);
+                            }
+                            let result = builder.build();
+                            Value::Column(NullableColumn {
+                                column: result,
+                                validity: constant_bitmap(true, from.len()).into(),
+                            })
+                        }
+                    },
+                );
             }
         });
     }
