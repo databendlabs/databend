@@ -227,22 +227,7 @@ fn list_all_builtin_functions() {
 
     let fn_registry = &BUILTIN_FUNCTIONS;
 
-    writeln!(file, "Simple functions:").unwrap();
-    for (func, _) in fn_registry
-        .funcs
-        .iter()
-        .sorted_by_key(|(name, _)| name.to_string())
-        .flat_map(|(_, funcs)| funcs)
-    {
-        writeln!(file, "{}", func.signature).unwrap();
-    }
-
-    writeln!(file, "\nFactory functions:").unwrap();
-    for func_name in fn_registry.factories.keys().sorted() {
-        writeln!(file, "{func_name}").unwrap();
-    }
-
-    writeln!(file, "\nFunction aliases (alias to origin):").unwrap();
+    writeln!(file, "Function aliases (alias to origin):").unwrap();
     for (alias_name, original_name) in fn_registry
         .aliases
         .iter()
@@ -250,41 +235,30 @@ fn list_all_builtin_functions() {
     {
         writeln!(file, "{alias_name} -> {original_name}").unwrap();
     }
-}
-
-#[test]
-fn list_all_builtin_functions_with_ordered() {
-    let mut mint = Mint::new("tests/it/scalars/testdata");
-    let file = &mut mint.new_goldenfile("function_list_ordered.txt").unwrap();
-
-    let fn_registry = &BUILTIN_FUNCTIONS;
-
+    writeln!(file, "\nFunctions overloads:").unwrap();
     let mut funcs = fn_registry
         .funcs
         .values()
         .flatten()
-        .map(|(func, seq)| {
+        .map(|(func, id)| {
             (
-                (func.signature.name.clone(), *seq),
+                (func.signature.name.clone(), *id),
                 format!("{}", func.signature),
             )
         })
         .collect::<Vec<_>>();
-
-    let facts = fn_registry
+    fn_registry
         .factories
         .iter()
         .flat_map(|(name, funcs)| {
             funcs
                 .iter()
-                .map(|(_, seq)| ((name.clone(), *seq), "FACTORY".to_string()))
+                .map(|(_, id)| ((name.clone(), *id), format!("{} FACTORY", name.clone())))
         })
-        .collect::<Vec<_>>();
-
-    funcs.extend(facts);
-    funcs.sort();
-    for ((name, seq), sig) in funcs {
-        writeln!(file, "{name} {seq} {sig}").unwrap();
+        .collect_into(&mut funcs);
+    funcs.sort_by_key(|(key, _)| key.clone());
+    for ((_, id), sig) in funcs {
+        writeln!(file, "{id} {sig}").unwrap();
     }
 }
 
