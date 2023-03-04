@@ -23,6 +23,11 @@ drop table t;
 statement error 1049
 create table t (a Decimal(0, 0));
 
+query T
+select typeof(1.1::decimal(3,2)::decimal(76,2))
+----
+DECIMAL(76, 2)
+
 query IIII
 select 1::Decimal(17, 3), 2::Decimal(19, 4), 3::Decimal(20, 5), cast(10 as Decimal(7, 2));
 ----
@@ -42,6 +47,10 @@ query IIII
 select 1::Decimal(41, 3)::Float64, 2::Decimal(42, 4)::Float64, 3::Decimal(55, 5)::Float64, cast(10 as Decimal(76, 2))::Float64;
 ----
 1.0 2.0 3.0 10.0
+
+## to_decimal(decimal) overflow
+statement error 1001
+select 10000::decimal(5,0)::decimal(3,0);
 
 ## parser overflow
 statement error 1005
