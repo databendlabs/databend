@@ -294,126 +294,126 @@ Functions overloads:
 117 city64withseed(UInt8 NULL, Float32 NULL) :: UInt64 NULL
 118 city64withseed(UInt8, Float64) :: UInt64
 119 city64withseed(UInt8 NULL, Float64 NULL) :: UInt64 NULL
-120 city64withseed(UInt16, UInt8) :: UInt64
-121 city64withseed(UInt16 NULL, UInt8 NULL) :: UInt64 NULL
-122 city64withseed(UInt16, UInt16) :: UInt64
-123 city64withseed(UInt16 NULL, UInt16 NULL) :: UInt64 NULL
-124 city64withseed(UInt16, UInt32) :: UInt64
-125 city64withseed(UInt16 NULL, UInt32 NULL) :: UInt64 NULL
-126 city64withseed(UInt16, UInt64) :: UInt64
-127 city64withseed(UInt16 NULL, UInt64 NULL) :: UInt64 NULL
-128 city64withseed(UInt16, Int8) :: UInt64
-129 city64withseed(UInt16 NULL, Int8 NULL) :: UInt64 NULL
-130 city64withseed(UInt16, Int16) :: UInt64
-131 city64withseed(UInt16 NULL, Int16 NULL) :: UInt64 NULL
-132 city64withseed(UInt16, Int32) :: UInt64
-133 city64withseed(UInt16 NULL, Int32 NULL) :: UInt64 NULL
-134 city64withseed(UInt16, Int64) :: UInt64
-135 city64withseed(UInt16 NULL, Int64 NULL) :: UInt64 NULL
-136 city64withseed(UInt16, Float32) :: UInt64
-137 city64withseed(UInt16 NULL, Float32 NULL) :: UInt64 NULL
-138 city64withseed(UInt16, Float64) :: UInt64
-139 city64withseed(UInt16 NULL, Float64 NULL) :: UInt64 NULL
-140 city64withseed(UInt32, UInt8) :: UInt64
-141 city64withseed(UInt32 NULL, UInt8 NULL) :: UInt64 NULL
-142 city64withseed(UInt32, UInt16) :: UInt64
-143 city64withseed(UInt32 NULL, UInt16 NULL) :: UInt64 NULL
-144 city64withseed(UInt32, UInt32) :: UInt64
-145 city64withseed(UInt32 NULL, UInt32 NULL) :: UInt64 NULL
-146 city64withseed(UInt32, UInt64) :: UInt64
-147 city64withseed(UInt32 NULL, UInt64 NULL) :: UInt64 NULL
-148 city64withseed(UInt32, Int8) :: UInt64
-149 city64withseed(UInt32 NULL, Int8 NULL) :: UInt64 NULL
-150 city64withseed(UInt32, Int16) :: UInt64
-151 city64withseed(UInt32 NULL, Int16 NULL) :: UInt64 NULL
-152 city64withseed(UInt32, Int32) :: UInt64
-153 city64withseed(UInt32 NULL, Int32 NULL) :: UInt64 NULL
-154 city64withseed(UInt32, Int64) :: UInt64
-155 city64withseed(UInt32 NULL, Int64 NULL) :: UInt64 NULL
-156 city64withseed(UInt32, Float32) :: UInt64
-157 city64withseed(UInt32 NULL, Float32 NULL) :: UInt64 NULL
-158 city64withseed(UInt32, Float64) :: UInt64
-159 city64withseed(UInt32 NULL, Float64 NULL) :: UInt64 NULL
-160 city64withseed(UInt64, UInt8) :: UInt64
-161 city64withseed(UInt64 NULL, UInt8 NULL) :: UInt64 NULL
-162 city64withseed(UInt64, UInt16) :: UInt64
-163 city64withseed(UInt64 NULL, UInt16 NULL) :: UInt64 NULL
-164 city64withseed(UInt64, UInt32) :: UInt64
-165 city64withseed(UInt64 NULL, UInt32 NULL) :: UInt64 NULL
-166 city64withseed(UInt64, UInt64) :: UInt64
-167 city64withseed(UInt64 NULL, UInt64 NULL) :: UInt64 NULL
-168 city64withseed(UInt64, Int8) :: UInt64
-169 city64withseed(UInt64 NULL, Int8 NULL) :: UInt64 NULL
-170 city64withseed(UInt64, Int16) :: UInt64
-171 city64withseed(UInt64 NULL, Int16 NULL) :: UInt64 NULL
-172 city64withseed(UInt64, Int32) :: UInt64
-173 city64withseed(UInt64 NULL, Int32 NULL) :: UInt64 NULL
-174 city64withseed(UInt64, Int64) :: UInt64
-175 city64withseed(UInt64 NULL, Int64 NULL) :: UInt64 NULL
-176 city64withseed(UInt64, Float32) :: UInt64
-177 city64withseed(UInt64 NULL, Float32 NULL) :: UInt64 NULL
-178 city64withseed(UInt64, Float64) :: UInt64
-179 city64withseed(UInt64 NULL, Float64 NULL) :: UInt64 NULL
-180 city64withseed(Int8, UInt8) :: UInt64
-181 city64withseed(Int8 NULL, UInt8 NULL) :: UInt64 NULL
-182 city64withseed(Int8, UInt16) :: UInt64
-183 city64withseed(Int8 NULL, UInt16 NULL) :: UInt64 NULL
-184 city64withseed(Int8, UInt32) :: UInt64
-185 city64withseed(Int8 NULL, UInt32 NULL) :: UInt64 NULL
-186 city64withseed(Int8, UInt64) :: UInt64
-187 city64withseed(Int8 NULL, UInt64 NULL) :: UInt64 NULL
-188 city64withseed(Int8, Int8) :: UInt64
-189 city64withseed(Int8 NULL, Int8 NULL) :: UInt64 NULL
-190 city64withseed(Int8, Int16) :: UInt64
-191 city64withseed(Int8 NULL, Int16 NULL) :: UInt64 NULL
-192 city64withseed(Int8, Int32) :: UInt64
-193 city64withseed(Int8 NULL, Int32 NULL) :: UInt64 NULL
-194 city64withseed(Int8, Int64) :: UInt64
-195 city64withseed(Int8 NULL, Int64 NULL) :: UInt64 NULL
-196 city64withseed(Int8, Float32) :: UInt64
-197 city64withseed(Int8 NULL, Float32 NULL) :: UInt64 NULL
-198 city64withseed(Int8, Float64) :: UInt64
-199 city64withseed(Int8 NULL, Float64 NULL) :: UInt64 NULL
-200 city64withseed(Int16, UInt8) :: UInt64
-201 city64withseed(Int16 NULL, UInt8 NULL) :: UInt64 NULL
-202 city64withseed(Int16, UInt16) :: UInt64
-203 city64withseed(Int16 NULL, UInt16 NULL) :: UInt64 NULL
-204 city64withseed(Int16, UInt32) :: UInt64
-205 city64withseed(Int16 NULL, UInt32 NULL) :: UInt64 NULL
-206 city64withseed(Int16, UInt64) :: UInt64
-207 city64withseed(Int16 NULL, UInt64 NULL) :: UInt64 NULL
-208 city64withseed(Int16, Int8) :: UInt64
-209 city64withseed(Int16 NULL, Int8 NULL) :: UInt64 NULL
-210 city64withseed(Int16, Int16) :: UInt64
-211 city64withseed(Int16 NULL, Int16 NULL) :: UInt64 NULL
-212 city64withseed(Int16, Int32) :: UInt64
-213 city64withseed(Int16 NULL, Int32 NULL) :: UInt64 NULL
-214 city64withseed(Int16, Int64) :: UInt64
-215 city64withseed(Int16 NULL, Int64 NULL) :: UInt64 NULL
-216 city64withseed(Int16, Float32) :: UInt64
-217 city64withseed(Int16 NULL, Float32 NULL) :: UInt64 NULL
-218 city64withseed(Int16, Float64) :: UInt64
-219 city64withseed(Int16 NULL, Float64 NULL) :: UInt64 NULL
-220 city64withseed(Int32, UInt8) :: UInt64
-221 city64withseed(Int32 NULL, UInt8 NULL) :: UInt64 NULL
-222 city64withseed(Int32, UInt16) :: UInt64
-223 city64withseed(Int32 NULL, UInt16 NULL) :: UInt64 NULL
-224 city64withseed(Int32, UInt32) :: UInt64
-225 city64withseed(Int32 NULL, UInt32 NULL) :: UInt64 NULL
-226 city64withseed(Int32, UInt64) :: UInt64
-227 city64withseed(Int32 NULL, UInt64 NULL) :: UInt64 NULL
-228 city64withseed(Int32, Int8) :: UInt64
-229 city64withseed(Int32 NULL, Int8 NULL) :: UInt64 NULL
-230 city64withseed(Int32, Int16) :: UInt64
-231 city64withseed(Int32 NULL, Int16 NULL) :: UInt64 NULL
-232 city64withseed(Int32, Int32) :: UInt64
-233 city64withseed(Int32 NULL, Int32 NULL) :: UInt64 NULL
-234 city64withseed(Int32, Int64) :: UInt64
-235 city64withseed(Int32 NULL, Int64 NULL) :: UInt64 NULL
-236 city64withseed(Int32, Float32) :: UInt64
-237 city64withseed(Int32 NULL, Float32 NULL) :: UInt64 NULL
-238 city64withseed(Int32, Float64) :: UInt64
-239 city64withseed(Int32 NULL, Float64 NULL) :: UInt64 NULL
+120 city64withseed(Int8, UInt8) :: UInt64
+121 city64withseed(Int8 NULL, UInt8 NULL) :: UInt64 NULL
+122 city64withseed(Int8, UInt16) :: UInt64
+123 city64withseed(Int8 NULL, UInt16 NULL) :: UInt64 NULL
+124 city64withseed(Int8, UInt32) :: UInt64
+125 city64withseed(Int8 NULL, UInt32 NULL) :: UInt64 NULL
+126 city64withseed(Int8, UInt64) :: UInt64
+127 city64withseed(Int8 NULL, UInt64 NULL) :: UInt64 NULL
+128 city64withseed(Int8, Int8) :: UInt64
+129 city64withseed(Int8 NULL, Int8 NULL) :: UInt64 NULL
+130 city64withseed(Int8, Int16) :: UInt64
+131 city64withseed(Int8 NULL, Int16 NULL) :: UInt64 NULL
+132 city64withseed(Int8, Int32) :: UInt64
+133 city64withseed(Int8 NULL, Int32 NULL) :: UInt64 NULL
+134 city64withseed(Int8, Int64) :: UInt64
+135 city64withseed(Int8 NULL, Int64 NULL) :: UInt64 NULL
+136 city64withseed(Int8, Float32) :: UInt64
+137 city64withseed(Int8 NULL, Float32 NULL) :: UInt64 NULL
+138 city64withseed(Int8, Float64) :: UInt64
+139 city64withseed(Int8 NULL, Float64 NULL) :: UInt64 NULL
+140 city64withseed(UInt16, UInt8) :: UInt64
+141 city64withseed(UInt16 NULL, UInt8 NULL) :: UInt64 NULL
+142 city64withseed(UInt16, UInt16) :: UInt64
+143 city64withseed(UInt16 NULL, UInt16 NULL) :: UInt64 NULL
+144 city64withseed(UInt16, UInt32) :: UInt64
+145 city64withseed(UInt16 NULL, UInt32 NULL) :: UInt64 NULL
+146 city64withseed(UInt16, UInt64) :: UInt64
+147 city64withseed(UInt16 NULL, UInt64 NULL) :: UInt64 NULL
+148 city64withseed(UInt16, Int8) :: UInt64
+149 city64withseed(UInt16 NULL, Int8 NULL) :: UInt64 NULL
+150 city64withseed(UInt16, Int16) :: UInt64
+151 city64withseed(UInt16 NULL, Int16 NULL) :: UInt64 NULL
+152 city64withseed(UInt16, Int32) :: UInt64
+153 city64withseed(UInt16 NULL, Int32 NULL) :: UInt64 NULL
+154 city64withseed(UInt16, Int64) :: UInt64
+155 city64withseed(UInt16 NULL, Int64 NULL) :: UInt64 NULL
+156 city64withseed(UInt16, Float32) :: UInt64
+157 city64withseed(UInt16 NULL, Float32 NULL) :: UInt64 NULL
+158 city64withseed(UInt16, Float64) :: UInt64
+159 city64withseed(UInt16 NULL, Float64 NULL) :: UInt64 NULL
+160 city64withseed(Int16, UInt8) :: UInt64
+161 city64withseed(Int16 NULL, UInt8 NULL) :: UInt64 NULL
+162 city64withseed(Int16, UInt16) :: UInt64
+163 city64withseed(Int16 NULL, UInt16 NULL) :: UInt64 NULL
+164 city64withseed(Int16, UInt32) :: UInt64
+165 city64withseed(Int16 NULL, UInt32 NULL) :: UInt64 NULL
+166 city64withseed(Int16, UInt64) :: UInt64
+167 city64withseed(Int16 NULL, UInt64 NULL) :: UInt64 NULL
+168 city64withseed(Int16, Int8) :: UInt64
+169 city64withseed(Int16 NULL, Int8 NULL) :: UInt64 NULL
+170 city64withseed(Int16, Int16) :: UInt64
+171 city64withseed(Int16 NULL, Int16 NULL) :: UInt64 NULL
+172 city64withseed(Int16, Int32) :: UInt64
+173 city64withseed(Int16 NULL, Int32 NULL) :: UInt64 NULL
+174 city64withseed(Int16, Int64) :: UInt64
+175 city64withseed(Int16 NULL, Int64 NULL) :: UInt64 NULL
+176 city64withseed(Int16, Float32) :: UInt64
+177 city64withseed(Int16 NULL, Float32 NULL) :: UInt64 NULL
+178 city64withseed(Int16, Float64) :: UInt64
+179 city64withseed(Int16 NULL, Float64 NULL) :: UInt64 NULL
+180 city64withseed(UInt32, UInt8) :: UInt64
+181 city64withseed(UInt32 NULL, UInt8 NULL) :: UInt64 NULL
+182 city64withseed(UInt32, UInt16) :: UInt64
+183 city64withseed(UInt32 NULL, UInt16 NULL) :: UInt64 NULL
+184 city64withseed(UInt32, UInt32) :: UInt64
+185 city64withseed(UInt32 NULL, UInt32 NULL) :: UInt64 NULL
+186 city64withseed(UInt32, UInt64) :: UInt64
+187 city64withseed(UInt32 NULL, UInt64 NULL) :: UInt64 NULL
+188 city64withseed(UInt32, Int8) :: UInt64
+189 city64withseed(UInt32 NULL, Int8 NULL) :: UInt64 NULL
+190 city64withseed(UInt32, Int16) :: UInt64
+191 city64withseed(UInt32 NULL, Int16 NULL) :: UInt64 NULL
+192 city64withseed(UInt32, Int32) :: UInt64
+193 city64withseed(UInt32 NULL, Int32 NULL) :: UInt64 NULL
+194 city64withseed(UInt32, Int64) :: UInt64
+195 city64withseed(UInt32 NULL, Int64 NULL) :: UInt64 NULL
+196 city64withseed(UInt32, Float32) :: UInt64
+197 city64withseed(UInt32 NULL, Float32 NULL) :: UInt64 NULL
+198 city64withseed(UInt32, Float64) :: UInt64
+199 city64withseed(UInt32 NULL, Float64 NULL) :: UInt64 NULL
+200 city64withseed(Int32, UInt8) :: UInt64
+201 city64withseed(Int32 NULL, UInt8 NULL) :: UInt64 NULL
+202 city64withseed(Int32, UInt16) :: UInt64
+203 city64withseed(Int32 NULL, UInt16 NULL) :: UInt64 NULL
+204 city64withseed(Int32, UInt32) :: UInt64
+205 city64withseed(Int32 NULL, UInt32 NULL) :: UInt64 NULL
+206 city64withseed(Int32, UInt64) :: UInt64
+207 city64withseed(Int32 NULL, UInt64 NULL) :: UInt64 NULL
+208 city64withseed(Int32, Int8) :: UInt64
+209 city64withseed(Int32 NULL, Int8 NULL) :: UInt64 NULL
+210 city64withseed(Int32, Int16) :: UInt64
+211 city64withseed(Int32 NULL, Int16 NULL) :: UInt64 NULL
+212 city64withseed(Int32, Int32) :: UInt64
+213 city64withseed(Int32 NULL, Int32 NULL) :: UInt64 NULL
+214 city64withseed(Int32, Int64) :: UInt64
+215 city64withseed(Int32 NULL, Int64 NULL) :: UInt64 NULL
+216 city64withseed(Int32, Float32) :: UInt64
+217 city64withseed(Int32 NULL, Float32 NULL) :: UInt64 NULL
+218 city64withseed(Int32, Float64) :: UInt64
+219 city64withseed(Int32 NULL, Float64 NULL) :: UInt64 NULL
+220 city64withseed(UInt64, UInt8) :: UInt64
+221 city64withseed(UInt64 NULL, UInt8 NULL) :: UInt64 NULL
+222 city64withseed(UInt64, UInt16) :: UInt64
+223 city64withseed(UInt64 NULL, UInt16 NULL) :: UInt64 NULL
+224 city64withseed(UInt64, UInt32) :: UInt64
+225 city64withseed(UInt64 NULL, UInt32 NULL) :: UInt64 NULL
+226 city64withseed(UInt64, UInt64) :: UInt64
+227 city64withseed(UInt64 NULL, UInt64 NULL) :: UInt64 NULL
+228 city64withseed(UInt64, Int8) :: UInt64
+229 city64withseed(UInt64 NULL, Int8 NULL) :: UInt64 NULL
+230 city64withseed(UInt64, Int16) :: UInt64
+231 city64withseed(UInt64 NULL, Int16 NULL) :: UInt64 NULL
+232 city64withseed(UInt64, Int32) :: UInt64
+233 city64withseed(UInt64 NULL, Int32 NULL) :: UInt64 NULL
+234 city64withseed(UInt64, Int64) :: UInt64
+235 city64withseed(UInt64 NULL, Int64 NULL) :: UInt64 NULL
+236 city64withseed(UInt64, Float32) :: UInt64
+237 city64withseed(UInt64 NULL, Float32 NULL) :: UInt64 NULL
+238 city64withseed(UInt64, Float64) :: UInt64
+239 city64withseed(UInt64 NULL, Float64 NULL) :: UInt64 NULL
 240 city64withseed(Int64, UInt8) :: UInt64
 241 city64withseed(Int64 NULL, UInt8 NULL) :: UInt64 NULL
 242 city64withseed(Int64, UInt16) :: UInt64
@@ -434,86 +434,86 @@ Functions overloads:
 257 city64withseed(Int64 NULL, Float32 NULL) :: UInt64 NULL
 258 city64withseed(Int64, Float64) :: UInt64
 259 city64withseed(Int64 NULL, Float64 NULL) :: UInt64 NULL
-260 city64withseed(Float32, UInt8) :: UInt64
-261 city64withseed(Float32 NULL, UInt8 NULL) :: UInt64 NULL
-262 city64withseed(Float32, UInt16) :: UInt64
-263 city64withseed(Float32 NULL, UInt16 NULL) :: UInt64 NULL
-264 city64withseed(Float32, UInt32) :: UInt64
-265 city64withseed(Float32 NULL, UInt32 NULL) :: UInt64 NULL
-266 city64withseed(Float32, UInt64) :: UInt64
-267 city64withseed(Float32 NULL, UInt64 NULL) :: UInt64 NULL
-268 city64withseed(Float32, Int8) :: UInt64
-269 city64withseed(Float32 NULL, Int8 NULL) :: UInt64 NULL
-270 city64withseed(Float32, Int16) :: UInt64
-271 city64withseed(Float32 NULL, Int16 NULL) :: UInt64 NULL
-272 city64withseed(Float32, Int32) :: UInt64
-273 city64withseed(Float32 NULL, Int32 NULL) :: UInt64 NULL
-274 city64withseed(Float32, Int64) :: UInt64
-275 city64withseed(Float32 NULL, Int64 NULL) :: UInt64 NULL
-276 city64withseed(Float32, Float32) :: UInt64
-277 city64withseed(Float32 NULL, Float32 NULL) :: UInt64 NULL
-278 city64withseed(Float32, Float64) :: UInt64
-279 city64withseed(Float32 NULL, Float64 NULL) :: UInt64 NULL
-280 city64withseed(Float64, UInt8) :: UInt64
-281 city64withseed(Float64 NULL, UInt8 NULL) :: UInt64 NULL
-282 city64withseed(Float64, UInt16) :: UInt64
-283 city64withseed(Float64 NULL, UInt16 NULL) :: UInt64 NULL
-284 city64withseed(Float64, UInt32) :: UInt64
-285 city64withseed(Float64 NULL, UInt32 NULL) :: UInt64 NULL
-286 city64withseed(Float64, UInt64) :: UInt64
-287 city64withseed(Float64 NULL, UInt64 NULL) :: UInt64 NULL
-288 city64withseed(Float64, Int8) :: UInt64
-289 city64withseed(Float64 NULL, Int8 NULL) :: UInt64 NULL
-290 city64withseed(Float64, Int16) :: UInt64
-291 city64withseed(Float64 NULL, Int16 NULL) :: UInt64 NULL
-292 city64withseed(Float64, Int32) :: UInt64
-293 city64withseed(Float64 NULL, Int32 NULL) :: UInt64 NULL
-294 city64withseed(Float64, Int64) :: UInt64
-295 city64withseed(Float64 NULL, Int64 NULL) :: UInt64 NULL
-296 city64withseed(Float64, Float32) :: UInt64
-297 city64withseed(Float64 NULL, Float32 NULL) :: UInt64 NULL
-298 city64withseed(Float64, Float64) :: UInt64
-299 city64withseed(Float64 NULL, Float64 NULL) :: UInt64 NULL
-300 city64withseed(Decimal(38, 0), UInt8) :: UInt64
-301 city64withseed(Decimal(38, 0) NULL, UInt8 NULL) :: UInt64 NULL
-302 city64withseed(Decimal(38, 0), UInt16) :: UInt64
-303 city64withseed(Decimal(38, 0) NULL, UInt16 NULL) :: UInt64 NULL
-304 city64withseed(Decimal(38, 0), UInt32) :: UInt64
-305 city64withseed(Decimal(38, 0) NULL, UInt32 NULL) :: UInt64 NULL
-306 city64withseed(Decimal(38, 0), UInt64) :: UInt64
-307 city64withseed(Decimal(38, 0) NULL, UInt64 NULL) :: UInt64 NULL
-308 city64withseed(Decimal(38, 0), Int8) :: UInt64
-309 city64withseed(Decimal(38, 0) NULL, Int8 NULL) :: UInt64 NULL
-310 city64withseed(Decimal(38, 0), Int16) :: UInt64
-311 city64withseed(Decimal(38, 0) NULL, Int16 NULL) :: UInt64 NULL
-312 city64withseed(Decimal(38, 0), Int32) :: UInt64
-313 city64withseed(Decimal(38, 0) NULL, Int32 NULL) :: UInt64 NULL
-314 city64withseed(Decimal(38, 0), Int64) :: UInt64
-315 city64withseed(Decimal(38, 0) NULL, Int64 NULL) :: UInt64 NULL
-316 city64withseed(Decimal(38, 0), Float32) :: UInt64
-317 city64withseed(Decimal(38, 0) NULL, Float32 NULL) :: UInt64 NULL
-318 city64withseed(Decimal(38, 0), Float64) :: UInt64
-319 city64withseed(Decimal(38, 0) NULL, Float64 NULL) :: UInt64 NULL
-320 city64withseed(Decimal(76, 0), UInt8) :: UInt64
-321 city64withseed(Decimal(76, 0) NULL, UInt8 NULL) :: UInt64 NULL
-322 city64withseed(Decimal(76, 0), UInt16) :: UInt64
-323 city64withseed(Decimal(76, 0) NULL, UInt16 NULL) :: UInt64 NULL
-324 city64withseed(Decimal(76, 0), UInt32) :: UInt64
-325 city64withseed(Decimal(76, 0) NULL, UInt32 NULL) :: UInt64 NULL
-326 city64withseed(Decimal(76, 0), UInt64) :: UInt64
-327 city64withseed(Decimal(76, 0) NULL, UInt64 NULL) :: UInt64 NULL
-328 city64withseed(Decimal(76, 0), Int8) :: UInt64
-329 city64withseed(Decimal(76, 0) NULL, Int8 NULL) :: UInt64 NULL
-330 city64withseed(Decimal(76, 0), Int16) :: UInt64
-331 city64withseed(Decimal(76, 0) NULL, Int16 NULL) :: UInt64 NULL
-332 city64withseed(Decimal(76, 0), Int32) :: UInt64
-333 city64withseed(Decimal(76, 0) NULL, Int32 NULL) :: UInt64 NULL
-334 city64withseed(Decimal(76, 0), Int64) :: UInt64
-335 city64withseed(Decimal(76, 0) NULL, Int64 NULL) :: UInt64 NULL
-336 city64withseed(Decimal(76, 0), Float32) :: UInt64
-337 city64withseed(Decimal(76, 0) NULL, Float32 NULL) :: UInt64 NULL
-338 city64withseed(Decimal(76, 0), Float64) :: UInt64
-339 city64withseed(Decimal(76, 0) NULL, Float64 NULL) :: UInt64 NULL
+260 city64withseed(Decimal(38, 0), UInt8) :: UInt64
+261 city64withseed(Decimal(38, 0) NULL, UInt8 NULL) :: UInt64 NULL
+262 city64withseed(Decimal(38, 0), UInt16) :: UInt64
+263 city64withseed(Decimal(38, 0) NULL, UInt16 NULL) :: UInt64 NULL
+264 city64withseed(Decimal(38, 0), UInt32) :: UInt64
+265 city64withseed(Decimal(38, 0) NULL, UInt32 NULL) :: UInt64 NULL
+266 city64withseed(Decimal(38, 0), UInt64) :: UInt64
+267 city64withseed(Decimal(38, 0) NULL, UInt64 NULL) :: UInt64 NULL
+268 city64withseed(Decimal(38, 0), Int8) :: UInt64
+269 city64withseed(Decimal(38, 0) NULL, Int8 NULL) :: UInt64 NULL
+270 city64withseed(Decimal(38, 0), Int16) :: UInt64
+271 city64withseed(Decimal(38, 0) NULL, Int16 NULL) :: UInt64 NULL
+272 city64withseed(Decimal(38, 0), Int32) :: UInt64
+273 city64withseed(Decimal(38, 0) NULL, Int32 NULL) :: UInt64 NULL
+274 city64withseed(Decimal(38, 0), Int64) :: UInt64
+275 city64withseed(Decimal(38, 0) NULL, Int64 NULL) :: UInt64 NULL
+276 city64withseed(Decimal(38, 0), Float32) :: UInt64
+277 city64withseed(Decimal(38, 0) NULL, Float32 NULL) :: UInt64 NULL
+278 city64withseed(Decimal(38, 0), Float64) :: UInt64
+279 city64withseed(Decimal(38, 0) NULL, Float64 NULL) :: UInt64 NULL
+280 city64withseed(Decimal(76, 0), UInt8) :: UInt64
+281 city64withseed(Decimal(76, 0) NULL, UInt8 NULL) :: UInt64 NULL
+282 city64withseed(Decimal(76, 0), UInt16) :: UInt64
+283 city64withseed(Decimal(76, 0) NULL, UInt16 NULL) :: UInt64 NULL
+284 city64withseed(Decimal(76, 0), UInt32) :: UInt64
+285 city64withseed(Decimal(76, 0) NULL, UInt32 NULL) :: UInt64 NULL
+286 city64withseed(Decimal(76, 0), UInt64) :: UInt64
+287 city64withseed(Decimal(76, 0) NULL, UInt64 NULL) :: UInt64 NULL
+288 city64withseed(Decimal(76, 0), Int8) :: UInt64
+289 city64withseed(Decimal(76, 0) NULL, Int8 NULL) :: UInt64 NULL
+290 city64withseed(Decimal(76, 0), Int16) :: UInt64
+291 city64withseed(Decimal(76, 0) NULL, Int16 NULL) :: UInt64 NULL
+292 city64withseed(Decimal(76, 0), Int32) :: UInt64
+293 city64withseed(Decimal(76, 0) NULL, Int32 NULL) :: UInt64 NULL
+294 city64withseed(Decimal(76, 0), Int64) :: UInt64
+295 city64withseed(Decimal(76, 0) NULL, Int64 NULL) :: UInt64 NULL
+296 city64withseed(Decimal(76, 0), Float32) :: UInt64
+297 city64withseed(Decimal(76, 0) NULL, Float32 NULL) :: UInt64 NULL
+298 city64withseed(Decimal(76, 0), Float64) :: UInt64
+299 city64withseed(Decimal(76, 0) NULL, Float64 NULL) :: UInt64 NULL
+300 city64withseed(Float32, UInt8) :: UInt64
+301 city64withseed(Float32 NULL, UInt8 NULL) :: UInt64 NULL
+302 city64withseed(Float32, UInt16) :: UInt64
+303 city64withseed(Float32 NULL, UInt16 NULL) :: UInt64 NULL
+304 city64withseed(Float32, UInt32) :: UInt64
+305 city64withseed(Float32 NULL, UInt32 NULL) :: UInt64 NULL
+306 city64withseed(Float32, UInt64) :: UInt64
+307 city64withseed(Float32 NULL, UInt64 NULL) :: UInt64 NULL
+308 city64withseed(Float32, Int8) :: UInt64
+309 city64withseed(Float32 NULL, Int8 NULL) :: UInt64 NULL
+310 city64withseed(Float32, Int16) :: UInt64
+311 city64withseed(Float32 NULL, Int16 NULL) :: UInt64 NULL
+312 city64withseed(Float32, Int32) :: UInt64
+313 city64withseed(Float32 NULL, Int32 NULL) :: UInt64 NULL
+314 city64withseed(Float32, Int64) :: UInt64
+315 city64withseed(Float32 NULL, Int64 NULL) :: UInt64 NULL
+316 city64withseed(Float32, Float32) :: UInt64
+317 city64withseed(Float32 NULL, Float32 NULL) :: UInt64 NULL
+318 city64withseed(Float32, Float64) :: UInt64
+319 city64withseed(Float32 NULL, Float64 NULL) :: UInt64 NULL
+320 city64withseed(Float64, UInt8) :: UInt64
+321 city64withseed(Float64 NULL, UInt8 NULL) :: UInt64 NULL
+322 city64withseed(Float64, UInt16) :: UInt64
+323 city64withseed(Float64 NULL, UInt16 NULL) :: UInt64 NULL
+324 city64withseed(Float64, UInt32) :: UInt64
+325 city64withseed(Float64 NULL, UInt32 NULL) :: UInt64 NULL
+326 city64withseed(Float64, UInt64) :: UInt64
+327 city64withseed(Float64 NULL, UInt64 NULL) :: UInt64 NULL
+328 city64withseed(Float64, Int8) :: UInt64
+329 city64withseed(Float64 NULL, Int8 NULL) :: UInt64 NULL
+330 city64withseed(Float64, Int16) :: UInt64
+331 city64withseed(Float64 NULL, Int16 NULL) :: UInt64 NULL
+332 city64withseed(Float64, Int32) :: UInt64
+333 city64withseed(Float64 NULL, Int32 NULL) :: UInt64 NULL
+334 city64withseed(Float64, Int64) :: UInt64
+335 city64withseed(Float64 NULL, Int64 NULL) :: UInt64 NULL
+336 city64withseed(Float64, Float32) :: UInt64
+337 city64withseed(Float64 NULL, Float32 NULL) :: UInt64 NULL
+338 city64withseed(Float64, Float64) :: UInt64
+339 city64withseed(Float64 NULL, Float64 NULL) :: UInt64 NULL
 0 concat FACTORY
 1 concat FACTORY
 0 concat_ws FACTORY
@@ -571,146 +571,146 @@ Functions overloads:
 13 div(UInt8 NULL, Int32 NULL) :: Int32 NULL
 14 div(UInt8, Int64) :: Int64
 15 div(UInt8 NULL, Int64 NULL) :: Int64 NULL
-16 div(UInt8, Float32) :: Int32
-17 div(UInt8 NULL, Float32 NULL) :: Int32 NULL
-18 div(UInt8, Float64) :: Int64
-19 div(UInt8 NULL, Float64 NULL) :: Int64 NULL
-20 div(UInt16, UInt8) :: UInt16
-21 div(UInt16 NULL, UInt8 NULL) :: UInt16 NULL
-22 div(UInt16, UInt16) :: UInt16
-23 div(UInt16 NULL, UInt16 NULL) :: UInt16 NULL
-24 div(UInt16, UInt32) :: UInt32
-25 div(UInt16 NULL, UInt32 NULL) :: UInt32 NULL
-26 div(UInt16, UInt64) :: UInt64
-27 div(UInt16 NULL, UInt64 NULL) :: UInt64 NULL
-28 div(UInt16, Int8) :: Int16
-29 div(UInt16 NULL, Int8 NULL) :: Int16 NULL
-30 div(UInt16, Int16) :: Int16
-31 div(UInt16 NULL, Int16 NULL) :: Int16 NULL
-32 div(UInt16, Int32) :: Int32
-33 div(UInt16 NULL, Int32 NULL) :: Int32 NULL
-34 div(UInt16, Int64) :: Int64
-35 div(UInt16 NULL, Int64 NULL) :: Int64 NULL
-36 div(UInt16, Float32) :: Int32
-37 div(UInt16 NULL, Float32 NULL) :: Int32 NULL
-38 div(UInt16, Float64) :: Int64
-39 div(UInt16 NULL, Float64 NULL) :: Int64 NULL
-40 div(UInt32, UInt8) :: UInt32
-41 div(UInt32 NULL, UInt8 NULL) :: UInt32 NULL
-42 div(UInt32, UInt16) :: UInt32
-43 div(UInt32 NULL, UInt16 NULL) :: UInt32 NULL
-44 div(UInt32, UInt32) :: UInt32
-45 div(UInt32 NULL, UInt32 NULL) :: UInt32 NULL
-46 div(UInt32, UInt64) :: UInt64
-47 div(UInt32 NULL, UInt64 NULL) :: UInt64 NULL
-48 div(UInt32, Int8) :: Int32
-49 div(UInt32 NULL, Int8 NULL) :: Int32 NULL
-50 div(UInt32, Int16) :: Int32
-51 div(UInt32 NULL, Int16 NULL) :: Int32 NULL
-52 div(UInt32, Int32) :: Int32
-53 div(UInt32 NULL, Int32 NULL) :: Int32 NULL
-54 div(UInt32, Int64) :: Int64
-55 div(UInt32 NULL, Int64 NULL) :: Int64 NULL
-56 div(UInt32, Float32) :: Int32
-57 div(UInt32 NULL, Float32 NULL) :: Int32 NULL
-58 div(UInt32, Float64) :: Int64
-59 div(UInt32 NULL, Float64 NULL) :: Int64 NULL
-60 div(UInt64, UInt8) :: UInt64
-61 div(UInt64 NULL, UInt8 NULL) :: UInt64 NULL
-62 div(UInt64, UInt16) :: UInt64
-63 div(UInt64 NULL, UInt16 NULL) :: UInt64 NULL
-64 div(UInt64, UInt32) :: UInt64
-65 div(UInt64 NULL, UInt32 NULL) :: UInt64 NULL
-66 div(UInt64, UInt64) :: UInt64
-67 div(UInt64 NULL, UInt64 NULL) :: UInt64 NULL
-68 div(UInt64, Int8) :: Int64
-69 div(UInt64 NULL, Int8 NULL) :: Int64 NULL
-70 div(UInt64, Int16) :: Int64
-71 div(UInt64 NULL, Int16 NULL) :: Int64 NULL
-72 div(UInt64, Int32) :: Int64
-73 div(UInt64 NULL, Int32 NULL) :: Int64 NULL
-74 div(UInt64, Int64) :: Int64
-75 div(UInt64 NULL, Int64 NULL) :: Int64 NULL
-76 div(UInt64, Float32) :: Int64
-77 div(UInt64 NULL, Float32 NULL) :: Int64 NULL
-78 div(UInt64, Float64) :: Int64
-79 div(UInt64 NULL, Float64 NULL) :: Int64 NULL
-80 div(Int8, UInt8) :: Int8
-81 div(Int8 NULL, UInt8 NULL) :: Int8 NULL
-82 div(Int8, UInt16) :: Int16
-83 div(Int8 NULL, UInt16 NULL) :: Int16 NULL
-84 div(Int8, UInt32) :: Int32
-85 div(Int8 NULL, UInt32 NULL) :: Int32 NULL
-86 div(Int8, UInt64) :: Int64
-87 div(Int8 NULL, UInt64 NULL) :: Int64 NULL
-88 div(Int8, Int8) :: Int8
-89 div(Int8 NULL, Int8 NULL) :: Int8 NULL
-90 div(Int8, Int16) :: Int16
-91 div(Int8 NULL, Int16 NULL) :: Int16 NULL
-92 div(Int8, Int32) :: Int32
-93 div(Int8 NULL, Int32 NULL) :: Int32 NULL
-94 div(Int8, Int64) :: Int64
-95 div(Int8 NULL, Int64 NULL) :: Int64 NULL
-96 div(Int8, Float32) :: Int32
-97 div(Int8 NULL, Float32 NULL) :: Int32 NULL
-98 div(Int8, Float64) :: Int64
-99 div(Int8 NULL, Float64 NULL) :: Int64 NULL
-100 div(Int16, UInt8) :: Int16
-101 div(Int16 NULL, UInt8 NULL) :: Int16 NULL
-102 div(Int16, UInt16) :: Int16
-103 div(Int16 NULL, UInt16 NULL) :: Int16 NULL
-104 div(Int16, UInt32) :: Int32
-105 div(Int16 NULL, UInt32 NULL) :: Int32 NULL
-106 div(Int16, UInt64) :: Int64
-107 div(Int16 NULL, UInt64 NULL) :: Int64 NULL
-108 div(Int16, Int8) :: Int16
-109 div(Int16 NULL, Int8 NULL) :: Int16 NULL
-110 div(Int16, Int16) :: Int16
-111 div(Int16 NULL, Int16 NULL) :: Int16 NULL
-112 div(Int16, Int32) :: Int32
-113 div(Int16 NULL, Int32 NULL) :: Int32 NULL
-114 div(Int16, Int64) :: Int64
-115 div(Int16 NULL, Int64 NULL) :: Int64 NULL
-116 div(Int16, Float32) :: Int32
-117 div(Int16 NULL, Float32 NULL) :: Int32 NULL
-118 div(Int16, Float64) :: Int64
-119 div(Int16 NULL, Float64 NULL) :: Int64 NULL
-120 div(Int32, UInt8) :: Int32
-121 div(Int32 NULL, UInt8 NULL) :: Int32 NULL
-122 div(Int32, UInt16) :: Int32
-123 div(Int32 NULL, UInt16 NULL) :: Int32 NULL
-124 div(Int32, UInt32) :: Int32
-125 div(Int32 NULL, UInt32 NULL) :: Int32 NULL
-126 div(Int32, UInt64) :: Int64
-127 div(Int32 NULL, UInt64 NULL) :: Int64 NULL
-128 div(Int32, Int8) :: Int32
-129 div(Int32 NULL, Int8 NULL) :: Int32 NULL
-130 div(Int32, Int16) :: Int32
-131 div(Int32 NULL, Int16 NULL) :: Int32 NULL
-132 div(Int32, Int32) :: Int32
-133 div(Int32 NULL, Int32 NULL) :: Int32 NULL
-134 div(Int32, Int64) :: Int64
-135 div(Int32 NULL, Int64 NULL) :: Int64 NULL
-136 div(Int32, Float32) :: Int32
-137 div(Int32 NULL, Float32 NULL) :: Int32 NULL
-138 div(Int32, Float64) :: Int64
-139 div(Int32 NULL, Float64 NULL) :: Int64 NULL
-140 div(Int64, UInt8) :: Int64
-141 div(Int64 NULL, UInt8 NULL) :: Int64 NULL
-142 div(Int64, UInt16) :: Int64
-143 div(Int64 NULL, UInt16 NULL) :: Int64 NULL
-144 div(Int64, UInt32) :: Int64
-145 div(Int64 NULL, UInt32 NULL) :: Int64 NULL
-146 div(Int64, UInt64) :: Int64
-147 div(Int64 NULL, UInt64 NULL) :: Int64 NULL
-148 div(Int64, Int8) :: Int64
-149 div(Int64 NULL, Int8 NULL) :: Int64 NULL
-150 div(Int64, Int16) :: Int64
-151 div(Int64 NULL, Int16 NULL) :: Int64 NULL
-152 div(Int64, Int32) :: Int64
-153 div(Int64 NULL, Int32 NULL) :: Int64 NULL
-154 div(Int64, Int64) :: Int64
-155 div(Int64 NULL, Int64 NULL) :: Int64 NULL
+16 div(UInt16, UInt8) :: UInt16
+17 div(UInt16 NULL, UInt8 NULL) :: UInt16 NULL
+18 div(UInt16, UInt16) :: UInt16
+19 div(UInt16 NULL, UInt16 NULL) :: UInt16 NULL
+20 div(UInt16, UInt32) :: UInt32
+21 div(UInt16 NULL, UInt32 NULL) :: UInt32 NULL
+22 div(UInt16, UInt64) :: UInt64
+23 div(UInt16 NULL, UInt64 NULL) :: UInt64 NULL
+24 div(UInt16, Int8) :: Int16
+25 div(UInt16 NULL, Int8 NULL) :: Int16 NULL
+26 div(UInt16, Int16) :: Int16
+27 div(UInt16 NULL, Int16 NULL) :: Int16 NULL
+28 div(UInt16, Int32) :: Int32
+29 div(UInt16 NULL, Int32 NULL) :: Int32 NULL
+30 div(UInt16, Int64) :: Int64
+31 div(UInt16 NULL, Int64 NULL) :: Int64 NULL
+32 div(UInt32, UInt8) :: UInt32
+33 div(UInt32 NULL, UInt8 NULL) :: UInt32 NULL
+34 div(UInt32, UInt16) :: UInt32
+35 div(UInt32 NULL, UInt16 NULL) :: UInt32 NULL
+36 div(UInt32, UInt32) :: UInt32
+37 div(UInt32 NULL, UInt32 NULL) :: UInt32 NULL
+38 div(UInt32, UInt64) :: UInt64
+39 div(UInt32 NULL, UInt64 NULL) :: UInt64 NULL
+40 div(UInt32, Int8) :: Int32
+41 div(UInt32 NULL, Int8 NULL) :: Int32 NULL
+42 div(UInt32, Int16) :: Int32
+43 div(UInt32 NULL, Int16 NULL) :: Int32 NULL
+44 div(UInt32, Int32) :: Int32
+45 div(UInt32 NULL, Int32 NULL) :: Int32 NULL
+46 div(UInt32, Int64) :: Int64
+47 div(UInt32 NULL, Int64 NULL) :: Int64 NULL
+48 div(UInt64, UInt8) :: UInt64
+49 div(UInt64 NULL, UInt8 NULL) :: UInt64 NULL
+50 div(UInt64, UInt16) :: UInt64
+51 div(UInt64 NULL, UInt16 NULL) :: UInt64 NULL
+52 div(UInt64, UInt32) :: UInt64
+53 div(UInt64 NULL, UInt32 NULL) :: UInt64 NULL
+54 div(UInt64, UInt64) :: UInt64
+55 div(UInt64 NULL, UInt64 NULL) :: UInt64 NULL
+56 div(UInt64, Int8) :: Int64
+57 div(UInt64 NULL, Int8 NULL) :: Int64 NULL
+58 div(UInt64, Int16) :: Int64
+59 div(UInt64 NULL, Int16 NULL) :: Int64 NULL
+60 div(UInt64, Int32) :: Int64
+61 div(UInt64 NULL, Int32 NULL) :: Int64 NULL
+62 div(UInt64, Int64) :: Int64
+63 div(UInt64 NULL, Int64 NULL) :: Int64 NULL
+64 div(Int8, UInt8) :: Int8
+65 div(Int8 NULL, UInt8 NULL) :: Int8 NULL
+66 div(Int8, UInt16) :: Int16
+67 div(Int8 NULL, UInt16 NULL) :: Int16 NULL
+68 div(Int8, UInt32) :: Int32
+69 div(Int8 NULL, UInt32 NULL) :: Int32 NULL
+70 div(Int8, UInt64) :: Int64
+71 div(Int8 NULL, UInt64 NULL) :: Int64 NULL
+72 div(Int8, Int8) :: Int8
+73 div(Int8 NULL, Int8 NULL) :: Int8 NULL
+74 div(Int8, Int16) :: Int16
+75 div(Int8 NULL, Int16 NULL) :: Int16 NULL
+76 div(Int8, Int32) :: Int32
+77 div(Int8 NULL, Int32 NULL) :: Int32 NULL
+78 div(Int8, Int64) :: Int64
+79 div(Int8 NULL, Int64 NULL) :: Int64 NULL
+80 div(Int16, UInt8) :: Int16
+81 div(Int16 NULL, UInt8 NULL) :: Int16 NULL
+82 div(Int16, UInt16) :: Int16
+83 div(Int16 NULL, UInt16 NULL) :: Int16 NULL
+84 div(Int16, UInt32) :: Int32
+85 div(Int16 NULL, UInt32 NULL) :: Int32 NULL
+86 div(Int16, UInt64) :: Int64
+87 div(Int16 NULL, UInt64 NULL) :: Int64 NULL
+88 div(Int16, Int8) :: Int16
+89 div(Int16 NULL, Int8 NULL) :: Int16 NULL
+90 div(Int16, Int16) :: Int16
+91 div(Int16 NULL, Int16 NULL) :: Int16 NULL
+92 div(Int16, Int32) :: Int32
+93 div(Int16 NULL, Int32 NULL) :: Int32 NULL
+94 div(Int16, Int64) :: Int64
+95 div(Int16 NULL, Int64 NULL) :: Int64 NULL
+96 div(Int32, UInt8) :: Int32
+97 div(Int32 NULL, UInt8 NULL) :: Int32 NULL
+98 div(Int32, UInt16) :: Int32
+99 div(Int32 NULL, UInt16 NULL) :: Int32 NULL
+100 div(Int32, UInt32) :: Int32
+101 div(Int32 NULL, UInt32 NULL) :: Int32 NULL
+102 div(Int32, UInt64) :: Int64
+103 div(Int32 NULL, UInt64 NULL) :: Int64 NULL
+104 div(Int32, Int8) :: Int32
+105 div(Int32 NULL, Int8 NULL) :: Int32 NULL
+106 div(Int32, Int16) :: Int32
+107 div(Int32 NULL, Int16 NULL) :: Int32 NULL
+108 div(Int32, Int32) :: Int32
+109 div(Int32 NULL, Int32 NULL) :: Int32 NULL
+110 div(Int32, Int64) :: Int64
+111 div(Int32 NULL, Int64 NULL) :: Int64 NULL
+112 div(Int64, UInt8) :: Int64
+113 div(Int64 NULL, UInt8 NULL) :: Int64 NULL
+114 div(Int64, UInt16) :: Int64
+115 div(Int64 NULL, UInt16 NULL) :: Int64 NULL
+116 div(Int64, UInt32) :: Int64
+117 div(Int64 NULL, UInt32 NULL) :: Int64 NULL
+118 div(Int64, UInt64) :: Int64
+119 div(Int64 NULL, UInt64 NULL) :: Int64 NULL
+120 div(Int64, Int8) :: Int64
+121 div(Int64 NULL, Int8 NULL) :: Int64 NULL
+122 div(Int64, Int16) :: Int64
+123 div(Int64 NULL, Int16 NULL) :: Int64 NULL
+124 div(Int64, Int32) :: Int64
+125 div(Int64 NULL, Int32 NULL) :: Int64 NULL
+126 div(Int64, Int64) :: Int64
+127 div(Int64 NULL, Int64 NULL) :: Int64 NULL
+128 div(UInt8, Float32) :: Int32
+129 div(UInt8 NULL, Float32 NULL) :: Int32 NULL
+130 div(UInt8, Float64) :: Int64
+131 div(UInt8 NULL, Float64 NULL) :: Int64 NULL
+132 div(UInt16, Float32) :: Int32
+133 div(UInt16 NULL, Float32 NULL) :: Int32 NULL
+134 div(UInt16, Float64) :: Int64
+135 div(UInt16 NULL, Float64 NULL) :: Int64 NULL
+136 div(UInt32, Float32) :: Int32
+137 div(UInt32 NULL, Float32 NULL) :: Int32 NULL
+138 div(UInt32, Float64) :: Int64
+139 div(UInt32 NULL, Float64 NULL) :: Int64 NULL
+140 div(UInt64, Float32) :: Int64
+141 div(UInt64 NULL, Float32 NULL) :: Int64 NULL
+142 div(UInt64, Float64) :: Int64
+143 div(UInt64 NULL, Float64 NULL) :: Int64 NULL
+144 div(Int8, Float32) :: Int32
+145 div(Int8 NULL, Float32 NULL) :: Int32 NULL
+146 div(Int8, Float64) :: Int64
+147 div(Int8 NULL, Float64 NULL) :: Int64 NULL
+148 div(Int16, Float32) :: Int32
+149 div(Int16 NULL, Float32 NULL) :: Int32 NULL
+150 div(Int16, Float64) :: Int64
+151 div(Int16 NULL, Float64 NULL) :: Int64 NULL
+152 div(Int32, Float32) :: Int32
+153 div(Int32 NULL, Float32 NULL) :: Int32 NULL
+154 div(Int32, Float64) :: Int64
+155 div(Int32 NULL, Float64 NULL) :: Int64 NULL
 156 div(Int64, Float32) :: Int64
 157 div(Int64 NULL, Float32 NULL) :: Int64 NULL
 158 div(Int64, Float64) :: Int64
@@ -731,26 +731,26 @@ Functions overloads:
 173 div(Float32 NULL, Int32 NULL) :: Int32 NULL
 174 div(Float32, Int64) :: Int64
 175 div(Float32 NULL, Int64 NULL) :: Int64 NULL
-176 div(Float32, Float32) :: Int32
-177 div(Float32 NULL, Float32 NULL) :: Int32 NULL
-178 div(Float32, Float64) :: Int64
-179 div(Float32 NULL, Float64 NULL) :: Int64 NULL
-180 div(Float64, UInt8) :: Int64
-181 div(Float64 NULL, UInt8 NULL) :: Int64 NULL
-182 div(Float64, UInt16) :: Int64
-183 div(Float64 NULL, UInt16 NULL) :: Int64 NULL
-184 div(Float64, UInt32) :: Int64
-185 div(Float64 NULL, UInt32 NULL) :: Int64 NULL
-186 div(Float64, UInt64) :: Int64
-187 div(Float64 NULL, UInt64 NULL) :: Int64 NULL
-188 div(Float64, Int8) :: Int64
-189 div(Float64 NULL, Int8 NULL) :: Int64 NULL
-190 div(Float64, Int16) :: Int64
-191 div(Float64 NULL, Int16 NULL) :: Int64 NULL
-192 div(Float64, Int32) :: Int64
-193 div(Float64 NULL, Int32 NULL) :: Int64 NULL
-194 div(Float64, Int64) :: Int64
-195 div(Float64 NULL, Int64 NULL) :: Int64 NULL
+176 div(Float64, UInt8) :: Int64
+177 div(Float64 NULL, UInt8 NULL) :: Int64 NULL
+178 div(Float64, UInt16) :: Int64
+179 div(Float64 NULL, UInt16 NULL) :: Int64 NULL
+180 div(Float64, UInt32) :: Int64
+181 div(Float64 NULL, UInt32 NULL) :: Int64 NULL
+182 div(Float64, UInt64) :: Int64
+183 div(Float64 NULL, UInt64 NULL) :: Int64 NULL
+184 div(Float64, Int8) :: Int64
+185 div(Float64 NULL, Int8 NULL) :: Int64 NULL
+186 div(Float64, Int16) :: Int64
+187 div(Float64 NULL, Int16 NULL) :: Int64 NULL
+188 div(Float64, Int32) :: Int64
+189 div(Float64 NULL, Int32 NULL) :: Int64 NULL
+190 div(Float64, Int64) :: Int64
+191 div(Float64 NULL, Int64 NULL) :: Int64 NULL
+192 div(Float32, Float32) :: Int32
+193 div(Float32 NULL, Float32 NULL) :: Int32 NULL
+194 div(Float32, Float64) :: Int64
+195 div(Float32 NULL, Float64 NULL) :: Int64 NULL
 196 div(Float64, Float32) :: Int64
 197 div(Float64 NULL, Float32 NULL) :: Int64 NULL
 198 div(Float64, Float64) :: Int64
@@ -771,191 +771,191 @@ Functions overloads:
 13 divide(UInt8 NULL, Int32 NULL) :: Float64 NULL
 14 divide(UInt8, Int64) :: Float64
 15 divide(UInt8 NULL, Int64 NULL) :: Float64 NULL
-16 divide(UInt8, Float32) :: Float64
-17 divide(UInt8 NULL, Float32 NULL) :: Float64 NULL
-18 divide(UInt8, Float64) :: Float64
-19 divide(UInt8 NULL, Float64 NULL) :: Float64 NULL
-20 divide(UInt16, UInt8) :: Float64
-21 divide(UInt16 NULL, UInt8 NULL) :: Float64 NULL
-22 divide(UInt16, UInt16) :: Float64
-23 divide(UInt16 NULL, UInt16 NULL) :: Float64 NULL
-24 divide(UInt16, UInt32) :: Float64
-25 divide(UInt16 NULL, UInt32 NULL) :: Float64 NULL
-26 divide(UInt16, UInt64) :: Float64
-27 divide(UInt16 NULL, UInt64 NULL) :: Float64 NULL
-28 divide(UInt16, Int8) :: Float64
-29 divide(UInt16 NULL, Int8 NULL) :: Float64 NULL
-30 divide(UInt16, Int16) :: Float64
-31 divide(UInt16 NULL, Int16 NULL) :: Float64 NULL
-32 divide(UInt16, Int32) :: Float64
-33 divide(UInt16 NULL, Int32 NULL) :: Float64 NULL
-34 divide(UInt16, Int64) :: Float64
-35 divide(UInt16 NULL, Int64 NULL) :: Float64 NULL
-36 divide(UInt16, Float32) :: Float64
-37 divide(UInt16 NULL, Float32 NULL) :: Float64 NULL
-38 divide(UInt16, Float64) :: Float64
-39 divide(UInt16 NULL, Float64 NULL) :: Float64 NULL
-40 divide(UInt32, UInt8) :: Float64
-41 divide(UInt32 NULL, UInt8 NULL) :: Float64 NULL
-42 divide(UInt32, UInt16) :: Float64
-43 divide(UInt32 NULL, UInt16 NULL) :: Float64 NULL
-44 divide(UInt32, UInt32) :: Float64
-45 divide(UInt32 NULL, UInt32 NULL) :: Float64 NULL
-46 divide(UInt32, UInt64) :: Float64
-47 divide(UInt32 NULL, UInt64 NULL) :: Float64 NULL
-48 divide(UInt32, Int8) :: Float64
-49 divide(UInt32 NULL, Int8 NULL) :: Float64 NULL
-50 divide(UInt32, Int16) :: Float64
-51 divide(UInt32 NULL, Int16 NULL) :: Float64 NULL
-52 divide(UInt32, Int32) :: Float64
-53 divide(UInt32 NULL, Int32 NULL) :: Float64 NULL
-54 divide(UInt32, Int64) :: Float64
-55 divide(UInt32 NULL, Int64 NULL) :: Float64 NULL
-56 divide(UInt32, Float32) :: Float64
-57 divide(UInt32 NULL, Float32 NULL) :: Float64 NULL
-58 divide(UInt32, Float64) :: Float64
-59 divide(UInt32 NULL, Float64 NULL) :: Float64 NULL
-60 divide(UInt64, UInt8) :: Float64
-61 divide(UInt64 NULL, UInt8 NULL) :: Float64 NULL
-62 divide(UInt64, UInt16) :: Float64
-63 divide(UInt64 NULL, UInt16 NULL) :: Float64 NULL
-64 divide(UInt64, UInt32) :: Float64
-65 divide(UInt64 NULL, UInt32 NULL) :: Float64 NULL
-66 divide(UInt64, UInt64) :: Float64
-67 divide(UInt64 NULL, UInt64 NULL) :: Float64 NULL
-68 divide(UInt64, Int8) :: Float64
-69 divide(UInt64 NULL, Int8 NULL) :: Float64 NULL
-70 divide(UInt64, Int16) :: Float64
-71 divide(UInt64 NULL, Int16 NULL) :: Float64 NULL
-72 divide(UInt64, Int32) :: Float64
-73 divide(UInt64 NULL, Int32 NULL) :: Float64 NULL
-74 divide(UInt64, Int64) :: Float64
-75 divide(UInt64 NULL, Int64 NULL) :: Float64 NULL
-76 divide(UInt64, Float32) :: Float64
-77 divide(UInt64 NULL, Float32 NULL) :: Float64 NULL
-78 divide(UInt64, Float64) :: Float64
-79 divide(UInt64 NULL, Float64 NULL) :: Float64 NULL
-80 divide(Int8, UInt8) :: Float64
-81 divide(Int8 NULL, UInt8 NULL) :: Float64 NULL
-82 divide(Int8, UInt16) :: Float64
-83 divide(Int8 NULL, UInt16 NULL) :: Float64 NULL
-84 divide(Int8, UInt32) :: Float64
-85 divide(Int8 NULL, UInt32 NULL) :: Float64 NULL
-86 divide(Int8, UInt64) :: Float64
-87 divide(Int8 NULL, UInt64 NULL) :: Float64 NULL
-88 divide(Int8, Int8) :: Float64
-89 divide(Int8 NULL, Int8 NULL) :: Float64 NULL
-90 divide(Int8, Int16) :: Float64
-91 divide(Int8 NULL, Int16 NULL) :: Float64 NULL
-92 divide(Int8, Int32) :: Float64
-93 divide(Int8 NULL, Int32 NULL) :: Float64 NULL
-94 divide(Int8, Int64) :: Float64
-95 divide(Int8 NULL, Int64 NULL) :: Float64 NULL
-96 divide(Int8, Float32) :: Float64
-97 divide(Int8 NULL, Float32 NULL) :: Float64 NULL
-98 divide(Int8, Float64) :: Float64
-99 divide(Int8 NULL, Float64 NULL) :: Float64 NULL
-100 divide(Int16, UInt8) :: Float64
-101 divide(Int16 NULL, UInt8 NULL) :: Float64 NULL
-102 divide(Int16, UInt16) :: Float64
-103 divide(Int16 NULL, UInt16 NULL) :: Float64 NULL
-104 divide(Int16, UInt32) :: Float64
-105 divide(Int16 NULL, UInt32 NULL) :: Float64 NULL
-106 divide(Int16, UInt64) :: Float64
-107 divide(Int16 NULL, UInt64 NULL) :: Float64 NULL
-108 divide(Int16, Int8) :: Float64
-109 divide(Int16 NULL, Int8 NULL) :: Float64 NULL
-110 divide(Int16, Int16) :: Float64
-111 divide(Int16 NULL, Int16 NULL) :: Float64 NULL
-112 divide(Int16, Int32) :: Float64
-113 divide(Int16 NULL, Int32 NULL) :: Float64 NULL
-114 divide(Int16, Int64) :: Float64
-115 divide(Int16 NULL, Int64 NULL) :: Float64 NULL
-116 divide(Int16, Float32) :: Float64
-117 divide(Int16 NULL, Float32 NULL) :: Float64 NULL
-118 divide(Int16, Float64) :: Float64
-119 divide(Int16 NULL, Float64 NULL) :: Float64 NULL
-120 divide(Int32, UInt8) :: Float64
-121 divide(Int32 NULL, UInt8 NULL) :: Float64 NULL
-122 divide(Int32, UInt16) :: Float64
-123 divide(Int32 NULL, UInt16 NULL) :: Float64 NULL
-124 divide(Int32, UInt32) :: Float64
-125 divide(Int32 NULL, UInt32 NULL) :: Float64 NULL
-126 divide(Int32, UInt64) :: Float64
-127 divide(Int32 NULL, UInt64 NULL) :: Float64 NULL
-128 divide(Int32, Int8) :: Float64
-129 divide(Int32 NULL, Int8 NULL) :: Float64 NULL
-130 divide(Int32, Int16) :: Float64
-131 divide(Int32 NULL, Int16 NULL) :: Float64 NULL
-132 divide(Int32, Int32) :: Float64
-133 divide(Int32 NULL, Int32 NULL) :: Float64 NULL
-134 divide(Int32, Int64) :: Float64
-135 divide(Int32 NULL, Int64 NULL) :: Float64 NULL
-136 divide(Int32, Float32) :: Float64
-137 divide(Int32 NULL, Float32 NULL) :: Float64 NULL
-138 divide(Int32, Float64) :: Float64
-139 divide(Int32 NULL, Float64 NULL) :: Float64 NULL
-140 divide(Int64, UInt8) :: Float64
-141 divide(Int64 NULL, UInt8 NULL) :: Float64 NULL
-142 divide(Int64, UInt16) :: Float64
-143 divide(Int64 NULL, UInt16 NULL) :: Float64 NULL
-144 divide(Int64, UInt32) :: Float64
-145 divide(Int64 NULL, UInt32 NULL) :: Float64 NULL
-146 divide(Int64, UInt64) :: Float64
-147 divide(Int64 NULL, UInt64 NULL) :: Float64 NULL
-148 divide(Int64, Int8) :: Float64
-149 divide(Int64 NULL, Int8 NULL) :: Float64 NULL
-150 divide(Int64, Int16) :: Float64
-151 divide(Int64 NULL, Int16 NULL) :: Float64 NULL
-152 divide(Int64, Int32) :: Float64
-153 divide(Int64 NULL, Int32 NULL) :: Float64 NULL
-154 divide(Int64, Int64) :: Float64
-155 divide(Int64 NULL, Int64 NULL) :: Float64 NULL
-156 divide(Int64, Float32) :: Float64
-157 divide(Int64 NULL, Float32 NULL) :: Float64 NULL
-158 divide(Int64, Float64) :: Float64
-159 divide(Int64 NULL, Float64 NULL) :: Float64 NULL
-160 divide(Float32, UInt8) :: Float64
-161 divide(Float32 NULL, UInt8 NULL) :: Float64 NULL
-162 divide(Float32, UInt16) :: Float64
-163 divide(Float32 NULL, UInt16 NULL) :: Float64 NULL
-164 divide(Float32, UInt32) :: Float64
-165 divide(Float32 NULL, UInt32 NULL) :: Float64 NULL
-166 divide(Float32, UInt64) :: Float64
-167 divide(Float32 NULL, UInt64 NULL) :: Float64 NULL
-168 divide(Float32, Int8) :: Float64
-169 divide(Float32 NULL, Int8 NULL) :: Float64 NULL
-170 divide(Float32, Int16) :: Float64
-171 divide(Float32 NULL, Int16 NULL) :: Float64 NULL
-172 divide(Float32, Int32) :: Float64
-173 divide(Float32 NULL, Int32 NULL) :: Float64 NULL
-174 divide(Float32, Int64) :: Float64
-175 divide(Float32 NULL, Int64 NULL) :: Float64 NULL
-176 divide(Float32, Float32) :: Float64
-177 divide(Float32 NULL, Float32 NULL) :: Float64 NULL
-178 divide(Float32, Float64) :: Float64
-179 divide(Float32 NULL, Float64 NULL) :: Float64 NULL
-180 divide(Float64, UInt8) :: Float64
-181 divide(Float64 NULL, UInt8 NULL) :: Float64 NULL
-182 divide(Float64, UInt16) :: Float64
-183 divide(Float64 NULL, UInt16 NULL) :: Float64 NULL
-184 divide(Float64, UInt32) :: Float64
-185 divide(Float64 NULL, UInt32 NULL) :: Float64 NULL
-186 divide(Float64, UInt64) :: Float64
-187 divide(Float64 NULL, UInt64 NULL) :: Float64 NULL
-188 divide(Float64, Int8) :: Float64
-189 divide(Float64 NULL, Int8 NULL) :: Float64 NULL
-190 divide(Float64, Int16) :: Float64
-191 divide(Float64 NULL, Int16 NULL) :: Float64 NULL
-192 divide(Float64, Int32) :: Float64
-193 divide(Float64 NULL, Int32 NULL) :: Float64 NULL
-194 divide(Float64, Int64) :: Float64
-195 divide(Float64 NULL, Int64 NULL) :: Float64 NULL
-196 divide(Float64, Float32) :: Float64
-197 divide(Float64 NULL, Float32 NULL) :: Float64 NULL
-198 divide(Float64, Float64) :: Float64
-199 divide(Float64 NULL, Float64 NULL) :: Float64 NULL
-200 divide FACTORY
+16 divide(UInt16, UInt8) :: Float64
+17 divide(UInt16 NULL, UInt8 NULL) :: Float64 NULL
+18 divide(UInt16, UInt16) :: Float64
+19 divide(UInt16 NULL, UInt16 NULL) :: Float64 NULL
+20 divide(UInt16, UInt32) :: Float64
+21 divide(UInt16 NULL, UInt32 NULL) :: Float64 NULL
+22 divide(UInt16, UInt64) :: Float64
+23 divide(UInt16 NULL, UInt64 NULL) :: Float64 NULL
+24 divide(UInt16, Int8) :: Float64
+25 divide(UInt16 NULL, Int8 NULL) :: Float64 NULL
+26 divide(UInt16, Int16) :: Float64
+27 divide(UInt16 NULL, Int16 NULL) :: Float64 NULL
+28 divide(UInt16, Int32) :: Float64
+29 divide(UInt16 NULL, Int32 NULL) :: Float64 NULL
+30 divide(UInt16, Int64) :: Float64
+31 divide(UInt16 NULL, Int64 NULL) :: Float64 NULL
+32 divide(UInt32, UInt8) :: Float64
+33 divide(UInt32 NULL, UInt8 NULL) :: Float64 NULL
+34 divide(UInt32, UInt16) :: Float64
+35 divide(UInt32 NULL, UInt16 NULL) :: Float64 NULL
+36 divide(UInt32, UInt32) :: Float64
+37 divide(UInt32 NULL, UInt32 NULL) :: Float64 NULL
+38 divide(UInt32, UInt64) :: Float64
+39 divide(UInt32 NULL, UInt64 NULL) :: Float64 NULL
+40 divide(UInt32, Int8) :: Float64
+41 divide(UInt32 NULL, Int8 NULL) :: Float64 NULL
+42 divide(UInt32, Int16) :: Float64
+43 divide(UInt32 NULL, Int16 NULL) :: Float64 NULL
+44 divide(UInt32, Int32) :: Float64
+45 divide(UInt32 NULL, Int32 NULL) :: Float64 NULL
+46 divide(UInt32, Int64) :: Float64
+47 divide(UInt32 NULL, Int64 NULL) :: Float64 NULL
+48 divide(UInt64, UInt8) :: Float64
+49 divide(UInt64 NULL, UInt8 NULL) :: Float64 NULL
+50 divide(UInt64, UInt16) :: Float64
+51 divide(UInt64 NULL, UInt16 NULL) :: Float64 NULL
+52 divide(UInt64, UInt32) :: Float64
+53 divide(UInt64 NULL, UInt32 NULL) :: Float64 NULL
+54 divide(UInt64, UInt64) :: Float64
+55 divide(UInt64 NULL, UInt64 NULL) :: Float64 NULL
+56 divide(UInt64, Int8) :: Float64
+57 divide(UInt64 NULL, Int8 NULL) :: Float64 NULL
+58 divide(UInt64, Int16) :: Float64
+59 divide(UInt64 NULL, Int16 NULL) :: Float64 NULL
+60 divide(UInt64, Int32) :: Float64
+61 divide(UInt64 NULL, Int32 NULL) :: Float64 NULL
+62 divide(UInt64, Int64) :: Float64
+63 divide(UInt64 NULL, Int64 NULL) :: Float64 NULL
+64 divide(Int8, UInt8) :: Float64
+65 divide(Int8 NULL, UInt8 NULL) :: Float64 NULL
+66 divide(Int8, UInt16) :: Float64
+67 divide(Int8 NULL, UInt16 NULL) :: Float64 NULL
+68 divide(Int8, UInt32) :: Float64
+69 divide(Int8 NULL, UInt32 NULL) :: Float64 NULL
+70 divide(Int8, UInt64) :: Float64
+71 divide(Int8 NULL, UInt64 NULL) :: Float64 NULL
+72 divide(Int8, Int8) :: Float64
+73 divide(Int8 NULL, Int8 NULL) :: Float64 NULL
+74 divide(Int8, Int16) :: Float64
+75 divide(Int8 NULL, Int16 NULL) :: Float64 NULL
+76 divide(Int8, Int32) :: Float64
+77 divide(Int8 NULL, Int32 NULL) :: Float64 NULL
+78 divide(Int8, Int64) :: Float64
+79 divide(Int8 NULL, Int64 NULL) :: Float64 NULL
+80 divide(Int16, UInt8) :: Float64
+81 divide(Int16 NULL, UInt8 NULL) :: Float64 NULL
+82 divide(Int16, UInt16) :: Float64
+83 divide(Int16 NULL, UInt16 NULL) :: Float64 NULL
+84 divide(Int16, UInt32) :: Float64
+85 divide(Int16 NULL, UInt32 NULL) :: Float64 NULL
+86 divide(Int16, UInt64) :: Float64
+87 divide(Int16 NULL, UInt64 NULL) :: Float64 NULL
+88 divide(Int16, Int8) :: Float64
+89 divide(Int16 NULL, Int8 NULL) :: Float64 NULL
+90 divide(Int16, Int16) :: Float64
+91 divide(Int16 NULL, Int16 NULL) :: Float64 NULL
+92 divide(Int16, Int32) :: Float64
+93 divide(Int16 NULL, Int32 NULL) :: Float64 NULL
+94 divide(Int16, Int64) :: Float64
+95 divide(Int16 NULL, Int64 NULL) :: Float64 NULL
+96 divide(Int32, UInt8) :: Float64
+97 divide(Int32 NULL, UInt8 NULL) :: Float64 NULL
+98 divide(Int32, UInt16) :: Float64
+99 divide(Int32 NULL, UInt16 NULL) :: Float64 NULL
+100 divide(Int32, UInt32) :: Float64
+101 divide(Int32 NULL, UInt32 NULL) :: Float64 NULL
+102 divide(Int32, UInt64) :: Float64
+103 divide(Int32 NULL, UInt64 NULL) :: Float64 NULL
+104 divide(Int32, Int8) :: Float64
+105 divide(Int32 NULL, Int8 NULL) :: Float64 NULL
+106 divide(Int32, Int16) :: Float64
+107 divide(Int32 NULL, Int16 NULL) :: Float64 NULL
+108 divide(Int32, Int32) :: Float64
+109 divide(Int32 NULL, Int32 NULL) :: Float64 NULL
+110 divide(Int32, Int64) :: Float64
+111 divide(Int32 NULL, Int64 NULL) :: Float64 NULL
+112 divide(Int64, UInt8) :: Float64
+113 divide(Int64 NULL, UInt8 NULL) :: Float64 NULL
+114 divide(Int64, UInt16) :: Float64
+115 divide(Int64 NULL, UInt16 NULL) :: Float64 NULL
+116 divide(Int64, UInt32) :: Float64
+117 divide(Int64 NULL, UInt32 NULL) :: Float64 NULL
+118 divide(Int64, UInt64) :: Float64
+119 divide(Int64 NULL, UInt64 NULL) :: Float64 NULL
+120 divide(Int64, Int8) :: Float64
+121 divide(Int64 NULL, Int8 NULL) :: Float64 NULL
+122 divide(Int64, Int16) :: Float64
+123 divide(Int64 NULL, Int16 NULL) :: Float64 NULL
+124 divide(Int64, Int32) :: Float64
+125 divide(Int64 NULL, Int32 NULL) :: Float64 NULL
+126 divide(Int64, Int64) :: Float64
+127 divide(Int64 NULL, Int64 NULL) :: Float64 NULL
+128 divide FACTORY
+129 divide(UInt8, Float32) :: Float64
+130 divide(UInt8 NULL, Float32 NULL) :: Float64 NULL
+131 divide(UInt8, Float64) :: Float64
+132 divide(UInt8 NULL, Float64 NULL) :: Float64 NULL
+133 divide(UInt16, Float32) :: Float64
+134 divide(UInt16 NULL, Float32 NULL) :: Float64 NULL
+135 divide(UInt16, Float64) :: Float64
+136 divide(UInt16 NULL, Float64 NULL) :: Float64 NULL
+137 divide(UInt32, Float32) :: Float64
+138 divide(UInt32 NULL, Float32 NULL) :: Float64 NULL
+139 divide(UInt32, Float64) :: Float64
+140 divide(UInt32 NULL, Float64 NULL) :: Float64 NULL
+141 divide(UInt64, Float32) :: Float64
+142 divide(UInt64 NULL, Float32 NULL) :: Float64 NULL
+143 divide(UInt64, Float64) :: Float64
+144 divide(UInt64 NULL, Float64 NULL) :: Float64 NULL
+145 divide(Int8, Float32) :: Float64
+146 divide(Int8 NULL, Float32 NULL) :: Float64 NULL
+147 divide(Int8, Float64) :: Float64
+148 divide(Int8 NULL, Float64 NULL) :: Float64 NULL
+149 divide(Int16, Float32) :: Float64
+150 divide(Int16 NULL, Float32 NULL) :: Float64 NULL
+151 divide(Int16, Float64) :: Float64
+152 divide(Int16 NULL, Float64 NULL) :: Float64 NULL
+153 divide(Int32, Float32) :: Float64
+154 divide(Int32 NULL, Float32 NULL) :: Float64 NULL
+155 divide(Int32, Float64) :: Float64
+156 divide(Int32 NULL, Float64 NULL) :: Float64 NULL
+157 divide(Int64, Float32) :: Float64
+158 divide(Int64 NULL, Float32 NULL) :: Float64 NULL
+159 divide(Int64, Float64) :: Float64
+160 divide(Int64 NULL, Float64 NULL) :: Float64 NULL
+161 divide(Float32, UInt8) :: Float64
+162 divide(Float32 NULL, UInt8 NULL) :: Float64 NULL
+163 divide(Float32, UInt16) :: Float64
+164 divide(Float32 NULL, UInt16 NULL) :: Float64 NULL
+165 divide(Float32, UInt32) :: Float64
+166 divide(Float32 NULL, UInt32 NULL) :: Float64 NULL
+167 divide(Float32, UInt64) :: Float64
+168 divide(Float32 NULL, UInt64 NULL) :: Float64 NULL
+169 divide(Float32, Int8) :: Float64
+170 divide(Float32 NULL, Int8 NULL) :: Float64 NULL
+171 divide(Float32, Int16) :: Float64
+172 divide(Float32 NULL, Int16 NULL) :: Float64 NULL
+173 divide(Float32, Int32) :: Float64
+174 divide(Float32 NULL, Int32 NULL) :: Float64 NULL
+175 divide(Float32, Int64) :: Float64
+176 divide(Float32 NULL, Int64 NULL) :: Float64 NULL
+177 divide(Float64, UInt8) :: Float64
+178 divide(Float64 NULL, UInt8 NULL) :: Float64 NULL
+179 divide(Float64, UInt16) :: Float64
+180 divide(Float64 NULL, UInt16 NULL) :: Float64 NULL
+181 divide(Float64, UInt32) :: Float64
+182 divide(Float64 NULL, UInt32 NULL) :: Float64 NULL
+183 divide(Float64, UInt64) :: Float64
+184 divide(Float64 NULL, UInt64 NULL) :: Float64 NULL
+185 divide(Float64, Int8) :: Float64
+186 divide(Float64 NULL, Int8 NULL) :: Float64 NULL
+187 divide(Float64, Int16) :: Float64
+188 divide(Float64 NULL, Int16 NULL) :: Float64 NULL
+189 divide(Float64, Int32) :: Float64
+190 divide(Float64 NULL, Int32 NULL) :: Float64 NULL
+191 divide(Float64, Int64) :: Float64
+192 divide(Float64 NULL, Int64 NULL) :: Float64 NULL
+193 divide(Float32, Float32) :: Float64
+194 divide(Float32 NULL, Float32 NULL) :: Float64 NULL
+195 divide(Float32, Float64) :: Float64
+196 divide(Float32 NULL, Float64 NULL) :: Float64 NULL
+197 divide(Float64, Float32) :: Float64
+198 divide(Float64 NULL, Float32 NULL) :: Float64 NULL
+199 divide(Float64, Float64) :: Float64
+200 divide(Float64 NULL, Float64 NULL) :: Float64 NULL
 0 eq(Variant, Variant) :: Boolean
 1 eq(Variant NULL, Variant NULL) :: Boolean NULL
 2 eq(String, String) :: Boolean
@@ -966,31 +966,31 @@ Functions overloads:
 7 eq(Timestamp NULL, Timestamp NULL) :: Boolean NULL
 8 eq(UInt8, UInt8) :: Boolean
 9 eq(UInt8 NULL, UInt8 NULL) :: Boolean NULL
-10 eq(UInt16, UInt16) :: Boolean
-11 eq(UInt16 NULL, UInt16 NULL) :: Boolean NULL
-12 eq(UInt32, UInt32) :: Boolean
-13 eq(UInt32 NULL, UInt32 NULL) :: Boolean NULL
-14 eq(UInt64, UInt64) :: Boolean
-15 eq(UInt64 NULL, UInt64 NULL) :: Boolean NULL
-16 eq(Int8, Int8) :: Boolean
-17 eq(Int8 NULL, Int8 NULL) :: Boolean NULL
-18 eq(Int16, Int16) :: Boolean
-19 eq(Int16 NULL, Int16 NULL) :: Boolean NULL
-20 eq(Int32, Int32) :: Boolean
-21 eq(Int32 NULL, Int32 NULL) :: Boolean NULL
+10 eq(Int8, Int8) :: Boolean
+11 eq(Int8 NULL, Int8 NULL) :: Boolean NULL
+12 eq(UInt16, UInt16) :: Boolean
+13 eq(UInt16 NULL, UInt16 NULL) :: Boolean NULL
+14 eq(Int16, Int16) :: Boolean
+15 eq(Int16 NULL, Int16 NULL) :: Boolean NULL
+16 eq(UInt32, UInt32) :: Boolean
+17 eq(UInt32 NULL, UInt32 NULL) :: Boolean NULL
+18 eq(Int32, Int32) :: Boolean
+19 eq(Int32 NULL, Int32 NULL) :: Boolean NULL
+20 eq(UInt64, UInt64) :: Boolean
+21 eq(UInt64 NULL, UInt64 NULL) :: Boolean NULL
 22 eq(Int64, Int64) :: Boolean
 23 eq(Int64 NULL, Int64 NULL) :: Boolean NULL
-24 eq(Float32, Float32) :: Boolean
-25 eq(Float32 NULL, Float32 NULL) :: Boolean NULL
-26 eq(Float64, Float64) :: Boolean
-27 eq(Float64 NULL, Float64 NULL) :: Boolean NULL
-28 eq(Boolean, Boolean) :: Boolean
-29 eq(Boolean NULL, Boolean NULL) :: Boolean NULL
-30 eq(Array(Nothing), Array(Nothing)) :: Boolean
-31 eq(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
-32 eq(Array(T0), Array(T0)) :: Boolean
-33 eq(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
-34 eq FACTORY
+24 eq FACTORY
+25 eq(Float32, Float32) :: Boolean
+26 eq(Float32 NULL, Float32 NULL) :: Boolean NULL
+27 eq(Float64, Float64) :: Boolean
+28 eq(Float64 NULL, Float64 NULL) :: Boolean NULL
+29 eq(Boolean, Boolean) :: Boolean
+30 eq(Boolean NULL, Boolean NULL) :: Boolean NULL
+31 eq(Array(Nothing), Array(Nothing)) :: Boolean
+32 eq(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
+33 eq(Array(T0), Array(T0)) :: Boolean
+34 eq(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
 35 eq FACTORY
 0 exp(UInt8) :: Float64
 1 exp(UInt8 NULL) :: Float64 NULL
@@ -1053,31 +1053,31 @@ Functions overloads:
 7 gt(Timestamp NULL, Timestamp NULL) :: Boolean NULL
 8 gt(UInt8, UInt8) :: Boolean
 9 gt(UInt8 NULL, UInt8 NULL) :: Boolean NULL
-10 gt(UInt16, UInt16) :: Boolean
-11 gt(UInt16 NULL, UInt16 NULL) :: Boolean NULL
-12 gt(UInt32, UInt32) :: Boolean
-13 gt(UInt32 NULL, UInt32 NULL) :: Boolean NULL
-14 gt(UInt64, UInt64) :: Boolean
-15 gt(UInt64 NULL, UInt64 NULL) :: Boolean NULL
-16 gt(Int8, Int8) :: Boolean
-17 gt(Int8 NULL, Int8 NULL) :: Boolean NULL
-18 gt(Int16, Int16) :: Boolean
-19 gt(Int16 NULL, Int16 NULL) :: Boolean NULL
-20 gt(Int32, Int32) :: Boolean
-21 gt(Int32 NULL, Int32 NULL) :: Boolean NULL
+10 gt(Int8, Int8) :: Boolean
+11 gt(Int8 NULL, Int8 NULL) :: Boolean NULL
+12 gt(UInt16, UInt16) :: Boolean
+13 gt(UInt16 NULL, UInt16 NULL) :: Boolean NULL
+14 gt(Int16, Int16) :: Boolean
+15 gt(Int16 NULL, Int16 NULL) :: Boolean NULL
+16 gt(UInt32, UInt32) :: Boolean
+17 gt(UInt32 NULL, UInt32 NULL) :: Boolean NULL
+18 gt(Int32, Int32) :: Boolean
+19 gt(Int32 NULL, Int32 NULL) :: Boolean NULL
+20 gt(UInt64, UInt64) :: Boolean
+21 gt(UInt64 NULL, UInt64 NULL) :: Boolean NULL
 22 gt(Int64, Int64) :: Boolean
 23 gt(Int64 NULL, Int64 NULL) :: Boolean NULL
-24 gt(Float32, Float32) :: Boolean
-25 gt(Float32 NULL, Float32 NULL) :: Boolean NULL
-26 gt(Float64, Float64) :: Boolean
-27 gt(Float64 NULL, Float64 NULL) :: Boolean NULL
-28 gt(Boolean, Boolean) :: Boolean
-29 gt(Boolean NULL, Boolean NULL) :: Boolean NULL
-30 gt(Array(Nothing), Array(Nothing)) :: Boolean
-31 gt(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
-32 gt(Array(T0), Array(T0)) :: Boolean
-33 gt(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
-34 gt FACTORY
+24 gt FACTORY
+25 gt(Float32, Float32) :: Boolean
+26 gt(Float32 NULL, Float32 NULL) :: Boolean NULL
+27 gt(Float64, Float64) :: Boolean
+28 gt(Float64 NULL, Float64 NULL) :: Boolean NULL
+29 gt(Boolean, Boolean) :: Boolean
+30 gt(Boolean NULL, Boolean NULL) :: Boolean NULL
+31 gt(Array(Nothing), Array(Nothing)) :: Boolean
+32 gt(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
+33 gt(Array(T0), Array(T0)) :: Boolean
+34 gt(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
 35 gt FACTORY
 0 gte(Variant, Variant) :: Boolean
 1 gte(Variant NULL, Variant NULL) :: Boolean NULL
@@ -1089,31 +1089,31 @@ Functions overloads:
 7 gte(Timestamp NULL, Timestamp NULL) :: Boolean NULL
 8 gte(UInt8, UInt8) :: Boolean
 9 gte(UInt8 NULL, UInt8 NULL) :: Boolean NULL
-10 gte(UInt16, UInt16) :: Boolean
-11 gte(UInt16 NULL, UInt16 NULL) :: Boolean NULL
-12 gte(UInt32, UInt32) :: Boolean
-13 gte(UInt32 NULL, UInt32 NULL) :: Boolean NULL
-14 gte(UInt64, UInt64) :: Boolean
-15 gte(UInt64 NULL, UInt64 NULL) :: Boolean NULL
-16 gte(Int8, Int8) :: Boolean
-17 gte(Int8 NULL, Int8 NULL) :: Boolean NULL
-18 gte(Int16, Int16) :: Boolean
-19 gte(Int16 NULL, Int16 NULL) :: Boolean NULL
-20 gte(Int32, Int32) :: Boolean
-21 gte(Int32 NULL, Int32 NULL) :: Boolean NULL
+10 gte(Int8, Int8) :: Boolean
+11 gte(Int8 NULL, Int8 NULL) :: Boolean NULL
+12 gte(UInt16, UInt16) :: Boolean
+13 gte(UInt16 NULL, UInt16 NULL) :: Boolean NULL
+14 gte(Int16, Int16) :: Boolean
+15 gte(Int16 NULL, Int16 NULL) :: Boolean NULL
+16 gte(UInt32, UInt32) :: Boolean
+17 gte(UInt32 NULL, UInt32 NULL) :: Boolean NULL
+18 gte(Int32, Int32) :: Boolean
+19 gte(Int32 NULL, Int32 NULL) :: Boolean NULL
+20 gte(UInt64, UInt64) :: Boolean
+21 gte(UInt64 NULL, UInt64 NULL) :: Boolean NULL
 22 gte(Int64, Int64) :: Boolean
 23 gte(Int64 NULL, Int64 NULL) :: Boolean NULL
-24 gte(Float32, Float32) :: Boolean
-25 gte(Float32 NULL, Float32 NULL) :: Boolean NULL
-26 gte(Float64, Float64) :: Boolean
-27 gte(Float64 NULL, Float64 NULL) :: Boolean NULL
-28 gte(Boolean, Boolean) :: Boolean
-29 gte(Boolean NULL, Boolean NULL) :: Boolean NULL
-30 gte(Array(Nothing), Array(Nothing)) :: Boolean
-31 gte(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
-32 gte(Array(T0), Array(T0)) :: Boolean
-33 gte(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
-34 gte FACTORY
+24 gte FACTORY
+25 gte(Float32, Float32) :: Boolean
+26 gte(Float32 NULL, Float32 NULL) :: Boolean NULL
+27 gte(Float64, Float64) :: Boolean
+28 gte(Float64 NULL, Float64 NULL) :: Boolean NULL
+29 gte(Boolean, Boolean) :: Boolean
+30 gte(Boolean NULL, Boolean NULL) :: Boolean NULL
+31 gte(Array(Nothing), Array(Nothing)) :: Boolean
+32 gte(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
+33 gte(Array(T0), Array(T0)) :: Boolean
+34 gte(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
 35 gte FACTORY
 0 hex(String) :: String
 1 hex(String NULL) :: String NULL
@@ -1268,31 +1268,31 @@ Functions overloads:
 7 lt(Timestamp NULL, Timestamp NULL) :: Boolean NULL
 8 lt(UInt8, UInt8) :: Boolean
 9 lt(UInt8 NULL, UInt8 NULL) :: Boolean NULL
-10 lt(UInt16, UInt16) :: Boolean
-11 lt(UInt16 NULL, UInt16 NULL) :: Boolean NULL
-12 lt(UInt32, UInt32) :: Boolean
-13 lt(UInt32 NULL, UInt32 NULL) :: Boolean NULL
-14 lt(UInt64, UInt64) :: Boolean
-15 lt(UInt64 NULL, UInt64 NULL) :: Boolean NULL
-16 lt(Int8, Int8) :: Boolean
-17 lt(Int8 NULL, Int8 NULL) :: Boolean NULL
-18 lt(Int16, Int16) :: Boolean
-19 lt(Int16 NULL, Int16 NULL) :: Boolean NULL
-20 lt(Int32, Int32) :: Boolean
-21 lt(Int32 NULL, Int32 NULL) :: Boolean NULL
+10 lt(Int8, Int8) :: Boolean
+11 lt(Int8 NULL, Int8 NULL) :: Boolean NULL
+12 lt(UInt16, UInt16) :: Boolean
+13 lt(UInt16 NULL, UInt16 NULL) :: Boolean NULL
+14 lt(Int16, Int16) :: Boolean
+15 lt(Int16 NULL, Int16 NULL) :: Boolean NULL
+16 lt(UInt32, UInt32) :: Boolean
+17 lt(UInt32 NULL, UInt32 NULL) :: Boolean NULL
+18 lt(Int32, Int32) :: Boolean
+19 lt(Int32 NULL, Int32 NULL) :: Boolean NULL
+20 lt(UInt64, UInt64) :: Boolean
+21 lt(UInt64 NULL, UInt64 NULL) :: Boolean NULL
 22 lt(Int64, Int64) :: Boolean
 23 lt(Int64 NULL, Int64 NULL) :: Boolean NULL
-24 lt(Float32, Float32) :: Boolean
-25 lt(Float32 NULL, Float32 NULL) :: Boolean NULL
-26 lt(Float64, Float64) :: Boolean
-27 lt(Float64 NULL, Float64 NULL) :: Boolean NULL
-28 lt(Boolean, Boolean) :: Boolean
-29 lt(Boolean NULL, Boolean NULL) :: Boolean NULL
-30 lt(Array(Nothing), Array(Nothing)) :: Boolean
-31 lt(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
-32 lt(Array(T0), Array(T0)) :: Boolean
-33 lt(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
-34 lt FACTORY
+24 lt FACTORY
+25 lt(Float32, Float32) :: Boolean
+26 lt(Float32 NULL, Float32 NULL) :: Boolean NULL
+27 lt(Float64, Float64) :: Boolean
+28 lt(Float64 NULL, Float64 NULL) :: Boolean NULL
+29 lt(Boolean, Boolean) :: Boolean
+30 lt(Boolean NULL, Boolean NULL) :: Boolean NULL
+31 lt(Array(Nothing), Array(Nothing)) :: Boolean
+32 lt(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
+33 lt(Array(T0), Array(T0)) :: Boolean
+34 lt(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
 35 lt FACTORY
 0 lte(Variant, Variant) :: Boolean
 1 lte(Variant NULL, Variant NULL) :: Boolean NULL
@@ -1304,31 +1304,31 @@ Functions overloads:
 7 lte(Timestamp NULL, Timestamp NULL) :: Boolean NULL
 8 lte(UInt8, UInt8) :: Boolean
 9 lte(UInt8 NULL, UInt8 NULL) :: Boolean NULL
-10 lte(UInt16, UInt16) :: Boolean
-11 lte(UInt16 NULL, UInt16 NULL) :: Boolean NULL
-12 lte(UInt32, UInt32) :: Boolean
-13 lte(UInt32 NULL, UInt32 NULL) :: Boolean NULL
-14 lte(UInt64, UInt64) :: Boolean
-15 lte(UInt64 NULL, UInt64 NULL) :: Boolean NULL
-16 lte(Int8, Int8) :: Boolean
-17 lte(Int8 NULL, Int8 NULL) :: Boolean NULL
-18 lte(Int16, Int16) :: Boolean
-19 lte(Int16 NULL, Int16 NULL) :: Boolean NULL
-20 lte(Int32, Int32) :: Boolean
-21 lte(Int32 NULL, Int32 NULL) :: Boolean NULL
+10 lte(Int8, Int8) :: Boolean
+11 lte(Int8 NULL, Int8 NULL) :: Boolean NULL
+12 lte(UInt16, UInt16) :: Boolean
+13 lte(UInt16 NULL, UInt16 NULL) :: Boolean NULL
+14 lte(Int16, Int16) :: Boolean
+15 lte(Int16 NULL, Int16 NULL) :: Boolean NULL
+16 lte(UInt32, UInt32) :: Boolean
+17 lte(UInt32 NULL, UInt32 NULL) :: Boolean NULL
+18 lte(Int32, Int32) :: Boolean
+19 lte(Int32 NULL, Int32 NULL) :: Boolean NULL
+20 lte(UInt64, UInt64) :: Boolean
+21 lte(UInt64 NULL, UInt64 NULL) :: Boolean NULL
 22 lte(Int64, Int64) :: Boolean
 23 lte(Int64 NULL, Int64 NULL) :: Boolean NULL
-24 lte(Float32, Float32) :: Boolean
-25 lte(Float32 NULL, Float32 NULL) :: Boolean NULL
-26 lte(Float64, Float64) :: Boolean
-27 lte(Float64 NULL, Float64 NULL) :: Boolean NULL
-28 lte(Boolean, Boolean) :: Boolean
-29 lte(Boolean NULL, Boolean NULL) :: Boolean NULL
-30 lte(Array(Nothing), Array(Nothing)) :: Boolean
-31 lte(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
-32 lte(Array(T0), Array(T0)) :: Boolean
-33 lte(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
-34 lte FACTORY
+24 lte FACTORY
+25 lte(Float32, Float32) :: Boolean
+26 lte(Float32 NULL, Float32 NULL) :: Boolean NULL
+27 lte(Float64, Float64) :: Boolean
+28 lte(Float64 NULL, Float64 NULL) :: Boolean NULL
+29 lte(Boolean, Boolean) :: Boolean
+30 lte(Boolean NULL, Boolean NULL) :: Boolean NULL
+31 lte(Array(Nothing), Array(Nothing)) :: Boolean
+32 lte(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
+33 lte(Array(T0), Array(T0)) :: Boolean
+34 lte(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
 35 lte FACTORY
 0 ltrim(String) :: String
 1 ltrim(String NULL) :: String NULL
@@ -1340,233 +1340,234 @@ Functions overloads:
 1 md5(String NULL) :: String NULL
 0 minus(UInt8) :: Int16
 1 minus(UInt8 NULL) :: Int16 NULL
-2 minus(UInt16) :: Int32
-3 minus(UInt16 NULL) :: Int32 NULL
-4 minus(UInt32) :: Int64
-5 minus(UInt32 NULL) :: Int64 NULL
-6 minus(UInt64) :: Int64
-7 minus(UInt64 NULL) :: Int64 NULL
-8 minus(Int8) :: Int8
-9 minus(Int8 NULL) :: Int8 NULL
-10 minus(Int16) :: Int16
-11 minus(Int16 NULL) :: Int16 NULL
-12 minus(Int32) :: Int32
-13 minus(Int32 NULL) :: Int32 NULL
+2 minus(Int8) :: Int8
+3 minus(Int8 NULL) :: Int8 NULL
+4 minus(UInt16) :: Int32
+5 minus(UInt16 NULL) :: Int32 NULL
+6 minus(Int16) :: Int16
+7 minus(Int16 NULL) :: Int16 NULL
+8 minus(UInt32) :: Int64
+9 minus(UInt32 NULL) :: Int64 NULL
+10 minus(Int32) :: Int32
+11 minus(Int32 NULL) :: Int32 NULL
+12 minus(UInt64) :: Int64
+13 minus(UInt64 NULL) :: Int64 NULL
 14 minus(Int64) :: Int64
 15 minus(Int64 NULL) :: Int64 NULL
-16 minus(Float32) :: Float32
-17 minus(Float32 NULL) :: Float32 NULL
-18 minus(Float64) :: Float64
-19 minus(Float64 NULL) :: Float64 NULL
-20 minus(UInt8, UInt8) :: Int16
-21 minus(UInt8 NULL, UInt8 NULL) :: Int16 NULL
-22 minus(UInt8, UInt16) :: Int32
-23 minus(UInt8 NULL, UInt16 NULL) :: Int32 NULL
-24 minus(UInt8, UInt32) :: Int64
-25 minus(UInt8 NULL, UInt32 NULL) :: Int64 NULL
-26 minus(UInt8, UInt64) :: Int64
-27 minus(UInt8 NULL, UInt64 NULL) :: Int64 NULL
-28 minus(UInt8, Int8) :: Int16
-29 minus(UInt8 NULL, Int8 NULL) :: Int16 NULL
-30 minus(UInt8, Int16) :: Int32
-31 minus(UInt8 NULL, Int16 NULL) :: Int32 NULL
-32 minus(UInt8, Int32) :: Int64
-33 minus(UInt8 NULL, Int32 NULL) :: Int64 NULL
-34 minus(UInt8, Int64) :: Int64
-35 minus(UInt8 NULL, Int64 NULL) :: Int64 NULL
-36 minus(UInt8, Float32) :: Float64
-37 minus(UInt8 NULL, Float32 NULL) :: Float64 NULL
-38 minus(UInt8, Float64) :: Float64
-39 minus(UInt8 NULL, Float64 NULL) :: Float64 NULL
-40 minus(UInt16, UInt8) :: Int32
-41 minus(UInt16 NULL, UInt8 NULL) :: Int32 NULL
-42 minus(UInt16, UInt16) :: Int32
-43 minus(UInt16 NULL, UInt16 NULL) :: Int32 NULL
-44 minus(UInt16, UInt32) :: Int64
-45 minus(UInt16 NULL, UInt32 NULL) :: Int64 NULL
-46 minus(UInt16, UInt64) :: Int64
-47 minus(UInt16 NULL, UInt64 NULL) :: Int64 NULL
-48 minus(UInt16, Int8) :: Int32
-49 minus(UInt16 NULL, Int8 NULL) :: Int32 NULL
-50 minus(UInt16, Int16) :: Int32
-51 minus(UInt16 NULL, Int16 NULL) :: Int32 NULL
-52 minus(UInt16, Int32) :: Int64
-53 minus(UInt16 NULL, Int32 NULL) :: Int64 NULL
-54 minus(UInt16, Int64) :: Int64
-55 minus(UInt16 NULL, Int64 NULL) :: Int64 NULL
-56 minus(UInt16, Float32) :: Float64
-57 minus(UInt16 NULL, Float32 NULL) :: Float64 NULL
-58 minus(UInt16, Float64) :: Float64
-59 minus(UInt16 NULL, Float64 NULL) :: Float64 NULL
-60 minus(UInt32, UInt8) :: Int64
-61 minus(UInt32 NULL, UInt8 NULL) :: Int64 NULL
-62 minus(UInt32, UInt16) :: Int64
-63 minus(UInt32 NULL, UInt16 NULL) :: Int64 NULL
-64 minus(UInt32, UInt32) :: Int64
-65 minus(UInt32 NULL, UInt32 NULL) :: Int64 NULL
-66 minus(UInt32, UInt64) :: Int64
-67 minus(UInt32 NULL, UInt64 NULL) :: Int64 NULL
-68 minus(UInt32, Int8) :: Int64
-69 minus(UInt32 NULL, Int8 NULL) :: Int64 NULL
-70 minus(UInt32, Int16) :: Int64
-71 minus(UInt32 NULL, Int16 NULL) :: Int64 NULL
-72 minus(UInt32, Int32) :: Int64
-73 minus(UInt32 NULL, Int32 NULL) :: Int64 NULL
-74 minus(UInt32, Int64) :: Int64
-75 minus(UInt32 NULL, Int64 NULL) :: Int64 NULL
-76 minus(UInt32, Float32) :: Float64
-77 minus(UInt32 NULL, Float32 NULL) :: Float64 NULL
-78 minus(UInt32, Float64) :: Float64
-79 minus(UInt32 NULL, Float64 NULL) :: Float64 NULL
-80 minus(UInt64, UInt8) :: Int64
-81 minus(UInt64 NULL, UInt8 NULL) :: Int64 NULL
-82 minus(UInt64, UInt16) :: Int64
-83 minus(UInt64 NULL, UInt16 NULL) :: Int64 NULL
-84 minus(UInt64, UInt32) :: Int64
-85 minus(UInt64 NULL, UInt32 NULL) :: Int64 NULL
-86 minus(UInt64, UInt64) :: Int64
-87 minus(UInt64 NULL, UInt64 NULL) :: Int64 NULL
-88 minus(UInt64, Int8) :: Int64
-89 minus(UInt64 NULL, Int8 NULL) :: Int64 NULL
-90 minus(UInt64, Int16) :: Int64
-91 minus(UInt64 NULL, Int16 NULL) :: Int64 NULL
-92 minus(UInt64, Int32) :: Int64
-93 minus(UInt64 NULL, Int32 NULL) :: Int64 NULL
-94 minus(UInt64, Int64) :: Int64
-95 minus(UInt64 NULL, Int64 NULL) :: Int64 NULL
-96 minus(UInt64, Float32) :: Float64
-97 minus(UInt64 NULL, Float32 NULL) :: Float64 NULL
-98 minus(UInt64, Float64) :: Float64
-99 minus(UInt64 NULL, Float64 NULL) :: Float64 NULL
-100 minus(Int8, UInt8) :: Int16
-101 minus(Int8 NULL, UInt8 NULL) :: Int16 NULL
-102 minus(Int8, UInt16) :: Int32
-103 minus(Int8 NULL, UInt16 NULL) :: Int32 NULL
-104 minus(Int8, UInt32) :: Int64
-105 minus(Int8 NULL, UInt32 NULL) :: Int64 NULL
-106 minus(Int8, UInt64) :: Int64
-107 minus(Int8 NULL, UInt64 NULL) :: Int64 NULL
-108 minus(Int8, Int8) :: Int16
-109 minus(Int8 NULL, Int8 NULL) :: Int16 NULL
-110 minus(Int8, Int16) :: Int32
-111 minus(Int8 NULL, Int16 NULL) :: Int32 NULL
-112 minus(Int8, Int32) :: Int64
-113 minus(Int8 NULL, Int32 NULL) :: Int64 NULL
-114 minus(Int8, Int64) :: Int64
-115 minus(Int8 NULL, Int64 NULL) :: Int64 NULL
-116 minus(Int8, Float32) :: Float64
-117 minus(Int8 NULL, Float32 NULL) :: Float64 NULL
-118 minus(Int8, Float64) :: Float64
-119 minus(Int8 NULL, Float64 NULL) :: Float64 NULL
-120 minus(Int16, UInt8) :: Int32
-121 minus(Int16 NULL, UInt8 NULL) :: Int32 NULL
-122 minus(Int16, UInt16) :: Int32
-123 minus(Int16 NULL, UInt16 NULL) :: Int32 NULL
-124 minus(Int16, UInt32) :: Int64
-125 minus(Int16 NULL, UInt32 NULL) :: Int64 NULL
-126 minus(Int16, UInt64) :: Int64
-127 minus(Int16 NULL, UInt64 NULL) :: Int64 NULL
-128 minus(Int16, Int8) :: Int32
-129 minus(Int16 NULL, Int8 NULL) :: Int32 NULL
-130 minus(Int16, Int16) :: Int32
-131 minus(Int16 NULL, Int16 NULL) :: Int32 NULL
-132 minus(Int16, Int32) :: Int64
-133 minus(Int16 NULL, Int32 NULL) :: Int64 NULL
-134 minus(Int16, Int64) :: Int64
-135 minus(Int16 NULL, Int64 NULL) :: Int64 NULL
-136 minus(Int16, Float32) :: Float64
-137 minus(Int16 NULL, Float32 NULL) :: Float64 NULL
-138 minus(Int16, Float64) :: Float64
-139 minus(Int16 NULL, Float64 NULL) :: Float64 NULL
-140 minus(Int32, UInt8) :: Int64
-141 minus(Int32 NULL, UInt8 NULL) :: Int64 NULL
-142 minus(Int32, UInt16) :: Int64
-143 minus(Int32 NULL, UInt16 NULL) :: Int64 NULL
-144 minus(Int32, UInt32) :: Int64
-145 minus(Int32 NULL, UInt32 NULL) :: Int64 NULL
-146 minus(Int32, UInt64) :: Int64
-147 minus(Int32 NULL, UInt64 NULL) :: Int64 NULL
-148 minus(Int32, Int8) :: Int64
-149 minus(Int32 NULL, Int8 NULL) :: Int64 NULL
-150 minus(Int32, Int16) :: Int64
-151 minus(Int32 NULL, Int16 NULL) :: Int64 NULL
-152 minus(Int32, Int32) :: Int64
-153 minus(Int32 NULL, Int32 NULL) :: Int64 NULL
-154 minus(Int32, Int64) :: Int64
-155 minus(Int32 NULL, Int64 NULL) :: Int64 NULL
-156 minus(Int32, Float32) :: Float64
-157 minus(Int32 NULL, Float32 NULL) :: Float64 NULL
-158 minus(Int32, Float64) :: Float64
-159 minus(Int32 NULL, Float64 NULL) :: Float64 NULL
-160 minus(Int64, UInt8) :: Int64
-161 minus(Int64 NULL, UInt8 NULL) :: Int64 NULL
-162 minus(Int64, UInt16) :: Int64
-163 minus(Int64 NULL, UInt16 NULL) :: Int64 NULL
-164 minus(Int64, UInt32) :: Int64
-165 minus(Int64 NULL, UInt32 NULL) :: Int64 NULL
-166 minus(Int64, UInt64) :: Int64
-167 minus(Int64 NULL, UInt64 NULL) :: Int64 NULL
-168 minus(Int64, Int8) :: Int64
-169 minus(Int64 NULL, Int8 NULL) :: Int64 NULL
-170 minus(Int64, Int16) :: Int64
-171 minus(Int64 NULL, Int16 NULL) :: Int64 NULL
-172 minus(Int64, Int32) :: Int64
-173 minus(Int64 NULL, Int32 NULL) :: Int64 NULL
-174 minus(Int64, Int64) :: Int64
-175 minus(Int64 NULL, Int64 NULL) :: Int64 NULL
-176 minus(Int64, Float32) :: Float64
-177 minus(Int64 NULL, Float32 NULL) :: Float64 NULL
-178 minus(Int64, Float64) :: Float64
-179 minus(Int64 NULL, Float64 NULL) :: Float64 NULL
-180 minus(Float32, UInt8) :: Float64
-181 minus(Float32 NULL, UInt8 NULL) :: Float64 NULL
-182 minus(Float32, UInt16) :: Float64
-183 minus(Float32 NULL, UInt16 NULL) :: Float64 NULL
-184 minus(Float32, UInt32) :: Float64
-185 minus(Float32 NULL, UInt32 NULL) :: Float64 NULL
-186 minus(Float32, UInt64) :: Float64
-187 minus(Float32 NULL, UInt64 NULL) :: Float64 NULL
-188 minus(Float32, Int8) :: Float64
-189 minus(Float32 NULL, Int8 NULL) :: Float64 NULL
-190 minus(Float32, Int16) :: Float64
-191 minus(Float32 NULL, Int16 NULL) :: Float64 NULL
-192 minus(Float32, Int32) :: Float64
-193 minus(Float32 NULL, Int32 NULL) :: Float64 NULL
-194 minus(Float32, Int64) :: Float64
-195 minus(Float32 NULL, Int64 NULL) :: Float64 NULL
-196 minus(Float32, Float32) :: Float64
-197 minus(Float32 NULL, Float32 NULL) :: Float64 NULL
-198 minus(Float32, Float64) :: Float64
-199 minus(Float32 NULL, Float64 NULL) :: Float64 NULL
-200 minus(Float64, UInt8) :: Float64
-201 minus(Float64 NULL, UInt8 NULL) :: Float64 NULL
-202 minus(Float64, UInt16) :: Float64
-203 minus(Float64 NULL, UInt16 NULL) :: Float64 NULL
-204 minus(Float64, UInt32) :: Float64
-205 minus(Float64 NULL, UInt32 NULL) :: Float64 NULL
-206 minus(Float64, UInt64) :: Float64
-207 minus(Float64 NULL, UInt64 NULL) :: Float64 NULL
-208 minus(Float64, Int8) :: Float64
-209 minus(Float64 NULL, Int8 NULL) :: Float64 NULL
-210 minus(Float64, Int16) :: Float64
-211 minus(Float64 NULL, Int16 NULL) :: Float64 NULL
-212 minus(Float64, Int32) :: Float64
-213 minus(Float64 NULL, Int32 NULL) :: Float64 NULL
-214 minus(Float64, Int64) :: Float64
-215 minus(Float64 NULL, Int64 NULL) :: Float64 NULL
-216 minus(Float64, Float32) :: Float64
-217 minus(Float64 NULL, Float32 NULL) :: Float64 NULL
-218 minus(Float64, Float64) :: Float64
-219 minus(Float64 NULL, Float64 NULL) :: Float64 NULL
-220 minus(Date, Int64) :: Date
-221 minus(Date NULL, Int64 NULL) :: Date NULL
-222 minus(Date, Date) :: Int32
-223 minus(Date NULL, Date NULL) :: Int32 NULL
-224 minus(Timestamp, Int64) :: Timestamp
-225 minus(Timestamp NULL, Int64 NULL) :: Timestamp NULL
-226 minus(Timestamp, Timestamp) :: Int64
-227 minus(Timestamp NULL, Timestamp NULL) :: Int64 NULL
-228 minus FACTORY
+16 minus FACTORY
+17 minus(Float32) :: Float32
+18 minus(Float32 NULL) :: Float32 NULL
+19 minus(Float64) :: Float64
+20 minus(Float64 NULL) :: Float64 NULL
+21 minus(UInt8, UInt8) :: Int16
+22 minus(UInt8 NULL, UInt8 NULL) :: Int16 NULL
+23 minus(UInt8, UInt16) :: Int32
+24 minus(UInt8 NULL, UInt16 NULL) :: Int32 NULL
+25 minus(UInt8, UInt32) :: Int64
+26 minus(UInt8 NULL, UInt32 NULL) :: Int64 NULL
+27 minus(UInt8, UInt64) :: Int64
+28 minus(UInt8 NULL, UInt64 NULL) :: Int64 NULL
+29 minus(UInt8, Int8) :: Int16
+30 minus(UInt8 NULL, Int8 NULL) :: Int16 NULL
+31 minus(UInt8, Int16) :: Int32
+32 minus(UInt8 NULL, Int16 NULL) :: Int32 NULL
+33 minus(UInt8, Int32) :: Int64
+34 minus(UInt8 NULL, Int32 NULL) :: Int64 NULL
+35 minus(UInt8, Int64) :: Int64
+36 minus(UInt8 NULL, Int64 NULL) :: Int64 NULL
+37 minus(UInt16, UInt8) :: Int32
+38 minus(UInt16 NULL, UInt8 NULL) :: Int32 NULL
+39 minus(UInt16, UInt16) :: Int32
+40 minus(UInt16 NULL, UInt16 NULL) :: Int32 NULL
+41 minus(UInt16, UInt32) :: Int64
+42 minus(UInt16 NULL, UInt32 NULL) :: Int64 NULL
+43 minus(UInt16, UInt64) :: Int64
+44 minus(UInt16 NULL, UInt64 NULL) :: Int64 NULL
+45 minus(UInt16, Int8) :: Int32
+46 minus(UInt16 NULL, Int8 NULL) :: Int32 NULL
+47 minus(UInt16, Int16) :: Int32
+48 minus(UInt16 NULL, Int16 NULL) :: Int32 NULL
+49 minus(UInt16, Int32) :: Int64
+50 minus(UInt16 NULL, Int32 NULL) :: Int64 NULL
+51 minus(UInt16, Int64) :: Int64
+52 minus(UInt16 NULL, Int64 NULL) :: Int64 NULL
+53 minus(UInt32, UInt8) :: Int64
+54 minus(UInt32 NULL, UInt8 NULL) :: Int64 NULL
+55 minus(UInt32, UInt16) :: Int64
+56 minus(UInt32 NULL, UInt16 NULL) :: Int64 NULL
+57 minus(UInt32, UInt32) :: Int64
+58 minus(UInt32 NULL, UInt32 NULL) :: Int64 NULL
+59 minus(UInt32, UInt64) :: Int64
+60 minus(UInt32 NULL, UInt64 NULL) :: Int64 NULL
+61 minus(UInt32, Int8) :: Int64
+62 minus(UInt32 NULL, Int8 NULL) :: Int64 NULL
+63 minus(UInt32, Int16) :: Int64
+64 minus(UInt32 NULL, Int16 NULL) :: Int64 NULL
+65 minus(UInt32, Int32) :: Int64
+66 minus(UInt32 NULL, Int32 NULL) :: Int64 NULL
+67 minus(UInt32, Int64) :: Int64
+68 minus(UInt32 NULL, Int64 NULL) :: Int64 NULL
+69 minus(UInt64, UInt8) :: Int64
+70 minus(UInt64 NULL, UInt8 NULL) :: Int64 NULL
+71 minus(UInt64, UInt16) :: Int64
+72 minus(UInt64 NULL, UInt16 NULL) :: Int64 NULL
+73 minus(UInt64, UInt32) :: Int64
+74 minus(UInt64 NULL, UInt32 NULL) :: Int64 NULL
+75 minus(UInt64, UInt64) :: Int64
+76 minus(UInt64 NULL, UInt64 NULL) :: Int64 NULL
+77 minus(UInt64, Int8) :: Int64
+78 minus(UInt64 NULL, Int8 NULL) :: Int64 NULL
+79 minus(UInt64, Int16) :: Int64
+80 minus(UInt64 NULL, Int16 NULL) :: Int64 NULL
+81 minus(UInt64, Int32) :: Int64
+82 minus(UInt64 NULL, Int32 NULL) :: Int64 NULL
+83 minus(UInt64, Int64) :: Int64
+84 minus(UInt64 NULL, Int64 NULL) :: Int64 NULL
+85 minus(Int8, UInt8) :: Int16
+86 minus(Int8 NULL, UInt8 NULL) :: Int16 NULL
+87 minus(Int8, UInt16) :: Int32
+88 minus(Int8 NULL, UInt16 NULL) :: Int32 NULL
+89 minus(Int8, UInt32) :: Int64
+90 minus(Int8 NULL, UInt32 NULL) :: Int64 NULL
+91 minus(Int8, UInt64) :: Int64
+92 minus(Int8 NULL, UInt64 NULL) :: Int64 NULL
+93 minus(Int8, Int8) :: Int16
+94 minus(Int8 NULL, Int8 NULL) :: Int16 NULL
+95 minus(Int8, Int16) :: Int32
+96 minus(Int8 NULL, Int16 NULL) :: Int32 NULL
+97 minus(Int8, Int32) :: Int64
+98 minus(Int8 NULL, Int32 NULL) :: Int64 NULL
+99 minus(Int8, Int64) :: Int64
+100 minus(Int8 NULL, Int64 NULL) :: Int64 NULL
+101 minus(Int16, UInt8) :: Int32
+102 minus(Int16 NULL, UInt8 NULL) :: Int32 NULL
+103 minus(Int16, UInt16) :: Int32
+104 minus(Int16 NULL, UInt16 NULL) :: Int32 NULL
+105 minus(Int16, UInt32) :: Int64
+106 minus(Int16 NULL, UInt32 NULL) :: Int64 NULL
+107 minus(Int16, UInt64) :: Int64
+108 minus(Int16 NULL, UInt64 NULL) :: Int64 NULL
+109 minus(Int16, Int8) :: Int32
+110 minus(Int16 NULL, Int8 NULL) :: Int32 NULL
+111 minus(Int16, Int16) :: Int32
+112 minus(Int16 NULL, Int16 NULL) :: Int32 NULL
+113 minus(Int16, Int32) :: Int64
+114 minus(Int16 NULL, Int32 NULL) :: Int64 NULL
+115 minus(Int16, Int64) :: Int64
+116 minus(Int16 NULL, Int64 NULL) :: Int64 NULL
+117 minus(Int32, UInt8) :: Int64
+118 minus(Int32 NULL, UInt8 NULL) :: Int64 NULL
+119 minus(Int32, UInt16) :: Int64
+120 minus(Int32 NULL, UInt16 NULL) :: Int64 NULL
+121 minus(Int32, UInt32) :: Int64
+122 minus(Int32 NULL, UInt32 NULL) :: Int64 NULL
+123 minus(Int32, UInt64) :: Int64
+124 minus(Int32 NULL, UInt64 NULL) :: Int64 NULL
+125 minus(Int32, Int8) :: Int64
+126 minus(Int32 NULL, Int8 NULL) :: Int64 NULL
+127 minus(Int32, Int16) :: Int64
+128 minus(Int32 NULL, Int16 NULL) :: Int64 NULL
+129 minus(Int32, Int32) :: Int64
+130 minus(Int32 NULL, Int32 NULL) :: Int64 NULL
+131 minus(Int32, Int64) :: Int64
+132 minus(Int32 NULL, Int64 NULL) :: Int64 NULL
+133 minus(Int64, UInt8) :: Int64
+134 minus(Int64 NULL, UInt8 NULL) :: Int64 NULL
+135 minus(Int64, UInt16) :: Int64
+136 minus(Int64 NULL, UInt16 NULL) :: Int64 NULL
+137 minus(Int64, UInt32) :: Int64
+138 minus(Int64 NULL, UInt32 NULL) :: Int64 NULL
+139 minus(Int64, UInt64) :: Int64
+140 minus(Int64 NULL, UInt64 NULL) :: Int64 NULL
+141 minus(Int64, Int8) :: Int64
+142 minus(Int64 NULL, Int8 NULL) :: Int64 NULL
+143 minus(Int64, Int16) :: Int64
+144 minus(Int64 NULL, Int16 NULL) :: Int64 NULL
+145 minus(Int64, Int32) :: Int64
+146 minus(Int64 NULL, Int32 NULL) :: Int64 NULL
+147 minus(Int64, Int64) :: Int64
+148 minus(Int64 NULL, Int64 NULL) :: Int64 NULL
+149 minus FACTORY
+150 minus(UInt8, Float32) :: Float64
+151 minus(UInt8 NULL, Float32 NULL) :: Float64 NULL
+152 minus(UInt8, Float64) :: Float64
+153 minus(UInt8 NULL, Float64 NULL) :: Float64 NULL
+154 minus(UInt16, Float32) :: Float64
+155 minus(UInt16 NULL, Float32 NULL) :: Float64 NULL
+156 minus(UInt16, Float64) :: Float64
+157 minus(UInt16 NULL, Float64 NULL) :: Float64 NULL
+158 minus(UInt32, Float32) :: Float64
+159 minus(UInt32 NULL, Float32 NULL) :: Float64 NULL
+160 minus(UInt32, Float64) :: Float64
+161 minus(UInt32 NULL, Float64 NULL) :: Float64 NULL
+162 minus(UInt64, Float32) :: Float64
+163 minus(UInt64 NULL, Float32 NULL) :: Float64 NULL
+164 minus(UInt64, Float64) :: Float64
+165 minus(UInt64 NULL, Float64 NULL) :: Float64 NULL
+166 minus(Int8, Float32) :: Float64
+167 minus(Int8 NULL, Float32 NULL) :: Float64 NULL
+168 minus(Int8, Float64) :: Float64
+169 minus(Int8 NULL, Float64 NULL) :: Float64 NULL
+170 minus(Int16, Float32) :: Float64
+171 minus(Int16 NULL, Float32 NULL) :: Float64 NULL
+172 minus(Int16, Float64) :: Float64
+173 minus(Int16 NULL, Float64 NULL) :: Float64 NULL
+174 minus(Int32, Float32) :: Float64
+175 minus(Int32 NULL, Float32 NULL) :: Float64 NULL
+176 minus(Int32, Float64) :: Float64
+177 minus(Int32 NULL, Float64 NULL) :: Float64 NULL
+178 minus(Int64, Float32) :: Float64
+179 minus(Int64 NULL, Float32 NULL) :: Float64 NULL
+180 minus(Int64, Float64) :: Float64
+181 minus(Int64 NULL, Float64 NULL) :: Float64 NULL
+182 minus(Float32, UInt8) :: Float64
+183 minus(Float32 NULL, UInt8 NULL) :: Float64 NULL
+184 minus(Float32, UInt16) :: Float64
+185 minus(Float32 NULL, UInt16 NULL) :: Float64 NULL
+186 minus(Float32, UInt32) :: Float64
+187 minus(Float32 NULL, UInt32 NULL) :: Float64 NULL
+188 minus(Float32, UInt64) :: Float64
+189 minus(Float32 NULL, UInt64 NULL) :: Float64 NULL
+190 minus(Float32, Int8) :: Float64
+191 minus(Float32 NULL, Int8 NULL) :: Float64 NULL
+192 minus(Float32, Int16) :: Float64
+193 minus(Float32 NULL, Int16 NULL) :: Float64 NULL
+194 minus(Float32, Int32) :: Float64
+195 minus(Float32 NULL, Int32 NULL) :: Float64 NULL
+196 minus(Float32, Int64) :: Float64
+197 minus(Float32 NULL, Int64 NULL) :: Float64 NULL
+198 minus(Float64, UInt8) :: Float64
+199 minus(Float64 NULL, UInt8 NULL) :: Float64 NULL
+200 minus(Float64, UInt16) :: Float64
+201 minus(Float64 NULL, UInt16 NULL) :: Float64 NULL
+202 minus(Float64, UInt32) :: Float64
+203 minus(Float64 NULL, UInt32 NULL) :: Float64 NULL
+204 minus(Float64, UInt64) :: Float64
+205 minus(Float64 NULL, UInt64 NULL) :: Float64 NULL
+206 minus(Float64, Int8) :: Float64
+207 minus(Float64 NULL, Int8 NULL) :: Float64 NULL
+208 minus(Float64, Int16) :: Float64
+209 minus(Float64 NULL, Int16 NULL) :: Float64 NULL
+210 minus(Float64, Int32) :: Float64
+211 minus(Float64 NULL, Int32 NULL) :: Float64 NULL
+212 minus(Float64, Int64) :: Float64
+213 minus(Float64 NULL, Int64 NULL) :: Float64 NULL
+214 minus(Float32, Float32) :: Float64
+215 minus(Float32 NULL, Float32 NULL) :: Float64 NULL
+216 minus(Float32, Float64) :: Float64
+217 minus(Float32 NULL, Float64 NULL) :: Float64 NULL
+218 minus(Float64, Float32) :: Float64
+219 minus(Float64 NULL, Float32 NULL) :: Float64 NULL
+220 minus(Float64, Float64) :: Float64
+221 minus(Float64 NULL, Float64 NULL) :: Float64 NULL
+222 minus(Date, Int64) :: Date
+223 minus(Date NULL, Int64 NULL) :: Date NULL
+224 minus(Date, Date) :: Int32
+225 minus(Date NULL, Date NULL) :: Int32 NULL
+226 minus(Timestamp, Int64) :: Timestamp
+227 minus(Timestamp NULL, Int64 NULL) :: Timestamp NULL
+228 minus(Timestamp, Timestamp) :: Int64
+229 minus(Timestamp NULL, Timestamp NULL) :: Int64 NULL
 0 modulo(UInt8, UInt8) :: UInt8
 1 modulo(UInt8 NULL, UInt8 NULL) :: UInt8 NULL
 2 modulo(UInt8, UInt16) :: UInt16
@@ -1583,146 +1584,146 @@ Functions overloads:
 13 modulo(UInt8 NULL, Int32 NULL) :: UInt32 NULL
 14 modulo(UInt8, Int64) :: UInt64
 15 modulo(UInt8 NULL, Int64 NULL) :: UInt64 NULL
-16 modulo(UInt8, Float32) :: Float64
-17 modulo(UInt8 NULL, Float32 NULL) :: Float64 NULL
-18 modulo(UInt8, Float64) :: Float64
-19 modulo(UInt8 NULL, Float64 NULL) :: Float64 NULL
-20 modulo(UInt16, UInt8) :: UInt8
-21 modulo(UInt16 NULL, UInt8 NULL) :: UInt8 NULL
-22 modulo(UInt16, UInt16) :: UInt16
-23 modulo(UInt16 NULL, UInt16 NULL) :: UInt16 NULL
-24 modulo(UInt16, UInt32) :: UInt32
-25 modulo(UInt16 NULL, UInt32 NULL) :: UInt32 NULL
-26 modulo(UInt16, UInt64) :: UInt64
-27 modulo(UInt16 NULL, UInt64 NULL) :: UInt64 NULL
-28 modulo(UInt16, Int8) :: UInt8
-29 modulo(UInt16 NULL, Int8 NULL) :: UInt8 NULL
-30 modulo(UInt16, Int16) :: UInt16
-31 modulo(UInt16 NULL, Int16 NULL) :: UInt16 NULL
-32 modulo(UInt16, Int32) :: UInt32
-33 modulo(UInt16 NULL, Int32 NULL) :: UInt32 NULL
-34 modulo(UInt16, Int64) :: UInt64
-35 modulo(UInt16 NULL, Int64 NULL) :: UInt64 NULL
-36 modulo(UInt16, Float32) :: Float64
-37 modulo(UInt16 NULL, Float32 NULL) :: Float64 NULL
-38 modulo(UInt16, Float64) :: Float64
-39 modulo(UInt16 NULL, Float64 NULL) :: Float64 NULL
-40 modulo(UInt32, UInt8) :: UInt8
-41 modulo(UInt32 NULL, UInt8 NULL) :: UInt8 NULL
-42 modulo(UInt32, UInt16) :: UInt16
-43 modulo(UInt32 NULL, UInt16 NULL) :: UInt16 NULL
-44 modulo(UInt32, UInt32) :: UInt32
-45 modulo(UInt32 NULL, UInt32 NULL) :: UInt32 NULL
-46 modulo(UInt32, UInt64) :: UInt64
-47 modulo(UInt32 NULL, UInt64 NULL) :: UInt64 NULL
-48 modulo(UInt32, Int8) :: UInt8
-49 modulo(UInt32 NULL, Int8 NULL) :: UInt8 NULL
-50 modulo(UInt32, Int16) :: UInt16
-51 modulo(UInt32 NULL, Int16 NULL) :: UInt16 NULL
-52 modulo(UInt32, Int32) :: UInt32
-53 modulo(UInt32 NULL, Int32 NULL) :: UInt32 NULL
-54 modulo(UInt32, Int64) :: UInt64
-55 modulo(UInt32 NULL, Int64 NULL) :: UInt64 NULL
-56 modulo(UInt32, Float32) :: Float64
-57 modulo(UInt32 NULL, Float32 NULL) :: Float64 NULL
-58 modulo(UInt32, Float64) :: Float64
-59 modulo(UInt32 NULL, Float64 NULL) :: Float64 NULL
-60 modulo(UInt64, UInt8) :: UInt8
-61 modulo(UInt64 NULL, UInt8 NULL) :: UInt8 NULL
-62 modulo(UInt64, UInt16) :: UInt16
-63 modulo(UInt64 NULL, UInt16 NULL) :: UInt16 NULL
-64 modulo(UInt64, UInt32) :: UInt32
-65 modulo(UInt64 NULL, UInt32 NULL) :: UInt32 NULL
-66 modulo(UInt64, UInt64) :: UInt64
-67 modulo(UInt64 NULL, UInt64 NULL) :: UInt64 NULL
-68 modulo(UInt64, Int8) :: UInt8
-69 modulo(UInt64 NULL, Int8 NULL) :: UInt8 NULL
-70 modulo(UInt64, Int16) :: UInt16
-71 modulo(UInt64 NULL, Int16 NULL) :: UInt16 NULL
-72 modulo(UInt64, Int32) :: UInt32
-73 modulo(UInt64 NULL, Int32 NULL) :: UInt32 NULL
-74 modulo(UInt64, Int64) :: UInt64
-75 modulo(UInt64 NULL, Int64 NULL) :: UInt64 NULL
-76 modulo(UInt64, Float32) :: Float64
-77 modulo(UInt64 NULL, Float32 NULL) :: Float64 NULL
-78 modulo(UInt64, Float64) :: Float64
-79 modulo(UInt64 NULL, Float64 NULL) :: Float64 NULL
-80 modulo(Int8, UInt8) :: Int16
-81 modulo(Int8 NULL, UInt8 NULL) :: Int16 NULL
-82 modulo(Int8, UInt16) :: Int32
-83 modulo(Int8 NULL, UInt16 NULL) :: Int32 NULL
-84 modulo(Int8, UInt32) :: Int64
-85 modulo(Int8 NULL, UInt32 NULL) :: Int64 NULL
-86 modulo(Int8, UInt64) :: Int64
-87 modulo(Int8 NULL, UInt64 NULL) :: Int64 NULL
-88 modulo(Int8, Int8) :: Int16
-89 modulo(Int8 NULL, Int8 NULL) :: Int16 NULL
-90 modulo(Int8, Int16) :: Int32
-91 modulo(Int8 NULL, Int16 NULL) :: Int32 NULL
-92 modulo(Int8, Int32) :: Int64
-93 modulo(Int8 NULL, Int32 NULL) :: Int64 NULL
-94 modulo(Int8, Int64) :: Int64
-95 modulo(Int8 NULL, Int64 NULL) :: Int64 NULL
-96 modulo(Int8, Float32) :: Float64
-97 modulo(Int8 NULL, Float32 NULL) :: Float64 NULL
-98 modulo(Int8, Float64) :: Float64
-99 modulo(Int8 NULL, Float64 NULL) :: Float64 NULL
-100 modulo(Int16, UInt8) :: Int16
-101 modulo(Int16 NULL, UInt8 NULL) :: Int16 NULL
-102 modulo(Int16, UInt16) :: Int32
-103 modulo(Int16 NULL, UInt16 NULL) :: Int32 NULL
-104 modulo(Int16, UInt32) :: Int64
-105 modulo(Int16 NULL, UInt32 NULL) :: Int64 NULL
-106 modulo(Int16, UInt64) :: Int64
-107 modulo(Int16 NULL, UInt64 NULL) :: Int64 NULL
-108 modulo(Int16, Int8) :: Int16
-109 modulo(Int16 NULL, Int8 NULL) :: Int16 NULL
-110 modulo(Int16, Int16) :: Int32
-111 modulo(Int16 NULL, Int16 NULL) :: Int32 NULL
-112 modulo(Int16, Int32) :: Int64
-113 modulo(Int16 NULL, Int32 NULL) :: Int64 NULL
-114 modulo(Int16, Int64) :: Int64
-115 modulo(Int16 NULL, Int64 NULL) :: Int64 NULL
-116 modulo(Int16, Float32) :: Float64
-117 modulo(Int16 NULL, Float32 NULL) :: Float64 NULL
-118 modulo(Int16, Float64) :: Float64
-119 modulo(Int16 NULL, Float64 NULL) :: Float64 NULL
-120 modulo(Int32, UInt8) :: Int16
-121 modulo(Int32 NULL, UInt8 NULL) :: Int16 NULL
-122 modulo(Int32, UInt16) :: Int32
-123 modulo(Int32 NULL, UInt16 NULL) :: Int32 NULL
-124 modulo(Int32, UInt32) :: Int64
-125 modulo(Int32 NULL, UInt32 NULL) :: Int64 NULL
-126 modulo(Int32, UInt64) :: Int64
-127 modulo(Int32 NULL, UInt64 NULL) :: Int64 NULL
-128 modulo(Int32, Int8) :: Int16
-129 modulo(Int32 NULL, Int8 NULL) :: Int16 NULL
-130 modulo(Int32, Int16) :: Int32
-131 modulo(Int32 NULL, Int16 NULL) :: Int32 NULL
-132 modulo(Int32, Int32) :: Int64
-133 modulo(Int32 NULL, Int32 NULL) :: Int64 NULL
-134 modulo(Int32, Int64) :: Int64
-135 modulo(Int32 NULL, Int64 NULL) :: Int64 NULL
-136 modulo(Int32, Float32) :: Float64
-137 modulo(Int32 NULL, Float32 NULL) :: Float64 NULL
-138 modulo(Int32, Float64) :: Float64
-139 modulo(Int32 NULL, Float64 NULL) :: Float64 NULL
-140 modulo(Int64, UInt8) :: Int16
-141 modulo(Int64 NULL, UInt8 NULL) :: Int16 NULL
-142 modulo(Int64, UInt16) :: Int32
-143 modulo(Int64 NULL, UInt16 NULL) :: Int32 NULL
-144 modulo(Int64, UInt32) :: Int64
-145 modulo(Int64 NULL, UInt32 NULL) :: Int64 NULL
-146 modulo(Int64, UInt64) :: Int64
-147 modulo(Int64 NULL, UInt64 NULL) :: Int64 NULL
-148 modulo(Int64, Int8) :: Int16
-149 modulo(Int64 NULL, Int8 NULL) :: Int16 NULL
-150 modulo(Int64, Int16) :: Int32
-151 modulo(Int64 NULL, Int16 NULL) :: Int32 NULL
-152 modulo(Int64, Int32) :: Int64
-153 modulo(Int64 NULL, Int32 NULL) :: Int64 NULL
-154 modulo(Int64, Int64) :: Int64
-155 modulo(Int64 NULL, Int64 NULL) :: Int64 NULL
+16 modulo(UInt16, UInt8) :: UInt8
+17 modulo(UInt16 NULL, UInt8 NULL) :: UInt8 NULL
+18 modulo(UInt16, UInt16) :: UInt16
+19 modulo(UInt16 NULL, UInt16 NULL) :: UInt16 NULL
+20 modulo(UInt16, UInt32) :: UInt32
+21 modulo(UInt16 NULL, UInt32 NULL) :: UInt32 NULL
+22 modulo(UInt16, UInt64) :: UInt64
+23 modulo(UInt16 NULL, UInt64 NULL) :: UInt64 NULL
+24 modulo(UInt16, Int8) :: UInt8
+25 modulo(UInt16 NULL, Int8 NULL) :: UInt8 NULL
+26 modulo(UInt16, Int16) :: UInt16
+27 modulo(UInt16 NULL, Int16 NULL) :: UInt16 NULL
+28 modulo(UInt16, Int32) :: UInt32
+29 modulo(UInt16 NULL, Int32 NULL) :: UInt32 NULL
+30 modulo(UInt16, Int64) :: UInt64
+31 modulo(UInt16 NULL, Int64 NULL) :: UInt64 NULL
+32 modulo(UInt32, UInt8) :: UInt8
+33 modulo(UInt32 NULL, UInt8 NULL) :: UInt8 NULL
+34 modulo(UInt32, UInt16) :: UInt16
+35 modulo(UInt32 NULL, UInt16 NULL) :: UInt16 NULL
+36 modulo(UInt32, UInt32) :: UInt32
+37 modulo(UInt32 NULL, UInt32 NULL) :: UInt32 NULL
+38 modulo(UInt32, UInt64) :: UInt64
+39 modulo(UInt32 NULL, UInt64 NULL) :: UInt64 NULL
+40 modulo(UInt32, Int8) :: UInt8
+41 modulo(UInt32 NULL, Int8 NULL) :: UInt8 NULL
+42 modulo(UInt32, Int16) :: UInt16
+43 modulo(UInt32 NULL, Int16 NULL) :: UInt16 NULL
+44 modulo(UInt32, Int32) :: UInt32
+45 modulo(UInt32 NULL, Int32 NULL) :: UInt32 NULL
+46 modulo(UInt32, Int64) :: UInt64
+47 modulo(UInt32 NULL, Int64 NULL) :: UInt64 NULL
+48 modulo(UInt64, UInt8) :: UInt8
+49 modulo(UInt64 NULL, UInt8 NULL) :: UInt8 NULL
+50 modulo(UInt64, UInt16) :: UInt16
+51 modulo(UInt64 NULL, UInt16 NULL) :: UInt16 NULL
+52 modulo(UInt64, UInt32) :: UInt32
+53 modulo(UInt64 NULL, UInt32 NULL) :: UInt32 NULL
+54 modulo(UInt64, UInt64) :: UInt64
+55 modulo(UInt64 NULL, UInt64 NULL) :: UInt64 NULL
+56 modulo(UInt64, Int8) :: UInt8
+57 modulo(UInt64 NULL, Int8 NULL) :: UInt8 NULL
+58 modulo(UInt64, Int16) :: UInt16
+59 modulo(UInt64 NULL, Int16 NULL) :: UInt16 NULL
+60 modulo(UInt64, Int32) :: UInt32
+61 modulo(UInt64 NULL, Int32 NULL) :: UInt32 NULL
+62 modulo(UInt64, Int64) :: UInt64
+63 modulo(UInt64 NULL, Int64 NULL) :: UInt64 NULL
+64 modulo(Int8, UInt8) :: Int16
+65 modulo(Int8 NULL, UInt8 NULL) :: Int16 NULL
+66 modulo(Int8, UInt16) :: Int32
+67 modulo(Int8 NULL, UInt16 NULL) :: Int32 NULL
+68 modulo(Int8, UInt32) :: Int64
+69 modulo(Int8 NULL, UInt32 NULL) :: Int64 NULL
+70 modulo(Int8, UInt64) :: Int64
+71 modulo(Int8 NULL, UInt64 NULL) :: Int64 NULL
+72 modulo(Int8, Int8) :: Int16
+73 modulo(Int8 NULL, Int8 NULL) :: Int16 NULL
+74 modulo(Int8, Int16) :: Int32
+75 modulo(Int8 NULL, Int16 NULL) :: Int32 NULL
+76 modulo(Int8, Int32) :: Int64
+77 modulo(Int8 NULL, Int32 NULL) :: Int64 NULL
+78 modulo(Int8, Int64) :: Int64
+79 modulo(Int8 NULL, Int64 NULL) :: Int64 NULL
+80 modulo(Int16, UInt8) :: Int16
+81 modulo(Int16 NULL, UInt8 NULL) :: Int16 NULL
+82 modulo(Int16, UInt16) :: Int32
+83 modulo(Int16 NULL, UInt16 NULL) :: Int32 NULL
+84 modulo(Int16, UInt32) :: Int64
+85 modulo(Int16 NULL, UInt32 NULL) :: Int64 NULL
+86 modulo(Int16, UInt64) :: Int64
+87 modulo(Int16 NULL, UInt64 NULL) :: Int64 NULL
+88 modulo(Int16, Int8) :: Int16
+89 modulo(Int16 NULL, Int8 NULL) :: Int16 NULL
+90 modulo(Int16, Int16) :: Int32
+91 modulo(Int16 NULL, Int16 NULL) :: Int32 NULL
+92 modulo(Int16, Int32) :: Int64
+93 modulo(Int16 NULL, Int32 NULL) :: Int64 NULL
+94 modulo(Int16, Int64) :: Int64
+95 modulo(Int16 NULL, Int64 NULL) :: Int64 NULL
+96 modulo(Int32, UInt8) :: Int16
+97 modulo(Int32 NULL, UInt8 NULL) :: Int16 NULL
+98 modulo(Int32, UInt16) :: Int32
+99 modulo(Int32 NULL, UInt16 NULL) :: Int32 NULL
+100 modulo(Int32, UInt32) :: Int64
+101 modulo(Int32 NULL, UInt32 NULL) :: Int64 NULL
+102 modulo(Int32, UInt64) :: Int64
+103 modulo(Int32 NULL, UInt64 NULL) :: Int64 NULL
+104 modulo(Int32, Int8) :: Int16
+105 modulo(Int32 NULL, Int8 NULL) :: Int16 NULL
+106 modulo(Int32, Int16) :: Int32
+107 modulo(Int32 NULL, Int16 NULL) :: Int32 NULL
+108 modulo(Int32, Int32) :: Int64
+109 modulo(Int32 NULL, Int32 NULL) :: Int64 NULL
+110 modulo(Int32, Int64) :: Int64
+111 modulo(Int32 NULL, Int64 NULL) :: Int64 NULL
+112 modulo(Int64, UInt8) :: Int16
+113 modulo(Int64 NULL, UInt8 NULL) :: Int16 NULL
+114 modulo(Int64, UInt16) :: Int32
+115 modulo(Int64 NULL, UInt16 NULL) :: Int32 NULL
+116 modulo(Int64, UInt32) :: Int64
+117 modulo(Int64 NULL, UInt32 NULL) :: Int64 NULL
+118 modulo(Int64, UInt64) :: Int64
+119 modulo(Int64 NULL, UInt64 NULL) :: Int64 NULL
+120 modulo(Int64, Int8) :: Int16
+121 modulo(Int64 NULL, Int8 NULL) :: Int16 NULL
+122 modulo(Int64, Int16) :: Int32
+123 modulo(Int64 NULL, Int16 NULL) :: Int32 NULL
+124 modulo(Int64, Int32) :: Int64
+125 modulo(Int64 NULL, Int32 NULL) :: Int64 NULL
+126 modulo(Int64, Int64) :: Int64
+127 modulo(Int64 NULL, Int64 NULL) :: Int64 NULL
+128 modulo(UInt8, Float32) :: Float64
+129 modulo(UInt8 NULL, Float32 NULL) :: Float64 NULL
+130 modulo(UInt8, Float64) :: Float64
+131 modulo(UInt8 NULL, Float64 NULL) :: Float64 NULL
+132 modulo(UInt16, Float32) :: Float64
+133 modulo(UInt16 NULL, Float32 NULL) :: Float64 NULL
+134 modulo(UInt16, Float64) :: Float64
+135 modulo(UInt16 NULL, Float64 NULL) :: Float64 NULL
+136 modulo(UInt32, Float32) :: Float64
+137 modulo(UInt32 NULL, Float32 NULL) :: Float64 NULL
+138 modulo(UInt32, Float64) :: Float64
+139 modulo(UInt32 NULL, Float64 NULL) :: Float64 NULL
+140 modulo(UInt64, Float32) :: Float64
+141 modulo(UInt64 NULL, Float32 NULL) :: Float64 NULL
+142 modulo(UInt64, Float64) :: Float64
+143 modulo(UInt64 NULL, Float64 NULL) :: Float64 NULL
+144 modulo(Int8, Float32) :: Float64
+145 modulo(Int8 NULL, Float32 NULL) :: Float64 NULL
+146 modulo(Int8, Float64) :: Float64
+147 modulo(Int8 NULL, Float64 NULL) :: Float64 NULL
+148 modulo(Int16, Float32) :: Float64
+149 modulo(Int16 NULL, Float32 NULL) :: Float64 NULL
+150 modulo(Int16, Float64) :: Float64
+151 modulo(Int16 NULL, Float64 NULL) :: Float64 NULL
+152 modulo(Int32, Float32) :: Float64
+153 modulo(Int32 NULL, Float32 NULL) :: Float64 NULL
+154 modulo(Int32, Float64) :: Float64
+155 modulo(Int32 NULL, Float64 NULL) :: Float64 NULL
 156 modulo(Int64, Float32) :: Float64
 157 modulo(Int64 NULL, Float32 NULL) :: Float64 NULL
 158 modulo(Int64, Float64) :: Float64
@@ -1743,26 +1744,26 @@ Functions overloads:
 173 modulo(Float32 NULL, Int32 NULL) :: Float64 NULL
 174 modulo(Float32, Int64) :: Float64
 175 modulo(Float32 NULL, Int64 NULL) :: Float64 NULL
-176 modulo(Float32, Float32) :: Float64
-177 modulo(Float32 NULL, Float32 NULL) :: Float64 NULL
-178 modulo(Float32, Float64) :: Float64
-179 modulo(Float32 NULL, Float64 NULL) :: Float64 NULL
-180 modulo(Float64, UInt8) :: Float64
-181 modulo(Float64 NULL, UInt8 NULL) :: Float64 NULL
-182 modulo(Float64, UInt16) :: Float64
-183 modulo(Float64 NULL, UInt16 NULL) :: Float64 NULL
-184 modulo(Float64, UInt32) :: Float64
-185 modulo(Float64 NULL, UInt32 NULL) :: Float64 NULL
-186 modulo(Float64, UInt64) :: Float64
-187 modulo(Float64 NULL, UInt64 NULL) :: Float64 NULL
-188 modulo(Float64, Int8) :: Float64
-189 modulo(Float64 NULL, Int8 NULL) :: Float64 NULL
-190 modulo(Float64, Int16) :: Float64
-191 modulo(Float64 NULL, Int16 NULL) :: Float64 NULL
-192 modulo(Float64, Int32) :: Float64
-193 modulo(Float64 NULL, Int32 NULL) :: Float64 NULL
-194 modulo(Float64, Int64) :: Float64
-195 modulo(Float64 NULL, Int64 NULL) :: Float64 NULL
+176 modulo(Float64, UInt8) :: Float64
+177 modulo(Float64 NULL, UInt8 NULL) :: Float64 NULL
+178 modulo(Float64, UInt16) :: Float64
+179 modulo(Float64 NULL, UInt16 NULL) :: Float64 NULL
+180 modulo(Float64, UInt32) :: Float64
+181 modulo(Float64 NULL, UInt32 NULL) :: Float64 NULL
+182 modulo(Float64, UInt64) :: Float64
+183 modulo(Float64 NULL, UInt64 NULL) :: Float64 NULL
+184 modulo(Float64, Int8) :: Float64
+185 modulo(Float64 NULL, Int8 NULL) :: Float64 NULL
+186 modulo(Float64, Int16) :: Float64
+187 modulo(Float64 NULL, Int16 NULL) :: Float64 NULL
+188 modulo(Float64, Int32) :: Float64
+189 modulo(Float64 NULL, Int32 NULL) :: Float64 NULL
+190 modulo(Float64, Int64) :: Float64
+191 modulo(Float64 NULL, Int64 NULL) :: Float64 NULL
+192 modulo(Float32, Float32) :: Float64
+193 modulo(Float32 NULL, Float32 NULL) :: Float64 NULL
+194 modulo(Float32, Float64) :: Float64
+195 modulo(Float32 NULL, Float64 NULL) :: Float64 NULL
 196 modulo(Float64, Float32) :: Float64
 197 modulo(Float64 NULL, Float32 NULL) :: Float64 NULL
 198 modulo(Float64, Float64) :: Float64
@@ -1784,191 +1785,191 @@ Functions overloads:
 13 multiply(UInt8 NULL, Int32 NULL) :: Int64 NULL
 14 multiply(UInt8, Int64) :: Int64
 15 multiply(UInt8 NULL, Int64 NULL) :: Int64 NULL
-16 multiply(UInt8, Float32) :: Float64
-17 multiply(UInt8 NULL, Float32 NULL) :: Float64 NULL
-18 multiply(UInt8, Float64) :: Float64
-19 multiply(UInt8 NULL, Float64 NULL) :: Float64 NULL
-20 multiply(UInt16, UInt8) :: UInt32
-21 multiply(UInt16 NULL, UInt8 NULL) :: UInt32 NULL
-22 multiply(UInt16, UInt16) :: UInt32
-23 multiply(UInt16 NULL, UInt16 NULL) :: UInt32 NULL
-24 multiply(UInt16, UInt32) :: UInt64
-25 multiply(UInt16 NULL, UInt32 NULL) :: UInt64 NULL
-26 multiply(UInt16, UInt64) :: UInt64
-27 multiply(UInt16 NULL, UInt64 NULL) :: UInt64 NULL
-28 multiply(UInt16, Int8) :: Int32
-29 multiply(UInt16 NULL, Int8 NULL) :: Int32 NULL
-30 multiply(UInt16, Int16) :: Int32
-31 multiply(UInt16 NULL, Int16 NULL) :: Int32 NULL
-32 multiply(UInt16, Int32) :: Int64
-33 multiply(UInt16 NULL, Int32 NULL) :: Int64 NULL
-34 multiply(UInt16, Int64) :: Int64
-35 multiply(UInt16 NULL, Int64 NULL) :: Int64 NULL
-36 multiply(UInt16, Float32) :: Float64
-37 multiply(UInt16 NULL, Float32 NULL) :: Float64 NULL
-38 multiply(UInt16, Float64) :: Float64
-39 multiply(UInt16 NULL, Float64 NULL) :: Float64 NULL
-40 multiply(UInt32, UInt8) :: UInt64
-41 multiply(UInt32 NULL, UInt8 NULL) :: UInt64 NULL
-42 multiply(UInt32, UInt16) :: UInt64
-43 multiply(UInt32 NULL, UInt16 NULL) :: UInt64 NULL
-44 multiply(UInt32, UInt32) :: UInt64
-45 multiply(UInt32 NULL, UInt32 NULL) :: UInt64 NULL
-46 multiply(UInt32, UInt64) :: UInt64
-47 multiply(UInt32 NULL, UInt64 NULL) :: UInt64 NULL
-48 multiply(UInt32, Int8) :: Int64
-49 multiply(UInt32 NULL, Int8 NULL) :: Int64 NULL
-50 multiply(UInt32, Int16) :: Int64
-51 multiply(UInt32 NULL, Int16 NULL) :: Int64 NULL
-52 multiply(UInt32, Int32) :: Int64
-53 multiply(UInt32 NULL, Int32 NULL) :: Int64 NULL
-54 multiply(UInt32, Int64) :: Int64
-55 multiply(UInt32 NULL, Int64 NULL) :: Int64 NULL
-56 multiply(UInt32, Float32) :: Float64
-57 multiply(UInt32 NULL, Float32 NULL) :: Float64 NULL
-58 multiply(UInt32, Float64) :: Float64
-59 multiply(UInt32 NULL, Float64 NULL) :: Float64 NULL
-60 multiply(UInt64, UInt8) :: UInt64
-61 multiply(UInt64 NULL, UInt8 NULL) :: UInt64 NULL
-62 multiply(UInt64, UInt16) :: UInt64
-63 multiply(UInt64 NULL, UInt16 NULL) :: UInt64 NULL
-64 multiply(UInt64, UInt32) :: UInt64
-65 multiply(UInt64 NULL, UInt32 NULL) :: UInt64 NULL
-66 multiply(UInt64, UInt64) :: UInt64
-67 multiply(UInt64 NULL, UInt64 NULL) :: UInt64 NULL
-68 multiply(UInt64, Int8) :: Int64
-69 multiply(UInt64 NULL, Int8 NULL) :: Int64 NULL
-70 multiply(UInt64, Int16) :: Int64
-71 multiply(UInt64 NULL, Int16 NULL) :: Int64 NULL
-72 multiply(UInt64, Int32) :: Int64
-73 multiply(UInt64 NULL, Int32 NULL) :: Int64 NULL
-74 multiply(UInt64, Int64) :: Int64
-75 multiply(UInt64 NULL, Int64 NULL) :: Int64 NULL
-76 multiply(UInt64, Float32) :: Float64
-77 multiply(UInt64 NULL, Float32 NULL) :: Float64 NULL
-78 multiply(UInt64, Float64) :: Float64
-79 multiply(UInt64 NULL, Float64 NULL) :: Float64 NULL
-80 multiply(Int8, UInt8) :: Int16
-81 multiply(Int8 NULL, UInt8 NULL) :: Int16 NULL
-82 multiply(Int8, UInt16) :: Int32
-83 multiply(Int8 NULL, UInt16 NULL) :: Int32 NULL
-84 multiply(Int8, UInt32) :: Int64
-85 multiply(Int8 NULL, UInt32 NULL) :: Int64 NULL
-86 multiply(Int8, UInt64) :: Int64
-87 multiply(Int8 NULL, UInt64 NULL) :: Int64 NULL
-88 multiply(Int8, Int8) :: Int16
-89 multiply(Int8 NULL, Int8 NULL) :: Int16 NULL
-90 multiply(Int8, Int16) :: Int32
-91 multiply(Int8 NULL, Int16 NULL) :: Int32 NULL
-92 multiply(Int8, Int32) :: Int64
-93 multiply(Int8 NULL, Int32 NULL) :: Int64 NULL
-94 multiply(Int8, Int64) :: Int64
-95 multiply(Int8 NULL, Int64 NULL) :: Int64 NULL
-96 multiply(Int8, Float32) :: Float64
-97 multiply(Int8 NULL, Float32 NULL) :: Float64 NULL
-98 multiply(Int8, Float64) :: Float64
-99 multiply(Int8 NULL, Float64 NULL) :: Float64 NULL
-100 multiply(Int16, UInt8) :: Int32
-101 multiply(Int16 NULL, UInt8 NULL) :: Int32 NULL
-102 multiply(Int16, UInt16) :: Int32
-103 multiply(Int16 NULL, UInt16 NULL) :: Int32 NULL
-104 multiply(Int16, UInt32) :: Int64
-105 multiply(Int16 NULL, UInt32 NULL) :: Int64 NULL
-106 multiply(Int16, UInt64) :: Int64
-107 multiply(Int16 NULL, UInt64 NULL) :: Int64 NULL
-108 multiply(Int16, Int8) :: Int32
-109 multiply(Int16 NULL, Int8 NULL) :: Int32 NULL
-110 multiply(Int16, Int16) :: Int32
-111 multiply(Int16 NULL, Int16 NULL) :: Int32 NULL
-112 multiply(Int16, Int32) :: Int64
-113 multiply(Int16 NULL, Int32 NULL) :: Int64 NULL
-114 multiply(Int16, Int64) :: Int64
-115 multiply(Int16 NULL, Int64 NULL) :: Int64 NULL
-116 multiply(Int16, Float32) :: Float64
-117 multiply(Int16 NULL, Float32 NULL) :: Float64 NULL
-118 multiply(Int16, Float64) :: Float64
-119 multiply(Int16 NULL, Float64 NULL) :: Float64 NULL
-120 multiply(Int32, UInt8) :: Int64
-121 multiply(Int32 NULL, UInt8 NULL) :: Int64 NULL
-122 multiply(Int32, UInt16) :: Int64
-123 multiply(Int32 NULL, UInt16 NULL) :: Int64 NULL
-124 multiply(Int32, UInt32) :: Int64
-125 multiply(Int32 NULL, UInt32 NULL) :: Int64 NULL
-126 multiply(Int32, UInt64) :: Int64
-127 multiply(Int32 NULL, UInt64 NULL) :: Int64 NULL
-128 multiply(Int32, Int8) :: Int64
-129 multiply(Int32 NULL, Int8 NULL) :: Int64 NULL
-130 multiply(Int32, Int16) :: Int64
-131 multiply(Int32 NULL, Int16 NULL) :: Int64 NULL
-132 multiply(Int32, Int32) :: Int64
-133 multiply(Int32 NULL, Int32 NULL) :: Int64 NULL
-134 multiply(Int32, Int64) :: Int64
-135 multiply(Int32 NULL, Int64 NULL) :: Int64 NULL
-136 multiply(Int32, Float32) :: Float64
-137 multiply(Int32 NULL, Float32 NULL) :: Float64 NULL
-138 multiply(Int32, Float64) :: Float64
-139 multiply(Int32 NULL, Float64 NULL) :: Float64 NULL
-140 multiply(Int64, UInt8) :: Int64
-141 multiply(Int64 NULL, UInt8 NULL) :: Int64 NULL
-142 multiply(Int64, UInt16) :: Int64
-143 multiply(Int64 NULL, UInt16 NULL) :: Int64 NULL
-144 multiply(Int64, UInt32) :: Int64
-145 multiply(Int64 NULL, UInt32 NULL) :: Int64 NULL
-146 multiply(Int64, UInt64) :: Int64
-147 multiply(Int64 NULL, UInt64 NULL) :: Int64 NULL
-148 multiply(Int64, Int8) :: Int64
-149 multiply(Int64 NULL, Int8 NULL) :: Int64 NULL
-150 multiply(Int64, Int16) :: Int64
-151 multiply(Int64 NULL, Int16 NULL) :: Int64 NULL
-152 multiply(Int64, Int32) :: Int64
-153 multiply(Int64 NULL, Int32 NULL) :: Int64 NULL
-154 multiply(Int64, Int64) :: Int64
-155 multiply(Int64 NULL, Int64 NULL) :: Int64 NULL
-156 multiply(Int64, Float32) :: Float64
-157 multiply(Int64 NULL, Float32 NULL) :: Float64 NULL
-158 multiply(Int64, Float64) :: Float64
-159 multiply(Int64 NULL, Float64 NULL) :: Float64 NULL
-160 multiply(Float32, UInt8) :: Float64
-161 multiply(Float32 NULL, UInt8 NULL) :: Float64 NULL
-162 multiply(Float32, UInt16) :: Float64
-163 multiply(Float32 NULL, UInt16 NULL) :: Float64 NULL
-164 multiply(Float32, UInt32) :: Float64
-165 multiply(Float32 NULL, UInt32 NULL) :: Float64 NULL
-166 multiply(Float32, UInt64) :: Float64
-167 multiply(Float32 NULL, UInt64 NULL) :: Float64 NULL
-168 multiply(Float32, Int8) :: Float64
-169 multiply(Float32 NULL, Int8 NULL) :: Float64 NULL
-170 multiply(Float32, Int16) :: Float64
-171 multiply(Float32 NULL, Int16 NULL) :: Float64 NULL
-172 multiply(Float32, Int32) :: Float64
-173 multiply(Float32 NULL, Int32 NULL) :: Float64 NULL
-174 multiply(Float32, Int64) :: Float64
-175 multiply(Float32 NULL, Int64 NULL) :: Float64 NULL
-176 multiply(Float32, Float32) :: Float64
-177 multiply(Float32 NULL, Float32 NULL) :: Float64 NULL
-178 multiply(Float32, Float64) :: Float64
-179 multiply(Float32 NULL, Float64 NULL) :: Float64 NULL
-180 multiply(Float64, UInt8) :: Float64
-181 multiply(Float64 NULL, UInt8 NULL) :: Float64 NULL
-182 multiply(Float64, UInt16) :: Float64
-183 multiply(Float64 NULL, UInt16 NULL) :: Float64 NULL
-184 multiply(Float64, UInt32) :: Float64
-185 multiply(Float64 NULL, UInt32 NULL) :: Float64 NULL
-186 multiply(Float64, UInt64) :: Float64
-187 multiply(Float64 NULL, UInt64 NULL) :: Float64 NULL
-188 multiply(Float64, Int8) :: Float64
-189 multiply(Float64 NULL, Int8 NULL) :: Float64 NULL
-190 multiply(Float64, Int16) :: Float64
-191 multiply(Float64 NULL, Int16 NULL) :: Float64 NULL
-192 multiply(Float64, Int32) :: Float64
-193 multiply(Float64 NULL, Int32 NULL) :: Float64 NULL
-194 multiply(Float64, Int64) :: Float64
-195 multiply(Float64 NULL, Int64 NULL) :: Float64 NULL
-196 multiply(Float64, Float32) :: Float64
-197 multiply(Float64 NULL, Float32 NULL) :: Float64 NULL
-198 multiply(Float64, Float64) :: Float64
-199 multiply(Float64 NULL, Float64 NULL) :: Float64 NULL
-200 multiply FACTORY
+16 multiply(UInt16, UInt8) :: UInt32
+17 multiply(UInt16 NULL, UInt8 NULL) :: UInt32 NULL
+18 multiply(UInt16, UInt16) :: UInt32
+19 multiply(UInt16 NULL, UInt16 NULL) :: UInt32 NULL
+20 multiply(UInt16, UInt32) :: UInt64
+21 multiply(UInt16 NULL, UInt32 NULL) :: UInt64 NULL
+22 multiply(UInt16, UInt64) :: UInt64
+23 multiply(UInt16 NULL, UInt64 NULL) :: UInt64 NULL
+24 multiply(UInt16, Int8) :: Int32
+25 multiply(UInt16 NULL, Int8 NULL) :: Int32 NULL
+26 multiply(UInt16, Int16) :: Int32
+27 multiply(UInt16 NULL, Int16 NULL) :: Int32 NULL
+28 multiply(UInt16, Int32) :: Int64
+29 multiply(UInt16 NULL, Int32 NULL) :: Int64 NULL
+30 multiply(UInt16, Int64) :: Int64
+31 multiply(UInt16 NULL, Int64 NULL) :: Int64 NULL
+32 multiply(UInt32, UInt8) :: UInt64
+33 multiply(UInt32 NULL, UInt8 NULL) :: UInt64 NULL
+34 multiply(UInt32, UInt16) :: UInt64
+35 multiply(UInt32 NULL, UInt16 NULL) :: UInt64 NULL
+36 multiply(UInt32, UInt32) :: UInt64
+37 multiply(UInt32 NULL, UInt32 NULL) :: UInt64 NULL
+38 multiply(UInt32, UInt64) :: UInt64
+39 multiply(UInt32 NULL, UInt64 NULL) :: UInt64 NULL
+40 multiply(UInt32, Int8) :: Int64
+41 multiply(UInt32 NULL, Int8 NULL) :: Int64 NULL
+42 multiply(UInt32, Int16) :: Int64
+43 multiply(UInt32 NULL, Int16 NULL) :: Int64 NULL
+44 multiply(UInt32, Int32) :: Int64
+45 multiply(UInt32 NULL, Int32 NULL) :: Int64 NULL
+46 multiply(UInt32, Int64) :: Int64
+47 multiply(UInt32 NULL, Int64 NULL) :: Int64 NULL
+48 multiply(UInt64, UInt8) :: UInt64
+49 multiply(UInt64 NULL, UInt8 NULL) :: UInt64 NULL
+50 multiply(UInt64, UInt16) :: UInt64
+51 multiply(UInt64 NULL, UInt16 NULL) :: UInt64 NULL
+52 multiply(UInt64, UInt32) :: UInt64
+53 multiply(UInt64 NULL, UInt32 NULL) :: UInt64 NULL
+54 multiply(UInt64, UInt64) :: UInt64
+55 multiply(UInt64 NULL, UInt64 NULL) :: UInt64 NULL
+56 multiply(UInt64, Int8) :: Int64
+57 multiply(UInt64 NULL, Int8 NULL) :: Int64 NULL
+58 multiply(UInt64, Int16) :: Int64
+59 multiply(UInt64 NULL, Int16 NULL) :: Int64 NULL
+60 multiply(UInt64, Int32) :: Int64
+61 multiply(UInt64 NULL, Int32 NULL) :: Int64 NULL
+62 multiply(UInt64, Int64) :: Int64
+63 multiply(UInt64 NULL, Int64 NULL) :: Int64 NULL
+64 multiply(Int8, UInt8) :: Int16
+65 multiply(Int8 NULL, UInt8 NULL) :: Int16 NULL
+66 multiply(Int8, UInt16) :: Int32
+67 multiply(Int8 NULL, UInt16 NULL) :: Int32 NULL
+68 multiply(Int8, UInt32) :: Int64
+69 multiply(Int8 NULL, UInt32 NULL) :: Int64 NULL
+70 multiply(Int8, UInt64) :: Int64
+71 multiply(Int8 NULL, UInt64 NULL) :: Int64 NULL
+72 multiply(Int8, Int8) :: Int16
+73 multiply(Int8 NULL, Int8 NULL) :: Int16 NULL
+74 multiply(Int8, Int16) :: Int32
+75 multiply(Int8 NULL, Int16 NULL) :: Int32 NULL
+76 multiply(Int8, Int32) :: Int64
+77 multiply(Int8 NULL, Int32 NULL) :: Int64 NULL
+78 multiply(Int8, Int64) :: Int64
+79 multiply(Int8 NULL, Int64 NULL) :: Int64 NULL
+80 multiply(Int16, UInt8) :: Int32
+81 multiply(Int16 NULL, UInt8 NULL) :: Int32 NULL
+82 multiply(Int16, UInt16) :: Int32
+83 multiply(Int16 NULL, UInt16 NULL) :: Int32 NULL
+84 multiply(Int16, UInt32) :: Int64
+85 multiply(Int16 NULL, UInt32 NULL) :: Int64 NULL
+86 multiply(Int16, UInt64) :: Int64
+87 multiply(Int16 NULL, UInt64 NULL) :: Int64 NULL
+88 multiply(Int16, Int8) :: Int32
+89 multiply(Int16 NULL, Int8 NULL) :: Int32 NULL
+90 multiply(Int16, Int16) :: Int32
+91 multiply(Int16 NULL, Int16 NULL) :: Int32 NULL
+92 multiply(Int16, Int32) :: Int64
+93 multiply(Int16 NULL, Int32 NULL) :: Int64 NULL
+94 multiply(Int16, Int64) :: Int64
+95 multiply(Int16 NULL, Int64 NULL) :: Int64 NULL
+96 multiply(Int32, UInt8) :: Int64
+97 multiply(Int32 NULL, UInt8 NULL) :: Int64 NULL
+98 multiply(Int32, UInt16) :: Int64
+99 multiply(Int32 NULL, UInt16 NULL) :: Int64 NULL
+100 multiply(Int32, UInt32) :: Int64
+101 multiply(Int32 NULL, UInt32 NULL) :: Int64 NULL
+102 multiply(Int32, UInt64) :: Int64
+103 multiply(Int32 NULL, UInt64 NULL) :: Int64 NULL
+104 multiply(Int32, Int8) :: Int64
+105 multiply(Int32 NULL, Int8 NULL) :: Int64 NULL
+106 multiply(Int32, Int16) :: Int64
+107 multiply(Int32 NULL, Int16 NULL) :: Int64 NULL
+108 multiply(Int32, Int32) :: Int64
+109 multiply(Int32 NULL, Int32 NULL) :: Int64 NULL
+110 multiply(Int32, Int64) :: Int64
+111 multiply(Int32 NULL, Int64 NULL) :: Int64 NULL
+112 multiply(Int64, UInt8) :: Int64
+113 multiply(Int64 NULL, UInt8 NULL) :: Int64 NULL
+114 multiply(Int64, UInt16) :: Int64
+115 multiply(Int64 NULL, UInt16 NULL) :: Int64 NULL
+116 multiply(Int64, UInt32) :: Int64
+117 multiply(Int64 NULL, UInt32 NULL) :: Int64 NULL
+118 multiply(Int64, UInt64) :: Int64
+119 multiply(Int64 NULL, UInt64 NULL) :: Int64 NULL
+120 multiply(Int64, Int8) :: Int64
+121 multiply(Int64 NULL, Int8 NULL) :: Int64 NULL
+122 multiply(Int64, Int16) :: Int64
+123 multiply(Int64 NULL, Int16 NULL) :: Int64 NULL
+124 multiply(Int64, Int32) :: Int64
+125 multiply(Int64 NULL, Int32 NULL) :: Int64 NULL
+126 multiply(Int64, Int64) :: Int64
+127 multiply(Int64 NULL, Int64 NULL) :: Int64 NULL
+128 multiply FACTORY
+129 multiply(UInt8, Float32) :: Float64
+130 multiply(UInt8 NULL, Float32 NULL) :: Float64 NULL
+131 multiply(UInt8, Float64) :: Float64
+132 multiply(UInt8 NULL, Float64 NULL) :: Float64 NULL
+133 multiply(UInt16, Float32) :: Float64
+134 multiply(UInt16 NULL, Float32 NULL) :: Float64 NULL
+135 multiply(UInt16, Float64) :: Float64
+136 multiply(UInt16 NULL, Float64 NULL) :: Float64 NULL
+137 multiply(UInt32, Float32) :: Float64
+138 multiply(UInt32 NULL, Float32 NULL) :: Float64 NULL
+139 multiply(UInt32, Float64) :: Float64
+140 multiply(UInt32 NULL, Float64 NULL) :: Float64 NULL
+141 multiply(UInt64, Float32) :: Float64
+142 multiply(UInt64 NULL, Float32 NULL) :: Float64 NULL
+143 multiply(UInt64, Float64) :: Float64
+144 multiply(UInt64 NULL, Float64 NULL) :: Float64 NULL
+145 multiply(Int8, Float32) :: Float64
+146 multiply(Int8 NULL, Float32 NULL) :: Float64 NULL
+147 multiply(Int8, Float64) :: Float64
+148 multiply(Int8 NULL, Float64 NULL) :: Float64 NULL
+149 multiply(Int16, Float32) :: Float64
+150 multiply(Int16 NULL, Float32 NULL) :: Float64 NULL
+151 multiply(Int16, Float64) :: Float64
+152 multiply(Int16 NULL, Float64 NULL) :: Float64 NULL
+153 multiply(Int32, Float32) :: Float64
+154 multiply(Int32 NULL, Float32 NULL) :: Float64 NULL
+155 multiply(Int32, Float64) :: Float64
+156 multiply(Int32 NULL, Float64 NULL) :: Float64 NULL
+157 multiply(Int64, Float32) :: Float64
+158 multiply(Int64 NULL, Float32 NULL) :: Float64 NULL
+159 multiply(Int64, Float64) :: Float64
+160 multiply(Int64 NULL, Float64 NULL) :: Float64 NULL
+161 multiply(Float32, UInt8) :: Float64
+162 multiply(Float32 NULL, UInt8 NULL) :: Float64 NULL
+163 multiply(Float32, UInt16) :: Float64
+164 multiply(Float32 NULL, UInt16 NULL) :: Float64 NULL
+165 multiply(Float32, UInt32) :: Float64
+166 multiply(Float32 NULL, UInt32 NULL) :: Float64 NULL
+167 multiply(Float32, UInt64) :: Float64
+168 multiply(Float32 NULL, UInt64 NULL) :: Float64 NULL
+169 multiply(Float32, Int8) :: Float64
+170 multiply(Float32 NULL, Int8 NULL) :: Float64 NULL
+171 multiply(Float32, Int16) :: Float64
+172 multiply(Float32 NULL, Int16 NULL) :: Float64 NULL
+173 multiply(Float32, Int32) :: Float64
+174 multiply(Float32 NULL, Int32 NULL) :: Float64 NULL
+175 multiply(Float32, Int64) :: Float64
+176 multiply(Float32 NULL, Int64 NULL) :: Float64 NULL
+177 multiply(Float64, UInt8) :: Float64
+178 multiply(Float64 NULL, UInt8 NULL) :: Float64 NULL
+179 multiply(Float64, UInt16) :: Float64
+180 multiply(Float64 NULL, UInt16 NULL) :: Float64 NULL
+181 multiply(Float64, UInt32) :: Float64
+182 multiply(Float64 NULL, UInt32 NULL) :: Float64 NULL
+183 multiply(Float64, UInt64) :: Float64
+184 multiply(Float64 NULL, UInt64 NULL) :: Float64 NULL
+185 multiply(Float64, Int8) :: Float64
+186 multiply(Float64 NULL, Int8 NULL) :: Float64 NULL
+187 multiply(Float64, Int16) :: Float64
+188 multiply(Float64 NULL, Int16 NULL) :: Float64 NULL
+189 multiply(Float64, Int32) :: Float64
+190 multiply(Float64 NULL, Int32 NULL) :: Float64 NULL
+191 multiply(Float64, Int64) :: Float64
+192 multiply(Float64 NULL, Int64 NULL) :: Float64 NULL
+193 multiply(Float32, Float32) :: Float64
+194 multiply(Float32 NULL, Float32 NULL) :: Float64 NULL
+195 multiply(Float32, Float64) :: Float64
+196 multiply(Float32 NULL, Float64 NULL) :: Float64 NULL
+197 multiply(Float64, Float32) :: Float64
+198 multiply(Float64 NULL, Float32 NULL) :: Float64 NULL
+199 multiply(Float64, Float64) :: Float64
+200 multiply(Float64 NULL, Float64 NULL) :: Float64 NULL
 0 ne FACTORY
 0 not(Boolean) :: Boolean
 1 not(Boolean NULL) :: Boolean NULL
@@ -1982,18 +1983,18 @@ Functions overloads:
 7 noteq(Timestamp NULL, Timestamp NULL) :: Boolean NULL
 8 noteq(UInt8, UInt8) :: Boolean
 9 noteq(UInt8 NULL, UInt8 NULL) :: Boolean NULL
-10 noteq(UInt16, UInt16) :: Boolean
-11 noteq(UInt16 NULL, UInt16 NULL) :: Boolean NULL
-12 noteq(UInt32, UInt32) :: Boolean
-13 noteq(UInt32 NULL, UInt32 NULL) :: Boolean NULL
-14 noteq(UInt64, UInt64) :: Boolean
-15 noteq(UInt64 NULL, UInt64 NULL) :: Boolean NULL
-16 noteq(Int8, Int8) :: Boolean
-17 noteq(Int8 NULL, Int8 NULL) :: Boolean NULL
-18 noteq(Int16, Int16) :: Boolean
-19 noteq(Int16 NULL, Int16 NULL) :: Boolean NULL
-20 noteq(Int32, Int32) :: Boolean
-21 noteq(Int32 NULL, Int32 NULL) :: Boolean NULL
+10 noteq(Int8, Int8) :: Boolean
+11 noteq(Int8 NULL, Int8 NULL) :: Boolean NULL
+12 noteq(UInt16, UInt16) :: Boolean
+13 noteq(UInt16 NULL, UInt16 NULL) :: Boolean NULL
+14 noteq(Int16, Int16) :: Boolean
+15 noteq(Int16 NULL, Int16 NULL) :: Boolean NULL
+16 noteq(UInt32, UInt32) :: Boolean
+17 noteq(UInt32 NULL, UInt32 NULL) :: Boolean NULL
+18 noteq(Int32, Int32) :: Boolean
+19 noteq(Int32 NULL, Int32 NULL) :: Boolean NULL
+20 noteq(UInt64, UInt64) :: Boolean
+21 noteq(UInt64 NULL, UInt64 NULL) :: Boolean NULL
 22 noteq(Int64, Int64) :: Boolean
 23 noteq(Int64 NULL, Int64 NULL) :: Boolean NULL
 24 noteq(Float32, Float32) :: Boolean
@@ -2034,199 +2035,199 @@ Functions overloads:
 13 plus(UInt8 NULL, Int32 NULL) :: Int64 NULL
 14 plus(UInt8, Int64) :: Int64
 15 plus(UInt8 NULL, Int64 NULL) :: Int64 NULL
-16 plus(UInt8, Float32) :: Float64
-17 plus(UInt8 NULL, Float32 NULL) :: Float64 NULL
-18 plus(UInt8, Float64) :: Float64
-19 plus(UInt8 NULL, Float64 NULL) :: Float64 NULL
-20 plus(UInt16, UInt8) :: UInt32
-21 plus(UInt16 NULL, UInt8 NULL) :: UInt32 NULL
-22 plus(UInt16, UInt16) :: UInt32
-23 plus(UInt16 NULL, UInt16 NULL) :: UInt32 NULL
-24 plus(UInt16, UInt32) :: UInt64
-25 plus(UInt16 NULL, UInt32 NULL) :: UInt64 NULL
-26 plus(UInt16, UInt64) :: UInt64
-27 plus(UInt16 NULL, UInt64 NULL) :: UInt64 NULL
-28 plus(UInt16, Int8) :: Int32
-29 plus(UInt16 NULL, Int8 NULL) :: Int32 NULL
-30 plus(UInt16, Int16) :: Int32
-31 plus(UInt16 NULL, Int16 NULL) :: Int32 NULL
-32 plus(UInt16, Int32) :: Int64
-33 plus(UInt16 NULL, Int32 NULL) :: Int64 NULL
-34 plus(UInt16, Int64) :: Int64
-35 plus(UInt16 NULL, Int64 NULL) :: Int64 NULL
-36 plus(UInt16, Float32) :: Float64
-37 plus(UInt16 NULL, Float32 NULL) :: Float64 NULL
-38 plus(UInt16, Float64) :: Float64
-39 plus(UInt16 NULL, Float64 NULL) :: Float64 NULL
-40 plus(UInt32, UInt8) :: UInt64
-41 plus(UInt32 NULL, UInt8 NULL) :: UInt64 NULL
-42 plus(UInt32, UInt16) :: UInt64
-43 plus(UInt32 NULL, UInt16 NULL) :: UInt64 NULL
-44 plus(UInt32, UInt32) :: UInt64
-45 plus(UInt32 NULL, UInt32 NULL) :: UInt64 NULL
-46 plus(UInt32, UInt64) :: UInt64
-47 plus(UInt32 NULL, UInt64 NULL) :: UInt64 NULL
-48 plus(UInt32, Int8) :: Int64
-49 plus(UInt32 NULL, Int8 NULL) :: Int64 NULL
-50 plus(UInt32, Int16) :: Int64
-51 plus(UInt32 NULL, Int16 NULL) :: Int64 NULL
-52 plus(UInt32, Int32) :: Int64
-53 plus(UInt32 NULL, Int32 NULL) :: Int64 NULL
-54 plus(UInt32, Int64) :: Int64
-55 plus(UInt32 NULL, Int64 NULL) :: Int64 NULL
-56 plus(UInt32, Float32) :: Float64
-57 plus(UInt32 NULL, Float32 NULL) :: Float64 NULL
-58 plus(UInt32, Float64) :: Float64
-59 plus(UInt32 NULL, Float64 NULL) :: Float64 NULL
-60 plus(UInt64, UInt8) :: UInt64
-61 plus(UInt64 NULL, UInt8 NULL) :: UInt64 NULL
-62 plus(UInt64, UInt16) :: UInt64
-63 plus(UInt64 NULL, UInt16 NULL) :: UInt64 NULL
-64 plus(UInt64, UInt32) :: UInt64
-65 plus(UInt64 NULL, UInt32 NULL) :: UInt64 NULL
-66 plus(UInt64, UInt64) :: UInt64
-67 plus(UInt64 NULL, UInt64 NULL) :: UInt64 NULL
-68 plus(UInt64, Int8) :: Int64
-69 plus(UInt64 NULL, Int8 NULL) :: Int64 NULL
-70 plus(UInt64, Int16) :: Int64
-71 plus(UInt64 NULL, Int16 NULL) :: Int64 NULL
-72 plus(UInt64, Int32) :: Int64
-73 plus(UInt64 NULL, Int32 NULL) :: Int64 NULL
-74 plus(UInt64, Int64) :: Int64
-75 plus(UInt64 NULL, Int64 NULL) :: Int64 NULL
-76 plus(UInt64, Float32) :: Float64
-77 plus(UInt64 NULL, Float32 NULL) :: Float64 NULL
-78 plus(UInt64, Float64) :: Float64
-79 plus(UInt64 NULL, Float64 NULL) :: Float64 NULL
-80 plus(Int8, UInt8) :: Int16
-81 plus(Int8 NULL, UInt8 NULL) :: Int16 NULL
-82 plus(Int8, UInt16) :: Int32
-83 plus(Int8 NULL, UInt16 NULL) :: Int32 NULL
-84 plus(Int8, UInt32) :: Int64
-85 plus(Int8 NULL, UInt32 NULL) :: Int64 NULL
-86 plus(Int8, UInt64) :: Int64
-87 plus(Int8 NULL, UInt64 NULL) :: Int64 NULL
-88 plus(Int8, Int8) :: Int16
-89 plus(Int8 NULL, Int8 NULL) :: Int16 NULL
-90 plus(Int8, Int16) :: Int32
-91 plus(Int8 NULL, Int16 NULL) :: Int32 NULL
-92 plus(Int8, Int32) :: Int64
-93 plus(Int8 NULL, Int32 NULL) :: Int64 NULL
-94 plus(Int8, Int64) :: Int64
-95 plus(Int8 NULL, Int64 NULL) :: Int64 NULL
-96 plus(Int8, Float32) :: Float64
-97 plus(Int8 NULL, Float32 NULL) :: Float64 NULL
-98 plus(Int8, Float64) :: Float64
-99 plus(Int8 NULL, Float64 NULL) :: Float64 NULL
-100 plus(Int16, UInt8) :: Int32
-101 plus(Int16 NULL, UInt8 NULL) :: Int32 NULL
-102 plus(Int16, UInt16) :: Int32
-103 plus(Int16 NULL, UInt16 NULL) :: Int32 NULL
-104 plus(Int16, UInt32) :: Int64
-105 plus(Int16 NULL, UInt32 NULL) :: Int64 NULL
-106 plus(Int16, UInt64) :: Int64
-107 plus(Int16 NULL, UInt64 NULL) :: Int64 NULL
-108 plus(Int16, Int8) :: Int32
-109 plus(Int16 NULL, Int8 NULL) :: Int32 NULL
-110 plus(Int16, Int16) :: Int32
-111 plus(Int16 NULL, Int16 NULL) :: Int32 NULL
-112 plus(Int16, Int32) :: Int64
-113 plus(Int16 NULL, Int32 NULL) :: Int64 NULL
-114 plus(Int16, Int64) :: Int64
-115 plus(Int16 NULL, Int64 NULL) :: Int64 NULL
-116 plus(Int16, Float32) :: Float64
-117 plus(Int16 NULL, Float32 NULL) :: Float64 NULL
-118 plus(Int16, Float64) :: Float64
-119 plus(Int16 NULL, Float64 NULL) :: Float64 NULL
-120 plus(Int32, UInt8) :: Int64
-121 plus(Int32 NULL, UInt8 NULL) :: Int64 NULL
-122 plus(Int32, UInt16) :: Int64
-123 plus(Int32 NULL, UInt16 NULL) :: Int64 NULL
-124 plus(Int32, UInt32) :: Int64
-125 plus(Int32 NULL, UInt32 NULL) :: Int64 NULL
-126 plus(Int32, UInt64) :: Int64
-127 plus(Int32 NULL, UInt64 NULL) :: Int64 NULL
-128 plus(Int32, Int8) :: Int64
-129 plus(Int32 NULL, Int8 NULL) :: Int64 NULL
-130 plus(Int32, Int16) :: Int64
-131 plus(Int32 NULL, Int16 NULL) :: Int64 NULL
-132 plus(Int32, Int32) :: Int64
-133 plus(Int32 NULL, Int32 NULL) :: Int64 NULL
-134 plus(Int32, Int64) :: Int64
-135 plus(Int32 NULL, Int64 NULL) :: Int64 NULL
-136 plus(Int32, Float32) :: Float64
-137 plus(Int32 NULL, Float32 NULL) :: Float64 NULL
-138 plus(Int32, Float64) :: Float64
-139 plus(Int32 NULL, Float64 NULL) :: Float64 NULL
-140 plus(Int64, UInt8) :: Int64
-141 plus(Int64 NULL, UInt8 NULL) :: Int64 NULL
-142 plus(Int64, UInt16) :: Int64
-143 plus(Int64 NULL, UInt16 NULL) :: Int64 NULL
-144 plus(Int64, UInt32) :: Int64
-145 plus(Int64 NULL, UInt32 NULL) :: Int64 NULL
-146 plus(Int64, UInt64) :: Int64
-147 plus(Int64 NULL, UInt64 NULL) :: Int64 NULL
-148 plus(Int64, Int8) :: Int64
-149 plus(Int64 NULL, Int8 NULL) :: Int64 NULL
-150 plus(Int64, Int16) :: Int64
-151 plus(Int64 NULL, Int16 NULL) :: Int64 NULL
-152 plus(Int64, Int32) :: Int64
-153 plus(Int64 NULL, Int32 NULL) :: Int64 NULL
-154 plus(Int64, Int64) :: Int64
-155 plus(Int64 NULL, Int64 NULL) :: Int64 NULL
-156 plus(Int64, Float32) :: Float64
-157 plus(Int64 NULL, Float32 NULL) :: Float64 NULL
-158 plus(Int64, Float64) :: Float64
-159 plus(Int64 NULL, Float64 NULL) :: Float64 NULL
-160 plus(Float32, UInt8) :: Float64
-161 plus(Float32 NULL, UInt8 NULL) :: Float64 NULL
-162 plus(Float32, UInt16) :: Float64
-163 plus(Float32 NULL, UInt16 NULL) :: Float64 NULL
-164 plus(Float32, UInt32) :: Float64
-165 plus(Float32 NULL, UInt32 NULL) :: Float64 NULL
-166 plus(Float32, UInt64) :: Float64
-167 plus(Float32 NULL, UInt64 NULL) :: Float64 NULL
-168 plus(Float32, Int8) :: Float64
-169 plus(Float32 NULL, Int8 NULL) :: Float64 NULL
-170 plus(Float32, Int16) :: Float64
-171 plus(Float32 NULL, Int16 NULL) :: Float64 NULL
-172 plus(Float32, Int32) :: Float64
-173 plus(Float32 NULL, Int32 NULL) :: Float64 NULL
-174 plus(Float32, Int64) :: Float64
-175 plus(Float32 NULL, Int64 NULL) :: Float64 NULL
-176 plus(Float32, Float32) :: Float64
-177 plus(Float32 NULL, Float32 NULL) :: Float64 NULL
-178 plus(Float32, Float64) :: Float64
-179 plus(Float32 NULL, Float64 NULL) :: Float64 NULL
-180 plus(Float64, UInt8) :: Float64
-181 plus(Float64 NULL, UInt8 NULL) :: Float64 NULL
-182 plus(Float64, UInt16) :: Float64
-183 plus(Float64 NULL, UInt16 NULL) :: Float64 NULL
-184 plus(Float64, UInt32) :: Float64
-185 plus(Float64 NULL, UInt32 NULL) :: Float64 NULL
-186 plus(Float64, UInt64) :: Float64
-187 plus(Float64 NULL, UInt64 NULL) :: Float64 NULL
-188 plus(Float64, Int8) :: Float64
-189 plus(Float64 NULL, Int8 NULL) :: Float64 NULL
-190 plus(Float64, Int16) :: Float64
-191 plus(Float64 NULL, Int16 NULL) :: Float64 NULL
-192 plus(Float64, Int32) :: Float64
-193 plus(Float64 NULL, Int32 NULL) :: Float64 NULL
-194 plus(Float64, Int64) :: Float64
-195 plus(Float64 NULL, Int64 NULL) :: Float64 NULL
-196 plus(Float64, Float32) :: Float64
-197 plus(Float64 NULL, Float32 NULL) :: Float64 NULL
-198 plus(Float64, Float64) :: Float64
-199 plus(Float64 NULL, Float64 NULL) :: Float64 NULL
-200 plus(Date, Int64) :: Date
-201 plus(Date NULL, Int64 NULL) :: Date NULL
-202 plus(Date, Date) :: Int32
-203 plus(Date NULL, Date NULL) :: Int32 NULL
-204 plus(Timestamp, Int64) :: Timestamp
-205 plus(Timestamp NULL, Int64 NULL) :: Timestamp NULL
-206 plus(Timestamp, Timestamp) :: Int64
-207 plus(Timestamp NULL, Timestamp NULL) :: Int64 NULL
-208 plus FACTORY
+16 plus(UInt16, UInt8) :: UInt32
+17 plus(UInt16 NULL, UInt8 NULL) :: UInt32 NULL
+18 plus(UInt16, UInt16) :: UInt32
+19 plus(UInt16 NULL, UInt16 NULL) :: UInt32 NULL
+20 plus(UInt16, UInt32) :: UInt64
+21 plus(UInt16 NULL, UInt32 NULL) :: UInt64 NULL
+22 plus(UInt16, UInt64) :: UInt64
+23 plus(UInt16 NULL, UInt64 NULL) :: UInt64 NULL
+24 plus(UInt16, Int8) :: Int32
+25 plus(UInt16 NULL, Int8 NULL) :: Int32 NULL
+26 plus(UInt16, Int16) :: Int32
+27 plus(UInt16 NULL, Int16 NULL) :: Int32 NULL
+28 plus(UInt16, Int32) :: Int64
+29 plus(UInt16 NULL, Int32 NULL) :: Int64 NULL
+30 plus(UInt16, Int64) :: Int64
+31 plus(UInt16 NULL, Int64 NULL) :: Int64 NULL
+32 plus(UInt32, UInt8) :: UInt64
+33 plus(UInt32 NULL, UInt8 NULL) :: UInt64 NULL
+34 plus(UInt32, UInt16) :: UInt64
+35 plus(UInt32 NULL, UInt16 NULL) :: UInt64 NULL
+36 plus(UInt32, UInt32) :: UInt64
+37 plus(UInt32 NULL, UInt32 NULL) :: UInt64 NULL
+38 plus(UInt32, UInt64) :: UInt64
+39 plus(UInt32 NULL, UInt64 NULL) :: UInt64 NULL
+40 plus(UInt32, Int8) :: Int64
+41 plus(UInt32 NULL, Int8 NULL) :: Int64 NULL
+42 plus(UInt32, Int16) :: Int64
+43 plus(UInt32 NULL, Int16 NULL) :: Int64 NULL
+44 plus(UInt32, Int32) :: Int64
+45 plus(UInt32 NULL, Int32 NULL) :: Int64 NULL
+46 plus(UInt32, Int64) :: Int64
+47 plus(UInt32 NULL, Int64 NULL) :: Int64 NULL
+48 plus(UInt64, UInt8) :: UInt64
+49 plus(UInt64 NULL, UInt8 NULL) :: UInt64 NULL
+50 plus(UInt64, UInt16) :: UInt64
+51 plus(UInt64 NULL, UInt16 NULL) :: UInt64 NULL
+52 plus(UInt64, UInt32) :: UInt64
+53 plus(UInt64 NULL, UInt32 NULL) :: UInt64 NULL
+54 plus(UInt64, UInt64) :: UInt64
+55 plus(UInt64 NULL, UInt64 NULL) :: UInt64 NULL
+56 plus(UInt64, Int8) :: Int64
+57 plus(UInt64 NULL, Int8 NULL) :: Int64 NULL
+58 plus(UInt64, Int16) :: Int64
+59 plus(UInt64 NULL, Int16 NULL) :: Int64 NULL
+60 plus(UInt64, Int32) :: Int64
+61 plus(UInt64 NULL, Int32 NULL) :: Int64 NULL
+62 plus(UInt64, Int64) :: Int64
+63 plus(UInt64 NULL, Int64 NULL) :: Int64 NULL
+64 plus(Int8, UInt8) :: Int16
+65 plus(Int8 NULL, UInt8 NULL) :: Int16 NULL
+66 plus(Int8, UInt16) :: Int32
+67 plus(Int8 NULL, UInt16 NULL) :: Int32 NULL
+68 plus(Int8, UInt32) :: Int64
+69 plus(Int8 NULL, UInt32 NULL) :: Int64 NULL
+70 plus(Int8, UInt64) :: Int64
+71 plus(Int8 NULL, UInt64 NULL) :: Int64 NULL
+72 plus(Int8, Int8) :: Int16
+73 plus(Int8 NULL, Int8 NULL) :: Int16 NULL
+74 plus(Int8, Int16) :: Int32
+75 plus(Int8 NULL, Int16 NULL) :: Int32 NULL
+76 plus(Int8, Int32) :: Int64
+77 plus(Int8 NULL, Int32 NULL) :: Int64 NULL
+78 plus(Int8, Int64) :: Int64
+79 plus(Int8 NULL, Int64 NULL) :: Int64 NULL
+80 plus(Int16, UInt8) :: Int32
+81 plus(Int16 NULL, UInt8 NULL) :: Int32 NULL
+82 plus(Int16, UInt16) :: Int32
+83 plus(Int16 NULL, UInt16 NULL) :: Int32 NULL
+84 plus(Int16, UInt32) :: Int64
+85 plus(Int16 NULL, UInt32 NULL) :: Int64 NULL
+86 plus(Int16, UInt64) :: Int64
+87 plus(Int16 NULL, UInt64 NULL) :: Int64 NULL
+88 plus(Int16, Int8) :: Int32
+89 plus(Int16 NULL, Int8 NULL) :: Int32 NULL
+90 plus(Int16, Int16) :: Int32
+91 plus(Int16 NULL, Int16 NULL) :: Int32 NULL
+92 plus(Int16, Int32) :: Int64
+93 plus(Int16 NULL, Int32 NULL) :: Int64 NULL
+94 plus(Int16, Int64) :: Int64
+95 plus(Int16 NULL, Int64 NULL) :: Int64 NULL
+96 plus(Int32, UInt8) :: Int64
+97 plus(Int32 NULL, UInt8 NULL) :: Int64 NULL
+98 plus(Int32, UInt16) :: Int64
+99 plus(Int32 NULL, UInt16 NULL) :: Int64 NULL
+100 plus(Int32, UInt32) :: Int64
+101 plus(Int32 NULL, UInt32 NULL) :: Int64 NULL
+102 plus(Int32, UInt64) :: Int64
+103 plus(Int32 NULL, UInt64 NULL) :: Int64 NULL
+104 plus(Int32, Int8) :: Int64
+105 plus(Int32 NULL, Int8 NULL) :: Int64 NULL
+106 plus(Int32, Int16) :: Int64
+107 plus(Int32 NULL, Int16 NULL) :: Int64 NULL
+108 plus(Int32, Int32) :: Int64
+109 plus(Int32 NULL, Int32 NULL) :: Int64 NULL
+110 plus(Int32, Int64) :: Int64
+111 plus(Int32 NULL, Int64 NULL) :: Int64 NULL
+112 plus(Int64, UInt8) :: Int64
+113 plus(Int64 NULL, UInt8 NULL) :: Int64 NULL
+114 plus(Int64, UInt16) :: Int64
+115 plus(Int64 NULL, UInt16 NULL) :: Int64 NULL
+116 plus(Int64, UInt32) :: Int64
+117 plus(Int64 NULL, UInt32 NULL) :: Int64 NULL
+118 plus(Int64, UInt64) :: Int64
+119 plus(Int64 NULL, UInt64 NULL) :: Int64 NULL
+120 plus(Int64, Int8) :: Int64
+121 plus(Int64 NULL, Int8 NULL) :: Int64 NULL
+122 plus(Int64, Int16) :: Int64
+123 plus(Int64 NULL, Int16 NULL) :: Int64 NULL
+124 plus(Int64, Int32) :: Int64
+125 plus(Int64 NULL, Int32 NULL) :: Int64 NULL
+126 plus(Int64, Int64) :: Int64
+127 plus(Int64 NULL, Int64 NULL) :: Int64 NULL
+128 plus FACTORY
+129 plus(UInt8, Float32) :: Float64
+130 plus(UInt8 NULL, Float32 NULL) :: Float64 NULL
+131 plus(UInt8, Float64) :: Float64
+132 plus(UInt8 NULL, Float64 NULL) :: Float64 NULL
+133 plus(UInt16, Float32) :: Float64
+134 plus(UInt16 NULL, Float32 NULL) :: Float64 NULL
+135 plus(UInt16, Float64) :: Float64
+136 plus(UInt16 NULL, Float64 NULL) :: Float64 NULL
+137 plus(UInt32, Float32) :: Float64
+138 plus(UInt32 NULL, Float32 NULL) :: Float64 NULL
+139 plus(UInt32, Float64) :: Float64
+140 plus(UInt32 NULL, Float64 NULL) :: Float64 NULL
+141 plus(UInt64, Float32) :: Float64
+142 plus(UInt64 NULL, Float32 NULL) :: Float64 NULL
+143 plus(UInt64, Float64) :: Float64
+144 plus(UInt64 NULL, Float64 NULL) :: Float64 NULL
+145 plus(Int8, Float32) :: Float64
+146 plus(Int8 NULL, Float32 NULL) :: Float64 NULL
+147 plus(Int8, Float64) :: Float64
+148 plus(Int8 NULL, Float64 NULL) :: Float64 NULL
+149 plus(Int16, Float32) :: Float64
+150 plus(Int16 NULL, Float32 NULL) :: Float64 NULL
+151 plus(Int16, Float64) :: Float64
+152 plus(Int16 NULL, Float64 NULL) :: Float64 NULL
+153 plus(Int32, Float32) :: Float64
+154 plus(Int32 NULL, Float32 NULL) :: Float64 NULL
+155 plus(Int32, Float64) :: Float64
+156 plus(Int32 NULL, Float64 NULL) :: Float64 NULL
+157 plus(Int64, Float32) :: Float64
+158 plus(Int64 NULL, Float32 NULL) :: Float64 NULL
+159 plus(Int64, Float64) :: Float64
+160 plus(Int64 NULL, Float64 NULL) :: Float64 NULL
+161 plus(Float32, UInt8) :: Float64
+162 plus(Float32 NULL, UInt8 NULL) :: Float64 NULL
+163 plus(Float32, UInt16) :: Float64
+164 plus(Float32 NULL, UInt16 NULL) :: Float64 NULL
+165 plus(Float32, UInt32) :: Float64
+166 plus(Float32 NULL, UInt32 NULL) :: Float64 NULL
+167 plus(Float32, UInt64) :: Float64
+168 plus(Float32 NULL, UInt64 NULL) :: Float64 NULL
+169 plus(Float32, Int8) :: Float64
+170 plus(Float32 NULL, Int8 NULL) :: Float64 NULL
+171 plus(Float32, Int16) :: Float64
+172 plus(Float32 NULL, Int16 NULL) :: Float64 NULL
+173 plus(Float32, Int32) :: Float64
+174 plus(Float32 NULL, Int32 NULL) :: Float64 NULL
+175 plus(Float32, Int64) :: Float64
+176 plus(Float32 NULL, Int64 NULL) :: Float64 NULL
+177 plus(Float64, UInt8) :: Float64
+178 plus(Float64 NULL, UInt8 NULL) :: Float64 NULL
+179 plus(Float64, UInt16) :: Float64
+180 plus(Float64 NULL, UInt16 NULL) :: Float64 NULL
+181 plus(Float64, UInt32) :: Float64
+182 plus(Float64 NULL, UInt32 NULL) :: Float64 NULL
+183 plus(Float64, UInt64) :: Float64
+184 plus(Float64 NULL, UInt64 NULL) :: Float64 NULL
+185 plus(Float64, Int8) :: Float64
+186 plus(Float64 NULL, Int8 NULL) :: Float64 NULL
+187 plus(Float64, Int16) :: Float64
+188 plus(Float64 NULL, Int16 NULL) :: Float64 NULL
+189 plus(Float64, Int32) :: Float64
+190 plus(Float64 NULL, Int32 NULL) :: Float64 NULL
+191 plus(Float64, Int64) :: Float64
+192 plus(Float64 NULL, Int64 NULL) :: Float64 NULL
+193 plus(Float32, Float32) :: Float64
+194 plus(Float32 NULL, Float32 NULL) :: Float64 NULL
+195 plus(Float32, Float64) :: Float64
+196 plus(Float32 NULL, Float64 NULL) :: Float64 NULL
+197 plus(Float64, Float32) :: Float64
+198 plus(Float64 NULL, Float32 NULL) :: Float64 NULL
+199 plus(Float64, Float64) :: Float64
+200 plus(Float64 NULL, Float64 NULL) :: Float64 NULL
+201 plus(Date, Int64) :: Date
+202 plus(Date NULL, Int64 NULL) :: Date NULL
+203 plus(Date, Date) :: Int32
+204 plus(Date NULL, Date NULL) :: Int32 NULL
+205 plus(Timestamp, Int64) :: Timestamp
+206 plus(Timestamp NULL, Int64 NULL) :: Timestamp NULL
+207 plus(Timestamp, Timestamp) :: Int64
+208 plus(Timestamp NULL, Timestamp NULL) :: Int64 NULL
 0 point_in_ellipses FACTORY
 0 point_in_polygon FACTORY
 1 point_in_polygon FACTORY
@@ -2328,28 +2329,28 @@ Functions overloads:
 9 siphash64(Boolean NULL) :: UInt64 NULL
 10 siphash64(UInt8) :: UInt64
 11 siphash64(UInt8 NULL) :: UInt64 NULL
-12 siphash64(UInt16) :: UInt64
-13 siphash64(UInt16 NULL) :: UInt64 NULL
-14 siphash64(UInt32) :: UInt64
-15 siphash64(UInt32 NULL) :: UInt64 NULL
-16 siphash64(UInt64) :: UInt64
-17 siphash64(UInt64 NULL) :: UInt64 NULL
-18 siphash64(Int8) :: UInt64
-19 siphash64(Int8 NULL) :: UInt64 NULL
-20 siphash64(Int16) :: UInt64
-21 siphash64(Int16 NULL) :: UInt64 NULL
-22 siphash64(Int32) :: UInt64
-23 siphash64(Int32 NULL) :: UInt64 NULL
+12 siphash64(Int8) :: UInt64
+13 siphash64(Int8 NULL) :: UInt64 NULL
+14 siphash64(UInt16) :: UInt64
+15 siphash64(UInt16 NULL) :: UInt64 NULL
+16 siphash64(Int16) :: UInt64
+17 siphash64(Int16 NULL) :: UInt64 NULL
+18 siphash64(UInt32) :: UInt64
+19 siphash64(UInt32 NULL) :: UInt64 NULL
+20 siphash64(Int32) :: UInt64
+21 siphash64(Int32 NULL) :: UInt64 NULL
+22 siphash64(UInt64) :: UInt64
+23 siphash64(UInt64 NULL) :: UInt64 NULL
 24 siphash64(Int64) :: UInt64
 25 siphash64(Int64 NULL) :: UInt64 NULL
-26 siphash64(Float32) :: UInt64
-27 siphash64(Float32 NULL) :: UInt64 NULL
-28 siphash64(Float64) :: UInt64
-29 siphash64(Float64 NULL) :: UInt64 NULL
-30 siphash64(Decimal(38, 0)) :: UInt64
-31 siphash64(Decimal(38, 0) NULL) :: UInt64 NULL
-32 siphash64(Decimal(76, 0)) :: UInt64
-33 siphash64(Decimal(76, 0) NULL) :: UInt64 NULL
+26 siphash64(Decimal(38, 0)) :: UInt64
+27 siphash64(Decimal(38, 0) NULL) :: UInt64 NULL
+28 siphash64(Decimal(76, 0)) :: UInt64
+29 siphash64(Decimal(76, 0) NULL) :: UInt64 NULL
+30 siphash64(Float32) :: UInt64
+31 siphash64(Float32 NULL) :: UInt64 NULL
+32 siphash64(Float64) :: UInt64
+33 siphash64(Float64 NULL) :: UInt64 NULL
 0 sleep(Float64) :: UInt8
 0 slice(Array(Nothing), UInt64) :: Array(Nothing)
 1 slice(Array(Nothing) NULL, UInt64 NULL) :: Array(Nothing) NULL
@@ -2474,49 +2475,46 @@ Functions overloads:
 3 to_float32(String NULL) :: Float32 NULL
 4 to_float32(UInt8) :: Float32
 5 to_float32(UInt8 NULL) :: Float32 NULL
-6 to_float32(UInt16) :: Float32
-7 to_float32(UInt16 NULL) :: Float32 NULL
-8 to_float32(UInt32) :: Float32
-9 to_float32(UInt32 NULL) :: Float32 NULL
-10 to_float32(UInt64) :: Float32
-11 to_float32(UInt64 NULL) :: Float32 NULL
-12 to_float32(Int8) :: Float32
-13 to_float32(Int8 NULL) :: Float32 NULL
-14 to_float32(Int16) :: Float32
-15 to_float32(Int16 NULL) :: Float32 NULL
-16 to_float32(Int32) :: Float32
-17 to_float32(Int32 NULL) :: Float32 NULL
+6 to_float32(Int8) :: Float32
+7 to_float32(Int8 NULL) :: Float32 NULL
+8 to_float32(UInt16) :: Float32
+9 to_float32(UInt16 NULL) :: Float32 NULL
+10 to_float32(Int16) :: Float32
+11 to_float32(Int16 NULL) :: Float32 NULL
+12 to_float32(UInt32) :: Float32
+13 to_float32(UInt32 NULL) :: Float32 NULL
+14 to_float32(Int32) :: Float32
+15 to_float32(Int32 NULL) :: Float32 NULL
+16 to_float32(UInt64) :: Float32
+17 to_float32(UInt64 NULL) :: Float32 NULL
 18 to_float32(Int64) :: Float32
 19 to_float32(Int64 NULL) :: Float32 NULL
-20 to_float32(Float32) :: Float32
-21 to_float32(Float32 NULL) :: Float32 NULL
-22 to_float32(Float64) :: Float32
-23 to_float32(Float64 NULL) :: Float32 NULL
+20 to_float32 FACTORY
+21 to_float32(Float64) :: Float32
+22 to_float32(Float64 NULL) :: Float32 NULL
 0 to_float64(Variant) :: Float64
 1 to_float64(Variant NULL) :: Float64 NULL
 2 to_float64(String) :: Float64
 3 to_float64(String NULL) :: Float64 NULL
 4 to_float64(UInt8) :: Float64
 5 to_float64(UInt8 NULL) :: Float64 NULL
-6 to_float64(UInt16) :: Float64
-7 to_float64(UInt16 NULL) :: Float64 NULL
-8 to_float64(UInt32) :: Float64
-9 to_float64(UInt32 NULL) :: Float64 NULL
-10 to_float64(UInt64) :: Float64
-11 to_float64(UInt64 NULL) :: Float64 NULL
-12 to_float64(Int8) :: Float64
-13 to_float64(Int8 NULL) :: Float64 NULL
-14 to_float64(Int16) :: Float64
-15 to_float64(Int16 NULL) :: Float64 NULL
-16 to_float64(Int32) :: Float64
-17 to_float64(Int32 NULL) :: Float64 NULL
+6 to_float64(Int8) :: Float64
+7 to_float64(Int8 NULL) :: Float64 NULL
+8 to_float64(UInt16) :: Float64
+9 to_float64(UInt16 NULL) :: Float64 NULL
+10 to_float64(Int16) :: Float64
+11 to_float64(Int16 NULL) :: Float64 NULL
+12 to_float64(UInt32) :: Float64
+13 to_float64(UInt32 NULL) :: Float64 NULL
+14 to_float64(Int32) :: Float64
+15 to_float64(Int32 NULL) :: Float64 NULL
+16 to_float64(UInt64) :: Float64
+17 to_float64(UInt64 NULL) :: Float64 NULL
 18 to_float64(Int64) :: Float64
 19 to_float64(Int64 NULL) :: Float64 NULL
-20 to_float64(Float32) :: Float64
-21 to_float64(Float32 NULL) :: Float64 NULL
-22 to_float64(Float64) :: Float64
-23 to_float64(Float64 NULL) :: Float64 NULL
-24 to_float64 FACTORY
+20 to_float64 FACTORY
+21 to_float64(Float32) :: Float64
+22 to_float64(Float32 NULL) :: Float64 NULL
 0 to_hour(Timestamp) :: UInt8
 1 to_hour(Timestamp NULL) :: UInt8 NULL
 0 to_int16(Variant) :: Int16
@@ -2525,82 +2523,76 @@ Functions overloads:
 3 to_int16(String NULL) :: Int16 NULL
 4 to_int16(UInt8) :: Int16
 5 to_int16(UInt8 NULL) :: Int16 NULL
-6 to_int16(UInt16) :: Int16
-7 to_int16(UInt16 NULL) :: Int16 NULL
-8 to_int16(UInt32) :: Int16
-9 to_int16(UInt32 NULL) :: Int16 NULL
-10 to_int16(UInt64) :: Int16
-11 to_int16(UInt64 NULL) :: Int16 NULL
-12 to_int16(Int8) :: Int16
-13 to_int16(Int8 NULL) :: Int16 NULL
-14 to_int16(Int16) :: Int16
-15 to_int16(Int16 NULL) :: Int16 NULL
-16 to_int16(Int32) :: Int16
-17 to_int16(Int32 NULL) :: Int16 NULL
-18 to_int16(Int64) :: Int16
-19 to_int16(Int64 NULL) :: Int16 NULL
-20 to_int16(Float32) :: Int16
-21 to_int16(Float32 NULL) :: Int16 NULL
-22 to_int16(Float64) :: Int16
-23 to_int16(Float64 NULL) :: Int16 NULL
-24 to_int16(Boolean) :: Int16
-25 to_int16(Boolean NULL) :: Int16 NULL
+6 to_int16(Int8) :: Int16
+7 to_int16(Int8 NULL) :: Int16 NULL
+8 to_int16(UInt16) :: Int16
+9 to_int16(UInt16 NULL) :: Int16 NULL
+10 to_int16(UInt32) :: Int16
+11 to_int16(UInt32 NULL) :: Int16 NULL
+12 to_int16(Int32) :: Int16
+13 to_int16(Int32 NULL) :: Int16 NULL
+14 to_int16(UInt64) :: Int16
+15 to_int16(UInt64 NULL) :: Int16 NULL
+16 to_int16(Int64) :: Int16
+17 to_int16(Int64 NULL) :: Int16 NULL
+18 to_int16(Float32) :: Int16
+19 to_int16(Float32 NULL) :: Int16 NULL
+20 to_int16(Float64) :: Int16
+21 to_int16(Float64 NULL) :: Int16 NULL
+22 to_int16(Boolean) :: Int16
+23 to_int16(Boolean NULL) :: Int16 NULL
 0 to_int32(Variant) :: Int32
 1 to_int32(Variant NULL) :: Int32 NULL
 2 to_int32(String) :: Int32
 3 to_int32(String NULL) :: Int32 NULL
 4 to_int32(UInt8) :: Int32
 5 to_int32(UInt8 NULL) :: Int32 NULL
-6 to_int32(UInt16) :: Int32
-7 to_int32(UInt16 NULL) :: Int32 NULL
-8 to_int32(UInt32) :: Int32
-9 to_int32(UInt32 NULL) :: Int32 NULL
-10 to_int32(UInt64) :: Int32
-11 to_int32(UInt64 NULL) :: Int32 NULL
-12 to_int32(Int8) :: Int32
-13 to_int32(Int8 NULL) :: Int32 NULL
-14 to_int32(Int16) :: Int32
-15 to_int32(Int16 NULL) :: Int32 NULL
-16 to_int32(Int32) :: Int32
-17 to_int32(Int32 NULL) :: Int32 NULL
-18 to_int32(Int64) :: Int32
-19 to_int32(Int64 NULL) :: Int32 NULL
-20 to_int32(Float32) :: Int32
-21 to_int32(Float32 NULL) :: Int32 NULL
-22 to_int32(Float64) :: Int32
-23 to_int32(Float64 NULL) :: Int32 NULL
-24 to_int32(Boolean) :: Int32
-25 to_int32(Boolean NULL) :: Int32 NULL
+6 to_int32(Int8) :: Int32
+7 to_int32(Int8 NULL) :: Int32 NULL
+8 to_int32(UInt16) :: Int32
+9 to_int32(UInt16 NULL) :: Int32 NULL
+10 to_int32(Int16) :: Int32
+11 to_int32(Int16 NULL) :: Int32 NULL
+12 to_int32(UInt32) :: Int32
+13 to_int32(UInt32 NULL) :: Int32 NULL
+14 to_int32(UInt64) :: Int32
+15 to_int32(UInt64 NULL) :: Int32 NULL
+16 to_int32(Int64) :: Int32
+17 to_int32(Int64 NULL) :: Int32 NULL
+18 to_int32(Float32) :: Int32
+19 to_int32(Float32 NULL) :: Int32 NULL
+20 to_int32(Float64) :: Int32
+21 to_int32(Float64 NULL) :: Int32 NULL
+22 to_int32(Boolean) :: Int32
+23 to_int32(Boolean NULL) :: Int32 NULL
 0 to_int64(Variant) :: Int64
 1 to_int64(Variant NULL) :: Int64 NULL
 2 to_int64(String) :: Int64
 3 to_int64(String NULL) :: Int64 NULL
 4 to_int64(UInt8) :: Int64
 5 to_int64(UInt8 NULL) :: Int64 NULL
-6 to_int64(UInt16) :: Int64
-7 to_int64(UInt16 NULL) :: Int64 NULL
-8 to_int64(UInt32) :: Int64
-9 to_int64(UInt32 NULL) :: Int64 NULL
-10 to_int64(UInt64) :: Int64
-11 to_int64(UInt64 NULL) :: Int64 NULL
-12 to_int64(Int8) :: Int64
-13 to_int64(Int8 NULL) :: Int64 NULL
-14 to_int64(Int16) :: Int64
-15 to_int64(Int16 NULL) :: Int64 NULL
-16 to_int64(Int32) :: Int64
-17 to_int64(Int32 NULL) :: Int64 NULL
-18 to_int64(Int64) :: Int64
-19 to_int64(Int64 NULL) :: Int64 NULL
-20 to_int64(Float32) :: Int64
-21 to_int64(Float32 NULL) :: Int64 NULL
-22 to_int64(Float64) :: Int64
-23 to_int64(Float64 NULL) :: Int64 NULL
-24 to_int64(Boolean) :: Int64
-25 to_int64(Boolean NULL) :: Int64 NULL
-26 to_int64(Date) :: Int64
-27 to_int64(Date NULL) :: Int64 NULL
-28 to_int64(Timestamp) :: Int64
-29 to_int64(Timestamp NULL) :: Int64 NULL
+6 to_int64(Int8) :: Int64
+7 to_int64(Int8 NULL) :: Int64 NULL
+8 to_int64(UInt16) :: Int64
+9 to_int64(UInt16 NULL) :: Int64 NULL
+10 to_int64(Int16) :: Int64
+11 to_int64(Int16 NULL) :: Int64 NULL
+12 to_int64(UInt32) :: Int64
+13 to_int64(UInt32 NULL) :: Int64 NULL
+14 to_int64(Int32) :: Int64
+15 to_int64(Int32 NULL) :: Int64 NULL
+16 to_int64(UInt64) :: Int64
+17 to_int64(UInt64 NULL) :: Int64 NULL
+18 to_int64(Float32) :: Int64
+19 to_int64(Float32 NULL) :: Int64 NULL
+20 to_int64(Float64) :: Int64
+21 to_int64(Float64 NULL) :: Int64 NULL
+22 to_int64(Boolean) :: Int64
+23 to_int64(Boolean NULL) :: Int64 NULL
+24 to_int64(Date) :: Int64
+25 to_int64(Date NULL) :: Int64 NULL
+26 to_int64(Timestamp) :: Int64
+27 to_int64(Timestamp NULL) :: Int64 NULL
 0 to_int8(Variant) :: Int8
 1 to_int8(Variant NULL) :: Int8 NULL
 2 to_int8(String) :: Int8
@@ -2609,24 +2601,22 @@ Functions overloads:
 5 to_int8(UInt8 NULL) :: Int8 NULL
 6 to_int8(UInt16) :: Int8
 7 to_int8(UInt16 NULL) :: Int8 NULL
-8 to_int8(UInt32) :: Int8
-9 to_int8(UInt32 NULL) :: Int8 NULL
-10 to_int8(UInt64) :: Int8
-11 to_int8(UInt64 NULL) :: Int8 NULL
-12 to_int8(Int8) :: Int8
-13 to_int8(Int8 NULL) :: Int8 NULL
-14 to_int8(Int16) :: Int8
-15 to_int8(Int16 NULL) :: Int8 NULL
-16 to_int8(Int32) :: Int8
-17 to_int8(Int32 NULL) :: Int8 NULL
-18 to_int8(Int64) :: Int8
-19 to_int8(Int64 NULL) :: Int8 NULL
-20 to_int8(Float32) :: Int8
-21 to_int8(Float32 NULL) :: Int8 NULL
-22 to_int8(Float64) :: Int8
-23 to_int8(Float64 NULL) :: Int8 NULL
-24 to_int8(Boolean) :: Int8
-25 to_int8(Boolean NULL) :: Int8 NULL
+8 to_int8(Int16) :: Int8
+9 to_int8(Int16 NULL) :: Int8 NULL
+10 to_int8(UInt32) :: Int8
+11 to_int8(UInt32 NULL) :: Int8 NULL
+12 to_int8(Int32) :: Int8
+13 to_int8(Int32 NULL) :: Int8 NULL
+14 to_int8(UInt64) :: Int8
+15 to_int8(UInt64 NULL) :: Int8 NULL
+16 to_int8(Int64) :: Int8
+17 to_int8(Int64 NULL) :: Int8 NULL
+18 to_int8(Float32) :: Int8
+19 to_int8(Float32 NULL) :: Int8 NULL
+20 to_int8(Float64) :: Int8
+21 to_int8(Float64 NULL) :: Int8 NULL
+22 to_int8(Boolean) :: Int8
+23 to_int8(Boolean NULL) :: Int8 NULL
 0 to_minute(Timestamp) :: UInt8
 1 to_minute(Timestamp NULL) :: UInt8 NULL
 0 to_monday(Date) :: Date
@@ -2683,30 +2673,31 @@ Functions overloads:
 1 to_string(Variant NULL) :: String NULL
 2 to_string(UInt8) :: String
 3 to_string(UInt8 NULL) :: String NULL
-4 to_string(UInt16) :: String
-5 to_string(UInt16 NULL) :: String NULL
-6 to_string(UInt32) :: String
-7 to_string(UInt32 NULL) :: String NULL
-8 to_string(UInt64) :: String
-9 to_string(UInt64 NULL) :: String NULL
-10 to_string(Int8) :: String
-11 to_string(Int8 NULL) :: String NULL
-12 to_string(Int16) :: String
-13 to_string(Int16 NULL) :: String NULL
-14 to_string(Int32) :: String
-15 to_string(Int32 NULL) :: String NULL
+4 to_string(Int8) :: String
+5 to_string(Int8 NULL) :: String NULL
+6 to_string(UInt16) :: String
+7 to_string(UInt16 NULL) :: String NULL
+8 to_string(Int16) :: String
+9 to_string(Int16 NULL) :: String NULL
+10 to_string(UInt32) :: String
+11 to_string(UInt32 NULL) :: String NULL
+12 to_string(Int32) :: String
+13 to_string(Int32 NULL) :: String NULL
+14 to_string(UInt64) :: String
+15 to_string(UInt64 NULL) :: String NULL
 16 to_string(Int64) :: String
 17 to_string(Int64 NULL) :: String NULL
-18 to_string(Float32) :: String
-19 to_string(Float32 NULL) :: String NULL
-20 to_string(Float64) :: String
-21 to_string(Float64 NULL) :: String NULL
-22 to_string(Boolean) :: String
-23 to_string(Boolean NULL) :: String NULL
-24 to_string(Date) :: String
-25 to_string(Date NULL) :: String NULL
-26 to_string(Timestamp) :: String
-27 to_string(Timestamp NULL) :: String NULL
+18 to_string FACTORY
+19 to_string(Float32) :: String
+20 to_string(Float32 NULL) :: String NULL
+21 to_string(Float64) :: String
+22 to_string(Float64 NULL) :: String NULL
+23 to_string(Boolean) :: String
+24 to_string(Boolean NULL) :: String NULL
+25 to_string(Date) :: String
+26 to_string(Date NULL) :: String NULL
+27 to_string(Timestamp) :: String
+28 to_string(Timestamp NULL) :: String NULL
 0 to_timestamp(Variant) :: Timestamp
 1 to_timestamp(Variant NULL) :: Timestamp NULL
 2 to_timestamp(String) :: Timestamp
@@ -2721,104 +2712,96 @@ Functions overloads:
 3 to_uint16(String NULL) :: UInt16 NULL
 4 to_uint16(UInt8) :: UInt16
 5 to_uint16(UInt8 NULL) :: UInt16 NULL
-6 to_uint16(UInt16) :: UInt16
-7 to_uint16(UInt16 NULL) :: UInt16 NULL
-8 to_uint16(UInt32) :: UInt16
-9 to_uint16(UInt32 NULL) :: UInt16 NULL
-10 to_uint16(UInt64) :: UInt16
-11 to_uint16(UInt64 NULL) :: UInt16 NULL
-12 to_uint16(Int8) :: UInt16
-13 to_uint16(Int8 NULL) :: UInt16 NULL
-14 to_uint16(Int16) :: UInt16
-15 to_uint16(Int16 NULL) :: UInt16 NULL
-16 to_uint16(Int32) :: UInt16
-17 to_uint16(Int32 NULL) :: UInt16 NULL
-18 to_uint16(Int64) :: UInt16
-19 to_uint16(Int64 NULL) :: UInt16 NULL
-20 to_uint16(Float32) :: UInt16
-21 to_uint16(Float32 NULL) :: UInt16 NULL
-22 to_uint16(Float64) :: UInt16
-23 to_uint16(Float64 NULL) :: UInt16 NULL
-24 to_uint16(Boolean) :: UInt16
-25 to_uint16(Boolean NULL) :: UInt16 NULL
+6 to_uint16(Int8) :: UInt16
+7 to_uint16(Int8 NULL) :: UInt16 NULL
+8 to_uint16(Int16) :: UInt16
+9 to_uint16(Int16 NULL) :: UInt16 NULL
+10 to_uint16(UInt32) :: UInt16
+11 to_uint16(UInt32 NULL) :: UInt16 NULL
+12 to_uint16(Int32) :: UInt16
+13 to_uint16(Int32 NULL) :: UInt16 NULL
+14 to_uint16(UInt64) :: UInt16
+15 to_uint16(UInt64 NULL) :: UInt16 NULL
+16 to_uint16(Int64) :: UInt16
+17 to_uint16(Int64 NULL) :: UInt16 NULL
+18 to_uint16(Float32) :: UInt16
+19 to_uint16(Float32 NULL) :: UInt16 NULL
+20 to_uint16(Float64) :: UInt16
+21 to_uint16(Float64 NULL) :: UInt16 NULL
+22 to_uint16(Boolean) :: UInt16
+23 to_uint16(Boolean NULL) :: UInt16 NULL
 0 to_uint32(Variant) :: UInt32
 1 to_uint32(Variant NULL) :: UInt32 NULL
 2 to_uint32(String) :: UInt32
 3 to_uint32(String NULL) :: UInt32 NULL
 4 to_uint32(UInt8) :: UInt32
 5 to_uint32(UInt8 NULL) :: UInt32 NULL
-6 to_uint32(UInt16) :: UInt32
-7 to_uint32(UInt16 NULL) :: UInt32 NULL
-8 to_uint32(UInt32) :: UInt32
-9 to_uint32(UInt32 NULL) :: UInt32 NULL
-10 to_uint32(UInt64) :: UInt32
-11 to_uint32(UInt64 NULL) :: UInt32 NULL
-12 to_uint32(Int8) :: UInt32
-13 to_uint32(Int8 NULL) :: UInt32 NULL
-14 to_uint32(Int16) :: UInt32
-15 to_uint32(Int16 NULL) :: UInt32 NULL
-16 to_uint32(Int32) :: UInt32
-17 to_uint32(Int32 NULL) :: UInt32 NULL
-18 to_uint32(Int64) :: UInt32
-19 to_uint32(Int64 NULL) :: UInt32 NULL
-20 to_uint32(Float32) :: UInt32
-21 to_uint32(Float32 NULL) :: UInt32 NULL
-22 to_uint32(Float64) :: UInt32
-23 to_uint32(Float64 NULL) :: UInt32 NULL
-24 to_uint32(Boolean) :: UInt32
-25 to_uint32(Boolean NULL) :: UInt32 NULL
+6 to_uint32(Int8) :: UInt32
+7 to_uint32(Int8 NULL) :: UInt32 NULL
+8 to_uint32(UInt16) :: UInt32
+9 to_uint32(UInt16 NULL) :: UInt32 NULL
+10 to_uint32(Int16) :: UInt32
+11 to_uint32(Int16 NULL) :: UInt32 NULL
+12 to_uint32(Int32) :: UInt32
+13 to_uint32(Int32 NULL) :: UInt32 NULL
+14 to_uint32(UInt64) :: UInt32
+15 to_uint32(UInt64 NULL) :: UInt32 NULL
+16 to_uint32(Int64) :: UInt32
+17 to_uint32(Int64 NULL) :: UInt32 NULL
+18 to_uint32(Float32) :: UInt32
+19 to_uint32(Float32 NULL) :: UInt32 NULL
+20 to_uint32(Float64) :: UInt32
+21 to_uint32(Float64 NULL) :: UInt32 NULL
+22 to_uint32(Boolean) :: UInt32
+23 to_uint32(Boolean NULL) :: UInt32 NULL
 0 to_uint64(Variant) :: UInt64
 1 to_uint64(Variant NULL) :: UInt64 NULL
 2 to_uint64(String) :: UInt64
 3 to_uint64(String NULL) :: UInt64 NULL
 4 to_uint64(UInt8) :: UInt64
 5 to_uint64(UInt8 NULL) :: UInt64 NULL
-6 to_uint64(UInt16) :: UInt64
-7 to_uint64(UInt16 NULL) :: UInt64 NULL
-8 to_uint64(UInt32) :: UInt64
-9 to_uint64(UInt32 NULL) :: UInt64 NULL
-10 to_uint64(UInt64) :: UInt64
-11 to_uint64(UInt64 NULL) :: UInt64 NULL
-12 to_uint64(Int8) :: UInt64
-13 to_uint64(Int8 NULL) :: UInt64 NULL
-14 to_uint64(Int16) :: UInt64
-15 to_uint64(Int16 NULL) :: UInt64 NULL
-16 to_uint64(Int32) :: UInt64
-17 to_uint64(Int32 NULL) :: UInt64 NULL
-18 to_uint64(Int64) :: UInt64
-19 to_uint64(Int64 NULL) :: UInt64 NULL
-20 to_uint64(Float32) :: UInt64
-21 to_uint64(Float32 NULL) :: UInt64 NULL
-22 to_uint64(Float64) :: UInt64
-23 to_uint64(Float64 NULL) :: UInt64 NULL
-24 to_uint64(Boolean) :: UInt64
-25 to_uint64(Boolean NULL) :: UInt64 NULL
+6 to_uint64(Int8) :: UInt64
+7 to_uint64(Int8 NULL) :: UInt64 NULL
+8 to_uint64(UInt16) :: UInt64
+9 to_uint64(UInt16 NULL) :: UInt64 NULL
+10 to_uint64(Int16) :: UInt64
+11 to_uint64(Int16 NULL) :: UInt64 NULL
+12 to_uint64(UInt32) :: UInt64
+13 to_uint64(UInt32 NULL) :: UInt64 NULL
+14 to_uint64(Int32) :: UInt64
+15 to_uint64(Int32 NULL) :: UInt64 NULL
+16 to_uint64(Int64) :: UInt64
+17 to_uint64(Int64 NULL) :: UInt64 NULL
+18 to_uint64(Float32) :: UInt64
+19 to_uint64(Float32 NULL) :: UInt64 NULL
+20 to_uint64(Float64) :: UInt64
+21 to_uint64(Float64 NULL) :: UInt64 NULL
+22 to_uint64(Boolean) :: UInt64
+23 to_uint64(Boolean NULL) :: UInt64 NULL
 0 to_uint8(Variant) :: UInt8
 1 to_uint8(Variant NULL) :: UInt8 NULL
 2 to_uint8(String) :: UInt8
 3 to_uint8(String NULL) :: UInt8 NULL
-4 to_uint8(UInt8) :: UInt8
-5 to_uint8(UInt8 NULL) :: UInt8 NULL
+4 to_uint8(Int8) :: UInt8
+5 to_uint8(Int8 NULL) :: UInt8 NULL
 6 to_uint8(UInt16) :: UInt8
 7 to_uint8(UInt16 NULL) :: UInt8 NULL
-8 to_uint8(UInt32) :: UInt8
-9 to_uint8(UInt32 NULL) :: UInt8 NULL
-10 to_uint8(UInt64) :: UInt8
-11 to_uint8(UInt64 NULL) :: UInt8 NULL
-12 to_uint8(Int8) :: UInt8
-13 to_uint8(Int8 NULL) :: UInt8 NULL
-14 to_uint8(Int16) :: UInt8
-15 to_uint8(Int16 NULL) :: UInt8 NULL
-16 to_uint8(Int32) :: UInt8
-17 to_uint8(Int32 NULL) :: UInt8 NULL
-18 to_uint8(Int64) :: UInt8
-19 to_uint8(Int64 NULL) :: UInt8 NULL
-20 to_uint8(Float32) :: UInt8
-21 to_uint8(Float32 NULL) :: UInt8 NULL
-22 to_uint8(Float64) :: UInt8
-23 to_uint8(Float64 NULL) :: UInt8 NULL
-24 to_uint8(Boolean) :: UInt8
-25 to_uint8(Boolean NULL) :: UInt8 NULL
+8 to_uint8(Int16) :: UInt8
+9 to_uint8(Int16 NULL) :: UInt8 NULL
+10 to_uint8(UInt32) :: UInt8
+11 to_uint8(UInt32 NULL) :: UInt8 NULL
+12 to_uint8(Int32) :: UInt8
+13 to_uint8(Int32 NULL) :: UInt8 NULL
+14 to_uint8(UInt64) :: UInt8
+15 to_uint8(UInt64 NULL) :: UInt8 NULL
+16 to_uint8(Int64) :: UInt8
+17 to_uint8(Int64 NULL) :: UInt8 NULL
+18 to_uint8(Float32) :: UInt8
+19 to_uint8(Float32 NULL) :: UInt8 NULL
+20 to_uint8(Float64) :: UInt8
+21 to_uint8(Float64 NULL) :: UInt8 NULL
+22 to_uint8(Boolean) :: UInt8
+23 to_uint8(Boolean NULL) :: UInt8 NULL
 0 to_variant(T0) :: Variant
 1 to_variant(T0 NULL) :: Variant NULL
 0 to_year(Date) :: UInt16
@@ -2927,130 +2910,120 @@ Functions overloads:
 3 try_to_float32(String NULL) :: Float32 NULL
 4 try_to_float32(UInt8) :: Float32 NULL
 5 try_to_float32(UInt8 NULL) :: Float32 NULL
-6 try_to_float32(UInt16) :: Float32 NULL
-7 try_to_float32(UInt16 NULL) :: Float32 NULL
-8 try_to_float32(UInt32) :: Float32 NULL
-9 try_to_float32(UInt32 NULL) :: Float32 NULL
-10 try_to_float32(UInt64) :: Float32 NULL
-11 try_to_float32(UInt64 NULL) :: Float32 NULL
-12 try_to_float32(Int8) :: Float32 NULL
-13 try_to_float32(Int8 NULL) :: Float32 NULL
-14 try_to_float32(Int16) :: Float32 NULL
-15 try_to_float32(Int16 NULL) :: Float32 NULL
-16 try_to_float32(Int32) :: Float32 NULL
-17 try_to_float32(Int32 NULL) :: Float32 NULL
+6 try_to_float32(Int8) :: Float32 NULL
+7 try_to_float32(Int8 NULL) :: Float32 NULL
+8 try_to_float32(UInt16) :: Float32 NULL
+9 try_to_float32(UInt16 NULL) :: Float32 NULL
+10 try_to_float32(Int16) :: Float32 NULL
+11 try_to_float32(Int16 NULL) :: Float32 NULL
+12 try_to_float32(UInt32) :: Float32 NULL
+13 try_to_float32(UInt32 NULL) :: Float32 NULL
+14 try_to_float32(Int32) :: Float32 NULL
+15 try_to_float32(Int32 NULL) :: Float32 NULL
+16 try_to_float32(UInt64) :: Float32 NULL
+17 try_to_float32(UInt64 NULL) :: Float32 NULL
 18 try_to_float32(Int64) :: Float32 NULL
 19 try_to_float32(Int64 NULL) :: Float32 NULL
-20 try_to_float32(Float32) :: Float32 NULL
-21 try_to_float32(Float32 NULL) :: Float32 NULL
-22 try_to_float32(Float64) :: Float32 NULL
-23 try_to_float32(Float64 NULL) :: Float32 NULL
+20 try_to_float32(Float64) :: Float32 NULL
+21 try_to_float32(Float64 NULL) :: Float32 NULL
 0 try_to_float64(Variant) :: Float64 NULL
 1 try_to_float64(Variant NULL) :: Float64 NULL
 2 try_to_float64(String) :: Float64 NULL
 3 try_to_float64(String NULL) :: Float64 NULL
 4 try_to_float64(UInt8) :: Float64 NULL
 5 try_to_float64(UInt8 NULL) :: Float64 NULL
-6 try_to_float64(UInt16) :: Float64 NULL
-7 try_to_float64(UInt16 NULL) :: Float64 NULL
-8 try_to_float64(UInt32) :: Float64 NULL
-9 try_to_float64(UInt32 NULL) :: Float64 NULL
-10 try_to_float64(UInt64) :: Float64 NULL
-11 try_to_float64(UInt64 NULL) :: Float64 NULL
-12 try_to_float64(Int8) :: Float64 NULL
-13 try_to_float64(Int8 NULL) :: Float64 NULL
-14 try_to_float64(Int16) :: Float64 NULL
-15 try_to_float64(Int16 NULL) :: Float64 NULL
-16 try_to_float64(Int32) :: Float64 NULL
-17 try_to_float64(Int32 NULL) :: Float64 NULL
+6 try_to_float64(Int8) :: Float64 NULL
+7 try_to_float64(Int8 NULL) :: Float64 NULL
+8 try_to_float64(UInt16) :: Float64 NULL
+9 try_to_float64(UInt16 NULL) :: Float64 NULL
+10 try_to_float64(Int16) :: Float64 NULL
+11 try_to_float64(Int16 NULL) :: Float64 NULL
+12 try_to_float64(UInt32) :: Float64 NULL
+13 try_to_float64(UInt32 NULL) :: Float64 NULL
+14 try_to_float64(Int32) :: Float64 NULL
+15 try_to_float64(Int32 NULL) :: Float64 NULL
+16 try_to_float64(UInt64) :: Float64 NULL
+17 try_to_float64(UInt64 NULL) :: Float64 NULL
 18 try_to_float64(Int64) :: Float64 NULL
 19 try_to_float64(Int64 NULL) :: Float64 NULL
 20 try_to_float64(Float32) :: Float64 NULL
 21 try_to_float64(Float32 NULL) :: Float64 NULL
-22 try_to_float64(Float64) :: Float64 NULL
-23 try_to_float64(Float64 NULL) :: Float64 NULL
 0 try_to_int16(Variant) :: Int16 NULL
 1 try_to_int16(Variant NULL) :: Int16 NULL
 2 try_to_int16(String) :: Int16 NULL
 3 try_to_int16(String NULL) :: Int16 NULL
 4 try_to_int16(UInt8) :: Int16 NULL
 5 try_to_int16(UInt8 NULL) :: Int16 NULL
-6 try_to_int16(UInt16) :: Int16 NULL
-7 try_to_int16(UInt16 NULL) :: Int16 NULL
-8 try_to_int16(UInt32) :: Int16 NULL
-9 try_to_int16(UInt32 NULL) :: Int16 NULL
-10 try_to_int16(UInt64) :: Int16 NULL
-11 try_to_int16(UInt64 NULL) :: Int16 NULL
-12 try_to_int16(Int8) :: Int16 NULL
-13 try_to_int16(Int8 NULL) :: Int16 NULL
-14 try_to_int16(Int16) :: Int16 NULL
-15 try_to_int16(Int16 NULL) :: Int16 NULL
-16 try_to_int16(Int32) :: Int16 NULL
-17 try_to_int16(Int32 NULL) :: Int16 NULL
-18 try_to_int16(Int64) :: Int16 NULL
-19 try_to_int16(Int64 NULL) :: Int16 NULL
-20 try_to_int16(Float32) :: Int16 NULL
-21 try_to_int16(Float32 NULL) :: Int16 NULL
-22 try_to_int16(Float64) :: Int16 NULL
-23 try_to_int16(Float64 NULL) :: Int16 NULL
-24 try_to_int16(Boolean) :: Int16 NULL
-25 try_to_int16(Boolean NULL) :: Int16 NULL
+6 try_to_int16(Int8) :: Int16 NULL
+7 try_to_int16(Int8 NULL) :: Int16 NULL
+8 try_to_int16(UInt16) :: Int16 NULL
+9 try_to_int16(UInt16 NULL) :: Int16 NULL
+10 try_to_int16(UInt32) :: Int16 NULL
+11 try_to_int16(UInt32 NULL) :: Int16 NULL
+12 try_to_int16(Int32) :: Int16 NULL
+13 try_to_int16(Int32 NULL) :: Int16 NULL
+14 try_to_int16(UInt64) :: Int16 NULL
+15 try_to_int16(UInt64 NULL) :: Int16 NULL
+16 try_to_int16(Int64) :: Int16 NULL
+17 try_to_int16(Int64 NULL) :: Int16 NULL
+18 try_to_int16(Float32) :: Int16 NULL
+19 try_to_int16(Float32 NULL) :: Int16 NULL
+20 try_to_int16(Float64) :: Int16 NULL
+21 try_to_int16(Float64 NULL) :: Int16 NULL
+22 try_to_int16(Boolean) :: Int16 NULL
+23 try_to_int16(Boolean NULL) :: Int16 NULL
 0 try_to_int32(Variant) :: Int32 NULL
 1 try_to_int32(Variant NULL) :: Int32 NULL
 2 try_to_int32(String) :: Int32 NULL
 3 try_to_int32(String NULL) :: Int32 NULL
 4 try_to_int32(UInt8) :: Int32 NULL
 5 try_to_int32(UInt8 NULL) :: Int32 NULL
-6 try_to_int32(UInt16) :: Int32 NULL
-7 try_to_int32(UInt16 NULL) :: Int32 NULL
-8 try_to_int32(UInt32) :: Int32 NULL
-9 try_to_int32(UInt32 NULL) :: Int32 NULL
-10 try_to_int32(UInt64) :: Int32 NULL
-11 try_to_int32(UInt64 NULL) :: Int32 NULL
-12 try_to_int32(Int8) :: Int32 NULL
-13 try_to_int32(Int8 NULL) :: Int32 NULL
-14 try_to_int32(Int16) :: Int32 NULL
-15 try_to_int32(Int16 NULL) :: Int32 NULL
-16 try_to_int32(Int32) :: Int32 NULL
-17 try_to_int32(Int32 NULL) :: Int32 NULL
-18 try_to_int32(Int64) :: Int32 NULL
-19 try_to_int32(Int64 NULL) :: Int32 NULL
-20 try_to_int32(Float32) :: Int32 NULL
-21 try_to_int32(Float32 NULL) :: Int32 NULL
-22 try_to_int32(Float64) :: Int32 NULL
-23 try_to_int32(Float64 NULL) :: Int32 NULL
-24 try_to_int32(Boolean) :: Int32 NULL
-25 try_to_int32(Boolean NULL) :: Int32 NULL
+6 try_to_int32(Int8) :: Int32 NULL
+7 try_to_int32(Int8 NULL) :: Int32 NULL
+8 try_to_int32(UInt16) :: Int32 NULL
+9 try_to_int32(UInt16 NULL) :: Int32 NULL
+10 try_to_int32(Int16) :: Int32 NULL
+11 try_to_int32(Int16 NULL) :: Int32 NULL
+12 try_to_int32(UInt32) :: Int32 NULL
+13 try_to_int32(UInt32 NULL) :: Int32 NULL
+14 try_to_int32(UInt64) :: Int32 NULL
+15 try_to_int32(UInt64 NULL) :: Int32 NULL
+16 try_to_int32(Int64) :: Int32 NULL
+17 try_to_int32(Int64 NULL) :: Int32 NULL
+18 try_to_int32(Float32) :: Int32 NULL
+19 try_to_int32(Float32 NULL) :: Int32 NULL
+20 try_to_int32(Float64) :: Int32 NULL
+21 try_to_int32(Float64 NULL) :: Int32 NULL
+22 try_to_int32(Boolean) :: Int32 NULL
+23 try_to_int32(Boolean NULL) :: Int32 NULL
 0 try_to_int64(Variant) :: Int64 NULL
 1 try_to_int64(Variant NULL) :: Int64 NULL
 2 try_to_int64(String) :: Int64 NULL
 3 try_to_int64(String NULL) :: Int64 NULL
 4 try_to_int64(UInt8) :: Int64 NULL
 5 try_to_int64(UInt8 NULL) :: Int64 NULL
-6 try_to_int64(UInt16) :: Int64 NULL
-7 try_to_int64(UInt16 NULL) :: Int64 NULL
-8 try_to_int64(UInt32) :: Int64 NULL
-9 try_to_int64(UInt32 NULL) :: Int64 NULL
-10 try_to_int64(UInt64) :: Int64 NULL
-11 try_to_int64(UInt64 NULL) :: Int64 NULL
-12 try_to_int64(Int8) :: Int64 NULL
-13 try_to_int64(Int8 NULL) :: Int64 NULL
-14 try_to_int64(Int16) :: Int64 NULL
-15 try_to_int64(Int16 NULL) :: Int64 NULL
-16 try_to_int64(Int32) :: Int64 NULL
-17 try_to_int64(Int32 NULL) :: Int64 NULL
-18 try_to_int64(Int64) :: Int64 NULL
-19 try_to_int64(Int64 NULL) :: Int64 NULL
-20 try_to_int64(Float32) :: Int64 NULL
-21 try_to_int64(Float32 NULL) :: Int64 NULL
-22 try_to_int64(Float64) :: Int64 NULL
-23 try_to_int64(Float64 NULL) :: Int64 NULL
-24 try_to_int64(Boolean) :: Int64 NULL
-25 try_to_int64(Boolean NULL) :: Int64 NULL
-26 try_to_int64(Date) :: Int64 NULL
-27 try_to_int64(Date NULL) :: Int64 NULL
-28 try_to_int64(Timestamp) :: Int64 NULL
-29 try_to_int64(Timestamp NULL) :: Int64 NULL
+6 try_to_int64(Int8) :: Int64 NULL
+7 try_to_int64(Int8 NULL) :: Int64 NULL
+8 try_to_int64(UInt16) :: Int64 NULL
+9 try_to_int64(UInt16 NULL) :: Int64 NULL
+10 try_to_int64(Int16) :: Int64 NULL
+11 try_to_int64(Int16 NULL) :: Int64 NULL
+12 try_to_int64(UInt32) :: Int64 NULL
+13 try_to_int64(UInt32 NULL) :: Int64 NULL
+14 try_to_int64(Int32) :: Int64 NULL
+15 try_to_int64(Int32 NULL) :: Int64 NULL
+16 try_to_int64(UInt64) :: Int64 NULL
+17 try_to_int64(UInt64 NULL) :: Int64 NULL
+18 try_to_int64(Float32) :: Int64 NULL
+19 try_to_int64(Float32 NULL) :: Int64 NULL
+20 try_to_int64(Float64) :: Int64 NULL
+21 try_to_int64(Float64 NULL) :: Int64 NULL
+22 try_to_int64(Boolean) :: Int64 NULL
+23 try_to_int64(Boolean NULL) :: Int64 NULL
+24 try_to_int64(Date) :: Int64 NULL
+25 try_to_int64(Date NULL) :: Int64 NULL
+26 try_to_int64(Timestamp) :: Int64 NULL
+27 try_to_int64(Timestamp NULL) :: Int64 NULL
 0 try_to_int8(Variant) :: Int8 NULL
 1 try_to_int8(Variant NULL) :: Int8 NULL
 2 try_to_int8(String) :: Int8 NULL
@@ -3059,40 +3032,38 @@ Functions overloads:
 5 try_to_int8(UInt8 NULL) :: Int8 NULL
 6 try_to_int8(UInt16) :: Int8 NULL
 7 try_to_int8(UInt16 NULL) :: Int8 NULL
-8 try_to_int8(UInt32) :: Int8 NULL
-9 try_to_int8(UInt32 NULL) :: Int8 NULL
-10 try_to_int8(UInt64) :: Int8 NULL
-11 try_to_int8(UInt64 NULL) :: Int8 NULL
-12 try_to_int8(Int8) :: Int8 NULL
-13 try_to_int8(Int8 NULL) :: Int8 NULL
-14 try_to_int8(Int16) :: Int8 NULL
-15 try_to_int8(Int16 NULL) :: Int8 NULL
-16 try_to_int8(Int32) :: Int8 NULL
-17 try_to_int8(Int32 NULL) :: Int8 NULL
-18 try_to_int8(Int64) :: Int8 NULL
-19 try_to_int8(Int64 NULL) :: Int8 NULL
-20 try_to_int8(Float32) :: Int8 NULL
-21 try_to_int8(Float32 NULL) :: Int8 NULL
-22 try_to_int8(Float64) :: Int8 NULL
-23 try_to_int8(Float64 NULL) :: Int8 NULL
-24 try_to_int8(Boolean) :: Int8 NULL
-25 try_to_int8(Boolean NULL) :: Int8 NULL
+8 try_to_int8(Int16) :: Int8 NULL
+9 try_to_int8(Int16 NULL) :: Int8 NULL
+10 try_to_int8(UInt32) :: Int8 NULL
+11 try_to_int8(UInt32 NULL) :: Int8 NULL
+12 try_to_int8(Int32) :: Int8 NULL
+13 try_to_int8(Int32 NULL) :: Int8 NULL
+14 try_to_int8(UInt64) :: Int8 NULL
+15 try_to_int8(UInt64 NULL) :: Int8 NULL
+16 try_to_int8(Int64) :: Int8 NULL
+17 try_to_int8(Int64 NULL) :: Int8 NULL
+18 try_to_int8(Float32) :: Int8 NULL
+19 try_to_int8(Float32 NULL) :: Int8 NULL
+20 try_to_int8(Float64) :: Int8 NULL
+21 try_to_int8(Float64 NULL) :: Int8 NULL
+22 try_to_int8(Boolean) :: Int8 NULL
+23 try_to_int8(Boolean NULL) :: Int8 NULL
 0 try_to_string(Variant) :: String NULL
 1 try_to_string(Variant NULL) :: String NULL
 2 try_to_string(UInt8) :: String NULL
 3 try_to_string(UInt8 NULL) :: String NULL
-4 try_to_string(UInt16) :: String NULL
-5 try_to_string(UInt16 NULL) :: String NULL
-6 try_to_string(UInt32) :: String NULL
-7 try_to_string(UInt32 NULL) :: String NULL
-8 try_to_string(UInt64) :: String NULL
-9 try_to_string(UInt64 NULL) :: String NULL
-10 try_to_string(Int8) :: String NULL
-11 try_to_string(Int8 NULL) :: String NULL
-12 try_to_string(Int16) :: String NULL
-13 try_to_string(Int16 NULL) :: String NULL
-14 try_to_string(Int32) :: String NULL
-15 try_to_string(Int32 NULL) :: String NULL
+4 try_to_string(Int8) :: String NULL
+5 try_to_string(Int8 NULL) :: String NULL
+6 try_to_string(UInt16) :: String NULL
+7 try_to_string(UInt16 NULL) :: String NULL
+8 try_to_string(Int16) :: String NULL
+9 try_to_string(Int16 NULL) :: String NULL
+10 try_to_string(UInt32) :: String NULL
+11 try_to_string(UInt32 NULL) :: String NULL
+12 try_to_string(Int32) :: String NULL
+13 try_to_string(Int32 NULL) :: String NULL
+14 try_to_string(UInt64) :: String NULL
+15 try_to_string(UInt64 NULL) :: String NULL
 16 try_to_string(Int64) :: String NULL
 17 try_to_string(Int64 NULL) :: String NULL
 18 try_to_string(Float32) :: String NULL
@@ -3119,104 +3090,96 @@ Functions overloads:
 3 try_to_uint16(String NULL) :: UInt16 NULL
 4 try_to_uint16(UInt8) :: UInt16 NULL
 5 try_to_uint16(UInt8 NULL) :: UInt16 NULL
-6 try_to_uint16(UInt16) :: UInt16 NULL
-7 try_to_uint16(UInt16 NULL) :: UInt16 NULL
-8 try_to_uint16(UInt32) :: UInt16 NULL
-9 try_to_uint16(UInt32 NULL) :: UInt16 NULL
-10 try_to_uint16(UInt64) :: UInt16 NULL
-11 try_to_uint16(UInt64 NULL) :: UInt16 NULL
-12 try_to_uint16(Int8) :: UInt16 NULL
-13 try_to_uint16(Int8 NULL) :: UInt16 NULL
-14 try_to_uint16(Int16) :: UInt16 NULL
-15 try_to_uint16(Int16 NULL) :: UInt16 NULL
-16 try_to_uint16(Int32) :: UInt16 NULL
-17 try_to_uint16(Int32 NULL) :: UInt16 NULL
-18 try_to_uint16(Int64) :: UInt16 NULL
-19 try_to_uint16(Int64 NULL) :: UInt16 NULL
-20 try_to_uint16(Float32) :: UInt16 NULL
-21 try_to_uint16(Float32 NULL) :: UInt16 NULL
-22 try_to_uint16(Float64) :: UInt16 NULL
-23 try_to_uint16(Float64 NULL) :: UInt16 NULL
-24 try_to_uint16(Boolean) :: UInt16 NULL
-25 try_to_uint16(Boolean NULL) :: UInt16 NULL
+6 try_to_uint16(Int8) :: UInt16 NULL
+7 try_to_uint16(Int8 NULL) :: UInt16 NULL
+8 try_to_uint16(Int16) :: UInt16 NULL
+9 try_to_uint16(Int16 NULL) :: UInt16 NULL
+10 try_to_uint16(UInt32) :: UInt16 NULL
+11 try_to_uint16(UInt32 NULL) :: UInt16 NULL
+12 try_to_uint16(Int32) :: UInt16 NULL
+13 try_to_uint16(Int32 NULL) :: UInt16 NULL
+14 try_to_uint16(UInt64) :: UInt16 NULL
+15 try_to_uint16(UInt64 NULL) :: UInt16 NULL
+16 try_to_uint16(Int64) :: UInt16 NULL
+17 try_to_uint16(Int64 NULL) :: UInt16 NULL
+18 try_to_uint16(Float32) :: UInt16 NULL
+19 try_to_uint16(Float32 NULL) :: UInt16 NULL
+20 try_to_uint16(Float64) :: UInt16 NULL
+21 try_to_uint16(Float64 NULL) :: UInt16 NULL
+22 try_to_uint16(Boolean) :: UInt16 NULL
+23 try_to_uint16(Boolean NULL) :: UInt16 NULL
 0 try_to_uint32(Variant) :: UInt32 NULL
 1 try_to_uint32(Variant NULL) :: UInt32 NULL
 2 try_to_uint32(String) :: UInt32 NULL
 3 try_to_uint32(String NULL) :: UInt32 NULL
 4 try_to_uint32(UInt8) :: UInt32 NULL
 5 try_to_uint32(UInt8 NULL) :: UInt32 NULL
-6 try_to_uint32(UInt16) :: UInt32 NULL
-7 try_to_uint32(UInt16 NULL) :: UInt32 NULL
-8 try_to_uint32(UInt32) :: UInt32 NULL
-9 try_to_uint32(UInt32 NULL) :: UInt32 NULL
-10 try_to_uint32(UInt64) :: UInt32 NULL
-11 try_to_uint32(UInt64 NULL) :: UInt32 NULL
-12 try_to_uint32(Int8) :: UInt32 NULL
-13 try_to_uint32(Int8 NULL) :: UInt32 NULL
-14 try_to_uint32(Int16) :: UInt32 NULL
-15 try_to_uint32(Int16 NULL) :: UInt32 NULL
-16 try_to_uint32(Int32) :: UInt32 NULL
-17 try_to_uint32(Int32 NULL) :: UInt32 NULL
-18 try_to_uint32(Int64) :: UInt32 NULL
-19 try_to_uint32(Int64 NULL) :: UInt32 NULL
-20 try_to_uint32(Float32) :: UInt32 NULL
-21 try_to_uint32(Float32 NULL) :: UInt32 NULL
-22 try_to_uint32(Float64) :: UInt32 NULL
-23 try_to_uint32(Float64 NULL) :: UInt32 NULL
-24 try_to_uint32(Boolean) :: UInt32 NULL
-25 try_to_uint32(Boolean NULL) :: UInt32 NULL
+6 try_to_uint32(Int8) :: UInt32 NULL
+7 try_to_uint32(Int8 NULL) :: UInt32 NULL
+8 try_to_uint32(UInt16) :: UInt32 NULL
+9 try_to_uint32(UInt16 NULL) :: UInt32 NULL
+10 try_to_uint32(Int16) :: UInt32 NULL
+11 try_to_uint32(Int16 NULL) :: UInt32 NULL
+12 try_to_uint32(Int32) :: UInt32 NULL
+13 try_to_uint32(Int32 NULL) :: UInt32 NULL
+14 try_to_uint32(UInt64) :: UInt32 NULL
+15 try_to_uint32(UInt64 NULL) :: UInt32 NULL
+16 try_to_uint32(Int64) :: UInt32 NULL
+17 try_to_uint32(Int64 NULL) :: UInt32 NULL
+18 try_to_uint32(Float32) :: UInt32 NULL
+19 try_to_uint32(Float32 NULL) :: UInt32 NULL
+20 try_to_uint32(Float64) :: UInt32 NULL
+21 try_to_uint32(Float64 NULL) :: UInt32 NULL
+22 try_to_uint32(Boolean) :: UInt32 NULL
+23 try_to_uint32(Boolean NULL) :: UInt32 NULL
 0 try_to_uint64(Variant) :: UInt64 NULL
 1 try_to_uint64(Variant NULL) :: UInt64 NULL
 2 try_to_uint64(String) :: UInt64 NULL
 3 try_to_uint64(String NULL) :: UInt64 NULL
 4 try_to_uint64(UInt8) :: UInt64 NULL
 5 try_to_uint64(UInt8 NULL) :: UInt64 NULL
-6 try_to_uint64(UInt16) :: UInt64 NULL
-7 try_to_uint64(UInt16 NULL) :: UInt64 NULL
-8 try_to_uint64(UInt32) :: UInt64 NULL
-9 try_to_uint64(UInt32 NULL) :: UInt64 NULL
-10 try_to_uint64(UInt64) :: UInt64 NULL
-11 try_to_uint64(UInt64 NULL) :: UInt64 NULL
-12 try_to_uint64(Int8) :: UInt64 NULL
-13 try_to_uint64(Int8 NULL) :: UInt64 NULL
-14 try_to_uint64(Int16) :: UInt64 NULL
-15 try_to_uint64(Int16 NULL) :: UInt64 NULL
-16 try_to_uint64(Int32) :: UInt64 NULL
-17 try_to_uint64(Int32 NULL) :: UInt64 NULL
-18 try_to_uint64(Int64) :: UInt64 NULL
-19 try_to_uint64(Int64 NULL) :: UInt64 NULL
-20 try_to_uint64(Float32) :: UInt64 NULL
-21 try_to_uint64(Float32 NULL) :: UInt64 NULL
-22 try_to_uint64(Float64) :: UInt64 NULL
-23 try_to_uint64(Float64 NULL) :: UInt64 NULL
-24 try_to_uint64(Boolean) :: UInt64 NULL
-25 try_to_uint64(Boolean NULL) :: UInt64 NULL
+6 try_to_uint64(Int8) :: UInt64 NULL
+7 try_to_uint64(Int8 NULL) :: UInt64 NULL
+8 try_to_uint64(UInt16) :: UInt64 NULL
+9 try_to_uint64(UInt16 NULL) :: UInt64 NULL
+10 try_to_uint64(Int16) :: UInt64 NULL
+11 try_to_uint64(Int16 NULL) :: UInt64 NULL
+12 try_to_uint64(UInt32) :: UInt64 NULL
+13 try_to_uint64(UInt32 NULL) :: UInt64 NULL
+14 try_to_uint64(Int32) :: UInt64 NULL
+15 try_to_uint64(Int32 NULL) :: UInt64 NULL
+16 try_to_uint64(Int64) :: UInt64 NULL
+17 try_to_uint64(Int64 NULL) :: UInt64 NULL
+18 try_to_uint64(Float32) :: UInt64 NULL
+19 try_to_uint64(Float32 NULL) :: UInt64 NULL
+20 try_to_uint64(Float64) :: UInt64 NULL
+21 try_to_uint64(Float64 NULL) :: UInt64 NULL
+22 try_to_uint64(Boolean) :: UInt64 NULL
+23 try_to_uint64(Boolean NULL) :: UInt64 NULL
 0 try_to_uint8(Variant) :: UInt8 NULL
 1 try_to_uint8(Variant NULL) :: UInt8 NULL
 2 try_to_uint8(String) :: UInt8 NULL
 3 try_to_uint8(String NULL) :: UInt8 NULL
-4 try_to_uint8(UInt8) :: UInt8 NULL
-5 try_to_uint8(UInt8 NULL) :: UInt8 NULL
+4 try_to_uint8(Int8) :: UInt8 NULL
+5 try_to_uint8(Int8 NULL) :: UInt8 NULL
 6 try_to_uint8(UInt16) :: UInt8 NULL
 7 try_to_uint8(UInt16 NULL) :: UInt8 NULL
-8 try_to_uint8(UInt32) :: UInt8 NULL
-9 try_to_uint8(UInt32 NULL) :: UInt8 NULL
-10 try_to_uint8(UInt64) :: UInt8 NULL
-11 try_to_uint8(UInt64 NULL) :: UInt8 NULL
-12 try_to_uint8(Int8) :: UInt8 NULL
-13 try_to_uint8(Int8 NULL) :: UInt8 NULL
-14 try_to_uint8(Int16) :: UInt8 NULL
-15 try_to_uint8(Int16 NULL) :: UInt8 NULL
-16 try_to_uint8(Int32) :: UInt8 NULL
-17 try_to_uint8(Int32 NULL) :: UInt8 NULL
-18 try_to_uint8(Int64) :: UInt8 NULL
-19 try_to_uint8(Int64 NULL) :: UInt8 NULL
-20 try_to_uint8(Float32) :: UInt8 NULL
-21 try_to_uint8(Float32 NULL) :: UInt8 NULL
-22 try_to_uint8(Float64) :: UInt8 NULL
-23 try_to_uint8(Float64 NULL) :: UInt8 NULL
-24 try_to_uint8(Boolean) :: UInt8 NULL
-25 try_to_uint8(Boolean NULL) :: UInt8 NULL
+8 try_to_uint8(Int16) :: UInt8 NULL
+9 try_to_uint8(Int16 NULL) :: UInt8 NULL
+10 try_to_uint8(UInt32) :: UInt8 NULL
+11 try_to_uint8(UInt32 NULL) :: UInt8 NULL
+12 try_to_uint8(Int32) :: UInt8 NULL
+13 try_to_uint8(Int32 NULL) :: UInt8 NULL
+14 try_to_uint8(UInt64) :: UInt8 NULL
+15 try_to_uint8(UInt64 NULL) :: UInt8 NULL
+16 try_to_uint8(Int64) :: UInt8 NULL
+17 try_to_uint8(Int64 NULL) :: UInt8 NULL
+18 try_to_uint8(Float32) :: UInt8 NULL
+19 try_to_uint8(Float32 NULL) :: UInt8 NULL
+20 try_to_uint8(Float64) :: UInt8 NULL
+21 try_to_uint8(Float64 NULL) :: UInt8 NULL
+22 try_to_uint8(Boolean) :: UInt8 NULL
+23 try_to_uint8(Boolean NULL) :: UInt8 NULL
 0 try_to_variant(T0) :: Variant NULL
 1 try_to_variant(T0 NULL) :: Variant NULL
 0 tuple FACTORY
@@ -3239,28 +3202,28 @@ Functions overloads:
 9 xxhash32(Boolean NULL) :: UInt32 NULL
 10 xxhash32(UInt8) :: UInt32
 11 xxhash32(UInt8 NULL) :: UInt32 NULL
-12 xxhash32(UInt16) :: UInt32
-13 xxhash32(UInt16 NULL) :: UInt32 NULL
-14 xxhash32(UInt32) :: UInt32
-15 xxhash32(UInt32 NULL) :: UInt32 NULL
-16 xxhash32(UInt64) :: UInt32
-17 xxhash32(UInt64 NULL) :: UInt32 NULL
-18 xxhash32(Int8) :: UInt32
-19 xxhash32(Int8 NULL) :: UInt32 NULL
-20 xxhash32(Int16) :: UInt32
-21 xxhash32(Int16 NULL) :: UInt32 NULL
-22 xxhash32(Int32) :: UInt32
-23 xxhash32(Int32 NULL) :: UInt32 NULL
+12 xxhash32(Int8) :: UInt32
+13 xxhash32(Int8 NULL) :: UInt32 NULL
+14 xxhash32(UInt16) :: UInt32
+15 xxhash32(UInt16 NULL) :: UInt32 NULL
+16 xxhash32(Int16) :: UInt32
+17 xxhash32(Int16 NULL) :: UInt32 NULL
+18 xxhash32(UInt32) :: UInt32
+19 xxhash32(UInt32 NULL) :: UInt32 NULL
+20 xxhash32(Int32) :: UInt32
+21 xxhash32(Int32 NULL) :: UInt32 NULL
+22 xxhash32(UInt64) :: UInt32
+23 xxhash32(UInt64 NULL) :: UInt32 NULL
 24 xxhash32(Int64) :: UInt32
 25 xxhash32(Int64 NULL) :: UInt32 NULL
-26 xxhash32(Float32) :: UInt32
-27 xxhash32(Float32 NULL) :: UInt32 NULL
-28 xxhash32(Float64) :: UInt32
-29 xxhash32(Float64 NULL) :: UInt32 NULL
-30 xxhash32(Decimal(38, 0)) :: UInt32
-31 xxhash32(Decimal(38, 0) NULL) :: UInt32 NULL
-32 xxhash32(Decimal(76, 0)) :: UInt32
-33 xxhash32(Decimal(76, 0) NULL) :: UInt32 NULL
+26 xxhash32(Decimal(38, 0)) :: UInt32
+27 xxhash32(Decimal(38, 0) NULL) :: UInt32 NULL
+28 xxhash32(Decimal(76, 0)) :: UInt32
+29 xxhash32(Decimal(76, 0) NULL) :: UInt32 NULL
+30 xxhash32(Float32) :: UInt32
+31 xxhash32(Float32 NULL) :: UInt32 NULL
+32 xxhash32(Float64) :: UInt32
+33 xxhash32(Float64 NULL) :: UInt32 NULL
 0 xxhash64(Variant) :: UInt64
 1 xxhash64(Variant NULL) :: UInt64 NULL
 2 xxhash64(String) :: UInt64
@@ -3273,26 +3236,26 @@ Functions overloads:
 9 xxhash64(Boolean NULL) :: UInt64 NULL
 10 xxhash64(UInt8) :: UInt64
 11 xxhash64(UInt8 NULL) :: UInt64 NULL
-12 xxhash64(UInt16) :: UInt64
-13 xxhash64(UInt16 NULL) :: UInt64 NULL
-14 xxhash64(UInt32) :: UInt64
-15 xxhash64(UInt32 NULL) :: UInt64 NULL
-16 xxhash64(UInt64) :: UInt64
-17 xxhash64(UInt64 NULL) :: UInt64 NULL
-18 xxhash64(Int8) :: UInt64
-19 xxhash64(Int8 NULL) :: UInt64 NULL
-20 xxhash64(Int16) :: UInt64
-21 xxhash64(Int16 NULL) :: UInt64 NULL
-22 xxhash64(Int32) :: UInt64
-23 xxhash64(Int32 NULL) :: UInt64 NULL
+12 xxhash64(Int8) :: UInt64
+13 xxhash64(Int8 NULL) :: UInt64 NULL
+14 xxhash64(UInt16) :: UInt64
+15 xxhash64(UInt16 NULL) :: UInt64 NULL
+16 xxhash64(Int16) :: UInt64
+17 xxhash64(Int16 NULL) :: UInt64 NULL
+18 xxhash64(UInt32) :: UInt64
+19 xxhash64(UInt32 NULL) :: UInt64 NULL
+20 xxhash64(Int32) :: UInt64
+21 xxhash64(Int32 NULL) :: UInt64 NULL
+22 xxhash64(UInt64) :: UInt64
+23 xxhash64(UInt64 NULL) :: UInt64 NULL
 24 xxhash64(Int64) :: UInt64
 25 xxhash64(Int64 NULL) :: UInt64 NULL
-26 xxhash64(Float32) :: UInt64
-27 xxhash64(Float32 NULL) :: UInt64 NULL
-28 xxhash64(Float64) :: UInt64
-29 xxhash64(Float64 NULL) :: UInt64 NULL
-30 xxhash64(Decimal(38, 0)) :: UInt64
-31 xxhash64(Decimal(38, 0) NULL) :: UInt64 NULL
-32 xxhash64(Decimal(76, 0)) :: UInt64
-33 xxhash64(Decimal(76, 0) NULL) :: UInt64 NULL
+26 xxhash64(Decimal(38, 0)) :: UInt64
+27 xxhash64(Decimal(38, 0) NULL) :: UInt64 NULL
+28 xxhash64(Decimal(76, 0)) :: UInt64
+29 xxhash64(Decimal(76, 0) NULL) :: UInt64 NULL
+30 xxhash64(Float32) :: UInt64
+31 xxhash64(Float32 NULL) :: UInt64 NULL
+32 xxhash64(Float64) :: UInt64
+33 xxhash64(Float64 NULL) :: UInt64 NULL
 0 yesterday() :: Date
