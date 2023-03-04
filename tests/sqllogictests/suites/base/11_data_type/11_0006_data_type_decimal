@@ -29,7 +29,17 @@ select 1::Decimal(17, 3), 2::Decimal(19, 4), 3::Decimal(20, 5), cast(10 as Decim
 1.000 2.0000 3.00000 10.00
 
 query IIII
+select 1::Decimal(39, 3), 2::Decimal(40, 4), 3::Decimal(75, 5), cast(10 as Decimal(76, 2));
+----
+1.000 2.0000 3.00000 10.00
+
+query IIII
 select 1::Decimal(17, 3)::Float64, 2::Decimal(19, 4)::Float64, 3::Decimal(20, 5)::Float64, cast(10 as Decimal(7, 2))::Float64;
+----
+1.0 2.0 3.0 10.0
+
+query IIII
+select 1::Decimal(41, 3)::Float64, 2::Decimal(42, 4)::Float64, 3::Decimal(55, 5)::Float64, cast(10 as Decimal(76, 2))::Float64;
 ----
 1.0 2.0 3.0 10.0
 
@@ -55,7 +65,17 @@ SELECT CAST(1.23 AS DECIMAL(6, 2)) + CAST(4.56 AS DECIMAL(6, 2)) AS result;
 5.78
 
 query I
+SELECT CAST(1.23 AS DECIMAL(76, 2)) + CAST(4.56 AS DECIMAL(76, 2)) AS result;
+----
+5.78
+
+query I
 SELECT CAST(123456789.12 AS DECIMAL(20, 2)) + CAST(987654321.34 AS DECIMAL(20, 2)) AS result;
+----
+1111111110.46
+
+query I
+SELECT CAST(123456789.12 AS DECIMAL(76, 2)) + CAST(987654321.34 AS DECIMAL(76, 2)) AS result;
 ----
 1111111110.46
 
@@ -64,7 +84,10 @@ SELECT CAST(1.23 AS DECIMAL(6, 2)) + CAST(987654321.34 AS DECIMAL(20, 2)) AS res
 ----
 987654322.57
 
-
+query I
+SELECT CAST(12345678912345678900.23 AS DECIMAL(76, 2)) + CAST(987654321.34 AS DECIMAL(76, 2)) AS result;
+----
+12345678913333334439.10
 
 ## sub
 
@@ -73,13 +96,37 @@ SELECT CAST(4.56 AS DECIMAL(6, 2)) - CAST(1.23 AS DECIMAL(6, 2)) AS result;
 ----
 3.32
 
+onlyif mysql
+statement error 1068
+SELECT CAST(12345678912345678900.23 AS DECIMAL(76, 2)) - CAST(1.23 AS DECIMAL(6, 2)) AS result
+
+query I
+SELECT CAST(123456789.23 AS DECIMAL(76, 2)) - CAST(1.23 AS DECIMAL(39, 2))
+----
+123456788.00
+
+query I
+SELECT CAST(12345678912345678900.23 AS DECIMAL(76, 2)) - CAST(12345678912345678900.23 AS DECIMAL(76, 2)) AS result;
+----
+0.00
+
 query I
 SELECT CAST(987654321.34 AS DECIMAL(20, 2)) - CAST(123456789.12 AS DECIMAL(20, 2)) AS result;
 ----
 864197532.22
 
 query I
+SELECT CAST(987654321.34 AS DECIMAL(76, 2)) - CAST(123456789.12 AS DECIMAL(76, 2)) AS result;
+----
+864197532.22
+
+query I
 SELECT CAST(987654321.34 AS DECIMAL(20, 2)) - CAST(1.23 AS DECIMAL(6, 2)) AS result;
+----
+987654320.11
+
+query I
+SELECT CAST(987654321.34 AS DECIMAL(39, 2)) - CAST(1.23 AS DECIMAL(39, 2)) AS result;
 ----
 987654320.11
 
@@ -91,12 +138,27 @@ SELECT CAST(1.23 AS DECIMAL(6, 2)) * CAST(4.56 AS DECIMAL(6, 2)) AS result;
 5.5965
 
 query I
+SELECT CAST(1.23 AS DECIMAL(76, 2)) * CAST(4.56 AS DECIMAL(76, 2)) AS result;
+----
+5.5965
+
+query I
 SELECT CAST(123456789.12 AS DECIMAL(20, 2)) * CAST(987654321.34 AS DECIMAL(20, 2)) AS result;
 ----
 121932631273129095.8208
 
 query I
+SELECT CAST(123456789.12 AS DECIMAL(39, 2)) * CAST(987654321.34 AS DECIMAL(39, 2)) AS result;
+----
+121932631273129095.8208
+
+query I
 SELECT CAST(1.23 AS DECIMAL(6, 2)) * CAST(987654321.34 AS DECIMAL(20, 2)) AS result;
+----
+1214814815.2482
+
+query I
+SELECT CAST(1.23 AS DECIMAL(76, 2)) * CAST(987654321.34 AS DECIMAL(20, 2)) AS result;
 ----
 1214814815.2482
 
@@ -109,17 +171,33 @@ SELECT CAST(4.56 AS DECIMAL(6, 2)) / CAST(1.23 AS DECIMAL(6, 2)) AS result;
 3.69
 
 query I
+SELECT CAST(4.56 AS DECIMAL(46, 2)) / CAST(1.23 AS DECIMAL(46, 2)) AS result;
+----
+3.69
+
+query I
 SELECT CAST(987654321.34 AS DECIMAL(20, 2)) / CAST(123456789.12 AS DECIMAL(20, 2)) AS result;
 ----
 8.00
 
 query I
+SELECT CAST(987654321.34 AS DECIMAL(52, 2)) / CAST(123456789.12 AS DECIMAL(52, 2)) AS result;
+----
+8.00
+
+query I
 SELECT CAST(987654321.34 AS DECIMAL(20, 2)) / CAST(1.23 AS DECIMAL(6, 2)) AS result;
- 
 ----
 802970992.95
 
+onlyif mysql
+statement error 1068
+SELECT CAST(987654321.34 AS DECIMAL(76, 2)) / CAST(1.23 AS DECIMAL(6, 2)) AS result;
 
+query I
+SELECT CAST(987654321.34 AS DECIMAL(76, 2)) / CAST(1.23 AS DECIMAL(76, 2)) AS result;
+----
+802970992.95
 
 ## negative
 
@@ -129,7 +207,17 @@ SELECT CAST(-1.23 AS DECIMAL(6, 2)) + CAST(-4.56 AS DECIMAL(6, 2)) AS result;
 -5.78
 
 query I
+SELECT CAST(-1.23 AS DECIMAL(39, 2)) + CAST(-4.56 AS DECIMAL(39, 2)) AS result;
+----
+-5.78
+
+query I
 SELECT CAST(-4.56 AS DECIMAL(6, 2)) - CAST(1.23 AS DECIMAL(6, 2)) AS result;
+----
+-5.78
+
+query I
+SELECT CAST(-4.56 AS DECIMAL(76, 2)) - CAST(1.23 AS DECIMAL(76, 2)) AS result;
 ----
 -5.78
 
@@ -139,7 +227,17 @@ SELECT CAST(-1.23 AS DECIMAL(6, 2)) * CAST(-4.56 AS DECIMAL(6, 2)) AS result;
 5.5965
 
 query I
+SELECT CAST(-1.23 AS DECIMAL(76, 2)) * CAST(-4.56 AS DECIMAL(76, 2)) AS result;
+----
+5.5965
+
+query I
 SELECT CAST(-4.56 AS DECIMAL(6, 2)) / CAST(-1.23 AS DECIMAL(6, 2)) AS result;
+----
+3.69
+
+query I
+SELECT CAST(-4.56 AS DECIMAL(76, 2)) / CAST(-1.23 AS DECIMAL(76, 2)) AS result;
 ----
 3.69
 
@@ -149,7 +247,17 @@ SELECT MIN(CAST(-4.56 AS DECIMAL(6, 2)))
 -4.55
 
 query I
+SELECT MIN(CAST(-4.56 AS DECIMAL(55, 2)))
+----
+-4.55
+
+query I
 SELECT MAX(CAST(4.26 AS DECIMAL(6, 2)))
+----
+4.26
+
+query I
+SELECT MAX(CAST(4.26 AS DECIMAL(76, 2)))
 ----
 4.26
 
@@ -159,21 +267,44 @@ select max(number::Decimal(6,2)) as result from numbers(10);
 9.00
 
 query I
+select max(number::Decimal(76,2)) as result from numbers(10);
+----
+9.00
+
+query I
 select min(number::Decimal(6,2)) as result from numbers(10);
 ----
 0.00
+
+query I
+select min(number::Decimal(76,3)) as result from numbers(10);
+----
+0.000
 
 query I
 SELECT ANY(CAST(2.34 AS DECIMAL(6, 2)))
 ----
 2.34
 
+query I
+SELECT ANY(CAST(2.34 AS DECIMAL(76, 2)))
+----
+2.34
 
 query TTTT
 select typeof(a+b), typeof(a-b), typeof(a*b), typeof(a/b) from (select 3::Decimal(13,2) a , 3.1::Decimal(8,3) b);
 ----
 DECIMAL(15, 3) DECIMAL(15, 3) DECIMAL(21, 5) DECIMAL(16, 2)
 
+query TTTT
+select typeof(a+b), typeof(a-b), typeof(a*b), typeof(a/b) from (select 3::Decimal(76,2) a , 3.1::Decimal(76,3) b);
+----
+DECIMAL(76, 3) DECIMAL(76, 3) DECIMAL(76, 5) DECIMAL(76, 2)
+
+query TTTT
+select typeof(a+b), typeof(a-b), typeof(a*b), typeof(a/b) from (select 3::Decimal(39,2) a , 3.1::Decimal(39,3) b);
+----
+DECIMAL(41, 3) DECIMAL(41, 3) DECIMAL(76, 5) DECIMAL(42, 2)
 
 ## compare
 
@@ -182,9 +313,18 @@ select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(13,2) a , 3.1
 ----
 0 1 0 1 0
 
+query IIIII
+select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(76,2) a , 3.1::Decimal(76,2) b);
+----
+0 1 0 1 0
 
 query IIIII
 select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(13,2) a , 3 b);
+----
+0 0 1 1 1
+
+query IIIII
+select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(76,2) a , 3 b);
 ----
 0 0 1 1 1
 
@@ -194,12 +334,27 @@ select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(13,2) a , 3.1
 0 1 0 1 0
 
 query IIIII
+select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(76,2) a , 3.1 b);
+----
+0 1 0 1 0
+
+query IIIII
 select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(13,2) a , 2.9 b);
+----
+1 0 0 0 1
+
+query IIIII
+select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(76,3) a , 2.9 b);
 ----
 1 0 0 0 1
 
 query T
 select typeof(a = b) from (select 3::Decimal(13,2) a , 2.9 b);
+----
+BOOLEAN
+
+query T
+select typeof(a = b) from (select 3::Decimal(52,2) a , 2.9 b);
 ----
 BOOLEAN
 
@@ -347,6 +502,151 @@ select * from t_decimal_4_2;
 11.11
 0.11
 
+statement ok
+drop table if exists t_decimal_76_2;
+
+statement ok
+create table t_decimal_76_2(a Decimal(76,2));
+
+## illegal
+statement error 1065
+insert into t_decimal_76_2 values (1.1.1);
+
+statement error 1303
+insert into t_decimal_76_2 values (.);
+
+statement error 1303
+insert into t_decimal_76_2 values (+);
+
+statement error 1303
+insert into t_decimal_76_2 values (-);
+
+statement error 1303
+insert into t_decimal_76_2 values ();
+
+statement error 1065
+insert into t_decimal_76_2 values (a);
+
+query I
+select * from t_decimal_76_2;
+----
+
+## overflow
+## this will panic
+## because of https://github.com/datafuselabs/databend/blob/389f520ac65911b0ce84c9502ee242924a2661eb/src/query/expression/src/types/decimal.rs#L492
+## statement error 1104
+## insert into t_decimal_76_2 values (1e76);
+## query I
+## select count(*) from t_decimal_76_2;
+## ----
+## 0
+
+statement ok
+truncate table t_decimal_76_2;
+
+statement ok
+insert into t_decimal_76_2 values
+(0), (000000), (0.000000), (0e1), (0.), (.0), (.00),
+(-0), (-000000), (-0.000000), (-0e1), (-0.), (-.0), (-.00),
+(+0), (+000000), (+0.000000), (+0e1), (+0.), (+.0), (+.00);
+
+query I
+select * from t_decimal_76_2;
+----
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+0.00
+
+statement ok
+truncate table t_decimal_76_2;
+
+statement ok
+insert into t_decimal_76_2 values
+(1.1), (0.1), (1.0),
+(1.1e1), (1.1e-1),
+(.1), (1.), (0.), (.0),
+(10.00);
+
+query I
+select * from t_decimal_76_2;
+----
+1.10
+0.10
+1.00
+11.00
+0.11
+0.10
+1.00
+0.00
+0.00
+10.00
+
+statement ok
+truncate table t_decimal_76_2
+
+statement ok
+insert into t_decimal_76_2 values (+1.1), (+0.1), (+.0), (+1.1e+1), (+1e-1) ;
+
+query I
+select * from t_decimal_76_2;
+----
+1.10
+0.10
+0.00
+11.00
+0.10
+
+statement ok
+truncate table t_decimal_76_2
+
+statement ok
+insert into t_decimal_76_2 values (-1.1), (-0.1), (-1.1e+1), (-1e-1) ;
+
+query I
+select * from t_decimal_76_2;
+----
+-1.10
+-0.10
+-11.00
+-0.10
+
+statement ok
+truncate table t_decimal_76_2
+
+## cut
+statement ok
+insert into t_decimal_76_2 values (1.1111), (0.011111e3), (111e-3) ;
+
+query I
+select * from t_decimal_76_2;
+----
+1.11
+11.11
+0.11
+
+statement ok
+drop table t_decimal_76_2
+
+statement ok
+drop table t_decimal_4_2
 
 statement ok
 drop table if exists t
@@ -399,16 +699,43 @@ select * from t order by c1 asc limit 1,2
 2.34
 
 statement ok
-create table t1(c0 int, c1 decimal(39,2))
+create table t1(c0 int, c1 decimal(39,2) null)
 
 statement ok
 select * from t order by c1
 
-## https://github.com/jorgecarleitao/parquet2/blob/main/src/schema/types/converted_type.rs#L25
-## https://github.com/jorgecarleitao/arrow2/blob/main/src/io/parquet/write/schema.rs#L323
-## the parquet2 and arrow2 not impl decimal256
-statement error 1002
+statement ok
 select * from t1 order by c1
+
+statement ok
+insert into t1(c1) values(1.2)
+
+statement ok
+insert into t1(c1) values(null)
+
+query T
+select c1 from t1 order by c1 asc
+----
+1.20
+NULL
+
+statement ok
+insert into t1(c1) values(1.23)
+
+statement ok
+insert into t1(c1) values(-1.23)
+
+statement ok
+insert into t1(c1) values(-1.2)
+
+query T
+select c1 from t1 order by c1 asc
+----
+-1.23
+-1.20
+1.20
+1.23
+NULL
 
 statement ok
 create table t2(c1 decimal(6,2) null)

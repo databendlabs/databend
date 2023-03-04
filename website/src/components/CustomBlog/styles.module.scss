@@ -71,7 +71,7 @@
                 padding: 12px;
                 background-color: var(--color-bg-1);
                 border: 1px solid var(--color-border);
-                transition:  all 0.2s;
+                transition:  translateY 0.2s;
 
                 &:hover {
                     background-color: var(--color-bg-1);
@@ -369,32 +369,37 @@
                             padding: 0;
                             margin: 0;
                             li{
-                                margin: 0;
                                 list-style: none;
-                                background-color: var(--color-bg-1);
-                                padding: 12px;
                                 flex: 1;
-                                border-radius: 6px;
-                                transition: all 0.2s;
-                                border: 0.5px solid transparent;
                                 a{
                                     text-decoration: none;
                                     color: var(--color-text-0);
+                                    display: block;
+                                    margin: 0;
+                                    background-color: var(--color-bg-1);
+                                    padding: 12px;
+                                    border-radius: 6px;
+                                    transition: all 0.2s;
+                                    border: 0.5px solid transparent;
+                                    height: 100%;
                                     p{
                                         font-size: 14px;
                                         font-weight: 400;
                                     }
+                                    &:hover{
+                                        border-color: var(--color-primary);
+                                        transform: translateY(-4px);
+                                        cursor: pointer;
+                                        box-shadow: 0 12px 16px rgb(1 14 41 / 3%), 0 4px 6px rgb(1 14 41 / 3%);
+                                    }
                                 }
-                                &:hover{
-                                    border-color: var(--color-primary);
-                                    transform: translateY(-4px);
-                                    cursor: pointer;
-                                    box-shadow: 0 12px 16px rgb(1 14 41 / 3%), 0 4px 6px rgb(1 14 41 / 3%);
-                                }
+
                                 @include media{
                                     flex: none;
                                     width: 100%;
-                                    border-color: var(--color-border);
+                                    a{
+                                        border-color: var(--color-border);
+                                    }
                                 }
                             }
                         }

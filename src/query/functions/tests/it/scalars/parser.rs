@@ -298,6 +298,33 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 args: vec![transform_expr(*expr, columns)],
             }
         }
+        AExpr::Map { span, kvs } => {
+            let mut keys = Vec::with_capacity(kvs.len());
+            let mut vals = Vec::with_capacity(kvs.len());
+            for (key, val) in kvs {
+                keys.push(transform_expr(key, columns));
+                vals.push(transform_expr(val, columns));
+            }
+            let keys = RawExpr::FunctionCall {
+                span,
+                name: "array".to_string(),
+                params: vec![],
+                args: keys,
+            };
+            let vals = RawExpr::FunctionCall {
+                span,
+                name: "array".to_string(),
+                params: vec![],
+                args: vals,
+            };
+            let args = vec![keys, vals];
+            RawExpr::FunctionCall {
+                span,
+                name: "map".to_string(),
+                params: vec![],
+                args,
+            }
+        }
         AExpr::Tuple { span, exprs } => RawExpr::FunctionCall {
             span,
             name: "tuple".to_string(),

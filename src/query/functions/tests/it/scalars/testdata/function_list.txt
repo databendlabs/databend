@@ -982,6 +982,9 @@ get(Variant NULL, UInt64 NULL) :: Variant NULL
 get(Array(Nothing) NULL, UInt64 NULL) :: NULL
 get(Array(T0 NULL), UInt64) :: T0 NULL
 get(Array(T0 NULL) NULL, UInt64 NULL) :: T0 NULL
+get(Map(Nothing) NULL, T0 NULL) :: NULL
+get(Map(T0, T1), T0) :: T1 NULL
+get(Map(T0, T1) NULL, T0 NULL) :: T1 NULL
 get_ignore_case(Variant NULL, String NULL) :: Variant NULL
 get_path(Variant NULL, String NULL) :: Variant NULL
 great_circle_angle(Float64, Float64, Float64, Float64) :: Float32

@@ -165,7 +165,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.16.0"
-source = "git+https://github.com/jorgecarleitao/arrow2?rev=d06323a#d06323ac2370dc6622d9772561b89a89b1f793f1"
+source = "git+https://github.com/jorgecarleitao/arrow2?rev=9749aee#9749aee117165a5543a6fcbf647aa4a9ab732429"
 dependencies = [
  "ahash 0.8.2",
  "arrow-format",
@@ -1402,7 +1402,6 @@ dependencies = [
  "common-exception",
  "common-hashtable",
  "common-io",
- "common-jsonb",
  "dashmap",
  "educe",
  "enum-as-inner",
@@ -1412,6 +1411,7 @@ dependencies = [
  "goldenfile",
  "hex",
  "itertools",
+ "jsonb",
  "lexical-core",
  "match-template",
  "micromarshal",
@@ -1437,9 +1437,9 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-io",
- "common-jsonb",
  "common-meta-app",
  "common-settings",
+ "jsonb",
  "lexical-core",
  "micromarshal",
  "num",
@@ -1468,7 +1468,6 @@ dependencies = [
  "common-expression",
  "common-hashtable",
  "common-io",
- "common-jsonb",
  "crc32fast",
  "criterion",
  "ctor",
@@ -1479,6 +1478,7 @@ dependencies = [
  "h3o",
  "hex",
  "itertools",
+ "jsonb",
  "lexical-core",
  "match-template",
  "md-5",
@@ -1568,17 +1568,6 @@ dependencies = [
  "ordered-float 3.4.0",
  "rand 0.8.5",
  "serde",
-]
-
-[[package]]
-name = "common-jsonb"
-version = "0.1.0"
-dependencies = [
- "byteorder",
- "fast-float",
- "ordered-float 3.4.0",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -2070,7 +2059,6 @@ dependencies = [
  "common-expression",
  "common-functions",
  "common-io",
- "common-jsonb",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
@@ -2082,6 +2070,7 @@ dependencies = [
  "futures",
  "futures-util",
  "itertools",
+ "jsonb",
  "metrics",
  "opendal",
  "serde",
@@ -2317,7 +2306,6 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-functions",
- "common-jsonb",
  "common-meta-app",
  "common-metrics",
  "common-pipeline-core",
@@ -2328,6 +2316,7 @@ dependencies = [
  "common-storages-view",
  "common-users",
  "itertools",
+ "jsonb",
  "once_cell",
  "parking_lot 0.12.1",
  "serde",
@@ -2934,7 +2923,6 @@ dependencies = [
  "common-hashtable",
  "common-http",
  "common-io",
- "common-jsonb",
  "common-management",
  "common-meta-api",
  "common-meta-app",
@@ -2975,6 +2963,7 @@ dependencies = [
  "hex",
  "http",
  "itertools",
+ "jsonb",
  "jwt-simple",
  "lz4",
  "maplit",
@@ -4524,6 +4513,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f63b421e16eb4100beb677af56f0b4f3a4f08bab74ef2af079ce5bb92c2683f"
 dependencies = [
  "indexmap",
+]
+
+[[package]]
+name = "jsonb"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd7cd23238fe597fd093ca5d3efc50fc1e805027a63220838d0c5cb9c03df897"
+dependencies = [
+ "byteorder",
+ "fast-float",
+ "ordered-float 3.4.0",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -7725,8 +7727,8 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 
 [[package]]
 name = "strawboat"
-version = "0.1.0"
-source = "git+https://github.com/sundy-li/strawboat?rev=d7b3271#d7b3271bdaa85039ada658fa6418e126368a979e"
+version = "0.2.0"
+source = "git+https://github.com/sundy-li/strawboat?rev=3a9f75c#3a9f75ce7bd59085be29647310466eb22ff6ee34"
 dependencies = [
  "arrow2",
  "bytemuck",

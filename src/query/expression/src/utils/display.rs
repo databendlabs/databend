@@ -230,7 +230,7 @@ impl<'a> Display for ScalarRef<'a> {
                 write!(f, ")")
             }
             ScalarRef::Variant(s) => {
-                let value = common_jsonb::to_string(s);
+                let value = jsonb::to_string(s);
                 write!(f, "{value}")
             }
         }
@@ -757,6 +757,10 @@ impl Display for Domain {
                 }
                 write!(f, ")")
             }
+            Domain::Map(None) => write!(f, "{{}}"),
+            Domain::Map(Some((key_domain, val_domain))) => {
+                write!(f, "{{[{key_domain}], [{val_domain}]}}")
+            }
             Domain::Undefined => write!(f, "Undefined"),
         }
     }
@@ -827,7 +831,7 @@ fn display_decimal_256(num: i256, scale: u8) -> String {
                 buf,
                 "{}.{:0>width$}",
                 num / pow_scale,
-                num % pow_scale.abs(),
+                (num % pow_scale).abs(),
                 width = scale as usize
             )
             .unwrap();
@@ -836,7 +840,7 @@ fn display_decimal_256(num: i256, scale: u8) -> String {
                 buf,
                 "-{}.{:0>width$}",
                 -num / pow_scale,
-                num % pow_scale,
+                (num % pow_scale).abs(),
                 width = scale as usize
             )
             .unwrap();

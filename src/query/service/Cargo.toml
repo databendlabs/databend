@@ -47,10 +47,10 @@ common-grpc = { path = "../../common/grpc" }
 common-hashtable = { path = "../../common/hashtable" }
 common-http = { path = "../../common/http" }
 common-io = { path = "../../common/io" }
-common-jsonb = { path = "../../common/jsonb" }
 common-management = { path = "../management" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
+jsonb = { workspace = true }
 # common-meta-embedded = { path = "../../meta/embedded" }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
