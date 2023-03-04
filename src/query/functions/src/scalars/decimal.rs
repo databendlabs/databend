@@ -50,7 +50,7 @@ macro_rules! op_decimal {
                     )
                 }
             },
-            _ => unreachable!(),
+            _ => unreachable!("return type of binary op is not decimal"),
         }
     };
     ($a: expr, $b: expr, $return_type: expr, $op: ident) => {
@@ -63,7 +63,7 @@ macro_rules! op_decimal {
                     compare_decimal!($a, $b, $op, Decimal256)
                 }
             },
-            _ => unreachable!(),
+            _ => unreachable!("return type of cmp op is not decimal"),
         }
     };
 }
@@ -107,7 +107,7 @@ macro_rules! compare_decimal {
                 ValueRef::Scalar(ScalarRef::Decimal(DecimalScalar::$decimal_type(b, _))),
             ) => Value::Scalar(Scalar::Boolean(a.cmp(b).$op())),
 
-            _ => unreachable!(),
+            _ => unreachable!("arg type of cmp op is not required decimal"),
         }
     }};
 }
@@ -208,7 +208,7 @@ macro_rules! binary_decimal {
                 Value::Scalar(Scalar::Decimal(DecimalScalar::$decimal_type(t, $size)))
             }
 
-            _ => unreachable!(),
+            _ => unreachable!("arg type of binary op is not required decimal"),
         }
     }};
 }
