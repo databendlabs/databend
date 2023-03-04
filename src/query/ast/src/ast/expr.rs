@@ -487,7 +487,7 @@ impl Display for BinaryOperator {
             BinaryOperator::NotEq => {
                 write!(f, "<>")
             }
-            BinaryOperator::Caret=>{
+            BinaryOperator::Caret => {
                 write!(f, "^")
             }
             BinaryOperator::And => {

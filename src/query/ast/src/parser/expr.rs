@@ -365,7 +365,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 BinaryOperator::Divide => Affix::Infix(Precedence(40), Associativity::Left),
                 BinaryOperator::Modulo => Affix::Infix(Precedence(40), Associativity::Left),
                 BinaryOperator::StringConcat => Affix::Infix(Precedence(40), Associativity::Left),
-                BinaryOperator::Caret=>Affix::Infix(Precedence(40),Associativity::Left),
+                BinaryOperator::Caret => Affix::Infix(Precedence(40), Associativity::Left),
             },
             ExprElement::PgCast { .. } => Affix::Postfix(Precedence(60)),
             _ => Affix::Nilfix,

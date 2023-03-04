@@ -35,9 +35,9 @@ use common_expression::with_number_mapped_type;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
-use ordered_float::OrderedFloat;
 use lexical_core::FormattedSize;
 use num_traits::AsPrimitive;
+use ordered_float::OrderedFloat;
 
 use super::arithmetic_modulo::vectorize_modulo;
 
