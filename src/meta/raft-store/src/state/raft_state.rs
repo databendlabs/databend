@@ -121,10 +121,7 @@ impl RaftState {
     pub async fn write_hard_state(&self, vote: &Vote) -> Result<(), MetaStorageError> {
         let state = self.state();
         state
-            .insert(
-                &RaftStateKey::HardState,
-                &RaftStateValue::HardState(vote.clone()),
-            )
+            .insert(&RaftStateKey::HardState, &RaftStateValue::HardState(*vote))
             .await?;
         Ok(())
     }

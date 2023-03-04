@@ -417,7 +417,7 @@ impl RaftNetworkFactory<TypeConfig> for Network {
     ) -> Self::Network {
         NetworkConnection {
             id: self.sto.id,
-            target: target,
+            target,
             target_node: node.clone(),
             sto: self.sto.clone(),
             conn_pool: self.conn_pool.clone(),
