@@ -809,8 +809,7 @@ impl TableField {
         next_column_id: &mut ColumnId,
     ) {
         column_ids.push(*next_column_id);
-
-        match data_type {
+        match data_type.remove_nullable() {
             TableDataType::Tuple {
                 fields_name: _,
                 ref fields_type,
@@ -1364,14 +1363,43 @@ impl From<&ArrowField> for TableDataType {
 impl From<&DataField> for ArrowField {
     fn from(f: &DataField) -> Self {
         let ty = f.data_type().into();
-        ArrowField::new(f.name(), ty, f.is_nullable())
+        match ty {
+            ArrowDataType::Struct(_) if f.is_nullable() => {
+                let ty = set_nullable(&ty);
+                ArrowField::new(f.name(), ty, f.is_nullable())
+            }
+            _ => ArrowField::new(f.name(), ty, f.is_nullable()),
+        }
     }
 }
 
 impl From<&TableField> for ArrowField {
     fn from(f: &TableField) -> Self {
         let ty = f.data_type().into();
-        ArrowField::new(f.name(), ty, f.is_nullable())
+        match ty {
+            ArrowDataType::Struct(_) if f.is_nullable() => {
+                let ty = set_nullable(&ty);
+                ArrowField::new(f.name(), ty, f.is_nullable())
+            }
+            _ => ArrowField::new(f.name(), ty, f.is_nullable()),
+        }
+    }
+}
+
+fn set_nullable(ty: &ArrowDataType) -> ArrowDataType {
+    // if the struct type is nullable, need to set inner fields as nullable
+    match ty {
+        ArrowDataType::Struct(fields) => {
+            let fields = fields
+                .iter()
+                .map(|f| {
+                    let data_type = set_nullable(&f.data_type);
+                    ArrowField::new(f.name.clone(), data_type, true)
+                })
+                .collect();
+            ArrowDataType::Struct(fields)
+        }
+        _ => ty.clone(),
     }
 }
 

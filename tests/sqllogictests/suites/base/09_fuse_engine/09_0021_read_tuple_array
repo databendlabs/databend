@@ -66,10 +66,58 @@ SELECT a FROM t1 where d = 4
 1
 
 statement ok
+CREATE TABLE t2 (a Tuple(Int64, Tuple(String), Array(Int32)) NULL, b Tuple(Int64 NULL, Tuple(String NULL) NULL, Array(Int32 NULL) NULL) NULL)
+
+statement ok
+INSERT INTO TABLE t2 VALUES ((1, ('a'), [2, 3]), (10, null, null)), (null, null), ((2, ('c'), []), (null, (null), [null]))
+
+query TT
+SELECT * FROM t2;
+----
+(1,('a'),[2,3]) (10,NULL,NULL)
+NULL NULL
+(2,('c'),[]) (NULL,(NULL),[NULL])
+
+statement ok
+CREATE TABLE t3 (a Array(Array(UInt8)) NULL, b Array(Array(Int32 NULL) NULL) NULL)
+
+statement ok
+INSERT INTO TABLE t3 VALUES ([[1, 2], [3, 4]], [[5, null], null]), (null, null), ([[]], [null])
+
+query TT
+SELECT * FROM t3;
+----
+[[1,2],[3,4]] [[5,NULL],NULL]
+NULL NULL
+[[]] [NULL]
+
+statement ok
+CREATE TABLE t4 (a Map(Int32, Array(String) NULL) NULL, b Map(String, Tuple(Int32 NULL) NULL) NULL)
+
+statement ok
+INSERT INTO TABLE t4 VALUES ({1: ['a', 'b']}, {'k1': (1)}), (null, null), ({2: null}, {'k2': (null)})
+
+query TT
+SELECT * FROM t4;
+----
+{1:['a','b']} {'k1':(1)}
+NULL NULL
+{2:NULL} {'k2':(NULL)}
+
+statement ok
 DROP TABLE t
 
 statement ok
 DROP TABLE t1
+
+statement ok
+DROP TABLE t2
+
+statement ok
+DROP TABLE t3
+
+statement ok
+DROP TABLE t4
 
 statement ok
 DROP DATABASE db_09_0021
