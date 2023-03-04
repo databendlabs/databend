@@ -74,7 +74,6 @@ use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::PartialSingleStateAggregator;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
 use crate::pipelines::processors::transforms::RuntimeFilterState;
-use crate::pipelines::processors::transforms::TransformAggregateSerializer;
 use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
 use crate::pipelines::processors::transforms::TransformLeftJoin;
@@ -132,7 +131,6 @@ impl PipelineBuilder {
             main_pipeline: Pipeline::create(),
             prof_span_set,
             exchange_injector: DefaultExchangeInjector::create(),
-            exchange_sorting: None,
             index: None,
         }
     }

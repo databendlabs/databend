@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::fmt::Display;
-use std::fmt::Formatter;
 
 use common_catalog::plan::DataSourcePlan;
 use common_exception::Result;
@@ -504,12 +502,6 @@ pub struct RuntimeFilterSource {
 impl RuntimeFilterSource {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         self.left_side.output_schema()
-    }
-}
-
-impl Display for RuntimeFilterSource {
-    fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
-        todo!()
     }
 }
 

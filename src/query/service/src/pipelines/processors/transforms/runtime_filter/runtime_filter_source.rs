@@ -100,6 +100,10 @@ impl RuntimeFilterConnector for RuntimeFilterState {
     }
 
     fn consume(&self, data: &DataBlock) -> Result<Vec<DataBlock>> {
+        let channel_filters = self.channel_filters.read();
+        if channel_filters.is_empty() {
+            return Ok(vec![data.clone()]);
+        }
         // Create a bitmap to filter data
         let mut bitmap = MutableBitmap::from_len_set(data.num_rows());
         let func_ctx = self.ctx.get_function_context()?;
@@ -109,7 +113,6 @@ impl RuntimeFilterConnector for RuntimeFilterState {
             let column = evaluator
                 .run(&expr)?
                 .convert_to_full_column(expr.data_type(), data.num_rows());
-            let channel_filters = self.channel_filters.read();
             let channel_filter = channel_filters.get(id).unwrap();
             for (idx, val) in column.iter().enumerate() {
                 if !channel_filter.contains(&val) {

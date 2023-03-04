@@ -31,6 +31,7 @@ use crate::executor::HashJoin;
 use crate::executor::Limit;
 use crate::executor::PhysicalPlan;
 use crate::executor::Project;
+use crate::executor::RuntimeFilterSource;
 use crate::executor::Sort;
 use crate::executor::TableScan;
 use crate::executor::UnionAll;
@@ -297,6 +298,12 @@ impl Display for UnionAll {
 impl Display for DistributedInsertSelect {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DistributedInsertSelect")
+    }
+}
+
+impl Display for RuntimeFilterSource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RuntimeFilterSource")
     }
 }
 
