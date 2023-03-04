@@ -50,7 +50,7 @@ macro_rules! op_decimal {
                     )
                 }
             },
-            _ => unreachable!(),
+            _ => unreachable!("return type of binary op is not decimal"),
         }
     };
     ($a: expr, $b: expr, $return_type: expr, $op: ident) => {
@@ -63,7 +63,7 @@ macro_rules! op_decimal {
                     compare_decimal!($a, $b, $op, Decimal256)
                 }
             },
-            _ => unreachable!(),
+            _ => unreachable!("return type of cmp op is not decimal"),
         }
     };
 }
@@ -107,7 +107,7 @@ macro_rules! compare_decimal {
                 ValueRef::Scalar(ScalarRef::Decimal(DecimalScalar::$decimal_type(b, _))),
             ) => Value::Scalar(Scalar::Boolean(a.cmp(b).$op())),
 
-            _ => unreachable!(),
+            _ => unreachable!("arg type of cmp op is not required decimal"),
         }
     }};
 }
@@ -208,7 +208,7 @@ macro_rules! binary_decimal {
                 Value::Scalar(Scalar::Decimal(DecimalScalar::$decimal_type(t, $size)))
             }
 
-            _ => unreachable!(),
+            _ => unreachable!("arg type of binary op is not required decimal"),
         }
     }};
 }
@@ -640,7 +640,17 @@ macro_rules! m_decimal_to_decimal {
     ($from_size: expr, $dest_size: expr, $buffer: expr, $from_type_name: ty, $dest_type_name: ty, $ctx: expr) => {
         // faster path
         if $from_size.scale == $dest_size.scale && $from_size.precision <= $dest_size.precision {
-            <$from_type_name>::to_column_from_buffer($buffer, $dest_size)
+            if <$from_type_name>::MAX == <$dest_type_name>::MAX {
+                // 128 -> 128 or 256 -> 256
+                <$from_type_name>::to_column_from_buffer($buffer, $dest_size)
+            } else {
+                // 128 -> 256
+                let buffer = $buffer
+                    .into_iter()
+                    .map(|x| x * <$dest_type_name>::one())
+                    .collect();
+                <$dest_type_name>::to_column(buffer, $dest_size)
+            }
         } else {
             let values = if $from_size.scale > $dest_size.scale {
                 let factor = <$dest_type_name>::e(($from_size.scale - $dest_size.scale) as u32);
@@ -660,14 +670,16 @@ macro_rules! m_decimal_to_decimal {
                     .collect()
             } else {
                 let factor = <$dest_type_name>::e(($dest_size.scale - $from_size.scale) as u32);
+                let max = <$dest_type_name>::max_for_precision($dest_size.precision);
+                let min = <$dest_type_name>::min_for_precision($dest_size.precision);
                 $buffer
                     .iter()
                     .enumerate()
                     .map(|(row, x)| {
                         let x = x * <$dest_type_name>::one();
                         match x.checked_mul(factor) {
-                            Some(x) => x,
-                            None => {
+                            Some(x) if x <= max && x >= min => x,
+                            _ => {
                                 $ctx.set_error(row, "Decimal overflow");
                                 <$dest_type_name>::one()
                             }
