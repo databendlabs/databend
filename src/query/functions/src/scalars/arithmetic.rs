@@ -35,6 +35,7 @@ use common_expression::with_number_mapped_type;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
+use ordered_float::OrderedFloat;
 use lexical_core::FormattedSize;
 use num_traits::AsPrimitive;
 
@@ -141,6 +142,18 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     .unwrap_or(FunctionDomain::Full)
                                 },
                                 |a, b, _| (a.as_() : T) * (b.as_() : T),
+                            );
+                        }
+
+                        {
+                            type T = F64;
+                            registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
+                                "caret",
+                                FunctionProperty::default(),
+                                |_, _| FunctionDomain::Full,
+                                |a, b, _| {
+                                    OrderedFloat((a.as_() : f64).powf(b.as_() : f64))
+                                }
                             );
                         }
 

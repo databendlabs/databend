@@ -47,6 +47,7 @@ fn test_arithmetic() {
     test_intdiv(file, columns);
     test_modulo(file, columns);
     test_to_string(file, columns);
+    test_carte(file, columns);
 }
 
 fn test_add(file: &mut impl Write, columns: &[(&str, Column)]) {
@@ -111,4 +112,12 @@ fn test_to_string(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "to_string(c)", columns);
     run_ast(file, "to_string(d)", columns);
     run_ast(file, "to_string(d2)", columns);
+}
+
+fn test_carte(file: &mut impl Write, columns: &[(&str, Column)]) {
+    run_ast(file, "a ^ 2", columns);
+    run_ast(file, "a ^ a", columns);
+    run_ast(file, "a ^ a2", columns);
+    run_ast(file, "c ^ 0", columns);
+    run_ast(file, "c ^ d", columns);
 }

@@ -313,6 +313,7 @@ pub enum BinaryOperator {
     Lte,
     Eq,
     NotEq,
+    Caret,
     And,
     Or,
     Xor,
@@ -486,6 +487,9 @@ impl Display for BinaryOperator {
             BinaryOperator::NotEq => {
                 write!(f, "<>")
             }
+            BinaryOperator::Caret=>{
+                write!(f, "^")
+            }
             BinaryOperator::And => {
                 write!(f, "AND")
             }
@@ -520,7 +524,7 @@ impl Display for BinaryOperator {
                 write!(f, "&")
             }
             BinaryOperator::BitwiseXor => {
-                write!(f, "^")
+                write!(f, "#")
             }
         }
     }
