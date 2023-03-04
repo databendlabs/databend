@@ -122,6 +122,13 @@ impl DataType {
         }
     }
 
+    pub fn unnest(&self) -> Self {
+        match self {
+            DataType::Array(ty) => ty.unnest(),
+            _ => self.clone(),
+        }
+    }
+
     pub fn has_generic(&self) -> bool {
         match self {
             DataType::Generic(_) => true,
