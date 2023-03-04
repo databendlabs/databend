@@ -281,10 +281,22 @@ impl Debug for DecimalScalar {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             DecimalScalar::Decimal128(val, size) => {
-                write!(f, "{}_d128", display_decimal_128(*val, size.scale))
+                write!(
+                    f,
+                    "{}_d128({},{})",
+                    display_decimal_128(*val, size.scale),
+                    size.precision,
+                    size.scale
+                )
             }
             DecimalScalar::Decimal256(val, size) => {
-                write!(f, "{}_d256", display_decimal_256(*val, size.scale))
+                write!(
+                    f,
+                    "{}_d256({},{})",
+                    display_decimal_256(*val, size.scale),
+                    size.precision,
+                    size.scale
+                )
             }
         }
     }
