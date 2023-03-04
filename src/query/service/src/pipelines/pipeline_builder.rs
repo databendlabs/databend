@@ -551,8 +551,12 @@ impl PipelineBuilder {
         match params.aggregate_functions.is_empty() {
             true => with_hash_method!(|T| match method {
                 HashMethodKind::T(v) => {
-                    self.exchange_injector =
-                        AggregateInjector::<_, ()>::create(tenant, v.clone(), params.clone());
+                    let input: &PhysicalPlan = &aggregate.input;
+                    if matches!(input, PhysicalPlan::ExchangeSource(_)) {
+                        self.exchange_injector =
+                            AggregateInjector::<_, ()>::create(tenant, v.clone(), params.clone());
+                    }
+
                     self.build_pipeline(&aggregate.input)?;
                     self.exchange_injector = old_inject;
                     build_partition_bucket::<_, ()>(v, &mut self.main_pipeline, params.clone())
@@ -560,8 +564,14 @@ impl PipelineBuilder {
             }),
             false => with_hash_method!(|T| match method {
                 HashMethodKind::T(v) => {
-                    self.exchange_injector =
-                        AggregateInjector::<_, usize>::create(tenant, v.clone(), params.clone());
+                    let input: &PhysicalPlan = &aggregate.input;
+                    if matches!(input, PhysicalPlan::ExchangeSource(_)) {
+                        self.exchange_injector = AggregateInjector::<_, usize>::create(
+                            tenant,
+                            v.clone(),
+                            params.clone(),
+                        );
+                    }
                     self.build_pipeline(&aggregate.input)?;
                     self.exchange_injector = old_inject;
                     build_partition_bucket::<_, usize>(v, &mut self.main_pipeline, params.clone())

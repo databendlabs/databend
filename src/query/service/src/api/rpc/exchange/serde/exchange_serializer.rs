@@ -213,6 +213,12 @@ pub fn serialize_block(
     ipc_field: &[IpcField],
     options: &WriteOptions,
 ) -> Result<DataBlock> {
+    if data_block.is_empty() && data_block.get_meta().is_none() {
+        return Ok(DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
+            block_num, None,
+        )));
+    }
+
     let mut meta = vec![];
     meta.write_scalar_own(data_block.num_rows() as u32)?;
     bincode::serialize_into(&mut meta, &data_block.get_meta())
