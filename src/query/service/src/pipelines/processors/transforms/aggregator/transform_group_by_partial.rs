@@ -61,18 +61,14 @@ impl TryFrom<Arc<QueryContext>> for GroupBySettings {
     fn try_from(ctx: Arc<QueryContext>) -> std::result::Result<Self, Self::Error> {
         let settings = ctx.get_settings();
         let convert_threshold = settings.get_group_by_two_level_threshold()? as usize;
-        let mut spilling_bytes_threshold_per_proc = usize::MAX;
-
-        if ctx.get_cluster().is_empty() {
-            let value = settings.get_spilling_bytes_threshold_per_proc()?;
-            if value != 0 {
-                spilling_bytes_threshold_per_proc = value;
-            }
-        }
+        let value = settings.get_spilling_bytes_threshold_per_proc()?;
 
         Ok(GroupBySettings {
             convert_threshold,
-            spilling_bytes_threshold_per_proc,
+            spilling_bytes_threshold_per_proc: match value == 0 {
+                true => usize::MAX,
+                false => value,
+            },
         })
     }
 }

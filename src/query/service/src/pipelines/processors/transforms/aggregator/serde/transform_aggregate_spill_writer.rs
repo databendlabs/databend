@@ -22,16 +22,17 @@ use common_exception::Result;
 use common_expression::arrow::serialize_column;
 use common_expression::BlockEntry;
 use common_expression::BlockMetaInfoDowncast;
-use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::Processor;
+use futures_util::future::BoxFuture;
 use opendal::Operator;
 use tracing::info;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::serde::transform_aggregate_serializer::serialize_aggregate;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::AggregatorParams;
@@ -44,9 +45,9 @@ pub struct TransformAggregateSpillWriter<Method: HashMethodBounds> {
 
     operator: Operator,
     location_prefix: String,
-    spilled_meta: Option<BlockMetaInfoPtr>,
+    output_block: Option<DataBlock>,
     spilling_meta: Option<AggregateMeta<Method, usize>>,
-    writing_data_block: Option<(isize, usize, Vec<Vec<u8>>)>,
+    spilling_future: Option<BoxFuture<'static, Result<()>>>,
 }
 
 impl<Method: HashMethodBounds> TransformAggregateSpillWriter<Method> {
@@ -65,9 +66,9 @@ impl<Method: HashMethodBounds> TransformAggregateSpillWriter<Method> {
             params,
             operator,
             location_prefix,
-            spilled_meta: None,
+            output_block: None,
             spilling_meta: None,
-            writing_data_block: None,
+            spilling_future: None,
         })
     }
 }
@@ -93,15 +94,14 @@ impl<Method: HashMethodBounds> Processor for TransformAggregateSpillWriter<Metho
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(spilled_meta) = self.spilled_meta.take() {
-            self.output
-                .push_data(Ok(DataBlock::empty_with_meta(spilled_meta)));
-            return Ok(Event::NeedConsume);
-        }
-
-        if self.writing_data_block.is_some() {
+        if self.spilling_future.is_some() {
             self.input.set_not_need_data();
             return Ok(Event::Async);
+        }
+
+        if let Some(output_block) = self.output_block.take() {
+            self.output.push_data(Ok(output_block));
+            return Ok(Event::NeedConsume);
         }
 
         if self.spilling_meta.is_some() {
@@ -140,20 +140,17 @@ impl<Method: HashMethodBounds> Processor for TransformAggregateSpillWriter<Metho
     fn process(&mut self) -> Result<()> {
         if let Some(spilling_meta) = self.spilling_meta.take() {
             if let AggregateMeta::Spilling(payload) = spilling_meta {
-                let bucket = payload.bucket;
-                let data_block = serialize_aggregate(&self.method, &self.params, payload)?;
-                let columns = get_columns(data_block);
+                let (output_block, spilling_future) = spilling_aggregate_payload(
+                    self.operator.clone(),
+                    &self.method,
+                    &self.location_prefix,
+                    &self.params,
+                    payload,
+                )?;
 
-                let mut total_size = 0;
-                let mut columns_data = Vec::with_capacity(columns.len());
-                for column in columns.into_iter() {
-                    let column = column.value.as_column().unwrap();
-                    let column_data = serialize_column(column);
-                    total_size += column_data.len();
-                    columns_data.push(column_data);
-                }
+                self.output_block = Some(output_block);
+                self.spilling_future = Some(spilling_future);
 
-                self.writing_data_block = Some((bucket, total_size, columns_data));
                 return Ok(());
             }
 
@@ -164,32 +161,8 @@ impl<Method: HashMethodBounds> Processor for TransformAggregateSpillWriter<Metho
     }
 
     async fn async_process(&mut self) -> Result<()> {
-        if let Some((bucket, total_size, data)) = self.writing_data_block.take() {
-            let instant = Instant::now();
-            let unique_name = GlobalUniqName::unique();
-            let location = format!("{}/{}", self.location_prefix, unique_name);
-            let object = self.operator.object(&location);
-
-            // temp code: waiting https://github.com/datafuselabs/opendal/pull/1431
-            let mut write_data = Vec::with_capacity(total_size);
-            let mut columns_layout = Vec::with_capacity(data.len());
-
-            for data in data.into_iter() {
-                columns_layout.push(data.len());
-                write_data.extend(data);
-            }
-
-            object.write(write_data).await?;
-            info!(
-                "Write aggregate spill {} successfully, elapsed: {:?}",
-                &location,
-                instant.elapsed()
-            );
-            self.spilled_meta = Some(AggregateMeta::<Method, usize>::create_spilled(
-                bucket,
-                location,
-                columns_layout,
-            ));
+        if let Some(spilling_future) = self.spilling_future.take() {
+            return spilling_future.await;
         }
 
         Ok(())
@@ -198,4 +171,67 @@ impl<Method: HashMethodBounds> Processor for TransformAggregateSpillWriter<Metho
 
 fn get_columns(data_block: DataBlock) -> Vec<BlockEntry> {
     data_block.columns().to_vec()
+}
+
+fn serialize_spill_file<Method: HashMethodBounds>(
+    method: &Method,
+    params: &Arc<AggregatorParams>,
+    payload: HashTablePayload<Method, usize>,
+) -> Result<(isize, usize, Vec<Vec<u8>>)> {
+    let bucket = payload.bucket;
+    let data_block = serialize_aggregate(method, params, payload)?;
+    let columns = get_columns(data_block);
+
+    let mut total_size = 0;
+    let mut columns_data = Vec::with_capacity(columns.len());
+    for column in columns.into_iter() {
+        let column = column.value.as_column().unwrap();
+        let column_data = serialize_column(column);
+        total_size += column_data.len();
+        columns_data.push(column_data);
+    }
+
+    Ok((bucket, total_size, columns_data))
+}
+
+pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
+    operator: Operator,
+    method: &Method,
+    location_prefix: &str,
+    params: &Arc<AggregatorParams>,
+    payload: HashTablePayload<Method, usize>,
+) -> Result<(DataBlock, BoxFuture<'static, Result<()>>)> {
+    let (bucket, total_size, data) = serialize_spill_file(method, params, payload)?;
+
+    let unique_name = GlobalUniqName::unique();
+    let location = format!("{}/{}", location_prefix, unique_name);
+    let columns_layout = data.iter().map(Vec::len).collect::<Vec<_>>();
+    let output_data_block = DataBlock::empty_with_meta(
+        AggregateMeta::<Method, usize>::create_spilled(bucket, location.clone(), columns_layout),
+    );
+
+    Ok((
+        output_data_block,
+        Box::pin(async move {
+            let instant = Instant::now();
+            let object = operator.object(&location);
+
+            // temp code: waiting https://github.com/datafuselabs/opendal/pull/1431
+            let mut write_data = Vec::with_capacity(total_size);
+
+            for data in data.into_iter() {
+                write_data.extend(data);
+            }
+
+            object.write(write_data).await?;
+
+            info!(
+                "Write aggregate spill {} successfully, elapsed: {:?}",
+                location,
+                instant.elapsed()
+            );
+
+            Ok(())
+        }),
+    ))
 }
