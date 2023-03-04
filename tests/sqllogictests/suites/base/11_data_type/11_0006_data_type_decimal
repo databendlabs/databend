@@ -71,12 +71,12 @@ select 20000::Decimal(4, 3);
 query I
 SELECT CAST(1.23 AS DECIMAL(6, 2)) + CAST(4.56 AS DECIMAL(6, 2)) AS result;
 ----
-5.78
+5.79
 
 query I
 SELECT CAST(1.23 AS DECIMAL(76, 2)) + CAST(4.56 AS DECIMAL(76, 2)) AS result;
 ----
-5.78
+5.79
 
 query I
 SELECT CAST(123456789.12 AS DECIMAL(20, 2)) + CAST(987654321.34 AS DECIMAL(20, 2)) AS result;
@@ -96,14 +96,14 @@ SELECT CAST(1.23 AS DECIMAL(6, 2)) + CAST(987654321.34 AS DECIMAL(20, 2)) AS res
 query I
 SELECT CAST(12345678912345678900.23 AS DECIMAL(76, 2)) + CAST(987654321.34 AS DECIMAL(76, 2)) AS result;
 ----
-12345678913333334439.10
+12345678913333333221.57
 
 ## sub
 
 query I
 SELECT CAST(4.56 AS DECIMAL(6, 2)) - CAST(1.23 AS DECIMAL(6, 2)) AS result;
 ----
-3.32
+3.33
 
 onlyif mysql
 statement error 1068
@@ -144,12 +144,12 @@ SELECT CAST(987654321.34 AS DECIMAL(39, 2)) - CAST(1.23 AS DECIMAL(39, 2)) AS re
 query I
 SELECT CAST(1.23 AS DECIMAL(6, 2)) * CAST(4.56 AS DECIMAL(6, 2)) AS result;
 ----
-5.5965
+5.6088
 
 query I
 SELECT CAST(1.23 AS DECIMAL(76, 2)) * CAST(4.56 AS DECIMAL(76, 2)) AS result;
 ----
-5.5965
+5.6088
 
 query I
 SELECT CAST(123456789.12 AS DECIMAL(20, 2)) * CAST(987654321.34 AS DECIMAL(20, 2)) AS result;
@@ -177,12 +177,12 @@ SELECT CAST(1.23 AS DECIMAL(76, 2)) * CAST(987654321.34 AS DECIMAL(20, 2)) AS re
 query I
 SELECT CAST(4.56 AS DECIMAL(6, 2)) / CAST(1.23 AS DECIMAL(6, 2)) AS result;
 ----
-3.69
+3.70
 
 query I
 SELECT CAST(4.56 AS DECIMAL(46, 2)) / CAST(1.23 AS DECIMAL(46, 2)) AS result;
 ----
-3.69
+3.70
 
 query I
 SELECT CAST(987654321.34 AS DECIMAL(20, 2)) / CAST(123456789.12 AS DECIMAL(20, 2)) AS result;
@@ -213,52 +213,52 @@ SELECT CAST(987654321.34 AS DECIMAL(76, 2)) / CAST(1.23 AS DECIMAL(76, 2)) AS re
 query I
 SELECT CAST(-1.23 AS DECIMAL(6, 2)) + CAST(-4.56 AS DECIMAL(6, 2)) AS result;
 ----
--5.78
+-5.79
 
 query I
 SELECT CAST(-1.23 AS DECIMAL(39, 2)) + CAST(-4.56 AS DECIMAL(39, 2)) AS result;
 ----
--5.78
+-5.79
 
 query I
 SELECT CAST(-4.56 AS DECIMAL(6, 2)) - CAST(1.23 AS DECIMAL(6, 2)) AS result;
 ----
--5.78
+-5.79
 
 query I
 SELECT CAST(-4.56 AS DECIMAL(76, 2)) - CAST(1.23 AS DECIMAL(76, 2)) AS result;
 ----
--5.78
+-5.79
 
 query I
 SELECT CAST(-1.23 AS DECIMAL(6, 2)) * CAST(-4.56 AS DECIMAL(6, 2)) AS result;
 ----
-5.5965
+5.6088
 
 query I
 SELECT CAST(-1.23 AS DECIMAL(76, 2)) * CAST(-4.56 AS DECIMAL(76, 2)) AS result;
 ----
-5.5965
+5.6088
 
 query I
 SELECT CAST(-4.56 AS DECIMAL(6, 2)) / CAST(-1.23 AS DECIMAL(6, 2)) AS result;
 ----
-3.69
+3.70
 
 query I
 SELECT CAST(-4.56 AS DECIMAL(76, 2)) / CAST(-1.23 AS DECIMAL(76, 2)) AS result;
 ----
-3.69
+3.70
 
 query I
 SELECT MIN(CAST(-4.56 AS DECIMAL(6, 2)))
 ----
--4.55
+-4.56
 
 query I
 SELECT MIN(CAST(-4.56 AS DECIMAL(55, 2)))
 ----
--4.55
+-4.56
 
 query I
 SELECT MAX(CAST(4.26 AS DECIMAL(6, 2)))
@@ -379,28 +379,80 @@ create table t_decimal_4_2(a Decimal(4,2));
 statement error 1065
 insert into t_decimal_4_2 values (1.1.1);
 
+statement ok
+truncate table t_decimal_4_2;
+
+query I
+select count(*) from t_decimal_4_2;
+----
+0
+
 statement error 1303
 insert into t_decimal_4_2 values (.);
+
+statement ok
+truncate table t_decimal_4_2;
+
+query I
+select count(*) from t_decimal_4_2;
+----
+0
 
 statement error 1303
 insert into t_decimal_4_2 values (+);
 
+statement ok
+truncate table t_decimal_4_2;
+
+query I
+select count(*) from t_decimal_4_2;
+----
+0
+
 statement error 1303
 insert into t_decimal_4_2 values (-);
+
+statement ok
+truncate table t_decimal_4_2;
+
+query I
+select count(*) from t_decimal_4_2;
+----
+0
 
 statement error 1303
 insert into t_decimal_4_2 values ();
 
+statement ok
+truncate table t_decimal_4_2;
+
+query I
+select count(*) from t_decimal_4_2;
+----
+0
+
 statement error 1065
 insert into t_decimal_4_2 values (a);
 
+statement ok
+truncate table t_decimal_4_2;
+
 query I
-select * from t_decimal_4_2;
+select count(*) from t_decimal_4_2;
 ----
+0
 
 ## overflow
 statement error 1001
 insert into t_decimal_4_2 values (11111);
+
+statement ok
+truncate table t_decimal_4_2;
+
+query I
+select count(*) from t_decimal_4_2;
+----
+0
 
 statement error 1001
 insert into t_decimal_4_2 values (1e4);
