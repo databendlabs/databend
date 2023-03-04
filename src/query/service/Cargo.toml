@@ -115,7 +115,6 @@ opendal = { workspace = true, features = ["layers-tracing", "layers-metrics"] }
 opensrv-mysql = { git = "https://github.com/datafuselabs/opensrv", rev = "5e37788" }
 parking_lot = "0.12.1"
 petgraph = "0.6.2"
-strength_reduce = "0.2.4"
 pin-project-lite = "0.2.9"
 poem = { version = "1", features = ["rustls", "multipart", "compression"] }
 rand = "0.8.5"
@@ -125,6 +124,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serde_urlencoded = "0.7.1"
 socket2 = "0.4.7"
+strength_reduce = "0.2.4"
 tempfile = { version = "3.3.0", optional = true }
 time = "0.3.14"
 tokio-stream = { version = "0.1.10", features = ["net"] }

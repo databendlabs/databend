@@ -94,7 +94,13 @@ impl TransformExchangeDeserializer {
             &Default::default(),
         )?;
 
-        DataBlock::from_arrow_chunk(&batch, &self.schema)?.add_meta(meta)
+        let data_block = DataBlock::from_arrow_chunk(&batch, &self.schema)?;
+
+        if data_block.num_columns() == 0 {
+            return Ok(DataBlock::new_with_meta(vec![], row_count as usize, meta));
+        }
+
+        data_block.add_meta(meta)
     }
 }
 
