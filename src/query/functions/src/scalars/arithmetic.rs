@@ -202,9 +202,7 @@ macro_rules! register_caret {
             "caret",
             FunctionProperty::default(),
             |_, _| FunctionDomain::Full,
-            |a, b, _| {
-                OrderedFloat((a.as_() : f64).powf(b.as_() : f64))
-            }
+            |a, b, _| OrderedFloat((a.as_(): f64).powf(b.as_(): f64)),
         );
     };
 }
