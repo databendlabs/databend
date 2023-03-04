@@ -46,7 +46,7 @@ async fn test_state_machine_snapshot() -> anyhow::Result<()> {
 
         assert_eq!(Some(new_log_id(1, 0, 9)), last_applied);
         assert_eq!(&Some(new_log_id(1, 0, 5)), last_membership.log_id());
-        assert!(id.to_string().starts_with(&format!("{}-{}-", 1, 9)));
+        assert!(id.to_string().starts_with(&format!("{}-{}-{}-", 1, 0, 9)));
 
         let res = pretty_snapshot(&snap.kvs);
         assert_eq!(want, res);
