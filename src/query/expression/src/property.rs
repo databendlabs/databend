@@ -13,9 +13,10 @@
 // limitations under the License.
 
 use enum_as_inner::EnumAsInner;
-use ethnum::i256;
 
 use crate::types::boolean::BooleanDomain;
+use crate::types::decimal::Decimal128Type;
+use crate::types::decimal::Decimal256Type;
 use crate::types::decimal::DecimalDomain;
 use crate::types::nullable::NullableDomain;
 use crate::types::number::NumberDomain;
@@ -37,7 +38,6 @@ use crate::types::ValueType;
 use crate::with_decimal_type;
 use crate::with_number_type;
 use crate::Scalar;
-
 #[derive(Debug, Clone, Default)]
 pub struct FunctionProperty {
     pub non_deterministic: bool,
@@ -146,22 +146,10 @@ impl Domain {
             // useless domain, we don't support min/max index for decimal type
             DataType::Decimal(x) => match x {
                 crate::types::DecimalDataType::Decimal128(x) => {
-                    Domain::Decimal(DecimalDomain::Decimal128(
-                        SimpleDomain {
-                            min: i128::MIN,
-                            max: i128::MAX,
-                        },
-                        *x,
-                    ))
+                    Domain::Decimal(DecimalDomain::Decimal128(Decimal128Type::full_domain(), *x))
                 }
                 crate::types::DecimalDataType::Decimal256(x) => {
-                    Domain::Decimal(DecimalDomain::Decimal256(
-                        SimpleDomain {
-                            min: i256::MIN,
-                            max: i256::MAX,
-                        },
-                        *x,
-                    ))
+                    Domain::Decimal(DecimalDomain::Decimal256(Decimal256Type::full_domain(), *x))
                 }
             },
             DataType::Timestamp => Domain::Timestamp(TimestampType::full_domain()),
