@@ -13,9 +13,9 @@ const Connectwithus = () => {
       link: "https://github.com/datafuselabs/databend/discussions",
     },
     {
-      name: "Follow our twitter",
+      name: "Follow us on Twitter",
       icon: <Twitter />,
-      des: "Feature requests, bug reports, and contributions",
+      des: "Never miss an update",
       link: "https://twitter.com/DatabendLabs",
     },
     {

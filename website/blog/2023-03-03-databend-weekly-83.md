@@ -84,17 +84,17 @@ authors:
 
 [Databend](https://github.com/datafuselabs/databend) is a modern cloud data warehouse, serving your massive-scale analytics needs at low cost and complexity. Open source alternative to Snowflake. Also available in the cloud: <https://app.databend.com> .
 
-> :loudspeaker: Databend v1.0 is about to be released, and v1.0.0-nightly is already available as a candidate version. https://github.com/datafuselabs/databend/releases/tag/v1.0.0-nightly
+> :loudspeaker: Databend's official release of version 1.0 is just around the corner, and a preview version, v1.0.0-nightly, is already available as a candidate. Check it out at https://github.com/datafuselabs/databend/releases/tag/v1.0.0-nightly
 
 ## What's On In Databend
 
 Stay connected with the latest news about Databend.
 
-### Support WebHDFS Backend
+### Support for WebHDFS
 
-HDFS is a widely used distributed file system for big data, and one of the storage backends supported by Databend. However, in previous implementations, using HDFS depended on Java environment and some specific jars, which might be inconvenient for some users.
+HDFS is a popular distributed file system for managing big data and is one of the storage backends supported by Databend. However, incorporating HDFS into Databend required a Java environment and specific jars, which were not suitable in some circumstances.
 
-To solve this problem, Databend now supports WebHDFS as a storage backend, which facilitates users to interact with existing HDFS storage without Java environment. WebHDFS is a REST API that exposes HDFS operations through HTTP.
+Databend now offers support for WebHDFS as a storage backend, allowing users to interact with existing HDFS storage without requiring Java environment. WebHDFS is a REST API that exposes HDFS operations through HTTP, making it more accessible to users.
 
 ```sql
 #> CREATE STAGE IF NOT EXISTS whdfs URL='webhdfs://127.0.0.1:9870/data-files/' CONNECTION=(HTTPS='false');
@@ -116,14 +116,14 @@ Query OK, 2 rows affected (0.615 sec)
 2 rows in set (0.044 sec)
 ```
 
-If you are interested in learning more about how this is achieved, and how it can improve your analytical experience, please refer to these pull requests:
+Check out these pull requests if you're interested in how it works and improving your analytical experience:
 
 - [PR | feat: backend webhdfs](https://github.com/datafuselabs/databend/pull/10285)
 - [PR | feat: Add support for copying from webhdfs](https://github.com/datafuselabs/databend/pull/10156)
 
-### Support Aggregate Spill to Object Storage
+### Support for Aggregation Spilling to Object Storage
 
-One of the challenges of processing large data volumes is how to perform GroupBy and OrderBy operations efficiently and reliably. To address this challenge, Databend community is working on a new feature that involves spilling intermediate results to cloud-based object storage like Amazon S3.
+One of the challenges of processing large data volumes is how to perform GroupBy and OrderBy operations efficiently and reliably. To address this challenge, the Databend community is working on a new feature that involves spilling intermediate results to cloud-based object storage like Amazon S3.
 
 This feature will enable Databend to handle GroupBy and OrderBy queries with unlimited data size, without running out of memory or compromising performance. If you want to learn more about how this feature works and how it can benefit your analytics needs, please check out this pull request:
 
@@ -148,8 +148,7 @@ select * from decimal;
 | 0.017820781941443176 |
 +----------------------+
 ```
-
-If you are interested in learning more about how Databend handles decimal types efficiently and accurately, please read on:
+If you're interested in how Databend handles decimal types efficiently and accurately, please read on:
 
 - [Docs | Data Types - Decimal](https://databend.rs/doc/sql-reference/data-types/data-type-decimal-types).
 
@@ -159,7 +158,16 @@ We're always open to cutting-edge technologies and innovative ideas. You're more
 
 ### Initialize `regex` at Compile Time
 
-In `https://github.com/datafuselabs/databend/blob/main/src/query/service/src/servers/federated_helper.rs`, many regular expressions will be used to match queries. We can improve this by initializing [`regex`](https://crates.io/crates/regex) at compile time.
+If you read the code in [federated_helper.rs](https://github.com/datafuselabs/databend/blob/main/src/query/service/src/servers/federated_helper.rs), you may notice that numerous regular expressions are employed to match queries.
+
+```rust
+use regex::bytes::RegexSet;
+
+let regex_set = RegexSet::new(regex_rules).unwrap();
+let matches = regex_set.matches(query.as_ref());
+```
+
+This can be optimized by initializing the [`regex`](https://crates.io/crates/regex) at compile time.
 
 [Issue 10286: Feature: make regexp initialized at compile time](https://github.com/datafuselabs/databend/issues/10286)
 
