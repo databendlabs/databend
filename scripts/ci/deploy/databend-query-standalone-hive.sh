@@ -19,7 +19,13 @@ for bin in databend-query databend-meta; do
 	fi
 done
 
+echo 'Start databend-meta...'
+nohup target/${BUILD_PROFILE}/databend-meta --single --log-level=ERROR &
+echo "Waiting on databend-meta 10 seconds..."
+python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
+
 echo 'Start databend-query...'
-nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-embedded-meta-hive.toml &
+nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-hive.toml &
+
 echo "Waiting on databend-query 10 seconds..."
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 3307
