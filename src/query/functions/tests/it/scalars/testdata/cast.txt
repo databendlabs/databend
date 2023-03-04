@@ -232,10 +232,10 @@ output         : -1
 ast            : CAST(1.1 AS VARIANT)
 raw expr       : CAST(1.1_decimal(2, 1) AS Variant)
 checked expr   : to_variant<T0=Decimal(2, 1)><T0>(1.1_d128(2,1))
-optimized expr : 0x2000000010000003312e31
+optimized expr : 0x2000000020000009603ff199999999999a
 output type    : Variant
 output domain  : Undefined
-output         : "1.1"
+output         : 1.1
 
 
 ast            : CAST('🍦 が美味しい' AS VARIANT)
@@ -2051,10 +2051,10 @@ output         : -1
 ast            : TRY_CAST(1.1 AS VARIANT)
 raw expr       : TRY_CAST(1.1_decimal(2, 1) AS Variant)
 checked expr   : try_to_variant<T0=Decimal(2, 1)><T0>(1.1_d128(2,1))
-optimized expr : 0x2000000010000003312e31
+optimized expr : 0x2000000020000009603ff199999999999a
 output type    : Variant NULL
 output domain  : Undefined
-output         : "1.1"
+output         : 1.1
 
 
 ast            : TRY_CAST('🍦 が美味しい' AS VARIANT)
