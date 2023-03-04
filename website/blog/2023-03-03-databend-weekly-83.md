@@ -128,7 +128,7 @@ Please let us know if you're interested in contributing to this issue, or pick u
 
 ## New Contributors
 
-We always open arms to new contributors and can’t wait to see how you’ll help our community grow and thrive.
+We always open arms to everyone and can't wait to see how you'll help our community grow and thrive.
 
 - [@xinlifoobar](https://github.com/xinlifoobar) made their first contribution in [#10164](https://github.com/datafuselabs/databend/pull/10164)
 - [@wangjili8417](https://github.com/wangjili8417) made their first contribution in [#10025](https://github.com/datafuselabs/databend/pull/10255)
