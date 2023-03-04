@@ -75,13 +75,6 @@ impl TransformExchangeDeserializer {
     }
 
     fn recv_data(&self, fragment_data: FragmentData) -> Result<DataBlock> {
-        let batch = deserialize_batch(
-            &fragment_data.data,
-            &self.arrow_schema.fields,
-            &self.ipc_schema,
-            &Default::default(),
-        )?;
-
         const ROW_HEADER_SIZE: usize = std::mem::size_of::<u32>();
 
         let meta = match bincode::deserialize(&fragment_data.get_meta()[ROW_HEADER_SIZE..]) {
@@ -91,15 +84,21 @@ impl TransformExchangeDeserializer {
             )),
         }?;
 
-        let block = DataBlock::from_arrow_chunk(&batch, &self.schema)?;
+        let mut row_count_meta = &fragment_data.get_meta()[..ROW_HEADER_SIZE];
+        let row_count: u32 = row_count_meta.read_scalar()?;
 
-        if block.num_columns() == 0 {
-            let mut row_count_meta = &fragment_data.get_meta()[..ROW_HEADER_SIZE];
-            let row_count: u32 = row_count_meta.read_scalar()?;
-            return Ok(DataBlock::new_with_meta(vec![], row_count as usize, meta));
+        if row_count == 0 {
+            return Ok(DataBlock::new_with_meta(vec![], 0, meta));
         }
 
-        block.add_meta(meta)
+        let batch = deserialize_batch(
+            &fragment_data.data,
+            &self.arrow_schema.fields,
+            &self.ipc_schema,
+            &Default::default(),
+        )?;
+
+        DataBlock::from_arrow_chunk(&batch, &self.schema)?.add_meta(meta)
     }
 }
 

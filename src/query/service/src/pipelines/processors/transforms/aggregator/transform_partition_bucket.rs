@@ -428,16 +428,14 @@ pub fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 
 
     pipeline.resize(input_nums)?;
 
-    if ctx.get_cluster().is_empty() {
-        let operator = DataOperator::instance().operator();
-        pipeline.add_transform(|input, output| {
-            let operator = operator.clone();
-            match params.aggregate_functions.is_empty() {
-                true => TransformGroupBySpillReader::<Method>::create(input, output, operator),
-                false => TransformAggregateSpillReader::<Method>::create(input, output, operator),
-            }
-        })?;
-    }
+    let operator = DataOperator::instance().operator();
+    pipeline.add_transform(|input, output| {
+        let operator = operator.clone();
+        match params.aggregate_functions.is_empty() {
+            true => TransformGroupBySpillReader::<Method>::create(input, output, operator),
+            false => TransformAggregateSpillReader::<Method>::create(input, output, operator),
+        }
+    })?;
 
     pipeline.add_transform(
         |input, output| match params.aggregate_functions.is_empty() {

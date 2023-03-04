@@ -87,10 +87,6 @@ where
             let mut data_block = self.input.pull_data().unwrap()?;
             let block_meta = data_block.take_meta();
 
-            if let Some(block_meta) = &block_meta {
-                println!("{:?}", serde_json::to_string(block_meta));
-            }
-
             let meta = block_meta
                 .and_then(AggregateSerdeMeta::downcast_from)
                 .unwrap();

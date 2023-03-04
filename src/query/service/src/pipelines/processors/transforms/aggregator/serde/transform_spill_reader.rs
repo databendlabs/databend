@@ -174,7 +174,6 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                 AggregateMeta::HashTable(_) => unreachable!(),
                 AggregateMeta::Serialized(_) => unreachable!(),
                 AggregateMeta::Spilled(payload) => {
-                    // TODO: need retry read
                     let instant = Instant::now();
                     let object = self.operator.object(&payload.location);
                     let data = object.read().await?;
@@ -197,7 +196,6 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                 AggregateMeta::Partitioned { data, .. } => {
                     let mut read_data = Vec::with_capacity(data.len());
                     for meta in data {
-                        // TODO: need retry read
                         if let AggregateMeta::Spilled(payload) = meta {
                             let location = payload.location.clone();
                             let operator = self.operator.clone();

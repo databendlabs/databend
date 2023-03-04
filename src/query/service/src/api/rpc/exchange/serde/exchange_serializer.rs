@@ -17,6 +17,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use common_arrow::arrow::chunk::Chunk;
 use common_arrow::arrow::io::flight::default_ipc_fields;
 use common_arrow::arrow::io::flight::serialize_batch;
 use common_arrow::arrow::io::flight::WriteOptions;
@@ -207,25 +208,26 @@ pub fn serialize_block(
     ipc_field: &[IpcField],
     options: &WriteOptions,
 ) -> Result<DataBlock> {
-    if data_block.is_empty() {
-        return Ok(DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
-            block_num, None,
-        )));
-    }
-
     let mut meta = vec![];
     meta.write_scalar_own(data_block.num_rows() as u32)?;
     bincode::serialize_into(&mut meta, &data_block.get_meta())
         .map_err(|_| ErrorCode::BadBytes("block meta serialize error when exchange"))?;
 
-    let chunks = data_block.try_into()?;
-    let (dicts, values) = serialize_batch(&chunks, ipc_field, options)?;
+    let values = match data_block.is_empty() {
+        true => serialize_batch(&Chunk::new(vec![]), &[], options)?.1,
+        false => {
+            let chunks = data_block.try_into()?;
+            let (dicts, values) = serialize_batch(&chunks, ipc_field, options)?;
 
-    if !dicts.is_empty() {
-        return Err(ErrorCode::Unimplemented(
-            "DatabendQuery does not implement dicts.",
-        ));
-    }
+            if !dicts.is_empty() {
+                return Err(ErrorCode::Unimplemented(
+                    "DatabendQuery does not implement dicts.",
+                ));
+            }
+
+            values
+        }
+    };
 
     Ok(DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
         block_num,
