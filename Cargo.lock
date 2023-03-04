@@ -2996,6 +2996,7 @@ dependencies = [
  "storages-common-cache-manager",
  "storages-common-index",
  "storages-common-table-meta",
+ "strength_reduce",
  "temp-env",
  "tempfile",
  "time 0.3.17",

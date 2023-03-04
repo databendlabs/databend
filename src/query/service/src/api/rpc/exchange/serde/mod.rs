@@ -14,4 +14,3 @@
 
 pub mod exchange_deserializer;
 pub mod exchange_serializer;
-pub mod exchange_serializer_with_sorting;

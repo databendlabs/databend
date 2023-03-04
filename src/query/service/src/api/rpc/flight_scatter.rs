@@ -16,5 +16,5 @@ use common_exception::Result;
 use common_expression::DataBlock;
 
 pub trait FlightScatter: Sync + Send {
-    fn execute(&self, data_block: &DataBlock) -> Result<Vec<DataBlock>>;
+    fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>>;
 }
