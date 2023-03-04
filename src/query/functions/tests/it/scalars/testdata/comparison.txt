@@ -114,18 +114,18 @@ has tried possible overloads:
   eq(Timestamp NULL, Timestamp NULL) :: Boolean NULL            : unable to unify `Tuple(UInt8, String)` with `Timestamp`
   eq(UInt8, UInt8) :: Boolean                                   : unable to unify `Tuple(UInt8, String)` with `UInt8`
   eq(UInt8 NULL, UInt8 NULL) :: Boolean NULL                    : unable to unify `Tuple(UInt8, String)` with `UInt8`
-  eq(UInt16, UInt16) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt16`
-  eq(UInt16 NULL, UInt16 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt16`
-  eq(UInt32, UInt32) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt32`
-  eq(UInt32 NULL, UInt32 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt32`
-  eq(UInt64, UInt64) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt64`
-  eq(UInt64 NULL, UInt64 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt64`
   eq(Int8, Int8) :: Boolean                                     : unable to unify `Tuple(UInt8, String)` with `Int8`
   eq(Int8 NULL, Int8 NULL) :: Boolean NULL                      : unable to unify `Tuple(UInt8, String)` with `Int8`
+  eq(UInt16, UInt16) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt16`
+  eq(UInt16 NULL, UInt16 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt16`
   eq(Int16, Int16) :: Boolean                                   : unable to unify `Tuple(UInt8, String)` with `Int16`
   eq(Int16 NULL, Int16 NULL) :: Boolean NULL                    : unable to unify `Tuple(UInt8, String)` with `Int16`
+  eq(UInt32, UInt32) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt32`
+  eq(UInt32 NULL, UInt32 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt32`
   eq(Int32, Int32) :: Boolean                                   : unable to unify `Tuple(UInt8, String)` with `Int32`
   eq(Int32 NULL, Int32 NULL) :: Boolean NULL                    : unable to unify `Tuple(UInt8, String)` with `Int32`
+  eq(UInt64, UInt64) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt64`
+  eq(UInt64 NULL, UInt64 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt64`
   eq(Int64, Int64) :: Boolean                                   : unable to unify `Tuple(UInt8, String)` with `Int64`
   eq(Int64 NULL, Int64 NULL) :: Boolean NULL                    : unable to unify `Tuple(UInt8, String)` with `Int64`
   eq(Float32, Float32) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Float32`
@@ -379,18 +379,18 @@ has tried possible overloads:
   noteq(Timestamp NULL, Timestamp NULL) :: Boolean NULL            : unable to unify `Tuple(UInt8, String)` with `Timestamp`
   noteq(UInt8, UInt8) :: Boolean                                   : unable to unify `Tuple(UInt8, String)` with `UInt8`
   noteq(UInt8 NULL, UInt8 NULL) :: Boolean NULL                    : unable to unify `Tuple(UInt8, String)` with `UInt8`
-  noteq(UInt16, UInt16) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt16`
-  noteq(UInt16 NULL, UInt16 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt16`
-  noteq(UInt32, UInt32) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt32`
-  noteq(UInt32 NULL, UInt32 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt32`
-  noteq(UInt64, UInt64) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt64`
-  noteq(UInt64 NULL, UInt64 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt64`
   noteq(Int8, Int8) :: Boolean                                     : unable to unify `Tuple(UInt8, String)` with `Int8`
   noteq(Int8 NULL, Int8 NULL) :: Boolean NULL                      : unable to unify `Tuple(UInt8, String)` with `Int8`
+  noteq(UInt16, UInt16) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt16`
+  noteq(UInt16 NULL, UInt16 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt16`
   noteq(Int16, Int16) :: Boolean                                   : unable to unify `Tuple(UInt8, String)` with `Int16`
   noteq(Int16 NULL, Int16 NULL) :: Boolean NULL                    : unable to unify `Tuple(UInt8, String)` with `Int16`
+  noteq(UInt32, UInt32) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt32`
+  noteq(UInt32 NULL, UInt32 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt32`
   noteq(Int32, Int32) :: Boolean                                   : unable to unify `Tuple(UInt8, String)` with `Int32`
   noteq(Int32 NULL, Int32 NULL) :: Boolean NULL                    : unable to unify `Tuple(UInt8, String)` with `Int32`
+  noteq(UInt64, UInt64) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt64`
+  noteq(UInt64 NULL, UInt64 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt64`
   noteq(Int64, Int64) :: Boolean                                   : unable to unify `Tuple(UInt8, String)` with `Int64`
   noteq(Int64 NULL, Int64 NULL) :: Boolean NULL                    : unable to unify `Tuple(UInt8, String)` with `Int64`
   noteq(Float32, Float32) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Float32`

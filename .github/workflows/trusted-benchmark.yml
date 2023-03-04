@@ -116,7 +116,7 @@ jobs:
       - name: Generate report
         working-directory: benchmark/clickbench
         run: |
-          aws s3 sync "${{ env.BENCHMARK_S3_PREFIX }}/release/${{ matrix.dataset }}/$(date -u +%Y)/$(date -u +%m)/" ./results/
+          aws s3 sync "${{ env.BENCHMARK_S3_PREFIX }}/release/${{ matrix.dataset }}/$(date -u +%Y)/$(date -u +%m)/" ./results/${{ matrix.dataset }}/
           ./update-results.sh ${{ matrix.dataset }}
       - name: Upload PR clickbench report to repo.databend.rs
         working-directory: benchmark/clickbench

@@ -172,7 +172,7 @@ pub trait FieldEncoderRowBased {
         raw: bool,
     ) {
         let v = unsafe { column.index_unchecked(row_index) };
-        let s = common_jsonb::to_string(v);
+        let s = jsonb::to_string(v);
         self.write_string_inner(s.as_bytes(), out_buf, raw);
     }
 

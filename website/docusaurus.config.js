@@ -131,6 +131,10 @@ const config = {
                         title: 'RESOURCES',
                         items: [
                             {
+                                label: 'Performance',
+                                to: '/doc/performance'
+                            },
+                            {
                                 label: 'Deployment',
                                 to: '/doc/deploy'
                             },

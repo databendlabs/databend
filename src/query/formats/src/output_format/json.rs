@@ -128,7 +128,7 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
             JsonValue::Object(vals)
         }
         ScalarRef::Variant(x) => {
-            let b = common_jsonb::from_slice(x).unwrap();
+            let b = jsonb::from_slice(x).unwrap();
             b.into()
         }
     }

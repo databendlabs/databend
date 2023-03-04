@@ -14,11 +14,14 @@
 
 use std::hash::Hash;
 
+use common_expression::types::nullable::NullableDomain;
 use common_expression::types::ArrayType;
 use common_expression::types::EmptyArrayType;
 use common_expression::types::EmptyMapType;
 use common_expression::types::GenericType;
 use common_expression::types::MapType;
+use common_expression::types::NullType;
+use common_expression::types::NullableType;
 use common_expression::vectorize_with_builder_2_arg;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
@@ -80,6 +83,33 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
                 output.commit_row();
+            }
+        ),
+    );
+
+    registry.register_2_arg_core::<NullableType<EmptyMapType>, NullableType<GenericType<0>>, NullType, _, _>(
+        "get",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        |_, _, _| Value::Scalar(()),
+    );
+
+    registry.register_combine_nullable_2_arg::<MapType<GenericType<0>, GenericType<1>>, GenericType<0>, GenericType<1>, _, _>(
+        "get",
+        FunctionProperty::default(),
+        |domain, _| FunctionDomain::Domain(NullableDomain {
+            has_null: true,
+            value: domain.as_ref().map(|(_, val_domain)| Box::new(val_domain.clone())),
+        }),
+        vectorize_with_builder_2_arg::<MapType<GenericType<0>, GenericType<1>>, GenericType<0>, NullableType<GenericType<1>>>(
+            |map, key, output, _| {
+                for (k, v) in map.iter() {
+                    if k == key {
+                        output.push(v);
+                        return
+                    }
+                }
+                output.push_null()
             }
         ),
     );

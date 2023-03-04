@@ -227,28 +227,38 @@ fn list_all_builtin_functions() {
 
     let fn_registry = &BUILTIN_FUNCTIONS;
 
-    writeln!(file, "Simple functions:").unwrap();
-    for (func, _) in fn_registry
-        .funcs
-        .iter()
-        .sorted_by_key(|(name, _)| name.to_string())
-        .flat_map(|(_, funcs)| funcs)
-    {
-        writeln!(file, "{}", func.signature).unwrap();
-    }
-
-    writeln!(file, "\nFactory functions:").unwrap();
-    for func_name in fn_registry.factories.keys().sorted() {
-        writeln!(file, "{func_name}").unwrap();
-    }
-
-    writeln!(file, "\nFunction aliases (alias to origin):").unwrap();
+    writeln!(file, "Function aliases (alias to origin):").unwrap();
     for (alias_name, original_name) in fn_registry
         .aliases
         .iter()
         .sorted_by_key(|(alias_name, _)| alias_name.to_string())
     {
         writeln!(file, "{alias_name} -> {original_name}").unwrap();
+    }
+    writeln!(file, "\nFunctions overloads:").unwrap();
+    let mut funcs = fn_registry
+        .funcs
+        .values()
+        .flatten()
+        .map(|(func, id)| {
+            (
+                (func.signature.name.clone(), *id),
+                format!("{}", func.signature),
+            )
+        })
+        .collect::<Vec<_>>();
+    fn_registry
+        .factories
+        .iter()
+        .flat_map(|(name, funcs)| {
+            funcs
+                .iter()
+                .map(|(_, id)| ((name.clone(), *id), format!("{} FACTORY", name.clone())))
+        })
+        .collect_into(&mut funcs);
+    funcs.sort_by_key(|(key, _)| key.clone());
+    for ((_, id), sig) in funcs {
+        writeln!(file, "{id} {sig}").unwrap();
     }
 }
 

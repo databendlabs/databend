@@ -30,8 +30,8 @@ mod transform_resort_addon;
 mod transform_right_join;
 mod transform_right_semi_anti_join;
 
-pub use aggregator::efficiently_memory_final_aggregator;
-pub use aggregator::AggregateExchangeSorting;
+pub use aggregator::build_partition_bucket;
+pub use aggregator::AggregateInjector;
 pub use aggregator::AggregatorParams;
 pub use aggregator::FinalSingleStateAggregator;
 pub use aggregator::HashTableCell;

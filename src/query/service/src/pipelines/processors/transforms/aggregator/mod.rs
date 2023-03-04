@@ -13,7 +13,7 @@
 // limitations under the License.
 
 mod aggregate_cell;
-mod aggregate_exchange_sorting;
+mod aggregate_exchange_injector;
 mod aggregate_meta;
 mod aggregator_params;
 mod serde;
@@ -27,13 +27,13 @@ mod utils;
 
 pub use aggregate_cell::HashTableCell;
 pub use aggregate_cell::PartitionedHashTableDropper;
-pub use aggregate_exchange_sorting::AggregateExchangeSorting;
+pub use aggregate_exchange_injector::AggregateInjector;
 pub use aggregator_params::AggregatorParams;
 pub use transform_aggregate_final::TransformFinalAggregate;
 pub use transform_aggregate_partial::TransformPartialAggregate;
 pub use transform_group_by_final::TransformFinalGroupBy;
 pub use transform_group_by_partial::TransformPartialGroupBy;
-pub use transform_partition_bucket::efficiently_memory_final_aggregator;
+pub use transform_partition_bucket::build_partition_bucket;
 pub use transform_partition_bucket::TransformPartitionBucket;
 pub use transform_single_key::FinalSingleStateAggregator;
 pub use transform_single_key::PartialSingleStateAggregator;

@@ -19,7 +19,7 @@ Check out what we've done this week to make Databend even better for you.
 
 **AST**
 
-- select from stage support uri with connect\*ion options ([#9926](https://github.com/datafuselabs/databend/pull/9926))
+- select from stage support uri with connection options ([#10066](https://github.com/datafuselabs/databend/pull/10066))
 
 **Catalog**
 
@@ -118,6 +118,8 @@ Upstream────►│Duplicate│ 4  │         │ 4  │ Result  │
 
 ```
 
+**Learn More**
+
 - [PR | feat(query): query result cache](https://github.com/datafuselabs/databend/pull/10042)
 - [Docs | RFC: Query Result Cache](https://databend.rs/doc/contributing/rfcs/query-result-cache)
 - [Tracking Issue | RFC: query result cache](https://github.com/datafuselabs/databend/issues/10011)
@@ -130,6 +132,8 @@ Databend now supports table data cache:
 - in-memory cache(experimental): deserialized column objects of a data block.
 
 For cache-friendly workloads, the performance gains are significant.
+
+**Learn More**
 
 - [PR | feat: table data cache](https://github.com/datafuselabs/databend/pull/9772)
 - [Docs | Query Server Configuration - Cache](https://databend.rs/doc/deploy/query/query-config#5-cache)
@@ -147,6 +151,8 @@ sudo apt install databend
 sudo systemctl start databend-meta
 sudo systemctl start databend-query
 ```
+
+**Learn More**
 
 - [PR | chore(ci): release with systemd units](https://github.com/datafuselabs/databend/pull/10145)
 - [Docs | Installing Databend - Package Manager](https://databend.rs/doc/deploy/installing-databend#package-manager)

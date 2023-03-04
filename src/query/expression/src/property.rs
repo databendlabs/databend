@@ -13,9 +13,10 @@
 // limitations under the License.
 
 use enum_as_inner::EnumAsInner;
-use ethnum::i256;
 
 use crate::types::boolean::BooleanDomain;
+use crate::types::decimal::Decimal128Type;
+use crate::types::decimal::Decimal256Type;
 use crate::types::decimal::DecimalDomain;
 use crate::types::nullable::NullableDomain;
 use crate::types::number::NumberDomain;
@@ -37,7 +38,6 @@ use crate::types::ValueType;
 use crate::with_decimal_type;
 use crate::with_number_type;
 use crate::Scalar;
-
 #[derive(Debug, Clone, Default)]
 pub struct FunctionProperty {
     pub non_deterministic: bool,
@@ -78,6 +78,8 @@ pub enum Domain {
     Nullable(NullableDomain<AnyType>),
     /// `Array(None)` means that the array is empty, thus there is no inner domain information.
     Array(Option<Box<Domain>>),
+    /// `Map(None)` means that the map is empty, thus there is no inner domain information.
+    Map(Option<(Box<Domain>, Box<Domain>)>),
     Tuple(Vec<Domain>),
     /// For certain types, like `Variant`, the domain is useless therefore is not defined.
     Undefined,
@@ -144,22 +146,10 @@ impl Domain {
             // useless domain, we don't support min/max index for decimal type
             DataType::Decimal(x) => match x {
                 crate::types::DecimalDataType::Decimal128(x) => {
-                    Domain::Decimal(DecimalDomain::Decimal128(
-                        SimpleDomain {
-                            min: i128::MIN,
-                            max: i128::MAX,
-                        },
-                        *x,
-                    ))
+                    Domain::Decimal(DecimalDomain::Decimal128(Decimal128Type::full_domain(), *x))
                 }
                 crate::types::DecimalDataType::Decimal256(x) => {
-                    Domain::Decimal(DecimalDomain::Decimal256(
-                        SimpleDomain {
-                            min: i256::MIN,
-                            max: i256::MAX,
-                        },
-                        *x,
-                    ))
+                    Domain::Decimal(DecimalDomain::Decimal256(Decimal256Type::full_domain(), *x))
                 }
             },
             DataType::Timestamp => Domain::Timestamp(TimestampType::full_domain()),
@@ -177,7 +167,19 @@ impl Domain {
             }
             DataType::EmptyArray => Domain::Array(None),
             DataType::Array(ty) => Domain::Array(Some(Box::new(Domain::full(ty)))),
-            DataType::EmptyMap | DataType::Map(_) | DataType::Variant => Domain::Undefined,
+            DataType::EmptyMap => Domain::Map(None),
+            DataType::Map(box ty) => {
+                let inner_domain = match ty {
+                    DataType::Tuple(inner_tys) => {
+                        let key_domain = Box::new(Domain::full(&inner_tys[0]));
+                        let val_domain = Box::new(Domain::full(&inner_tys[1]));
+                        (key_domain, val_domain)
+                    }
+                    _ => unreachable!(),
+                };
+                Domain::Map(Some(inner_domain))
+            }
+            DataType::Variant => Domain::Undefined,
             DataType::Generic(_) => unreachable!(),
         }
     }
@@ -287,6 +289,16 @@ impl Domain {
             (Domain::Array(Some(self_arr)), Domain::Array(Some(other_arr))) => {
                 Domain::Array(Some(Box::new(self_arr.merge(other_arr))))
             }
+            (Domain::Map(None), Domain::Map(None)) => Domain::Map(None),
+            (Domain::Map(Some(_)), Domain::Map(None)) => self.clone(),
+            (Domain::Map(None), Domain::Map(Some(_))) => other.clone(),
+            (
+                Domain::Map(Some((self_key, self_val))),
+                Domain::Map(Some((other_key, other_val))),
+            ) => Domain::Map(Some((
+                Box::new(self_key.merge(other_key)),
+                Box::new(self_val.merge(other_val)),
+            ))),
             (Domain::Tuple(self_tup), Domain::Tuple(other_tup)) => Domain::Tuple(
                 self_tup
                     .iter()
