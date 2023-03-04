@@ -425,9 +425,9 @@ impl Decimal for i128 {
         }))
     }
 
-    const MIN: i128 = i128::MIN;
+    const MIN: i128 = -99999999999999999999999999999999999999i128;
 
-    const MAX: i128 = i128::MAX;
+    const MAX: i128 = 99999999999999999999999999999999999999i128;
 }
 
 impl Decimal for i256 {
@@ -556,8 +556,12 @@ impl Decimal for i256 {
         }))
     }
 
-    const MIN: i256 = i256::MIN;
-    const MAX: i256 = i256::MAX;
+    const MIN: i256 = ethnum::int!(
+        "-9999999999999999999999999999999999999999999999999999999999999999999999999999"
+    );
+    const MAX: i256 = ethnum::int!(
+        "9999999999999999999999999999999999999999999999999999999999999999999999999999"
+    );
     fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn {
         DecimalColumn::Decimal256(value, size)
     }

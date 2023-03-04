@@ -228,14 +228,13 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         let (arg1, arg2) = if args_type.len() == 2 {
             let arg1 = match args_type.get(0)? {
-                DataType::Tuple(tys) => tys.clone(),
+                DataType::Tuple(tys) => vec![DataType::Number(NumberDataType::Float64); tys.len()],
                 _ => return None,
             };
             let arg2 = match args_type.get(1)? {
-                DataType::Array(box DataType::Tuple(tys)) => (0..tys.len())
-                    .map(|_| DataType::Number(NumberDataType::Float64))
-                    .collect(),
-
+                DataType::Array(box DataType::Tuple(tys)) => {
+                    vec![DataType::Number(NumberDataType::Float64); tys.len()]
+                }
                 _ => return None,
             };
             (arg1, arg2)
@@ -267,13 +266,13 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         let (arg1, arg2) = if args_type.len() == 2 {
             let arg1 = match args_type.get(0)? {
-                DataType::Tuple(tys) => tys.clone(),
+                DataType::Tuple(tys) => vec![DataType::Number(NumberDataType::Float64); tys.len()],
                 _ => return None,
             };
             let arg2 = match args_type.get(1)? {
-                DataType::Array(box DataType::Array(box DataType::Tuple(tys))) => (0..tys.len())
-                    .map(|_| DataType::Number(NumberDataType::Float64))
-                    .collect(),
+                DataType::Array(box DataType::Array(box DataType::Tuple(tys))) => {
+                    vec![DataType::Number(NumberDataType::Float64); tys.len()]
+                }
                 _ => return None,
             };
             (arg1, arg2)
@@ -306,15 +305,15 @@ pub fn register(registry: &mut FunctionRegistry) {
         let mut args = vec![];
 
         let arg1 = match args_type.get(0)? {
-            DataType::Tuple(tys) => tys.clone(),
+            DataType::Tuple(tys) => vec![DataType::Number(NumberDataType::Float64); tys.len()],
             _ => return None,
         };
         args.push(DataType::Tuple(arg1));
 
         let arg2: Vec<DataType> = match args_type.get(1)? {
-            DataType::Array(box DataType::Tuple(tys)) => (0..tys.len())
-                .map(|_| DataType::Number(NumberDataType::Float64))
-                .collect(),
+            DataType::Array(box DataType::Tuple(tys)) => {
+                vec![DataType::Number(NumberDataType::Float64); tys.len()]
+            }
 
             _ => return None,
         };
