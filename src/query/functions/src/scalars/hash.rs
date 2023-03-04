@@ -25,13 +25,14 @@ use common_expression::types::number::F64;
 use common_expression::types::ArgType;
 use common_expression::types::BooleanType;
 use common_expression::types::DateType;
+use common_expression::types::NumberClass;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::types::TimestampType;
 use common_expression::types::VariantType;
 use common_expression::types::ALL_INTEGER_TYPES;
-use common_expression::types::ALL_NUMERICS_TYPES;
+use common_expression::types::ALL_NUMBER_CLASSES;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
 use common_expression::with_integer_mapped_type;
@@ -60,17 +61,19 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_simple_domain_type_hash::<TimestampType>(registry);
     register_simple_domain_type_hash::<BooleanType>(registry);
 
-    for ty in ALL_NUMERICS_TYPES {
+    for ty in ALL_NUMBER_CLASSES {
         with_number_mapped_type!(|NUM_TYPE| match ty {
-            NumberDataType::NUM_TYPE => {
+            NumberClass::NUM_TYPE => {
                 register_simple_domain_type_hash::<NumberType<NUM_TYPE>>(registry);
+            }
+            NumberClass::Decimal128 => {
+                register_simple_domain_type_hash::<DecimalType<i128>>(registry);
+            }
+            NumberClass::Decimal256 => {
+                register_simple_domain_type_hash::<DecimalType<i256>>(registry);
             }
         });
     }
-
-    // Decimal types we only register the default type size
-    register_simple_domain_type_hash::<DecimalType<i128>>(registry);
-    register_simple_domain_type_hash::<DecimalType<i256>>(registry);
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "md5",

@@ -15,12 +15,12 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::fmt::Write;
 
 use chrono_tz::Tz;
 use comfy_table::Cell;
 use comfy_table::Table;
-use ethnum::i256;
+use common_io::display_decimal_128;
+use common_io::display_decimal_256;
 use itertools::Itertools;
 use num_traits::FromPrimitive;
 use rust_decimal::Decimal;
@@ -788,63 +788,4 @@ fn display_f64(num: f64) -> String {
             .to_string(),
         None => num.to_string(),
     }
-}
-
-fn display_decimal_128(num: i128, scale: u8) -> String {
-    let mut buf = String::new();
-    if scale == 0 {
-        write!(buf, "{}", num).unwrap();
-    } else {
-        let pow_scale = 10_i128.pow(scale as u32);
-        if num >= 0 {
-            write!(
-                buf,
-                "{}.{:0>width$}",
-                num / pow_scale,
-                (num % pow_scale).abs(),
-                width = scale as usize
-            )
-            .unwrap();
-        } else {
-            write!(
-                buf,
-                "-{}.{:0>width$}",
-                -num / pow_scale,
-                (num % pow_scale).abs(),
-                width = scale as usize
-            )
-            .unwrap();
-        }
-    }
-    buf
-}
-
-fn display_decimal_256(num: i256, scale: u8) -> String {
-    let mut buf = String::new();
-    if scale == 0 {
-        write!(buf, "{}", num).unwrap();
-    } else {
-        let pow_scale = i256::from(10).pow(scale as u32);
-        // -1/10 = 0
-        if num >= 0 {
-            write!(
-                buf,
-                "{}.{:0>width$}",
-                num / pow_scale,
-                (num % pow_scale).abs(),
-                width = scale as usize
-            )
-            .unwrap();
-        } else {
-            write!(
-                buf,
-                "-{}.{:0>width$}",
-                -num / pow_scale,
-                (num % pow_scale).abs(),
-                width = scale as usize
-            )
-            .unwrap();
-        }
-    }
-    buf
 }
