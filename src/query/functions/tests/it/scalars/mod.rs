@@ -261,8 +261,8 @@ fn list_all_builtin_functions_with_ordered() {
 
     let mut funcs = fn_registry
         .funcs
-        .iter()
-        .flat_map(|(_name, funcs)| funcs)
+        .values()
+        .flatten()
         .map(|(func, seq)| {
             (
                 (func.signature.name.clone(), *seq),
