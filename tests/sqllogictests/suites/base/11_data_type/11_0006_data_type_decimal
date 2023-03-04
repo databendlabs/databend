@@ -23,6 +23,11 @@ drop table t;
 statement error 1049
 create table t (a Decimal(0, 0));
 
+query T
+select typeof(1.1::decimal(3,2)::decimal(76,2))
+----
+DECIMAL(76, 2)
+
 query IIII
 select 1::Decimal(17, 3), 2::Decimal(19, 4), 3::Decimal(20, 5), cast(10 as Decimal(7, 2));
 ----

@@ -640,7 +640,17 @@ macro_rules! m_decimal_to_decimal {
     ($from_size: expr, $dest_size: expr, $buffer: expr, $from_type_name: ty, $dest_type_name: ty, $ctx: expr) => {
         // faster path
         if $from_size.scale == $dest_size.scale && $from_size.precision <= $dest_size.precision {
-            <$from_type_name>::to_column_from_buffer($buffer, $dest_size)
+            if <$from_type_name>::MAX == <$dest_type_name>::MAX {
+                // 128 -> 128 or 256 -> 256
+                <$from_type_name>::to_column_from_buffer($buffer, $dest_size)
+            } else {
+                // 128 -> 256
+                let buffer = $buffer
+                    .into_iter()
+                    .map(|x| x * <$dest_type_name>::one())
+                    .collect();
+                <$dest_type_name>::to_column(buffer, $dest_size)
+            }
         } else {
             let values = if $from_size.scale > $dest_size.scale {
                 let factor = <$dest_type_name>::e(($from_size.scale - $dest_size.scale) as u32);
