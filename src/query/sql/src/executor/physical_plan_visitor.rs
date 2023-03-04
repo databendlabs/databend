@@ -220,7 +220,7 @@ pub trait PhysicalPlanReplacer {
         Ok(PhysicalPlan::Unnest(Unnest {
             plan_id: plan.plan_id,
             input: Box::new(input),
-            offsets: plan.offsets.clone(),
+            num_columns: plan.num_columns,
             stat_info: plan.stat_info.clone(),
         }))
     }

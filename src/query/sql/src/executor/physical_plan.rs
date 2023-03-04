@@ -140,8 +140,9 @@ pub struct Unnest {
     pub plan_id: u32,
 
     pub input: Box<PhysicalPlan>,
-    /// Columns need to be unnested. (offsets in the input DataBlock)
-    pub offsets: Vec<usize>,
+
+    /// How many unnest columns.
+    pub num_columns: usize,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -151,8 +152,8 @@ impl Unnest {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         let mut fields = input_schema.fields().clone();
-        for offset in &self.offsets {
-            let f = &mut fields[*offset];
+        let skip = fields.len() - self.num_columns;
+        for f in fields.iter_mut().skip(skip) {
             let inner_type = f.data_type().as_array().unwrap();
             *f = DataField::new(f.name(), inner_type.unnest().wrap_nullable());
         }

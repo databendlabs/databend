@@ -376,7 +376,7 @@ impl PipelineBuilder {
         self.build_pipeline(&unnest.input)?;
 
         let op = BlockOperator::Unnest {
-            fields: unnest.offsets.clone(),
+            num_columns: unnest.num_columns,
         };
 
         let func_ctx = self.ctx.get_function_context()?;
