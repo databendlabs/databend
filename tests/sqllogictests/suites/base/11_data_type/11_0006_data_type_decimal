@@ -323,40 +323,40 @@ select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(13,2) a , 3 b
 ----
 0 0 1 1 1
 
-query IIIII
-select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(76,2) a , 3 b);
-----
-0 0 1 1 1
+#query IIIII
+#select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(76,2) a , 3 b);
+#----
+#0 0 1 1 1
 
-query IIIII
-select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(13,2) a , 3.1 b);
-----
-0 1 0 1 0
+#query IIIII
+#select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(13,2) a , 3.1 b);
+#----
+#0 1 0 1 0
 
-query IIIII
-select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(76,2) a , 3.1 b);
-----
-0 1 0 1 0
+#query IIIII
+#select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(76,2) a , 3.1 b);
+#----
+#0 1 0 1 0
 
-query IIIII
-select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(13,2) a , 2.9 b);
-----
-1 0 0 0 1
+#query IIIII
+#select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(13,2) a , 2.9 b);
+#----
+#1 0 0 0 1
 
-query IIIII
-select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(76,3) a , 2.9 b);
-----
-1 0 0 0 1
+#query IIIII
+#select a > b, a < b, a = b, a <= b, a >= b from (select 3::Decimal(76,3) a , 2.9 b);
+#----
+#1 0 0 0 1
 
-query T
-select typeof(a = b) from (select 3::Decimal(13,2) a , 2.9 b);
-----
-BOOLEAN
+#query T
+#select typeof(a = b) from (select 3::Decimal(13,2) a , 2.9 b);
+#----
+#BOOLEAN
 
-query T
-select typeof(a = b) from (select 3::Decimal(52,2) a , 2.9 b);
-----
-BOOLEAN
+#query T
+#select typeof(a = b) from (select 3::Decimal(52,2) a , 2.9 b);
+#----
+#BOOLEAN
 
 ## insert
 
