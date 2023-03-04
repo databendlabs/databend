@@ -23,6 +23,10 @@ use common_hashtable::FastHash;
 use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
+use common_pipeline_core::pipe::Pipe;
+use common_pipeline_core::pipe::PipeItem;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_storage::DataOperator;
@@ -34,6 +38,7 @@ use crate::api::ExchangeSorting;
 use crate::api::FlightScatter;
 use crate::api::MergeExchangeParams;
 use crate::api::ShuffleExchangeParams;
+use crate::api::TransformExchangeDeserializer;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::serde::AggregateSerdeMeta;
@@ -42,13 +47,18 @@ use crate::pipelines::processors::transforms::aggregator::serde::TransformScatte
 use crate::pipelines::processors::transforms::aggregator::serde::TransformScatterGroupBySerializer;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformScatterGroupBySpillWriter;
 use crate::pipelines::processors::transforms::aggregator::serde::BUCKET_TYPE;
+use crate::pipelines::processors::transforms::group_by::Area;
+use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::HashTableCell;
+use crate::pipelines::processors::transforms::TransformAggregateDeserializer;
 use crate::pipelines::processors::transforms::TransformAggregateSerializer;
 use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
+use crate::pipelines::processors::transforms::TransformGroupByDeserializer;
 use crate::pipelines::processors::transforms::TransformGroupBySerializer;
 use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
 use crate::pipelines::processors::AggregatorParams;
+use crate::pipelines::processors::TransformDummy;
 use crate::sessions::QueryContext;
 
 struct AggregateExchangeSorting<Method: HashMethodBounds, V: Send + Sync + 'static> {
@@ -56,18 +66,17 @@ struct AggregateExchangeSorting<Method: HashMethodBounds, V: Send + Sync + 'stat
 }
 
 impl<Method: HashMethodBounds, V: Send + Sync + 'static> ExchangeSorting
-for AggregateExchangeSorting<Method, V>
+    for AggregateExchangeSorting<Method, V>
 {
     fn block_number(&self, data_block: &DataBlock) -> Result<isize> {
         match data_block.get_meta() {
             None => Ok(-1),
             Some(block_meta_info) => {
                 match AggregateMeta::<Method, V>::downcast_ref_from(block_meta_info) {
-                    None => Err(ErrorCode::Internal(
-                        format!("Internal error, AggregateExchangeSorting only recv AggregateMeta {:?}",
-                                serde_json::to_string(block_meta_info)
-                        )
-                    )),
+                    None => Err(ErrorCode::Internal(format!(
+                        "Internal error, AggregateExchangeSorting only recv AggregateMeta {:?}",
+                        serde_json::to_string(block_meta_info)
+                    ))),
                     Some(meta_info) => match meta_info {
                         AggregateMeta::Partitioned { .. } => unreachable!(),
                         AggregateMeta::Serialized(v) => Ok(v.bucket),
@@ -115,11 +124,17 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> HashTableHashSca
 
         let mut res = Vec::with_capacity(buckets.len());
         let dropper = payload.cell._dropper.take();
+        let arena = std::mem::replace(&mut payload.cell.arena, Area::create());
+        payload
+            .cell
+            .arena_holders
+            .push(ArenaHolder::create(Some(arena)));
         for bucket_table in buckets {
-            res.push(HashTableCell::<Method, V>::create(
-                bucket_table,
-                dropper.clone().unwrap(),
-            ));
+            let mut cell =
+                HashTableCell::<Method, V>::create(bucket_table, dropper.clone().unwrap());
+            cell.arena_holders
+                .extend(payload.cell.arena_holders.clone());
+            res.push(cell);
         }
 
         Ok(res)
@@ -127,7 +142,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> HashTableHashSca
 }
 
 impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
-for HashTableHashScatter<Method, V>
+    for HashTableHashScatter<Method, V>
 {
     fn execute(&self, mut data_block: DataBlock) -> Result<Vec<DataBlock>> {
         if let Some(block_meta) = data_block.take_meta() {
@@ -191,7 +206,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> AggregateInjecto
 }
 
 impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
-for AggregateInjector<Method, V>
+    for AggregateInjector<Method, V>
 {
     fn flight_scatter(
         &self,
@@ -295,6 +310,12 @@ for AggregateInjector<Method, V>
         })?;
 
         let schema = shuffle_params.schema.clone();
+        let local_id = &shuffle_params.executor_id;
+        let local_pos = shuffle_params
+            .destination_ids
+            .iter()
+            .position(|x| x == local_id)
+            .unwrap();
 
         pipeline.add_transform(
             |input, output| match params.aggregate_functions.is_empty() {
@@ -303,14 +324,155 @@ for AggregateInjector<Method, V>
                     output,
                     method.clone(),
                     schema.clone(),
+                    local_pos,
                 ),
                 false => TransformScatterAggregateSerializer::try_create(
                     input,
                     output,
                     method.clone(),
+                    schema.clone(),
+                    local_pos,
                     params.clone(),
                 ),
             },
         )
+    }
+
+    fn apply_merge_deserializer(
+        &self,
+        remote_inputs: usize,
+        params: &MergeExchangeParams,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        let local_inputs = pipeline.output_len() - remote_inputs;
+        let mut items = Vec::with_capacity(pipeline.output_len());
+
+        for _index in 0..local_inputs {
+            let input = InputPort::create();
+            let output = OutputPort::create();
+
+            items.push(PipeItem::create(
+                TransformDummy::create(input.clone(), output.clone()),
+                vec![input],
+                vec![output],
+            ));
+        }
+
+        for _index in 0..remote_inputs {
+            let input = InputPort::create();
+            let output = OutputPort::create();
+
+            let schema = &params.schema;
+            items.push(PipeItem::create(
+                TransformExchangeDeserializer::create(input.clone(), output.clone(), schema),
+                vec![input],
+                vec![output],
+            ));
+        }
+
+        pipeline.add_pipe(Pipe::create(items.len(), items.len(), items));
+
+        let mut items = Vec::with_capacity(pipeline.output_len());
+
+        for _index in 0..local_inputs {
+            let input = InputPort::create();
+            let output = OutputPort::create();
+
+            items.push(PipeItem::create(
+                TransformDummy::create(input.clone(), output.clone()),
+                vec![input],
+                vec![output],
+            ));
+        }
+
+        for _index in 0..remote_inputs {
+            let input = InputPort::create();
+            let output = OutputPort::create();
+
+            let proc = match self.aggregator_params.aggregate_functions.is_empty() {
+                true => TransformGroupByDeserializer::<Method>::try_create(
+                    input.clone(),
+                    output.clone(),
+                ),
+                false => TransformAggregateDeserializer::<Method>::try_create(
+                    input.clone(),
+                    output.clone(),
+                ),
+            }?;
+
+            items.push(PipeItem::create(proc, vec![input], vec![output]));
+        }
+
+        pipeline.add_pipe(Pipe::create(items.len(), items.len(), items));
+        Ok(())
+    }
+
+    fn apply_shuffle_deserializer(
+        &self,
+        remote_inputs: usize,
+        params: &ShuffleExchangeParams,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        let local_inputs = pipeline.output_len() - remote_inputs;
+        let mut items = Vec::with_capacity(pipeline.output_len());
+
+        for _index in 0..local_inputs {
+            let input = InputPort::create();
+            let output = OutputPort::create();
+
+            items.push(PipeItem::create(
+                TransformDummy::create(input.clone(), output.clone()),
+                vec![input],
+                vec![output],
+            ));
+        }
+
+        for _index in 0..remote_inputs {
+            let input = InputPort::create();
+            let output = OutputPort::create();
+
+            let schema = &params.schema;
+            items.push(PipeItem::create(
+                TransformExchangeDeserializer::create(input.clone(), output.clone(), schema),
+                vec![input],
+                vec![output],
+            ));
+        }
+
+        pipeline.add_pipe(Pipe::create(items.len(), items.len(), items));
+
+        let mut items = Vec::with_capacity(pipeline.output_len());
+
+        for _index in 0..local_inputs {
+            let input = InputPort::create();
+            let output = OutputPort::create();
+
+            items.push(PipeItem::create(
+                TransformDummy::create(input.clone(), output.clone()),
+                vec![input],
+                vec![output],
+            ));
+        }
+
+        for _index in 0..remote_inputs {
+            let input = InputPort::create();
+            let output = OutputPort::create();
+
+            let proc = match self.aggregator_params.aggregate_functions.is_empty() {
+                true => TransformGroupByDeserializer::<Method>::try_create(
+                    input.clone(),
+                    output.clone(),
+                ),
+                false => TransformAggregateDeserializer::<Method>::try_create(
+                    input.clone(),
+                    output.clone(),
+                ),
+            }?;
+
+            items.push(PipeItem::create(proc, vec![input], vec![output]));
+        }
+
+        pipeline.add_pipe(Pipe::create(items.len(), items.len(), items));
+        Ok(())
     }
 }

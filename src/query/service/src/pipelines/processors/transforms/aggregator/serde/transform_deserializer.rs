@@ -16,15 +16,24 @@ use std::any::Any;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use common_arrow::arrow::io::flight::deserialize_batch;
+use common_arrow::arrow::io::ipc::IpcSchema;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
+use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use common_pipeline_transforms::processors::transforms::BlockMetaTransform;
 
+use crate::api::DataPacket;
+use crate::api::ExchangeDeserializeMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::serde::serde_meta::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::serde::BUCKET_TYPE;
@@ -77,6 +86,10 @@ where
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
             let block_meta = data_block.take_meta();
+
+            if let Some(block_meta) = &block_meta {
+                println!("{:?}", serde_json::to_string(block_meta));
+            }
 
             let meta = block_meta
                 .and_then(AggregateSerdeMeta::downcast_from)

@@ -14,12 +14,16 @@
 
 use std::sync::Arc;
 
+use common_arrow::arrow::io::flight::default_ipc_fields;
+use common_arrow::arrow::io::flight::WriteOptions;
+use common_arrow::arrow::io::ipc::IpcField;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::Column;
 use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
 use common_functions::aggregates::StateAddr;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
@@ -29,6 +33,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::BlockMetaTransform;
 use common_pipeline_transforms::processors::transforms::BlockMetaTransformer;
 
+use crate::api::serialize_block;
 use crate::api::ExchangeShuffleMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
@@ -41,6 +46,9 @@ use crate::pipelines::processors::AggregatorParams;
 
 pub struct TransformScatterAggregateSerializer<Method: HashMethodBounds> {
     method: Method,
+    local_pos: usize,
+    options: WriteOptions,
+    ipc_fields: Vec<IpcField>,
     params: Arc<AggregatorParams>,
 }
 
@@ -49,12 +57,23 @@ impl<Method: HashMethodBounds> TransformScatterAggregateSerializer<Method> {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         method: Method,
+        schema: DataSchemaRef,
+        local_pos: usize,
         params: Arc<AggregatorParams>,
     ) -> Result<ProcessorPtr> {
+        let arrow_schema = schema.to_arrow();
+        let ipc_fields = default_ipc_fields(&arrow_schema.fields);
+
         Ok(ProcessorPtr::create(BlockMetaTransformer::create(
             input,
             output,
-            TransformScatterAggregateSerializer { method, params },
+            TransformScatterAggregateSerializer {
+                method,
+                params,
+                local_pos,
+                ipc_fields,
+                options: Default::default(),
+            },
         )))
     }
 }
@@ -67,7 +86,12 @@ where Method: HashMethodBounds
     fn transform(&mut self, meta: ExchangeShuffleMeta) -> Result<DataBlock> {
         let mut new_blocks = Vec::with_capacity(meta.blocks.len());
 
-        for mut block in meta.blocks {
+        for (index, mut block) in meta.blocks.into_iter().enumerate() {
+            if index == self.local_pos {
+                new_blocks.push(block);
+                continue;
+            }
+
             if let Some(meta) = block
                 .take_meta()
                 .and_then(AggregateMeta::<Method, usize>::downcast_from)
@@ -77,16 +101,22 @@ where Method: HashMethodBounds
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::Serialized(_) => unreachable!(),
                     AggregateMeta::Spilled(payload) => {
-                        DataBlock::empty_with_meta(AggregateSerdeMeta::create_spilled(
-                            payload.bucket,
-                            payload.location,
-                            payload.columns_layout,
-                        ))
+                        let bucket = payload.bucket;
+                        let data_block =
+                            DataBlock::empty_with_meta(AggregateSerdeMeta::create_spilled(
+                                bucket,
+                                payload.location,
+                                payload.columns_layout,
+                            ));
+
+                        serialize_block(bucket, data_block, &self.ipc_fields, &self.options)?
                     }
                     AggregateMeta::HashTable(payload) => {
                         let bucket = payload.bucket;
                         let data_block = serialize_aggregate(&self.method, &self.params, payload)?;
-                        data_block.add_meta(Some(AggregateSerdeMeta::create(bucket)))?
+                        let data_block =
+                            data_block.add_meta(Some(AggregateSerdeMeta::create(bucket)))?;
+                        serialize_block(bucket, data_block, &self.ipc_fields, &self.options)?
                     }
                 });
 

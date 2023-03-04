@@ -408,21 +408,12 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
     }
 }
 
-fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>(
+pub fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>(
     ctx: &Arc<QueryContext>,
     method: Method,
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
 ) -> Result<()> {
-    if !ctx.get_cluster().is_empty() {
-        pipeline.add_transform(
-            |input, output| match params.aggregate_functions.is_empty() {
-                true => TransformGroupByDeserializer::<Method>::try_create(input, output),
-                false => TransformAggregateDeserializer::<Method>::try_create(input, output),
-            },
-        )?;
-    }
-
     let input_nums = pipeline.output_len();
     let transform = TransformPartitionBucket::<Method, V>::create(method.clone(), input_nums)?;
 
@@ -458,26 +449,4 @@ fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 'sta
             }
         },
     )
-}
-
-pub fn efficiently_memory_final_aggregator(
-    ctx: &Arc<QueryContext>,
-    params: Arc<AggregatorParams>,
-    pipeline: &mut Pipeline,
-) -> Result<()> {
-    let group_cols = &params.group_columns;
-    let schema_before_group_by = params.input_schema.clone();
-    let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
-    let method = DataBlock::choose_hash_method(&sample_block, group_cols)?;
-
-    match params.aggregate_functions.is_empty() {
-        true => with_hash_method!(|T| match method {
-            HashMethodKind::T(v) =>
-                build_partition_bucket::<_, ()>(ctx, v, pipeline, params.clone()),
-        }),
-        false => with_hash_method!(|T| match method {
-            HashMethodKind::T(v) =>
-                build_partition_bucket::<_, usize>(ctx, v, pipeline, params.clone()),
-        }),
-    }
 }

@@ -17,6 +17,9 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use common_arrow::arrow::array::Array;
+use common_arrow::arrow::chunk::Chunk;
+use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::flight::default_ipc_fields;
 use common_arrow::arrow::io::flight::deserialize_batch;
@@ -168,24 +171,4 @@ impl BlockMetaInfo for ExchangeDeserializeMeta {
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         unimplemented!("Unimplemented clone ExchangeSourceMeta")
     }
-}
-
-pub fn create_deserializer_items(size: usize, schema: &DataSchemaRef) -> Vec<PipeItem> {
-    let mut items = Vec::with_capacity(size);
-    for _index in 0..size {
-        items.push(create_deserializer_item(schema));
-    }
-
-    items
-}
-
-pub fn create_deserializer_item(schema: &DataSchemaRef) -> PipeItem {
-    let input = InputPort::create();
-    let output = OutputPort::create();
-
-    PipeItem::create(
-        TransformExchangeDeserializer::create(input.clone(), output.clone(), schema),
-        vec![input],
-        vec![output],
-    )
 }

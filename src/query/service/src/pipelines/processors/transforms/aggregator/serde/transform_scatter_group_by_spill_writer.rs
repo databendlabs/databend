@@ -136,7 +136,9 @@ impl<Method: HashMethodBounds> Processor for TransformScatterGroupBySpillWriter<
                     new_blocks.push(block);
                 }
 
-                self.output_data_block = Some(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(new_blocks)));
+                self.output_data_block = Some(DataBlock::empty_with_meta(
+                    ExchangeShuffleMeta::create(new_blocks),
+                ));
             }
         }
 

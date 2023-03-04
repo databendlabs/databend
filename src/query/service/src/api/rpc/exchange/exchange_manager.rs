@@ -43,6 +43,7 @@ use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::rpc::flight_client::FlightExchangeRef;
 use crate::api::rpc::Packet;
 use crate::api::DataExchange;
+use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
 use crate::api::ExchangeSorting;
 use crate::api::FlightClient;
@@ -283,7 +284,9 @@ impl DataExchangeManager {
             None => Err(ErrorCode::Internal("Query not exists.")),
             Some(query_coordinator) => {
                 query_coordinator.fragment_exchanges.clear();
-                let mut build_res = query_coordinator.subscribe_fragment(&ctx, fragment_id)?;
+                let injector = DefaultExchangeInjector::create();
+                let mut build_res =
+                    query_coordinator.subscribe_fragment(&ctx, fragment_id, injector)?;
 
                 let exchanges = std::mem::take(&mut query_coordinator.statistics_exchanges);
                 let mut statistics_receiver = StatisticsReceiver::create(ctx.clone(), exchanges)?;
@@ -324,6 +327,7 @@ impl DataExchangeManager {
         &self,
         query_id: &str,
         fragment_id: usize,
+        injector: Arc<dyn ExchangeInjector>,
     ) -> Result<PipelineBuildResult> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -338,7 +342,7 @@ impl DataExchangeManager {
                     .query_ctx
                     .clone();
 
-                query_coordinator.subscribe_fragment(&query_ctx, fragment_id)
+                query_coordinator.subscribe_fragment(&query_ctx, fragment_id, injector)
             }
         }
     }
@@ -466,6 +470,7 @@ impl QueryCoordinator {
         &mut self,
         ctx: &Arc<QueryContext>,
         fragment_id: usize,
+        injector: Arc<dyn ExchangeInjector>,
     ) -> Result<PipelineBuildResult> {
         // Merge pipelines if exist locally pipeline
         if let Some(mut fragment_coordinator) = self.fragments_coordinator.remove(&fragment_id) {
@@ -503,7 +508,13 @@ impl QueryCoordinator {
             }
 
             // Add exchange data transform.
-            ExchangeTransform::via(ctx, &exchange_params, &mut build_res.main_pipeline)?;
+
+            ExchangeTransform::via(
+                ctx,
+                &exchange_params,
+                &mut build_res.main_pipeline,
+                injector,
+            )?;
 
             return Ok(build_res);
         }

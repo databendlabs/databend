@@ -19,6 +19,7 @@ use common_catalog::table::AppendMode;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_function;
+use common_expression::with_hash_method;
 use common_expression::with_mappedhash_method;
 use common_expression::DataBlock;
 use common_expression::DataField;
@@ -63,7 +64,7 @@ use super::processors::ProfileWrapper;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
 use crate::api::ExchangeSorting;
-use crate::pipelines::processors::transforms::efficiently_memory_final_aggregator;
+use crate::pipelines::processors::transforms::build_partition_bucket;
 use crate::pipelines::processors::transforms::AggregateInjector;
 use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
@@ -517,17 +518,15 @@ impl PipelineBuilder {
     }
 
     fn build_aggregate_final(&mut self, aggregate: &AggregateFinal) -> Result<()> {
-        self.build_pipeline(&aggregate.input)?;
-
         let params = Self::build_aggregator_params(
             aggregate.before_group_by_schema.clone(),
-            // aggregate.output_schema()?,
             &aggregate.group_by,
             &aggregate.agg_funcs,
             aggregate.limit,
         )?;
 
         if params.group_columns.is_empty() {
+            self.build_pipeline(&aggregate.input)?;
             self.main_pipeline.resize(1)?;
             return self.main_pipeline.add_transform(|input, output| {
                 let transform = FinalSingleStateAggregator::try_create(input, output, &params)?;
@@ -544,7 +543,46 @@ impl PipelineBuilder {
             });
         }
 
-        efficiently_memory_final_aggregator(&self.ctx, params, &mut self.main_pipeline)
+        let group_cols = &params.group_columns;
+        let schema_before_group_by = params.input_schema.clone();
+        let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
+        let method = DataBlock::choose_hash_method(&sample_block, group_cols)?;
+
+        let tenant = self.ctx.get_tenant();
+        let old_inject = self.exchange_injector.clone();
+
+        let ctx = self.ctx.clone();
+
+        match params.aggregate_functions.is_empty() {
+            true => with_hash_method!(|T| match method {
+                HashMethodKind::T(v) => {
+                    self.exchange_injector =
+                        AggregateInjector::<_, ()>::create(tenant, v.clone(), params.clone());
+                    self.build_pipeline(&aggregate.input)?;
+                    self.exchange_injector = old_inject;
+                    build_partition_bucket::<_, ()>(
+                        &ctx,
+                        v,
+                        &mut self.main_pipeline,
+                        params.clone(),
+                    )
+                }
+            }),
+            false => with_hash_method!(|T| match method {
+                HashMethodKind::T(v) => {
+                    self.exchange_injector =
+                        AggregateInjector::<_, usize>::create(tenant, v.clone(), params.clone());
+                    self.build_pipeline(&aggregate.input)?;
+                    self.exchange_injector = old_inject;
+                    build_partition_bucket::<_, usize>(
+                        &ctx,
+                        v,
+                        &mut self.main_pipeline,
+                        params.clone(),
+                    )
+                }
+            }),
+        }
     }
 
     pub fn build_aggregator_params(
@@ -806,6 +844,7 @@ impl PipelineBuilder {
         let build_res = exchange_manager.get_fragment_source(
             &exchange_source.query_id,
             exchange_source.source_fragment_id,
+            self.exchange_injector.clone(),
         )?;
 
         self.main_pipeline = build_res.main_pipeline;

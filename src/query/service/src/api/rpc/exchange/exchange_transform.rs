@@ -25,7 +25,7 @@ use crate::api::rpc::exchange::exchange_sink_writer::create_writer_item;
 use crate::api::rpc::exchange::exchange_source::via_exchange_source;
 use crate::api::rpc::exchange::exchange_source_reader::create_reader_item;
 use crate::api::rpc::exchange::exchange_transform_shuffle::exchange_shuffle;
-use crate::api::rpc::exchange::serde::exchange_deserializer::create_deserializer_items;
+use crate::api::ExchangeInjector;
 use crate::pipelines::processors::create_dummy_item;
 use crate::pipelines::processors::create_dummy_items;
 use crate::sessions::QueryContext;
@@ -37,10 +37,11 @@ impl ExchangeTransform {
         ctx: &Arc<QueryContext>,
         params: &ExchangeParams,
         pipeline: &mut Pipeline,
+        injector: Arc<dyn ExchangeInjector>,
     ) -> Result<()> {
         match params {
             ExchangeParams::MergeExchange(params) => {
-                via_exchange_source(ctx.clone(), params, pipeline)
+                via_exchange_source(ctx.clone(), params, injector, pipeline)
             }
             ExchangeParams::ShuffleExchange(params) => {
                 exchange_shuffle(params, pipeline)?;
@@ -75,11 +76,7 @@ impl ExchangeTransform {
                 let new_outputs = max_threads + nodes_source;
                 pipeline.add_pipe(Pipe::create(len, new_outputs, items));
 
-                let mut items = create_dummy_items(max_threads, new_outputs);
-                items.extend(create_deserializer_items(nodes_source, &params.schema));
-                pipeline.add_pipe(Pipe::create(new_outputs, new_outputs, items));
-
-                Ok(())
+                injector.apply_shuffle_deserializer(nodes_source, params, pipeline)
             }
         }
     }

@@ -13,14 +13,15 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use itertools::Itertools;
-use common_arrow::arrow::io::flight::{default_ipc_fields, WriteOptions};
-use common_arrow::arrow::io::ipc::IpcField;
 
+use common_arrow::arrow::io::flight::default_ipc_fields;
+use common_arrow::arrow::io::flight::WriteOptions;
+use common_arrow::arrow::io::ipc::IpcField;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::{BlockMetaInfoDowncast, DataSchemaRef};
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 use common_pipeline_core::processors::port::InputPort;
@@ -28,8 +29,11 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::BlockMetaTransform;
 use common_pipeline_transforms::processors::transforms::BlockMetaTransformer;
+use itertools::Itertools;
 
-use crate::api::{ExchangeSerializeMeta, ExchangeShuffleMeta, serialize_block};
+use crate::api::serialize_block;
+use crate::api::ExchangeSerializeMeta;
+use crate::api::ExchangeShuffleMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::estimated_key_size;
@@ -42,7 +46,7 @@ pub struct TransformScatterGroupBySerializer<Method: HashMethodBounds> {
     method: Method,
     options: WriteOptions,
     ipc_fields: Vec<IpcField>,
-    // local_pos: usize,
+    local_pos: usize,
 }
 
 impl<Method: HashMethodBounds> TransformScatterGroupBySerializer<Method> {
@@ -51,6 +55,7 @@ impl<Method: HashMethodBounds> TransformScatterGroupBySerializer<Method> {
         output: Arc<OutputPort>,
         method: Method,
         schema: DataSchemaRef,
+        local_pos: usize,
     ) -> Result<ProcessorPtr> {
         let arrow_schema = schema.to_arrow();
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
@@ -59,6 +64,7 @@ impl<Method: HashMethodBounds> TransformScatterGroupBySerializer<Method> {
             output,
             TransformScatterGroupBySerializer {
                 method,
+                local_pos,
                 ipc_fields,
                 options: WriteOptions { compression: None },
             },
@@ -67,7 +73,7 @@ impl<Method: HashMethodBounds> TransformScatterGroupBySerializer<Method> {
 }
 
 impl<Method> BlockMetaTransform<ExchangeShuffleMeta> for TransformScatterGroupBySerializer<Method>
-    where Method: HashMethodBounds
+where Method: HashMethodBounds
 {
     const NAME: &'static str = "TransformScatterGroupBySerializer";
 
@@ -75,10 +81,10 @@ impl<Method> BlockMetaTransform<ExchangeShuffleMeta> for TransformScatterGroupBy
         let mut new_blocks = Vec::with_capacity(meta.blocks.len());
 
         for (index, mut block) in meta.blocks.into_iter().enumerate() {
-            // if index == self.local_pos {
-            //     new_blocks.push(block);
-            //     continue;
-            // }
+            if index == self.local_pos {
+                new_blocks.push(block);
+                continue;
+            }
 
             if let Some(meta) = block
                 .take_meta()
@@ -90,18 +96,20 @@ impl<Method> BlockMetaTransform<ExchangeShuffleMeta> for TransformScatterGroupBy
                     AggregateMeta::Serialized(_) => unreachable!(),
                     AggregateMeta::Spilled(payload) => {
                         let bucket = payload.bucket;
-                        let data_block = DataBlock::empty_with_meta(AggregateSerdeMeta::create_spilled(
-                            bucket,
-                            payload.location,
-                            payload.columns_layout,
-                        ));
+                        let data_block =
+                            DataBlock::empty_with_meta(AggregateSerdeMeta::create_spilled(
+                                bucket,
+                                payload.location,
+                                payload.columns_layout,
+                            ));
 
                         serialize_block(bucket, data_block, &self.ipc_fields, &self.options)?
                     }
                     AggregateMeta::HashTable(payload) => {
                         let bucket = payload.bucket;
                         let data_block = serialize_group_by(&self.method, payload)?;
-                        let data_block = data_block.add_meta(Some(AggregateSerdeMeta::create(bucket)))?;
+                        let data_block =
+                            data_block.add_meta(Some(AggregateSerdeMeta::create(bucket)))?;
                         serialize_block(bucket, data_block, &self.ipc_fields, &self.options)?
                     }
                 });
