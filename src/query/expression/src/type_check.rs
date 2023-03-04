@@ -487,7 +487,9 @@ pub fn can_auto_cast_to(
                 .zip(dest_tys)
                 .all(|(src_ty, dest_ty)| can_auto_cast_to(src_ty, dest_ty, auto_cast_rules))
         }
-        (DataType::Number(_), DataType::Decimal(_)) => true,
+        (DataType::Number(n), DataType::Decimal(_)) => {
+            !matches!(n, NumberDataType::Float32 | NumberDataType::Float64)
+        }
         (DataType::Decimal(x), DataType::Decimal(y)) => x.precision() <= y.precision(),
         _ => false,
     }
