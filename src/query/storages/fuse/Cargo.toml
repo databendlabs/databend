@@ -19,7 +19,6 @@ common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
 common-functions = { path = "../../functions" }
 common-io = { path = "../../../common/io" }
-common-jsonb = { path = "../../../common/jsonb" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../../pipeline/core" }
@@ -28,6 +27,7 @@ common-pipeline-transforms = { path = "../../pipeline/transforms" }
 common-sharing = { path = "../../sharing" }
 common-sql = { path = "../../sql" }
 common-storage = { path = "../../../common/storage" }
+jsonb = { workspace = true }
 
 storages-common-blocks = { path = "../common/blocks" }
 storages-common-cache = { path = "../common/cache" }

@@ -76,8 +76,9 @@ where
 
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
-            let meta = data_block
-                .take_meta()
+            let block_meta = data_block.take_meta();
+
+            let meta = block_meta
                 .and_then(AggregateSerdeMeta::downcast_from)
                 .unwrap();
 

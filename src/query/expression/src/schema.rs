@@ -26,11 +26,11 @@ use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_jsonb::Number as JsonbNumber;
-use common_jsonb::Object as JsonbObject;
-use common_jsonb::Value as JsonbValue;
 use ethnum::i256;
 use itertools::Itertools;
+use jsonb::Number as JsonbNumber;
+use jsonb::Object as JsonbObject;
+use jsonb::Value as JsonbValue;
 use rand::distributions::Alphanumeric;
 use rand::distributions::DistString;
 use rand::rngs::SmallRng;
@@ -195,7 +195,9 @@ impl DataSchema {
 
     /// Find the index of the column with the given name.
     pub fn index_of(&self, name: &str) -> Result<FieldIndex> {
-        for i in 0..self.fields.len() {
+        for i in (0..self.fields.len()).rev() {
+            // Use `rev` is because unnest columns will be attached to end of schema,
+            // but their names are the same as the original column.
             if self.fields[i].name() == name {
                 return Ok(i);
             }

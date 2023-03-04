@@ -47,10 +47,10 @@ common-grpc = { path = "../../common/grpc" }
 common-hashtable = { path = "../../common/hashtable" }
 common-http = { path = "../../common/http" }
 common-io = { path = "../../common/io" }
-common-jsonb = { path = "../../common/jsonb" }
 common-management = { path = "../management" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
+jsonb = { workspace = true }
 # common-meta-embedded = { path = "../../meta/embedded" }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
@@ -124,6 +124,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serde_urlencoded = "0.7.1"
 socket2 = "0.4.7"
+strength_reduce = "0.2.4"
 tempfile = { version = "3.3.0", optional = true }
 time = "0.3.14"
 tokio-stream = { version = "0.1.10", features = ["net"] }

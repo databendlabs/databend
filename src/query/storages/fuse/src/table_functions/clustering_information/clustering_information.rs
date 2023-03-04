@@ -31,7 +31,7 @@ use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRefExt;
 use common_expression::Value;
-use common_jsonb::Value as JsonbValue;
+use jsonb::Value as JsonbValue;
 use serde_json::json;
 use serde_json::Value as JsonValue;
 use storages_common_table_meta::meta::BlockMeta;

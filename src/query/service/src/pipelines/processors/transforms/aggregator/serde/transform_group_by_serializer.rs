@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_exception::Result;
 use common_expression::DataBlock;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
@@ -39,7 +40,7 @@ impl<Method: HashMethodBounds> TransformGroupBySerializer<Method> {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         method: Method,
-    ) -> common_exception::Result<ProcessorPtr> {
+    ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(BlockMetaTransformer::create(
             input,
             output,
@@ -53,10 +54,7 @@ where Method: HashMethodBounds
 {
     const NAME: &'static str = "TransformGroupBySerializer";
 
-    fn transform(
-        &mut self,
-        meta: AggregateMeta<Method, ()>,
-    ) -> common_exception::Result<DataBlock> {
+    fn transform(&mut self, meta: AggregateMeta<Method, ()>) -> Result<DataBlock> {
         match meta {
             AggregateMeta::Spilling(_) => unreachable!(),
             AggregateMeta::Partitioned { .. } => unreachable!(),
@@ -80,7 +78,7 @@ where Method: HashMethodBounds
 pub fn serialize_group_by<Method: HashMethodBounds>(
     method: &Method,
     payload: HashTablePayload<Method, ()>,
-) -> common_exception::Result<DataBlock> {
+) -> Result<DataBlock> {
     let keys_len = payload.cell.hashtable.len();
     let value_size = estimated_key_size(&payload.cell.hashtable);
     let mut group_key_builder = method.keys_column_builder(keys_len, value_size);

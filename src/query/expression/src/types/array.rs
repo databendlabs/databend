@@ -221,6 +221,12 @@ impl<T: ValueType> ArrayColumn<T> {
     pub fn memory_size(&self) -> usize {
         T::column_memory_size(&self.values) + self.offsets.len() * 8
     }
+
+    pub fn underlying_column(&self) -> T::Column {
+        debug_assert!(!self.offsets.is_empty());
+        let range = *self.offsets.first().unwrap() as usize..*self.offsets.last().unwrap() as usize;
+        T::slice_column(&self.values, range)
+    }
 }
 
 impl ArrayColumn<AnyType> {

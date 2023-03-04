@@ -899,7 +899,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     );
 
     let map_expr = map(
-        rule! { "{" ~ #comma_separated_list1(map_element) ~ "}" },
+        rule! { "{" ~ #comma_separated_list0(map_element) ~ "}" },
         |(_, kvs, _)| ExprElement::Map { kvs },
     );
 

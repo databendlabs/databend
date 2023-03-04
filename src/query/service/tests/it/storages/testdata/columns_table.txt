@@ -6,6 +6,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 +---------------------------------+----------------------+-----------------------+--------------------+---------------------+----------+----------+----------+----------+
 | "Comment"                       | "system"             | "engines"             | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "Engine"                        | "system"             | "engines"             | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
+| "active_result_scan"            | "system"             | "query_cache"         | "Boolean"          | "BOOLEAN"           | ""       | ""       | "NO"     | ""       |
 | "auth_string"                   | "system"             | "users"               | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "auth_type"                     | "system"             | "users"               | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "cardinality"                   | "information_schema" | "statistics"          | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
@@ -167,6 +168,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | "position_in_unique_constraint" | "information_schema" | "key_column_usage"    | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
 | "projections"                   | "system"             | "query_log"           | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "query_duration_ms"             | "system"             | "query_log"           | "Int64"            | "BIGINT"            | ""       | ""       | "NO"     | ""       |
+| "query_id"                      | "system"             | "query_cache"         | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "query_id"                      | "system"             | "query_log"           | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "query_kind"                    | "system"             | "query_log"           | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "query_start_time"              | "system"             | "query_log"           | "Timestamp"        | "TIMESTAMP"         | ""       | ""       | "NO"     | ""       |

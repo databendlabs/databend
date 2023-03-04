@@ -24,15 +24,15 @@ base64 = "0.13.0"
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 comfy-table = "6"
-common-jsonb = { path = "../../common/jsonb" }
 dashmap = "5.4"
 educe = "0.4"
 enum-as-inner = "0.5"
 enum_dispatch = "0.3.8"
-ethnum = { version = "1.3", features = ["serde"] }
+ethnum = { version = "1.3", features = ["serde", "macros"] }
 futures = "0.3.24"
 hex = "0.4.3"
 itertools = "0.10"
+jsonb = { workspace = true }
 lexical-core = "0.8.5"
 match-template = "0.0.1"
 micromarshal = "0.2.1"

@@ -301,12 +301,6 @@ impl Display for DistributedInsertSelect {
 
 impl Display for Unnest {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let columns = self
-            .offsets
-            .iter()
-            .map(|v| v.to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-        write!(f, "Unnest: column: [{}]", columns)
+        write!(f, "Unnest: unnset num : {}", self.num_columns)
     }
 }

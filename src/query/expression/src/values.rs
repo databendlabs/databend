@@ -314,6 +314,7 @@ impl<'a> ScalarRef<'a> {
                 value: None,
             }),
             ScalarRef::EmptyArray => Domain::Array(None),
+            ScalarRef::EmptyMap => Domain::Map(None),
             ScalarRef::Number(num) => Domain::Number(num.domain()),
             ScalarRef::Decimal(dec) => Domain::Decimal(dec.domain()),
             ScalarRef::Boolean(true) => Domain::Boolean(BooleanDomain {
@@ -337,6 +338,20 @@ impl<'a> ScalarRef<'a> {
                     Domain::Array(Some(Box::new(array.domain())))
                 }
             }
+            ScalarRef::Map(map) => {
+                if map.len() == 0 {
+                    Domain::Map(None)
+                } else {
+                    let inner_domain = map.domain();
+                    let map_domain = match inner_domain {
+                        Domain::Tuple(domains) => {
+                            (Box::new(domains[0].clone()), Box::new(domains[1].clone()))
+                        }
+                        _ => unreachable!(),
+                    };
+                    Domain::Map(Some(map_domain))
+                }
+            }
             ScalarRef::Tuple(fields) => {
                 let types = data_type.as_tuple().unwrap();
                 Domain::Tuple(
@@ -347,7 +362,7 @@ impl<'a> ScalarRef<'a> {
                         .collect(),
                 )
             }
-            ScalarRef::EmptyMap | ScalarRef::Map(_) | ScalarRef::Variant(_) => Domain::Undefined,
+            ScalarRef::Variant(_) => Domain::Undefined,
         }
     }
 
@@ -426,7 +441,7 @@ impl PartialOrd for Scalar {
             (Scalar::Map(m1), Scalar::Map(m2)) => m1.partial_cmp(m2),
             (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
             (Scalar::Variant(v1), Scalar::Variant(v2)) => {
-                common_jsonb::compare(v1.as_slice(), v2.as_slice()).ok()
+                jsonb::compare(v1.as_slice(), v2.as_slice()).ok()
             }
             _ => None,
         }
@@ -460,7 +475,7 @@ impl PartialOrd for ScalarRef<'_> {
             (ScalarRef::Array(a1), ScalarRef::Array(a2)) => a1.partial_cmp(a2),
             (ScalarRef::Map(m1), ScalarRef::Map(m2)) => m1.partial_cmp(m2),
             (ScalarRef::Tuple(t1), ScalarRef::Tuple(t2)) => t1.partial_cmp(t2),
-            (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => common_jsonb::compare(v1, v2).ok(),
+            (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => jsonb::compare(v1, v2).ok(),
             _ => None,
         }
     }
@@ -546,7 +561,7 @@ impl PartialOrd for Column {
             }
             (Column::Variant(col1), Column::Variant(col2)) => col1
                 .iter()
-                .partial_cmp_by(col2.iter(), |v1, v2| common_jsonb::compare(v1, v2).ok()),
+                .partial_cmp_by(col2.iter(), |v1, v2| jsonb::compare(v1, v2).ok()),
             _ => None,
         }
     }
@@ -735,6 +750,20 @@ impl Column {
                     Domain::Array(Some(Box::new(inner_domain)))
                 }
             }
+            Column::Map(col) => {
+                if col.len() == 0 {
+                    Domain::Map(None)
+                } else {
+                    let inner_domain = col.values.domain();
+                    let map_domain = match inner_domain {
+                        Domain::Tuple(domains) => {
+                            (Box::new(domains[0].clone()), Box::new(domains[1].clone()))
+                        }
+                        _ => unreachable!(),
+                    };
+                    Domain::Map(Some(map_domain))
+                }
+            }
             Column::Nullable(col) => {
                 let inner_domain = col.column.domain();
                 Domain::Nullable(NullableDomain {
@@ -746,7 +775,7 @@ impl Column {
                 let domains = fields.iter().map(|col| col.domain()).collect::<Vec<_>>();
                 Domain::Tuple(domains)
             }
-            Column::Map(_) | Column::Variant(_) => Domain::Undefined,
+            Column::Variant(_) => Domain::Undefined,
         }
     }
 
@@ -1373,6 +1402,20 @@ impl Column {
         match self {
             Column::Nullable(inner) => inner.column.clone(),
             _ => self.clone(),
+        }
+    }
+
+    pub fn wrap_nullable(self) -> Self {
+        match self {
+            col @ Column::Nullable(_) => col,
+            col => {
+                let mut validity = MutableBitmap::with_capacity(col.len());
+                validity.extend_constant(col.len(), true);
+                Column::Nullable(Box::new(NullableColumn {
+                    column: col,
+                    validity: validity.into(),
+                }))
+            }
         }
     }
 

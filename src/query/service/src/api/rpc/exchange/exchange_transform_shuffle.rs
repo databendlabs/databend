@@ -37,6 +37,7 @@ use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
 use crate::api::rpc::exchange::exchange_sorting::ExchangeSorting;
 use crate::api::rpc::exchange::exchange_sorting::TransformExchangeSorting;
 use crate::api::rpc::exchange::exchange_transform_scatter::ScatterTransform;
+use crate::api::rpc::exchange::serde::exchange_serializer::ExchangeSerializeMeta;
 
 pub struct ExchangeShuffleMeta {
     pub blocks: Vec<DataBlock>,
@@ -194,9 +195,8 @@ impl Processor for ExchangeShuffleTransform {
             if let Some(mut data_block) = self.try_pull_inputs()? {
                 if let Some(block_meta) = data_block.take_meta() {
                     if let Some(shuffle_meta) = ExchangeShuffleMeta::downcast_from(block_meta) {
-                        let blocks = shuffle_meta.blocks;
-                        for (index, block) in blocks.into_iter().enumerate() {
-                            if !block.is_empty() {
+                        for (index, block) in shuffle_meta.blocks.into_iter().enumerate() {
+                            if !block.is_empty() || block.get_meta().is_some() {
                                 self.buffer.push_back(index, block);
                             }
                         }
@@ -285,10 +285,12 @@ pub fn exchange_shuffle(params: &ShuffleExchangeParams, pipeline: &mut Pipeline)
         ))
     })?;
 
-    if let Some(exchange_sorting) = &params.exchange_sorting {
+    let exchange_injector = &params.exchange_injector;
+    exchange_injector.apply_shuffle_serializer(params, pipeline)?;
+
+    if let Some(exchange_sorting) = &exchange_injector.exchange_sorting() {
         let output_len = pipeline.output_len();
         let sorting = ShuffleExchangeSorting::create(exchange_sorting.clone());
-
         let transform = TransformExchangeSorting::create(output_len, sorting);
 
         let output = transform.get_output();
@@ -331,11 +333,19 @@ impl ExchangeSorting for ShuffleExchangeSorting {
             .unwrap();
 
         for block in &shuffle_meta.blocks {
-            if !block.is_empty() {
+            if let Some(block_meta) = block.get_meta() {
+                if let Some(block_meta) = ExchangeSerializeMeta::downcast_ref_from(block_meta) {
+                    return Ok(block_meta.block_number);
+                }
+            }
+
+            if !block.is_empty() || block.get_meta().is_some() {
                 return self.inner.block_number(block);
             }
         }
 
-        Ok(0)
+        Err(ErrorCode::Internal(
+            "Internal, ShuffleExchangeSorting only recv ExchangeSerializeMeta.",
+        ))
     }
 }
