@@ -125,17 +125,15 @@ This can be optimized by initializing the [`regex`](https://crates.io/crates/reg
 
 Please let us know if you're interested in contributing to this issue, or pick up a good first issue at <https://link.databend.rs/i-m-feeling-lucky> to get started.
 
-## What's New
+## New Contributors
 
-Check out what make Databend even better for you.
-
-### New Contributors :sparkler:
+We always open arms to new contributors and can’t wait to see how you’ll help our community grow and thrive.
 
 - [@xinlifoobar](https://github.com/xinlifoobar) made their first contribution in [#10164](https://github.com/datafuselabs/databend/pull/10164)
 - [@wangjili8417](https://github.com/wangjili8417) made their first contribution in [#10025](https://github.com/datafuselabs/databend/pull/10255)
 - [@dusx1981](https://github.com/dusx1981) made their first contribution in [#10024](https://github.com/datafuselabs/databend/pull/10024)
 
-### Changelog
+## Changelog
 
 You can check the changelog of Databend Nightly for details about our latest developments.
 
