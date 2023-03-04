@@ -519,6 +519,9 @@ fn unary_minus_decimal(args: &[ValueRef<AnyType>], arg_type: DataType) -> Value<
         Column::Decimal(DecimalColumn::Decimal128(buf, size)) => {
             DecimalColumn::Decimal128(buf.into_iter().map(|x| -x).collect(), size)
         }
+        Column::Decimal(DecimalColumn::Decimal256(buf, size)) => {
+            DecimalColumn::Decimal256(buf.into_iter().map(|x| -x).collect(), size)
+        }
         _ => unreachable!(),
     };
 
