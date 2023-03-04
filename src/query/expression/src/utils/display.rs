@@ -757,6 +757,10 @@ impl Display for Domain {
                 }
                 write!(f, ")")
             }
+            Domain::Map(None) => write!(f, "{{}}"),
+            Domain::Map(Some((key_domain, val_domain))) => {
+                write!(f, "{{[{key_domain}], [{val_domain}]}}")
+            }
             Domain::Undefined => write!(f, "Undefined"),
         }
     }

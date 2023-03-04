@@ -78,6 +78,8 @@ pub enum Domain {
     Nullable(NullableDomain<AnyType>),
     /// `Array(None)` means that the array is empty, thus there is no inner domain information.
     Array(Option<Box<Domain>>),
+    /// `Map(None)` means that the map is empty, thus there is no inner domain information.
+    Map(Option<(Box<Domain>, Box<Domain>)>),
     Tuple(Vec<Domain>),
     /// For certain types, like `Variant`, the domain is useless therefore is not defined.
     Undefined,
@@ -177,7 +179,19 @@ impl Domain {
             }
             DataType::EmptyArray => Domain::Array(None),
             DataType::Array(ty) => Domain::Array(Some(Box::new(Domain::full(ty)))),
-            DataType::EmptyMap | DataType::Map(_) | DataType::Variant => Domain::Undefined,
+            DataType::EmptyMap => Domain::Map(None),
+            DataType::Map(box ty) => {
+                let inner_domain = match ty {
+                    DataType::Tuple(inner_tys) => {
+                        let key_domain = Box::new(Domain::full(&inner_tys[0]));
+                        let val_domain = Box::new(Domain::full(&inner_tys[1]));
+                        (key_domain, val_domain)
+                    }
+                    _ => unreachable!(),
+                };
+                Domain::Map(Some(inner_domain))
+            }
+            DataType::Variant => Domain::Undefined,
             DataType::Generic(_) => unreachable!(),
         }
     }
@@ -287,6 +301,16 @@ impl Domain {
             (Domain::Array(Some(self_arr)), Domain::Array(Some(other_arr))) => {
                 Domain::Array(Some(Box::new(self_arr.merge(other_arr))))
             }
+            (Domain::Map(None), Domain::Map(None)) => Domain::Map(None),
+            (Domain::Map(Some(_)), Domain::Map(None)) => self.clone(),
+            (Domain::Map(None), Domain::Map(Some(_))) => other.clone(),
+            (
+                Domain::Map(Some((self_key, self_val))),
+                Domain::Map(Some((other_key, other_val))),
+            ) => Domain::Map(Some((
+                Box::new(self_key.merge(other_key)),
+                Box::new(self_val.merge(other_val)),
+            ))),
             (Domain::Tuple(self_tup), Domain::Tuple(other_tup)) => Domain::Tuple(
                 self_tup
                     .iter()

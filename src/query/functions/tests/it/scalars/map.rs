@@ -26,6 +26,7 @@ fn test_map() {
     let file = &mut mint.new_goldenfile("map.txt").unwrap();
 
     test_create(file);
+    test_get(file);
 }
 
 fn test_create(file: &mut impl Write) {
@@ -60,4 +61,23 @@ fn test_create(file: &mut impl Write) {
         &columns,
     );
     run_ast(file, "map(['k1', 'k2'], [a_col, b_col])", &columns);
+}
+
+fn test_get(file: &mut impl Write) {
+    run_ast(file, "map([],[])[1]", &[]);
+    run_ast(file, "map([1,2],['a','b'])[1]", &[]);
+    run_ast(file, "map([1,2],['a','b'])[10]", &[]);
+    run_ast(file, "map(['a','b'],[1,2])['a']", &[]);
+    run_ast(file, "map(['a','b'],[1,2])['x']", &[]);
+
+    run_ast(file, "{}['k']", &[]);
+    run_ast(file, "{'k1':'v1','k2':'v2'}['k1']", &[]);
+    run_ast(file, "{'k1':'v1','k2':'v2'}['k3']", &[]);
+
+    run_ast(file, "map([k1,k2],[v1,v2])[1]", &[
+        ("k1", Int16Type::from_data(vec![1i16, 2])),
+        ("k2", Int16Type::from_data(vec![3i16, 4])),
+        ("v1", StringType::from_data(vec!["v1", "v2"])),
+        ("v2", StringType::from_data(vec!["v3", "v4"])),
+    ]);
 }
