@@ -198,7 +198,7 @@ macro_rules! register_caret {
         type L = $lt;
         type R = $rt;
         type T = F64;
-        $registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
+        $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
             "caret",
             FunctionProperty::default(),
             |_, _| FunctionDomain::Full,
