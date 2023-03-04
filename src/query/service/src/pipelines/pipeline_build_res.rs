@@ -24,7 +24,6 @@ use common_profile::ProfSpanSetRef;
 
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
-use crate::api::ExchangeSorting;
 
 pub struct PipelineBuildResult {
     pub main_pipeline: Pipeline,

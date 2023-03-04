@@ -17,10 +17,6 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_pipeline_core::pipe::Pipe;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
@@ -28,7 +24,6 @@ use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::rpc::exchange::exchange_source_reader;
 use crate::api::ExchangeInjector;
 use crate::clusters::ClusterHelper;
-use crate::pipelines::processors::TransformDummy;
 use crate::sessions::QueryContext;
 
 pub fn via_exchange_source(

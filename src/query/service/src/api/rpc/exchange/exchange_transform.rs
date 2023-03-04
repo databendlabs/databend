@@ -27,7 +27,6 @@ use crate::api::rpc::exchange::exchange_source_reader::create_reader_item;
 use crate::api::rpc::exchange::exchange_transform_shuffle::exchange_shuffle;
 use crate::api::ExchangeInjector;
 use crate::pipelines::processors::create_dummy_item;
-use crate::pipelines::processors::create_dummy_items;
 use crate::sessions::QueryContext;
 
 pub struct ExchangeTransform;

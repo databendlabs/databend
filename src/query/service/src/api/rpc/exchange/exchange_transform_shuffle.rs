@@ -38,7 +38,6 @@ use crate::api::rpc::exchange::exchange_sorting::ExchangeSorting;
 use crate::api::rpc::exchange::exchange_sorting::TransformExchangeSorting;
 use crate::api::rpc::exchange::exchange_transform_scatter::ScatterTransform;
 use crate::api::rpc::exchange::serde::exchange_serializer::ExchangeSerializeMeta;
-use crate::api::rpc::exchange::serde::exchange_serializer::TransformScatterExchangeSerializer;
 
 pub struct ExchangeShuffleMeta {
     pub blocks: Vec<DataBlock>,

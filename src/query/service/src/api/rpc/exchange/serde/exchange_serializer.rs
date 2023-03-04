@@ -176,6 +176,11 @@ impl Transform for TransformScatterExchangeSerializer {
             if let Some(shuffle_meta) = ExchangeShuffleMeta::downcast_from(block_meta) {
                 let mut new_blocks = Vec::with_capacity(shuffle_meta.blocks.len());
                 for (index, block) in shuffle_meta.blocks.into_iter().enumerate() {
+                    if block.is_empty() {
+                        new_blocks.push(block);
+                        continue;
+                    }
+
                     new_blocks.push(match self.local_pos == index {
                         true => block,
                         false => match &self.sorting {

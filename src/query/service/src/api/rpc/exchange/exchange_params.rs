@@ -21,7 +21,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
 
-use crate::api::rpc::exchange::exchange_sorting::ExchangeSorting;
 use crate::api::rpc::flight_scatter::FlightScatter;
 use crate::api::ExchangeInjector;
 

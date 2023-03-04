@@ -16,24 +16,15 @@ use std::any::Any;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow::io::flight::deserialize_batch;
-use common_arrow::arrow::io::ipc::IpcSchema;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
-use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_transforms::processors::transforms::BlockMetaTransform;
 
-use crate::api::DataPacket;
-use crate::api::ExchangeDeserializeMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::serde::serde_meta::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::serde::BUCKET_TYPE;

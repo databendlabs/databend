@@ -45,7 +45,6 @@ use crate::api::rpc::Packet;
 use crate::api::DataExchange;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
-use crate::api::ExchangeSorting;
 use crate::api::FlightClient;
 use crate::api::FragmentPlanPacket;
 use crate::api::InitNodesChannelPacket;

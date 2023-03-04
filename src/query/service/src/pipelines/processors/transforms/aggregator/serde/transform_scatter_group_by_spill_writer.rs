@@ -1,8 +1,6 @@
 use std::any::Any;
 use std::sync::Arc;
-use std::time::Instant;
 
-use common_base::base::GlobalUniqName;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
@@ -12,7 +10,6 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::Processor;
 use futures_util::future::BoxFuture;
 use opendal::Operator;
-use tracing::info;
 
 use crate::api::ExchangeShuffleMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;

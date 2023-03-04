@@ -17,30 +17,22 @@ use std::sync::Arc;
 use common_arrow::arrow::io::flight::default_ipc_fields;
 use common_arrow::arrow::io::flight::WriteOptions;
 use common_arrow::arrow::io::ipc::IpcField;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
-use common_hashtable::HashtableEntryRefLike;
-use common_hashtable::HashtableLike;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::BlockMetaTransform;
 use common_pipeline_transforms::processors::transforms::BlockMetaTransformer;
-use itertools::Itertools;
 
 use crate::api::serialize_block;
-use crate::api::ExchangeSerializeMeta;
 use crate::api::ExchangeShuffleMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
-use crate::pipelines::processors::transforms::aggregator::estimated_key_size;
 use crate::pipelines::processors::transforms::aggregator::serde::transform_group_by_serializer::serialize_group_by;
 use crate::pipelines::processors::transforms::aggregator::serde::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
-use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
 
 pub struct TransformScatterGroupBySerializer<Method: HashMethodBounds> {
     method: Method,

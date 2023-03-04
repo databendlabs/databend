@@ -19,13 +19,10 @@ use std::marker::PhantomData;
 use std::mem::take;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::with_hash_method;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
-use common_expression::HashMethodKind;
 use common_hashtable::hash2bucket;
 use common_hashtable::HashtableLike;
 use common_pipeline_core::pipe::Pipe;
@@ -41,7 +38,6 @@ use common_storage::DataOperator;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SerializedPayload;
-use crate::pipelines::processors::transforms::aggregator::TransformAggregateDeserializer;
 use crate::pipelines::processors::transforms::aggregator::TransformFinalGroupBy;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
@@ -49,10 +45,8 @@ use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::PartitionedHashTableDropper;
 use crate::pipelines::processors::transforms::TransformAggregateSpillReader;
 use crate::pipelines::processors::transforms::TransformFinalAggregate;
-use crate::pipelines::processors::transforms::TransformGroupByDeserializer;
 use crate::pipelines::processors::transforms::TransformGroupBySpillReader;
 use crate::pipelines::processors::AggregatorParams;
-use crate::sessions::QueryContext;
 
 static SINGLE_LEVEL_BUCKET_NUM: isize = -1;
 
@@ -409,7 +403,6 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
 }
 
 pub fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>(
-    ctx: &Arc<QueryContext>,
     method: Method,
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,

@@ -63,16 +63,13 @@ use common_storage::DataOperator;
 use super::processors::ProfileWrapper;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
-use crate::api::ExchangeSorting;
 use crate::pipelines::processors::transforms::build_partition_bucket;
 use crate::pipelines::processors::transforms::AggregateInjector;
 use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::PartialSingleStateAggregator;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
-use crate::pipelines::processors::transforms::TransformAggregateSerializer;
 use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
-use crate::pipelines::processors::transforms::TransformGroupBySerializer;
 use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
 use crate::pipelines::processors::transforms::TransformLeftJoin;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
@@ -551,8 +548,6 @@ impl PipelineBuilder {
         let tenant = self.ctx.get_tenant();
         let old_inject = self.exchange_injector.clone();
 
-        let ctx = self.ctx.clone();
-
         match params.aggregate_functions.is_empty() {
             true => with_hash_method!(|T| match method {
                 HashMethodKind::T(v) => {
@@ -560,12 +555,7 @@ impl PipelineBuilder {
                         AggregateInjector::<_, ()>::create(tenant, v.clone(), params.clone());
                     self.build_pipeline(&aggregate.input)?;
                     self.exchange_injector = old_inject;
-                    build_partition_bucket::<_, ()>(
-                        &ctx,
-                        v,
-                        &mut self.main_pipeline,
-                        params.clone(),
-                    )
+                    build_partition_bucket::<_, ()>(v, &mut self.main_pipeline, params.clone())
                 }
             }),
             false => with_hash_method!(|T| match method {
@@ -574,12 +564,7 @@ impl PipelineBuilder {
                         AggregateInjector::<_, usize>::create(tenant, v.clone(), params.clone());
                     self.build_pipeline(&aggregate.input)?;
                     self.exchange_injector = old_inject;
-                    build_partition_bucket::<_, usize>(
-                        &ctx,
-                        v,
-                        &mut self.main_pipeline,
-                        params.clone(),
-                    )
+                    build_partition_bucket::<_, usize>(v, &mut self.main_pipeline, params.clone())
                 }
             }),
         }

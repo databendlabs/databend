@@ -18,7 +18,6 @@ use crate::api::DataExchange;
 use crate::api::ExchangeSorting;
 use crate::api::HashFlightScatter;
 use crate::api::ShuffleExchangeParams;
-use crate::pipelines::processors::create_dummy_items;
 use crate::pipelines::processors::TransformDummy;
 use crate::sessions::QueryContext;
 
@@ -95,7 +94,7 @@ impl ExchangeInjector for DefaultExchangeInjector {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_transform(|input, output| {
-            TransformExchangeSerializer::create(input, output, &params, None)
+            TransformExchangeSerializer::create(input, output, params, None)
         })
     }
 
@@ -105,7 +104,7 @@ impl ExchangeInjector for DefaultExchangeInjector {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_transform(|input, output| {
-            TransformScatterExchangeSerializer::create(input, output, &params, None)
+            TransformScatterExchangeSerializer::create(input, output, params, None)
         })
     }
 

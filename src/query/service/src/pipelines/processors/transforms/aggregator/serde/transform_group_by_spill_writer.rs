@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::future::Future;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -23,14 +22,12 @@ use common_exception::Result;
 use common_expression::arrow::serialize_column;
 use common_expression::BlockEntry;
 use common_expression::BlockMetaInfoDowncast;
-use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::Processor;
 use futures_util::future::BoxFuture;
-use futures_util::FutureExt;
 use opendal::Operator;
 use tracing::info;
 
