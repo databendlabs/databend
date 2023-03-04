@@ -197,7 +197,9 @@ impl Processor for ExchangeShuffleTransform {
                 if let Some(block_meta) = data_block.take_meta() {
                     if let Some(shuffle_meta) = ExchangeShuffleMeta::downcast_from(block_meta) {
                         for (index, block) in shuffle_meta.blocks.into_iter().enumerate() {
-                            self.buffer.push_back(index, block);
+                            if !block.is_empty() || block.get_meta().is_some() {
+                                self.buffer.push_back(index, block);
+                            }
                         }
 
                         // Try push again.
@@ -338,7 +340,7 @@ impl ExchangeSorting for ShuffleExchangeSorting {
                 }
             }
 
-            if !block.is_empty() {
+            if !block.is_empty() || block.get_meta().is_some() {
                 return self.inner.block_number(block);
             }
         }

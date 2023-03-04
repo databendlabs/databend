@@ -117,9 +117,7 @@ where Method: HashMethodBounds
                 continue;
             }
 
-            return Err(ErrorCode::Internal(
-                "Internal, TransformScatterGroupBySerializer only recv AggregateMeta.",
-            ));
+            new_blocks.push(block);
         }
 
         Ok(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(

@@ -147,7 +147,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
     fn execute(&self, mut data_block: DataBlock) -> Result<Vec<DataBlock>> {
         if let Some(block_meta) = data_block.take_meta() {
             if let Some(block_meta) = AggregateMeta::<Method, V>::downcast_from(block_meta) {
-                let mut blocks = Vec::with_capacity(1);
+                let mut blocks = Vec::with_capacity(self.buckets);
                 match block_meta {
                     AggregateMeta::Spilled(_) => unreachable!(),
                     AggregateMeta::Serialized(_) => unreachable!(),
@@ -155,20 +155,29 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
                     AggregateMeta::Spilling(payload) => {
                         let bucket = payload.bucket;
                         for hashtable_cell in self.scatter(payload)? {
-                            blocks.push(DataBlock::empty_with_meta(
-                                AggregateMeta::<Method, V>::create_spilling(bucket, hashtable_cell),
-                            ));
+                            blocks.push(match hashtable_cell.hashtable.len() == 0 {
+                                true => DataBlock::empty(),
+                                false => DataBlock::empty_with_meta(
+                                    AggregateMeta::<Method, V>::create_spilling(
+                                        bucket,
+                                        hashtable_cell,
+                                    ),
+                                ),
+                            });
                         }
                     }
                     AggregateMeta::HashTable(payload) => {
                         let bucket = payload.bucket;
                         for hashtable_cell in self.scatter(payload)? {
-                            blocks.push(DataBlock::empty_with_meta(
-                                AggregateMeta::<Method, V>::create_hashtable(
-                                    bucket,
-                                    hashtable_cell,
+                            blocks.push(match hashtable_cell.hashtable.len() == 0 {
+                                true => DataBlock::empty(),
+                                false => DataBlock::empty_with_meta(
+                                    AggregateMeta::<Method, V>::create_hashtable(
+                                        bucket,
+                                        hashtable_cell,
+                                    ),
                                 ),
-                            ));
+                            });
                         }
                     }
                 };
