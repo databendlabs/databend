@@ -6,6 +6,7 @@ array_length -> length
 array_slice -> slice
 ceiling -> ceil
 character_length -> char_length
+exponentiation -> caret
 intdiv -> div
 ipv4_num_to_string -> inet_ntoa
 ipv4_string_to_num -> inet_aton
