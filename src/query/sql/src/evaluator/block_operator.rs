@@ -98,9 +98,9 @@ impl BlockOperator {
                 {
                     let array_col = match &col.value {
                         Value::Scalar(Scalar::Array(col)) => {
-                            Box::new(ArrayColumnBuilder::<AnyType>::repeat(col, num_rows).build())
+                            ArrayColumnBuilder::<AnyType>::repeat(col, num_rows).build()
                         }
-                        Value::Column(Column::Array(col)) => col.clone(),
+                        Value::Column(Column::Array(col)) => *col.clone(),
                         _ => {
                             return Err(ErrorCode::Internal(
                                 "Unnest can only be applied to array types.",
@@ -160,7 +160,7 @@ impl BlockOperator {
     /// The array scalar `[1,2,3]` will be replicated first (See the logic in `BlockOperator::execute`).
     fn fit_unnest(
         input: DataBlock,
-        unnest_columns: Vec<Box<ArrayColumn<AnyType>>>,
+        unnest_columns: Vec<ArrayColumn<AnyType>>,
     ) -> Result<DataBlock> {
         if unnest_columns.is_empty() {
             return Ok(input);
@@ -233,7 +233,7 @@ impl BlockOperator {
     /// +---------+---------+
     /// ```
     fn unify_unnest_columns(
-        unnest_columns: Vec<Box<ArrayColumn<AnyType>>>,
+        unnest_columns: Vec<ArrayColumn<AnyType>>,
     ) -> (Vec<Column>, Vec<usize>) {
         debug_assert!(!unnest_columns.is_empty());
         let num_rows = unnest_columns[0].len(); // Rows of the original `ArrayColumn`s.

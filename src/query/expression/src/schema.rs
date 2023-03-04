@@ -195,7 +195,9 @@ impl DataSchema {
 
     /// Find the index of the column with the given name.
     pub fn index_of(&self, name: &str) -> Result<FieldIndex> {
-        for i in 0..self.fields.len() {
+        for i in (0..self.fields.len()).rev() {
+            // Use `rev` is because unnest columns will be attached to end of schema,
+            // but their names are the same as the original column.
             if self.fields[i].name() == name {
                 return Ok(i);
             }

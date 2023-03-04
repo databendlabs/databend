@@ -327,7 +327,7 @@ impl PhysicalPlanBuilder {
                         let mut before_scalars = vec![];
                         item.scalar
                             .collect_before_unnest_scalars(&mut before_scalars);
-                        let befores =
+                        let before =
                             before_scalars
                                 .iter()
                                 .map(|scalar| {
@@ -342,7 +342,7 @@ impl PhysicalPlanBuilder {
                                     Ok((expr.as_remote_expr(), item.index))
                                 })
                                 .collect::<Result<Vec<_>>>()?;
-                        before_exprs.extend(befores);
+                        before_exprs.extend(before);
 
                         // 1.2 Collect the after unnest scalars, and build into `RemoteExpr`.
                         let expr = item

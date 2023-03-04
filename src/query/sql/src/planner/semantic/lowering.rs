@@ -211,7 +211,7 @@ impl ScalarExpr {
                 span: None,
                 id: DUMMY_INDEX,
                 data_type: *unnest.return_type.clone(),
-                display_name: format!("_unnest"),
+                display_name: DUMMY_NAME.to_string(),
             },
         }
     }
