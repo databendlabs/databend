@@ -46,6 +46,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("minus", &["subtract", "neg", "negate"]);
     registry.register_aliases("div", &["intdiv"]);
     registry.register_aliases("modulo", &["mod"]);
+    registry.register_aliases("caret", &["exponentiation"]);
 
     for num_ty in ALL_NUMERICS_TYPES {
         with_number_mapped_type!(|NUM_TYPE| match num_ty {
