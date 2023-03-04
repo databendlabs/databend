@@ -79,3 +79,19 @@ SELECT * FROM infer_schema(location => '@infer_parquet/', pattern => '.*parquet'
 +-------------+-----------------+----------+----------+
 ```
 
+### Create a Table From Parquet File
+
+The `infer_schema` can only display the schema of a parquet file and cannot create a table from it. 
+
+To create a table from a parquet file, use the [Stage Table Function](./stage_table_function.md) as following:
+
+```
+CREATE TABLE mytable AS SELECT * FROM @infer_parquet/ (pattern=>'.*parquet') LIMIT 0;
+
+DESC mytable;
++--------+-----------------+------+---------+-------+
+| Field  | Type            | Null | Default | Extra |
++--------+-----------------+------+---------+-------+
+| number | BIGINT UNSIGNED | NO   | 0       |       |
++--------+-----------------+------+---------+-------+
+```
