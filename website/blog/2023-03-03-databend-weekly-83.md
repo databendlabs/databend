@@ -3,6 +3,7 @@ title: "This Week in Databend #83"
 date: 2023-03-03
 slug: 2023-03-03-databend-weekly
 tags: [databend, weekly]
+description: ""
 contributors:
 - name: andylokandy
 - name: ariesdevil
