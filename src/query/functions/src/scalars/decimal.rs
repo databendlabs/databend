@@ -670,14 +670,16 @@ macro_rules! m_decimal_to_decimal {
                     .collect()
             } else {
                 let factor = <$dest_type_name>::e(($dest_size.scale - $from_size.scale) as u32);
+                let max = <$dest_type_name>::max_for_precision($dest_size.precision);
+                let min = <$dest_type_name>::min_for_precision($dest_size.precision);
                 $buffer
                     .iter()
                     .enumerate()
                     .map(|(row, x)| {
                         let x = x * <$dest_type_name>::one();
                         match x.checked_mul(factor) {
-                            Some(x) => x,
-                            None => {
+                            Some(x) if x <= max && x >= min => x,
+                            _ => {
                                 $ctx.set_error(row, "Decimal overflow");
                                 <$dest_type_name>::one()
                             }
