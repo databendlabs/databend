@@ -84,7 +84,7 @@ impl SledOrderedSerde for StateMachineMetaKey {
     }
 }
 
-mod compat_with_07 {
+pub(crate) mod compat_with_07 {
     use common_meta_sled_store::SledBytesError;
     use common_meta_sled_store::SledSerde;
     use common_meta_types::compat07;
@@ -97,6 +97,17 @@ mod compat_with_07 {
         LogId(compat07::LogId),
         Bool(bool),
         Membership(compat07::StoredMembership),
+    }
+
+    impl Upgrade<StateMachineMetaValue> for StateMachineMetaValueCompat {
+        #[rustfmt::skip]
+        fn upgrade(self) -> StateMachineMetaValue {
+            match self {
+                Self::LogId(lid)    => StateMachineMetaValue::LogId(lid.upgrade()),
+                Self::Bool(b)       => StateMachineMetaValue::Bool(b),
+                Self::Membership(m) => StateMachineMetaValue::Membership(m.upgrade()),
+            }
+        }
     }
 
     impl SledSerde for StateMachineMetaValue {

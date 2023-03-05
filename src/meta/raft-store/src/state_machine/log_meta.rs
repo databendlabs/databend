@@ -67,7 +67,7 @@ impl SledOrderedSerde for LogMetaKey {
     }
 }
 
-mod compat_with_07 {
+pub(crate) mod compat_with_07 {
     use common_meta_sled_store::SledBytesError;
     use common_meta_sled_store::SledSerde;
     use common_meta_types::compat07;
@@ -76,8 +76,16 @@ mod compat_with_07 {
     use super::LogMetaValue;
 
     #[derive(Debug, serde::Serialize, serde::Deserialize)]
-    enum LogMetaValueCompat {
+    pub enum LogMetaValueCompat {
         LogId(compat07::LogId),
+    }
+
+    impl Upgrade<LogMetaValue> for LogMetaValueCompat {
+        #[rustfmt::skip]
+        fn upgrade(self) -> LogMetaValue {
+            let Self::LogId(lid) = self;
+            LogMetaValue::LogId(lid.upgrade())
+        }
     }
 
     impl SledSerde for LogMetaValue {

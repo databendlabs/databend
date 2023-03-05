@@ -117,7 +117,7 @@ impl From<RaftStateValue> for (u64, u64) {
     }
 }
 
-mod compat_with_07 {
+pub(crate) mod compat_with_07 {
     use common_meta_sled_store::SledBytesError;
     use common_meta_sled_store::SledSerde;
     use common_meta_types::compat07;
@@ -131,6 +131,17 @@ mod compat_with_07 {
         NodeId(NodeId),
         HardState(compat07::Vote),
         StateMachineId((u64, u64)),
+    }
+
+    impl Upgrade<RaftStateValue> for RaftStateValueCompat {
+        #[rustfmt::skip]
+        fn upgrade(self) -> RaftStateValue {
+            match self{
+                Self::NodeId(nid)       => RaftStateValue::NodeId(nid),
+                Self::HardState(v)      => RaftStateValue::HardState(v.upgrade()),
+                Self::StateMachineId(x) => RaftStateValue::StateMachineId(x),
+            }
+        }
     }
 
     impl SledSerde for RaftStateValue {

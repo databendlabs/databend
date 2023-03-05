@@ -28,11 +28,13 @@ use anyhow::anyhow;
 use common_base::base::tokio;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::key_spaces::RaftStoreEntry;
+use common_meta_raft_store::key_spaces::RaftStoreEntryCompat;
 use common_meta_raft_store::log::RaftLog;
 use common_meta_raft_store::state::RaftState;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::init_sled_db;
+use common_meta_sled_store::openraft::compat::Upgrade;
 use common_meta_stoerr::MetaStorageError;
 use common_meta_types::anyerror::AnyError;
 use common_meta_types::Cmd;
@@ -91,7 +93,8 @@ fn import_lines<B: BufRead>(lines: Lines<B>) -> anyhow::Result<Option<LogId>> {
     let mut max_log_id: Option<LogId> = None;
     for line in lines {
         let l = line?;
-        let (tree_name, kv_entry): (String, RaftStoreEntry) = serde_json::from_str(&l)?;
+        let (tree_name, kv_entry): (String, RaftStoreEntryCompat) = serde_json::from_str(&l)?;
+        let kv_entry = kv_entry.upgrade();
 
         // eprintln!("line: {}", l);
 
