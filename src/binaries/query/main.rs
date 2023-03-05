@@ -26,9 +26,9 @@ use common_base::set_alloc_error_hook;
 use common_config::InnerConfig;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_config::QUERY_SEMVER;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_client::MIN_METASRV_SEMVER;
-use common_meta_embedded::MetaEmbedded;
 use common_metrics::init_default_metrics_recorder;
 use common_tracing::set_panic_hook;
 use databend_query::api::HttpService;
@@ -83,7 +83,9 @@ async fn main_entrypoint() -> Result<()> {
     }
 
     if conf.meta.is_embedded_meta()? {
-        MetaEmbedded::init_global_meta_store(conf.meta.embedded_dir.clone()).await?;
+        return Err(ErrorCode::Unimplemented(
+            "Embedded meta is an deployment method and will not be supported since March 2023.",
+        ));
     }
     // Make sure global services have been inited.
     GlobalServices::init(conf.clone()).await?;
