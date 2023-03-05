@@ -114,14 +114,6 @@ impl BlockOperator {
         }
     }
 
-    /// Unnest a nested column into one column.
-    fn unnest_column(column: Column) -> Column {
-        match column {
-            Column::Array(col) => Self::unnest_column(col.underlying_column()),
-            _ => column,
-        }
-    }
-
     /// Apply the `unnest`ed columns to the whole [`DataBlock`].
     /// Each row in non-unnest columns will be replicated due to the related unnest column.
     ///
@@ -243,7 +235,7 @@ impl BlockOperator {
             .into_iter()
             .map(|col| {
                 let typ = col.values.data_type().unnest();
-                let arrays = col.iter().map(Self::unnest_column).collect::<Vec<_>>();
+                let arrays = col.iter().map(|c| c.unnest()).collect::<Vec<_>>();
                 (typ, arrays)
             })
             .collect::<Vec<_>>();

@@ -24,4 +24,5 @@ common-meta-types = { path = "../types" }
 
 # Crates.io dependencies
 async-trait = "0.1.57"
+tokio-stream = "0.1.11"
 tracing = "0.1.36"
