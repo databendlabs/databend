@@ -37,16 +37,17 @@ default_compression = 'zstd'
 [log]
 
 [log.file]
-level = "DEBUG"
+level = "INFO"
 format = "text"
-dir = "./.databend/logs_meta_embedded"
+dir = "./.databend/logs_hive"
 
 [meta]
-# To enable embedded meta-store, set address to ""
-embedded_dir = "./.databend/meta_embedded"
-username = ""
-password = ""
+# It is a list of `grpc_api_advertise_host:<grpc-api-port>` of databend-meta config
+endpoints = ["0.0.0.0:9191"]
+username = "root"
+password = "root"
 client_timeout_in_second = 60
+auto_sync_interval = 60
 
 # Storage config.
 [storage]
@@ -56,3 +57,9 @@ type = "fs"
 # Fs storage.
 [storage.fs]
 data_path = "./.databend/stateless_test_data"
+
+# catalog configuration
+[catalogs.hive]
+type = "hive"
+address = "127.0.0.1:9083"
+protocol = "binary"

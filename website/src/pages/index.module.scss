@@ -161,4 +161,7 @@
       justify-content: center;
     }
   }
+  @include media{
+    min-height: 1280px;
+  }
 }
