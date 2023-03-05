@@ -30,14 +30,11 @@ const Connectwithus = () => {
     <div className={clsx(styles.Connectwithus)}>
       <h2>🎈Connect With Us</h2>
       <p>
-        We'd love to hear from you. Feel free to run the code and see if
-        Databend works for you. Submit an issue with your problem if you need
-        help.
+        Databend is a cutting-edge, open-source cloud-native warehouse built with Rust,
+        designed to handle massive-scale analytics.
       </p>
       <p>
-        <a href="https://github.com/datafuselabs/">DatafuseLabs Community</a> is
-        open to everyone who loves data warehouses. Please join the community
-        and share your thoughts.
+        Join the <a href="https://github.com/datafuselabs/databend">Databend Community</a> to try, get help, and contribute!
       </p>
       <ul className={clsx(styles.Connecttype)}>
         {items.map((item, index) => {
