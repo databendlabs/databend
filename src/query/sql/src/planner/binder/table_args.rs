@@ -19,7 +19,9 @@ use common_catalog::table_args::TableArgs;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_literal;
+use common_expression::ConstantFolder;
 use common_expression::Scalar;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 
 use crate::plans::ConstantExpr;
 use crate::ScalarBinder;
@@ -42,12 +44,17 @@ pub async fn bind_table_args(
 
     let positioned_args = args
         .into_iter()
-        .map(|scalar| match scalar {
-            ScalarExpr::ConstantExpr(ConstantExpr { value, .. }) => Ok(check_literal(&value).0),
-            _ => Err(ErrorCode::Unimplemented(format!(
-                "Unsupported table argument type: {:?}",
-                scalar
-            ))),
+        .map(|scalar| {
+            let expr = scalar.as_expr_with_col_index()?;
+            let (expr, _) =
+                ConstantFolder::fold(&expr, scalar_binder.get_func_ctx()?, &BUILTIN_FUNCTIONS);
+            match expr {
+                common_expression::Expr::Constant { scalar, .. } => Ok(scalar),
+                _ => Err(ErrorCode::Unimplemented(format!(
+                    "Unsupported table argument type: {:?}",
+                    scalar
+                ))),
+            }
         })
         .collect::<Result<Vec<_>>>()?;
 
