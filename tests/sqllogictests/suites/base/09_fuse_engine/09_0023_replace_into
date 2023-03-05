@@ -15,7 +15,7 @@ statement ok
 CREATE TABLE test(a int);
 
 statement ok
-REPLACE INTO test ON(a) values(1), (2), (3)
+REPLACE INTO test ON CONFLICT(a) values(1), (2), (3)
 
 query I
 SELECT * FROM test
@@ -34,6 +34,7 @@ DROP TABLE test;
 statement ok
 CREATE TABLE test(a int);
 
+# note that "CONFLICT" is optional
 statement error 4000
 REPLACE INTO test ON(a) values(1), (2), (2)
 

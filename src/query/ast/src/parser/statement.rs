@@ -118,10 +118,10 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             REPLACE ~ INTO?
             ~ #period_separated_idents_1_to_3
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
-            ~ (ON ~ "(" ~ #ident ~ ")")
+            ~ (ON ~ CONFLICT? ~ "(" ~ #ident ~ ")")
             ~ #insert_source
         },
-        |(_, _, (catalog, database, table), opt_columns, (_, _, on, _), source)| {
+        |(_, _, (catalog, database, table), opt_columns, (_, _, _, on, _), source)| {
             Statement::Replace(ReplaceStmt {
                 catalog,
                 database,
