@@ -12,23 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::hash::Hash;
 
 use common_ast::ast::TableAlias;
+use common_catalog::plan::VirtualColumn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
 use common_expression::types::DataType;
+use common_expression::ColumnId;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use dashmap::DashMap;
 
 use super::AggregateInfo;
+use super::VirtualColumnFactory;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::ScalarExpr;
+use crate::ColumnSet;
 use crate::IndexType;
+use crate::MetadataRef;
 use crate::NameResolutionContext;
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -41,8 +47,6 @@ pub enum Visibility {
     // The result should only contain one `a` column.
     // So we need make `t.a` or `t1.a` invisible in unqualified
     UnqualifiedWildcardInVisible,
-    // Virtual column
-    Virtual,
 }
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
@@ -59,6 +63,8 @@ pub struct ColumnBinding {
     pub data_type: Box<DataType>,
 
     pub visibility: Visibility,
+
+    pub virtual_column: Option<VirtualColumn>,
 }
 
 impl PartialEq for ColumnBinding {
@@ -88,6 +94,9 @@ pub struct BindContext {
 
     pub columns: Vec<ColumnBinding>,
 
+    // map virtual column id to (table_index, column_index)
+    pub bound_virtual_columns: BTreeMap<ColumnId, (IndexType, IndexType)>,
+
     pub aggregate_info: AggregateInfo,
 
     /// True if there is aggregation in current context, which means
@@ -112,6 +121,7 @@ impl BindContext {
         Self {
             parent: None,
             columns: Vec::new(),
+            bound_virtual_columns: BTreeMap::new(),
             aggregate_info: AggregateInfo::default(),
             in_grouping: false,
             ctes_map: Box::new(DashMap::new()),
@@ -123,6 +133,7 @@ impl BindContext {
         BindContext {
             parent: Some(parent.clone()),
             columns: vec![],
+            bound_virtual_columns: BTreeMap::new(),
             aggregate_info: Default::default(),
             in_grouping: false,
             ctes_map: parent.ctes_map.clone(),
@@ -222,6 +233,23 @@ impl BindContext {
                 break;
             }
 
+            // look up virtual column
+            if let Some(virtual_column) =
+                VirtualColumnFactory::instance().get_virtual_column(column)
+            {
+                let column_binding = ColumnBinding {
+                    database_name: database.map(|n| n.to_owned()),
+                    table_name: table.map(|n| n.to_owned()),
+                    column_name: virtual_column.column_name().to_owned(),
+                    index: bind_context.columns.len(),
+                    data_type: Box::new(virtual_column.data_type()),
+                    visibility: Visibility::Visible,
+                    virtual_column: Some(virtual_column),
+                };
+                result.push(NameResolutionResult::Column(column_binding));
+                break;
+            }
+
             if let Some(ref parent) = bind_context.parent {
                 bind_context = parent;
             } else {
@@ -301,6 +329,86 @@ impl BindContext {
             })
             .collect();
         DataSchemaRefExt::create(fields)
+    }
+
+    fn get_virtual_column_table_index(
+        column_binding: &ColumnBinding,
+        metadata: MetadataRef,
+    ) -> (IndexType, Option<String>, Option<String>) {
+        let metadata = metadata.read();
+        let (database_name, table_name) =
+            match (&column_binding.database_name, &column_binding.table_name) {
+                (Some(database_name), Some(table_name)) => {
+                    (Some(database_name.clone()), Some(table_name.clone()))
+                }
+                (None, Some(table_name)) => (None, Some(table_name.clone())),
+                (database_name, None) => {
+                    // If table_name is None, assert that metadata.tables has only one table
+                    debug_assert!(metadata.tables().len() == 1);
+                    return (metadata.table(0).index(), database_name.clone(), None);
+                }
+            };
+
+        (
+            metadata
+                .get_table_index(
+                    database_name.as_deref(),
+                    table_name.as_ref().unwrap().as_str(),
+                )
+                .unwrap(),
+            database_name,
+            table_name,
+        )
+    }
+
+    // add virtual column binding into `BindContext`
+    pub fn add_virtual_column_binding(
+        &mut self,
+        virtual_column: &VirtualColumn,
+        column_binding: &ColumnBinding,
+        metadata: MetadataRef,
+    ) {
+        let column_id = virtual_column.column_id();
+        if let std::collections::btree_map::Entry::Vacant(e) =
+            self.bound_virtual_columns.entry(column_id)
+        {
+            // New added virtual column MUST at the end of `columns` array.
+            debug_assert_eq!(column_binding.index, self.columns.len());
+
+            let (table_index, database_name, table_name) =
+                BindContext::get_virtual_column_table_index(column_binding, metadata.clone());
+
+            let mut metadata = metadata.write();
+            metadata.add_virtual_table_column(table_index, virtual_column.to_owned());
+            self.columns.push(ColumnBinding {
+                database_name,
+                table_name,
+                column_name: column_binding.column_name.clone(),
+                index: column_binding.index,
+                data_type: column_binding.data_type.clone(),
+                visibility: Visibility::Visible,
+                virtual_column: None,
+            });
+
+            e.insert((table_index, column_binding.index));
+        }
+    }
+
+    pub fn add_virtual_column_into_expr(&self, s_expr: SExpr) -> SExpr {
+        let bound_virtual_columns = &self.bound_virtual_columns;
+        if bound_virtual_columns.is_empty() {
+            s_expr
+        } else {
+            let mut s_expr = s_expr;
+            for (table_index, column_index) in bound_virtual_columns.values() {
+                s_expr = SExpr::add_virtual_column_index(&s_expr, *table_index, *column_index);
+            }
+            s_expr
+        }
+    }
+
+    pub fn column_set(&self) -> ColumnSet {
+        self.columns.iter().map(|c| c.index).collect()
     }
 }
 

@@ -182,6 +182,7 @@ impl<'a> AggregateRewriter<'a> {
                     index,
                     data_type: Box::new(arg.data_type()),
                     visibility: Visibility::Visible,
+                    virtual_column: None,
                 };
                 replaced_args.push(
                     BoundColumnRef {

@@ -1078,6 +1078,7 @@ impl Binder {
                 index,
                 data_type: Box::new(DataType::from(field.data_type())),
                 visibility: Visibility::Visible,
+                virtual_column: None,
             };
             bind_context.columns.push(column);
         }

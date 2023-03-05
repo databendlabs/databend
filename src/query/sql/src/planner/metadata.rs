@@ -27,8 +27,6 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use parking_lot::RwLock;
 
-use crate::binder::VirtualColumnFactory;
-
 /// Planner use [`usize`] as it's index type.
 ///
 /// This type will be used across the whole planner.
@@ -79,6 +77,26 @@ impl Metadata {
             }) if column_indexes.contains(column_index) => Some(*table_index),
             _ => None,
         })
+    }
+
+    pub fn get_table_index(
+        &self,
+        database_name: Option<&str>,
+        table_name: &str,
+    ) -> Option<IndexType> {
+        self.tables
+            .iter()
+            .find(|table| {
+                if table.name == table_name {
+                    match database_name {
+                        Some(database_name) => table.database == database_name,
+                        None => true,
+                    }
+                } else {
+                    false
+                }
+            })
+            .map(|table| table.index)
     }
 
     pub fn column(&self, index: IndexType) -> &ColumnEntry {
@@ -139,7 +157,7 @@ impl Metadata {
         column_index
     }
 
-    fn add_virtual_table_column(
+    pub fn add_virtual_table_column(
         &mut self,
         table_index: IndexType,
         virtual_column: VirtualColumn,
@@ -228,11 +246,6 @@ impl Metadata {
             }
         }
 
-        // add virtual columns
-        let virtual_columns = VirtualColumnFactory::instance().all_virtual_columns();
-        for virtual_column in virtual_columns {
-            self.add_virtual_table_column(table_index, virtual_column);
-        }
         table_index
     }
 }

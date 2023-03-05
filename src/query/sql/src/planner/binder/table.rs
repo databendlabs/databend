@@ -485,6 +485,7 @@ impl Binder {
                         } else {
                             Visibility::Visible
                         },
+                        virtual_column: None,
                     };
                     bind_context.add_column_binding(column_binding);
                     if path_indices.is_none() {
@@ -494,21 +495,6 @@ impl Binder {
                             col_stats.insert(*column_index, col_stat);
                         }
                     }
-                }
-                ColumnEntry::VirtualColumn(TableVirtualColumn {
-                    column_index,
-                    virtual_column,
-                    ..
-                }) => {
-                    let column_binding = ColumnBinding {
-                        database_name: Some(database_name.to_string()),
-                        table_name: Some(table.name().to_string()),
-                        column_name: virtual_column.column_name().clone(),
-                        index: *column_index,
-                        data_type: Box::new(virtual_column.data_type()),
-                        visibility: Visibility::Virtual,
-                    };
-                    bind_context.add_column_binding(column_binding);
                 }
                 _ => {
                     return Err(ErrorCode::Internal("Invalid column entry"));

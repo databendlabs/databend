@@ -93,12 +93,12 @@ impl Binder {
         };
 
         if let Some(expr) = &stmt.selection {
-            s_expr = self.bind_where(&from_context, expr, s_expr).await?;
+            s_expr = self.bind_where(&mut from_context, expr, s_expr).await?;
         }
 
         // Generate a analyzed select list with from context
         let mut select_list = self
-            .normalize_select_list(&from_context, &stmt.select_list)
+            .normalize_select_list(&mut from_context, &stmt.select_list)
             .await?;
 
         let (mut scalar_items, projections) = self.analyze_projection(&select_list)?;
@@ -157,6 +157,9 @@ impl Binder {
         }
 
         s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
+
+        // add virtual column binding into expr
+        s_expr = from_context.add_virtual_column_into_expr(s_expr);
 
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
@@ -255,7 +258,7 @@ impl Binder {
 
     pub(super) async fn bind_where(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         expr: &Expr,
         child: SExpr,
     ) -> Result<SExpr> {
@@ -267,6 +270,18 @@ impl Binder {
             &[],
         );
         let (scalar, _) = scalar_binder.bind(expr).await?;
+        // if `Expr` is virtual column, then add this virtual column into `BindContext`
+        if let ScalarExpr::BoundColumnRef(ref column) = scalar {
+            if let Some(ref virtual_column) = column.column.virtual_column {
+                // add virtual column binding into `BindContext`
+                bind_context.add_virtual_column_binding(
+                    virtual_column,
+                    &column.column,
+                    self.metadata.clone(),
+                );
+            }
+        };
+
         let filter_plan = Filter {
             predicates: split_conjunctions(&scalar),
             is_having: false,
@@ -479,6 +494,7 @@ impl Binder {
                     index: new_column_index,
                     data_type: Box::new(coercion_types[idx].clone()),
                     visibility: Visibility::Visible,
+                    virtual_column: None,
                 };
                 let left_coercion_expr = CastExpr {
                     is_try: false,

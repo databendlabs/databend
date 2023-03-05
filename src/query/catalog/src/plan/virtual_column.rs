@@ -48,8 +48,8 @@ pub enum VirtualColumnType {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct VirtualColumn {
-    column_name: String,
-    column_type: VirtualColumnType,
+    pub column_name: String,
+    pub column_type: VirtualColumnType,
 }
 
 impl VirtualColumn {
