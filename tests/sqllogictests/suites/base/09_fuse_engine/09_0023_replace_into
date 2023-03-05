@@ -7,7 +7,9 @@ CREATE DATABASE db_09_0023
 statement ok
 USE db_09_0023
 
-# replace into empty table
+############################
+# replace into empty table #
+############################
 
 statement ok
 CREATE TABLE test(a int);
@@ -25,7 +27,9 @@ SELECT * FROM test
 statement ok
 DROP TABLE test;
 
-# replace into empty table, duplicated keys
+###################
+# duplicated keys #
+###################
 
 statement ok
 CREATE TABLE test(a int);
@@ -37,16 +41,18 @@ statement ok
 DROP TABLE test;
 
 
-# replace into non-empty table
+###################
+# non-empty table #
+###################
 
 statement ok
 CREATE TABLE test(a int);
 
 statement ok
-INSERT INTO test values(1), (2), (3)
+INSERT INTO test        values (1), (2), (3)
 
 statement ok
-REPLACE INTO test ON(a) values(3), (4)
+REPLACE INTO test ON(a) values      (2), (3), (4)
 
 query I
 SELECT * FROM test order by a;
@@ -60,7 +66,9 @@ statement ok
 DROP TABLE test;
 
 
-# on conflict (2nd column)
+############################
+# on conflict (2nd column) #
+############################
 
 statement ok
 CREATE TABLE test(c1 string, c2 int);
@@ -82,7 +90,9 @@ SELECT c2, c1 FROM test order by c2;
 statement ok
 DROP TABLE test;
 
-# sub query
+#############
+# sub query #
+#############
 
 statement ok
 CREATE TABLE test(c1 int, c2 int);
@@ -105,4 +115,61 @@ SELECT sum(c1),  sum(c2) FROM test;
 
 statement ok
 DROP TABLE test;
+
+
+##############
+# from stage #
+##############
+
+statement ok
+CREATE TABLE tmp(id INTEGER, name VARCHAR, age INT)
+
+statement ok
+insert into tmp(id,name,age) values (1,'2',3), (4, '5', 6);
+
+statement ok
+CREATE STAGE IF NOT EXISTS test_stage;
+
+statement ok
+CREATE TABLE test(id INTEGER, name VARCHAR, age INT);
+
+statement ok
+copy into @test_stage from tmp FILE_FORMAT = (type = parquet);
+
+statement ok
+drop table tmp;
+
+statement ok
+replace into test on(id) select * from @test_stage (pattern => '.*parquet');
+
+query ITI
+select * from test order by id;
+----
+1 2 3
+4 5 6
+
+# replace-into twice
+statement ok
+replace into test on(id) select * from @test_stage (pattern => '.*parquet');
+
+# idempotent
+query ITI
+select * from test order by id;
+----
+1 2 3
+4 5 6
+
+# cleanup
+
+statement ok
+DROP TABLE test;
+
+statement ok
+drop stage test_stage
+
+statement ok
+DROP DATABASE db_09_0023
+
+
+
 
