@@ -32,4 +32,17 @@
       }
     }
   }
+  @include media{
+    gap: 20px;
+    flex-direction: column-reverse;
+    p{
+      text-align: center;
+    }
+    .footerItems{
+      justify-content: center;
+      span{
+        display: none;
+      }
+    }
+  }
 }
