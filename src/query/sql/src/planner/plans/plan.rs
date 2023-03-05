@@ -233,6 +233,7 @@ pub enum RewriteKind {
     ShowTablesStatus,
 
     ShowFunctions,
+    ShowTableFunctions,
 
     ShowUsers,
     ShowStages,
