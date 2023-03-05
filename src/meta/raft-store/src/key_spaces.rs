@@ -228,13 +228,13 @@ impl openraft::compat::Upgrade<RaftStoreEntry> for RaftStoreEntryCompat {
     fn upgrade(self) -> RaftStoreEntry {
         match self {
             RaftStoreEntryCompat::Logs             { key, value } => RaftStoreEntry::Logs             { key, value: value.upgrade(), },
-            RaftStoreEntryCompat::Nodes            { key, value } => RaftStoreEntry::Nodes            { key, value: value, },
+            RaftStoreEntryCompat::Nodes            { key, value } => RaftStoreEntry::Nodes            { key, value, },
             RaftStoreEntryCompat::StateMachineMeta { key, value } => RaftStoreEntry::StateMachineMeta { key, value: value.upgrade(), },
             RaftStoreEntryCompat::RaftStateKV      { key, value } => RaftStoreEntry::RaftStateKV      { key, value: value.upgrade(), },
-            RaftStoreEntryCompat::Expire           { key, value } => RaftStoreEntry::Expire           { key, value: value, },
-            RaftStoreEntryCompat::GenericKV        { key, value } => RaftStoreEntry::GenericKV        { key, value: value, },
-            RaftStoreEntryCompat::Sequences        { key, value } => RaftStoreEntry::Sequences        { key, value: value, },
-            RaftStoreEntryCompat::ClientLastResps  { key, value } => RaftStoreEntry::ClientLastResps  { key, value: value, },
+            RaftStoreEntryCompat::Expire           { key, value } => RaftStoreEntry::Expire           { key, value, },
+            RaftStoreEntryCompat::GenericKV        { key, value } => RaftStoreEntry::GenericKV        { key, value, },
+            RaftStoreEntryCompat::Sequences        { key, value } => RaftStoreEntry::Sequences        { key, value, },
+            RaftStoreEntryCompat::ClientLastResps  { key, value } => RaftStoreEntry::ClientLastResps  { key, value, },
             RaftStoreEntryCompat::LogMeta          { key, value } => RaftStoreEntry::LogMeta          { key, value: value.upgrade(), },
         }
     }
