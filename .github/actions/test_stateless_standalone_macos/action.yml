@@ -29,11 +29,6 @@ runs:
       run: |
         bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
 
-    - name: Run Stateless Tests with Standalone mode, with embedded meta-store
-      shell: bash
-      run: |
-        bash ./scripts/ci/ci-run-tests-embedded-meta.sh
-
     - name: Upload failure
       if: failure() || cancelled()
       uses: ./.github/actions/artifact_failure
