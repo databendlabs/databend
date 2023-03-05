@@ -1223,7 +1223,7 @@ dependencies = [
  "logos",
  "nom",
  "nom-rule",
- "pratt",
+ "pratt 0.4.0",
  "pretty",
  "pretty_assertions",
  "regex",
@@ -5301,7 +5301,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea8dd3c6d80d1e61031aecc5fdfaf4b7d2324dbd94d575ac12f94e5d6856c2d4"
 dependencies = [
  "nom",
- "pratt",
+ "pratt 0.3.0",
  "proc-macro-error 1.0.4",
  "proc-macro2",
  "quote",
@@ -6099,6 +6099,12 @@ name = "pratt"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e31bbc12f7936a7b195790dd6d9b982b66c54f45ff6766decf25c44cac302dce"
+
+[[package]]
+name = "pratt"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17e0a4425d076f0718b820673a38fbf3747080c61017eeb0dd79bc7e472b8bb8"
 
 [[package]]
 name = "predicates"
