@@ -32,7 +32,6 @@ use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
-use common_meta_types::MetaClientError;
 use common_meta_types::MetaError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
@@ -76,8 +75,7 @@ impl MetaStore {
         }
     }
 
-    pub async fn watch<E>(&self, request: WatchRequest) -> Result<WatchStream, MetaError>
-    where E: From<MetaClientError> + Send + Sync + 'static {
+    pub async fn watch(&self, request: WatchRequest) -> Result<WatchStream, MetaError> {
         match self {
             MetaStore::L(_) => unreachable!(),
             MetaStore::R(grpc_client) => {
