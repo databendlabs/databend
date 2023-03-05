@@ -6,22 +6,22 @@ TINYINT UNSIGNED
 query T
 select typeof(a) from (select -1 as a)
 ----
-SMALLINT
+TINYINT
 
 query T
 select typeof(a) from (select -128 as a)
 ----
-SMALLINT
+TINYINT
 
 query T
 select typeof(a) from (select -32768 as a)
 ----
-INT
+SMALLINT
 
 query T
 select typeof(a) from (select -2147483648 as a)
 ----
-BIGINT
+INT
 
 query T
 select typeof(a) from (select -9223372036854775808 as a)

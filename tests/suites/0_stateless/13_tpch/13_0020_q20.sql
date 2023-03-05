@@ -22,7 +22,7 @@ where
             )
           and ps_availqty > (
             select
-                    0.5::decimal(2, 1) * sum(l_quantity)
+                    0.5 * sum(l_quantity)
             from
                 lineitem
             where

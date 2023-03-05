@@ -7,8 +7,8 @@ error:
 
 
 ast            : to_timestamp(-315360000000000)
-raw expr       : to_timestamp(minus(315360000000000_u64))
-checked expr   : to_timestamp<Int64>(minus<UInt64>(315360000000000_u64))
+raw expr       : to_timestamp(-315360000000000_i64)
+checked expr   : to_timestamp<Int64>(-315360000000000_i64)
 optimized expr : -315360000000000
 output type    : Timestamp
 output domain  : {-315360000000000..=-315360000000000}
@@ -16,8 +16,8 @@ output         : 1960-01-04 00:00:00.000000
 
 
 ast            : to_timestamp(-315360000000)
-raw expr       : to_timestamp(minus(315360000000_u64))
-checked expr   : to_timestamp<Int64>(minus<UInt64>(315360000000_u64))
+raw expr       : to_timestamp(-315360000000_i64)
+checked expr   : to_timestamp<Int64>(-315360000000_i64)
 optimized expr : -315360000000000
 output type    : Timestamp
 output domain  : {-315360000000000..=-315360000000000}
@@ -25,8 +25,8 @@ output         : 1960-01-04 00:00:00.000000
 
 
 ast            : to_timestamp(-100)
-raw expr       : to_timestamp(minus(100_u8))
-checked expr   : to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(100_u8)))
+raw expr       : to_timestamp(-100_i8)
+checked expr   : to_timestamp<Int64>(to_int64<Int8>(-100_i8))
 optimized expr : -100000000
 output type    : Timestamp
 output domain  : {-100000000..=-100000000}
@@ -34,8 +34,8 @@ output         : 1969-12-31 23:58:20.000000
 
 
 ast            : to_timestamp(-0)
-raw expr       : to_timestamp(minus(0_u8))
-checked expr   : to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(0_u8)))
+raw expr       : to_timestamp(0_i8)
+checked expr   : to_timestamp<Int64>(to_int64<Int8>(0_i8))
 optimized expr : 0
 output type    : Timestamp
 output domain  : {0..=0}
@@ -121,8 +121,8 @@ error:
 
 
 ast            : to_datetime(-315360000000000)
-raw expr       : to_datetime(minus(315360000000000_u64))
-checked expr   : to_timestamp<Int64>(minus<UInt64>(315360000000000_u64))
+raw expr       : to_datetime(-315360000000000_i64)
+checked expr   : to_timestamp<Int64>(-315360000000000_i64)
 optimized expr : -315360000000000
 output type    : Timestamp
 output domain  : {-315360000000000..=-315360000000000}
@@ -130,8 +130,8 @@ output         : 1960-01-04 00:00:00.000000
 
 
 ast            : to_datetime(-315360000000)
-raw expr       : to_datetime(minus(315360000000_u64))
-checked expr   : to_timestamp<Int64>(minus<UInt64>(315360000000_u64))
+raw expr       : to_datetime(-315360000000_i64)
+checked expr   : to_timestamp<Int64>(-315360000000_i64)
 optimized expr : -315360000000000
 output type    : Timestamp
 output domain  : {-315360000000000..=-315360000000000}
@@ -139,8 +139,8 @@ output         : 1960-01-04 00:00:00.000000
 
 
 ast            : to_datetime(-100)
-raw expr       : to_datetime(minus(100_u8))
-checked expr   : to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(100_u8)))
+raw expr       : to_datetime(-100_i8)
+checked expr   : to_timestamp<Int64>(to_int64<Int8>(-100_i8))
 optimized expr : -100000000
 output type    : Timestamp
 output domain  : {-100000000..=-100000000}
@@ -148,8 +148,8 @@ output         : 1969-12-31 23:58:20.000000
 
 
 ast            : to_datetime(-0)
-raw expr       : to_datetime(minus(0_u8))
-checked expr   : to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(0_u8)))
+raw expr       : to_datetime(0_i8)
+checked expr   : to_timestamp<Int64>(to_int64<Int8>(0_i8))
 optimized expr : 0
 output type    : Timestamp
 output domain  : {0..=0}
@@ -235,8 +235,8 @@ error:
 
 
 ast            : to_date(-354285)
-raw expr       : to_date(minus(354285_u32))
-checked expr   : to_date<Int64>(minus<UInt32>(354285_u32))
+raw expr       : to_date(-354285_i32)
+checked expr   : to_date<Int64>(to_int64<Int32>(-354285_i32))
 optimized expr : -354285
 output type    : Date
 output domain  : {-354285..=-354285}
@@ -244,8 +244,8 @@ output         : 1000-01-01
 
 
 ast            : to_date(-100)
-raw expr       : to_date(minus(100_u8))
-checked expr   : to_date<Int64>(to_int64<Int16>(minus<UInt8>(100_u8)))
+raw expr       : to_date(-100_i8)
+checked expr   : to_date<Int64>(to_int64<Int8>(-100_i8))
 optimized expr : -100
 output type    : Date
 output domain  : {-100..=-100}
@@ -253,8 +253,8 @@ output         : 1969-09-23
 
 
 ast            : to_date(-0)
-raw expr       : to_date(minus(0_u8))
-checked expr   : to_date<Int64>(to_int64<Int16>(minus<UInt8>(0_u8)))
+raw expr       : to_date(0_i8)
+checked expr   : to_date<Int64>(to_int64<Int8>(0_i8))
 optimized expr : 0
 output type    : Date
 output domain  : {0..=0}

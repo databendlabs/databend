@@ -187,8 +187,8 @@ output         : 10246934130793054423
 
 
 ast            : city64withseed('Abc',256.3)
-raw expr       : city64withseed("Abc", 256.3_f64)
-checked expr   : city64withseed<String, Float64>("Abc", 256.3_f64)
+raw expr       : city64withseed("Abc", 256.3_decimal(4, 1))
+checked expr   : city64withseed<String, Float32>("Abc", to_float32<Decimal(4, 1)>(256.3_d128(4,1)))
 optimized expr : 10246934130793054423_u64
 output type    : UInt64
 output domain  : {10246934130793054423..=10246934130793054423}
@@ -214,17 +214,17 @@ output         : 2939704650099116301
 
 
 ast            : city64withseed(1.1, 12)
-raw expr       : city64withseed(1.1_f64, 12_u8)
-checked expr   : city64withseed<Float64, UInt8>(1.1_f64, 12_u8)
-optimized expr : 10046394896202388363_u64
+raw expr       : city64withseed(1.1_decimal(2, 1), 12_u8)
+checked expr   : city64withseed<Decimal(38, 0), UInt8>(to_decimal<Decimal(2, 1)>(1.1_d128(2,1)), 12_u8)
+optimized expr : 10350043282552431796_u64
 output type    : UInt64
-output domain  : {10046394896202388363..=10046394896202388363}
-output         : 10046394896202388363
+output domain  : {10350043282552431796..=10350043282552431796}
+output         : 10350043282552431796
 
 
 ast            : city64withseed('1234567890', 12.12)
-raw expr       : city64withseed("1234567890", 12.12_f64)
-checked expr   : city64withseed<String, Float64>("1234567890", 12.12_f64)
+raw expr       : city64withseed("1234567890", 12.12_decimal(4, 2))
+checked expr   : city64withseed<String, Float32>("1234567890", to_float32<Decimal(4, 2)>(12.12_d128(4,2)))
 optimized expr : 10660895976650300430_u64
 output type    : UInt64
 output domain  : {10660895976650300430..=10660895976650300430}
@@ -232,8 +232,8 @@ output         : 10660895976650300430
 
 
 ast            : city64withseed(1234567890, 12.12)
-raw expr       : city64withseed(1234567890_u32, 12.12_f64)
-checked expr   : city64withseed<UInt32, Float64>(1234567890_u32, 12.12_f64)
+raw expr       : city64withseed(1234567890_u32, 12.12_decimal(4, 2))
+checked expr   : city64withseed<UInt32, Float32>(1234567890_u32, to_float32<Decimal(4, 2)>(12.12_d128(4,2)))
 optimized expr : 2939704650099116301_u64
 output type    : UInt64
 output domain  : {2939704650099116301..=2939704650099116301}
@@ -309,12 +309,12 @@ output         : 12447382539015599056
 
 
 ast            : siphash64(1.1)
-raw expr       : siphash64(1.1_f64)
-checked expr   : siphash64<Float64>(1.1_f64)
-optimized expr : 14856193058643670405_u64
+raw expr       : siphash64(1.1_decimal(2, 1))
+checked expr   : siphash64<Decimal(38, 0)>(to_decimal<Decimal(2, 1)>(1.1_d128(2,1)))
+optimized expr : 9886797495896358906_u64
 output type    : UInt64
-output domain  : {14856193058643670405..=14856193058643670405}
-output         : 14856193058643670405
+output domain  : {9886797495896358906..=9886797495896358906}
+output         : 9886797495896358906
 
 
 ast            : siphash64(to_date(100000))
@@ -402,12 +402,12 @@ output         : 14922725725041217620
 
 
 ast            : xxhash64(1.1)
-raw expr       : xxhash64(1.1_f64)
-checked expr   : xxhash64<Float64>(1.1_f64)
-optimized expr : 18307966283998289030_u64
+raw expr       : xxhash64(1.1_decimal(2, 1))
+checked expr   : xxhash64<Decimal(38, 0)>(to_decimal<Decimal(2, 1)>(1.1_d128(2,1)))
+optimized expr : 7790381849595394832_u64
 output type    : UInt64
-output domain  : {18307966283998289030..=18307966283998289030}
-output         : 18307966283998289030
+output domain  : {7790381849595394832..=7790381849595394832}
+output         : 7790381849595394832
 
 
 ast            : xxhash64(to_date(100000))
@@ -495,12 +495,12 @@ output         : 2833116583
 
 
 ast            : xxhash32(1.1)
-raw expr       : xxhash32(1.1_f64)
-checked expr   : xxhash32<Float64>(1.1_f64)
-optimized expr : 3252916525_u32
+raw expr       : xxhash32(1.1_decimal(2, 1))
+checked expr   : xxhash32<Decimal(38, 0)>(to_decimal<Decimal(2, 1)>(1.1_d128(2,1)))
+optimized expr : 3061175237_u32
 output type    : UInt32
-output domain  : {3252916525..=3252916525}
-output         : 3252916525
+output domain  : {3061175237..=3061175237}
+output         : 3061175237
 
 
 ast            : xxhash32(to_date(100000))
