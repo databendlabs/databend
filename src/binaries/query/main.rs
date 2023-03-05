@@ -84,7 +84,7 @@ async fn main_entrypoint() -> Result<()> {
 
     if conf.meta.is_embedded_meta()? {
         return Err(ErrorCode::Unimplemented(
-            "Embedded meta is an  deployment method and will not be supported since March 2023.",
+            "Embedded meta is an deployment method and will not be supported since March 2023.",
         ));
     }
     // Make sure global services have been inited.
