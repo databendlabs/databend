@@ -19,7 +19,6 @@ use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 
-// use tokio_stream::StreamExt;
 use common_grpc::RpcClientConf;
 use common_meta_client::ClientHandle;
 use common_meta_client::MetaGrpcClient;
