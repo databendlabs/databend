@@ -13,8 +13,18 @@ CREATE TABLE IF NOT EXISTS t1 (a INT);
 statement ok
 INSERT INTO t1 VALUES (1), (2), (3);
 
+query I
+SELECT * FROM t1 ORDER BY a;
+----
+1
+2
+3
+
 statement ok
 SET enable_query_result_cache = 1;
+
+statement error `RESULT_SCAN` could not find related cache key in current session for this query id
+SELECT * FROM RESULT_SCAN(last_query_id()) ORDER BY a;
 
 query I
 SELECT * FROM t1 ORDER BY a;

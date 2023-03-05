@@ -22,12 +22,15 @@ use common_exception::Result;
 use common_exception::Span;
 use educe::Educe;
 use enum_as_inner::EnumAsInner;
+use ethnum::i256;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::function::Function;
 use crate::function::FunctionID;
 use crate::function::FunctionRegistry;
+use crate::types::decimal::DecimalScalar;
+use crate::types::decimal::DecimalSize;
 use crate::types::number::NumberScalar;
 use crate::types::number::F32;
 use crate::types::number::F64;
@@ -152,6 +155,16 @@ pub enum Literal {
     UInt64(u64),
     Float32(F32),
     Float64(F64),
+    Decimal128 {
+        value: i128,
+        precision: u8,
+        scale: u8,
+    },
+    Decimal256 {
+        value: i256,
+        precision: u8,
+        scale: u8,
+    },
     Boolean(bool),
     String(Vec<u8>),
 }
@@ -169,6 +182,22 @@ impl Literal {
             Literal::UInt32(value) => Scalar::Number(NumberScalar::UInt32(value)),
             Literal::UInt64(value) => Scalar::Number(NumberScalar::UInt64(value)),
             Literal::Float32(value) => Scalar::Number(NumberScalar::Float32(value)),
+            Literal::Decimal128 {
+                value,
+                precision,
+                scale,
+            } => Scalar::Decimal(DecimalScalar::Decimal128(value, DecimalSize {
+                precision,
+                scale,
+            })),
+            Literal::Decimal256 {
+                value,
+                precision,
+                scale,
+            } => Scalar::Decimal(DecimalScalar::Decimal256(value, DecimalSize {
+                precision,
+                scale,
+            })),
             Literal::Float64(value) => Scalar::Number(NumberScalar::Float64(value)),
             Literal::Boolean(value) => Scalar::Boolean(value),
             Literal::String(value) => Scalar::String(value.to_vec()),
@@ -421,6 +450,75 @@ impl<Index: ColumnIndex> Expr<Index> {
                 !function.signature.property.non_deterministic
                     && args.iter().all(|arg| arg.is_deterministic())
             }
+        }
+    }
+}
+
+impl Expr<usize> {
+    pub fn project_column_ref_with_unnest_offset(
+        &self,
+        f: impl Fn(&usize) -> usize + Copy,
+        offset: &mut usize,
+    ) -> Expr<usize> {
+        match self {
+            Expr::Constant {
+                span,
+                scalar,
+                data_type,
+            } => Expr::Constant {
+                span: *span,
+                scalar: scalar.clone(),
+                data_type: data_type.clone(),
+            },
+            Expr::ColumnRef {
+                span,
+                id,
+                data_type,
+                display_name,
+            } => {
+                let id = if *id == usize::MAX {
+                    let id = *offset;
+                    *offset += 1;
+                    id
+                } else {
+                    f(id)
+                };
+                Expr::ColumnRef {
+                    span: *span,
+                    id,
+                    data_type: data_type.clone(),
+                    display_name: display_name.clone(),
+                }
+            }
+            Expr::Cast {
+                span,
+                is_try,
+                expr,
+                dest_type,
+            } => Expr::Cast {
+                span: *span,
+                is_try: *is_try,
+                expr: Box::new(expr.project_column_ref_with_unnest_offset(f, offset)),
+                dest_type: dest_type.clone(),
+            },
+            Expr::FunctionCall {
+                span,
+                id,
+                function,
+                generics,
+                args,
+                return_type,
+            } => Expr::FunctionCall {
+                span: *span,
+                id: id.clone(),
+                function: function.clone(),
+                generics: generics.clone(),
+                args: args
+                    .iter()
+                    .map(|expr| expr.project_column_ref_with_unnest_offset(f, offset))
+                    .collect(),
+                return_type: return_type.clone(),
+            },
         }
     }
 }

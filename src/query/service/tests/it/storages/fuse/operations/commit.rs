@@ -13,6 +13,7 @@
 //  limitations under the License.
 use std::any::Any;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
@@ -445,6 +446,9 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_last_query_id(&self, _index: i32) -> String {
+        todo!()
+    }
+    fn get_query_id_history(&self) -> HashSet<String> {
         todo!()
     }
     fn get_result_cache_key(&self, _query_id: &str) -> Option<String> {

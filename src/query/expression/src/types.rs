@@ -24,6 +24,7 @@ pub mod map;
 pub mod null;
 pub mod nullable;
 pub mod number;
+pub mod number_class;
 pub mod string;
 pub mod timestamp;
 pub mod variant;
@@ -52,6 +53,7 @@ pub use self::null::NullType;
 pub use self::nullable::NullableType;
 use self::number::NumberScalar;
 pub use self::number::*;
+pub use self::number_class::*;
 use self::string::StringColumnBuilder;
 pub use self::string::StringType;
 pub use self::timestamp::TimestampType;
@@ -59,6 +61,7 @@ pub use self::variant::VariantType;
 use crate::deserializations::ArrayDeserializer;
 use crate::deserializations::DateDeserializer;
 use crate::deserializations::DecimalDeserializer;
+use crate::deserializations::MapDeserializer;
 use crate::deserializations::NullableDeserializer;
 use crate::deserializations::NumberDeserializer;
 use crate::deserializations::TimestampDeserializer;
@@ -116,6 +119,24 @@ impl DataType {
         match self {
             DataType::Nullable(ty) => (**ty).clone(),
             _ => self.clone(),
+        }
+    }
+
+    pub fn unnest(&self) -> Self {
+        match self {
+            DataType::Array(ty) => ty.unnest(),
+            _ => self.clone(),
+        }
+    }
+
+    pub fn has_generic(&self) -> bool {
+        match self {
+            DataType::Generic(_) => true,
+            DataType::Nullable(ty) => ty.has_generic(),
+            DataType::Array(ty) => ty.has_generic(),
+            DataType::Map(ty) => ty.has_generic(),
+            DataType::Tuple(tys) => tys.iter().any(|ty| ty.has_generic()),
+            _ => false,
         }
     }
 
@@ -236,7 +257,7 @@ impl DataType {
             }
             DataType::Variant => VariantDeserializer::with_capacity(capacity).into(),
             DataType::Array(ty) => ArrayDeserializer::with_capacity(capacity, ty).into(),
-            DataType::Map(_ty) => todo!(),
+            DataType::Map(ty) => MapDeserializer::with_capacity(capacity, ty).into(),
             DataType::Tuple(types) => TupleDeserializer::with_capacity(capacity, types).into(),
             DataType::Decimal(types) => match types {
                 DecimalDataType::Decimal128(_) => {

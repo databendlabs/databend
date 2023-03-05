@@ -248,25 +248,6 @@ impl Settings {
                 desc: "The size of buffer in bytes for input with format. By default, it is 1MB.",
                 possible_values: None,
             },
-            // enable_new_processor_framework
-            SettingValue {
-                default_value: UserSettingValue::UInt64(1),
-                user_setting: UserSetting::create(
-                    "enable_new_processor_framework",
-                    UserSettingValue::UInt64(1),
-                ),
-                level: ScopeLevel::Session,
-                desc: "Enable new processor framework if value != 0, default value: 1.",
-                possible_values: None,
-            },
-            // enable_planner_v2
-            SettingValue {
-                default_value: UserSettingValue::UInt64(1),
-                user_setting: UserSetting::create("enable_planner_v2", UserSettingValue::UInt64(1)),
-                level: ScopeLevel::Session,
-                desc: "Enable planner v2 by setting this variable to 1, default value: 1.",
-                possible_values: None,
-            },
             SettingValue {
                 default_value: UserSettingValue::String("UTC".to_owned()),
                 user_setting: UserSetting::create(
@@ -292,36 +273,6 @@ impl Settings {
                 user_setting: UserSetting::create("max_inlist_to_or", UserSettingValue::UInt64(3)),
                 level: ScopeLevel::Session,
                 desc: "Max size in inlist expression that will convert to or combinator, default value: 3.",
-                possible_values: None,
-            },
-            SettingValue {
-                default_value: UserSettingValue::UInt64(0),
-                user_setting: UserSetting::create(
-                    "enable_async_insert",
-                    UserSettingValue::UInt64(0),
-                ),
-                level: ScopeLevel::Session,
-                desc: "Whether the client open async insert mode, default value: 0.",
-                possible_values: None,
-            },
-            SettingValue {
-                default_value: UserSettingValue::UInt64(1),
-                user_setting: UserSetting::create(
-                    "wait_for_async_insert",
-                    UserSettingValue::UInt64(1),
-                ),
-                level: ScopeLevel::Session,
-                desc: "Whether the client wait for the reply of async insert, default value: 1.",
-                possible_values: None,
-            },
-            SettingValue {
-                default_value: UserSettingValue::UInt64(100),
-                user_setting: UserSetting::create(
-                    "wait_for_async_insert_timeout",
-                    UserSettingValue::UInt64(100),
-                ),
-                level: ScopeLevel::Session,
-                desc: "The timeout in seconds for waiting for processing of async insert, default value: 100.",
                 possible_values: None,
             },
             SettingValue {
@@ -686,16 +637,6 @@ impl Settings {
         self.try_get_u64(key)
     }
 
-    pub fn get_enable_new_processor_framework(&self) -> Result<u64> {
-        let key = "enable_new_processor_framework";
-        self.try_get_u64(key)
-    }
-
-    pub fn get_enable_planner_v2(&self) -> Result<u64> {
-        static KEY: &str = "enable_planner_v2";
-        self.try_get_u64(KEY)
-    }
-
     pub fn get_enable_bushy_join(&self) -> Result<u64> {
         static KEY: &str = "enable_bushy_join";
         self.try_get_u64(KEY)
@@ -722,36 +663,6 @@ impl Settings {
     pub fn get_max_inlist_to_or(&self) -> Result<u64> {
         let key = "max_inlist_to_or";
         self.try_get_u64(key)
-    }
-
-    pub fn get_enable_async_insert(&self) -> Result<u64> {
-        let key = "enable_async_insert";
-        self.try_get_u64(key)
-    }
-
-    pub fn set_enable_async_insert(&self, val: u64) -> Result<()> {
-        let key = "enable_async_insert";
-        self.try_set_u64(key, val, false)
-    }
-
-    pub fn get_wait_for_async_insert(&self) -> Result<u64> {
-        let key = "wait_for_async_insert";
-        self.try_get_u64(key)
-    }
-
-    pub fn set_wait_for_async_insert(&self, val: u64) -> Result<()> {
-        let key = "wait_for_async_insert";
-        self.try_set_u64(key, val, false)
-    }
-
-    pub fn get_wait_for_async_insert_timeout(&self) -> Result<u64> {
-        let key = "wait_for_async_insert_timeout";
-        self.try_get_u64(key)
-    }
-
-    pub fn set_wait_for_async_insert_timeout(&self, val: u64) -> Result<()> {
-        let key = "wait_for_async_insert_timeout";
-        self.try_set_u64(key, val, false)
     }
 
     pub fn get_unquoted_ident_case_sensitive(&self) -> Result<bool> {
@@ -1110,6 +1021,16 @@ impl Settings {
 
         match setting.user_setting.value {
             UserSettingValue::UInt64(_) => {
+                // decimal 10 * 1.5 to string may result in string like "15.0"
+                let val = if let Some(p) = val.find('.') {
+                    if val[(p + 1)..].chars().all(|x| x == '0') {
+                        &val[..p]
+                    } else {
+                        return Err(ErrorCode::BadArguments("not a integer"));
+                    }
+                } else {
+                    &val[..]
+                };
                 let u64_val = val.parse::<u64>()?;
                 self.try_set_u64(&key, u64_val, is_global)?
             }

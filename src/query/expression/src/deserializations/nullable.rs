@@ -106,9 +106,16 @@ impl TypeDeserializer for NullableDeserializer {
         Ok(())
     }
 
-    fn pop_data_value(&mut self) -> Result<()> {
+    fn pop_data_value(&mut self) -> Result<Scalar> {
         match self.validity.pop() {
-            Some(_) => self.inner.pop_data_value(),
+            Some(v) => {
+                if v {
+                    self.inner.pop_data_value()
+                } else {
+                    let _ = self.inner.pop_data_value();
+                    Ok(Scalar::Null)
+                }
+            }
             None => Err(ErrorCode::from(
                 "Nullable column is empty when pop data value",
             )),

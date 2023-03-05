@@ -271,7 +271,7 @@ fn parse_webhdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
     let is_https = l
         .connection
         .get("https")
-        .map(|s| s.parse::<bool>())
+        .map(|s| s.to_lowercase().parse::<bool>())
         .unwrap_or(Ok(true))
         .map_err(|e| {
             Error::new(

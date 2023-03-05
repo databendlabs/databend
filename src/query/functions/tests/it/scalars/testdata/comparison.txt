@@ -26,8 +26,8 @@ output         : false
 
 
 ast            : 1.0=1
-raw expr       : eq(1_f64, 1_u8)
-checked expr   : eq<Float64, Float64>(1_f64, to_float64<UInt8>(1_u8))
+raw expr       : eq(1.0_decimal(2, 1), 1_u8)
+checked expr   : eq<Decimal(38, 1), Decimal(38, 1)>(to_decimal<Decimal(2, 1)>(1.0_d128(2,1)), to_decimal<UInt8>(1_u8))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -114,18 +114,18 @@ has tried possible overloads:
   eq(Timestamp NULL, Timestamp NULL) :: Boolean NULL            : unable to unify `Tuple(UInt8, String)` with `Timestamp`
   eq(UInt8, UInt8) :: Boolean                                   : unable to unify `Tuple(UInt8, String)` with `UInt8`
   eq(UInt8 NULL, UInt8 NULL) :: Boolean NULL                    : unable to unify `Tuple(UInt8, String)` with `UInt8`
-  eq(UInt16, UInt16) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt16`
-  eq(UInt16 NULL, UInt16 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt16`
-  eq(UInt32, UInt32) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt32`
-  eq(UInt32 NULL, UInt32 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt32`
-  eq(UInt64, UInt64) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt64`
-  eq(UInt64 NULL, UInt64 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt64`
   eq(Int8, Int8) :: Boolean                                     : unable to unify `Tuple(UInt8, String)` with `Int8`
   eq(Int8 NULL, Int8 NULL) :: Boolean NULL                      : unable to unify `Tuple(UInt8, String)` with `Int8`
+  eq(UInt16, UInt16) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt16`
+  eq(UInt16 NULL, UInt16 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt16`
   eq(Int16, Int16) :: Boolean                                   : unable to unify `Tuple(UInt8, String)` with `Int16`
   eq(Int16 NULL, Int16 NULL) :: Boolean NULL                    : unable to unify `Tuple(UInt8, String)` with `Int16`
+  eq(UInt32, UInt32) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt32`
+  eq(UInt32 NULL, UInt32 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt32`
   eq(Int32, Int32) :: Boolean                                   : unable to unify `Tuple(UInt8, String)` with `Int32`
   eq(Int32 NULL, Int32 NULL) :: Boolean NULL                    : unable to unify `Tuple(UInt8, String)` with `Int32`
+  eq(UInt64, UInt64) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt64`
+  eq(UInt64 NULL, UInt64 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt64`
   eq(Int64, Int64) :: Boolean                                   : unable to unify `Tuple(UInt8, String)` with `Int64`
   eq(Int64 NULL, Int64 NULL) :: Boolean NULL                    : unable to unify `Tuple(UInt8, String)` with `Int64`
   eq(Float32, Float32) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Float32`
@@ -170,8 +170,8 @@ output         : false
 
 
 ast            : to_timestamp(-315360000000000)=to_timestamp(-100)
-raw expr       : eq(to_timestamp(minus(315360000000000_u64)), to_timestamp(minus(100_u8)))
-checked expr   : eq<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(100_u8))))
+raw expr       : eq(to_timestamp(-315360000000000_i64), to_timestamp(-100_i8))
+checked expr   : eq<Timestamp, Timestamp>(to_timestamp<Int64>(-315360000000000_i64), to_timestamp<Int64>(to_int64<Int8>(-100_i8)))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -210,8 +210,8 @@ evaluation (internal):
 
 
 ast            : 1.1=1.1
-raw expr       : eq(1.1_f64, 1.1_f64)
-checked expr   : eq<Float64, Float64>(1.1_f64, 1.1_f64)
+raw expr       : eq(1.1_decimal(2, 1), 1.1_decimal(2, 1))
+checked expr   : eq<Decimal(3, 1), Decimal(3, 1)>(to_decimal<Decimal(2, 1)>(1.1_d128(2,1)), to_decimal<Decimal(2, 1)>(1.1_d128(2,1)))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -300,8 +300,8 @@ output         : true
 
 
 ast            : 1.1!=1.1
-raw expr       : noteq(1.1_f64, 1.1_f64)
-checked expr   : noteq<Float64, Float64>(1.1_f64, 1.1_f64)
+raw expr       : noteq(1.1_decimal(2, 1), 1.1_decimal(2, 1))
+checked expr   : noteq<Float32, Float32>(to_float32<Decimal(2, 1)>(1.1_d128(2,1)), to_float32<Decimal(2, 1)>(1.1_d128(2,1)))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -379,18 +379,18 @@ has tried possible overloads:
   noteq(Timestamp NULL, Timestamp NULL) :: Boolean NULL            : unable to unify `Tuple(UInt8, String)` with `Timestamp`
   noteq(UInt8, UInt8) :: Boolean                                   : unable to unify `Tuple(UInt8, String)` with `UInt8`
   noteq(UInt8 NULL, UInt8 NULL) :: Boolean NULL                    : unable to unify `Tuple(UInt8, String)` with `UInt8`
-  noteq(UInt16, UInt16) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt16`
-  noteq(UInt16 NULL, UInt16 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt16`
-  noteq(UInt32, UInt32) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt32`
-  noteq(UInt32 NULL, UInt32 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt32`
-  noteq(UInt64, UInt64) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt64`
-  noteq(UInt64 NULL, UInt64 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt64`
   noteq(Int8, Int8) :: Boolean                                     : unable to unify `Tuple(UInt8, String)` with `Int8`
   noteq(Int8 NULL, Int8 NULL) :: Boolean NULL                      : unable to unify `Tuple(UInt8, String)` with `Int8`
+  noteq(UInt16, UInt16) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt16`
+  noteq(UInt16 NULL, UInt16 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt16`
   noteq(Int16, Int16) :: Boolean                                   : unable to unify `Tuple(UInt8, String)` with `Int16`
   noteq(Int16 NULL, Int16 NULL) :: Boolean NULL                    : unable to unify `Tuple(UInt8, String)` with `Int16`
+  noteq(UInt32, UInt32) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt32`
+  noteq(UInt32 NULL, UInt32 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt32`
   noteq(Int32, Int32) :: Boolean                                   : unable to unify `Tuple(UInt8, String)` with `Int32`
   noteq(Int32 NULL, Int32 NULL) :: Boolean NULL                    : unable to unify `Tuple(UInt8, String)` with `Int32`
+  noteq(UInt64, UInt64) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `UInt64`
+  noteq(UInt64 NULL, UInt64 NULL) :: Boolean NULL                  : unable to unify `Tuple(UInt8, String)` with `UInt64`
   noteq(Int64, Int64) :: Boolean                                   : unable to unify `Tuple(UInt8, String)` with `Int64`
   noteq(Int64 NULL, Int64 NULL) :: Boolean NULL                    : unable to unify `Tuple(UInt8, String)` with `Int64`
   noteq(Float32, Float32) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Float32`
@@ -426,8 +426,8 @@ output         : true
 
 
 ast            : to_timestamp(-315360000000000)!=to_timestamp(-100)
-raw expr       : noteq(to_timestamp(minus(315360000000000_u64)), to_timestamp(minus(100_u8)))
-checked expr   : noteq<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(100_u8))))
+raw expr       : noteq(to_timestamp(-315360000000000_i64), to_timestamp(-100_i8))
+checked expr   : noteq<Timestamp, Timestamp>(to_timestamp<Int64>(-315360000000000_i64), to_timestamp<Int64>(to_int64<Int8>(-100_i8)))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -510,8 +510,8 @@ output         : false
 
 
 ast            : 1.1<1.1
-raw expr       : lt(1.1_f64, 1.1_f64)
-checked expr   : lt<Float64, Float64>(1.1_f64, 1.1_f64)
+raw expr       : lt(1.1_decimal(2, 1), 1.1_decimal(2, 1))
+checked expr   : lt<Decimal(3, 1), Decimal(3, 1)>(to_decimal<Decimal(2, 1)>(1.1_d128(2,1)), to_decimal<Decimal(2, 1)>(1.1_d128(2,1)))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -591,8 +591,8 @@ output         : true
 
 
 ast            : to_timestamp(-315360000000000)<to_timestamp(-100)
-raw expr       : lt(to_timestamp(minus(315360000000000_u64)), to_timestamp(minus(100_u8)))
-checked expr   : lt<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(100_u8))))
+raw expr       : lt(to_timestamp(-315360000000000_i64), to_timestamp(-100_i8))
+checked expr   : lt<Timestamp, Timestamp>(to_timestamp<Int64>(-315360000000000_i64), to_timestamp<Int64>(to_int64<Int8>(-100_i8)))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -681,8 +681,8 @@ output         : true
 
 
 ast            : 1.1<=2.1
-raw expr       : lte(1.1_f64, 2.1_f64)
-checked expr   : lte<Float64, Float64>(1.1_f64, 2.1_f64)
+raw expr       : lte(1.1_decimal(2, 1), 2.1_decimal(2, 1))
+checked expr   : lte<Decimal(3, 1), Decimal(3, 1)>(to_decimal<Decimal(2, 1)>(1.1_d128(2,1)), to_decimal<Decimal(2, 1)>(2.1_d128(2,1)))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -771,8 +771,8 @@ output         : true
 
 
 ast            : to_timestamp(-315360000000000)<=to_timestamp(-100)
-raw expr       : lte(to_timestamp(minus(315360000000000_u64)), to_timestamp(minus(100_u8)))
-checked expr   : lte<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(100_u8))))
+raw expr       : lte(to_timestamp(-315360000000000_i64), to_timestamp(-100_i8))
+checked expr   : lte<Timestamp, Timestamp>(to_timestamp<Int64>(-315360000000000_i64), to_timestamp<Int64>(to_int64<Int8>(-100_i8)))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -780,8 +780,8 @@ output         : true
 
 
 ast            : to_timestamp(-315360000000000)<=to_timestamp(-315360000000000)
-raw expr       : lte(to_timestamp(minus(315360000000000_u64)), to_timestamp(minus(315360000000000_u64)))
-checked expr   : lte<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)))
+raw expr       : lte(to_timestamp(-315360000000000_i64), to_timestamp(-315360000000000_i64))
+checked expr   : lte<Timestamp, Timestamp>(to_timestamp<Int64>(-315360000000000_i64), to_timestamp<Int64>(-315360000000000_i64))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -853,8 +853,8 @@ output         : false
 
 
 ast            : 1.2>1.1
-raw expr       : gt(1.2_f64, 1.1_f64)
-checked expr   : gt<Float64, Float64>(1.2_f64, 1.1_f64)
+raw expr       : gt(1.2_decimal(2, 1), 1.1_decimal(2, 1))
+checked expr   : gt<Decimal(3, 1), Decimal(3, 1)>(to_decimal<Decimal(2, 1)>(1.2_d128(2,1)), to_decimal<Decimal(2, 1)>(1.1_d128(2,1)))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -934,8 +934,8 @@ output         : false
 
 
 ast            : to_timestamp(-315360000000000)>to_timestamp(-100)
-raw expr       : gt(to_timestamp(minus(315360000000000_u64)), to_timestamp(minus(100_u8)))
-checked expr   : gt<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(100_u8))))
+raw expr       : gt(to_timestamp(-315360000000000_i64), to_timestamp(-100_i8))
+checked expr   : gt<Timestamp, Timestamp>(to_timestamp<Int64>(-315360000000000_i64), to_timestamp<Int64>(to_int64<Int8>(-100_i8)))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -943,8 +943,8 @@ output         : false
 
 
 ast            : to_timestamp(-315360000000000)>to_timestamp(-315360000000000)
-raw expr       : gt(to_timestamp(minus(315360000000000_u64)), to_timestamp(minus(315360000000000_u64)))
-checked expr   : gt<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)))
+raw expr       : gt(to_timestamp(-315360000000000_i64), to_timestamp(-315360000000000_i64))
+checked expr   : gt<Timestamp, Timestamp>(to_timestamp<Int64>(-315360000000000_i64), to_timestamp<Int64>(-315360000000000_i64))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1029,8 +1029,8 @@ output         : false
 
 
 ast            : 1.1>=1.1
-raw expr       : gte(1.1_f64, 1.1_f64)
-checked expr   : gte<Float64, Float64>(1.1_f64, 1.1_f64)
+raw expr       : gte(1.1_decimal(2, 1), 1.1_decimal(2, 1))
+checked expr   : gte<Decimal(3, 1), Decimal(3, 1)>(to_decimal<Decimal(2, 1)>(1.1_d128(2,1)), to_decimal<Decimal(2, 1)>(1.1_d128(2,1)))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1110,8 +1110,8 @@ output         : false
 
 
 ast            : to_timestamp(-315360000000000)>=to_timestamp(-100)
-raw expr       : gte(to_timestamp(minus(315360000000000_u64)), to_timestamp(minus(100_u8)))
-checked expr   : gte<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(100_u8))))
+raw expr       : gte(to_timestamp(-315360000000000_i64), to_timestamp(-100_i8))
+checked expr   : gte<Timestamp, Timestamp>(to_timestamp<Int64>(-315360000000000_i64), to_timestamp<Int64>(to_int64<Int8>(-100_i8)))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1119,8 +1119,8 @@ output         : false
 
 
 ast            : to_timestamp(-315360000000000)>=to_timestamp(-315360000000000)
-raw expr       : gte(to_timestamp(minus(315360000000000_u64)), to_timestamp(minus(315360000000000_u64)))
-checked expr   : gte<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)))
+raw expr       : gte(to_timestamp(-315360000000000_i64), to_timestamp(-315360000000000_i64))
+checked expr   : gte<Timestamp, Timestamp>(to_timestamp<Int64>(-315360000000000_i64), to_timestamp<Int64>(-315360000000000_i64))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}

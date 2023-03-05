@@ -28,7 +28,7 @@ impl BroadcastFlightScatter {
 }
 
 impl FlightScatter for BroadcastFlightScatter {
-    fn execute(&self, data_block: &DataBlock) -> Result<Vec<DataBlock>> {
+    fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
         let mut data_blocks = vec![];
         for _ in 0..self.scattered_size {
             data_blocks.push(data_block.clone());

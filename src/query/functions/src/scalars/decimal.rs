@@ -36,21 +36,21 @@ use ethnum::i256;
 use num_traits::AsPrimitive;
 
 macro_rules! op_decimal {
-    ($a: expr, $b: expr, $ctx: expr, $return_type: expr, $op: ident, $scale_a: expr, $scale_b: expr) => {
+    ($a: expr, $b: expr, $ctx: expr, $return_type: expr, $op: ident, $scale_a: expr, $scale_b: expr, $is_divide: expr) => {
         match $return_type {
             DataType::Decimal(d) => match d {
                 DecimalDataType::Decimal128(size) => {
                     binary_decimal!(
-                        $a, $b, $ctx, $op, *size, $scale_a, $scale_b, i128, Decimal128
+                        $a, $b, $ctx, $op, *size, $scale_a, $scale_b, i128, Decimal128, $is_divide
                     )
                 }
                 DecimalDataType::Decimal256(size) => {
                     binary_decimal!(
-                        $a, $b, $ctx, $op, *size, $scale_a, $scale_b, i256, Decimal256
+                        $a, $b, $ctx, $op, *size, $scale_a, $scale_b, i256, Decimal256, $is_divide
                     )
                 }
             },
-            _ => unreachable!(),
+            _ => unreachable!("return type of binary op is not decimal"),
         }
     };
     ($a: expr, $b: expr, $return_type: expr, $op: ident) => {
@@ -63,7 +63,7 @@ macro_rules! op_decimal {
                     compare_decimal!($a, $b, $op, Decimal256)
                 }
             },
-            _ => unreachable!(),
+            _ => unreachable!("return type of cmp op is not decimal"),
         }
     };
 }
@@ -107,16 +107,17 @@ macro_rules! compare_decimal {
                 ValueRef::Scalar(ScalarRef::Decimal(DecimalScalar::$decimal_type(b, _))),
             ) => Value::Scalar(Scalar::Boolean(a.cmp(b).$op())),
 
-            _ => unreachable!(),
+            _ => unreachable!("arg type of cmp op is not required decimal"),
         }
     }};
 }
 
 macro_rules! binary_decimal {
-    ($a: expr, $b: expr, $ctx: expr, $op: ident, $size: expr, $scale_a: expr, $scale_b: expr, $type_name: ty, $decimal_type: tt) => {{
+    ($a: expr, $b: expr, $ctx: expr, $op: ident, $size: expr, $scale_a: expr, $scale_b: expr, $type_name: ty, $decimal_type: tt, $is_divide: expr) => {{
         let scale_a = <$type_name>::e($scale_a);
         let scale_b = <$type_name>::e($scale_b);
 
+        let zero = <$type_name>::zero();
         let one = <$type_name>::one();
         let min_for_precision = <$type_name>::min_for_precision($size.precision);
         let max_for_precision = <$type_name>::max_for_precision($size.precision);
@@ -149,13 +150,18 @@ macro_rules! binary_decimal {
             ) => {
                 let mut result = Vec::with_capacity(buffer.len());
 
-                for a in buffer.iter() {
-                    let t = (a * scale_a).$op(b) / scale_b;
-                    if t < min_for_precision || t > max_for_precision {
-                        $ctx.set_error(result.len(), "Decimal overflow");
-                        result.push(one);
-                    } else {
-                        result.push(t);
+                if $is_divide && std::intrinsics::unlikely(*b == zero) {
+                    $ctx.set_error(result.len(), "divided by zero");
+                    result.push(one);
+                } else {
+                    for a in buffer.iter() {
+                        let t = (a * scale_a).$op(b) / scale_b;
+                        if t < min_for_precision || t > max_for_precision {
+                            $ctx.set_error(result.len(), "Decimal overflow");
+                            result.push(one);
+                        } else {
+                            result.push(t);
+                        }
                     }
                 }
 
@@ -190,15 +196,19 @@ macro_rules! binary_decimal {
                 ValueRef::Scalar(ScalarRef::Decimal(DecimalScalar::$decimal_type(a, _))),
                 ValueRef::Scalar(ScalarRef::Decimal(DecimalScalar::$decimal_type(b, _))),
             ) => {
-                let t = (a * scale_a).$op(b) / scale_b;
-                if t < min_for_precision || t > max_for_precision {
-                    $ctx.set_error(0, "Decimal overflow");
+                let mut t = zero;
+                if $is_divide && std::intrinsics::unlikely(*b == zero) {
+                    $ctx.set_error(0, "divided by zero");
                 } else {
+                    t = (a * scale_a).$op(b) / scale_b;
+                    if t < min_for_precision || t > max_for_precision {
+                        $ctx.set_error(0, "Decimal overflow");
+                    }
                 }
                 Value::Scalar(Scalar::Decimal(DecimalScalar::$decimal_type(t, $size)))
             }
 
-            _ => unreachable!(),
+            _ => unreachable!("arg type of binary op is not required decimal"),
         }
     }};
 }
@@ -331,7 +341,8 @@ macro_rules! register_decimal_binary_op {
                         &DataType::Decimal(return_type.clone()),
                         $op,
                         scale_a,
-                        scale_b
+                        scale_b,
+                        is_divide
                     )
                 }),
             };
@@ -344,13 +355,7 @@ macro_rules! register_decimal_binary_op {
     };
 }
 
-pub fn register(registry: &mut FunctionRegistry) {
-    // TODO checked overflow by default
-    register_decimal_binary_op!(registry, "plus", add);
-    register_decimal_binary_op!(registry, "minus", sub);
-    register_decimal_binary_op!(registry, "divide", div);
-    register_decimal_binary_op!(registry, "multiply", mul);
-
+pub(crate) fn register_decimal_compare_op(registry: &mut FunctionRegistry) {
     register_decimal_compare_op!(registry, "lt", is_lt);
     register_decimal_compare_op!(registry, "eq", is_eq);
     register_decimal_compare_op!(registry, "gt", is_gt);
@@ -360,7 +365,17 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_decimal_compare_op!(registry, "gte", is_ge);
 
     register_decimal_compare_op!(registry, "ne", is_ne);
+}
 
+pub(crate) fn register_decimal_arithmetic(registry: &mut FunctionRegistry) {
+    // TODO checked overflow by default
+    register_decimal_binary_op!(registry, "plus", add);
+    register_decimal_binary_op!(registry, "minus", sub);
+    register_decimal_binary_op!(registry, "divide", div);
+    register_decimal_binary_op!(registry, "multiply", mul);
+}
+
+pub fn register(registry: &mut FunctionRegistry) {
     // int float to decimal
     registry.register_function_factory("to_decimal", |params, args_type| {
         if args_type.len() != 1 {
@@ -396,8 +411,9 @@ pub fn register(registry: &mut FunctionRegistry) {
             }),
         }))
     });
+}
 
-    // decimal to  float
+pub(crate) fn register_decimal_to_float64(registry: &mut FunctionRegistry) {
     registry.register_function_factory("to_float64", |_params, args_type| {
         if args_type.len() != 1 {
             return None;
@@ -417,6 +433,30 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
             calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
             eval: Box::new(move |args, tx| decimal_to_float64(args, arg_type.clone(), tx)),
+        }))
+    });
+}
+
+pub(crate) fn register_decimal_to_float32(registry: &mut FunctionRegistry) {
+    registry.register_function_factory("to_float32", |_params, args_type| {
+        if args_type.len() != 1 {
+            return None;
+        }
+
+        let arg_type = args_type[0].clone();
+        if !arg_type.is_decimal() {
+            return None;
+        }
+
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "to_float32".to_string(),
+                args_type: vec![arg_type.clone()],
+                return_type: Float32Type::data_type(),
+                property: FunctionProperty::default(),
+            },
+            calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
+            eval: Box::new(move |args, tx| decimal_to_float32(args, arg_type.clone(), tx)),
         }))
     });
 }
@@ -600,7 +640,17 @@ macro_rules! m_decimal_to_decimal {
     ($from_size: expr, $dest_size: expr, $buffer: expr, $from_type_name: ty, $dest_type_name: ty, $ctx: expr) => {
         // faster path
         if $from_size.scale == $dest_size.scale && $from_size.precision <= $dest_size.precision {
-            <$from_type_name>::to_column_from_buffer($buffer, $dest_size)
+            if <$from_type_name>::MAX == <$dest_type_name>::MAX {
+                // 128 -> 128 or 256 -> 256
+                <$from_type_name>::to_column_from_buffer($buffer, $dest_size)
+            } else {
+                // 128 -> 256
+                let buffer = $buffer
+                    .into_iter()
+                    .map(|x| x * <$dest_type_name>::one())
+                    .collect();
+                <$dest_type_name>::to_column(buffer, $dest_size)
+            }
         } else {
             let values = if $from_size.scale > $dest_size.scale {
                 let factor = <$dest_type_name>::e(($from_size.scale - $dest_size.scale) as u32);
@@ -620,14 +670,16 @@ macro_rules! m_decimal_to_decimal {
                     .collect()
             } else {
                 let factor = <$dest_type_name>::e(($dest_size.scale - $from_size.scale) as u32);
+                let max = <$dest_type_name>::max_for_precision($dest_size.precision);
+                let min = <$dest_type_name>::min_for_precision($dest_size.precision);
                 $buffer
                     .iter()
                     .enumerate()
                     .map(|(row, x)| {
                         let x = x * <$dest_type_name>::one();
                         match x.checked_mul(factor) {
-                            Some(x) => x,
-                            None => {
+                            Some(x) if x <= max && x >= min => x,
+                            _ => {
                                 $ctx.set_error(row, "Decimal overflow");
                                 <$dest_type_name>::one()
                             }
@@ -725,6 +777,56 @@ fn decimal_to_float64(
                 .map(|x| (f64::from(*x) / div).into())
                 .collect();
             Float64Type::upcast_column(values)
+        }
+    };
+
+    if is_scalar {
+        let scalar = result.index(0).unwrap();
+        Value::Scalar(scalar.to_owned())
+    } else {
+        Value::Column(result)
+    }
+}
+
+fn decimal_to_float32(
+    args: &[ValueRef<AnyType>],
+    from_type: DataType,
+    _ctx: &mut EvalContext,
+) -> Value<AnyType> {
+    let arg = &args[0];
+
+    let mut is_scalar = false;
+    let column = match arg {
+        ValueRef::Column(column) => column.clone(),
+        ValueRef::Scalar(s) => {
+            is_scalar = true;
+            let builder = ColumnBuilder::repeat(s, 1, &from_type);
+            builder.build()
+        }
+    };
+
+    let from_type = from_type.as_decimal().unwrap();
+
+    let result = match from_type {
+        DecimalDataType::Decimal128(_) => {
+            let (buffer, from_size) = i128::try_downcast_column(&column).unwrap();
+
+            let div = 10_f32.powi(from_size.scale as i32);
+
+            let values: Buffer<F32> = buffer.iter().map(|x| (*x as f32 / div).into()).collect();
+            Float32Type::upcast_column(values)
+        }
+
+        DecimalDataType::Decimal256(_) => {
+            let (buffer, from_size) = i256::try_downcast_column(&column).unwrap();
+
+            let div = 10_f32.powi(from_size.scale as i32);
+
+            let values: Buffer<F32> = buffer
+                .iter()
+                .map(|x| (f32::from(*x) / div).into())
+                .collect();
+            Float32Type::upcast_column(values)
         }
     };
 

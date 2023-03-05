@@ -17,6 +17,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use common_arrow::arrow::chunk::Chunk;
 use common_arrow::arrow::io::flight::default_ipc_fields;
 use common_arrow::arrow::io::flight::serialize_batch;
 use common_arrow::arrow::io::flight::WriteOptions;
@@ -24,11 +25,10 @@ use common_arrow::arrow::io::ipc::IpcField;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
 use common_io::prelude::BinaryWrite;
-use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -37,7 +37,11 @@ use common_pipeline_transforms::processors::transforms::Transformer;
 use serde::Deserializer;
 use serde::Serializer;
 
+use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
+use crate::api::rpc::exchange::exchange_params::ShuffleExchangeParams;
+use crate::api::rpc::exchange::exchange_transform_shuffle::ExchangeShuffleMeta;
 use crate::api::DataPacket;
+use crate::api::ExchangeSorting;
 use crate::api::FragmentData;
 
 pub struct ExchangeSerializeMeta {
@@ -46,10 +50,10 @@ pub struct ExchangeSerializeMeta {
 }
 
 impl ExchangeSerializeMeta {
-    pub fn create(packet: DataPacket, block_number: isize) -> BlockMetaInfoPtr {
+    pub fn create(block_number: isize, packet: Option<DataPacket>) -> BlockMetaInfoPtr {
         Box::new(ExchangeSerializeMeta {
+            packet,
             block_number,
-            packet: Some(packet),
         })
     }
 }
@@ -92,24 +96,27 @@ impl BlockMetaInfo for ExchangeSerializeMeta {
 pub struct TransformExchangeSerializer {
     options: WriteOptions,
     ipc_fields: Vec<IpcField>,
+    sorting: Option<Arc<dyn ExchangeSorting>>,
 }
 
 impl TransformExchangeSerializer {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        schema: &DataSchemaRef,
-    ) -> ProcessorPtr {
-        let arrow_schema = schema.to_arrow();
+        params: &MergeExchangeParams,
+        sorting: Option<Arc<dyn ExchangeSorting>>,
+    ) -> Result<ProcessorPtr> {
+        let arrow_schema = params.schema.to_arrow();
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
-        ProcessorPtr::create(Transformer::create(
+        Ok(ProcessorPtr::create(Transformer::create(
             input,
             output,
             TransformExchangeSerializer {
+                sorting,
                 ipc_fields,
                 options: WriteOptions { compression: None },
             },
-        ))
+        )))
     }
 }
 
@@ -117,41 +124,124 @@ impl Transform for TransformExchangeSerializer {
     const NAME: &'static str = "ExchangeSerializerTransform";
 
     fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
-        let mut meta = vec![];
-        meta.write_scalar_own(data_block.num_rows() as u32)?;
-        bincode::serialize_into(&mut meta, &data_block.get_meta())
-            .map_err(|_| ErrorCode::BadBytes("block meta serialize error when exchange"))?;
+        let mut block_num = 0;
 
-        let chunks = data_block.try_into()?;
-        let (dicts, values) = serialize_batch(&chunks, &self.ipc_fields, &self.options)?;
-
-        if !dicts.is_empty() {
-            return Err(ErrorCode::Unimplemented(
-                "DatabendQuery does not implement dicts.",
-            ));
+        if let Some(sorting) = &self.sorting {
+            block_num = sorting.block_number(&data_block)?;
         }
 
-        Ok(DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
-            DataPacket::FragmentData(FragmentData::create(meta, values)),
-            0,
+        serialize_block(block_num, data_block, &self.ipc_fields, &self.options)
+    }
+}
+
+pub struct TransformScatterExchangeSerializer {
+    local_pos: usize,
+    options: WriteOptions,
+    ipc_fields: Vec<IpcField>,
+    sorting: Option<Arc<dyn ExchangeSorting>>,
+}
+
+impl TransformScatterExchangeSerializer {
+    pub fn create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        params: &ShuffleExchangeParams,
+        sorting: Option<Arc<dyn ExchangeSorting>>,
+    ) -> Result<ProcessorPtr> {
+        let local_id = &params.executor_id;
+        let arrow_schema = params.schema.to_arrow();
+        let ipc_fields = default_ipc_fields(&arrow_schema.fields);
+        Ok(ProcessorPtr::create(Transformer::create(
+            input,
+            output,
+            TransformScatterExchangeSerializer {
+                sorting,
+                ipc_fields,
+                options: WriteOptions { compression: None },
+                local_pos: params
+                    .destination_ids
+                    .iter()
+                    .position(|x| x == local_id)
+                    .unwrap(),
+            },
         )))
     }
 }
 
-pub fn create_serializer_item(schema: &DataSchemaRef) -> PipeItem {
-    let input = InputPort::create();
-    let output = OutputPort::create();
+impl Transform for TransformScatterExchangeSerializer {
+    const NAME: &'static str = "TransformScatterExchangeSerializer";
 
-    PipeItem::create(
-        TransformExchangeSerializer::create(input.clone(), output.clone(), schema),
-        vec![input],
-        vec![output],
-    )
+    fn transform(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
+        if let Some(block_meta) = data_block.take_meta() {
+            if let Some(shuffle_meta) = ExchangeShuffleMeta::downcast_from(block_meta) {
+                let mut new_blocks = Vec::with_capacity(shuffle_meta.blocks.len());
+                for (index, block) in shuffle_meta.blocks.into_iter().enumerate() {
+                    if block.is_empty() {
+                        new_blocks.push(block);
+                        continue;
+                    }
+
+                    new_blocks.push(match self.local_pos == index {
+                        true => block,
+                        false => match &self.sorting {
+                            None => serialize_block(0, block, &self.ipc_fields, &self.options)?,
+                            Some(sorting) => serialize_block(
+                                sorting.block_number(&data_block)?,
+                                block,
+                                &self.ipc_fields,
+                                &self.options,
+                            )?,
+                        },
+                    });
+                }
+
+                return Ok(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
+                    new_blocks,
+                )));
+            }
+        }
+
+        Err(ErrorCode::Internal(
+            "Internal, TransformScatterExchangeSerializer only recv ExchangeShuffleMeta.",
+        ))
+    }
 }
 
-pub fn create_serializer_items(size: usize, schema: &DataSchemaRef) -> Vec<PipeItem> {
-    (0..size)
-        .into_iter()
-        .map(|_| create_serializer_item(schema))
-        .collect()
+pub fn serialize_block(
+    block_num: isize,
+    data_block: DataBlock,
+    ipc_field: &[IpcField],
+    options: &WriteOptions,
+) -> Result<DataBlock> {
+    if data_block.is_empty() && data_block.get_meta().is_none() {
+        return Ok(DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
+            block_num, None,
+        )));
+    }
+
+    let mut meta = vec![];
+    meta.write_scalar_own(data_block.num_rows() as u32)?;
+    bincode::serialize_into(&mut meta, &data_block.get_meta())
+        .map_err(|_| ErrorCode::BadBytes("block meta serialize error when exchange"))?;
+
+    let values = match data_block.is_empty() {
+        true => serialize_batch(&Chunk::new(vec![]), &[], options)?.1,
+        false => {
+            let chunks = data_block.try_into()?;
+            let (dicts, values) = serialize_batch(&chunks, ipc_field, options)?;
+
+            if !dicts.is_empty() {
+                return Err(ErrorCode::Unimplemented(
+                    "DatabendQuery does not implement dicts.",
+                ));
+            }
+
+            values
+        }
+    };
+
+    Ok(DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
+        block_num,
+        Some(DataPacket::FragmentData(FragmentData::create(meta, values))),
+    )))
 }

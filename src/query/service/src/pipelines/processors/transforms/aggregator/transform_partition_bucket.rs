@@ -19,13 +19,10 @@ use std::marker::PhantomData;
 use std::mem::take;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::with_hash_method;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
-use common_expression::HashMethodKind;
 use common_hashtable::hash2bucket;
 use common_hashtable::HashtableLike;
 use common_pipeline_core::pipe::Pipe;
@@ -41,7 +38,6 @@ use common_storage::DataOperator;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SerializedPayload;
-use crate::pipelines::processors::transforms::aggregator::TransformAggregateDeserializer;
 use crate::pipelines::processors::transforms::aggregator::TransformFinalGroupBy;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
@@ -49,10 +45,8 @@ use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::PartitionedHashTableDropper;
 use crate::pipelines::processors::transforms::TransformAggregateSpillReader;
 use crate::pipelines::processors::transforms::TransformFinalAggregate;
-use crate::pipelines::processors::transforms::TransformGroupByDeserializer;
 use crate::pipelines::processors::transforms::TransformGroupBySpillReader;
 use crate::pipelines::processors::AggregatorParams;
-use crate::sessions::QueryContext;
 
 static SINGLE_LEVEL_BUCKET_NUM: isize = -1;
 
@@ -408,21 +402,11 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
     }
 }
 
-fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>(
-    ctx: &Arc<QueryContext>,
+pub fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>(
     method: Method,
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
 ) -> Result<()> {
-    if !ctx.get_cluster().is_empty() {
-        pipeline.add_transform(
-            |input, output| match params.aggregate_functions.is_empty() {
-                true => TransformGroupByDeserializer::<Method>::try_create(input, output),
-                false => TransformAggregateDeserializer::<Method>::try_create(input, output),
-            },
-        )?;
-    }
-
     let input_nums = pipeline.output_len();
     let transform = TransformPartitionBucket::<Method, V>::create(method.clone(), input_nums)?;
 
@@ -437,16 +421,14 @@ fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 'sta
 
     pipeline.resize(input_nums)?;
 
-    if ctx.get_cluster().is_empty() {
-        let operator = DataOperator::instance().operator();
-        pipeline.add_transform(|input, output| {
-            let operator = operator.clone();
-            match params.aggregate_functions.is_empty() {
-                true => TransformGroupBySpillReader::<Method>::create(input, output, operator),
-                false => TransformAggregateSpillReader::<Method>::create(input, output, operator),
-            }
-        })?;
-    }
+    let operator = DataOperator::instance().operator();
+    pipeline.add_transform(|input, output| {
+        let operator = operator.clone();
+        match params.aggregate_functions.is_empty() {
+            true => TransformGroupBySpillReader::<Method>::create(input, output, operator),
+            false => TransformAggregateSpillReader::<Method>::create(input, output, operator),
+        }
+    })?;
 
     pipeline.add_transform(
         |input, output| match params.aggregate_functions.is_empty() {
@@ -458,26 +440,4 @@ fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 'sta
             }
         },
     )
-}
-
-pub fn efficiently_memory_final_aggregator(
-    ctx: &Arc<QueryContext>,
-    params: Arc<AggregatorParams>,
-    pipeline: &mut Pipeline,
-) -> Result<()> {
-    let group_cols = &params.group_columns;
-    let schema_before_group_by = params.input_schema.clone();
-    let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
-    let method = DataBlock::choose_hash_method(&sample_block, group_cols)?;
-
-    match params.aggregate_functions.is_empty() {
-        true => with_hash_method!(|T| match method {
-            HashMethodKind::T(v) =>
-                build_partition_bucket::<_, ()>(ctx, v, pipeline, params.clone()),
-        }),
-        false => with_hash_method!(|T| match method {
-            HashMethodKind::T(v) =>
-                build_partition_bucket::<_, usize>(ctx, v, pipeline, params.clone()),
-        }),
-    }
 }

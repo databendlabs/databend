@@ -140,8 +140,43 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                     };
                 }
             }
+
+            if prev != -1 {
+                if let (
+                    ExprElement::UnaryOp {
+                        op: UnaryOperator::Minus,
+                    },
+                    ExprElement::Literal { lit },
+                ) = (
+                    &expr_elements[prev as usize].elem,
+                    &expr_elements[curr as usize].elem,
+                ) {
+                    if matches!(
+                        lit,
+                        Literal::Float(_)
+                            | Literal::UInt64(_)
+                            | Literal::Decimal128 { .. }
+                            | Literal::Decimal256 { .. }
+                    ) {
+                        let span = expr_elements[curr as usize].span;
+                        expr_elements[curr as usize] = WithSpan {
+                            span,
+                            elem: ExprElement::Literal { lit: lit.neg() },
+                        };
+                        let span = expr_elements[prev as usize].span;
+                        expr_elements[prev as usize] = WithSpan {
+                            span,
+                            elem: ExprElement::Skip,
+                        };
+                    }
+                }
+            }
         }
-        let iter = &mut expr_elements.into_iter();
+        let iter = &mut expr_elements
+            .into_iter()
+            .filter(|x| x.elem != ExprElement::Skip)
+            .collect::<Vec<_>>()
+            .into_iter();
         run_pratt_parser(ExprParser, iter, rest, i)
     }
 }
@@ -286,6 +321,10 @@ pub enum ExprElement {
         // Optional `NULLS FIRST` or `NULLS LAST`
         nulls_first: Option<String>,
     },
+    /// `{'k1':'v1','k2':'v2'}`
+    Map {
+        kvs: Vec<(Expr, Expr)>,
+    },
     Interval {
         expr: Expr,
         unit: IntervalKind,
@@ -304,6 +343,7 @@ pub enum ExprElement {
         unit: IntervalKind,
         date: Expr,
     },
+    Skip,
 }
 
 struct ExprParser;
@@ -504,6 +544,10 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                     null_first,
                 }
             }
+            ExprElement::Map { kvs } => Expr::Map {
+                span: transform_span(elem.span.0),
+                kvs,
+            },
             ExprElement::Interval { expr, unit } => Expr::Interval {
                 span: transform_span(elem.span.0),
                 expr: Box::new(expr),
@@ -889,6 +933,12 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             nulls_first: opt_null_first.map(|(_, first_last)| first_last),
         },
     );
+
+    let map_expr = map(
+        rule! { "{" ~ #comma_separated_list0(map_element) ~ "}" },
+        |(_, kvs, _)| ExprElement::Map { kvs },
+    );
+
     let date_add = map(
         rule! {
             DATE_ADD ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
@@ -965,6 +1015,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #map_access : "[<key>] | .<key> | :<key>"
             | #literal : "<literal>"
             | #array : "`[...]`"
+            | #map_expr : "`{...}`"
         ),
     )))(i)?;
 
@@ -1012,17 +1063,6 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
 
 pub fn literal(i: Input) -> IResult<Literal> {
     let string = map(literal_string, Literal::String);
-    let integer = map(literal_u64, Literal::Integer);
-    let float = map(literal_f64, Literal::Float);
-    let bigint = map(rule!(LiteralInteger), |lit| Literal::BigInt {
-        lit: lit.text().to_string(),
-        is_hex: false,
-    });
-    let bigint_hex = map(literal_hex_str, |lit| Literal::BigInt {
-        lit: lit.to_string(),
-        is_hex: true,
-    });
-
     let boolean = alt((
         value(Literal::Boolean(true), rule! { TRUE }),
         value(Literal::Boolean(false), rule! { FALSE }),
@@ -1032,10 +1072,8 @@ pub fn literal(i: Input) -> IResult<Literal> {
 
     rule!(
         #string
-        | #integer
-        | #float
-        | #bigint
-        | #bigint_hex
+        | #literal_decimal
+        | #literal_hex
         | #boolean
         | #current_timestamp
         | #null
@@ -1086,6 +1124,45 @@ pub fn literal_f64(i: Input) -> IResult<f64> {
             LiteralFloat
         },
         |token| Ok(fast_float::parse(token.text())?),
+    )(i)
+}
+
+pub fn literal_decimal(i: Input) -> IResult<Literal> {
+    let decimal_unit = map_res(
+        rule! {
+            LiteralInteger
+        },
+        |token| Literal::parse_decimal_uint(token.text()),
+    );
+
+    let decimal = map_res(
+        rule! {
+           LiteralFloat
+        },
+        |token| Literal::parse_decimal(token.text()),
+    );
+
+    rule!(
+        #decimal_unit
+        | #decimal
+    )(i)
+}
+
+pub fn literal_hex(i: Input) -> IResult<Literal> {
+    let hex_u64 = map_res(literal_hex_str, |lit| {
+        Ok(Literal::UInt64(u64::from_str_radix(lit, 16)?))
+    });
+    // todo(youngsofun): more accurate precision
+    let hex_u128 = map_res(literal_hex_str, |lit| {
+        Ok(Literal::Decimal128 {
+            value: i128::from_str_radix(lit, 16)?,
+            precision: 38,
+            scale: 0,
+        })
+    });
+    rule!(
+        #hex_u64
+        | #hex_u128
     )(i)
 }
 
@@ -1184,9 +1261,14 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         },
     );
     let ty_array = map(
-        rule! { ARRAY ~ ( "(" ~ #type_name ~ ")" )? },
-        |(_, opt_item_type)| TypeName::Array {
-            item_type: opt_item_type.map(|(_, opt_item_type, _)| Box::new(opt_item_type)),
+        rule! { ARRAY ~ "(" ~ #type_name ~ ")" },
+        |(_, _, item_type, _)| TypeName::Array(Box::new(item_type)),
+    );
+    let ty_map = map(
+        rule! { MAP ~ "(" ~ #type_name ~ "," ~ #type_name ~ ")" },
+        |(_, _, key_type, _, val_type, _)| TypeName::Map {
+            key_type: Box::new(key_type),
+            val_type: Box::new(val_type),
         },
     );
     let ty_nullable = map(
@@ -1226,7 +1308,6 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         TypeName::String,
         rule! { ( STRING | VARCHAR | CHAR | CHARACTER | TEXT  ) ~ ( "(" ~ #literal_u64 ~ ")" )? },
     );
-    let ty_object = value(TypeName::Object, rule! { OBJECT | MAP });
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
     map(
         rule! {
@@ -1243,11 +1324,11 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_float64
             | #ty_decimal
             | #ty_array
+            | #ty_map
             | #ty_tuple
             | #ty_date
             | #ty_datetime
             | #ty_string
-            | #ty_object
             | #ty_variant
             | #ty_nullable
             ) ~ NULL? : "type name"
@@ -1370,5 +1451,14 @@ pub fn map_access(i: Input) -> IResult<MapAccessor> {
         | #period
         | #period_number
         | #colon
+    )(i)
+}
+
+pub fn map_element(i: Input) -> IResult<(Expr, Expr)> {
+    map(
+        rule! {
+            #subexpr(0) ~ ":" ~ #subexpr(0)
+        },
+        |(key, _, value)| (key, value),
     )(i)
 }

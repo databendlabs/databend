@@ -46,24 +46,24 @@ use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::Value;
 use common_expression::ValueRef;
-use common_jsonb::array_length;
-use common_jsonb::as_bool;
-use common_jsonb::as_f64;
-use common_jsonb::as_i64;
-use common_jsonb::as_str;
-use common_jsonb::get_by_name_ignore_case;
-use common_jsonb::get_by_path;
-use common_jsonb::is_array;
-use common_jsonb::is_object;
-use common_jsonb::object_keys;
-use common_jsonb::parse_json_path;
-use common_jsonb::parse_value;
-use common_jsonb::to_bool;
-use common_jsonb::to_f64;
-use common_jsonb::to_i64;
-use common_jsonb::to_str;
-use common_jsonb::to_u64;
-use common_jsonb::JsonPathRef;
+use jsonb::array_length;
+use jsonb::as_bool;
+use jsonb::as_f64;
+use jsonb::as_i64;
+use jsonb::as_str;
+use jsonb::get_by_name_ignore_case;
+use jsonb::get_by_path;
+use jsonb::is_array;
+use jsonb::is_object;
+use jsonb::object_keys;
+use jsonb::parse_json_path;
+use jsonb::parse_value;
+use jsonb::to_bool;
+use jsonb::to_f64;
+use jsonb::to_i64;
+use jsonb::to_str;
+use jsonb::to_u64;
+use jsonb::JsonPathRef;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<StringType, VariantType, _, _>(
@@ -246,7 +246,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 if s.is_empty() || path.is_empty() {
                     output.push_null();
                 } else {
-                    let value = common_jsonb::parse_value(s);
+                    let value = jsonb::parse_value(s);
                     let json_paths = parse_json_path(path);
 
                     match (value, json_paths) {

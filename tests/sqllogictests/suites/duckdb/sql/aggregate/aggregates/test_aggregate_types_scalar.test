@@ -72,7 +72,7 @@ SELECT LAST(1, 2)
 query FTF
 SELECT AVG(1), AVG(NULL), AVG(33.3)
 ----
-1.0 NULL 33.3
+1.0 NULL 33.3000
 
 statement error 1010
 SELECT AVG(True)

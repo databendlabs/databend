@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -256,5 +257,10 @@ impl SessionContext {
         }
 
         (*lock)[idx as usize].0.clone()
+    }
+
+    pub fn get_query_id_history(&self) -> HashSet<String> {
+        let lock = self.query_ids_results.read();
+        HashSet::from_iter(lock.iter().map(|result| result.clone().0))
     }
 }

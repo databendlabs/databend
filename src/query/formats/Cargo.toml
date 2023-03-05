@@ -24,9 +24,9 @@ common-arrow = { path = "../../common/arrow" }
 common-exception = { path = "../../common/exception" }
 common-expression = { path = "../expression" }
 common-io = { path = "../../common/io" }
-common-jsonb = { path = "../../common/jsonb" }
 common-meta-app = { path = "../../meta/app" }
 common-settings = { path = "../settings" }
+jsonb = { workspace = true }
 
 storages-common-blocks = { path = "../storages/common/blocks" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }

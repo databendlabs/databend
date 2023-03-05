@@ -165,7 +165,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.16.0"
-source = "git+https://github.com/jorgecarleitao/arrow2?rev=615300b#615300ba2fd6490682d892bc37538df737d3e3db"
+source = "git+https://github.com/jorgecarleitao/arrow2?rev=9749aee#9749aee117165a5543a6fcbf647aa4a9ab732429"
 dependencies = [
  "ahash 0.8.2",
  "arrow-format",
@@ -1213,8 +1213,10 @@ version = "0.1.0"
 dependencies = [
  "common-base",
  "common-exception",
+ "common-io",
  "common-meta-app",
  "criterion",
+ "ethnum",
  "fast-float",
  "goldenfile",
  "itertools",
@@ -1402,7 +1404,6 @@ dependencies = [
  "common-exception",
  "common-hashtable",
  "common-io",
- "common-jsonb",
  "dashmap",
  "educe",
  "enum-as-inner",
@@ -1412,6 +1413,7 @@ dependencies = [
  "goldenfile",
  "hex",
  "itertools",
+ "jsonb",
  "lexical-core",
  "match-template",
  "micromarshal",
@@ -1437,9 +1439,9 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-io",
- "common-jsonb",
  "common-meta-app",
  "common-settings",
+ "jsonb",
  "lexical-core",
  "micromarshal",
  "num",
@@ -1468,7 +1470,6 @@ dependencies = [
  "common-expression",
  "common-hashtable",
  "common-io",
- "common-jsonb",
  "crc32fast",
  "criterion",
  "ctor",
@@ -1479,6 +1480,7 @@ dependencies = [
  "h3o",
  "hex",
  "itertools",
+ "jsonb",
  "lexical-core",
  "match-template",
  "md-5",
@@ -1563,22 +1565,12 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "common-exception",
+ "ethnum",
  "lexical-core",
  "micromarshal",
  "ordered-float 3.4.0",
  "rand 0.8.5",
  "serde",
-]
-
-[[package]]
-name = "common-jsonb"
-version = "0.1.0"
-dependencies = [
- "byteorder",
- "fast-float",
- "ordered-float 3.4.0",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -2070,7 +2062,6 @@ dependencies = [
  "common-expression",
  "common-functions",
  "common-io",
- "common-jsonb",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
@@ -2082,6 +2073,7 @@ dependencies = [
  "futures",
  "futures-util",
  "itertools",
+ "jsonb",
  "metrics",
  "opendal",
  "serde",
@@ -2317,7 +2309,6 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-functions",
- "common-jsonb",
  "common-meta-app",
  "common-metrics",
  "common-pipeline-core",
@@ -2328,6 +2319,7 @@ dependencies = [
  "common-storages-view",
  "common-users",
  "itertools",
+ "jsonb",
  "once_cell",
  "parking_lot 0.12.1",
  "serde",
@@ -2934,7 +2926,6 @@ dependencies = [
  "common-hashtable",
  "common-http",
  "common-io",
- "common-jsonb",
  "common-management",
  "common-meta-api",
  "common-meta-app",
@@ -2975,6 +2966,7 @@ dependencies = [
  "hex",
  "http",
  "itertools",
+ "jsonb",
  "jwt-simple",
  "lz4",
  "maplit",
@@ -3006,6 +2998,7 @@ dependencies = [
  "storages-common-cache-manager",
  "storages-common-index",
  "storages-common-table-meta",
+ "strength_reduce",
  "temp-env",
  "tempfile",
  "time 0.3.17",
@@ -3424,8 +3417,15 @@ version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0198b9d0078e0f30dedc7acbb21c974e838fc8fae3ee170128658a98cb2c1c04"
 dependencies = [
+ "ethnum-macros",
  "serde",
 ]
+
+[[package]]
+name = "ethnum-macros"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba69ba11ab069d2f946bb46a199630ad6680fa3ecdc87a62c7477f9916095841"
 
 [[package]]
 name = "event-listener"
@@ -4524,6 +4524,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f63b421e16eb4100beb677af56f0b4f3a4f08bab74ef2af079ce5bb92c2683f"
 dependencies = [
  "indexmap",
+]
+
+[[package]]
+name = "jsonb"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd7cd23238fe597fd093ca5d3efc50fc1e805027a63220838d0c5cb9c03df897"
+dependencies = [
+ "byteorder",
+ "fast-float",
+ "ordered-float 3.4.0",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -6630,15 +6643,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "456c603be3e8d448b072f410900c09faf164fbce2d480456f50eea6e25f9c848"
 
 [[package]]
-name = "remove_dir_all"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3acd125665422973a33ac9d3dd2df85edad0f4ae9b00dafb1a05e43a9f5ef8e7"
-dependencies = [
- "winapi",
-]
-
-[[package]]
 name = "rend"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7725,8 +7729,8 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 
 [[package]]
 name = "strawboat"
-version = "0.1.0"
-source = "git+https://github.com/sundy-li/strawboat?rev=dfbe357#dfbe357ec1f8968e4bb02756ab17ad54b5bffdcb"
+version = "0.2.0"
+source = "git+https://github.com/sundy-li/strawboat?rev=3a9f75c#3a9f75ce7bd59085be29647310466eb22ff6ee34"
 dependencies = [
  "arrow2",
  "bytemuck",
@@ -7908,16 +7912,15 @@ dependencies = [
 
 [[package]]
 name = "tempfile"
-version = "3.3.0"
+version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5cdb1ef4eaeeaddc8fbd371e5017057064af0911902ef36b39801f67cc6d79e4"
+checksum = "af18f7ae1acd354b992402e9ec5864359d693cd8a79dcbef59f76891701c1e95"
 dependencies = [
  "cfg-if",
  "fastrand",
- "libc",
  "redox_syscall",
- "remove_dir_all",
- "winapi",
+ "rustix",
+ "windows-sys 0.42.0",
 ]
 
 [[package]]

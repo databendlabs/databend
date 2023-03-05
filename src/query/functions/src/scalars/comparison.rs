@@ -26,13 +26,13 @@ use common_expression::types::DataType;
 use common_expression::types::DateType;
 use common_expression::types::EmptyArrayType;
 use common_expression::types::GenericType;
-use common_expression::types::NumberDataType;
+use common_expression::types::NumberClass;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::types::TimestampType;
 use common_expression::types::ValueType;
 use common_expression::types::VariantType;
-use common_expression::types::ALL_NUMERICS_TYPES;
+use common_expression::types::ALL_NUMBER_CLASSES;
 use common_expression::values::Value;
 use common_expression::with_number_mapped_type;
 use common_expression::Column;
@@ -47,6 +47,7 @@ use common_expression::ValueRef;
 use memchr::memmem;
 use regex::bytes::Regex;
 
+use crate::scalars::decimal::register_decimal_compare_op;
 use crate::scalars::string_multi_args::regexp;
 
 pub fn register(registry: &mut FunctionRegistry) {
@@ -79,7 +80,7 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         |lhs, rhs, _| {
-            common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") == Ordering::Equal
+            jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") == Ordering::Equal
         },
     );
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
@@ -87,7 +88,7 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         |lhs, rhs, _| {
-            common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") != Ordering::Equal
+            jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") != Ordering::Equal
         },
     );
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
@@ -95,8 +96,7 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         |lhs, rhs, _| {
-            common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value")
-                == Ordering::Greater
+            jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") == Ordering::Greater
         },
     );
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
@@ -104,7 +104,7 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         |lhs, rhs, _| {
-            common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") != Ordering::Less
+            jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") != Ordering::Less
         },
     );
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
@@ -112,7 +112,7 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         |lhs, rhs, _| {
-            common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") == Ordering::Less
+            jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") == Ordering::Less
         },
     );
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
@@ -120,8 +120,7 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         |lhs, rhs, _| {
-            common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value")
-                != Ordering::Greater
+            jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") != Ordering::Greater
         },
     );
 }
@@ -328,10 +327,16 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
 }
 
 fn register_number_cmp(registry: &mut FunctionRegistry) {
-    for ty in ALL_NUMERICS_TYPES {
+    for ty in ALL_NUMBER_CLASSES {
         with_number_mapped_type!(|NUM_TYPE| match ty {
-            NumberDataType::NUM_TYPE => {
+            NumberClass::NUM_TYPE => {
                 register_simple_domain_type_cmp!(registry, NumberType<NUM_TYPE>);
+            }
+            NumberClass::Decimal128 => {
+                register_decimal_compare_op(registry)
+            }
+            NumberClass::Decimal256 => {
+                // already registered in Decimal128 branch
             }
         });
     }

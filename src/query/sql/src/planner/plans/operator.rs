@@ -43,7 +43,7 @@ pub trait Operator {
         false
     }
 
-    fn transrormation_candidate_rules(&self) -> roaring::RoaringBitmap {
+    fn transformation_candidate_rules(&self) -> roaring::RoaringBitmap {
         (RuleID::NormalizeScalarFilter as u32..RuleID::CommuteJoin as u32)
             .collect::<RoaringBitmap>()
     }

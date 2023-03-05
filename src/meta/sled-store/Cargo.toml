@@ -26,7 +26,7 @@ byteorder = "1.4.3"
 once_cell = "1.15.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
-tempfile = "3.3.0"
+tempfile = "3.4.0"
 thiserror = { workspace = true }
 tracing = "0.1.36"
 

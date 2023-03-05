@@ -232,22 +232,6 @@ impl DataBlock {
         }
     }
 
-    /// Convert the columns to fit the type required by schema. This is used to
-    /// restore the lost information (e.g. the scale of decimal) before persisting
-    /// the columns to storage.
-    pub fn fit_schema(&self, schema: DataSchema) -> Self {
-        debug_assert!(self.num_columns() == schema.fields().len());
-        debug_assert!(
-            self.columns
-                .iter()
-                .zip(schema.fields())
-                .all(|(col, field)| { &col.data_type == field.data_type() })
-        );
-
-        // Return block directly, because we don't support decimal yet.
-        self.clone()
-    }
-
     pub fn slice(&self, range: Range<usize>) -> Self {
         let columns = self
             .columns()

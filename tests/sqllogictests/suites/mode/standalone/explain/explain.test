@@ -260,17 +260,17 @@ Query (children 1)
     └── SelectQuery (children 1)
         └── SelectList (children 4)
             ├── Target (children 1)
-            │   └── Literal Integer(1)
+            │   └── Literal UInt64(1)
             ├── Target (children 1)
             │   └── Literal String("ab")
             ├── Target (alias a) (children 1)
             │   └── Literal Array (children 3)
-            │       ├── Literal Integer(1)
-            │       ├── Literal Integer(2)
-            │       └── Literal Integer(3)
+            │       ├── Literal UInt64(1)
+            │       ├── Literal UInt64(2)
+            │       └── Literal UInt64(3)
             └── Target (alias t) (children 1)
                 └── Literal Tuple (children 2)
-                    ├── Literal Integer(1)
+                    ├── Literal UInt64(1)
                     └── Literal String("a")
 
 query T
@@ -285,10 +285,10 @@ Query (children 1)
         │           ├── Conditions (children 2)
         │           │   ├── Function > (children 2)
         │           │   │   ├── ColumnIdentifier a
-        │           │   │   └── Literal Integer(1)
+        │           │   │   └── Literal UInt64(1)
         │           │   └── Function < (children 2)
         │           │       ├── ColumnIdentifier a
-        │           │       └── Literal Integer(10)
+        │           │       └── Literal UInt64(10)
         │           ├── Results (children 2)
         │           │   ├── Literal String("x")
         │           │   └── Literal String("y")
@@ -317,21 +317,21 @@ Query (children 3)
 │       │       │   ├── Function In (children 2)
 │       │       │   │   ├── ColumnIdentifier a
 │       │       │   │   └── List (children 2)
-│       │       │   │       ├── Literal Integer(1)
-│       │       │   │       └── Literal Integer(2)
+│       │       │   │       ├── Literal UInt64(1)
+│       │       │   │       └── Literal UInt64(2)
 │       │       │   └── Function > (children 2)
 │       │       │       ├── ColumnIdentifier b
-│       │       │       └── Literal Integer(0)
+│       │       │       └── Literal UInt64(0)
 │       │       └── Function < (children 2)
 │       │           ├── ColumnIdentifier b
-│       │           └── Literal Integer(100)
+│       │           └── Literal UInt64(100)
 │       └── GroupByList (children 1)
 │           └── ColumnIdentifier a
 ├── OrderByList (children 1)
 │   └── OrderByElement (children 1)
 │       └── ColumnIdentifier a
 └── LimitList (children 1)
-    └── Literal Integer(3)
+    └── Literal UInt64(3)
 
 query T
 explain ast select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b and t1.a > 2
@@ -357,7 +357,7 @@ Query (children 1)
                             │       └── ColumnIdentifier t2.b
                             └── Function > (children 2)
                                 ├── ColumnIdentifier t1.a
-                                └── Literal Integer(2)
+                                └── Literal UInt64(2)
 
 query T
 explain ast with cte (a, b) as (select 1, 2 union all select 3, 4) select a, b from cte
@@ -372,16 +372,16 @@ Query (children 2)
 │                   │   └── SelectQuery (children 1)
 │                   │       └── SelectList (children 2)
 │                   │           ├── Target (children 1)
-│                   │           │   └── Literal Integer(1)
+│                   │           │   └── Literal UInt64(1)
 │                   │           └── Target (children 1)
-│                   │               └── Literal Integer(2)
+│                   │               └── Literal UInt64(2)
 │                   └── QueryBody (children 1)
 │                       └── SelectQuery (children 1)
 │                           └── SelectList (children 2)
 │                               ├── Target (children 1)
-│                               │   └── Literal Integer(3)
+│                               │   └── Literal UInt64(3)
 │                               └── Target (children 1)
-│                                   └── Literal Integer(4)
+│                                   └── Literal UInt64(4)
 └── QueryBody (children 1)
     └── SelectQuery (children 2)
         ├── SelectList (children 2)
@@ -412,13 +412,13 @@ Delete (children 2)
     ├── Function AND (children 2)
     │   ├── Function > (children 2)
     │   │   ├── ColumnIdentifier a
-    │   │   └── Literal Integer(100)
+    │   │   └── Literal UInt64(100)
     │   └── Function > (children 2)
     │       ├── ColumnIdentifier b
-    │       └── Literal Integer(1)
+    │       └── Literal UInt64(1)
     └── Function < (children 2)
         ├── ColumnIdentifier b
-        └── Literal Integer(10)
+        └── Literal UInt64(10)
 
 skipif clickhouse
 query T
@@ -483,14 +483,14 @@ CreateView (children 2)
             │   └── Target (alias a) (children 1)
             │       └── Function % (children 2)
             │           ├── ColumnIdentifier number
-            │           └── Literal Integer(3)
+            │           └── Literal UInt64(3)
             ├── TableList (children 1)
             │   └── TableFunction numbers (children 1)
-            │       └── Literal Integer(100)
+            │       └── Literal UInt64(100)
             └── Where (children 1)
                 └── Function > (children 2)
                     ├── ColumnIdentifier number
-                    └── Literal Integer(10)
+                    └── Literal UInt64(10)
 
 query T
 explain ast show create table t1
@@ -516,7 +516,7 @@ Query (children 1)
         │   └── Target (children 1)
         │       └── Function + (children 2)
         │           ├── ColumnIdentifier unknown_table.a
-        │           └── Literal Integer(1)
+        │           └── Literal UInt64(1)
         └── TableList (children 1)
             └── TableIdentifier unknown_table1
 

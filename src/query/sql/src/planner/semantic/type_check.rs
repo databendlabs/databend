@@ -733,7 +733,7 @@ impl<'a> TypeChecker<'a> {
                     let params = params
                         .iter()
                         .map(|literal| match literal {
-                            Literal::Integer(n) => Ok(*n as usize),
+                            Literal::UInt64(n) => Ok(*n as usize),
                             lit => Err(ErrorCode::SemanticError(format!(
                                 "Invalid parameter {lit} for scalar function"
                             ))
@@ -833,7 +833,7 @@ impl<'a> TypeChecker<'a> {
                         MapAccessor::Period { key } | MapAccessor::Colon { key } => {
                             Literal::String(key.name.clone())
                         }
-                        MapAccessor::PeriodNumber { key } => Literal::Integer(*key),
+                        MapAccessor::PeriodNumber { key } => Literal::UInt64(*key),
                         _ => {
                             return Err(ErrorCode::SemanticError(format!(
                                 "Unsupported accessor: {:?}",
@@ -931,6 +931,8 @@ impl<'a> TypeChecker<'a> {
                 )
                 .await?
             }
+
+            Expr::Map { span, kvs, .. } => self.resolve_map(*span, kvs).await?,
 
             Expr::Tuple { span, exprs, .. } => self.resolve_tuple(*span, exprs).await?,
         };
@@ -1656,8 +1658,8 @@ impl<'a> TypeChecker<'a> {
                         Expr::BinaryOp {
                             op, left, right, ..
                         } => {
-                            if let Expr::Literal {span:_, lit:Literal::Integer(l)} = **left
-                                && let Expr::Literal {span:_, lit:Literal::Integer(r)} = **right {
+                            if let Expr::Literal {span:_, lit:Literal::UInt64(l)} = **left
+                                && let Expr::Literal {span:_, lit:Literal::UInt64(r)} = **right {
                                 match op {
                                     BinaryOperator::Plus => (l + r) as i32,
                                     BinaryOperator::Minus => (l - r) as i32,
@@ -1668,7 +1670,7 @@ impl<'a> TypeChecker<'a> {
                         Expr::UnaryOp { op, expr, .. } => {
                             if let Expr::Literal {
                                 span: _,
-                                lit: Literal::Integer(i),
+                                lit: Literal::UInt64(i),
                             } = **expr
                             {
                                 match op {
@@ -1681,7 +1683,7 @@ impl<'a> TypeChecker<'a> {
                             }
                         }
                         Expr::Literal {
-                            lit: Literal::Integer(i),
+                            lit: Literal::UInt64(i),
                             ..
                         } => *i as i32,
                         _ => -1,
@@ -1713,7 +1715,7 @@ impl<'a> TypeChecker<'a> {
                 let box (inner_expr, inner_type) = inner_res.unwrap();
                 Some(match inner_type {
                     DataType::Array(inner) => {
-                        let return_type = inner.clone();
+                        let return_type = Box::new(inner.unnest().wrap_nullable());
                         Ok(Box::new((
                             ScalarExpr::Unnest(Unnest {
                                 return_type,
@@ -1772,7 +1774,7 @@ impl<'a> TypeChecker<'a> {
         required_type: Option<DataType>,
     ) -> Result<Box<(common_expression::Literal, DataType)>> {
         let value = match literal {
-            Literal::Integer(uint) => {
+            Literal::UInt64(uint) => {
                 // how to use match range?
                 if *uint <= u8::MAX as u64 {
                     common_expression::Literal::UInt8(*uint as u8)
@@ -1784,6 +1786,35 @@ impl<'a> TypeChecker<'a> {
                     common_expression::Literal::UInt64(*uint)
                 }
             }
+            Literal::Int64(int) => {
+                if *int >= i8::MIN as i64 && *int <= i8::MAX as i64 {
+                    common_expression::Literal::Int8(*int as i8)
+                } else if *int >= i16::MIN as i64 && *int <= i16::MAX as i64 {
+                    common_expression::Literal::Int16(*int as i16)
+                } else if *int >= i32::MIN as i64 && *int <= i32::MAX as i64 {
+                    common_expression::Literal::Int32(*int as i32)
+                } else {
+                    common_expression::Literal::Int64(*int)
+                }
+            }
+            Literal::Decimal128 {
+                value,
+                precision,
+                scale,
+            } => common_expression::Literal::Decimal128 {
+                value: *value,
+                precision: *precision,
+                scale: *scale,
+            },
+            Literal::Decimal256 {
+                value,
+                precision,
+                scale,
+            } => common_expression::Literal::Decimal256 {
+                value: *value,
+                precision: *precision,
+                scale: *scale,
+            },
             Literal::Float(float) => common_expression::Literal::Float64(F64::from(*float)),
             Literal::String(string) => {
                 common_expression::Literal::String(string.as_bytes().to_vec())
@@ -1860,6 +1891,32 @@ impl<'a> TypeChecker<'a> {
             (false, false) => "array_sort_desc_null_last",
         };
         self.resolve_scalar_function_call(span, func_name, vec![], vec![arg], None)
+            .await
+    }
+
+    #[async_recursion::async_recursion]
+    async fn resolve_map(
+        &mut self,
+        span: Span,
+        kvs: &[(Expr, Expr)],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let mut keys = Vec::with_capacity(kvs.len());
+        let mut vals = Vec::with_capacity(kvs.len());
+        for (key_expr, val_expr) in kvs {
+            let box (key_arg, _data_type) = self.resolve(key_expr, None).await?;
+            keys.push(key_arg);
+            let box (val_arg, _data_type) = self.resolve(val_expr, None).await?;
+            vals.push(val_arg);
+        }
+        let box (key_arg, _data_type) = self
+            .resolve_scalar_function_call(span, "array", vec![], keys, None)
+            .await?;
+        let box (val_arg, _data_type) = self
+            .resolve_scalar_function_call(span, "array", vec![], vals, None)
+            .await?;
+        let args = vec![key_arg, val_arg];
+
+        self.resolve_scalar_function_call(span, "map", vec![], args, None)
             .await
     }
 
@@ -1969,7 +2026,7 @@ impl<'a> TypeChecker<'a> {
             } = table_data_type
             {
                 let idx = match path_lit {
-                    Literal::Integer(idx) => {
+                    Literal::UInt64(idx) => {
                         if idx == 0 {
                             return Err(ErrorCode::SemanticError(
                                 "tuple index is starting from 1, but 0 is found".to_string(),
@@ -2048,7 +2105,7 @@ impl<'a> TypeChecker<'a> {
             {
                 let path = paths.pop_front().unwrap();
                 match path {
-                    Literal::Integer(idx) => {
+                    Literal::UInt64(idx) => {
                         if idx == 0 {
                             return Err(ErrorCode::SemanticError(
                                 "tuple index is starting from 1, but 0 is found".to_string(),
@@ -2436,9 +2493,33 @@ impl<'a> TypeChecker<'a> {
             TypeName::String => TableDataType::String,
             TypeName::Timestamp => TableDataType::Timestamp,
             TypeName::Date => TableDataType::Date,
-            TypeName::Array {
-                item_type: Some(item_type),
-            } => TableDataType::Array(Box::new(Self::resolve_type_name(item_type)?)),
+            TypeName::Array(item_type) => {
+                TableDataType::Array(Box::new(Self::resolve_type_name(item_type)?))
+            }
+            TypeName::Map { key_type, val_type } => {
+                let key_type = Self::resolve_type_name(key_type)?;
+                match key_type {
+                    TableDataType::Boolean
+                    | TableDataType::String
+                    | TableDataType::Number(_)
+                    | TableDataType::Decimal(_)
+                    | TableDataType::Timestamp
+                    | TableDataType::Date => {
+                        let val_type = Self::resolve_type_name(val_type)?;
+                        let inner_type = TableDataType::Tuple {
+                            fields_name: vec!["key".to_string(), "value".to_string()],
+                            fields_type: vec![key_type, val_type],
+                        };
+                        TableDataType::Map(Box::new(inner_type))
+                    }
+                    _ => {
+                        return Err(ErrorCode::Internal(format!(
+                            "Invalid Map key type \'{:?}\'",
+                            key_type
+                        )));
+                    }
+                }
+            }
             TypeName::Tuple {
                 fields_type,
                 fields_name,
@@ -2459,12 +2540,6 @@ impl<'a> TypeChecker<'a> {
                 TableDataType::Nullable(Box::new(Self::resolve_type_name(inner_type)?))
             }
             TypeName::Variant => TableDataType::Variant,
-            name => {
-                return Err(ErrorCode::Internal(format!(
-                    "Invalid type name \'{:?}\'",
-                    name
-                )));
-            }
         };
 
         Ok(data_type)

@@ -97,9 +97,9 @@ impl TypeDeserializer for DateDeserializer {
         Ok(())
     }
 
-    fn pop_data_value(&mut self) -> Result<()> {
+    fn pop_data_value(&mut self) -> Result<Scalar> {
         match self.builder.pop() {
-            Some(_) => Ok(()),
+            Some(v) => Ok(Scalar::Date(v)),
             None => Err(ErrorCode::from("Date column is empty when pop data value")),
         }
     }

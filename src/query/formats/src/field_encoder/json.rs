@@ -103,8 +103,6 @@ impl FieldEncoderRowBased for FieldEncoderJSON {
 
     fn write_decimal(&self, column: &DecimalColumn, row_index: usize, out_buf: &mut Vec<u8>) {
         let data = column.index(row_index).unwrap().to_string();
-        out_buf.push(b'"');
         out_buf.extend_from_slice(data.as_bytes());
-        out_buf.push(b'"');
     }
 }

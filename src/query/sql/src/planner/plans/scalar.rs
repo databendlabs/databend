@@ -98,6 +98,38 @@ impl ScalarExpr {
             ScalarExpr::Unnest(scalar) => scalar.argument.used_columns(),
         }
     }
+
+    /// Collect all [`ScalarExpr`]s that need to be eval before executing `UNNEST`.
+    pub fn collect_before_unnest_scalars(&self, scalars: &mut Vec<Box<ScalarExpr>>) {
+        match self {
+            ScalarExpr::AndExpr(scalar) => {
+                scalar.left.collect_before_unnest_scalars(scalars);
+                scalar.right.collect_before_unnest_scalars(scalars);
+            }
+            ScalarExpr::OrExpr(scalar) => {
+                scalar.left.collect_before_unnest_scalars(scalars);
+                scalar.right.collect_before_unnest_scalars(scalars);
+            }
+            ScalarExpr::NotExpr(scalar) => scalar.argument.collect_before_unnest_scalars(scalars),
+            ScalarExpr::ComparisonExpr(scalar) => {
+                scalar.left.collect_before_unnest_scalars(scalars);
+                scalar.right.collect_before_unnest_scalars(scalars);
+            }
+            ScalarExpr::AggregateFunction(scalar) => {
+                for scalar in &scalar.args {
+                    scalar.collect_before_unnest_scalars(scalars);
+                }
+            }
+            ScalarExpr::FunctionCall(scalar) => {
+                for scalar in &scalar.arguments {
+                    scalar.collect_before_unnest_scalars(scalars);
+                }
+            }
+            ScalarExpr::CastExpr(scalar) => scalar.argument.collect_before_unnest_scalars(scalars),
+            ScalarExpr::Unnest(scalar) => scalars.push(scalar.argument.clone()),
+            _ => {}
+        }
+    }
 }
 
 impl From<BoundColumnRef> for ScalarExpr {

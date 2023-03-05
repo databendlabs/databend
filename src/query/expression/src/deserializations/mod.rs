@@ -18,6 +18,7 @@ mod array;
 mod boolean;
 mod date;
 mod decimal;
+mod map;
 mod null;
 mod nullable;
 mod number;
@@ -33,6 +34,7 @@ pub use date::*;
 pub use decimal::*;
 use enum_dispatch::enum_dispatch;
 use ethnum::i256;
+pub use map::*;
 pub use null::*;
 pub use nullable::*;
 pub use number::*;
@@ -73,7 +75,7 @@ pub trait TypeDeserializer: Send + Sync {
     fn append_data_value(&mut self, value: Scalar, format: &FormatSettings) -> Result<()>;
 
     /// Note this method will return err only when inner builder is empty.
-    fn pop_data_value(&mut self) -> Result<()>;
+    fn pop_data_value(&mut self) -> Result<Scalar>;
 
     fn finish_to_column(&mut self) -> Column;
 }
@@ -83,6 +85,7 @@ pub enum TypeDeserializerImpl {
     Null(NullDeserializer),
     Nullable(NullableDeserializer),
     Array(ArrayDeserializer),
+    Map(MapDeserializer),
     Boolean(BooleanDeserializer),
     Int8(NumberDeserializer<i8, i8>),
     Int16(NumberDeserializer<i16, i16>),

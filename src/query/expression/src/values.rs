@@ -62,7 +62,6 @@ use crate::utils::arrow::constant_bitmap;
 use crate::utils::arrow::deserialize_column;
 use crate::utils::arrow::serialize_column;
 use crate::with_decimal_type;
-use crate::with_integer_mapped_type;
 use crate::with_number_type;
 
 #[derive(Debug, Clone, PartialEq, EnumAsInner)]
@@ -315,6 +314,7 @@ impl<'a> ScalarRef<'a> {
                 value: None,
             }),
             ScalarRef::EmptyArray => Domain::Array(None),
+            ScalarRef::EmptyMap => Domain::Map(None),
             ScalarRef::Number(num) => Domain::Number(num.domain()),
             ScalarRef::Decimal(dec) => Domain::Decimal(dec.domain()),
             ScalarRef::Boolean(true) => Domain::Boolean(BooleanDomain {
@@ -338,6 +338,20 @@ impl<'a> ScalarRef<'a> {
                     Domain::Array(Some(Box::new(array.domain())))
                 }
             }
+            ScalarRef::Map(map) => {
+                if map.len() == 0 {
+                    Domain::Map(None)
+                } else {
+                    let inner_domain = map.domain();
+                    let map_domain = match inner_domain {
+                        Domain::Tuple(domains) => {
+                            (Box::new(domains[0].clone()), Box::new(domains[1].clone()))
+                        }
+                        _ => unreachable!(),
+                    };
+                    Domain::Map(Some(map_domain))
+                }
+            }
             ScalarRef::Tuple(fields) => {
                 let types = data_type.as_tuple().unwrap();
                 Domain::Tuple(
@@ -348,7 +362,7 @@ impl<'a> ScalarRef<'a> {
                         .collect(),
                 )
             }
-            ScalarRef::EmptyMap | ScalarRef::Map(_) | ScalarRef::Variant(_) => Domain::Undefined,
+            ScalarRef::Variant(_) => Domain::Undefined,
         }
     }
 
@@ -378,22 +392,35 @@ impl<'a> ScalarRef<'a> {
         }
     }
 
-    pub fn cast_to_u64(&self) -> Option<u64> {
+    /// Infer the data type of the scalar.
+    /// If the scalar is Null, the data type is `DataType::Null`,
+    /// otherwise, the inferred data type is not nullable.
+    pub fn infer_data_type(&self) -> DataType {
         match self {
-            ScalarRef::Number(t) => with_integer_mapped_type!(|NUM_TYPE| match t {
-                NumberScalar::NUM_TYPE(v) => {
-                    if *v >= 0 as _ { Some(*v as _) } else { None }
-                }
-                _ => None,
+            ScalarRef::Null => DataType::Null,
+            ScalarRef::EmptyArray => DataType::EmptyArray,
+            ScalarRef::EmptyMap => DataType::EmptyMap,
+            ScalarRef::Number(s) => with_number_type!(|NUM_TYPE| match s {
+                NumberScalar::NUM_TYPE(_) => DataType::Number(NumberDataType::NUM_TYPE),
             }),
-            ScalarRef::Timestamp(i) => {
-                if *i >= 0 {
-                    Some(*i as u64)
-                } else {
-                    None
-                }
+            ScalarRef::Decimal(s) => with_decimal_type!(|DECIMAL_TYPE| match s {
+                DecimalScalar::DECIMAL_TYPE(_, size) =>
+                    DataType::Decimal(DecimalDataType::DECIMAL_TYPE(*size)),
+            }),
+            ScalarRef::Boolean(_) => DataType::Boolean,
+            ScalarRef::String(_) => DataType::String,
+            ScalarRef::Timestamp(_) => DataType::Timestamp,
+            ScalarRef::Date(_) => DataType::Date,
+            ScalarRef::Array(array) => DataType::Array(Box::new(array.data_type())),
+            ScalarRef::Map(col) => DataType::Map(Box::new(col.data_type())),
+            ScalarRef::Tuple(fields) => {
+                let inner = fields
+                    .iter()
+                    .map(|field| field.infer_data_type())
+                    .collect::<Vec<_>>();
+                DataType::Tuple(inner)
             }
-            _ => None,
+            ScalarRef::Variant(_) => DataType::Variant,
         }
     }
 }
@@ -405,6 +432,7 @@ impl PartialOrd for Scalar {
             (Scalar::EmptyArray, Scalar::EmptyArray) => Some(Ordering::Equal),
             (Scalar::EmptyMap, Scalar::EmptyMap) => Some(Ordering::Equal),
             (Scalar::Number(n1), Scalar::Number(n2)) => n1.partial_cmp(n2),
+            (Scalar::Decimal(d1), Scalar::Decimal(d2)) => d1.partial_cmp(d2),
             (Scalar::Boolean(b1), Scalar::Boolean(b2)) => b1.partial_cmp(b2),
             (Scalar::String(s1), Scalar::String(s2)) => s1.partial_cmp(s2),
             (Scalar::Timestamp(t1), Scalar::Timestamp(t2)) => t1.partial_cmp(t2),
@@ -413,7 +441,7 @@ impl PartialOrd for Scalar {
             (Scalar::Map(m1), Scalar::Map(m2)) => m1.partial_cmp(m2),
             (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
             (Scalar::Variant(v1), Scalar::Variant(v2)) => {
-                common_jsonb::compare(v1.as_slice(), v2.as_slice()).ok()
+                jsonb::compare(v1.as_slice(), v2.as_slice()).ok()
             }
             _ => None,
         }
@@ -439,6 +467,7 @@ impl PartialOrd for ScalarRef<'_> {
             (ScalarRef::EmptyArray, ScalarRef::EmptyArray) => Some(Ordering::Equal),
             (ScalarRef::EmptyMap, ScalarRef::EmptyMap) => Some(Ordering::Equal),
             (ScalarRef::Number(n1), ScalarRef::Number(n2)) => n1.partial_cmp(n2),
+            (ScalarRef::Decimal(d1), ScalarRef::Decimal(d2)) => d1.partial_cmp(d2),
             (ScalarRef::Boolean(b1), ScalarRef::Boolean(b2)) => b1.partial_cmp(b2),
             (ScalarRef::String(s1), ScalarRef::String(s2)) => s1.partial_cmp(s2),
             (ScalarRef::Timestamp(t1), ScalarRef::Timestamp(t2)) => t1.partial_cmp(t2),
@@ -446,7 +475,7 @@ impl PartialOrd for ScalarRef<'_> {
             (ScalarRef::Array(a1), ScalarRef::Array(a2)) => a1.partial_cmp(a2),
             (ScalarRef::Map(m1), ScalarRef::Map(m2)) => m1.partial_cmp(m2),
             (ScalarRef::Tuple(t1), ScalarRef::Tuple(t2)) => t1.partial_cmp(t2),
-            (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => common_jsonb::compare(v1, v2).ok(),
+            (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => jsonb::compare(v1, v2).ok(),
             _ => None,
         }
     }
@@ -532,7 +561,7 @@ impl PartialOrd for Column {
             }
             (Column::Variant(col1), Column::Variant(col2)) => col1
                 .iter()
-                .partial_cmp_by(col2.iter(), |v1, v2| common_jsonb::compare(v1, v2).ok()),
+                .partial_cmp_by(col2.iter(), |v1, v2| jsonb::compare(v1, v2).ok()),
             _ => None,
         }
     }
@@ -721,6 +750,20 @@ impl Column {
                     Domain::Array(Some(Box::new(inner_domain)))
                 }
             }
+            Column::Map(col) => {
+                if col.len() == 0 {
+                    Domain::Map(None)
+                } else {
+                    let inner_domain = col.values.domain();
+                    let map_domain = match inner_domain {
+                        Domain::Tuple(domains) => {
+                            (Box::new(domains[0].clone()), Box::new(domains[1].clone()))
+                        }
+                        _ => unreachable!(),
+                    };
+                    Domain::Map(Some(map_domain))
+                }
+            }
             Column::Nullable(col) => {
                 let inner_domain = col.column.domain();
                 Domain::Nullable(NullableDomain {
@@ -732,7 +775,7 @@ impl Column {
                 let domains = fields.iter().map(|col| col.domain()).collect::<Vec<_>>();
                 Domain::Tuple(domains)
             }
-            Column::Map(_) | Column::Variant(_) => Domain::Undefined,
+            Column::Variant(_) => Domain::Undefined,
         }
     }
 
@@ -945,11 +988,25 @@ impl Column {
             Column::Map(col) => {
                 let offsets: Buffer<i32> =
                     col.offsets.iter().map(|offset| *offset as i32).collect();
+                let values = match (&arrow_type, &col.values) {
+                    (ArrowType::Map(inner_field, _), Column::Tuple { fields, .. }) => {
+                        let inner_type = inner_field.data_type.clone();
+                        Box::new(
+                            common_arrow::arrow::array::StructArray::try_new(
+                                inner_type,
+                                fields.iter().map(|field| field.as_arrow()).collect(),
+                                None,
+                            )
+                            .unwrap(),
+                        )
+                    }
+                    (_, _) => unreachable!(),
+                };
                 Box::new(
                     common_arrow::arrow::array::MapArray::try_new(
                         arrow_type,
                         unsafe { OffsetsBuffer::new_unchecked(offsets) },
-                        col.values.as_arrow(),
+                        values,
                         None,
                     )
                     .unwrap(),
@@ -1348,6 +1405,20 @@ impl Column {
         }
     }
 
+    pub fn wrap_nullable(self) -> Self {
+        match self {
+            col @ Column::Nullable(_) => col,
+            col => {
+                let mut validity = MutableBitmap::with_capacity(col.len());
+                validity.extend_constant(col.len(), true);
+                Column::Nullable(Box::new(NullableColumn {
+                    column: col,
+                    validity: validity.into(),
+                }))
+            }
+        }
+    }
+
     pub fn memory_size(&self) -> usize {
         match self {
             Column::Null { .. } => std::mem::size_of::<usize>(),
@@ -1575,7 +1646,7 @@ impl ColumnBuilder {
             DataType::Map(ty) => {
                 let mut offsets = Vec::with_capacity(capacity + 1);
                 offsets.push(0);
-                ColumnBuilder::Array(Box::new(ArrayColumnBuilder {
+                ColumnBuilder::Map(Box::new(ArrayColumnBuilder {
                     builder: Self::with_capacity(ty, 0),
                     offsets,
                 }))
