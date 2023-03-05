@@ -36,8 +36,8 @@ use crate::operations::merge_into::AppendTransform;
 use crate::operations::merge_into::BroadcastProcessor;
 use crate::operations::merge_into::CommitSink;
 use crate::operations::merge_into::MergeIntoOperationAggregator;
-use crate::operations::merge_into::ReplaceIntoProcessor;
 use crate::operations::merge_into::TableMutationAggregator;
+use crate::operations::replace_into::processor_replace_into::ReplaceIntoProcessor;
 use crate::pipelines::Pipeline;
 use crate::FuseTable;
 

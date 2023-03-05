@@ -18,6 +18,7 @@ use std::collections::HashSet;
 
 use common_exception::ErrorCode;
 use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_expression::Scalar;
 
@@ -55,20 +56,19 @@ impl BlockMetaInfo for MergeIntoOperation {
     }
 }
 
-impl<'a> TryFrom<&'a DataBlock> for &'a MergeIntoOperation {
+impl TryFrom<DataBlock> for MergeIntoOperation {
     type Error = ErrorCode;
 
-    fn try_from(value: &'a DataBlock) -> Result<Self, Self::Error> {
-        let meta = value.get_meta().ok_or_else(|| {
+    fn try_from(value: DataBlock) -> Result<Self, Self::Error> {
+        let meta = value.get_owned_meta().ok_or_else(|| {
             ErrorCode::Internal(
                 "convert MergeIntoOperation from data block failed, no block meta found",
             )
         })?;
-        match meta.as_any().downcast_ref::<MergeIntoOperation>() {
-            Some(v) => Ok(v),
-            None => Err(ErrorCode::Internal(
-                "Cannot downcast from BlockMetaInfo to MergeIntoOperation.",
-            )),
-        }
+        MergeIntoOperation::downcast_from(meta).ok_or_else(|| {
+            ErrorCode::Internal(
+                "downcast block meta to MutationIntoOperation failed, type mismatch",
+            )
+        })
     }
 }

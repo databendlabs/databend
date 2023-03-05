@@ -33,9 +33,9 @@ use crate::io::try_join_futures_with_vec;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::merge_into::mutation_meta::mutation_log::CommitMeta;
-use crate::operations::merge_into::mutation_meta::mutation_log::Mutation;
 use crate::operations::merge_into::mutation_meta::mutation_log::MutationLogEntry;
 use crate::operations::merge_into::mutation_meta::mutation_log::MutationLogs;
+use crate::operations::merge_into::mutation_meta::mutation_log::Replacement;
 use crate::operations::merge_into::mutator::mutation_accumulator::MutationAccumulator;
 use crate::operations::merge_into::mutator::mutation_accumulator::SerializedSegment;
 use crate::operations::mutation::AbortOperation;
@@ -75,13 +75,13 @@ impl TableMutationAggregator {
 }
 
 impl TableMutationAggregator {
-    pub fn accumulate_mutation(&mut self, mutations: &MutationLogs) {
+    pub fn accumulate_mutation(&mut self, mutations: MutationLogs) {
         for entry in &mutations.entries {
             self.mutation_accumulator.accumulate_log_entry(entry);
             // TODO wrap this aborts in mutation accumulator
             match entry {
-                MutationLogEntry::Mutation(mutation) => {
-                    if let Mutation::Replaced(block_meta) = &mutation.op {
+                MutationLogEntry::Replacement(mutation) => {
+                    if let Replacement::Replaced(block_meta) = &mutation.op {
                         self.abort_operation.add_block(block_meta);
                     }
                 }
@@ -104,7 +104,7 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
 
     async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
         // TODO wasting the ownership of data block
-        let mutation = (&data).try_into()?;
+        let mutation = data.try_into()?;
         self.accumulate_mutation(mutation);
         Ok(None)
     }

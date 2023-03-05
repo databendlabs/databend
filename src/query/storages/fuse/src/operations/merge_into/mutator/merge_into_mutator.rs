@@ -32,6 +32,7 @@ use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
+use tracing::debug;
 
 use crate::io::write_data;
 use crate::io::BlockBuilder;
@@ -44,10 +45,10 @@ use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::Del
 use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::MergeIntoOperation;
 use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::UniqueKeyDigest;
 use crate::operations::merge_into::mutation_meta::mutation_log::BlockMetaIndex;
-use crate::operations::merge_into::mutation_meta::mutation_log::Mutation;
-use crate::operations::merge_into::mutation_meta::mutation_log::MutationLog;
 use crate::operations::merge_into::mutation_meta::mutation_log::MutationLogEntry;
 use crate::operations::merge_into::mutation_meta::mutation_log::MutationLogs;
+use crate::operations::merge_into::mutation_meta::mutation_log::Replacement;
+use crate::operations::merge_into::mutation_meta::mutation_log::ReplacementLogEntry;
 use crate::operations::merge_into::mutator::deletion_accumulator::DeletionAccumulator;
 use crate::operations::mutation::base_mutator::BlockIndex;
 use crate::operations::mutation::base_mutator::SegmentIndex;
@@ -107,7 +108,7 @@ impl MergeIntoOperationAggregator {
 
 // aggregate mutations (currently, deletion only)
 impl MergeIntoOperationAggregator {
-    pub async fn accumulate(&mut self, merge_action: &MergeIntoOperation) -> Result<()> {
+    pub async fn accumulate(&mut self, merge_action: MergeIntoOperation) -> Result<()> {
         match &merge_action {
             MergeIntoOperation::Delete(DeletionByColumn {
                 key_min,
@@ -123,6 +124,7 @@ impl MergeIntoOperationAggregator {
                     };
                     // for typical configuration, segment cache is enabled, thus after the first loop, we are reading from cache
                     let segment_info = self.segment_reader.read(&load_param).await?;
+
                     // segment level
                     if self.overlapped(&segment_info.summary.col_stats, key_min, key_max) {
                         // block level
@@ -152,7 +154,7 @@ impl MergeIntoOperationAggregator {
             // do we need a local cache?
             let (path, ver) = self.segment_locations.get(segment_idx).ok_or_else(|| {
                 ErrorCode::Internal(format!(
-                    "unexpected, segment (idx {}) not found, during appply",
+                    "unexpected, segment (idx {}) not found, during applying mutation log",
                     segment_idx
                 ))
             })?;
@@ -172,7 +174,7 @@ impl MergeIntoOperationAggregator {
                     .apply_deletion_to_data_block(*segment_idx, *block_index, block_meta, keys)
                     .await?
                 {
-                    mutation_logs.push(MutationLogEntry::Mutation(segment_mutation_log));
+                    mutation_logs.push(MutationLogEntry::Replacement(segment_mutation_log));
                 }
             }
         }
@@ -187,7 +189,8 @@ impl MergeIntoOperationAggregator {
         block_index: BlockIndex,
         block_meta: &BlockMeta,
         deleted_key_hashes: &HashSet<UniqueKeyDigest>,
-    ) -> Result<Option<MutationLog>> {
+    ) -> Result<Option<ReplacementLogEntry>> {
+        debug!("apply delete to segment {}", segment_index);
         if block_meta.row_count == 0 {
             return Ok(None);
         }
@@ -204,11 +207,23 @@ impl MergeIntoOperationAggregator {
             .await?;
         let num_rows = data_block.num_rows();
 
-        // TODO report an error
-        let key_column = data_block.columns()[on_conflict_field_index]
+        let key_column = data_block
+            .columns()
+            .get(on_conflict_field_index)
+            .ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "unexpected, block entry (index {}) not found. segment index {}, block index {}",
+                    on_conflict_field_index, segment_index, block_index
+                ))
+            })?
             .value
             .as_column()
-            .unwrap();
+            .ok_or_else(||{
+                ErrorCode::Internal(format!(
+                    "unexpected, cast block entry (index {}) to column failed, got None. segment index {}, block index {}",
+                    on_conflict_field_index, segment_index, block_index
+                ))
+            })?;
 
         let mut bitmap = MutableBitmap::new();
         for i in 0..num_rows {
@@ -222,20 +237,22 @@ impl MergeIntoOperationAggregator {
 
         // shortcuts
         if bitmap.unset_bits() == 0 {
+            debug!("nothing deleted");
             // nothing to be deleted
             return Ok(None);
         }
 
         if bitmap.unset_bits() == block_meta.row_count as usize {
+            debug!("whole block deletion");
             // whole block deletion
             // NOTE that if deletion marker is enabled, check the real meaning of `row_count`
-            let mutation = MutationLog {
+            let mutation = ReplacementLogEntry {
                 index: BlockMetaIndex {
                     segment_idx: segment_index,
                     block_idx: block_index,
                     range: None,
                 },
-                op: Mutation::Deleted,
+                op: Replacement::Deleted,
             };
 
             return Ok(Some(mutation));
@@ -243,6 +260,7 @@ impl MergeIntoOperationAggregator {
 
         let bitmap = bitmap.into();
         let new_block = data_block.filter_with_bitmap(&bitmap)?;
+        debug!("number of row deleted: {}", bitmap.unset_bits());
 
         // serialization and compression is cpu intensive, send them to dedicated thread pool
         // and wait (asyncly, which will NOT block the executor thread)
@@ -260,13 +278,13 @@ impl MergeIntoOperationAggregator {
         }
 
         // generate log
-        let mutation = MutationLog {
+        let mutation = ReplacementLogEntry {
             index: BlockMetaIndex {
                 segment_idx: segment_index,
                 block_idx: block_index,
                 range: None,
             },
-            op: Mutation::Replaced(Arc::new(new_block_meta)),
+            op: Replacement::Replaced(Arc::new(new_block_meta)),
         };
 
         Ok(Some(mutation))
@@ -279,14 +297,11 @@ impl MergeIntoOperationAggregator {
         key_max: &Scalar,
     ) -> bool {
         if let Some(stats) = column_stats.get(&self.on_conflict_field_id) {
-            return if &stats.max <= key_min || key_max <= &stats.min {
-                // non-coincide overlap
-                true
-            } else {
-                // coincide overlap
-                &stats.max == key_max && &stats.min == key_min
-            };
+            std::cmp::min(key_max, &stats.max) >= std::cmp::max(key_min, &stats.min)
+            || // coincide overlap
+            (&stats.max == key_max && &stats.min == key_min)
+        } else {
+            false
         }
-        false
     }
 }

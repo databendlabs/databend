@@ -15,7 +15,7 @@
 
 /// This is an ongoing refactor of table mutations:
 /// which will eventually unify the mutation operation, mutation log, commit action
-mod mutation_meta;
+pub mod mutation_meta;
 mod mutator;
 mod processors;
 
@@ -24,5 +24,4 @@ pub use processors::AppendTransform;
 pub use processors::BroadcastProcessor;
 pub use processors::CommitSink;
 pub use processors::MergeIntoOperationAggregator;
-pub use processors::ReplaceIntoProcessor;
 pub use processors::TableMutationAggregator;

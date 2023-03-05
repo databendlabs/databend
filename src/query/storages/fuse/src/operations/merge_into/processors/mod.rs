@@ -19,11 +19,9 @@ mod sink_commit;
 mod transform_append;
 mod transform_merge_into_mutation_aggregator;
 mod transform_mutation_aggregator;
-mod transform_replace_into;
 
 pub use processor_broadcast::*;
 pub use sink_commit::CommitSink;
 pub use transform_append::AppendTransform;
 pub use transform_merge_into_mutation_aggregator::*;
 pub use transform_mutation_aggregator::*;
-pub use transform_replace_into::*;

@@ -20,6 +20,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use storages_common_table_meta::meta::BlockMeta;
@@ -29,11 +30,27 @@ use storages_common_table_meta::meta::Statistics;
 
 use crate::operations::mutation::AbortOperation;
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct MutationLogs {
+    pub entries: Vec<MutationLogEntry>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub enum MutationLogEntry {
+    Replacement(ReplacementLogEntry),
+    Append(AppendOperationLogEntry),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct ReplacementLogEntry {
+    pub index: BlockMetaIndex,
+    pub op: Replacement,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum Mutation {
-    DoNothing,
+pub enum Replacement {
     Replaced(Arc<BlockMeta>),
-    Deleted, // <- consider remove this
+    Deleted, // replace something with nothing
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
@@ -41,18 +58,6 @@ pub struct BlockMetaIndex {
     pub segment_idx: usize,
     pub block_idx: usize,
     pub range: Option<Range<usize>>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct MutationLog {
-    pub index: BlockMetaIndex,
-    pub op: Mutation,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub enum MutationLogEntry {
-    Mutation(MutationLog),
-    Append(AppendOperationLogEntry),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -70,11 +75,6 @@ impl AppendOperationLogEntry {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
-pub struct MutationLogs {
-    pub entries: Vec<MutationLogEntry>,
-}
-
 impl MutationLogs {
     pub fn push_append(&mut self, log_entry: AppendOperationLogEntry) {
         self.entries.push(MutationLogEntry::Append(log_entry))
@@ -87,15 +87,15 @@ impl BlockMetaInfo for MutationLogs {
         self
     }
 
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        Box::new(self.clone())
-    }
-
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         match info.as_any().downcast_ref::<MutationLogs>() {
             None => false,
             Some(other) => self == other,
         }
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
     }
 }
 
@@ -165,16 +165,16 @@ impl From<MutationLogs> for DataBlock {
     }
 }
 
-impl<'a> TryFrom<&'a DataBlock> for &'a MutationLogs {
+impl TryFrom<DataBlock> for MutationLogs {
     type Error = ErrorCode;
-    fn try_from(value: &'a DataBlock) -> std::result::Result<Self, Self::Error> {
-        let block_meta = value.get_meta().ok_or_else(|| {
+    fn try_from(value: DataBlock) -> std::result::Result<Self, Self::Error> {
+        let block_meta = value.get_owned_meta().ok_or_else(|| {
             ErrorCode::Internal(
                 "converting data block meta to MutationLogs failed, no data block meta found",
             )
         })?;
-        MutationLogs::from_meta(block_meta)
+        MutationLogs::downcast_from(block_meta).ok_or_else(|| {
+            ErrorCode::Internal("downcast block meta to MutationLogs failed, type mismatch")
+        })
     }
 }
-
-// TODO better names

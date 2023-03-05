@@ -13,6 +13,5 @@
 // limitations under the License.
 //
 
-pub mod deletion_accumulator;
-pub mod merge_into_mutator;
-pub mod mutation_accumulator;
+pub mod mutator_replace_into;
+pub mod processor_replace_into;

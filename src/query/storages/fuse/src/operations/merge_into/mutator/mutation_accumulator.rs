@@ -27,9 +27,9 @@ use storages_common_table_meta::meta::Statistics;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::merge_into::mutation_meta::mutation_log::AppendOperationLogEntry;
 use crate::operations::merge_into::mutation_meta::mutation_log::CommitMeta;
-use crate::operations::merge_into::mutation_meta::mutation_log::Mutation;
-use crate::operations::merge_into::mutation_meta::mutation_log::MutationLog;
 use crate::operations::merge_into::mutation_meta::mutation_log::MutationLogEntry;
+use crate::operations::merge_into::mutation_meta::mutation_log::Replacement;
+use crate::operations::merge_into::mutation_meta::mutation_log::ReplacementLogEntry;
 use crate::operations::mutation::base_mutator::BlockIndex;
 use crate::operations::mutation::base_mutator::SegmentIndex;
 use crate::operations::mutation::AbortOperation;
@@ -80,9 +80,9 @@ pub struct MutationAccumulator {
 }
 
 impl MutationAccumulator {
-    pub fn accumulate_mutation(&mut self, meta: &MutationLog) {
+    pub fn accumulate_mutation(&mut self, meta: &ReplacementLogEntry) {
         match &meta.op {
-            Mutation::Replaced(block_meta) => {
+            Replacement::Replaced(block_meta) => {
                 self.mutations
                     .entry(meta.index.segment_idx)
                     .and_modify(|v| v.push_replaced(meta.index.block_idx, block_meta.clone()))
@@ -91,13 +91,12 @@ impl MutationAccumulator {
                         block_meta.clone(),
                     ));
             }
-            Mutation::Deleted => {
+            Replacement::Deleted => {
                 self.mutations
                     .entry(meta.index.segment_idx)
                     .and_modify(|v| v.push_deleted(meta.index.block_idx))
                     .or_insert(BlockMutations::new_deletion(meta.index.block_idx));
             }
-            Mutation::DoNothing => (),
         }
     }
 
@@ -110,7 +109,7 @@ impl MutationAccumulator {
 
     pub fn accumulate_log_entry(&mut self, log_entry: &MutationLogEntry) {
         match log_entry {
-            MutationLogEntry::Mutation(mutation) => self.accumulate_mutation(mutation),
+            MutationLogEntry::Replacement(mutation) => self.accumulate_mutation(mutation),
             MutationLogEntry::Append(append) => self.accumulate_append(append),
         }
     }
@@ -212,12 +211,3 @@ impl MutationAccumulator {
         Ok((meta, serialized_segments))
     }
 }
-
-// mod tests {
-//    use super::*;
-//
-//    #[test]
-//    fn test_column_digest() -> Result<()> {
-//        Ok(())
-//    }
-//}

@@ -26,6 +26,7 @@ mod operation_log;
 mod read_data;
 mod read_partitions;
 mod recluster;
+mod replace;
 mod replace_into;
 mod truncate;
 mod update;

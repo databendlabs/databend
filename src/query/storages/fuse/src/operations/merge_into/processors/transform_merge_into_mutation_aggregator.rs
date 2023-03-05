@@ -34,7 +34,7 @@ impl AsyncAccumulatingTransform for MergeIntoOperationAggregator {
 
     async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
         // accumulate mutations
-        let merge_into_operation = <&MergeIntoOperation>::try_from(&data)?;
+        let merge_into_operation = MergeIntoOperation::try_from(data)?;
         self.accumulate(merge_into_operation).await?;
         // no partial output
         Ok(None)

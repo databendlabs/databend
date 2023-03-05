@@ -26,7 +26,7 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
-pub use crate::operations::merge_into::mutator::replace_into_mutator::ReplaceIntoMutator;
+use crate::operations::replace_into::mutator_replace_into::ReplaceIntoMutator;
 
 pub struct ReplaceIntoProcessor {
     replace_into_mutator: ReplaceIntoMutator,
