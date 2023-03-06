@@ -14,7 +14,9 @@
 
 use common_exception::Result;
 
+use crate::optimizer::rule::Rule;
 use crate::optimizer::ColumnSet;
+use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Filter;
 use crate::plans::PatternPlan;
@@ -24,14 +26,16 @@ use crate::plans::ScalarExpr;
 use crate::plans::Scan;
 use crate::MetadataRef;
 
-pub struct PrewhereOptimizer {
+pub struct RulePushDownPrewhere {
+    id: RuleID,
     metadata: MetadataRef,
     pattern: SExpr,
 }
 
-impl PrewhereOptimizer {
+impl RulePushDownPrewhere {
     pub fn new(metadata: MetadataRef) -> Self {
         Self {
+            id: RuleID::PushDownPrewhere,
             metadata,
             pattern: SExpr::create_unary(
                 PatternPlan {
@@ -91,47 +95,58 @@ impl PrewhereOptimizer {
         columns
     }
 
-    pub fn prewhere_optimize(&self, s_expr: SExpr) -> Result<SExpr> {
-        if s_expr.match_pattern(&self.pattern) {
-            let filter: Filter = s_expr.plan().clone().try_into()?;
-            let mut get: Scan = s_expr.child(0)?.plan().clone().try_into()?;
-            get.push_down_predicates = Some(filter.predicates.clone());
-            let metadata = self.metadata.read().clone();
+    pub fn prewhere_optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
+        let filter: Filter = s_expr.plan().clone().try_into()?;
+        let mut get: Scan = s_expr.child(0)?.plan().clone().try_into()?;
+        let metadata = self.metadata.read().clone();
 
-            let table = metadata.table(get.table_index).table();
-            if !table.support_prewhere() {
-                // cannot optimize
-                return Ok(s_expr);
-            }
-
-            let mut prewhere_columns = ColumnSet::new();
-            let mut prewhere_pred = Vec::new();
-
-            // filter.predicates are already splited by AND
-            for pred in filter.predicates.iter() {
-                let columns = Self::collect_columns(pred);
-                prewhere_pred.push(pred.clone());
-                prewhere_columns.extend(&columns);
-            }
-
-            get.prewhere = if prewhere_pred.is_empty() {
-                None
-            } else {
-                Some(Prewhere {
-                    output_columns: get.columns.clone(),
-                    prewhere_columns,
-                    predicates: prewhere_pred,
-                })
-            };
-
-            Ok(SExpr::create_leaf(get.into()))
-        } else {
-            let children = s_expr
-                .children()
-                .iter()
-                .map(|expr| self.prewhere_optimize(expr.clone()))
-                .collect::<Result<Vec<_>>>()?;
-            Ok(s_expr.replace_children(children))
+        let table = metadata.table(get.table_index).table();
+        if !table.support_prewhere() {
+            // cannot optimize
+            return Ok(s_expr.clone());
         }
+
+        let mut prewhere_columns = ColumnSet::new();
+        let mut prewhere_pred = Vec::new();
+
+        // filter.predicates are already splited by AND
+        for pred in filter.predicates.iter() {
+            let columns = Self::collect_columns(pred);
+            prewhere_pred.push(pred.clone());
+            prewhere_columns.extend(&columns);
+        }
+
+        get.prewhere = if prewhere_pred.is_empty() {
+            None
+        } else {
+            Some(Prewhere {
+                output_columns: get.columns.clone(),
+                prewhere_columns,
+                predicates: prewhere_pred,
+            })
+        };
+
+        Ok(SExpr::create_leaf(get.into()))
+    }
+}
+
+impl Rule for RulePushDownPrewhere {
+    fn id(&self) -> RuleID {
+        self.id
+    }
+
+    fn pattern(&self) -> &SExpr {
+        &self.pattern
+    }
+
+    fn apply(
+        &self,
+        s_expr: &SExpr,
+        state: &mut crate::optimizer::rule::TransformResult,
+    ) -> Result<()> {
+        let mut result = self.prewhere_optimize(s_expr)?;
+        result.set_applied_rule(&self.id);
+        state.add_result(result);
+        Ok(())
     }
 }
