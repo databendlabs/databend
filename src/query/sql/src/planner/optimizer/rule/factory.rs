@@ -25,6 +25,7 @@ use super::rewrite::RulePushDownFilterEvalScalar;
 use super::rewrite::RulePushDownFilterJoin;
 use super::rewrite::RulePushDownLimitAggregate;
 use super::rewrite::RulePushDownLimitExpression;
+use super::rewrite::RulePushDownPrewhere;
 use super::transform::RuleCommuteJoin;
 use super::transform::RuleLeftAssociateJoin;
 use super::transform::RuleRightAssociateJoin;
@@ -103,6 +104,7 @@ impl RuleFactory {
             RuleID::LeftExchangeJoin => Ok(Box::new(RuleLeftExchangeJoin::new())),
             RuleID::RightExchangeJoin => Ok(Box::new(RuleRightExchangeJoin::new())),
             RuleID::ExchangeJoin => Ok(Box::new(RuleExchangeJoin::new())),
+            RuleID::PushDownPrewhere => Ok(Box::new(RulePushDownPrewhere::new(metadata.unwrap()))),
         }
     }
 }

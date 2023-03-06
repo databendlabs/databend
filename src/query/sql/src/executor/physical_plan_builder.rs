@@ -52,6 +52,7 @@ use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::EvalScalar;
 use crate::executor::FragmentKind;
 use crate::executor::PhysicalPlan;
+use crate::executor::RuntimeFilterSource;
 use crate::executor::SortDesc;
 use crate::executor::UnionAll;
 use crate::optimizer::ColumnSet;
@@ -298,6 +299,7 @@ impl PhysicalPlanBuilder {
                     marker_index: join.marker_index,
                     from_correlated_subquery: join.from_correlated_subquery,
 
+                    contain_runtime_filter: join.contain_runtime_filter,
                     stat_info: Some(stat_info),
                 }))
             }
@@ -694,6 +696,46 @@ impl PhysicalPlanBuilder {
                     schema: DataSchemaRefExt::create(fields),
 
                     stat_info: Some(stat_info),
+                }))
+            }
+            RelOperator::RuntimeFilterSource(op) => {
+                let left_side = Box::new(self.build(s_expr.child(0)?).await?);
+                let left_schema = left_side.output_schema()?;
+                let right_side = Box::new(self.build(s_expr.child(1)?).await?);
+                let right_schema = right_side.output_schema()?;
+                let mut left_runtime_filters = BTreeMap::new();
+                let mut right_runtime_filters = BTreeMap::new();
+                for (left, right) in op
+                    .left_runtime_filters
+                    .iter()
+                    .zip(op.right_runtime_filters.iter())
+                {
+                    left_runtime_filters.insert(
+                        left.0.clone(),
+                        left.1
+                            .as_expr_with_col_index()?
+                            .project_column_ref(|index| {
+                                left_schema.index_of(&index.to_string()).unwrap()
+                            })
+                            .as_remote_expr(),
+                    );
+                    right_runtime_filters.insert(
+                        right.0.clone(),
+                        right
+                            .1
+                            .as_expr_with_col_index()?
+                            .project_column_ref(|index| {
+                                right_schema.index_of(&index.to_string()).unwrap()
+                            })
+                            .as_remote_expr(),
+                    );
+                }
+                Ok(PhysicalPlan::RuntimeFilterSource(RuntimeFilterSource {
+                    plan_id: self.next_plan_id(),
+                    left_side,
+                    right_side,
+                    left_runtime_filters,
+                    right_runtime_filters,
                 }))
             }
             _ => Err(ErrorCode::Internal(format!(

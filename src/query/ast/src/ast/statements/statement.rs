@@ -51,6 +51,9 @@ pub enum Statement {
     ShowFunctions {
         limit: Option<ShowLimit>,
     },
+    ShowTableFunctions {
+        limit: Option<ShowLimit>,
+    },
 
     KillStmt {
         kill_target: KillTarget,
@@ -71,6 +74,7 @@ pub enum Statement {
     },
 
     Insert(InsertStmt),
+    Replace(ReplaceStmt),
 
     Delete {
         table_reference: TableReference,
@@ -231,6 +235,7 @@ impl Display for Statement {
             }
             Statement::Query(query) => write!(f, "{query}")?,
             Statement::Insert(insert) => write!(f, "{insert}")?,
+            Statement::Replace(replace) => write!(f, "{replace}")?,
             Statement::Delete {
                 table_reference,
                 selection,
@@ -254,6 +259,12 @@ impl Display for Statement {
             Statement::ShowEngines => write!(f, "SHOW ENGINES")?,
             Statement::ShowFunctions { limit } => {
                 write!(f, "SHOW FUNCTIONS")?;
+                if let Some(limit) = limit {
+                    write!(f, " {limit}")?;
+                }
+            }
+            Statement::ShowTableFunctions { limit } => {
+                write!(f, "SHOW TABLE_FUNCTIONS")?;
                 if let Some(limit) = limit {
                     write!(f, " {limit}")?;
                 }

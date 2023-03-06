@@ -158,20 +158,26 @@ import TabItem from '@theme/TabItem';
 
 ### Step 1. Deploy a Databend Meta Cluster
 
-It is **highly recommended** to deploy an at least 3-nodes cluster
-with persistent storage on each node for high availability.
-
 1. Create a values file with persistent and monitoring enabled:
 
 Detailed and default values are available at [documentation](https://github.com/datafuselabs/helm-charts/blob/main/charts/databend-meta/values.yaml)
 
 ```yaml title="values.yaml"
+bootstrap: true
 replicaCount: 3
 persistence:
   size: 20Gi
 serviceMonitor:
   enabled: true
 ```
+
+:::caution
+It is **highly recommended** to deploy an at least 3-nodes cluster
+with persistent storage on each node for high availability.
+
+When `replicaCount > 1`, a `bootstrap: true` is necessary on first run,
+and could be removed when all nodes in cluster are up and running.
+:::
 
 2. Deploy the meta cluster in namespace `databend-meta`
 

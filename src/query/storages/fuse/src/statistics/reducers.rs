@@ -131,6 +131,7 @@ pub fn merge_statistics(l: &Statistics, r: &Statistics) -> Result<Statistics> {
 pub fn merge_statistics_mut(l: &mut Statistics, r: &Statistics) -> Result<()> {
     l.row_count += r.row_count;
     l.block_count += r.block_count;
+    l.perfect_block_count += r.perfect_block_count;
     l.uncompressed_byte_size += r.uncompressed_byte_size;
     l.compressed_byte_size += r.compressed_byte_size;
     l.index_size += r.index_size;
