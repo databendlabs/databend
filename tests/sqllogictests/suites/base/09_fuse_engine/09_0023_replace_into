@@ -118,6 +118,27 @@ statement ok
 DROP TABLE test;
 
 
+###################
+# specify columns #
+###################
+
+statement ok
+CREATE TABLE test(c1 int, c2 int, a int);
+
+statement ok
+replace into test(c1, a) on(c1) values(1, 1), (2, 2);
+
+statement ok
+replace into test(c2, a) on(c2) values(3, 3), (4, 4);
+
+query III
+SELECT c1,  c2, a FROM test order by a;
+----
+1 0 1
+2 0 2
+0 3 3
+0 4 4
+
 ##############
 # from stage #
 ##############

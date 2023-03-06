@@ -30,6 +30,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::processors::TransformCastSchema;
+use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
@@ -61,6 +62,18 @@ impl Interpreter for ReplaceInterpreter {
         let mut pipeline = self
             .connect_input_source(self.ctx.clone(), &self.plan.source, self.plan.schema())
             .await?;
+
+        pipeline
+            .main_pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                TransformResortAddOn::try_create(
+                    self.ctx.clone(),
+                    transform_input_port,
+                    transform_output_port,
+                    self.plan.schema(),
+                    table.clone(),
+                )
+            })?;
 
         let field = plan.join_on.clone();
         table
