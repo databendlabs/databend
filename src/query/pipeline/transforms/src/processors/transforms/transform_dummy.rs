@@ -17,12 +17,12 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::pipe::PipeItem;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::transforms::transform::Transform;
-use crate::pipelines::processors::transforms::transform::Transformer;
+use crate::processors::transforms::Transform;
+use crate::processors::transforms::Transformer;
 
 pub struct TransformDummy;
 

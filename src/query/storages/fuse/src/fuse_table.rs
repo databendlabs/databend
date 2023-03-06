@@ -38,6 +38,7 @@ use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
+use common_expression::TableField;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use common_meta_app::schema::DatabaseType;
@@ -484,6 +485,15 @@ impl Table for FuseTable {
         self.do_append_data(ctx, pipeline, append_mode, need_output)
     }
 
+    async fn replace_into(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        join_filed: TableField,
+    ) -> Result<()> {
+        self.build_replace_pipeline(ctx, join_filed, pipeline).await
+    }
+
     #[tracing::instrument(level = "debug", name = "fuse_table_commit_insertion", skip(self, ctx, operations), fields(ctx.id = ctx.get_id().as_str()))]
     async fn commit_insertion(
         &self,
@@ -625,7 +635,7 @@ impl Table for FuseTable {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum FuseStorageFormat {
     Parquet,
     Native,

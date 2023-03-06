@@ -71,6 +71,7 @@ pub enum Statement {
     },
 
     Insert(InsertStmt),
+    Replace(ReplaceStmt),
 
     Delete {
         table_reference: TableReference,
@@ -231,6 +232,7 @@ impl Display for Statement {
             }
             Statement::Query(query) => write!(f, "{query}")?,
             Statement::Insert(insert) => write!(f, "{insert}")?,
+            Statement::Replace(replace) => write!(f, "{replace}")?,
             Statement::Delete {
                 table_reference,
                 selection,

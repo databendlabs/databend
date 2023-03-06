@@ -91,6 +91,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             query: Box::new(statement.stmt),
         },
     );
+
     let insert = map(
         rule! {
             INSERT ~ ( INTO | OVERWRITE ) ~ TABLE?
@@ -108,6 +109,28 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                     .unwrap_or_default(),
                 source,
                 overwrite: overwrite.kind == OVERWRITE,
+            })
+        },
+    );
+
+    let replace = map(
+        rule! {
+            REPLACE ~ INTO?
+            ~ #period_separated_idents_1_to_3
+            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            ~ (ON ~ CONFLICT? ~ "(" ~ #ident ~ ")")
+            ~ #insert_source
+        },
+        |(_, _, (catalog, database, table), opt_columns, (_, _, _, on, _), source)| {
+            Statement::Replace(ReplaceStmt {
+                catalog,
+                database,
+                table,
+                on,
+                columns: opt_columns
+                    .map(|(_, columns, _)| columns)
+                    .unwrap_or_default(),
+                source,
             })
         },
     );
@@ -1029,7 +1052,6 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             #map(query, |query| Statement::Query(Box::new(query)))
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
             | #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
-            | #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #delete : "`DELETE FROM <table> [WHERE ...]`"
             | #update : "`UPDATE <table> SET <column> = <expr> [, <column> = <expr> , ... ] [WHERE ...]`"
             | #show_settings : "`SHOW SETTINGS [<show_limit>]`"
@@ -1047,6 +1069,10 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
             | #use_database : "`USE <database>`"
+        ),
+        rule!(
+            #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            | #replace : "`REPLACE INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
         ),
         rule!(
             #set_variable : "`SET <variable> = <value>`"

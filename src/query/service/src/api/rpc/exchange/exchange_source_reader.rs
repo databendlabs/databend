@@ -24,11 +24,11 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
+use common_pipeline_transforms::processors::transforms::TransformDummy;
 
 use crate::api::rpc::exchange::serde::exchange_deserializer::ExchangeDeserializeMeta;
 use crate::api::rpc::flight_client::FlightExchangeRef;
 use crate::api::DataPacket;
-use crate::pipelines::processors::TransformDummy;
 
 pub struct ExchangeSourceReader {
     finished: bool,

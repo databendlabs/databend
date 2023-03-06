@@ -29,6 +29,7 @@ use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
+use common_pipeline_transforms::processors::transforms::TransformDummy;
 use common_storage::DataOperator;
 use strength_reduce::StrengthReducedU64;
 
@@ -56,7 +57,6 @@ use crate::pipelines::processors::transforms::TransformGroupByDeserializer;
 use crate::pipelines::processors::transforms::TransformGroupBySerializer;
 use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
 use crate::pipelines::processors::AggregatorParams;
-use crate::pipelines::processors::TransformDummy;
 use crate::sessions::QueryContext;
 
 struct AggregateExchangeSorting<Method: HashMethodBounds, V: Send + Sync + 'static> {

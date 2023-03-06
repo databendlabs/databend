@@ -228,6 +228,7 @@ impl<'a> Binder {
                 self.bind_remove_stage(location, pattern).await?
             }
             Statement::Insert(stmt) => self.bind_insert(bind_context, stmt).await?,
+            Statement::Replace(stmt) => self.bind_replace(bind_context, stmt).await?,
             Statement::Delete {
                 table_reference,
                 selection,

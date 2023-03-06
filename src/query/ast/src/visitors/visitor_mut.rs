@@ -348,6 +348,7 @@ pub trait VisitorMut: Sized {
     fn visit_set_role(&mut self, _is_default: bool, _role_name: &mut String) {}
 
     fn visit_insert(&mut self, _insert: &mut InsertStmt) {}
+    fn visit_replace(&mut self, _replace: &mut ReplaceStmt) {}
 
     fn visit_insert_source(&mut self, _insert_source: &mut InsertSource) {}
 

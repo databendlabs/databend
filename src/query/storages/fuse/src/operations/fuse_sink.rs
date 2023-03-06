@@ -241,8 +241,12 @@ impl Processor for FuseTableSink {
 
                 // we need a configuration of block size threshold here
                 let mut data = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
-                let (size, meta_data) =
-                    io::write_block(&self.write_settings, &self.source_schema, block, &mut data)?;
+                let (size, meta_data) = io::serialize_block(
+                    &self.write_settings,
+                    &self.source_schema,
+                    block,
+                    &mut data,
+                )?;
 
                 self.state = State::Serialized {
                     data,

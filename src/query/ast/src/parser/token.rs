@@ -317,10 +317,12 @@ pub enum TokenKind {
     CONTENT_TYPE,
     #[token("CHAR", ignore(ascii_case))]
     CHAR,
-    #[token("CHARACTER", ignore(ascii_case))]
     #[token("COLUMN", ignore(ascii_case))]
     COLUMN,
+    #[token("CHARACTER", ignore(ascii_case))]
     CHARACTER,
+    #[token("CONFLICT", ignore(ascii_case))]
+    CONFLICT,
     #[token("COMPRESSION", ignore(ascii_case))]
     COMPRESSION,
     #[token("COPY_OPTIONS", ignore(ascii_case))]
@@ -635,6 +637,8 @@ pub enum TokenKind {
     REGEXP,
     #[token("RENAME", ignore(ascii_case))]
     RENAME,
+    #[token("REPLACE", ignore(ascii_case))]
+    REPLACE,
     #[token("ROW_TAG", ignore(ascii_case))]
     ROW_TAG,
     #[token("GRANT", ignore(ascii_case))]
