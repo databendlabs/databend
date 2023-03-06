@@ -139,6 +139,17 @@ SELECT c1,  c2, a FROM test order by a;
 0 3 3
 0 4 4
 
+# num of column not match
+statement error 1303
+replace into test(c1) on(c1) values(1,2), (2,3), (3,4);
+
+statement error 1303
+replace into test(c1, c2, a) on(c1) values(1,2), (2,3), (3,4);
+
+statement ok
+DROP TABLE test;
+
+
 ##############
 # from stage #
 ##############
