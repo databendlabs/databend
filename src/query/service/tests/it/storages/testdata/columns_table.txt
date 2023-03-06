@@ -148,6 +148,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | "name"                          | "system"             | "roles"               | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "name"                          | "system"             | "settings"            | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "name"                          | "system"             | "stages"              | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
+| "name"                          | "system"             | "table_functions"     | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "name"                          | "system"             | "tables"              | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "name"                          | "system"             | "tables_with_history" | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "name"                          | "system"             | "users"               | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |

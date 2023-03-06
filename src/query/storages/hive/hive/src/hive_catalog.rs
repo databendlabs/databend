@@ -408,6 +408,11 @@ impl Catalog for HiveCatalog {
         unimplemented!()
     }
 
+    // List all table functions' names.
+    fn list_table_functions(&self) -> Vec<String> {
+        unimplemented!()
+    }
+
     // Get table engines
     fn get_table_engines(&self) -> Vec<StorageDescription> {
         unimplemented!()

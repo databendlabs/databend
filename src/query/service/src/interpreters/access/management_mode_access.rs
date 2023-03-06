@@ -43,6 +43,7 @@ impl AccessChecker for ManagementModeAccess {
                             | RewriteKind::ShowEngines
                             | RewriteKind::ShowSettings
                             | RewriteKind::ShowFunctions
+                            | RewriteKind::ShowTableFunctions
                             | RewriteKind::ShowUsers
                             | RewriteKind::ShowStages
                             | RewriteKind::DescribeStage

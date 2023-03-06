@@ -179,6 +179,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
         |(_, _, limit)| Statement::ShowFunctions { limit },
     );
+    let show_table_functions = map(
+        rule! {
+            SHOW ~ TABLE_FUNCTIONS ~ #show_limit?
+        },
+        |(_, _, limit)| Statement::ShowTableFunctions { limit },
+    );
 
     // kill query 199;
     let kill_stmt = map(
@@ -1093,6 +1099,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
             | #analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
+            | #show_table_functions : "`SHOW TABLE_FUNCTIONS [<show_limit>]`"
         ),
         rule!(
             #create_view : "`CREATE VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
