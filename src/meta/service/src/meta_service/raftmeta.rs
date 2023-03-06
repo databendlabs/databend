@@ -25,6 +25,7 @@ use common_base::base::tokio::sync::watch;
 use common_base::base::tokio::sync::watch::error::RecvError;
 use common_base::base::tokio::sync::Mutex;
 use common_base::base::tokio::task::JoinHandle;
+use common_base::base::tokio::time::sleep;
 use common_base::base::tokio::time::Instant;
 use common_grpc::ConnectionFactory;
 use common_grpc::DNSResolver;
@@ -80,6 +81,7 @@ use crate::message::ForwardRequestBody;
 use crate::message::ForwardResponse;
 use crate::message::JoinRequest;
 use crate::message::LeaveRequest;
+use crate::meta_service::errors::grpc_error_to_network_err;
 use crate::meta_service::meta_leader::MetaLeader;
 use crate::meta_service::RaftServiceImpl;
 use crate::metrics::server_metrics;
@@ -626,73 +628,31 @@ impl MetaNode {
         let mut errors = vec![];
         let addrs = &conf.join;
 
-        // Joining cluster has to use advertise host instead of listen host.
-        let advertise_endpoint = conf.raft_api_advertise_host_endpoint();
-
         #[allow(clippy::never_loop)]
         for addr in addrs {
-            let timeout = Some(Duration::from_millis(10_000));
-            info!(
-                "try to join cluster via {}, timeout: {:?}...",
-                addr, timeout
-            );
-
             if addr == &conf.raft_api_advertise_host_string() {
                 info!("avoid join via self: {}", addr);
                 continue;
             }
 
-            let chan_res = ConnectionFactory::create_rpc_channel(addr, timeout, None).await;
-            let chan = match chan_res {
-                Ok(c) => c,
-                Err(e) => {
-                    error!("connect to {} join cluster fail: {:?}", addr, e);
-                    errors.push(
-                        AnyError::new(&e).add_context(|| format!("join via: {}", addr.clone())),
-                    );
-                    continue;
-                }
-            };
-            let mut raft_client = RaftServiceClient::new(chan);
+            for _i in 0..3 {
+                let res = self.join_via(conf, &grpc_api_advertise_address, addr).await;
+                match res {
+                    Ok(x) => return Ok(x),
+                    Err(api_err) => {
+                        tracing::warn!("{} while joining cluster via {}", api_err, addr);
 
-            let req = ForwardRequest {
-                forward_to_leader: 1,
-                body: ForwardRequestBody::Join(JoinRequest::new(
-                    conf.id,
-                    advertise_endpoint.clone(),
-                    grpc_api_advertise_address.clone(),
-                )),
-            };
-
-            let join_res = raft_client.forward(req.clone()).await;
-            info!("join cluster result: {:?}", join_res);
-
-            match join_res {
-                Ok(r) => {
-                    let reply = r.into_inner();
-
-                    let res: Result<ForwardResponse, MetaAPIError> = reply_to_api_result(reply);
-                    match res {
-                        Ok(v) => {
-                            info!("join cluster via {} success: {:?}", addr, v);
-                            return Ok(());
-                        }
-                        Err(e) => {
-                            error!("join cluster via {} fail: {}", addr, e.to_string());
-                            errors.push(
-                                AnyError::new(&e)
-                                    .add_context(|| format!("join via: {}", addr.clone())),
-                            );
+                        if let MetaAPIError::CanNotForward(_) = &api_err {
+                            // Leader is not ready, wait a while and retry
+                            sleep(Duration::from_millis(1_000)).await;
+                            continue;
+                        } else {
+                            errors.push(api_err);
+                            break;
                         }
                     }
                 }
-                Err(s) => {
-                    error!("join cluster via {} fail: {:?}", addr, s);
-                    errors.push(
-                        AnyError::new(&s).add_context(|| format!("join via: {}", addr.clone())),
-                    );
-                }
-            };
+            }
         }
         Err(MetaManagementError::Join(AnyError::error(format!(
             "fail to join {} cluster via {:?}, caused by errors: {}",
@@ -700,6 +660,69 @@ impl MetaNode {
             addrs,
             errors.into_iter().map(|e| e.to_string()).join(", ")
         ))))
+    }
+
+    #[tracing::instrument(level = "info", skip(conf, self))]
+    async fn join_via(
+        &self,
+        conf: &RaftConfig,
+        grpc_api_advertise_address: &Option<String>,
+        addr: &String,
+    ) -> Result<(), MetaAPIError> {
+        // Joining cluster has to use advertise host instead of listen host.
+        let advertise_endpoint = conf.raft_api_advertise_host_endpoint();
+
+        let timeout = Some(Duration::from_millis(10_000));
+        info!(
+            "try to join cluster via {}, timeout: {:?}...",
+            addr, timeout
+        );
+
+        let chan_res = ConnectionFactory::create_rpc_channel(addr, timeout, None).await;
+        let chan = match chan_res {
+            Ok(c) => c,
+            Err(e) => {
+                error!("connect to {} join cluster fail: {:?}", addr, e);
+                let net_err = grpc_error_to_network_err(e);
+                return Err(MetaAPIError::NetworkError(net_err));
+            }
+        };
+        let mut raft_client = RaftServiceClient::new(chan);
+
+        let req = ForwardRequest {
+            forward_to_leader: 1,
+            body: ForwardRequestBody::Join(JoinRequest::new(
+                conf.id,
+                advertise_endpoint.clone(),
+                grpc_api_advertise_address.clone(),
+            )),
+        };
+
+        let join_res = raft_client.forward(req.clone()).await;
+        info!("join cluster result: {:?}", join_res);
+
+        match join_res {
+            Ok(r) => {
+                let reply = r.into_inner();
+
+                let res: Result<ForwardResponse, MetaAPIError> = reply_to_api_result(reply);
+                match res {
+                    Ok(v) => {
+                        info!("join cluster via {} success: {:?}", addr, v);
+                        return Ok(());
+                    }
+                    Err(e) => {
+                        error!("join cluster via {} fail: {}", addr, e.to_string());
+                        return Err(e);
+                    }
+                }
+            }
+            Err(s) => {
+                error!("join cluster via {} fail: {:?}", addr, s);
+                let net_err = MetaNetworkError::from(s);
+                return Err(MetaAPIError::NetworkError(net_err));
+            }
+        };
     }
 
     /// Check meta-node state to see if it's appropriate to join to a cluster.

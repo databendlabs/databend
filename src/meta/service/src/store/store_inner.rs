@@ -335,12 +335,15 @@ impl StoreInner {
         let sm = self.state_machine.read().await;
         let ms = sm.get_membership()?;
 
+        tracing::debug!("in-statemachine membership: {:?}", ms);
+
         let membership = match &ms {
             Some(membership) => membership.membership(),
             None => return Ok(vec![]),
         };
 
         let ids = list_ids(membership);
+        tracing::debug!("filtered node ids: {:?}", ids);
         let mut ns = vec![];
 
         for id in ids {

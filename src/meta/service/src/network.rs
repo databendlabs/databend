@@ -415,6 +415,13 @@ impl RaftNetworkFactory<TypeConfig> for Network {
         target: NodeId,
         node: &MembershipNode,
     ) -> Self::Network {
+        tracing::info!(
+            "new raft communication client: id:{}, target:{}, node:{}",
+            self.sto.id,
+            target,
+            node
+        );
+
         NetworkConnection {
             id: self.sto.id,
             target,

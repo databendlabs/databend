@@ -61,7 +61,7 @@ nohup ./target/debug/databend-meta --config-file=./tests/metactl/config/new-data
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 39191
 
 echo " === sleep 3 sec to wait for membership to commit"
-time sleep 3
+time sleep 5
 
 echo " === dump new cluster state:"
 curl -sL http://127.0.0.1:28101/v1/cluster/status

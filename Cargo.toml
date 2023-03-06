@@ -95,7 +95,7 @@ ordered-float = { version = "3.4.0", default-features = false }
 jsonb = { version = "0.1.1" }
 
 #openraft = { version = "0.8.2", features = ["compat-07"] }
-openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.2-alpha.5", features = ["compat-07"] }
+openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.2-alpha.6", features = ["compat-07"] }
 
 # type helper
 derive_more = "0.99.17"
