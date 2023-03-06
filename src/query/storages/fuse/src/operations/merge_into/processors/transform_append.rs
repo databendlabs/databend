@@ -159,7 +159,6 @@ impl AsyncAccumulatingTransform for AppendTransform {
     const NAME: &'static str = "AppendTransform";
 
     async fn transform(&mut self, data_block: DataBlock) -> Result<Option<DataBlock>> {
-        eprintln!("Append Transform got some thing");
         // 1. serialize block and index
         let block_builder = self.block_builder.clone();
         let serialized_block_state =
@@ -211,7 +210,6 @@ impl AsyncAccumulatingTransform for AppendTransform {
     }
 
     async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
-        eprintln!("Append Transform on finished");
         // output final operation log if any
         let append_log = self.output_mutation().await?;
         self.output_mutation_block(append_log)

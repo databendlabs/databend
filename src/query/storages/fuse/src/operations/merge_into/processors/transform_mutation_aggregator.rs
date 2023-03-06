@@ -28,6 +28,7 @@ use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CacheManager;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
+use tracing::debug;
 
 use crate::io::try_join_futures_with_vec;
 use crate::io::SegmentsIO;
@@ -111,7 +112,7 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
 
     async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
         let mutations: CommitMeta = self.apply_mutations().await?;
-        eprintln!("mutations {:?}", mutations);
+        debug!("mutations {:?}", mutations);
         let block_meta: BlockMetaInfoPtr = Box::new(mutations);
         Ok(Some(DataBlock::empty_with_meta(block_meta)))
     }

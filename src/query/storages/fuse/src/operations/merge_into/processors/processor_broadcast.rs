@@ -72,7 +72,6 @@ impl Processor for BroadcastProcessor {
             for o in &self.output_ports {
                 o.finish()
             }
-            eprintln!("BROADCAST: FIN");
             return Ok(Event::Finished);
         }
 
@@ -85,7 +84,6 @@ impl Processor for BroadcastProcessor {
                 let output = &self.output_ports[self.output_index];
                 if output.can_push() {
                     self.output_index += 1;
-                    eprintln!("BROADCAST: one block sent");
                     output.push_data(data.clone());
                 } else {
                     self.input_port.set_not_need_data();
@@ -94,13 +92,11 @@ impl Processor for BroadcastProcessor {
             }
 
             if self.output_index == self.output_ports.len() {
-                eprintln!("BROADCAST : one block broadcast");
                 self.input_data = None;
             };
         }
 
         self.input_port.set_need_data();
-        eprintln!("BROADCAST : need data");
         Ok(Event::NeedData)
     }
 }

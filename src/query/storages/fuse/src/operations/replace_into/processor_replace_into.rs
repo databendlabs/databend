@@ -89,23 +89,10 @@ impl Processor for ReplaceIntoProcessor {
         self
     }
     fn event(&mut self) -> Result<Event> {
-        // cumbersome
-        eprintln!("on event");
-
         if self.output_port_append_data.is_finished()
             || self.output_port_merge_into_action.is_finished()
             || self.input_port.is_finished()
         {
-            eprintln!("fin, output is finish");
-            eprintln!(
-                "self.output_port_append_data.is_finished {}
-                self.output_port_merge_into_action.is_finished {}
-                self.input_port.is_finished {}",
-                self.output_port_append_data.is_finished(),
-                self.output_port_merge_into_action.is_finished(),
-                self.input_port.is_finished(),
-            );
-
             self.input_port.finish();
             self.output_port_merge_into_action.finish();
             self.output_port_append_data.finish();
@@ -127,28 +114,23 @@ impl Processor for ReplaceIntoProcessor {
         }
 
         if pushed_something {
-            eprintln!("need consume2");
             Ok(Event::NeedConsume)
         } else {
             if self.input_data.is_some() {
-                eprintln!("Sync1");
                 return Ok(Event::Sync);
             }
 
             if self.input_port.has_data() {
                 self.input_data = Some(self.input_port.pull_data().unwrap()?);
-                eprintln!("Sync");
                 Ok(Event::Sync)
             } else {
                 self.input_port.set_need_data();
-                eprintln!("NeedData");
                 Ok(Event::NeedData)
             }
         }
     }
 
     fn process(&mut self) -> Result<()> {
-        eprintln!("on process");
         if let Some(data_block) = self.input_data.take() {
             let merge_into_action = self.replace_into_mutator.process_input_block(&data_block)?;
             if !self.target_table_empty {
