@@ -975,6 +975,33 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
         |(_, _, unit, _, date, _)| ExprElement::DateTrunc { unit, date },
     );
+
+    let date_expr = map(
+        rule! {
+            DATE ~ #literal_string
+        },
+        |(_, date)| ExprElement::Cast {
+            expr: Box::new(Expr::Literal {
+                span: None,
+                lit: Literal::String(date),
+            }),
+            target_type: TypeName::Date,
+        },
+    );
+
+    let timestamp_expr = map(
+        rule! {
+            TIMESTAMP ~ #literal_string
+        },
+        |(_, date)| ExprElement::Cast {
+            expr: Box::new(Expr::Literal {
+                span: None,
+                lit: Literal::String(date),
+            }),
+            target_type: TypeName::Timestamp,
+        },
+    );
+
     let is_distinct_from = map(
         rule! {
             IS ~ NOT? ~ DISTINCT ~ FROM
@@ -995,17 +1022,19 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #date_add: "`DATE_ADD(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
             | #date_sub: "`DATE_SUB(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
             | #date_trunc: "`DATE_TRUNC((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND), ...)`"
+            | #date_expr: "`DATE <str_literal>`"
+            | #timestamp_expr: "`TIMESTAMP <str_literal>`"
             | #interval: "`INTERVAL ... (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
             | #pg_cast : "`::<type_name>`"
             | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND) FROM ...)`"
-            | #position : "`POSITION(... IN ...)`"
+        ),
+        rule!(
+            #position : "`POSITION(... IN ...)`"
             | #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
             | #array_sort : "`ARRAY_SORT([...], 'ASC' | 'DESC', 'NULLS FIRST' | 'NULLS LAST')`"
             | #trim : "`TRIM(...)`"
             | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
-        ),
-        rule!(
-            #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
+            | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
             | #count_all : "COUNT(*)"
             | #function_call_with_param : "<function>"
             | #function_call : "<function>"
