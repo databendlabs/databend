@@ -123,13 +123,13 @@ We're always open to cutting-edge technologies and innovative ideas. You're more
 
 We can check if each row's each element's type is correct.
 
-**databend/tests/sqllogictests/src/client/mysql_client.rs** 
+**databend/tests/sqllogictests/src/client/mysql_client.rs**
 
 ```rust
- // Todo: add types to compare 
- Ok(DBOutput::Rows { 
-     types, 
-     rows: parsed_rows, 
+ // Todo: add types to compare
+ Ok(DBOutput::Rows {
+     types,
+     rows: parsed_rows,
 ```
 
 [Issue 9647: Feature: Add type checker for sqllogictest](https://github.com/datafuselabs/databend/issues/9647)
@@ -169,14 +169,3 @@ Thanks a lot to the contributors for their excellent work this week.
 [<img alt="zhang2014" src="https://avatars.githubusercontent.com/u/8087042?v=4&s=117" width="117" />](https://github.com/zhang2014) |[<img alt="zhyass" src="https://avatars.githubusercontent.com/u/34016424?v=4&s=117" width="117" />](https://github.com/zhyass) |
 :---: |:---: |
 [zhang2014](https://github.com/zhang2014) |[zhyass](https://github.com/zhyass) |
-
-## Connect With Us
-
-We'd love to hear from you. Feel free to run the code and see if Databend works for you. Submit an issue with your problem if you need help.
-
-[DatafuseLabs Community](https://github.com/datafuselabs/) is open to everyone who loves data warehouses. Please join the community and share your thoughts.
-
-- [Databend Official Website](https://databend.rs)
-- [GitHub Discussions](https://github.com/datafuselabs/databend/discussions) (Feature requests, bug reports, and contributions)
-- [Twitter](https://twitter.com/DatabendLabs) (Stay in the know)
-- [Slack Channel](https://link.databend.rs/join-slack) (Chat with the community)

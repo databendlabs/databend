@@ -167,13 +167,3 @@ Thanks a lot to the contributors for their excellent work this week.
 :---: |:---: |:---: |:---: |:---: |:---: |
 [sundy-li](https://github.com/sundy-li) |[Xuanwo](https://github.com/Xuanwo) |[xudong963](https://github.com/xudong963) |[youngsofun](https://github.com/youngsofun) |[zhang2014](https://github.com/zhang2014) |[zhyass](https://github.com/zhyass) |
 
-## Connect With Us
-
-We'd love to hear from you. Feel free to run the code and see if Databend works for you. Submit an issue with your problem if you need help.
-
-[DatafuseLabs Community](https://github.com/datafuselabs/) is open to everyone who loves data warehouses. Please join the community and share your thoughts.
-
-- [Databend Official Website](https://databend.rs)
-- [GitHub Discussions](https://github.com/datafuselabs/databend/discussions) (Feature requests, bug reports, and contributions)
-- [Twitter](https://twitter.com/DatabendLabs) (Stay in the know)
-- [Slack Channel](https://link.databend.rs/join-slack) (Chat with the community)
