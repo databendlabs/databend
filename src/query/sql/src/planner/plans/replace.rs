@@ -27,8 +27,7 @@ pub struct Replace {
     pub database: String,
     pub table: String,
     pub table_id: MetaId,
-    // TODO rename me, it is the CONFLICT ON(field/constraint)
-    pub join_on: TableField,
+    pub on_conflict_fields: Vec<TableField>,
     pub schema: TableSchemaRef,
     pub source: InsertInputSource,
 }
@@ -39,7 +38,7 @@ impl PartialEq for Replace {
             && self.database == other.database
             && self.table == other.table
             && self.schema == other.schema
-            && self.join_on == other.join_on
+            && self.on_conflict_fields == other.on_conflict_fields
     }
 }
 
@@ -55,13 +54,13 @@ impl Replace {
 
 impl std::fmt::Debug for Replace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Insert")
+        f.debug_struct("Replace")
             .field("catalog", &self.catalog)
             .field("database", &self.database)
             .field("table", &self.table)
             .field("table_id", &self.table_id)
             .field("schema", &self.schema)
-            .field("join_on", &self.join_on)
+            .field("on conflict", &self.on_conflict_fields)
             .finish()
     }
 }

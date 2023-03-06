@@ -32,8 +32,7 @@ pub type UniqueKeyDigest = u128;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DeletionByColumn {
     // used in table meta level pruning
-    pub key_min: Scalar,
-    pub key_max: Scalar,
+    pub columns_min_max: Vec<(Scalar, Scalar)>,
     // used in block level
     pub key_hashes: HashSet<UniqueKeyDigest>,
 }

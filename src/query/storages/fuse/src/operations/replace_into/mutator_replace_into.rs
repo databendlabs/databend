@@ -27,20 +27,20 @@ use siphasher::sip128::Hasher128;
 use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::DeletionByColumn;
 use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::MergeIntoOperation;
 use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::UniqueKeyDigest;
+use crate::operations::merge_into::OnConflictField;
 
 // Replace is somehow a simplified merge_into, which
 // - do insertion for "matched" branch
 // - update for "not-matched" branch (by sending MergeIntoOperation to downstream)
 pub struct ReplaceIntoMutator {
-    // note, it is the index, not the column id
-    on_conflict_field_index: usize,
+    on_conflict_fields: Vec<OnConflictField>,
     key_saw: HashSet<UniqueKeyDigest>,
 }
 
 impl ReplaceIntoMutator {
-    pub fn create(on_conflict_field_index: usize) -> Self {
+    pub fn create(on_conflict_fields: Vec<OnConflictField>) -> Self {
         Self {
-            on_conflict_field_index,
+            on_conflict_fields,
             key_saw: Default::default(),
         }
     }
@@ -55,20 +55,26 @@ impl ReplaceIntoMutator {
     pub fn process_input_block(&mut self, data_block: &DataBlock) -> Result<MergeIntoOperation> {
         // TODO table level pruning:
         // if we can deduced that `data_block` is insert only, return an MergeIntoOperation::None (None op for Matched Branch)
-        self.extract_key_column(data_block)
+        self.extract_on_conflict_columns(data_block)
     }
 
-    fn extract_key_column(&mut self, data_block: &DataBlock) -> Result<MergeIntoOperation> {
-        let entry = &data_block.columns()[self.on_conflict_field_index];
-        let column = entry.value.as_column().unwrap();
+    fn extract_on_conflict_columns(
+        &mut self,
+        data_block: &DataBlock,
+    ) -> Result<MergeIntoOperation> {
         let num_rows = data_block.num_rows();
-        match Self::build_column_hash(column, &mut self.key_saw, num_rows)? {
+        let mut columns = Vec::with_capacity(self.on_conflict_fields.len());
+        for field in &self.on_conflict_fields {
+            let filed_index = field.field_index;
+            let entry = &data_block.columns()[filed_index];
+            let column = entry.value.as_column().unwrap();
+            columns.push(column);
+        }
+        match Self::build_column_hash(&columns, &mut self.key_saw, num_rows)? {
             ColumnHash::NoConflict(key_hashes) => {
-                let (key_min, key_max) =
-                    Self::column_min_max(entry.value.as_column().unwrap(), num_rows)?;
+                let columns_min_max = Self::columns_min_max(&columns, num_rows)?;
                 let delete_action = DeletionByColumn {
-                    key_min,
-                    key_max,
+                    columns_min_max,
                     key_hashes,
                 };
                 Ok(MergeIntoOperation::Delete(delete_action))
@@ -80,16 +86,18 @@ impl ReplaceIntoMutator {
     }
 
     fn build_column_hash(
-        column: &Column,
+        columns: &[&Column],
         saw: &mut HashSet<UniqueKeyDigest>,
         num_rows: usize,
     ) -> Result<ColumnHash> {
         let mut digests = HashSet::new();
         for i in 0..num_rows {
-            let value = column.index(i).unwrap();
-            let string = value.to_string();
             let mut sip = sip128::SipHasher24::new();
-            sip.write(string.as_bytes());
+            for column in columns {
+                let value = column.index(i).unwrap();
+                let string = value.to_string();
+                sip.write(string.as_bytes());
+            }
             let hash = sip.finish128().as_u128();
             if saw.contains(&hash) {
                 return Ok(ColumnHash::Conflict);
@@ -113,10 +121,14 @@ impl ReplaceIntoMutator {
         ))
     }
 
-    fn column_min_max(column: &Column, num_rows: usize) -> Result<(Scalar, Scalar)> {
-        let min = Self::eval(column.clone(), num_rows, "min")?;
-        let max = Self::eval(column.clone(), num_rows, "max")?;
-        Ok((min, max))
+    fn columns_min_max(columns: &[&Column], num_rows: usize) -> Result<Vec<(Scalar, Scalar)>> {
+        let mut res = Vec::with_capacity(columns.len());
+        for column in columns {
+            let min = Self::eval((*column).clone(), num_rows, "min")?;
+            let max = Self::eval((*column).clone(), num_rows, "max")?;
+            res.push((min, max));
+        }
+        Ok(res)
     }
 }
 
@@ -130,26 +142,40 @@ mod tests {
 
     #[test]
     fn test_column_digest() -> Result<()> {
-        let column = StringType::from_data(&["Hi", "World"]);
+        // ------|---
+        // Hi      1
+        // hello   2
+        let column1 = StringType::from_data(&["Hi", "Hello"]);
+        let column2 = NumberType::<u8>::from_data(vec![1, 2]);
         let mut saw = HashSet::new();
         let num_rows = 2;
 
-        let r = ReplaceIntoMutator::build_column_hash(&column, &mut saw, num_rows)?;
+        let columns = [&column1, &column2];
+        let r = ReplaceIntoMutator::build_column_hash(&columns, &mut saw, num_rows)?;
         assert_eq!(saw.len(), 2);
         assert!(matches!(r, ColumnHash::NoConflict(..)));
 
-        // new item, no conflict
-        let column = StringType::from_data(&["Hello"]);
-        let num_rows = 1;
-        let r = ReplaceIntoMutator::build_column_hash(&column, &mut saw, num_rows)?;
-        assert_eq!(saw.len(), 3);
+        // append new item, no conflict
+        // ------|---
+        // Hi      2
+        // hello   3
+        let column1 = StringType::from_data(&["Hi", "Hello"]);
+        let column2 = NumberType::<u8>::from_data(vec![2, 3]);
+        let columns = [&column1, &column2];
+        let num_rows = 2;
+        let r = ReplaceIntoMutator::build_column_hash(&columns, &mut saw, num_rows)?;
+        assert_eq!(saw.len(), 4);
         assert!(matches!(r, ColumnHash::NoConflict(..)));
 
         // new item, conflict
-        let column = StringType::from_data(&["Hello"]);
+        // ------|---
+        //  Hi     1
+        let column1 = StringType::from_data(&["Hi"]);
+        let column2 = NumberType::<u8>::from_data(vec![1]);
+        let columns = [&column1, &column2];
         let num_rows = 1;
-        let r = ReplaceIntoMutator::build_column_hash(&column, &mut saw, num_rows)?;
-        assert_eq!(saw.len(), 3);
+        let r = ReplaceIntoMutator::build_column_hash(&columns, &mut saw, num_rows)?;
+        assert_eq!(saw.len(), 4);
         assert!(matches!(r, ColumnHash::Conflict));
 
         Ok(())
@@ -157,17 +183,17 @@ mod tests {
 
     #[test]
     fn test_column_min_max() -> Result<()> {
-        let column = NumberType::<u8>::from_data(vec![5, 3, 2, 1, 2, 3, 5]);
+        let column1 = StringType::from_data(vec!["a", "b", "c", "d", "c", "b", "a"]);
+        let column2 = NumberType::<u8>::from_data(vec![5, 3, 2, 1, 2, 3, 5]);
+        let columns = [&column1, &column2];
         let num_rows = 2;
-        let (min, max) = ReplaceIntoMutator::column_min_max(&column, num_rows)?;
+        let min_max_pairs = ReplaceIntoMutator::columns_min_max(&columns, num_rows)?;
+        let (min, max) = &min_max_pairs[0];
+        assert_eq!(min.to_string(), "\"a\"");
+        assert_eq!(max.to_string(), "\"d\"");
+        let (min, max) = &min_max_pairs[1];
         assert_eq!(min.to_string(), "1");
         assert_eq!(max.to_string(), "5");
-
-        let column = NumberType::<u8>::from_data(vec![1]);
-        let num_rows = 1;
-        let (min, max) = ReplaceIntoMutator::column_min_max(&column, num_rows)?;
-        assert_eq!(min.to_string(), "1");
-        assert_eq!(max.to_string(), "1");
 
         Ok(())
     }

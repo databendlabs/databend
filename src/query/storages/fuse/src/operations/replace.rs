@@ -19,7 +19,6 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::ColumnId;
 use common_expression::TableField;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
@@ -36,6 +35,7 @@ use crate::operations::merge_into::AppendTransform;
 use crate::operations::merge_into::BroadcastProcessor;
 use crate::operations::merge_into::CommitSink;
 use crate::operations::merge_into::MergeIntoOperationAggregator;
+use crate::operations::merge_into::OnConflictField;
 use crate::operations::merge_into::TableMutationAggregator;
 use crate::operations::replace_into::processor_replace_into::ReplaceIntoProcessor;
 use crate::pipelines::Pipeline;
@@ -98,17 +98,15 @@ impl FuseTable {
     pub async fn build_replace_pipeline<'a>(
         &'a self,
         ctx: Arc<dyn TableContext>,
-        on_conflict_field: TableField,
+        on_conflict_field_identifiers: Vec<TableField>,
         pipeline: &'a mut Pipeline,
     ) -> Result<()> {
-        // TODO we do need higher level apis
-
         let schema = self.table_info.schema();
-        let on_conflict_field_name = on_conflict_field.name();
 
-        let on_conflict_field_id = on_conflict_field.column_id();
-        let (on_conflict_field_index, _on_conflict_field) =
-            match schema.column_with_name(on_conflict_field_name) {
+        let mut on_conflicts = Vec::with_capacity(on_conflict_field_identifiers.len());
+        for f in on_conflict_field_identifiers {
+            let field_name = f.name();
+            let (field_index, _) = match schema.column_with_name(field_name) {
                 Some(idx) => idx,
                 None => {
                     return Err(ErrorCode::Internal(
@@ -116,6 +114,11 @@ impl FuseTable {
                     ));
                 }
             };
+            on_conflicts.push(OnConflictField {
+                table_field: f.clone(),
+                field_index,
+            })
+        }
 
         // 1. resize input to 1, since the UpsertTransform need to de-duplicate inputs "globally"
         pipeline.resize(1)?;
@@ -142,7 +145,7 @@ impl FuseTable {
 
         let empty_table = base_snapshot.segments.is_empty();
         let replace_into_processor =
-            ReplaceIntoProcessor::create(on_conflict_field_index, empty_table);
+            ReplaceIntoProcessor::create(on_conflicts.clone(), empty_table);
         pipeline.add_pipe(replace_into_processor.into_pipe());
 
         // 3. connect to broadcast processor and append transform
@@ -221,8 +224,7 @@ impl FuseTable {
                     ctx.clone(),
                     segment_partition_num,
                     block_builder,
-                    on_conflict_field_index,
-                    on_conflict_field_id,
+                    on_conflicts.clone(),
                     &base_snapshot,
                 )
                 .await?;
@@ -254,8 +256,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         num_partition: usize,
         block_builder: BlockBuilder,
-        on_conflict_field_index: usize,
-        on_conflict_field_id: ColumnId,
+        on_conflicts: Vec<OnConflictField>,
         table_snapshot: &TableSnapshot,
     ) -> Result<Vec<PipeItem>> {
         let segments = table_snapshot.segments.as_slice();
@@ -285,8 +286,7 @@ impl FuseTable {
         for chunk_of_segment_locations in chunks {
             let item = MergeIntoOperationAggregator::try_create(
                 ctx.clone(),
-                on_conflict_field_index,
-                on_conflict_field_id,
+                on_conflicts.clone(),
                 chunk_of_segment_locations,
                 self.operator.clone(),
                 self.table_info.schema(),

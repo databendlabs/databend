@@ -186,9 +186,9 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
-        join_filed: TableField,
+        on_conflict_fields: Vec<TableField>,
     ) -> Result<()> {
-        let (_, _, _) = (ctx, pipeline, join_filed);
+        let (_, _, _) = (ctx, pipeline, on_conflict_fields);
 
         Err(ErrorCode::Unimplemented(format!(
             "replace_into operation for table {} is not implemented. table engine : {}",

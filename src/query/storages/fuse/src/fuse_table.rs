@@ -489,9 +489,10 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
-        join_filed: TableField,
+        on_conflict_fields: Vec<TableField>,
     ) -> Result<()> {
-        self.build_replace_pipeline(ctx, join_filed, pipeline).await
+        self.build_replace_pipeline(ctx, on_conflict_fields, pipeline)
+            .await
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_commit_insertion", skip(self, ctx, operations), fields(ctx.id = ctx.get_id().as_str()))]

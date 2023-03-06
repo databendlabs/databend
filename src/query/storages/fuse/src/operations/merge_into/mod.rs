@@ -24,4 +24,5 @@ pub use processors::AppendTransform;
 pub use processors::BroadcastProcessor;
 pub use processors::CommitSink;
 pub use processors::MergeIntoOperationAggregator;
+pub use processors::OnConflictField;
 pub use processors::TableMutationAggregator;

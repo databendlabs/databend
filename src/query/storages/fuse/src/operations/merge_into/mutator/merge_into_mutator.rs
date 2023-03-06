@@ -50,6 +50,7 @@ use crate::operations::merge_into::mutation_meta::mutation_log::MutationLogs;
 use crate::operations::merge_into::mutation_meta::mutation_log::Replacement;
 use crate::operations::merge_into::mutation_meta::mutation_log::ReplacementLogEntry;
 use crate::operations::merge_into::mutator::deletion_accumulator::DeletionAccumulator;
+use crate::operations::merge_into::OnConflictField;
 use crate::operations::mutation::base_mutator::BlockIndex;
 use crate::operations::mutation::base_mutator::SegmentIndex;
 
@@ -57,9 +58,7 @@ use crate::operations::mutation::base_mutator::SegmentIndex;
 pub struct MergeIntoOperationAggregator {
     segment_locations: HashMap<SegmentIndex, Location>,
     deletion_accumulator: DeletionAccumulator,
-    // TODO encapsulate these (support multi columns)
-    on_conflict_field_index: usize,
-    on_conflict_field_id: ColumnId,
+    on_conflict_fields: Vec<OnConflictField>,
     block_reader: Arc<BlockReader>,
     data_accessor: Operator,
     write_settings: WriteSettings,
@@ -72,8 +71,7 @@ impl MergeIntoOperationAggregator {
     #[allow(clippy::too_many_arguments)] // TODO fix this
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
-        on_conflict_field_index: usize,
-        on_conflict_field_id: ColumnId,
+        on_conflict_fields: Vec<OnConflictField>,
         segment_locations: Vec<(SegmentIndex, Location)>,
         data_accessor: Operator,
         table_schema: Arc<TableSchema>,
@@ -94,8 +92,7 @@ impl MergeIntoOperationAggregator {
         Ok(Self {
             segment_locations: HashMap::from_iter(segment_locations.into_iter()),
             deletion_accumulator,
-            on_conflict_field_index,
-            on_conflict_field_id,
+            on_conflict_fields,
             block_reader,
             data_accessor,
             write_settings,
@@ -111,8 +108,7 @@ impl MergeIntoOperationAggregator {
     pub async fn accumulate(&mut self, merge_action: MergeIntoOperation) -> Result<()> {
         match &merge_action {
             MergeIntoOperation::Delete(DeletionByColumn {
-                key_min,
-                key_max,
+                columns_min_max,
                 key_hashes,
             }) => {
                 for (segment_index, (path, ver)) in &self.segment_locations {
@@ -126,10 +122,10 @@ impl MergeIntoOperationAggregator {
                     let segment_info = self.segment_reader.read(&load_param).await?;
 
                     // segment level
-                    if self.overlapped(&segment_info.summary.col_stats, key_min, key_max) {
+                    if self.overlapped(&segment_info.summary.col_stats, columns_min_max) {
                         // block level
                         for (block_index, block_meta) in segment_info.blocks.iter().enumerate() {
-                            if self.overlapped(&block_meta.col_stats, key_min, key_max) {
+                            if self.overlapped(&block_meta.col_stats, columns_min_max) {
                                 self.deletion_accumulator.add_block_deletion(
                                     *segment_index,
                                     block_index,
@@ -196,7 +192,7 @@ impl MergeIntoOperationAggregator {
         }
 
         let reader = &self.block_reader;
-        let on_conflict_field_index = self.on_conflict_field_index;
+        let on_conflict_fields = &self.on_conflict_fields;
         // TODO optimization "prewhere"?
         let data_block = reader
             .read_by_meta(
@@ -207,30 +203,37 @@ impl MergeIntoOperationAggregator {
             .await?;
         let num_rows = data_block.num_rows();
 
-        let key_column = data_block
-            .columns()
-            .get(on_conflict_field_index)
-            .ok_or_else(|| {
-                ErrorCode::Internal(format!(
-                    "unexpected, block entry (index {}) not found. segment index {}, block index {}",
-                    on_conflict_field_index, segment_index, block_index
-                ))
-            })?
-            .value
-            .as_column()
-            .ok_or_else(||{
-                ErrorCode::Internal(format!(
-                    "unexpected, cast block entry (index {}) to column failed, got None. segment index {}, block index {}",
-                    on_conflict_field_index, segment_index, block_index
-                ))
-            })?;
+        let mut columns = Vec::with_capacity(on_conflict_fields.len());
+        for field in on_conflict_fields {
+            let on_conflict_field_index = field.field_index;
+            let key_column = data_block
+                .columns()
+                .get(on_conflict_field_index)
+                .ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "unexpected, block entry (index {}) not found. segment index {}, block index {}",
+                        on_conflict_field_index, segment_index, block_index
+                    ))
+                })?
+                .value
+                .as_column()
+                .ok_or_else(||{
+                    ErrorCode::Internal(format!(
+                        "unexpected, cast block entry (index {}) to column failed, got None. segment index {}, block index {}",
+                        on_conflict_field_index, segment_index, block_index
+                    ))
+                })?;
+            columns.push(key_column);
+        }
 
         let mut bitmap = MutableBitmap::new();
-        for i in 0..num_rows {
-            let value = key_column.index(i).unwrap();
-            let string = value.to_string();
+        for row in 0..num_rows {
             let mut sip = sip128::SipHasher24::new();
-            sip.write(string.as_bytes());
+            for column in &columns {
+                let value = column.index(row).unwrap();
+                let string = value.to_string();
+                sip.write(string.as_bytes());
+            }
             let hash = sip.finish128().as_u128();
             bitmap.push(!deleted_key_hashes.contains(&hash));
         }
@@ -293,13 +296,28 @@ impl MergeIntoOperationAggregator {
     fn overlapped(
         &self,
         column_stats: &HashMap<ColumnId, ColumnStatistics>,
+        columns_min_max: &[(Scalar, Scalar)],
+    ) -> bool {
+        for (idx, field) in self.on_conflict_fields.iter().enumerate() {
+            let column_id = field.table_field.column_id();
+            let (min, max) = &columns_min_max[idx];
+            if self.overlapped_by_stats(column_stats.get(&column_id), min, max) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn overlapped_by_stats(
+        &self,
+        column_stats: Option<&ColumnStatistics>,
         key_min: &Scalar,
         key_max: &Scalar,
     ) -> bool {
-        if let Some(stats) = column_stats.get(&self.on_conflict_field_id) {
+        if let Some(stats) = column_stats {
             std::cmp::min(key_max, &stats.max) >= std::cmp::max(key_min, &stats.min)
-            || // coincide overlap
-            (&stats.max == key_max && &stats.min == key_min)
+                || // coincide overlap
+                (&stats.max == key_max && &stats.min == key_min)
         } else {
             false
         }
