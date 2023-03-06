@@ -66,7 +66,7 @@ impl<T: AsyncSink + 'static> AsyncSinker<T> {
 
 impl<T: AsyncSink + 'static> Drop for AsyncSinker<T> {
     fn drop(&mut self) {
-        assert!(self.called_on_finish);
+        assert!(self.called_on_finish, "self.called_on_finish, name: {}", self.name());
         // if !self.called_on_finish {
         //     Thread::named_spawn(Some(String::from("AsyncSinker-Drop")), || {
         //         // GlobalIORuntime::instance().spawn(async move {
