@@ -46,6 +46,7 @@ pub fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::Exchange(_) => "Exchange".to_string(),
         RelOperator::Pattern(_) => "Pattern".to_string(),
         RelOperator::DummyTableScan(_) => "DummyTableScan".to_string(),
+        RelOperator::RuntimeFilterSource(_) => "RuntimeFilterSource".to_string(),
     }
 }
 
