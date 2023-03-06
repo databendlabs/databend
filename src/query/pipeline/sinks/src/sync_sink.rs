@@ -57,6 +57,16 @@ impl<T: Sink + 'static> Sinker<T> {
     }
 }
 
+impl<T: Sink> Drop for Sinker<T> {
+    fn drop(&mut self) {
+        assert!(self.called_on_finish);
+        // if !self.called_on_finish {
+        //     self.called_on_finish = true;
+        //     self.inner.on_finish()?;
+        // }
+    }
+}
+
 #[async_trait::async_trait]
 impl<T: Sink + 'static> Processor for Sinker<T> {
     fn name(&self) -> String {

@@ -17,6 +17,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use async_trait::unboxed_simple;
+use common_base::runtime::GlobalIORuntime;
+use common_base::runtime::Thread;
+use common_base::runtime::TrySpawn;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
@@ -58,6 +61,19 @@ impl<T: AsyncSink + 'static> AsyncSinker<T> {
             called_on_start: false,
             called_on_finish: false,
         })
+    }
+}
+
+impl<T: AsyncSink + 'static> Drop for AsyncSinker<T> {
+    fn drop(&mut self) {
+        assert!(self.called_on_finish);
+        // if !self.called_on_finish {
+        //     Thread::named_spawn(Some(String::from("AsyncSinker-Drop")), || {
+        //         // GlobalIORuntime::instance().spawn(async move {
+        //         //
+        //         // })
+        //     })
+        // }
     }
 }
 
