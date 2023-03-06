@@ -2,7 +2,7 @@ query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = (select count(*) from numbers(1) as t2, numbers(1) as t3 where t.number = t2.number)
 ----
 Filter
-├── filters: [is_true(eq(CAST(t.number (#0) AS UInt64 NULL), TRY_CAST(if(CAST(is_not_null(scalar_subquery_4 (#4)) AS Boolean NULL), CAST(scalar_subquery_4 (#4) AS Int64 NULL), 0) AS UInt64 NULL)))]
+├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = TRY_CAST(if(CAST(is_not_null(scalar_subquery_4 (#4)) AS Boolean NULL), CAST(scalar_subquery_4 (#4) AS Int64 NULL), 0) AS UInt64 NULL))]
 ├── estimated rows: 0.33
 └── HashJoin
     ├── join type: SINGLE
@@ -70,7 +70,7 @@ query T
 explain select t.number from numbers(1) as t where exists (select t1.number from numbers(1) as t1 where t.number = t1.number) or t.number > 1
 ----
 Filter
-├── filters: [is_true(or(2 (#2), CAST(gt(t.number (#0), 1) AS Boolean NULL)))]
+├── filters: [is_true(2 (#2) OR CAST(t.number (#0) > 1 AS Boolean NULL))]
 ├── estimated rows: 1.00
 └── HashJoin
     ├── join type: RIGHT MARK
@@ -105,7 +105,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 0.33
 ├── Filter(Build)
-│   ├── filters: [eq(count(*) (#2), 1)]
+│   ├── filters: [count(*) (#2) = 1]
 │   ├── estimated rows: 0.33
 │   └── AggregateFinal
 │       ├── group by: []
@@ -120,7 +120,7 @@ HashJoin
 │               ├── offset: 0
 │               ├── estimated rows: 0.33
 │               └── Filter
-│                   ├── filters: [eq(numbers.number (#1), 0)]
+│                   ├── filters: [numbers.number (#1) = 0]
 │                   ├── estimated rows: 0.33
 │                   └── TableScan
 │                       ├── table: default.system.numbers
@@ -128,7 +128,7 @@ HashJoin
 │                       ├── read bytes: 8
 │                       ├── partitions total: 1
 │                       ├── partitions scanned: 1
-│                       ├── push downs: [filters: [eq(numbers.number (#1), 0)], limit: NONE]
+│                       ├── push downs: [filters: [numbers.number (#1) = 0], limit: NONE]
 │                       └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.system.numbers
@@ -143,7 +143,7 @@ query T
 explain select t.number from numbers(1) as t where number = (select * from numbers(1) where number = 0)
 ----
 Filter
-├── filters: [is_true(eq(CAST(t.number (#0) AS UInt64 NULL), scalar_subquery_1 (#1)))]
+├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = scalar_subquery_1 (#1))]
 ├── estimated rows: 0.33
 └── HashJoin
     ├── join type: SINGLE
@@ -152,7 +152,7 @@ Filter
     ├── filters: []
     ├── estimated rows: 1.00
     ├── Filter(Build)
-    │   ├── filters: [eq(numbers.number (#1), 0)]
+    │   ├── filters: [numbers.number (#1) = 0]
     │   ├── estimated rows: 0.33
     │   └── TableScan
     │       ├── table: default.system.numbers
@@ -160,7 +160,7 @@ Filter
     │       ├── read bytes: 8
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
-    │       ├── push downs: [filters: [eq(numbers.number (#1), 0)], limit: NONE]
+    │       ├── push downs: [filters: [numbers.number (#1) = 0], limit: NONE]
     │       └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.system.numbers
@@ -259,7 +259,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 0.33
 ├── Filter(Build)
-│   ├── filters: [eq(numbers.number (#1), 0)]
+│   ├── filters: [numbers.number (#1) = 0]
 │   ├── estimated rows: 0.33
 │   └── TableScan
 │       ├── table: default.system.numbers
@@ -267,10 +267,10 @@ HashJoin
 │       ├── read bytes: 8
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       ├── push downs: [filters: [eq(numbers.number (#1), 0)], limit: NONE]
+│       ├── push downs: [filters: [numbers.number (#1) = 0], limit: NONE]
 │       └── estimated rows: 1.00
 └── Filter(Probe)
-    ├── filters: [lt(t.number (#0), 10)]
+    ├── filters: [t.number (#0) < 10]
     ├── estimated rows: 0.33
     └── TableScan
         ├── table: default.system.numbers
@@ -278,7 +278,7 @@ HashJoin
         ├── read bytes: 8
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── push downs: [filters: [lt(t.number (#0), 10)], limit: NONE]
+        ├── push downs: [filters: [t.number (#0) < 10], limit: NONE]
         └── estimated rows: 1.00
 
 query T
@@ -288,7 +288,7 @@ HashJoin
 ├── join type: LEFT SEMI
 ├── build keys: [numbers.number (#1)]
 ├── probe keys: [t.number (#0)]
-├── filters: [lt(t.number (#0), numbers.number (#1))]
+├── filters: [t.number (#0) < numbers.number (#1)]
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -346,7 +346,7 @@ Filter
     ├── filters: []
     ├── estimated rows: 1.00
     ├── EvalScalar(Build)
-    │   ├── expressions: [eq(COUNT(*) (#4), 1)]
+    │   ├── expressions: [COUNT(*) (#4) = 1]
     │   ├── estimated rows: 1.00
     │   └── AggregateFinal
     │       ├── group by: [number]
@@ -394,7 +394,7 @@ HashJoin
 ├── join type: LEFT ANTI
 ├── build keys: []
 ├── probe keys: []
-├── filters: [lt(t.number (#0), t1.number (#2))]
+├── filters: [t.number (#0) < t1.number (#2)]
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -408,7 +408,7 @@ HashJoin
     ├── join type: LEFT SEMI
     ├── build keys: []
     ├── probe keys: []
-    ├── filters: [gt(t.number (#0), t1.number (#1))]
+    ├── filters: [t.number (#0) > t1.number (#1)]
     ├── estimated rows: 1.00
     ├── TableScan(Build)
     │   ├── table: default.system.numbers
