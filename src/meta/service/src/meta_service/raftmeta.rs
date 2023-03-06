@@ -709,20 +709,20 @@ impl MetaNode {
                 match res {
                     Ok(v) => {
                         info!("join cluster via {} success: {:?}", addr, v);
-                        return Ok(());
+                        Ok(())
                     }
                     Err(e) => {
                         error!("join cluster via {} fail: {}", addr, e.to_string());
-                        return Err(e);
+                        Err(e)
                     }
                 }
             }
             Err(s) => {
                 error!("join cluster via {} fail: {:?}", addr, s);
                 let net_err = MetaNetworkError::from(s);
-                return Err(MetaAPIError::NetworkError(net_err));
+                Err(MetaAPIError::NetworkError(net_err))
             }
-        };
+        }
     }
 
     /// Check meta-node state to see if it's appropriate to join to a cluster.
