@@ -1760,15 +1760,13 @@ error:
 
 
 
-error: 
-  --> SQL:1:12
-  |
-1 | array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'DESC', 'NULLS FIRST')
-  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `array(Decimal(2, 1), NULL, Decimal(2, 1), Decimal(2, 1), String, NULL)`
-
-has tried possible overloads:
-  array(T0, T0, T0, T0, T0, T0) :: Array(T0)  : unable to find a common super type for `Decimal(2, 1) NULL` and `String`
-
+ast            : array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'DESC', 'NULLS FIRST')
+raw expr       : array_sort_desc_null_first(array(1.2_decimal(2, 1), NULL, 3.4_decimal(2, 1), 5.6_decimal(2, 1), "2.2", NULL))
+checked expr   : array_sort_desc_null_first<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
+optimized expr : [NULL, NULL, 5.6, 3.4, 2.2, 1.2]
+output type    : Array(Decimal(2, 1) NULL)
+output domain  : [{0.0..=5.6} ∪ {NULL}]
+output         : [NULL, NULL, 5.6, 3.4, 2.2, 1.2]
 
 
 ast            : array_sort([], 'DESC', 'NULLS FIRST')
@@ -1780,15 +1778,13 @@ output domain  : []
 output         : []
 
 
-error: 
-  --> SQL:1:12
-  |
-1 | array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'DESC', 'NULLS LAST')
-  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `array(Decimal(2, 1), NULL, Decimal(2, 1), Decimal(2, 1), String, NULL)`
-
-has tried possible overloads:
-  array(T0, T0, T0, T0, T0, T0) :: Array(T0)  : unable to find a common super type for `Decimal(2, 1) NULL` and `String`
-
+ast            : array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'DESC', 'NULLS LAST')
+raw expr       : array_sort_desc_null_last(array(1.2_decimal(2, 1), NULL, 3.4_decimal(2, 1), 5.6_decimal(2, 1), "2.2", NULL))
+checked expr   : array_sort_desc_null_last<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
+optimized expr : [5.6, 3.4, 2.2, 1.2, NULL, NULL]
+output type    : Array(Decimal(2, 1) NULL)
+output domain  : [{0.0..=5.6} ∪ {NULL}]
+output         : [5.6, 3.4, 2.2, 1.2, NULL, NULL]
 
 
 ast            : array_sort([], 'DESC', 'NULLS LAST')
@@ -1800,15 +1796,13 @@ output domain  : []
 output         : []
 
 
-error: 
-  --> SQL:1:12
-  |
-1 | array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'ASC', 'NULLS FIRST')
-  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no overload satisfies `array(Decimal(2, 1), NULL, Decimal(2, 1), Decimal(2, 1), String, NULL)`
-
-has tried possible overloads:
-  array(T0, T0, T0, T0, T0, T0) :: Array(T0)  : unable to find a common super type for `Decimal(2, 1) NULL` and `String`
-
+ast            : array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'ASC', 'NULLS FIRST')
+raw expr       : array_sort_asc_null_first(array(1.2_decimal(2, 1), NULL, 3.4_decimal(2, 1), 5.6_decimal(2, 1), "2.2", NULL))
+checked expr   : array_sort_asc_null_first<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
+optimized expr : [NULL, NULL, 1.2, 2.2, 3.4, 5.6]
+output type    : Array(Decimal(2, 1) NULL)
+output domain  : [{0.0..=5.6} ∪ {NULL}]
+output         : [NULL, NULL, 1.2, 2.2, 3.4, 5.6]
 
 
 ast            : array_sort([], 'ASC', 'NULLS FIRST')
