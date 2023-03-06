@@ -225,7 +225,18 @@ impl AccessChecker for PrivilegeAccess {
                             plan.database.clone(),
                             plan.table.clone(),
                         ),
-                        UserPrivilegeType::Insert, // TODO also check update
+                        UserPrivilegeType::Insert,
+                    )
+                    .await?;
+                // TODO batch privilege checking api?
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        UserPrivilegeType::Delete,
                     )
                     .await?;
             }
