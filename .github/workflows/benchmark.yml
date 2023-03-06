@@ -47,21 +47,6 @@ jobs:
         with:
           target: x86_64-unknown-linux-gnu
           profile: release
-
-  clickbench:
-    needs: build_release
-    timeout-minutes: 30
-    runs-on: [self-hosted, X64, Linux, perf]
-    strategy:
-      matrix:
-        storage:
-          - s3
-          - fs
-        dataset:
-          - hits
-          - tpch
-    steps:
-      - uses: actions/checkout@v3
       - name: Get benchmark source
         run: |
           case ${{ github.event_name }} in
@@ -78,9 +63,15 @@ jobs:
               exit 1
               ;;
           esac
-      - uses: ./.github/actions/benchmark
+      - name: Generate benchmark metadata
+        run: |
+          echo '{}' > metadata.json
+          jq ".sha = \"${{ github.sha }}\"" <metadata.json >metadata.json.tmp && mv metadata.json.tmp metadata.json
+          jq ".run_id = \"${{ github.run_id }}\"" <metadata.json >metadata.json.tmp && mv metadata.json.tmp metadata.json
+          jq ".source = \"${{ env.BENCHMARK_SOURCE }}\"" <metadata.json >metadata.json.tmp && mv metadata.json.tmp metadata.json
+          jq ".source_id = \"${{ env.BENCHMARK_SOURCE_ID }}\"" <metadata.json >metadata.json.tmp && mv metadata.json.tmp metadata.json
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
         with:
-          storage: ${{ matrix.storage }}
-          dataset: ${{ matrix.dataset }}
-          source: ${{ env.BENCHMARK_SOURCE }}
-          source_id: ${{ env.BENCHMARK_SOURCE_ID }}
+          name: benchmark-metadata
+          path: metadata.json

@@ -343,7 +343,6 @@ jobs:
           platforms: linux/amd64,linux/arm64
           context: .
           file: ./docker/Dockerfile
-          build-args: VERSION=${{ needs.create_release.outputs.version }}
       - name: Update repo description
         uses: peter-evans/dockerhub-description@v3
         with:
@@ -416,7 +415,6 @@ jobs:
           platforms: linux/amd64,linux/arm64
           context: .
           file: ./docker/${{ matrix.distro }}/${{ matrix.service }}.Dockerfile
-          build-args: VERSION=${{ needs.create_release.outputs.version }}
 
   release_packages:
     name: release packages
