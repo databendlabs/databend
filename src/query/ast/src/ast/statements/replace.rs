@@ -25,7 +25,7 @@ pub struct ReplaceStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
-    pub on: Identifier,
+    pub on_conflict_columns: Vec<Identifier>,
     pub columns: Vec<Identifier>,
     pub source: InsertSource,
 }
@@ -40,12 +40,18 @@ impl Display for ReplaceStmt {
                 .chain(&self.database)
                 .chain(Some(&self.table)),
         )?;
-        write!(f, "ON ( {} )", self.on)?;
+        if !self.columns.is_empty() {
+            write!(f, " (")?;
+            write_comma_separated_list(f, &self.columns)?;
+            write!(f, ") ")?;
+        }
+        write!(f, "ON CONFLICT ")?;
         if !self.columns.is_empty() {
             write!(f, " (")?;
             write_comma_separated_list(f, &self.columns)?;
             write!(f, ")")?;
         }
+
         write!(f, " {}", self.source)
     }
 }

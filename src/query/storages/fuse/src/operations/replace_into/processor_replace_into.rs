@@ -26,6 +26,7 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
+use crate::operations::merge_into::OnConflictField;
 use crate::operations::replace_into::mutator_replace_into::ReplaceIntoMutator;
 
 pub struct ReplaceIntoProcessor {
@@ -44,8 +45,8 @@ pub struct ReplaceIntoProcessor {
 }
 
 impl ReplaceIntoProcessor {
-    pub fn create(on_conflict_field_index: usize, target_table_empty: bool) -> Self {
-        let replace_into_mutator = ReplaceIntoMutator::create(on_conflict_field_index);
+    pub fn create(on_conflict_fields: Vec<OnConflictField>, target_table_empty: bool) -> Self {
+        let replace_into_mutator = ReplaceIntoMutator::create(on_conflict_fields);
         let input_port = InputPort::create();
         let output_port_merge_into_action = OutputPort::create();
         let output_port_append_data = OutputPort::create();

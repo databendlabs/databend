@@ -53,6 +53,8 @@ impl Interpreter for ReplaceInterpreter {
     }
 
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        self.check_on_conflicts()?;
+
         let plan = &self.plan;
         let table = self
             .ctx
@@ -81,15 +83,28 @@ impl Interpreter for ReplaceInterpreter {
                 )
             })?;
 
-        let field = plan.join_on.clone();
+        let on_conflict_fields = plan.on_conflict_fields.clone();
         table
-            .replace_into(self.ctx.clone(), &mut pipeline.main_pipeline, field)
+            .replace_into(
+                self.ctx.clone(),
+                &mut pipeline.main_pipeline,
+                on_conflict_fields,
+            )
             .await?;
         Ok(pipeline)
     }
 }
 
 impl ReplaceInterpreter {
+    fn check_on_conflicts(&self) -> Result<()> {
+        if self.plan.on_conflict_fields.is_empty() {
+            Err(ErrorCode::BadArguments(
+                "at least one column must be specified in the replace into .. on [conflict] statement",
+            ))
+        } else {
+            Ok(())
+        }
+    }
     async fn connect_input_source<'a>(
         &'a self,
         ctx: Arc<QueryContext>,
@@ -99,7 +114,6 @@ impl ReplaceInterpreter {
         match source {
             InsertInputSource::Values(data) => {
                 self.connect_value_source(ctx.clone(), schema.clone(), data)
-                    .await
             }
 
             InsertInputSource::SelectPlan(plan) => {
@@ -112,8 +126,8 @@ impl ReplaceInterpreter {
         }
     }
 
-    async fn connect_value_source<'a>(
-        &'a self,
+    fn connect_value_source(
+        &self,
         ctx: Arc<QueryContext>,
         schema: DataSchemaRef,
         value_data: &str,

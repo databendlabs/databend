@@ -20,8 +20,16 @@ mod transform_append;
 mod transform_merge_into_mutation_aggregator;
 mod transform_mutation_aggregator;
 
+use common_expression::FieldIndex;
+use common_expression::TableField;
 pub use processor_broadcast::*;
 pub use sink_commit::CommitSink;
 pub use transform_append::AppendTransform;
 pub use transform_merge_into_mutation_aggregator::*;
 pub use transform_mutation_aggregator::*;
+
+#[derive(Clone)]
+pub struct OnConflictField {
+    pub table_field: TableField,
+    pub field_index: FieldIndex,
+}

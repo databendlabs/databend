@@ -41,7 +41,7 @@ impl Binder {
             catalog,
             database,
             table,
-            on,
+            on_conflict_columns,
             columns,
             source,
         } = stmt;
@@ -78,9 +78,14 @@ impl Binder {
             TableSchemaRefExt::create(fields)
         };
 
-        let on_conflict_field = schema
-            .field_with_name(&normalize_identifier(on, &self.name_resolution_ctx).name)
-            .map(|v| v.clone())?;
+        let on_conflict_fields = on_conflict_columns
+            .iter()
+            .map(|ident| {
+                schema
+                    .field_with_name(&normalize_identifier(ident, &self.name_resolution_ctx).name)
+                    .map(|v| v.clone())
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         let input_source: Result<InsertInputSource> = match source.clone() {
             InsertSource::Streaming {
@@ -128,7 +133,7 @@ impl Binder {
             database: database_name.to_string(),
             table: table_name,
             table_id,
-            join_on: on_conflict_field,
+            on_conflict_fields,
             schema,
             source: input_source?,
         };
