@@ -16,6 +16,7 @@ use std::cmp::Ordering;
 use std::hash::Hash;
 use std::ops::Range;
 
+use common_arrow::arrow::bitmap::and;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
@@ -1022,11 +1023,7 @@ impl Column {
             }
             Column::Nullable(col) => {
                 let arrow_array = col.column.as_arrow();
-                match arrow_array.data_type() {
-                    ArrowType::Null => arrow_array,
-                    ArrowType::Extension(_, t, _) if **t == ArrowType::Null => arrow_array,
-                    _ => arrow_array.with_validity(Some(col.validity.clone())),
-                }
+                Self::set_validity(arrow_array.clone(), &col.validity)
             }
             Column::Tuple { fields, .. } => Box::new(
                 common_arrow::arrow::array::StructArray::try_new(
@@ -1049,6 +1046,45 @@ impl Column {
                     .unwrap(),
                 )
             }
+        }
+    }
+
+    fn set_validity(
+        arrow_array: Box<dyn common_arrow::arrow::array::Array>,
+        validity: &Bitmap,
+    ) -> Box<dyn common_arrow::arrow::array::Array> {
+        // merge Struct validity with the inner fields validity
+        let validity = match arrow_array.validity() {
+            Some(inner_validity) => and(inner_validity, validity),
+            None => validity.clone(),
+        };
+
+        match arrow_array.data_type() {
+            ArrowType::Null => arrow_array.clone(),
+            ArrowType::Extension(_, t, _) if **t == ArrowType::Null => arrow_array.clone(),
+            ArrowType::Struct(_) => {
+                let struct_array = arrow_array
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::StructArray>()
+                    .expect("fail to read from arrow: array should be `StructArray`");
+                let fields = struct_array
+                    .values()
+                    .iter()
+                    .map(|array| {
+                        let array = Self::set_validity(array.clone(), &validity);
+                        array.clone()
+                    })
+                    .collect::<Vec<_>>();
+                Box::new(
+                    common_arrow::arrow::array::StructArray::try_new(
+                        arrow_array.data_type().clone(),
+                        fields,
+                        Some(validity),
+                    )
+                    .unwrap(),
+                )
+            }
+            _ => arrow_array.with_validity(Some(validity)),
         }
     }
 
