@@ -33,16 +33,20 @@ pub fn set_panic_hook() {
 
 pub fn log_panic(panic: &PanicInfo) {
     let backtrace = Backtrace::force_capture();
-    let backtrace = format!("{:?}", backtrace);
+    let backtrace_str = format!("{:?}", backtrace);
+
+    eprintln!("{}", panic);
+    eprintln!("{}", backtrace);
+
     if let Some(location) = panic.location() {
         error!(
             message = %panic,
-            backtrace = %backtrace,
+            backtrace = %backtrace_str,
             panic.file = location.file(),
             panic.line = location.line(),
             panic.column = location.column(),
         );
     } else {
-        error!(message = %panic, backtrace = %backtrace);
+        error!(message = %panic, backtrace = %backtrace_str);
     }
 }
