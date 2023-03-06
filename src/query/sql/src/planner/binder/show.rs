@@ -49,6 +49,31 @@ impl Binder {
             .await
     }
 
+    pub(in crate::planner::binder) async fn bind_show_table_functions(
+        &mut self,
+        bind_context: &BindContext,
+        limit: &Option<ShowLimit>,
+    ) -> Result<Plan> {
+        // rewrite show functions to select * from system.table_functions ...
+        let query = format!("SELECT name FROM system.table_functions {}", match limit {
+            None => {
+                "".to_string()
+            }
+            Some(predicate) => {
+                match predicate {
+                    ShowLimit::Like { pattern } => {
+                        format!("WHERE name LIKE '{}'", pattern)
+                    }
+                    ShowLimit::Where { selection } => {
+                        format!("WHERE {}", selection)
+                    }
+                }
+            }
+        });
+        self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowFunctions)
+            .await
+    }
+
     pub(in crate::planner::binder) async fn bind_show_settings(
         &mut self,
         bind_context: &BindContext,

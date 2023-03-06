@@ -125,6 +125,10 @@ impl<'a> Binder {
                 self.bind_show_functions(bind_context, limit).await?
             }
 
+            Statement::ShowTableFunctions { limit } => {
+                self.bind_show_table_functions(bind_context, limit).await?
+            }
+
             Statement::Copy(stmt) => self.bind_copy(bind_context, stmt).await?,
 
             Statement::ShowMetrics => {
