@@ -32,4 +32,4 @@ runs:
       if: failure() || cancelled()
       uses: ./.github/actions/artifact_failure
       with:
-        name: test-compat
+        name: fuse-compat

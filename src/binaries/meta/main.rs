@@ -140,8 +140,14 @@ async fn main() -> anyhow::Result<()> {
         "Register node to update raft_api_advertise_host_endpoint and grpc_api_advertise_address"
     );
     {
-        info!("Wait for active leader to register node");
-        let wait = meta_node.raft.wait(Some(Duration::from_secs(20)));
+        let wait_leader_timeout = Duration::from_millis(conf.raft_config.election_timeout().1 * 10);
+        info!(
+            "Wait {:?} for active leader to register node, raft election timeouts: {:?}",
+            wait_leader_timeout,
+            conf.raft_config.election_timeout()
+        );
+
+        let wait = meta_node.raft.wait(Some(wait_leader_timeout));
         let metrics = wait
             .metrics(|x| x.current_leader.is_some(), "receive an active leader")
             .await?;

@@ -27,74 +27,39 @@ use crate::Incompatible;
 ///
 /// `VER` is the current metadata version and is automatically set to the last version.
 /// `MIN_READER_VER` is the oldest compatible version.
+#[rustfmt::skip]
 const META_CHANGE_LOG: &[(u64, &str)] = &[
     //
-    (1, "----------: Initial"),
-    (2, "2022-07-13: Add: share.proto"),
-    (3, "2022-07-29: Add: user.proto/UserOption::default_role"),
-    (4, "2022-08-22: Add: config.proto/GcsStorageConfig"),
-    (
-        5,
-        "2022-08-25: Add: ShareMeta::share_from_db_ids; DatabaseMeta::from_share",
-    ),
-    (6, "2022-09-08: Add: users.proto/CopyOptions::purge"),
-    (
-        7,
-        "2022-09-09: Add: table.proto/{TableCopiedFileInfo,TableCopiedFileLock} type",
-    ),
-    (8, "2022-09-16: Add: users.proto/StageFile::entity_tag"),
-    (
-        9,
-        "2022-09-20: Add: config.proto/S3StorageConfig::security_token",
-    ),
+    ( 1, "----------: Initial"),
+    ( 2, "2022-07-13: Add: share.proto"),
+    ( 3, "2022-07-29: Add: user.proto/UserOption::default_role"),
+    ( 4, "2022-08-22: Add: config.proto/GcsStorageConfig"),
+    ( 5, "2022-08-25: Add: ShareMeta::share_from_db_ids; DatabaseMeta::from_share", ),
+    ( 6, "2022-09-08: Add: users.proto/CopyOptions::purge"),
+    ( 7, "2022-09-09: Add: table.proto/{TableCopiedFileInfo,TableCopiedFileLock} type", ),
+    ( 8, "2022-09-16: Add: users.proto/StageFile::entity_tag"),
+    ( 9, "2022-09-20: Add: config.proto/S3StorageConfig::security_token", ),
     (10, "2022-09-23: Add: table.proto/TableMeta::catalog"),
-    (
-        11,
-        "2022-09-29: Add: users.proto/CopyOptions::single and CopyOptions::max_file_size",
-    ),
+    (11, "2022-09-29: Add: users.proto/CopyOptions::single and CopyOptions::max_file_size", ),
     (12, "2022-09-29: Add: table.proto/TableMeta::storage_params"),
-    (
-        13,
-        "2022-10-09: Add: config.proto/OssStorageConfig and user.proto/StageStorage::oss",
-    ),
-    (
-        14,
-        "2022-10-11: Add: role_arn and external_id in config.proto/OssStorageConfig, Remove role_arn and oidc_token from config.proto/OssStorageConfig",
-    ),
+    (13, "2022-10-09: Add: config.proto/OssStorageConfig and user.proto/StageStorage::oss", ),
+    (14, "2022-10-11: Add: role_arn and external_id in config.proto/OssStorageConfig, Remove role_arn and oidc_token from config.proto/OssStorageConfig", ),
     (15, "2022-10-12: Remove: precision in TimestampType"),
     (16, "2022-09-29: Add: CopyOptions::split_size"),
     (17, "2022-10-28: Add: StageType::LegacyInternal"),
     (18, "2022-10-28: Add: FILEFormatOptions::escape"),
     (19, "2022-10-31: Add: StageType::UserStage"),
-    (
-        20,
-        "2022-11-02: Add: users.proto/FileFormatOptions::row_tag",
-    ),
-    (
-        21,
-        "2022-11-24: Add: users.proto/FileFormatOptions::nan_display",
-    ),
+    (20, "2022-11-02: Add: users.proto/FileFormatOptions::row_tag", ),
+    (21, "2022-11-24: Add: users.proto/FileFormatOptions::nan_display", ),
     (22, "2022-12-13: Add: users.proto/FileFormatOptions::quote"),
     (23, "2022-12-28: Add: table.proto/TableMeta::part_prefix"),
-    (
-        24,
-        "2023-01-07: Add: new-schema pb::DataType to/from TableDataType",
-    ),
+    (24, "2023-01-07: Add: new-schema pb::DataType to/from TableDataType", ),
     (25, "2023-01-05: Add: user.proto/OnErrorMode::AbortNum"),
-    (
-        26,
-        "2023-01-16: Add: metadata.proto/DataSchema::next_column_id",
-    ),
+    (26, "2023-01-16: Add: metadata.proto/DataSchema::next_column_id", ),
     (27, "2023-02-10: Add: metadata.proto/DataType Decimal types"),
     (28, "2023-02-13: Add: user.proto/UserDefinedFileFormat"),
-    (
-        29,
-        "2023-02-23: Add: metadata.proto/DataType EmptyMap types",
-    ),
-    (
-        30,
-        "2023-02-21: Add: config.proto/WebhdfsStorageConfig; Modify: user.proto/UserStageInfo::StageStorage",
-    ),
+    (29, "2023-02-23: Add: metadata.proto/DataType EmptyMap types", ),
+    (30, "2023-02-21: Add: config.proto/WebhdfsStorageConfig; Modify: user.proto/UserStageInfo::StageStorage", ),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

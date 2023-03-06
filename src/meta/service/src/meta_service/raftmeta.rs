@@ -258,11 +258,13 @@ impl MetaNode {
     pub fn new_raft_config(config: &RaftConfig) -> Config {
         let hb = config.heartbeat_interval;
 
+        let election_timeouts = config.election_timeout();
+
         Config {
             cluster_name: config.cluster_name.clone(),
             heartbeat_interval: hb,
-            election_timeout_min: hb * 8,
-            election_timeout_max: hb * 12,
+            election_timeout_min: election_timeouts.0,
+            election_timeout_max: election_timeouts.1,
             install_snapshot_timeout: config.install_snapshot_timeout,
             snapshot_policy: SnapshotPolicy::LogsSinceLast(config.snapshot_logs_since_last),
             max_in_snapshot_log_to_keep: config.max_applied_log_to_keep,

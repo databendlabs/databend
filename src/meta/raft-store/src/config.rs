@@ -194,6 +194,13 @@ impl RaftConfig {
         !self.no_sync
     }
 
+    /// Returns the min and max election timeout, in milli seconds.
+    ///
+    /// Raft will choose a random timeout in this range for next election.
+    pub fn election_timeout(&self) -> (u64, u64) {
+        (self.heartbeat_interval * 5, self.heartbeat_interval * 7)
+    }
+
     pub fn check(&self) -> std::result::Result<(), MetaStartupError> {
         // If just leaving, does not need to check other config
         if !self.leave_via.is_empty() {
