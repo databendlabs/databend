@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::TableDataType;
 use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::TableMeta;
@@ -157,7 +156,6 @@ impl CreateTableInterpreter {
     fn build_request(&self) -> Result<CreateTableReq> {
         let mut fields = Vec::with_capacity(self.plan.schema.num_fields());
         for (idx, field) in self.plan.schema.fields().clone().into_iter().enumerate() {
-            check_create_data_type(field.data_type())?;
             let field = if let Some(Some(default_expr)) = &self.plan.field_default_exprs.get(idx) {
                 let field = field.with_default_expr(Some(default_expr.clone()));
                 let _ = field_default_value(self.ctx.clone(), &field)?;
@@ -197,29 +195,5 @@ impl CreateTableInterpreter {
         };
 
         Ok(req)
-    }
-}
-
-/// Check if the type contains nullable nested types
-fn check_create_data_type(ty: &TableDataType) -> Result<()> {
-    match ty {
-        TableDataType::Array(box inner) => check_create_data_type(inner),
-        TableDataType::Tuple { fields_type, .. } => {
-            for field in fields_type {
-                check_create_data_type(field)?;
-            }
-            Ok(())
-        }
-        TableDataType::Nullable(box inner) => {
-            if matches!(inner, TableDataType::Array(_) | TableDataType::Tuple { .. }) {
-                Err(ErrorCode::IllegalDataType(format!(
-                    "nested type {:?} cannot be nullable",
-                    inner
-                )))
-            } else {
-                Ok(())
-            }
-        }
-        _ => Ok(()),
     }
 }

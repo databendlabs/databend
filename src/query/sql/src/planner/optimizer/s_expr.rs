@@ -152,6 +152,16 @@ impl SExpr {
         }
     }
 
+    pub fn replace_plan(&self, plan: RelOperator) -> Self {
+        Self {
+            plan,
+            original_group: self.original_group,
+            rel_prop: self.rel_prop.clone(),
+            applied_rules: self.applied_rules.clone(),
+            children: self.children.clone(),
+        }
+    }
+
     /// Record the applied rule id in current SExpr
     pub(crate) fn set_applied_rule(&mut self, rule_id: &RuleID) {
         self.applied_rules.set(rule_id, true);
@@ -179,6 +189,7 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         | RelOperator::UnionAll(_)
         | RelOperator::Sort(_)
         | RelOperator::DummyTableScan(_)
+        | RelOperator::RuntimeFilterSource(_)
         | RelOperator::Pattern(_) => false,
         RelOperator::Join(op) => {
             op.left_conditions.iter().any(find_subquery_in_expr)

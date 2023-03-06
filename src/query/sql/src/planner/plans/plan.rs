@@ -74,6 +74,7 @@ use crate::plans::OptimizeTablePlan;
 use crate::plans::RemoveStagePlan;
 use crate::plans::RenameDatabasePlan;
 use crate::plans::RenameTablePlan;
+use crate::plans::Replace;
 use crate::plans::RevertTablePlan;
 use crate::plans::RevokePrivilegePlan;
 use crate::plans::RevokeRolePlan;
@@ -160,6 +161,7 @@ pub enum Plan {
 
     // Insert
     Insert(Box<Insert>),
+    Replace(Box<Replace>),
     Delete(Box<DeletePlan>),
     Update(Box<UpdatePlan>),
 
@@ -233,6 +235,7 @@ pub enum RewriteKind {
     ShowTablesStatus,
 
     ShowFunctions,
+    ShowTableFunctions,
 
     ShowUsers,
     ShowStages,
@@ -296,6 +299,7 @@ impl Display for Plan {
             Plan::AlterUDF(_) => write!(f, "AlterUDF"),
             Plan::DropUDF(_) => write!(f, "DropUDF"),
             Plan::Insert(_) => write!(f, "Insert"),
+            Plan::Replace(_) => write!(f, "Replace"),
             Plan::Delete(_) => write!(f, "Delete"),
             Plan::Update(_) => write!(f, "Update"),
             Plan::Call(_) => write!(f, "Call"),
@@ -387,6 +391,7 @@ impl Plan {
             Plan::AlterUDF(_) => Arc::new(DataSchema::empty()),
             Plan::DropUDF(_) => Arc::new(DataSchema::empty()),
             Plan::Insert(plan) => plan.schema(),
+            Plan::Replace(plan) => plan.schema(),
             Plan::Delete(_) => Arc::new(DataSchema::empty()),
             Plan::Update(_) => Arc::new(DataSchema::empty()),
             Plan::Call(_) => Arc::new(DataSchema::empty()),

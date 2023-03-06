@@ -303,6 +303,7 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::ExplainAnalyze { query } => visitor.visit_statement(&mut *query),
         Statement::Query(query) => visitor.visit_query(&mut *query),
         Statement::Insert(insert) => visitor.visit_insert(insert),
+        Statement::Replace(replace) => visitor.visit_replace(replace),
         Statement::Delete {
             table_reference,
             selection,
@@ -315,6 +316,7 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::ShowMetrics => visitor.visit_show_metrics(),
         Statement::ShowEngines => visitor.visit_show_engines(),
         Statement::ShowFunctions { limit } => visitor.visit_show_functions(limit),
+        Statement::ShowTableFunctions { limit } => visitor.visit_show_table_functions(limit),
         Statement::KillStmt {
             kill_target,
             object_id,

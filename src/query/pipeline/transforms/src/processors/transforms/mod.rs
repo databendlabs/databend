@@ -15,17 +15,23 @@
 mod sort;
 pub mod transform;
 pub mod transform_accumulating;
+pub mod transform_accumulating_async;
+mod transform_async;
 pub mod transform_block_compact;
 pub mod transform_block_compact_no_split;
 pub mod transform_compact;
+mod transform_dummy;
 pub mod transform_multi_sort_merge;
 pub mod transform_sort_merge;
 pub mod transform_sort_partial;
 
 pub use transform::*;
 pub use transform_accumulating::*;
+pub use transform_accumulating_async::*;
+pub use transform_async::*;
 pub use transform_block_compact::*;
 pub use transform_compact::*;
+pub use transform_dummy::*;
 pub use transform_multi_sort_merge::*;
 pub use transform_sort_merge::*;
 pub use transform_sort_partial::*;

@@ -18,7 +18,7 @@ use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
-use common_storages_fuse::io::write_block;
+use common_storages_fuse::io::serialize_block;
 use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::io::WriteSettings;
 use common_storages_fuse::FuseStorageFormat;
@@ -72,7 +72,7 @@ impl<'a> BlockWriter<'a> {
         };
 
         let mut buf = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
-        let (file_size, col_metas) = write_block(&write_settings, schema, block, &mut buf)?;
+        let (file_size, col_metas) = serialize_block(&write_settings, schema, block, &mut buf)?;
 
         data_accessor.object(&location.0).write(buf).await?;
 
