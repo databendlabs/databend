@@ -13,13 +13,15 @@ echo "CREATE TABLE test_load_unload
     c array(string),
     d Variant,
     e timestamp,
-    f decimal(4, 2)
+    f decimal(4, 2),
+    g map(string,int),
+    h tuple(string,int)
 );" | $MYSQL_CLIENT_CONNECT
 
 insert_data() {
 	echo "insert into test_load_unload values
-	('a\"b', 1, ['a\"b'], parse_json('{\"k\":\"v\"}'), '2044-05-06T03:25:02.868894-07:00', 010.011),
-	(null, 2, ['a\'b'], parse_json('[1]'), '2044-05-06T03:25:02.868894-07:00', -010.011)
+	('a\"b', 1, ['a\"b'], parse_json('{\"k\":\"v\"}'), '2044-05-06T03:25:02.868894-07:00', 010.011, {'k1':10,'k2':20}, ('a', 5)),
+	(null, 2, ['a\'b'], parse_json('[1]'), '2044-05-06T03:25:02.868894-07:00', -010.011, {}, ('b',10))
 	" | $MYSQL_CLIENT_CONNECT
 }
 
@@ -50,3 +52,4 @@ test_format "CSV"
 
 test_format "TSV"
 
+test_format "NDJSON"
