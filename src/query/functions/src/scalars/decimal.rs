@@ -17,11 +17,14 @@ use std::ops::*;
 use std::sync::Arc;
 
 use common_arrow::arrow::buffer::Buffer;
+use common_expression::read_decimal_with_size;
 use common_expression::types::decimal::*;
+use common_expression::types::string::StringColumn;
 use common_expression::types::*;
 use common_expression::with_integer_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
+use common_expression::DecimalDeserializer;
 use common_expression::EvalContext;
 use common_expression::Function;
 use common_expression::FunctionDomain;
@@ -381,10 +384,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         if args_type.len() != 1 {
             return None;
         }
-        if !args_type[0].is_decimal() && !args_type[0].is_numeric() {
+        if !matches!(
+            args_type[0],
+            DataType::Number(_) | DataType::Decimal(_) | DataType::String
+        ) {
             return None;
         }
-
         if params.len() != 2 {
             return None;
         }
@@ -468,13 +473,72 @@ fn convert_to_decimal(
     dest_type: DataType,
 ) -> Value<AnyType> {
     let arg = &args[0];
-    if from_type.is_integer() {
-        return integer_to_decimal(arg, ctx, from_type, dest_type);
+    match from_type {
+        DataType::Number(ty) => {
+            if ty.is_float() {
+                float_to_decimal(arg, ctx, from_type, dest_type)
+            } else {
+                integer_to_decimal(arg, ctx, from_type, dest_type)
+            }
+        }
+        DataType::Decimal(_) => decimal_to_decimal(arg, ctx, from_type, dest_type),
+        DataType::String => string_to_decimal(arg, ctx, from_type, dest_type),
+        _ => unreachable!("to_decimal not support this DataType"),
     }
-    if from_type.is_floating() {
-        return float_to_decimal(arg, ctx, from_type, dest_type);
+}
+
+fn string_to_decimal_internal<T: Decimal>(
+    ctx: &mut EvalContext,
+    string_column: &StringColumn,
+    size: DecimalSize,
+    dest_type: &DecimalDataType,
+) -> DecimalColumn {
+    let mut builder = DecimalDeserializer::<T>::with_capacity(dest_type, string_column.len());
+    for (row, buf) in string_column.iter().enumerate() {
+        match read_decimal_with_size::<T>(buf, size, true) {
+            Ok((d, _)) => builder.values.push(d),
+            Err(e) => {
+                ctx.set_error(row, format!("fail to decode string as decimal: {e}"));
+                builder.values.push(T::zero())
+            }
+        }
     }
-    decimal_to_decimal(arg, ctx, from_type, dest_type)
+    T::to_column(std::mem::take(&mut builder.values), size)
+}
+
+fn string_to_decimal(
+    arg: &ValueRef<AnyType>,
+    ctx: &mut EvalContext,
+    from_type: DataType,
+    dest_type: DataType,
+) -> Value<AnyType> {
+    let dest_type = dest_type.as_decimal().unwrap();
+
+    let mut is_scalar = false;
+    let column = match arg {
+        ValueRef::Column(column) => column.clone(),
+        ValueRef::Scalar(s) => {
+            is_scalar = true;
+            let builder = ColumnBuilder::repeat(s, 1, &from_type);
+            builder.build()
+        }
+    };
+    let string_column = StringType::try_downcast_column(&column).unwrap();
+    let result = match dest_type {
+        DecimalDataType::Decimal128(size) => {
+            string_to_decimal_internal::<i128>(ctx, &string_column, *size, dest_type)
+        }
+        DecimalDataType::Decimal256(size) => {
+            string_to_decimal_internal::<i256>(ctx, &string_column, *size, dest_type)
+        }
+    };
+
+    if is_scalar {
+        let scalar = result.index(0).unwrap();
+        Value::Scalar(Scalar::Decimal(scalar))
+    } else {
+        Value::Column(Column::Decimal(result))
+    }
 }
 
 fn integer_to_decimal(
