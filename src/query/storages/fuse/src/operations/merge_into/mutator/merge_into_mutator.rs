@@ -322,19 +322,4 @@ impl MergeIntoOperationAggregator {
             false
         }
     }
-
-    // fn overlapped(
-    //     &self,
-    //     column_stats: &HashMap<ColumnId, ColumnStatistics>,
-    //     key_min: &Scalar,
-    //     key_max: &Scalar,
-    // ) -> bool {
-    //     if let Some(stats) = column_stats.get(&self.on_conflict_field_id) {
-    //         std::cmp::min(key_max, &stats.max) >= std::cmp::max(key_min, &stats.min)
-    //         || // coincide overlap
-    //         (&stats.max == key_max && &stats.min == key_min)
-    //     } else {
-    //         false
-    //     }
-    // }
 }
