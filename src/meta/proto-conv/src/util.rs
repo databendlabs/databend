@@ -93,7 +93,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     ),
     (
         30,
-        "2023-02-21: Add: config.proto/WebhdfsStorageConfig; Modify: user.proto/UserStageInfo::StageStorage",
+        "2023-02-21: Add: config.proto/WebhdfsStorageConfig; Modify: user.proto/StageInfo::StageStorage",
     ),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.

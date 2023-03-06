@@ -18,7 +18,7 @@ use std::str::FromStr;
 
 use common_catalog::plan::DataSourcePlan;
 use common_expression::TableSchemaRef;
-use common_meta_app::principal::UserStageInfo;
+use common_meta_app::principal::StageInfo;
 use common_meta_types::MetaId;
 
 use crate::plans::Plan;
@@ -66,7 +66,7 @@ pub enum CopyPlan {
         force: bool,
     },
     IntoStage {
-        stage: Box<UserStageInfo>,
+        stage: Box<StageInfo>,
         path: String,
         validation_mode: ValidationMode,
         from: Box<Plan>,

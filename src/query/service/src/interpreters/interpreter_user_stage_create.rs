@@ -48,7 +48,7 @@ impl Interpreter for CreateUserStageInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.plan.clone();
         let user_mgr = UserApiProvider::instance();
-        let user_stage = plan.user_stage_info;
+        let user_stage = plan.stage_info;
 
         // Check user stage.
         if user_stage.stage_type == StageType::User {

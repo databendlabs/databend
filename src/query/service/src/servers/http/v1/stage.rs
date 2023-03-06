@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_app::principal::UserStageInfo;
+use common_meta_app::principal::StageInfo;
 use common_storages_stage::StageTable;
 use common_users::UserApiProvider;
 use poem::error::InternalServerError;
@@ -60,7 +60,7 @@ pub async fn upload_to_stage(
         })?;
 
     let stage = if stage_name == "~" {
-        UserStageInfo::new_user_stage(
+        StageInfo::new_user_stage(
             context
                 .get_current_user()
                 .map_err(InternalServerError)?
