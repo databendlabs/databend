@@ -61,7 +61,7 @@ impl<T: Sink> Drop for Sinker<T> {
     fn drop(&mut self) {
         if !self.called_on_finish {
             self.called_on_finish = true;
-            self.inner.on_finish()?;
+            let _ = self.inner.on_finish();
         }
     }
 }
