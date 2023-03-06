@@ -24,7 +24,6 @@ use common_expression::types::*;
 use common_expression::with_integer_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
-use common_expression::DecimalDeserializer;
 use common_expression::EvalContext;
 use common_expression::Function;
 use common_expression::FunctionDomain;
@@ -482,62 +481,76 @@ fn convert_to_decimal(
             }
         }
         DataType::Decimal(_) => decimal_to_decimal(arg, ctx, from_type, dest_type),
-        DataType::String => string_to_decimal(arg, ctx, from_type, dest_type),
+        DataType::String => string_to_decimal(arg, ctx, dest_type),
         _ => unreachable!("to_decimal not support this DataType"),
     }
 }
 
-fn string_to_decimal_internal<T: Decimal>(
+fn string_to_decimal_column<T: Decimal>(
     ctx: &mut EvalContext,
     string_column: &StringColumn,
     size: DecimalSize,
-    dest_type: &DecimalDataType,
 ) -> DecimalColumn {
-    let mut builder = DecimalDeserializer::<T>::with_capacity(dest_type, string_column.len());
+    let mut values = Vec::<T>::with_capacity(string_column.len());
     for (row, buf) in string_column.iter().enumerate() {
         match read_decimal_with_size::<T>(buf, size, true) {
-            Ok((d, _)) => builder.values.push(d),
+            Ok((d, _)) => values.push(d),
             Err(e) => {
                 ctx.set_error(row, format!("fail to decode string as decimal: {e}"));
-                builder.values.push(T::zero())
+                values.push(T::zero())
             }
         }
     }
-    T::to_column(std::mem::take(&mut builder.values), size)
+    T::to_column(values, size)
+}
+
+fn string_to_decimal_scalar<T: Decimal>(
+    ctx: &mut EvalContext,
+    string_buf: &[u8],
+    size: DecimalSize,
+) -> DecimalScalar {
+    let value = match read_decimal_with_size::<T>(string_buf, size, true) {
+        Ok((d, _)) => d,
+        Err(e) => {
+            ctx.set_error(0, format!("fail to decode string as decimal: {e}"));
+            T::zero()
+        }
+    };
+    T::to_scalar(value, size)
 }
 
 fn string_to_decimal(
     arg: &ValueRef<AnyType>,
     ctx: &mut EvalContext,
-    from_type: DataType,
     dest_type: DataType,
 ) -> Value<AnyType> {
     let dest_type = dest_type.as_decimal().unwrap();
 
-    let mut is_scalar = false;
-    let column = match arg {
-        ValueRef::Column(column) => column.clone(),
-        ValueRef::Scalar(s) => {
-            is_scalar = true;
-            let builder = ColumnBuilder::repeat(s, 1, &from_type);
-            builder.build()
+    match arg {
+        ValueRef::Column(column) => {
+            let string_column = StringType::try_downcast_column(column).unwrap();
+            let column = match dest_type {
+                DecimalDataType::Decimal128(size) => {
+                    string_to_decimal_column::<i128>(ctx, &string_column, *size)
+                }
+                DecimalDataType::Decimal256(size) => {
+                    string_to_decimal_column::<i256>(ctx, &string_column, *size)
+                }
+            };
+            Value::Column(Column::Decimal(column))
         }
-    };
-    let string_column = StringType::try_downcast_column(&column).unwrap();
-    let result = match dest_type {
-        DecimalDataType::Decimal128(size) => {
-            string_to_decimal_internal::<i128>(ctx, &string_column, *size, dest_type)
+        ValueRef::Scalar(scalar) => {
+            let buf = StringType::try_downcast_scalar(scalar).unwrap();
+            let scalar = match dest_type {
+                DecimalDataType::Decimal128(size) => {
+                    string_to_decimal_scalar::<i128>(ctx, buf, *size)
+                }
+                DecimalDataType::Decimal256(size) => {
+                    string_to_decimal_scalar::<i128>(ctx, buf, *size)
+                }
+            };
+            Value::Scalar(Scalar::Decimal(scalar))
         }
-        DecimalDataType::Decimal256(size) => {
-            string_to_decimal_internal::<i256>(ctx, &string_column, *size, dest_type)
-        }
-    };
-
-    if is_scalar {
-        let scalar = result.index(0).unwrap();
-        Value::Scalar(Scalar::Decimal(scalar))
-    } else {
-        Value::Column(Column::Decimal(result))
     }
 }
 
