@@ -496,7 +496,7 @@ impl CopyOptions {
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
 #[serde(default)]
-pub struct UserStageInfo {
+pub struct StageInfo {
     pub stage_name: String,
     pub stage_type: StageType,
     pub stage_params: StageParams,
@@ -508,18 +508,18 @@ pub struct UserStageInfo {
     pub creator: Option<UserIdentity>,
 }
 
-impl UserStageInfo {
+impl StageInfo {
     /// Create a new internal stage.
-    pub fn new_internal_stage(name: &str) -> UserStageInfo {
-        UserStageInfo {
+    pub fn new_internal_stage(name: &str) -> StageInfo {
+        StageInfo {
             stage_name: name.to_string(),
             stage_type: StageType::Internal,
             ..Default::default()
         }
     }
 
-    pub fn new_external_stage(storage: StorageParams, path: &str) -> UserStageInfo {
-        UserStageInfo {
+    pub fn new_external_stage(storage: StorageParams, path: &str) -> StageInfo {
+        StageInfo {
             stage_name: format!("{storage},path={path}"),
             stage_type: StageType::External,
             stage_params: StageParams { storage },
@@ -528,8 +528,8 @@ impl UserStageInfo {
     }
 
     /// Create a new user stage.
-    pub fn new_user_stage(user: &str) -> UserStageInfo {
-        UserStageInfo {
+    pub fn new_user_stage(user: &str) -> StageInfo {
+        StageInfo {
             stage_name: user.to_string(),
             stage_type: StageType::User,
             ..Default::default()
@@ -537,7 +537,7 @@ impl UserStageInfo {
     }
 
     /// Update user stage with stage name.
-    pub fn with_stage_name(mut self, name: &str) -> UserStageInfo {
+    pub fn with_stage_name(mut self, name: &str) -> StageInfo {
         self.stage_name = name.to_string();
         self
     }

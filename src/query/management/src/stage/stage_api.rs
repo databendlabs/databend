@@ -14,19 +14,19 @@
 
 use common_exception::Result;
 use common_meta_app::principal::StageFile;
-use common_meta_app::principal::UserStageInfo;
+use common_meta_app::principal::StageInfo;
 use common_meta_types::MatchSeq;
 use common_meta_types::SeqV;
 
 #[async_trait::async_trait]
 pub trait StageApi: Sync + Send {
     // Add a stage info to /tenant/stage-name.
-    async fn add_stage(&self, stage: UserStageInfo) -> Result<u64>;
+    async fn add_stage(&self, stage: StageInfo) -> Result<u64>;
 
-    async fn get_stage(&self, name: &str, seq: MatchSeq) -> Result<SeqV<UserStageInfo>>;
+    async fn get_stage(&self, name: &str, seq: MatchSeq) -> Result<SeqV<StageInfo>>;
 
     // Get all the stages for a tenant.
-    async fn get_stages(&self) -> Result<Vec<UserStageInfo>>;
+    async fn get_stages(&self) -> Result<Vec<StageInfo>>;
 
     // Drop the tenant's stage by name.
     async fn drop_stage(&self, name: &str) -> Result<()>;
