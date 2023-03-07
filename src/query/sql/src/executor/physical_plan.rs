@@ -190,18 +190,16 @@ impl AggregatePartial {
                 DataType::String,
             ));
             let arg_indices = &agg.arg_indices;
-            for arg_index in arg_indices.into_iter() {
-                fields.push(DataField::new(
-                    &arg_index.to_string(),
-                    DataType::String,
-                ));
+            for arg_index in arg_indices.iter() {
+                fields.push(DataField::new(&arg_index.to_string(), DataType::String));
             }
         }
         // Join conditions
         // TODO(dousir9) may be we can replace group_by.iter() by reusing _group_by_key.
         for id in self.group_by.iter() {
             let data_type = self
-                .input.output_schema()?
+                .input
+                .output_schema()?
                 .field_with_name(&id.to_string())?
                 .data_type()
                 .clone();

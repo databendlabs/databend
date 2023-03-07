@@ -17,9 +17,9 @@ use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
+use crate::plans::Join;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
-use crate::plans::Join;
 use crate::plans::RelOperator;
 
 /// Input:     Aggregate(Final)
@@ -89,10 +89,10 @@ impl Rule for RulePushDownAggregateJoin {
         let agg_final: Aggregate = s_expr.plan().clone().try_into()?;
         let agg_partial_expr = s_expr.child(0)?;
         let agg_partial: Aggregate = agg_partial_expr.plan().clone().try_into()?;
-        
+
         let join_expr = agg_partial_expr.child(0)?;
         let join: Join = join_expr.plan().clone().try_into()?;
-        
+
         // TODO(dousir9) only consider one item in the group_items now.
         let mut can_push_to_left = true;
         let mut can_push_to_right = true;
@@ -100,10 +100,14 @@ impl Rule for RulePushDownAggregateJoin {
             can_push_to_left = false;
             can_push_to_right = false;
         } else {
-            if join.left_conditions.len() != 1 || agg_final.group_items[0].scalar != join.left_conditions[0] {
+            if join.left_conditions.len() != 1
+                || agg_final.group_items[0].scalar != join.left_conditions[0]
+            {
                 can_push_to_left = false;
             }
-            if join.right_conditions.len() != 1 || agg_final.group_items[0].scalar != join.right_conditions[0] {
+            if join.right_conditions.len() != 1
+                || agg_final.group_items[0].scalar != join.right_conditions[0]
+            {
                 can_push_to_right = false;
             }
         }
@@ -111,7 +115,10 @@ impl Rule for RulePushDownAggregateJoin {
         // TODO(dousir9) consider JoinType.
         if can_push_to_left {
             let mut result = s_expr.replace_children(vec![join_expr.replace_children(vec![
-                SExpr::create_unary(RelOperator::Aggregate(agg_partial), join_expr.child(0)?.clone()),
+                SExpr::create_unary(
+                    RelOperator::Aggregate(agg_partial),
+                    join_expr.child(0)?.clone(),
+                ),
                 join_expr.child(1)?.clone(),
             ])]);
             result.set_applied_rule(&self.id);
@@ -119,7 +126,10 @@ impl Rule for RulePushDownAggregateJoin {
         } else if can_push_to_right {
             let mut result = s_expr.replace_children(vec![join_expr.replace_children(vec![
                 join_expr.child(0)?.clone(),
-                SExpr::create_unary(RelOperator::Aggregate(agg_partial), join_expr.child(1)?.clone()),
+                SExpr::create_unary(
+                    RelOperator::Aggregate(agg_partial),
+                    join_expr.child(1)?.clone(),
+                ),
             ])]);
             result.set_applied_rule(&self.id);
             state.add_result(result);
