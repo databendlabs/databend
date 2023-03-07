@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::Semaphore;
@@ -95,6 +96,18 @@ impl FusePruner {
             .and_then(|p| p.limit);
         // prepare the limiter. in case that limit is none, an unlimited limiter will be returned
         let limit_pruner = LimiterPrunerCreator::create(limit);
+        /*
+        let runtime_filters = push_down.as_ref().and_then(|p| p.runtime_filter_exprs);
+        if let Some(runtime_filters) = runtime_filters {
+            let collector = ctx.get_runtime_filter_collector();
+            let mut recv = HashMap::new();
+            loop {
+                recv = collector.write()?.recv()?;
+            }
+
+        }
+
+         */
 
         // Range filter.
         // if filter_expression is none, an dummy pruner will be returned, which prunes nothing

@@ -14,6 +14,8 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Debug;
+use std::fmt::Display;
+use std::fmt::Formatter;
 
 use common_expression::types::DataType;
 use common_expression::RemoteExpr;
@@ -57,6 +59,12 @@ pub struct RuntimeFilterId {
 impl RuntimeFilterId {
     pub fn new(id: usize) -> Self {
         RuntimeFilterId { id: id.to_string() }
+    }
+}
+
+impl Display for RuntimeFilterId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.id)
     }
 }
 
