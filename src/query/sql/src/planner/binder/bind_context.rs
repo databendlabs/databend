@@ -396,15 +396,11 @@ impl BindContext {
 
     pub fn add_virtual_column_into_expr(&self, s_expr: SExpr) -> SExpr {
         let bound_virtual_columns = &self.bound_virtual_columns;
-        if bound_virtual_columns.is_empty() {
-            s_expr
-        } else {
-            let mut s_expr = s_expr;
-            for (table_index, column_index) in bound_virtual_columns.values() {
-                s_expr = SExpr::add_virtual_column_index(&s_expr, *table_index, *column_index);
-            }
-            s_expr
+        let mut s_expr = s_expr;
+        for (table_index, column_index) in bound_virtual_columns.values() {
+            s_expr = SExpr::add_virtual_column_index(&s_expr, *table_index, *column_index);
         }
+        s_expr
     }
 
     pub fn column_set(&self) -> ColumnSet {

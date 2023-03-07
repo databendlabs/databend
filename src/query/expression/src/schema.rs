@@ -379,6 +379,7 @@ impl TableSchema {
         Ok(())
     }
 
+    // Every virtual column has constant column id, no need to generate column id of virtual columns.
     pub fn add_virtual_column(
         &mut self,
         name: &str,

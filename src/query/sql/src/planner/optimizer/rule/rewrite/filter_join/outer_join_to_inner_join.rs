@@ -38,7 +38,6 @@ use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
-use crate::TableVirtualColumn;
 
 pub fn convert_outer_to_inner_join(s_expr: &SExpr) -> Result<(SExpr, bool)> {
     let filter: Filter = s_expr.plan().clone().try_into()?;
@@ -250,11 +249,8 @@ fn remove_column_nullable(
                         need_remove = false;
                     }
                 }
-                ColumnEntry::VirtualColumn(TableVirtualColumn { virtual_column, .. }) => {
-                    if let DataType::Nullable(_) = virtual_column.data_type() {
-                        need_remove = false;
-                    }
-                }
+                // None of virtual columns will be nullable, so just ignore virtual column type entry
+                ColumnEntry::VirtualColumn(..) => {}
             }
             match join_type {
                 JoinType::Left => {

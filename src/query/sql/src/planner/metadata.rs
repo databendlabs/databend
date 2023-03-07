@@ -86,15 +86,9 @@ impl Metadata {
     ) -> Option<IndexType> {
         self.tables
             .iter()
-            .find(|table| {
-                if table.name == table_name {
-                    match database_name {
-                        Some(database_name) => table.database == database_name,
-                        None => true,
-                    }
-                } else {
-                    false
-                }
+            .find(|table| match database_name {
+                Some(database_name) => table.database == database_name && table.name == table_name,
+                None => table.name == table_name,
             })
             .map(|table| table.index)
     }
@@ -364,6 +358,8 @@ pub enum ColumnEntry {
 
     /// Column synthesized from other columns, for example `SELECT t.a + t.b AS a FROM t`.
     DerivedColumn(DerivedColumn),
+
+    /// Virtual columns, such as `_row_id`, `_segment_name`, etc.
     VirtualColumn(TableVirtualColumn),
 }
 
