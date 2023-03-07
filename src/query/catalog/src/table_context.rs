@@ -87,6 +87,8 @@ pub trait TableContext: Send + Sync {
     fn set_partitions(&self, partitions: Partitions) -> Result<()>;
     fn add_partitions_sha(&self, sha: String);
     fn get_partitions_shas(&self) -> Vec<String>;
+    fn if_can_cache(&self) -> bool;
+    fn cannot_cache(&self);
 
     fn attach_query_str(&self, kind: String, query: &str);
     fn get_query_str(&self) -> String;

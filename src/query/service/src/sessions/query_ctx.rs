@@ -292,6 +292,14 @@ impl TableContext for QueryContext {
         sha
     }
 
+    fn if_can_cache(&self) -> bool {
+        self.shared.can_cache.load(Ordering::Acquire)
+    }
+
+    fn cannot_cache(&self) {
+        self.shared.can_cache.store(false, Ordering::Release);
+    }
+
     fn attach_query_str(&self, kind: String, query: &str) {
         self.shared.attach_query_str(kind, query);
     }

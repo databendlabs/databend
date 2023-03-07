@@ -365,6 +365,14 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn if_can_cache(&self) -> bool {
+        todo!()
+    }
+
+    fn cannot_cache(&self) {
+        todo!()
+    }
+
     fn attach_query_str(&self, _kind: String, _query: &str) {
         todo!()
     }
