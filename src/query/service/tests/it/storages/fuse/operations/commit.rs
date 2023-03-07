@@ -365,11 +365,11 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn if_can_cache(&self) -> bool {
+    fn get_cacheable(&self) -> bool {
         todo!()
     }
 
-    fn cannot_cache(&self) {
+    fn set_cacheable(&self, _: bool) {
         todo!()
     }
 

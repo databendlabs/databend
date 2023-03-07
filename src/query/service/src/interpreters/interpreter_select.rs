@@ -189,7 +189,7 @@ impl Interpreter for SelectInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         // 0. Need to build pipeline first to get the partitions.
         let mut build_res = self.build_pipeline().await?;
-        if self.ctx.get_settings().get_enable_query_result_cache()? && self.ctx.if_can_cache() {
+        if self.ctx.get_settings().get_enable_query_result_cache()? && self.ctx.get_cacheable() {
             let key = gen_result_cache_key(self.formatted_ast.as_ref().unwrap());
             // 1. Try to get result from cache.
             let kv_store = UserApiProvider::instance().get_meta_store_client();

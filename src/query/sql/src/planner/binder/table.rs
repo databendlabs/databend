@@ -152,7 +152,7 @@ impl Binder {
                     .unwrap_or_else(|| self.ctx.get_current_database());
 
                 if database == "system" {
-                    self.ctx.cannot_cache();
+                    self.ctx.set_cacheable(false);
                 }
 
                 let tenant = self.ctx.get_tenant();

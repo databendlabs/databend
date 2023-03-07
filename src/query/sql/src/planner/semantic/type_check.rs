@@ -1034,7 +1034,7 @@ impl<'a> TypeChecker<'a> {
         let expr = type_check::check(&raw_expr, registry)?;
 
         if !expr.is_deterministic() {
-            self.ctx.cannot_cache();
+            self.ctx.set_cacheable(false);
         }
 
         Ok(Box::new((
