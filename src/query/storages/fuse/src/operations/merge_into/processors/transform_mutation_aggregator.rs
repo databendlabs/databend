@@ -104,8 +104,7 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
     const NAME: &'static str = "MutationAggregator";
 
     async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
-        // TODO wasting the ownership of data block
-        let mutation = data.try_into()?;
+        let mutation = MutationLogs::try_from(data)?;
         self.accumulate_mutation(mutation);
         Ok(None)
     }

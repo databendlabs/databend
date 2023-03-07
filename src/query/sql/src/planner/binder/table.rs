@@ -151,6 +151,10 @@ impl Binder {
                     .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
                     .unwrap_or_else(|| self.ctx.get_current_database());
 
+                if database == "system" {
+                    self.ctx.set_cacheable(false);
+                }
+
                 let tenant = self.ctx.get_tenant();
 
                 let navigation_point = match travel_point {
