@@ -90,11 +90,11 @@ impl Processor for ReplaceIntoProcessor {
         self
     }
     fn event(&mut self) -> Result<Event> {
-        if self.output_port_append_data.is_finished()
-            || self.output_port_merge_into_action.is_finished()
-            || self.input_port.is_finished()
-        {
-            self.input_port.finish();
+        let finished = self.input_port.is_finished()
+            && self.output_data_append.is_none()
+            && self.output_data_merge_into_action.is_none();
+
+        if finished {
             self.output_port_merge_into_action.finish();
             self.output_port_append_data.finish();
             return Ok(Event::Finished);
@@ -107,6 +107,7 @@ impl Processor for ReplaceIntoProcessor {
                 pushed_something = true;
             }
         }
+
         if self.output_port_merge_into_action.can_push() {
             if let Some(data) = self.output_data_merge_into_action.take() {
                 self.output_port_merge_into_action.push_data(Ok(data));
