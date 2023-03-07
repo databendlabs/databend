@@ -15,15 +15,11 @@
 use std::fmt::Display;
 
 use common_ast::ast::FormatTreeNode;
-use common_expression::types::DataType;
 use itertools::Itertools;
 
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
-use crate::plans::AndExpr;
-use crate::plans::ComparisonExpr;
-use crate::plans::ComparisonOp;
 use crate::plans::EvalScalar;
 use crate::plans::Exchange;
 use crate::plans::Filter;
@@ -355,100 +351,20 @@ pub fn logical_join_to_format_tree(
     metadata: MetadataRef,
     children: Vec<FormatTreeNode<FormatContext>>,
 ) -> FormatTreeNode<FormatContext> {
-    let preds: Vec<ScalarExpr> = op
-        .left_conditions
-        .iter()
-        .zip(op.right_conditions.iter())
-        .map(|(left, right)| {
-            ComparisonExpr {
-                op: ComparisonOp::Equal,
-                left: Box::new(left.clone()),
-                right: Box::new(right.clone()),
-                return_type: Box::new(DataType::Boolean),
-            }
-            .into()
-        })
-        .collect();
-    let non_equi_conditions = op
-        .non_equi_conditions
-        .iter()
-        .map(|scalar| format_scalar(&metadata, scalar))
-        .collect::<Vec<String>>();
-
-    let equi_conditions = if !preds.is_empty() {
-        let pred = preds.iter().skip(1).fold(preds[0].clone(), |prev, next| {
-            ScalarExpr::AndExpr(AndExpr {
-                left: Box::new(prev),
-                right: Box::new(next.clone()),
-                return_type: Box::new(DataType::Boolean),
-            })
-        });
-        format_scalar(&metadata, &pred)
-    } else {
-        "".to_string()
-    };
-
     FormatTreeNode::with_children(
         FormatContext::RelOp {
-            metadata,
+            metadata: metadata.clone(),
             rel_operator: Box::new(op.clone().into()),
         },
         vec![
-            vec![
-                FormatTreeNode::new(FormatContext::Text(format!(
-                    "equi conditions: [{}]",
-                    equi_conditions
-                ))),
-                FormatTreeNode::new(FormatContext::Text(format!(
-                    "non-equi conditions: [{}]",
-                    non_equi_conditions.join(", ")
-                ))),
-            ],
-            children,
-        ]
-        .concat(),
-    )
-}
-
-#[allow(unused)]
-fn join_to_format_tree(
-    op: &Join,
-    metadata: MetadataRef,
-    children: Vec<FormatTreeNode<FormatContext>>,
-) -> FormatTreeNode<FormatContext> {
-    let build_keys = op
-        .right_conditions
-        .iter()
-        .map(|scalar| format_scalar(&metadata, scalar))
-        .collect::<Vec<String>>()
-        .join(", ");
-    let probe_keys = op
-        .left_conditions
-        .iter()
-        .map(|scalar| format_scalar(&metadata, scalar))
-        .collect::<Vec<String>>()
-        .join(", ");
-    let join_filters = op
-        .non_equi_conditions
-        .iter()
-        .map(|scalar| format_scalar(&metadata, scalar))
-        .collect::<Vec<String>>()
-        .join(", ");
-
-    FormatTreeNode::with_children(
-        FormatContext::RelOp {
-            metadata,
-            rel_operator: Box::new(op.clone().into()),
-        },
-        vec![
-            vec![
-                FormatTreeNode::new(FormatContext::Text(format!("build keys: [{}]", build_keys))),
-                FormatTreeNode::new(FormatContext::Text(format!("probe keys: [{}]", probe_keys))),
-                FormatTreeNode::new(FormatContext::Text(format!(
-                    "other filters: [{}]",
-                    join_filters
-                ))),
-            ],
+            vec![FormatTreeNode::new(FormatContext::Text(format!(
+                "conditions: [{}]",
+                op.conditions
+                    .iter()
+                    .map(|scalar| format_scalar(&metadata, scalar))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )))],
             children,
         ]
         .concat(),

@@ -20,6 +20,7 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
+use crate::binder::JoinPredicate;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::ColumnStat;
 use crate::optimizer::Datum;
@@ -131,9 +132,8 @@ impl Display for JoinType {
 /// the probe side.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Join {
-    pub left_conditions: Vec<ScalarExpr>,
-    pub right_conditions: Vec<ScalarExpr>,
-    pub non_equi_conditions: Vec<ScalarExpr>,
+    pub conditions: Vec<ScalarExpr>,
+
     pub join_type: JoinType,
     // marker_index is for MarkJoin only.
     pub marker_index: Option<IndexType>,
@@ -145,9 +145,7 @@ pub struct Join {
 impl Default for Join {
     fn default() -> Self {
         Self {
-            left_conditions: Default::default(),
-            right_conditions: Default::default(),
-            non_equi_conditions: Default::default(),
+            conditions: vec![],
             join_type: JoinType::Cross,
             marker_index: Default::default(),
             from_correlated_subquery: Default::default(),
@@ -159,15 +157,46 @@ impl Default for Join {
 impl Join {
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
-        for cond in self
-            .left_conditions
-            .iter()
-            .chain(self.right_conditions.iter())
-            .chain(self.non_equi_conditions.iter())
-        {
+        for cond in self.conditions.iter() {
             used_columns = used_columns.union(&cond.used_columns()).cloned().collect();
         }
         Ok(used_columns)
+    }
+
+    /// Get the equi-conditions split into left side and right side.
+    pub fn get_split_equi_conditions(
+        &self,
+        left_child_prop: &RelationalProperty,
+        right_child_prop: &RelationalProperty,
+    ) -> Vec<(ScalarExpr, ScalarExpr)> {
+        let mut conditions = vec![];
+        for cond in self.conditions.iter() {
+            let join_predicate = JoinPredicate::new(cond, left_child_prop, right_child_prop);
+            match join_predicate {
+                JoinPredicate::Both { left, right } => {
+                    conditions.push((left.clone(), right.clone()));
+                }
+                _ => {
+                    continue;
+                }
+            }
+        }
+        conditions
+    }
+
+    pub fn get_non_equi_conditions(
+        &self,
+        left_child_prop: &RelationalProperty,
+        right_child_prop: &RelationalProperty,
+    ) -> Vec<ScalarExpr> {
+        self.conditions
+            .iter()
+            .filter(|cond| {
+                let join_predicate = JoinPredicate::new(cond, left_child_prop, right_child_prop);
+                !matches!(join_predicate, JoinPredicate::Both { .. })
+            })
+            .cloned()
+            .collect()
     }
 
     fn inner_join_cardinality(
@@ -176,10 +205,8 @@ impl Join {
         right_prop: &mut RelationalProperty,
     ) -> Result<f64> {
         let mut join_card = left_prop.cardinality * right_prop.cardinality;
-        for (left_condition, right_condition) in self
-            .left_conditions
-            .iter()
-            .zip(self.right_conditions.iter())
+        for (left_condition, right_condition) in
+            self.get_split_equi_conditions(left_prop, right_prop)
         {
             if join_card == 0 as f64 {
                 break;
@@ -231,8 +258,8 @@ impl Join {
                         update_statistic(
                             left_prop,
                             right_prop,
-                            left_condition,
-                            right_condition,
+                            &left_condition,
+                            &right_condition,
                             NewStatistic {
                                 min: new_min,
                                 max: new_max,
@@ -260,8 +287,8 @@ impl Join {
                     update_statistic(
                         left_prop,
                         right_prop,
-                        left_condition,
-                        right_condition,
+                        &left_condition,
+                        &right_condition,
                         NewStatistic {
                             min: new_min,
                             max: new_max,
@@ -301,11 +328,7 @@ impl Operator for Join {
             .union(&right_prop.outer_columns)
             .cloned()
             .collect();
-        for cond in self
-            .left_conditions
-            .iter()
-            .chain(self.right_conditions.iter())
-        {
+        for cond in self.conditions.iter() {
             let used_columns = cond.used_columns();
             let outer = used_columns.difference(&output_columns).cloned().collect();
             outer_columns = outer_columns.union(&outer).cloned().collect();
@@ -389,6 +412,11 @@ impl Operator for Join {
         let probe_physical_prop = rel_expr.derive_physical_prop_child(0)?;
         let build_physical_prop = rel_expr.derive_physical_prop_child(1)?;
 
+        let conditions = self.get_split_equi_conditions(
+            &rel_expr.derive_relational_prop_child(0)?,
+            &rel_expr.derive_relational_prop_child(1)?,
+        );
+
         // if join/probe side is Serial or join key is empty, we use Serial distribution
         if probe_physical_prop.distribution == Distribution::Serial
             || build_physical_prop.distribution == Distribution::Serial
@@ -407,9 +435,13 @@ impl Operator for Join {
         {
             required.distribution = Distribution::Broadcast;
         } else if child_index == 0 {
-            required.distribution = Distribution::Hash(self.left_conditions.clone());
+            let (left_conditions, _): (Vec<ScalarExpr>, Vec<ScalarExpr>) =
+                conditions.iter().cloned().unzip();
+            required.distribution = Distribution::Hash(left_conditions);
         } else {
-            required.distribution = Distribution::Hash(self.right_conditions.clone());
+            let (_, right_conditions): (Vec<ScalarExpr>, Vec<ScalarExpr>) =
+                conditions.iter().cloned().unzip();
+            required.distribution = Distribution::Hash(right_conditions);
         }
 
         Ok(required)

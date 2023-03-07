@@ -14,6 +14,7 @@
 
 use common_exception::Result;
 use common_expression::type_check;
+use common_expression::DataSchemaRef;
 use common_expression::Expr;
 use common_expression::RawExpr;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
@@ -214,6 +215,124 @@ impl ScalarExpr {
                 display_name: DUMMY_NAME.to_string(),
             },
         }
+    }
+
+    pub fn as_raw_expr_with_col_index_by_schema(
+        &self,
+        input_schema: &DataSchemaRef,
+    ) -> Result<RawExpr> {
+        let raw_expr = match self {
+            ScalarExpr::BoundColumnRef(column_ref) => {
+                let field = input_schema.field_with_name(&column_ref.column.index.to_string())?;
+                RawExpr::ColumnRef {
+                    span: None,
+                    id: column_ref.column.index,
+                    data_type: field.data_type().clone(),
+                    display_name: format!(
+                        "{}{} (#{})",
+                        column_ref
+                            .column
+                            .table_name
+                            .as_ref()
+                            .map_or("".to_string(), |t| t.to_string() + "."),
+                        column_ref.column.column_name.clone(),
+                        column_ref.column.index
+                    ),
+                }
+            }
+            ScalarExpr::ConstantExpr(constant) => RawExpr::Literal {
+                span: None,
+                lit: constant.value.clone(),
+            },
+            ScalarExpr::AndExpr(expr) => RawExpr::FunctionCall {
+                span: None,
+                name: "and".to_string(),
+                params: vec![],
+                args: vec![
+                    expr.left
+                        .as_raw_expr_with_col_index_by_schema(input_schema)?,
+                    expr.right
+                        .as_raw_expr_with_col_index_by_schema(input_schema)?,
+                ],
+            },
+            ScalarExpr::OrExpr(expr) => RawExpr::FunctionCall {
+                span: None,
+                name: "or".to_string(),
+                params: vec![],
+                args: vec![
+                    expr.left
+                        .as_raw_expr_with_col_index_by_schema(input_schema)?,
+                    expr.right
+                        .as_raw_expr_with_col_index_by_schema(input_schema)?,
+                ],
+            },
+            ScalarExpr::NotExpr(expr) => RawExpr::FunctionCall {
+                span: None,
+                name: "not".to_string(),
+                params: vec![],
+                args: vec![
+                    expr.argument
+                        .as_raw_expr_with_col_index_by_schema(input_schema)?,
+                ],
+            },
+            ScalarExpr::ComparisonExpr(expr) => RawExpr::FunctionCall {
+                span: None,
+                name: expr.op.to_func_name().to_string(),
+                params: vec![],
+                args: vec![
+                    expr.left
+                        .as_raw_expr_with_col_index_by_schema(input_schema)?,
+                    expr.right
+                        .as_raw_expr_with_col_index_by_schema(input_schema)?,
+                ],
+            },
+            ScalarExpr::AggregateFunction(agg) => RawExpr::ColumnRef {
+                span: None,
+                id: DUMMY_INDEX,
+                data_type: (*agg.return_type).clone(),
+                display_name: agg.display_name.clone(),
+            },
+            ScalarExpr::FunctionCall(func) => RawExpr::FunctionCall {
+                span: None,
+                name: func.func_name.clone(),
+                params: func.params.clone(),
+                args: func
+                    .arguments
+                    .iter()
+                    .map(|v| v.as_raw_expr_with_col_index_by_schema(input_schema))
+                    .collect::<Result<Vec<_>>>()?,
+            },
+            ScalarExpr::CastExpr(cast) => RawExpr::Cast {
+                span: None,
+                is_try: cast.is_try,
+                expr: Box::new(
+                    cast.argument
+                        .as_raw_expr_with_col_index_by_schema(input_schema)?,
+                ),
+                dest_type: (*cast.target_type).clone(),
+            },
+            ScalarExpr::SubqueryExpr(subquery) => RawExpr::ColumnRef {
+                span: None,
+                id: DUMMY_INDEX,
+                data_type: subquery.data_type(),
+                display_name: DUMMY_NAME.to_string(),
+            },
+            ScalarExpr::Unnest(unnest) => RawExpr::ColumnRef {
+                // Rewrite to a ColumnRef
+                span: None,
+                id: DUMMY_INDEX,
+                data_type: *unnest.return_type.clone(),
+                display_name: DUMMY_NAME.to_string(),
+            },
+        };
+
+        Ok(raw_expr)
+    }
+
+    pub fn as_expr_with_col_index_by_schema(&self, input_schema: &DataSchemaRef) -> Result<Expr> {
+        let raw_expr = self.as_raw_expr_with_col_index_by_schema(input_schema)?;
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+        Ok(expr)
     }
 
     pub fn as_expr_with_col_index(&self) -> Result<Expr> {

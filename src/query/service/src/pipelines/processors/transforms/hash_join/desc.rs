@@ -14,10 +14,8 @@
 
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
-use common_expression::type_check::check_function;
 use common_expression::DataBlock;
 use common_expression::Expr;
-use common_expression::RemoteExpr;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_sql::executor::HashJoin;
 use parking_lot::RwLock;
@@ -35,7 +33,6 @@ pub enum MarkerKind {
 }
 
 pub struct MarkJoinDesc {
-    // pub(crate) marker_index: Option<IndexType>,
     pub(crate) has_null: RwLock<bool>,
 }
 
@@ -72,8 +69,6 @@ pub struct HashJoinDesc {
 
 impl HashJoinDesc {
     pub fn create(join: &HashJoin) -> Result<HashJoinDesc> {
-        let other_predicate = Self::join_predicate(&join.non_equi_conditions)?;
-
         let build_keys: Vec<Expr> = join
             .build_keys
             .iter()
@@ -89,22 +84,15 @@ impl HashJoinDesc {
             join_type: join.join_type.clone(),
             build_keys,
             probe_keys,
-            other_predicate,
+            other_predicate: join
+                .other_predicate
+                .clone()
+                .map(|v| v.as_expr(&BUILTIN_FUNCTIONS)),
             marker_join_desc: MarkJoinDesc {
                 has_null: RwLock::new(false),
-                // marker_index: join.marker_index,
             },
             from_correlated_subquery: join.from_correlated_subquery,
             join_state: JoinState::create()?,
         })
-    }
-
-    fn join_predicate(non_equi_conditions: &[RemoteExpr]) -> Result<Option<Expr>> {
-        non_equi_conditions
-            .iter()
-            .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
-            .try_reduce(|lhs, rhs| {
-                check_function(None, "and", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
-            })
     }
 }

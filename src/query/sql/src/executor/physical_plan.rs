@@ -290,7 +290,7 @@ pub struct HashJoin {
     pub probe: Box<PhysicalPlan>,
     pub build_keys: Vec<RemoteExpr>,
     pub probe_keys: Vec<RemoteExpr>,
-    pub non_equi_conditions: Vec<RemoteExpr>,
+    pub other_predicate: Option<RemoteExpr>,
     pub join_type: JoinType,
     pub marker_index: Option<IndexType>,
     pub from_correlated_subquery: bool,

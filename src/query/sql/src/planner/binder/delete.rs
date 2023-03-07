@@ -74,7 +74,6 @@ impl<'a> Binder {
             if let ScalarExpr::SubqueryExpr(_) = scalar {
                 let filter = Filter {
                     predicates: vec![scalar],
-                    is_having: false,
                 };
                 let filter_expr = SExpr::create_unary(filter.into(), table_expr);
                 let mut rewriter = SubqueryRewriter::new(self.metadata.clone());

@@ -16,6 +16,8 @@ use std::collections::BTreeMap;
 
 use common_exception::Result;
 
+use crate::optimizer::RelExpr;
+use crate::optimizer::RelationalProperty;
 use crate::optimizer::SExpr;
 use crate::plans::Join;
 use crate::plans::JoinType;
@@ -31,17 +33,17 @@ pub struct RuntimeFilterResult {
     pub right_runtime_filters: BTreeMap<RuntimeFilterId, ScalarExpr>,
 }
 
-fn create_runtime_filters(join: &Join) -> Result<RuntimeFilterResult> {
+fn create_runtime_filters(
+    join: &Join,
+    left_child_prop: &RelationalProperty,
+    right_child_prop: &RelationalProperty,
+) -> Result<RuntimeFilterResult> {
     let mut left_runtime_filters = BTreeMap::new();
     let mut right_runtime_filters = BTreeMap::new();
-    for (idx, exprs) in join
-        .right_conditions
-        .iter()
-        .zip(join.left_conditions.iter())
-        .enumerate()
-    {
-        right_runtime_filters.insert(RuntimeFilterId::new(idx), exprs.0.clone());
-        left_runtime_filters.insert(RuntimeFilterId::new(idx), exprs.1.clone());
+    let split_equi_conditions = join.get_split_equi_conditions(left_child_prop, right_child_prop);
+    for (idx, exprs) in split_equi_conditions.iter().enumerate() {
+        left_runtime_filters.insert(RuntimeFilterId::new(idx), exprs.0.clone());
+        right_runtime_filters.insert(RuntimeFilterId::new(idx), exprs.1.clone());
     }
     Ok(RuntimeFilterResult {
         left_runtime_filters,
@@ -92,6 +94,9 @@ fn add_runtime_filter_nodes(expr: &SExpr) -> Result<SExpr> {
     if join.join_type != JoinType::Inner {
         return Ok(expr.clone());
     }
-    let runtime_filter_result = create_runtime_filters(&join)?;
+    let rel_expr = RelExpr::with_s_expr(expr);
+    let left_child_prop = rel_expr.derive_relational_prop_child(0)?;
+    let right_child_prop = rel_expr.derive_relational_prop_child(1)?;
+    let runtime_filter_result = create_runtime_filters(&join, &left_child_prop, &right_child_prop)?;
     wrap_runtime_filter_source(expr, runtime_filter_result)
 }

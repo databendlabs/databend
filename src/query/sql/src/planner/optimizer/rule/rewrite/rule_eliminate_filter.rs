@@ -92,10 +92,7 @@ impl Rule for RuleEliminateFilter {
         if predicates.is_empty() {
             state.add_result(s_expr.child(0)?.clone());
         } else if origin_predicates.len() != predicates.len() {
-            let filter = Filter {
-                predicates,
-                is_having: eval_scalar.is_having,
-            };
+            let filter = Filter { predicates };
             state.add_result(SExpr::create_unary(filter.into(), s_expr.child(0)?.clone()));
         }
         Ok(())

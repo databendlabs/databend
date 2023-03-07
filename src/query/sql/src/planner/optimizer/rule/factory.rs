@@ -73,9 +73,7 @@ impl RuleFactory {
             RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new())),
             RuleID::PushDownFilterUnion => Ok(Box::new(RulePushDownFilterUnion::new())),
             RuleID::PushDownFilterEvalScalar => Ok(Box::new(RulePushDownFilterEvalScalar::new())),
-            RuleID::PushDownFilterJoin => {
-                Ok(Box::new(RulePushDownFilterJoin::new(metadata.unwrap())))
-            }
+            RuleID::PushDownFilterJoin => Ok(Box::new(RulePushDownFilterJoin::new())),
             RuleID::PushDownFilterScan => {
                 Ok(Box::new(RulePushDownFilterScan::new(metadata.unwrap())))
             }

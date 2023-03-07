@@ -191,11 +191,7 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         | RelOperator::DummyTableScan(_)
         | RelOperator::RuntimeFilterSource(_)
         | RelOperator::Pattern(_) => false,
-        RelOperator::Join(op) => {
-            op.left_conditions.iter().any(find_subquery_in_expr)
-                || op.right_conditions.iter().any(find_subquery_in_expr)
-                || op.non_equi_conditions.iter().any(find_subquery_in_expr)
-        }
+        RelOperator::Join(op) => op.conditions.iter().any(find_subquery_in_expr),
         RelOperator::EvalScalar(op) => op
             .items
             .iter()

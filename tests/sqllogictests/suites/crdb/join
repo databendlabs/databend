@@ -694,7 +694,7 @@ a a NULL
 c c NULL
 
 query TTT
-SELECT s, str1.s, str2.s FROM str1 RIGHT OUTER JOIN str2 USING(s) order by str2.s
+SELECT s, str1.s, str2.s FROM str2 LEFT OUTER JOIN str1 USING(s) order by str2.s
 ----
 A A A
 B NULL B

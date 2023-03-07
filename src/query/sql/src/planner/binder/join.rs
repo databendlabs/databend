@@ -16,40 +16,28 @@ use std::sync::Arc;
 
 use async_recursion::async_recursion;
 use common_ast::ast::split_conjunctions_expr;
-use common_ast::ast::split_equivalent_predicate_expr;
 use common_ast::ast::Expr;
 use common_ast::ast::JoinCondition;
 use common_ast::ast::JoinOperator;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::type_check::common_super_type;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_expression::types::DataType;
 
-use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
 use crate::normalize_identifier;
-use crate::optimizer::ColumnSet;
-use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
-use crate::planner::binder::wrap_cast;
 use crate::planner::binder::Binder;
 use crate::planner::semantic::NameResolutionContext;
 use crate::plans::BoundColumnRef;
-use crate::plans::Filter;
+use crate::plans::ComparisonExpr;
+use crate::plans::ComparisonOp;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::ScalarExpr;
 use crate::BindContext;
 use crate::MetadataRef;
-
-pub struct JoinConditions {
-    pub(crate) left_conditions: Vec<ScalarExpr>,
-    pub(crate) right_conditions: Vec<ScalarExpr>,
-    pub(crate) non_equi_conditions: Vec<ScalarExpr>,
-    pub(crate) other_conditions: Vec<ScalarExpr>,
-}
 
 impl Binder {
     #[async_recursion]
@@ -65,7 +53,14 @@ impl Binder {
 
         check_duplicate_join_tables(&left_context, &right_context)?;
 
+        // Build bind_context for join.
         let mut bind_context = bind_context.replace();
+        for column in left_context.all_column_bindings() {
+            bind_context.add_column_binding(column.clone());
+        }
+        for column in right_context.all_column_bindings() {
+            bind_context.add_column_binding(column.clone());
+        }
 
         match &join.op {
             JoinOperator::LeftOuter | JoinOperator::RightOuter | JoinOperator::FullOuter
@@ -83,10 +78,7 @@ impl Binder {
             _ => (),
         };
 
-        let mut left_join_conditions: Vec<ScalarExpr> = vec![];
-        let mut right_join_conditions: Vec<ScalarExpr> = vec![];
-        let mut non_equi_conditions: Vec<ScalarExpr> = vec![];
-        let mut other_conditions: Vec<ScalarExpr> = vec![];
+        let mut join_conditions = vec![];
         let mut join_condition_resolver = JoinConditionResolver::new(
             self.ctx.clone(),
             &self.name_resolution_ctx,
@@ -98,21 +90,9 @@ impl Binder {
             &join.condition,
         );
         join_condition_resolver
-            .resolve(
-                &mut left_join_conditions,
-                &mut right_join_conditions,
-                &mut non_equi_conditions,
-                &mut other_conditions,
-                &join.op,
-            )
+            .resolve(&mut join_conditions, &join.op)
             .await?;
 
-        let join_conditions = JoinConditions {
-            left_conditions: left_join_conditions,
-            right_conditions: right_join_conditions,
-            non_equi_conditions,
-            other_conditions,
-        };
         let s_expr = match &join.op {
             JoinOperator::Inner => {
                 self.bind_join_with_type(JoinType::Inner, join_conditions, left_child, right_child)
@@ -172,157 +152,18 @@ impl Binder {
     pub fn bind_join_with_type(
         &mut self,
         join_type: JoinType,
-        join_conditions: JoinConditions,
-        mut left_child: SExpr,
-        mut right_child: SExpr,
+        join_conditions: Vec<ScalarExpr>,
+        left_child: SExpr,
+        right_child: SExpr,
     ) -> Result<SExpr> {
-        let left_conditions = join_conditions.left_conditions;
-        let right_conditions = join_conditions.right_conditions;
-        let mut non_equi_conditions = join_conditions.non_equi_conditions;
-        let other_conditions = join_conditions.other_conditions;
-        if join_type == JoinType::Cross
-            && (!left_conditions.is_empty() || !right_conditions.is_empty())
-        {
-            return Err(ErrorCode::SemanticError(
-                "Join conditions should be empty in cross join",
-            ));
-        }
-        self.push_down_other_conditions(
-            &mut left_child,
-            &mut right_child,
-            other_conditions,
-            &mut non_equi_conditions,
-        )?;
-        let logical_join = Join {
-            left_conditions,
-            right_conditions,
-            non_equi_conditions,
+        let join = Join {
             join_type,
+            conditions: join_conditions,
             marker_index: None,
             from_correlated_subquery: false,
             contain_runtime_filter: false,
         };
-        Ok(SExpr::create_binary(
-            logical_join.into(),
-            left_child,
-            right_child,
-        ))
-    }
-
-    fn push_down_other_conditions(
-        &self,
-        left_child: &mut SExpr,
-        right_child: &mut SExpr,
-        other_conditions: Vec<ScalarExpr>,
-        non_equi_conditions: &mut Vec<ScalarExpr>,
-    ) -> Result<()> {
-        if other_conditions.is_empty() {
-            return Ok(());
-        }
-        let left_prop = RelExpr::with_s_expr(left_child).derive_relational_prop()?;
-        let right_prop = RelExpr::with_s_expr(right_child).derive_relational_prop()?;
-
-        let mut left_push_down = vec![];
-        let mut right_push_down = vec![];
-        let mut need_push_down = false;
-
-        for predicate in other_conditions.iter() {
-            let pred = JoinPredicate::new(predicate, &left_prop, &right_prop);
-            match pred {
-                JoinPredicate::Left(_) => {
-                    need_push_down = true;
-                    left_push_down.push(predicate.clone());
-                }
-                JoinPredicate::Right(_) => {
-                    need_push_down = true;
-                    right_push_down.push(predicate.clone());
-                }
-                _ => {
-                    non_equi_conditions.push(predicate.clone());
-                }
-            }
-        }
-
-        if !need_push_down {
-            return Ok(());
-        }
-
-        if !left_push_down.is_empty() {
-            *left_child = SExpr::create_unary(
-                Filter {
-                    predicates: left_push_down,
-                    is_having: false,
-                }
-                .into(),
-                left_child.clone(),
-            );
-        }
-
-        if !right_push_down.is_empty() {
-            *right_child = SExpr::create_unary(
-                Filter {
-                    predicates: right_push_down,
-                    is_having: false,
-                }
-                .into(),
-                right_child.clone(),
-            );
-        }
-
-        Ok(())
-    }
-}
-
-// Wrap nullable for column binding depending on join type.
-fn wrap_nullable_for_column(
-    join_type: &JoinOperator,
-    left_context: &BindContext,
-    right_context: &BindContext,
-    bind_context: &mut BindContext,
-) {
-    match join_type {
-        JoinOperator::LeftOuter => {
-            for column in left_context.all_column_bindings() {
-                bind_context.add_column_binding(column.clone());
-            }
-            for column in right_context.all_column_bindings().iter() {
-                let mut nullable_column = column.clone();
-                nullable_column.data_type = Box::new(column.data_type.wrap_nullable());
-                bind_context.add_column_binding(nullable_column);
-            }
-        }
-        JoinOperator::RightOuter => {
-            for column in left_context.all_column_bindings() {
-                let mut nullable_column = column.clone();
-                nullable_column.data_type = Box::new(column.data_type.wrap_nullable());
-                bind_context.add_column_binding(nullable_column);
-            }
-
-            for column in right_context.all_column_bindings().iter() {
-                bind_context.add_column_binding(column.clone());
-            }
-        }
-        JoinOperator::FullOuter => {
-            for column in left_context.all_column_bindings() {
-                let mut nullable_column = column.clone();
-                nullable_column.data_type = Box::new(column.data_type.wrap_nullable());
-                bind_context.add_column_binding(nullable_column);
-            }
-
-            for column in right_context.all_column_bindings().iter() {
-                let mut nullable_column = column.clone();
-                nullable_column.data_type = Box::new(column.data_type.wrap_nullable());
-                bind_context.add_column_binding(nullable_column);
-            }
-        }
-        _ => {
-            for column in left_context.all_column_bindings() {
-                bind_context.add_column_binding(column.clone());
-            }
-            for column in right_context.all_column_bindings() {
-                bind_context.add_column_binding(column.clone());
-            }
-        }
+        Ok(SExpr::create_binary(join.into(), left_child, right_child))
     }
 }
 
@@ -361,7 +202,7 @@ struct JoinConditionResolver<'a> {
     ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
-    join_op: JoinOperator,
+    _join_op: JoinOperator,
     left_context: &'a BindContext,
     right_context: &'a BindContext,
     join_context: &'a mut BindContext,
@@ -374,7 +215,7 @@ impl<'a> JoinConditionResolver<'a> {
         ctx: Arc<dyn TableContext>,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
-        join_op: JoinOperator,
+        _join_op: JoinOperator,
         left_context: &'a BindContext,
         right_context: &'a BindContext,
         join_context: &'a mut BindContext,
@@ -384,7 +225,7 @@ impl<'a> JoinConditionResolver<'a> {
             ctx,
             name_resolution_ctx,
             metadata,
-            join_op,
+            _join_op,
             left_context,
             right_context,
             join_context,
@@ -394,35 +235,20 @@ impl<'a> JoinConditionResolver<'a> {
 
     pub async fn resolve(
         &mut self,
-        left_join_conditions: &mut Vec<ScalarExpr>,
-        right_join_conditions: &mut Vec<ScalarExpr>,
-        non_equi_conditions: &mut Vec<ScalarExpr>,
-        other_join_conditions: &mut Vec<ScalarExpr>,
+        conditions: &mut Vec<ScalarExpr>,
         join_op: &JoinOperator,
     ) -> Result<()> {
         match &self.join_condition {
             JoinCondition::On(cond) => {
-                self.resolve_on(
-                    cond,
-                    left_join_conditions,
-                    right_join_conditions,
-                    non_equi_conditions,
-                    other_join_conditions,
-                )
-                .await?;
+                self.resolve_on(cond, conditions).await?;
             }
             JoinCondition::Using(identifiers) => {
                 let using_columns = identifiers
                     .iter()
                     .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name)
                     .collect::<Vec<String>>();
-                self.resolve_using(
-                    using_columns,
-                    left_join_conditions,
-                    right_join_conditions,
-                    join_op,
-                )
-                .await?;
+                self.resolve_using(using_columns, conditions, join_op)
+                    .await?;
             }
             JoinCondition::Natural => {
                 // NATURAL is a shorthand form of USING: it forms a USING list consisting of all column names that appear in both input tables
@@ -431,22 +257,10 @@ impl<'a> JoinConditionResolver<'a> {
                 let mut using_columns = vec![];
                 // Find common columns in both input tables
                 self.find_using_columns(&mut using_columns)?;
-                self.resolve_using(
-                    using_columns,
-                    left_join_conditions,
-                    right_join_conditions,
-                    join_op,
-                )
-                .await?
+                self.resolve_using(using_columns, conditions, join_op)
+                    .await?
             }
-            JoinCondition::None => {
-                wrap_nullable_for_column(
-                    &self.join_op,
-                    self.left_context,
-                    self.right_context,
-                    self.join_context,
-                );
-            }
+            JoinCondition::None => {}
         }
         Ok(())
     }
@@ -454,94 +268,38 @@ impl<'a> JoinConditionResolver<'a> {
     async fn resolve_on(
         &mut self,
         condition: &Expr,
-        left_join_conditions: &mut Vec<ScalarExpr>,
-        right_join_conditions: &mut Vec<ScalarExpr>,
-        non_equi_conditions: &mut Vec<ScalarExpr>,
-        other_join_conditions: &mut Vec<ScalarExpr>,
+        conditions: &mut Vec<ScalarExpr>,
     ) -> Result<()> {
         let conjunctions = split_conjunctions_expr(condition);
         for expr in conjunctions.iter() {
-            self.resolve_predicate(
-                expr,
-                left_join_conditions,
-                right_join_conditions,
-                non_equi_conditions,
-                other_join_conditions,
-            )
-            .await?;
+            self.resolve_predicate(expr, conditions).await?;
         }
-        wrap_nullable_for_column(
-            &self.join_op,
-            self.left_context,
-            self.right_context,
-            self.join_context,
-        );
         Ok(())
     }
 
     async fn resolve_predicate(
         &self,
         predicate: &Expr,
-        left_join_conditions: &mut Vec<ScalarExpr>,
-        right_join_conditions: &mut Vec<ScalarExpr>,
-        non_equi_conditions: &mut Vec<ScalarExpr>,
-        other_join_conditions: &mut Vec<ScalarExpr>,
+        conditions: &mut Vec<ScalarExpr>,
     ) -> Result<()> {
-        let mut join_context = (*self.join_context).clone();
-        wrap_nullable_for_column(
-            &self.join_op,
-            self.left_context,
-            self.right_context,
-            &mut join_context,
-        );
         let mut scalar_binder = ScalarBinder::new(
-            &join_context,
+            self.join_context,
             self.ctx.clone(),
             self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
         );
-        // Given two tables: t1(a, b), t2(a, b)
-        // A predicate can be regarded as an equi-predicate iff:
-        //
-        //   - The predicate is literally an equivalence expression, e.g. `t1.a = t2.a`
-        //   - Each side of `=` only contains columns from one table and the both sides are disjoint.
-        //     For example, `t1.a + t1.b = t2.a` is a valid one while `t1.a + t2.a = t2.b` isn't.
-        //
-        // Only equi-predicate can be exploited by common join algorithms(e.g. sort-merge join, hash join).
-
-        let mut added = if let Some((left, right)) = split_equivalent_predicate_expr(predicate) {
-            let (left, _) = scalar_binder.bind(&left).await?;
-            let (right, _) = scalar_binder.bind(&right).await?;
-            self.add_equi_conditions(left, right, left_join_conditions, right_join_conditions)?
-        } else {
-            false
-        };
-        if !added {
-            added = self
-                .add_other_conditions(predicate, other_join_conditions)
-                .await?;
-            if !added {
-                let (predicate, _) = scalar_binder.bind(predicate).await?;
-                non_equi_conditions.push(predicate);
-            }
-        }
+        let (predicate, _) = scalar_binder.bind(predicate).await?;
+        conditions.push(predicate);
         Ok(())
     }
 
     async fn resolve_using(
         &mut self,
         using_columns: Vec<String>,
-        left_join_conditions: &mut Vec<ScalarExpr>,
-        right_join_conditions: &mut Vec<ScalarExpr>,
+        conditions: &mut Vec<ScalarExpr>,
         join_op: &JoinOperator,
     ) -> Result<()> {
-        wrap_nullable_for_column(
-            &self.join_op,
-            self.left_context,
-            self.right_context,
-            self.join_context,
-        );
         let left_columns_len = self.left_context.columns.len();
         for join_key in using_columns.iter() {
             let join_key_name = join_key.as_str();
@@ -574,7 +332,12 @@ impl<'a> JoinConditionResolver<'a> {
                     join_key_name
                 )));
             };
-            let idx = !matches!(join_op, JoinOperator::RightOuter) as usize;
+            // According to the definition of USING clause and NATURAL JOIN, if
+            // the join operator is left outer join or inner join, the column
+            // referenced later without qualified table name should be the column
+            // in the left table. If the join operator is right outer join, the
+            // referenced column should be the column in the right table.
+            let idx = !matches!(&join_op, JoinOperator::RightOuter) as usize;
             if let Some(col_binding) = self
                 .join_context
                 .columns
@@ -586,131 +349,15 @@ impl<'a> JoinConditionResolver<'a> {
                 col_binding.visibility = Visibility::UnqualifiedWildcardInVisible;
             }
 
-            self.add_equi_conditions(
-                left_scalar,
-                right_scalar,
-                left_join_conditions,
-                right_join_conditions,
-            )?;
+            let condition = ScalarExpr::ComparisonExpr(ComparisonExpr {
+                left: Box::new(left_scalar),
+                op: ComparisonOp::Equal,
+                right: Box::new(right_scalar),
+                return_type: Box::new(DataType::Boolean),
+            });
+            conditions.push(condition);
         }
         Ok(())
-    }
-
-    fn add_equi_conditions(
-        &self,
-        mut left: ScalarExpr,
-        mut right: ScalarExpr,
-        left_join_conditions: &mut Vec<ScalarExpr>,
-        right_join_conditions: &mut Vec<ScalarExpr>,
-    ) -> Result<bool> {
-        let left_used_columns = left.used_columns();
-        let right_used_columns = right.used_columns();
-        let (left_columns, right_columns) = self.left_right_columns()?;
-
-        // Bump types of left conditions and right conditions
-        let left_type = left.data_type();
-        let right_type = right.data_type();
-        if left_type.ne(&right_type) {
-            let least_super_type = common_super_type(
-                left_type.clone(),
-                right_type.clone(),
-                &BUILTIN_FUNCTIONS.default_cast_rules,
-            )
-            .ok_or_else(|| {
-                ErrorCode::Internal(format!(
-                    "Left type {left_type} and right type {right_type} cannot be matched"
-                ))
-            })?;
-            // Wrap cast for both left and right, `cast` can change the physical type of the data block
-            // Related issue: https://github.com/datafuselabs/databend/issues/7650
-            left = wrap_cast(&left, &least_super_type);
-            right = wrap_cast(&right, &least_super_type);
-        }
-
-        if left_used_columns.is_subset(&left_columns)
-            && right_used_columns.is_subset(&right_columns)
-        {
-            left_join_conditions.push(left);
-            right_join_conditions.push(right);
-            return Ok(true);
-        } else if left_used_columns.is_subset(&right_columns)
-            && right_used_columns.is_subset(&left_columns)
-        {
-            left_join_conditions.push(right);
-            right_join_conditions.push(left);
-            return Ok(true);
-        }
-        Ok(false)
-    }
-
-    async fn add_other_conditions(
-        &self,
-        predicate: &Expr,
-        other_join_conditions: &mut Vec<ScalarExpr>,
-    ) -> Result<bool> {
-        let mut join_context = (*self.join_context).clone();
-        wrap_nullable_for_column(
-            &JoinOperator::Inner,
-            self.left_context,
-            self.right_context,
-            &mut join_context,
-        );
-        let mut scalar_binder = ScalarBinder::new(
-            &join_context,
-            self.ctx.clone(),
-            self.name_resolution_ctx,
-            self.metadata.clone(),
-            &[],
-        );
-        let (predicate, _) = scalar_binder.bind(predicate).await?;
-        let predicate_used_columns = predicate.used_columns();
-        let (left_columns, right_columns) = self.left_right_columns()?;
-        match self.join_op {
-            JoinOperator::LeftOuter => {
-                if predicate_used_columns.is_subset(&right_columns) {
-                    other_join_conditions.push(predicate);
-                    return Ok(true);
-                }
-            }
-            JoinOperator::RightOuter => {
-                if predicate_used_columns.is_subset(&left_columns) {
-                    other_join_conditions.push(predicate);
-                    return Ok(true);
-                }
-            }
-            JoinOperator::Inner => {
-                if predicate_used_columns.is_subset(&left_columns)
-                    || predicate_used_columns.is_subset(&right_columns)
-                {
-                    other_join_conditions.push(predicate);
-                    return Ok(true);
-                }
-            }
-            _ => {
-                return Ok(false);
-            }
-        }
-        Ok(false)
-    }
-
-    fn left_right_columns(&self) -> Result<(ColumnSet, ColumnSet)> {
-        let left_columns: ColumnSet =
-            self.left_context
-                .all_column_bindings()
-                .iter()
-                .fold(ColumnSet::new(), |mut acc, v| {
-                    acc.insert(v.index);
-                    acc
-                });
-        let right_columns: ColumnSet =
-            self.right_context
-                .all_column_bindings()
-                .iter()
-                .fold(ColumnSet::new(), |mut acc, v| {
-                    acc.insert(v.index);
-                    acc
-                });
-        Ok((left_columns, right_columns))
     }
 
     fn find_using_columns(&self, using_columns: &mut Vec<String>) -> Result<()> {

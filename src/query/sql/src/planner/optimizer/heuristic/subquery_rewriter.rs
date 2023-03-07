@@ -23,7 +23,6 @@ use common_expression::types::NumberDataType;
 use common_expression::Literal;
 use common_functions::aggregates::AggregateCountFunction;
 
-use crate::binder::wrap_cast;
 use crate::binder::ColumnBinding;
 use crate::binder::Visibility;
 use crate::optimizer::RelExpr;
@@ -385,9 +384,7 @@ impl SubqueryRewriter {
         match subquery.typ {
             SubqueryType::Scalar => {
                 let join_plan = Join {
-                    left_conditions: vec![],
-                    right_conditions: vec![],
-                    non_equi_conditions: vec![],
+                    conditions: vec![],
                     join_type: JoinType::Single,
                     marker_index: None,
                     from_correlated_subquery: false,
@@ -465,7 +462,6 @@ impl SubqueryRewriter {
                 };
                 let filter = Filter {
                     predicates: vec![compare.into()],
-                    is_having: false,
                 };
 
                 // Filter: COUNT(*) = 1 or COUNT(*) != 1
@@ -475,9 +471,7 @@ impl SubqueryRewriter {
                     SExpr::create_unary(agg.into(), subquery_expr),
                 );
                 let cross_join = Join {
-                    left_conditions: vec![],
-                    right_conditions: vec![],
-                    non_equi_conditions: vec![],
+                    conditions: vec![],
                     join_type: JoinType::Cross,
                     marker_index: None,
                     from_correlated_subquery: false,
@@ -492,35 +486,27 @@ impl SubqueryRewriter {
             SubqueryType::Any => {
                 let output_column = subquery.output_column.clone();
                 let column_name = format!("subquery_{}", output_column.index);
-                let left_condition = wrap_cast(
-                    &ScalarExpr::BoundColumnRef(BoundColumnRef {
-                        column: ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            column_name,
-                            index: output_column.index,
-                            data_type: output_column.data_type,
-                            visibility: Visibility::Visible,
-                        },
-                    }),
-                    &subquery.data_type,
-                );
+                let left_condition = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    column: ColumnBinding {
+                        database_name: None,
+                        table_name: None,
+                        column_name,
+                        index: output_column.index,
+                        data_type: output_column.data_type,
+                        visibility: Visibility::Visible,
+                    },
+                });
                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
                 let op = subquery.compare_op.as_ref().unwrap().clone();
-                let (right_condition, is_non_equi_condition) =
+                let (right_condition, _is_non_equi_condition) =
                     check_child_expr_in_subquery(&child_expr, &op)?;
-                let (left_conditions, right_conditions, non_equi_conditions) =
-                    if !is_non_equi_condition {
-                        (vec![left_condition], vec![right_condition], vec![])
-                    } else {
-                        let other_condition = ScalarExpr::ComparisonExpr(ComparisonExpr {
-                            op,
-                            left: Box::new(right_condition),
-                            right: Box::new(left_condition),
-                            return_type: Box::new(DataType::Nullable(Box::new(DataType::Boolean))),
-                        });
-                        (vec![], vec![], vec![other_condition])
-                    };
+                let condition: ScalarExpr = ComparisonExpr {
+                    op,
+                    left: Box::new(right_condition),
+                    right: Box::new(left_condition),
+                    return_type: Box::new(DataType::Boolean),
+                }
+                .into();
                 // Add a marker column to save comparison result.
                 // The column is Nullable(Boolean), the data value is TRUE, FALSE, or NULL.
                 // If subquery contains NULL, the comparison result is TRUE or NULL.
@@ -538,9 +524,7 @@ impl SubqueryRewriter {
                 // Will be transferred to:select t1.a, t2.a, marker_index from t1, t2 where t2.a = t1.a;
                 // Note that subquery is the right table, and it'll be the build side.
                 let mark_join = Join {
-                    left_conditions: right_conditions,
-                    right_conditions: left_conditions,
-                    non_equi_conditions,
+                    conditions: vec![condition],
                     join_type: JoinType::RightMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: false,

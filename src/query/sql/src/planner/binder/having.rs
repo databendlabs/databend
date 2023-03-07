@@ -72,10 +72,7 @@ impl Binder {
 
         let predicates = split_conjunctions(&scalar);
 
-        let filter = Filter {
-            predicates,
-            is_having: true,
-        };
+        let filter = Filter { predicates };
 
         Ok(SExpr::create_unary(filter.into(), child))
     }

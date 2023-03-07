@@ -16,6 +16,7 @@ use std::collections::HashMap;
 
 use common_exception::Result;
 
+use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::Filter;
 use crate::plans::Join;
@@ -34,6 +35,15 @@ pub fn try_derive_predicates(
     let mut left_child = join_expr.child(0)?.clone();
     let mut right_child = join_expr.child(1)?.clone();
 
+    let rel_expr = RelExpr::with_s_expr(join_expr);
+    let left_prop = rel_expr.derive_relational_prop_child(0)?;
+    let right_prop = rel_expr.derive_relational_prop_child(1)?;
+
+    let (left_conditions, right_conditions): (Vec<ScalarExpr>, Vec<ScalarExpr>) = join
+        .get_split_equi_conditions(&left_prop, &right_prop)
+        .into_iter()
+        .unzip();
+
     if join.join_type == JoinType::Inner {
         let mut new_left_push_down = vec![];
         let mut new_right_push_down = vec![];
@@ -41,13 +51,13 @@ pub fn try_derive_predicates(
             let used_columns = predicate.used_columns();
             let mut col_to_scalar = HashMap::with_capacity(used_columns.len());
             for column in used_columns.iter() {
-                for (idx, left_condition) in join.left_conditions.iter().enumerate() {
+                for (idx, left_condition) in left_conditions.iter().enumerate() {
                     if left_condition.used_columns().len() > 1
                         || !left_condition.used_columns().contains(column)
                     {
                         continue;
                     }
-                    col_to_scalar.insert(column, &join.right_conditions[idx]);
+                    col_to_scalar.insert(column, &right_conditions[idx]);
                     break;
                 }
             }
@@ -59,13 +69,13 @@ pub fn try_derive_predicates(
             let used_columns = predicate.used_columns();
             let mut col_to_scalar = HashMap::with_capacity(used_columns.len());
             for column in used_columns.iter() {
-                for (idx, right_condition) in join.right_conditions.iter().enumerate() {
+                for (idx, right_condition) in right_conditions.iter().enumerate() {
                     if right_condition.used_columns().len() > 1
                         || !right_condition.used_columns().contains(column)
                     {
                         continue;
                     }
-                    col_to_scalar.insert(column, &join.left_conditions[idx]);
+                    col_to_scalar.insert(column, &left_conditions[idx]);
                     break;
                 }
             }
@@ -81,7 +91,6 @@ pub fn try_derive_predicates(
         left_child = SExpr::create_unary(
             Filter {
                 predicates: left_push_down,
-                is_having: false,
             }
             .into(),
             left_child,
@@ -92,7 +101,6 @@ pub fn try_derive_predicates(
         right_child = SExpr::create_unary(
             Filter {
                 predicates: right_push_down,
-                is_having: false,
             }
             .into(),
             right_child,

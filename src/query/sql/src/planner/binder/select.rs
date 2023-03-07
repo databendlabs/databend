@@ -32,7 +32,6 @@ use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 
-use crate::binder::join::JoinConditions;
 use crate::binder::scalar_common::split_conjunctions;
 use crate::binder::CteInfo;
 use crate::binder::Visibility;
@@ -42,6 +41,8 @@ use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
+use crate::plans::ComparisonExpr;
+use crate::plans::ComparisonOp;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::JoinType;
@@ -269,7 +270,6 @@ impl Binder {
         let (scalar, _) = scalar_binder.bind(expr).await?;
         let filter_plan = Filter {
             predicates: split_conjunctions(&scalar),
-            is_having: false,
         };
         let new_expr = SExpr::create_unary(filter_plan.into(), child);
         Ok(new_expr)
@@ -417,34 +417,32 @@ impl Binder {
             &mut HashMap::new(),
             left_expr,
         )?;
-        let mut left_conditions = Vec::with_capacity(left_context.columns.len());
-        let mut right_conditions = Vec::with_capacity(right_context.columns.len());
-        assert_eq!(left_context.columns.len(), right_context.columns.len());
+        debug_assert_eq!(left_context.columns.len(), right_context.columns.len());
+        let mut conditions = vec![];
         for (left_column, right_column) in left_context
             .columns
             .iter()
             .zip(right_context.columns.iter())
         {
-            left_conditions.push(
-                BoundColumnRef {
-                    column: left_column.clone(),
-                }
-                .into(),
-            );
-            right_conditions.push(
-                BoundColumnRef {
-                    column: right_column.clone(),
-                }
-                .into(),
-            );
+            let condition = ScalarExpr::ComparisonExpr(ComparisonExpr {
+                op: ComparisonOp::Equal,
+                left: Box::new(
+                    BoundColumnRef {
+                        column: left_column.clone(),
+                    }
+                    .into(),
+                ),
+                right: Box::new(
+                    BoundColumnRef {
+                        column: right_column.clone(),
+                    }
+                    .into(),
+                ),
+                return_type: Box::new(DataType::Boolean),
+            });
+            conditions.push(condition);
         }
-        let join_conditions = JoinConditions {
-            left_conditions,
-            right_conditions,
-            non_equi_conditions: vec![],
-            other_conditions: vec![],
-        };
-        let s_expr = self.bind_join_with_type(join_type, join_conditions, left_expr, right_expr)?;
+        let s_expr = self.bind_join_with_type(join_type, conditions, left_expr, right_expr)?;
         Ok((s_expr, left_context))
     }
 

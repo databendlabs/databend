@@ -16,7 +16,6 @@ use std::vec;
 
 use common_exception::Result;
 
-use super::util::get_join_predicates;
 use crate::binder::JoinPredicate;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
@@ -129,21 +128,21 @@ impl Rule for RuleExchangeJoin {
             || join2.join_type == JoinType::Cross
             || join3.join_type == JoinType::Cross;
 
-        let predicates = vec![
-            get_join_predicates(&join1)?,
-            get_join_predicates(&join2)?,
-            get_join_predicates(&join3)?,
-        ]
-        .concat();
+        let predicates = join1
+            .conditions
+            .iter()
+            .chain(join2.conditions.iter().chain(join3.conditions.iter()))
+            .cloned()
+            .collect::<Vec<_>>();
 
         let mut join_4 = Join::default();
         let mut join_5 = Join::default();
         let mut join_6 = Join::default();
 
-        let t1_prop = RelExpr::with_s_expr(t1).derive_relational_prop()?;
-        let t2_prop = RelExpr::with_s_expr(t2).derive_relational_prop()?;
-        let t3_prop = RelExpr::with_s_expr(t3).derive_relational_prop()?;
-        let t4_prop = RelExpr::with_s_expr(t4).derive_relational_prop()?;
+        let _t1_prop = RelExpr::with_s_expr(t1).derive_relational_prop()?;
+        let _t2_prop = RelExpr::with_s_expr(t2).derive_relational_prop()?;
+        let _t3_prop = RelExpr::with_s_expr(t3).derive_relational_prop()?;
+        let _t4_prop = RelExpr::with_s_expr(t4).derive_relational_prop()?;
         let join5_prop = RelExpr::with_s_expr(&SExpr::create_binary(
             join_5.clone().into(),
             t1.clone(),
@@ -170,55 +169,31 @@ impl Rule for RuleExchangeJoin {
                 JoinPredicate::Right(pred) => {
                     join_6_preds.push(pred.clone());
                 }
-                JoinPredicate::Both { left, right } => {
-                    join_4.left_conditions.push(left.clone());
-                    join_4.right_conditions.push(right.clone());
+                JoinPredicate::Both { .. } => {
+                    join_4.conditions.push(predicate.clone());
                 }
                 JoinPredicate::Other(pred) => {
-                    join_4.non_equi_conditions.push(pred.clone());
+                    join_4.conditions.push(pred.clone());
                 }
             }
         }
 
-        if !join_4.left_conditions.is_empty() && !join_4.right_conditions.is_empty() {
+        if !join_4.conditions.is_empty() {
             join_4.join_type = JoinType::Inner;
         }
 
         // Resolve predicates for join5
-        for predicate in join_5_preds.iter() {
-            let join_pred = JoinPredicate::new(predicate, &t1_prop, &t3_prop);
-            match join_pred {
-                JoinPredicate::Left(_) | JoinPredicate::Right(_) | JoinPredicate::Other(_) => {
-                    // TODO(leiysky): push down the predicate
-                    join_5.non_equi_conditions.push(predicate.clone());
-                }
-                JoinPredicate::Both { left, right } => {
-                    join_5.left_conditions.push(left.clone());
-                    join_5.right_conditions.push(right.clone());
-                }
-            }
-        }
+        // TODO(leiysky): push down the predicate
+        join_5.conditions.extend(join_5_preds);
 
-        if !join_5.left_conditions.is_empty() && !join_5.right_conditions.is_empty() {
+        if !join_5.conditions.is_empty() {
             join_5.join_type = JoinType::Inner;
         }
 
         // Resolve predicates for join6
-        for predicate in join_6_preds.iter() {
-            let join_pred = JoinPredicate::new(predicate, &t2_prop, &t4_prop);
-            match join_pred {
-                JoinPredicate::Left(_) | JoinPredicate::Right(_) | JoinPredicate::Other(_) => {
-                    // TODO(leiysky): push down the predicate
-                    join_6.non_equi_conditions.push(predicate.clone());
-                }
-                JoinPredicate::Both { left, right } => {
-                    join_6.left_conditions.push(left.clone());
-                    join_6.right_conditions.push(right.clone());
-                }
-            }
-        }
+        join_6.conditions.extend(join_6_preds);
 
-        if !join_6.left_conditions.is_empty() && !join_6.right_conditions.is_empty() {
+        if !join_6.conditions.is_empty() {
             join_6.join_type = JoinType::Inner;
         }
 

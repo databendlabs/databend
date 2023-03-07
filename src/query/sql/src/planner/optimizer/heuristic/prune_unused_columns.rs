@@ -16,6 +16,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::optimizer::ColumnSet;
+use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::EvalScalar;
@@ -70,29 +71,32 @@ impl UnusedColumnPruner {
                 )))
             }
             RelOperator::Join(p) => {
+                let rel_expr = RelExpr::with_s_expr(expr);
+                let used_columns = p.used_columns()?;
                 // Include columns referenced in left conditions
-                let left = p.left_conditions.iter().fold(required.clone(), |acc, v| {
-                    acc.union(&v.used_columns()).cloned().collect()
-                });
-                // Include columns referenced in right conditions
-                let right = p.right_conditions.iter().fold(required.clone(), |acc, v| {
-                    acc.union(&v.used_columns()).cloned().collect()
-                });
+                let left_columns: ColumnSet = rel_expr
+                    .derive_relational_prop_child(0)?
+                    .output_columns
+                    .intersection(&used_columns)
+                    .copied()
+                    .collect();
+                let mut left_required = required.clone();
+                left_required.extend(left_columns);
 
-                let others = p.non_equi_conditions.iter().fold(required, |acc, v| {
-                    acc.union(&v.used_columns()).cloned().collect()
-                });
+                // Include columns referenced in right conditions
+                let right_columns: ColumnSet = rel_expr
+                    .derive_relational_prop_child(1)?
+                    .output_columns
+                    .intersection(&used_columns)
+                    .copied()
+                    .collect();
+                let mut right_required = required.clone();
+                right_required.extend(right_columns);
 
                 Ok(SExpr::create_binary(
                     RelOperator::Join(p.clone()),
-                    Self::keep_required_columns(
-                        expr.child(0)?,
-                        left.union(&others).cloned().collect(),
-                    )?,
-                    Self::keep_required_columns(
-                        expr.child(1)?,
-                        right.union(&others).cloned().collect(),
-                    )?,
+                    Self::keep_required_columns(expr.child(0)?, left_required)?,
+                    Self::keep_required_columns(expr.child(1)?, right_required)?,
                 ))
             }
 

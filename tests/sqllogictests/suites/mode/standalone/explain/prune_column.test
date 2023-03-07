@@ -40,24 +40,24 @@ Limit
 └── Sort
     ├── sort keys: [number ASC NULLS LAST]
     ├── estimated rows: 0.33
-    └── Filter
-        ├── filters: [numbers.b (#0) > 1]
+    └── AggregateFinal
+        ├── group by: [number, number, number, number]
+        ├── aggregate functions: []
         ├── estimated rows: 0.33
-        └── AggregateFinal
+        └── AggregatePartial
             ├── group by: [number, number, number, number]
             ├── aggregate functions: []
-            ├── estimated rows: 1.00
-            └── AggregatePartial
-                ├── group by: [number, number, number, number]
-                ├── aggregate functions: []
-                ├── estimated rows: 1.00
+            ├── estimated rows: 0.33
+            └── Filter
+                ├── filters: [numbers.b (#0) > 1]
+                ├── estimated rows: 0.33
                 └── TableScan
                     ├── table: default.system.numbers
                     ├── read rows: 1
                     ├── read bytes: 8
                     ├── partitions total: 1
                     ├── partitions scanned: 1
-                    ├── push downs: [filters: [], limit: NONE]
+                    ├── push downs: [filters: [numbers.b (#0) > 1], limit: NONE]
                     └── estimated rows: 1.00
 
 query T

@@ -73,10 +73,7 @@ impl Rule for RuleMergeFilter {
             .into_iter()
             .chain(down_filter.predicates.into_iter())
             .collect();
-        let merged = Filter {
-            predicates,
-            is_having: false,
-        };
+        let merged = Filter { predicates };
 
         let new_expr = SExpr::create_unary(merged.into(), s_expr.child(0)?.child(0)?.clone());
         state.add_result(new_expr);

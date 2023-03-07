@@ -76,9 +76,6 @@ impl Rule for RuleCommuteJoinBaseTable {
             | JoinType::LeftAnti
             | JoinType::LeftMark
             | JoinType::RightAnti => {
-                // Swap the join conditions side
-                (join.left_conditions, join.right_conditions) =
-                    (join.right_conditions, join.left_conditions);
                 join.join_type = join.join_type.opposite();
                 let mut result =
                     SExpr::create_binary(join.into(), right_child.clone(), left_child.clone());

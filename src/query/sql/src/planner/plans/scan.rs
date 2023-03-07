@@ -190,11 +190,14 @@ impl Operator for Scan {
                 .as_ref()
                 .map_or(0.0, |stat| stat.num_rows.map_or(0.0, |num| num as f64)),
             statistics: OpStatistics {
-                precise_cardinality: self
-                    .statistics
-                    .statistics
-                    .as_ref()
-                    .and_then(|stat| stat.num_rows),
+                precise_cardinality: if self.prewhere.is_none() {
+                    self.statistics
+                        .statistics
+                        .as_ref()
+                        .and_then(|stat| stat.num_rows)
+                } else {
+                    None
+                },
                 column_stats,
                 is_accurate: self.statistics.is_accurate,
             },

@@ -35,8 +35,6 @@ use crate::plans::ScalarExpr;
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Filter {
     pub predicates: Vec<ScalarExpr>,
-    // True if the plan represents having, else the plan represents where
-    pub is_having: bool,
 }
 
 impl Filter {

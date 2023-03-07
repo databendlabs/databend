@@ -13,13 +13,10 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_expression::type_check::common_super_type;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
 
 use crate::binder::JoinPredicate;
 use crate::optimizer::rule::rewrite::filter_join::convert_mark_to_semi_join;
 use crate::optimizer::rule::rewrite::filter_join::convert_outer_to_inner_join;
-use crate::optimizer::rule::rewrite::filter_join::remove_nullable;
 use crate::optimizer::rule::rewrite::filter_join::rewrite_predicates;
 use crate::optimizer::rule::rewrite::filter_join::try_derive_predicates;
 use crate::optimizer::rule::Rule;
@@ -27,23 +24,20 @@ use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
-use crate::planner::binder::wrap_cast;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
-use crate::MetadataRef;
 
 pub struct RulePushDownFilterJoin {
     id: RuleID,
     pattern: SExpr,
-    metadata: MetadataRef,
 }
 
 impl RulePushDownFilterJoin {
-    pub fn new(metadata: MetadataRef) -> Self {
+    pub fn new() -> Self {
         Self {
             id: RuleID::PushDownFilterJoin,
             // Filter
@@ -76,7 +70,6 @@ impl RulePushDownFilterJoin {
                     ),
                 ),
             ),
-            metadata,
         }
     }
 }
@@ -88,23 +81,11 @@ impl Rule for RulePushDownFilterJoin {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         // First, try to convert outer join to inner join
-        let join: Join = s_expr.child(0)?.plan().clone().try_into()?;
-        let origin_join_type = join.join_type;
-        let (mut s_expr, converted) = convert_outer_to_inner_join(s_expr)?;
-        if converted {
-            // If outer join is converted to inner join, we need to change datatype of filter predicate
-            let mut filter: Filter = s_expr.plan().clone().try_into()?;
-            let mut new_predicates = Vec::with_capacity(filter.predicates.len());
-            for predicate in filter.predicates.iter() {
-                let new_predicate =
-                    remove_nullable(&s_expr, predicate, &origin_join_type, self.metadata.clone())?;
-                new_predicates.push(new_predicate);
-            }
-            filter.predicates = new_predicates;
-            s_expr = SExpr::create_unary(filter.into(), s_expr.child(0)?.clone())
-        }
+        let mut s_expr = convert_outer_to_inner_join(s_expr)?;
+
         // Second, check if can convert mark join to semi join
         s_expr = convert_mark_to_semi_join(&s_expr)?;
+
         let filter: Filter = s_expr.plan().clone().try_into()?;
         if filter.predicates.is_empty() {
             state.add_result(s_expr);
@@ -168,31 +149,15 @@ pub fn try_push_down_filter_join(
             }
             JoinPredicate::Other(_) => original_predicates.push(predicate),
 
-            JoinPredicate::Both { left, right } => {
-                let left_type = left.data_type();
-                let right_type = right.data_type();
-                let join_key_type =
-                    common_super_type(left_type, right_type, &BUILTIN_FUNCTIONS.default_cast_rules);
+            JoinPredicate::Both { .. } => {
+                // Convert cross join to inner join
+                if join.join_type == JoinType::Cross {
+                    join.join_type = JoinType::Inner;
+                }
 
-                // We have to check if left_type and right_type can be coerced to
-                // a super type. If the coercion is failed, we cannot push the
-                // predicate into join.
-                if let Some(join_key_type) = join_key_type {
-                    if join.join_type == JoinType::Cross {
-                        join.join_type = JoinType::Inner;
-                    }
-                    if join.join_type == JoinType::Inner {
-                        if left.data_type().ne(&right.data_type()) {
-                            let left = wrap_cast(left, &join_key_type);
-                            let right = wrap_cast(right, &join_key_type);
-                            join.left_conditions.push(left);
-                            join.right_conditions.push(right);
-                        } else {
-                            join.left_conditions.push(left.clone());
-                            join.right_conditions.push(right.clone());
-                        }
-                        need_push = true;
-                    }
+                if join.join_type == JoinType::Inner {
+                    join.conditions.push(predicate);
+                    need_push = true;
                 } else {
                     original_predicates.push(predicate);
                 }
@@ -211,7 +176,6 @@ pub fn try_push_down_filter_join(
         result = SExpr::create_unary(
             Filter {
                 predicates: original_predicates,
-                is_having: false,
             }
             .into(),
             result,

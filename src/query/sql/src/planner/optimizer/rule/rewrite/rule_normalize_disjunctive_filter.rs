@@ -154,7 +154,6 @@ impl Rule for RuleNormalizeDisjunctiveFilter {
             state.add_result(SExpr::create_unary(
                 Filter {
                     predicates: split_predicates,
-                    is_having: filter.is_having,
                 }
                 .into(),
                 s_expr.child(0)?.clone(),

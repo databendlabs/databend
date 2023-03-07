@@ -25,6 +25,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_function;
+use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
 use common_expression::ConstantFolder;
 use common_expression::DataBlock;
@@ -47,8 +48,10 @@ use super::Limit;
 use super::Sort;
 use super::TableScan;
 use super::Unnest;
+use crate::binder::wrap_cast_if_needed;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
+use crate::executor::wrap_nullable_column_ref;
 use crate::executor::EvalScalar;
 use crate::executor::FragmentKind;
 use crate::executor::PhysicalPlan;
@@ -61,6 +64,7 @@ use crate::optimizer::SExpr;
 use crate::plans::AggregateMode;
 use crate::plans::AndExpr;
 use crate::plans::Exchange;
+use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::Scan;
@@ -237,13 +241,117 @@ impl PhysicalPlanBuilder {
                         .cloned()
                         .collect::<Vec<_>>(),
                 );
+                let rel_expr = RelExpr::with_s_expr(s_expr);
+                let (mut left_conditions, mut right_conditions): (
+                    Vec<ScalarExpr>,
+                    Vec<ScalarExpr>,
+                ) = join
+                    .get_split_equi_conditions(
+                        &rel_expr.derive_relational_prop_child(0)?,
+                        &rel_expr.derive_relational_prop_child(1)?,
+                    )
+                    .into_iter()
+                    .unzip();
+                let mut non_equi_conditions = join.get_non_equi_conditions(
+                    &rel_expr.derive_relational_prop_child(0)?,
+                    &rel_expr.derive_relational_prop_child(1)?,
+                );
+
+                // Wrap nullable type for outer joins.
+                match join.join_type {
+                    JoinType::Left => {
+                        let columns =
+                            build_schema
+                                .fields()
+                                .iter()
+                                .fold(ColumnSet::new(), |mut acc, v| {
+                                    if let Ok(index) = v.name().parse::<IndexType>() {
+                                        acc.insert(index);
+                                    }
+                                    acc
+                                });
+                        right_conditions.iter_mut().for_each(|v| {
+                            wrap_nullable_column_ref(v, &columns);
+                        });
+                        non_equi_conditions.iter_mut().for_each(|v| {
+                            wrap_nullable_column_ref(v, &columns);
+                        });
+                    }
+                    JoinType::Right => {
+                        let columns =
+                            probe_schema
+                                .fields()
+                                .iter()
+                                .fold(ColumnSet::new(), |mut acc, v| {
+                                    if let Ok(index) = v.name().parse::<IndexType>() {
+                                        acc.insert(index);
+                                    }
+                                    acc
+                                });
+                        left_conditions.iter_mut().for_each(|v| {
+                            wrap_nullable_column_ref(v, &columns);
+                        });
+                        non_equi_conditions.iter_mut().for_each(|v| {
+                            wrap_nullable_column_ref(v, &columns);
+                        });
+                    }
+                    JoinType::Full => {
+                        let columns =
+                            merged_schema
+                                .fields()
+                                .iter()
+                                .fold(ColumnSet::new(), |mut acc, v| {
+                                    if let Ok(index) = v.name().parse::<IndexType>() {
+                                        acc.insert(index);
+                                    }
+                                    acc
+                                });
+                        left_conditions.iter_mut().for_each(|v| {
+                            wrap_nullable_column_ref(v, &columns);
+                        });
+                        right_conditions.iter_mut().for_each(|v| {
+                            wrap_nullable_column_ref(v, &columns);
+                        });
+                        non_equi_conditions.iter_mut().for_each(|v| {
+                            wrap_nullable_column_ref(v, &columns);
+                        });
+                    }
+                    _ => {}
+                }
+
+                // Bump data type of join keys
+                for (left_condition, right_condition) in
+                    left_conditions.iter_mut().zip(right_conditions.iter_mut())
+                {
+                    let left_type = left_condition.as_expr_with_col_index()?.data_type().clone();
+                    let right_type = right_condition
+                        .as_expr_with_col_index()?
+                        .data_type()
+                        .clone();
+                    if left_type != right_type {
+                        let cast_type = common_super_type(
+                            left_type.clone(),
+                            right_type.clone(),
+                            &BUILTIN_FUNCTIONS.default_cast_rules,
+                        )
+                        .ok_or_else(|| {
+                            ErrorCode::IllegalDataType(format!(
+                                "cannot join on types {} and {}",
+                                left_type.sql_name(),
+                                right_type.sql_name()
+                            ))
+                        })?;
+                        *left_condition = wrap_cast_if_needed(left_condition, &cast_type);
+                        *right_condition = wrap_cast_if_needed(right_condition, &cast_type);
+                    }
+                }
+
                 Ok(PhysicalPlan::HashJoin(HashJoin {
                     plan_id: self.next_plan_id(),
                     build: Box::new(build_side),
                     probe: Box::new(probe_side),
                     join_type: join.join_type.clone(),
-                    build_keys: join
-                        .right_conditions
+                    build_keys: right_conditions
                         .iter()
                         .map(|scalar| {
                             let expr =
@@ -260,8 +368,7 @@ impl PhysicalPlanBuilder {
                             Ok(expr.as_remote_expr())
                         })
                         .collect::<Result<_>>()?,
-                    probe_keys: join
-                        .left_conditions
+                    probe_keys: left_conditions
                         .iter()
                         .map(|scalar| {
                             let expr =
@@ -278,10 +385,18 @@ impl PhysicalPlanBuilder {
                             Ok(expr.as_remote_expr())
                         })
                         .collect::<Result<_>>()?,
-                    non_equi_conditions: join
-                        .non_equi_conditions
-                        .iter()
-                        .map(|scalar| {
+                    other_predicate: non_equi_conditions
+                        .into_iter()
+                        .reduce(|acc, v| {
+                            ScalarExpr::AndExpr(AndExpr {
+                                left: Box::new(acc),
+                                right: Box::new(v),
+                                return_type: Box::new(DataType::Nullable(Box::new(
+                                    DataType::Boolean,
+                                ))),
+                            })
+                        })
+                        .map(|scalar| -> Result<RemoteExpr> {
                             let expr =
                                 scalar
                                     .as_expr_with_col_index()?
@@ -295,7 +410,7 @@ impl PhysicalPlanBuilder {
                             );
                             Ok(expr.as_remote_expr())
                         })
-                        .collect::<Result<_>>()?,
+                        .transpose()?,
                     marker_index: join.marker_index,
                     from_correlated_subquery: join.from_correlated_subquery,
 
@@ -329,27 +444,28 @@ impl PhysicalPlanBuilder {
                         let mut before_scalars = vec![];
                         item.scalar
                             .collect_before_unnest_scalars(&mut before_scalars);
-                        let before =
-                            before_scalars
-                                .iter()
-                                .map(|scalar| {
-                                    let expr = scalar.as_expr_with_col_index()?.project_column_ref(
-                                        |index| input_schema.index_of(&index.to_string()).unwrap(),
-                                    );
-                                    let (expr, _) = ConstantFolder::fold(
-                                        &expr,
-                                        self.ctx.get_function_context()?,
-                                        &BUILTIN_FUNCTIONS,
-                                    );
-                                    Ok((expr.as_remote_expr(), item.index))
-                                })
-                                .collect::<Result<Vec<_>>>()?;
+                        let before = before_scalars
+                            .iter()
+                            .map(|scalar| {
+                                let expr = scalar
+                                    .as_expr_with_col_index_by_schema(&input_schema)?
+                                    .project_column_ref(|index| {
+                                        input_schema.index_of(&index.to_string()).unwrap()
+                                    });
+                                let (expr, _) = ConstantFolder::fold(
+                                    &expr,
+                                    self.ctx.get_function_context()?,
+                                    &BUILTIN_FUNCTIONS,
+                                );
+                                Ok((expr.as_remote_expr(), item.index))
+                            })
+                            .collect::<Result<Vec<_>>>()?;
                         before_exprs.extend(before);
 
                         // 1.2 Collect the after unnest scalars, and build into `RemoteExpr`.
                         let expr = item
                             .scalar
-                            .as_expr_with_col_index()?
+                            .as_expr_with_col_index_by_schema(&input_schema)?
                             .project_column_ref_with_unnest_offset(
                                 |index| input_schema.index_of(&index.to_string()).unwrap(),
                                 &mut unnest_offset,
@@ -408,12 +524,11 @@ impl PhysicalPlanBuilder {
                         .predicates
                         .iter()
                         .map(|scalar| {
-                            let expr =
-                                scalar
-                                    .as_expr_with_col_index()?
-                                    .project_column_ref(|index| {
-                                        input_schema.index_of(&index.to_string()).unwrap()
-                                    });
+                            let expr = scalar
+                                .as_expr_with_col_index_by_schema(&input_schema)?
+                                .project_column_ref(|index| {
+                                    input_schema.index_of(&index.to_string()).unwrap()
+                                });
                             let expr = cast_expr_to_non_null_boolean(expr)?;
                             let (expr, _) = ConstantFolder::fold(
                                 &expr,
@@ -652,12 +767,11 @@ impl PhysicalPlanBuilder {
                     Exchange::Random => FragmentKind::Init,
                     Exchange::Hash(scalars) => {
                         for scalar in scalars {
-                            let expr =
-                                scalar
-                                    .as_expr_with_col_index()?
-                                    .project_column_ref(|index| {
-                                        input_schema.index_of(&index.to_string()).unwrap()
-                                    });
+                            let expr = scalar
+                                .as_expr_with_col_index_by_schema(&input_schema)?
+                                .project_column_ref(|index| {
+                                    input_schema.index_of(&index.to_string()).unwrap()
+                                });
                             let (expr, _) = ConstantFolder::fold(
                                 &expr,
                                 self.ctx.get_function_context()?,
@@ -699,6 +813,7 @@ impl PhysicalPlanBuilder {
                 }))
             }
             RelOperator::RuntimeFilterSource(op) => {
+                let mut op = op.clone();
                 let left_side = Box::new(self.build(s_expr.child(0)?).await?);
                 let left_schema = left_side.output_schema()?;
                 let right_side = Box::new(self.build(s_expr.child(1)?).await?);
@@ -707,13 +822,42 @@ impl PhysicalPlanBuilder {
                 let mut right_runtime_filters = BTreeMap::new();
                 for (left, right) in op
                     .left_runtime_filters
-                    .iter()
-                    .zip(op.right_runtime_filters.iter())
+                    .iter_mut()
+                    .zip(op.right_runtime_filters.iter_mut())
                 {
+                    let left_data_type = left
+                        .1
+                        .as_expr_with_col_index_by_schema(&left_schema)?
+                        .data_type()
+                        .clone();
+                    let right_data_type = right
+                        .1
+                        .as_expr_with_col_index_by_schema(&right_schema)?
+                        .data_type()
+                        .clone();
+
+                    // Cast left filter and right filter to common type.
+                    if left_data_type != right_data_type {
+                        let cast_type = common_super_type(
+                            left_data_type.clone(),
+                            right_data_type.clone(),
+                            &BUILTIN_FUNCTIONS.default_cast_rules,
+                        )
+                        .ok_or_else(|| {
+                            ErrorCode::IllegalDataType(format!(
+                                "cannot join on types {} and {}",
+                                left_data_type.sql_name(),
+                                right_data_type.sql_name()
+                            ))
+                        })?;
+                        *left.1 = wrap_cast_if_needed(left.1, &cast_type);
+                        *right.1 = wrap_cast_if_needed(right.1, &cast_type);
+                    }
+
                     left_runtime_filters.insert(
                         left.0.clone(),
                         left.1
-                            .as_expr_with_col_index()?
+                            .as_expr_with_col_index_by_schema(&left_schema)?
                             .project_column_ref(|index| {
                                 left_schema.index_of(&index.to_string()).unwrap()
                             })
@@ -723,7 +867,7 @@ impl PhysicalPlanBuilder {
                         right.0.clone(),
                         right
                             .1
-                            .as_expr_with_col_index()?
+                            .as_expr_with_col_index_by_schema(&right_schema)?
                             .project_column_ref(|index| {
                                 right_schema.index_of(&index.to_string()).unwrap()
                             })

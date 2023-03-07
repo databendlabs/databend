@@ -484,7 +484,7 @@ fn hash_join_to_format_tree(
         .collect::<Vec<_>>()
         .join(", ");
     let filters = plan
-        .non_equi_conditions
+        .other_predicate
         .iter()
         .map(|filter| filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
         .collect::<Vec<_>>()

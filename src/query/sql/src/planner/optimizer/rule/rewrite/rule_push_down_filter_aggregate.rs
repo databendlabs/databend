@@ -86,67 +86,63 @@ impl Rule for RulePushDownFilterAggregate {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> common_exception::Result<()> {
         let filter: Filter = s_expr.plan().clone().try_into()?;
-        if filter.is_having {
-            let agg_parent = s_expr.child(0)?;
-            let agg_parent_plan: Aggregate = agg_parent.plan().clone().try_into()?;
-            let agg_child = agg_parent.child(0)?;
-            let agg_child_plan: Aggregate = agg_child.plan().clone().try_into()?;
-            if agg_parent_plan.mode == AggregateMode::Final
-                && agg_child_plan.mode == AggregateMode::Partial
-            {
-                let mut push_predicates = vec![];
-                let mut remaining_predicates = vec![];
-                for predicate in filter.predicates {
-                    let used_columns = predicate.used_columns();
-                    let mut pushable = true;
-                    for col in used_columns {
-                        if !agg_parent_plan.group_columns()?.contains(&col) {
-                            pushable = false;
-                            break;
-                        }
-                    }
-                    if pushable {
-                        push_predicates.push(predicate);
-                    } else {
-                        remaining_predicates.push(predicate);
+        let agg_parent = s_expr.child(0)?;
+        let agg_parent_plan: Aggregate = agg_parent.plan().clone().try_into()?;
+        let agg_child = agg_parent.child(0)?;
+        let agg_child_plan: Aggregate = agg_child.plan().clone().try_into()?;
+        if agg_parent_plan.mode == AggregateMode::Final
+            && agg_child_plan.mode == AggregateMode::Partial
+        {
+            let mut push_predicates = vec![];
+            let mut remaining_predicates = vec![];
+            for predicate in filter.predicates {
+                let used_columns = predicate.used_columns();
+                let mut pushable = true;
+                for col in used_columns {
+                    if !agg_parent_plan.group_columns()?.contains(&col) {
+                        pushable = false;
+                        break;
                     }
                 }
-                let mut result: SExpr;
-                // No change since nothing can be pushed down.
-                if push_predicates.is_empty() {
-                    result = s_expr.clone();
+                if pushable {
+                    push_predicates.push(predicate);
                 } else {
-                    let filter_push_down_expr = SExpr::create_unary(
-                        RelOperator::Filter(Filter {
-                            predicates: push_predicates,
-                            is_having: false,
-                        }),
-                        agg_child.child(0)?.clone(),
-                    );
-                    let agg_with_filter_push_down_expr = SExpr::create_unary(
-                        RelOperator::Aggregate(agg_parent_plan),
-                        SExpr::create_unary(
-                            RelOperator::Aggregate(agg_child_plan),
-                            filter_push_down_expr,
-                        ),
-                    );
-                    // All filters are pushed down.
-                    if remaining_predicates.is_empty() {
-                        result = agg_with_filter_push_down_expr;
-                    } else {
-                        // Partial filter can be pushed down.
-                        result = SExpr::create_unary(
-                            RelOperator::Filter(Filter {
-                                predicates: remaining_predicates,
-                                is_having: true,
-                            }),
-                            agg_with_filter_push_down_expr,
-                        );
-                    }
+                    remaining_predicates.push(predicate);
                 }
-                result.set_applied_rule(&self.id);
-                state.add_result(result);
             }
+            let mut result: SExpr;
+            // No change since nothing can be pushed down.
+            if push_predicates.is_empty() {
+                result = s_expr.clone();
+            } else {
+                let filter_push_down_expr = SExpr::create_unary(
+                    RelOperator::Filter(Filter {
+                        predicates: push_predicates,
+                    }),
+                    agg_child.child(0)?.clone(),
+                );
+                let agg_with_filter_push_down_expr = SExpr::create_unary(
+                    RelOperator::Aggregate(agg_parent_plan),
+                    SExpr::create_unary(
+                        RelOperator::Aggregate(agg_child_plan),
+                        filter_push_down_expr,
+                    ),
+                );
+                // All filters are pushed down.
+                if remaining_predicates.is_empty() {
+                    result = agg_with_filter_push_down_expr;
+                } else {
+                    // Partial filter can be pushed down.
+                    result = SExpr::create_unary(
+                        RelOperator::Filter(Filter {
+                            predicates: remaining_predicates,
+                        }),
+                        agg_with_filter_push_down_expr,
+                    );
+                }
+            }
+            result.set_applied_rule(&self.id);
+            state.add_result(result);
         }
         Ok(())
     }

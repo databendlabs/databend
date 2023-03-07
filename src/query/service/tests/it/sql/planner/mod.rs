@@ -13,5 +13,4 @@
 // limitations under the License.
 
 mod builders;
-mod format;
 mod semantic;

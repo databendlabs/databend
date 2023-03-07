@@ -17,9 +17,7 @@ use std::collections::HashSet;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
 
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
@@ -144,9 +142,10 @@ impl SubqueryRewriter {
 
         // Second, we will check if the filter only contains equi-predicates.
         // This is not necessary, but it is a good heuristic for most cases.
-        let mut left_conditions = vec![];
-        let mut right_conditions = vec![];
-        let mut non_equi_conditions = vec![];
+        // let mut left_conditions = vec![];
+        // let mut right_conditions = vec![];
+        // let mut non_equi_conditions = vec![];
+        let mut conditions = vec![];
         let mut left_filters = vec![];
         let mut right_filters = vec![];
         for pred in filter.predicates.iter() {
@@ -159,34 +158,14 @@ impl SubqueryRewriter {
                     right_filters.push(filter.clone());
                 }
 
-                JoinPredicate::Other(pred) => {
-                    non_equi_conditions.push(pred.clone());
-                }
-
-                JoinPredicate::Both { left, right } => {
-                    if left.data_type().eq(&right.data_type()) {
-                        left_conditions.push(left.clone());
-                        right_conditions.push(right.clone());
-                        continue;
-                    }
-                    let join_type = common_super_type(
-                        left.data_type(),
-                        right.data_type(),
-                        &BUILTIN_FUNCTIONS.default_cast_rules,
-                    )
-                    .ok_or_else(|| ErrorCode::Internal("Cannot find common type"))?;
-                    let left = wrap_cast(left, &join_type);
-                    let right = wrap_cast(right, &join_type);
-                    left_conditions.push(left);
-                    right_conditions.push(right);
+                _ => {
+                    conditions.push(pred.clone());
                 }
             }
         }
 
         let join = Join {
-            left_conditions,
-            right_conditions,
-            non_equi_conditions,
+            conditions,
             join_type: match &subquery.typ {
                 SubqueryType::Any | SubqueryType::All | SubqueryType::Scalar => {
                     return Ok(None);
@@ -205,7 +184,6 @@ impl SubqueryRewriter {
             left_child = SExpr::create_unary(
                 Filter {
                     predicates: left_filters,
-                    is_having: false,
                 }
                 .into(),
                 left_child,
@@ -224,7 +202,6 @@ impl SubqueryRewriter {
             right_child = SExpr::create_unary(
                 Filter {
                     predicates: right_filters,
-                    is_having: false,
                 }
                 .into(),
                 right_child,
@@ -249,17 +226,9 @@ impl SubqueryRewriter {
                 let flatten_plan =
                     self.flatten(&subquery.subquery, &correlated_columns, flatten_info, false)?;
                 // Construct single join
-                let mut left_conditions = Vec::with_capacity(correlated_columns.len());
-                let mut right_conditions = Vec::with_capacity(correlated_columns.len());
-                self.add_equi_conditions(
-                    &correlated_columns,
-                    &mut right_conditions,
-                    &mut left_conditions,
-                )?;
+                let conditions = self.get_correlated_conditions(&correlated_columns)?;
                 let join_plan = Join {
-                    left_conditions,
-                    right_conditions,
-                    non_equi_conditions: vec![],
+                    conditions,
                     join_type: JoinType::Single,
                     marker_index: None,
                     from_correlated_subquery: true,
@@ -278,13 +247,7 @@ impl SubqueryRewriter {
                 let flatten_plan =
                     self.flatten(&subquery.subquery, &correlated_columns, flatten_info, false)?;
                 // Construct mark join
-                let mut left_conditions = Vec::with_capacity(correlated_columns.len());
-                let mut right_conditions = Vec::with_capacity(correlated_columns.len());
-                self.add_equi_conditions(
-                    &correlated_columns,
-                    &mut left_conditions,
-                    &mut right_conditions,
-                )?;
+                let conditions = self.get_correlated_conditions(&correlated_columns)?;
 
                 let marker_index = if let Some(idx) = subquery.projection_index {
                     idx
@@ -295,9 +258,7 @@ impl SubqueryRewriter {
                     )
                 };
                 let join_plan = Join {
-                    left_conditions: right_conditions,
-                    right_conditions: left_conditions,
-                    non_equi_conditions: vec![],
+                    conditions,
                     join_type: JoinType::RightMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
@@ -310,13 +271,7 @@ impl SubqueryRewriter {
                 let correlated_columns = subquery.outer_columns.clone();
                 let flatten_plan =
                     self.flatten(&subquery.subquery, &correlated_columns, flatten_info, false)?;
-                let mut left_conditions = Vec::with_capacity(correlated_columns.len());
-                let mut right_conditions = Vec::with_capacity(correlated_columns.len());
-                self.add_equi_conditions(
-                    &correlated_columns,
-                    &mut left_conditions,
-                    &mut right_conditions,
-                )?;
+                let conditions = self.get_correlated_conditions(&correlated_columns)?;
                 let output_column = subquery.output_column.clone();
                 let column_name = format!("subquery_{}", output_column.index);
                 let right_condition = wrap_cast(
@@ -336,7 +291,7 @@ impl SubqueryRewriter {
                 let op = subquery.compare_op.as_ref().unwrap().clone();
                 // Make <child_expr op right_condition> as non_equi_conditions even if op is equal operator.
                 // Because it's not null-safe.
-                let non_equi_conditions = vec![ScalarExpr::ComparisonExpr(ComparisonExpr {
+                let _non_equi_conditions = vec![ScalarExpr::ComparisonExpr(ComparisonExpr {
                     op,
                     left: Box::new(child_expr),
                     right: Box::new(right_condition),
@@ -351,9 +306,7 @@ impl SubqueryRewriter {
                     )
                 };
                 let mark_join = Join {
-                    left_conditions: right_conditions,
-                    right_conditions: left_conditions,
-                    non_equi_conditions,
+                    conditions,
                     join_type: JoinType::RightMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
@@ -425,9 +378,7 @@ impl SubqueryRewriter {
             );
             // Todo(xudong963): Wrap logical get with distinct to eliminate duplicates rows.
             let cross_join = Join {
-                left_conditions: vec![],
-                right_conditions: vec![],
-                non_equi_conditions: vec![],
+                conditions: vec![],
                 join_type: JoinType::Cross,
                 marker_index: None,
                 from_correlated_subquery: false,
@@ -509,11 +460,7 @@ impl SubqueryRewriter {
                     predicates.push(self.flatten_scalar(predicate, correlated_columns)?);
                 }
 
-                let filter_plan = Filter {
-                    predicates,
-                    is_having: filter.is_having,
-                }
-                .into();
+                let filter_plan = Filter { predicates }.into();
                 Ok(SExpr::create_unary(filter_plan, flatten_plan))
             }
             RelOperator::Join(join) => {
@@ -539,9 +486,7 @@ impl SubqueryRewriter {
                 )?;
                 Ok(SExpr::create_binary(
                     Join {
-                        left_conditions: join.left_conditions.clone(),
-                        right_conditions: join.right_conditions.clone(),
-                        non_equi_conditions: join.non_equi_conditions.clone(),
+                        conditions: join.conditions.clone(),
                         join_type: join.join_type.clone(),
                         marker_index: join.marker_index,
                         from_correlated_subquery: false,
@@ -785,12 +730,11 @@ impl SubqueryRewriter {
         }
     }
 
-    fn add_equi_conditions(
+    fn get_correlated_conditions(
         &self,
         correlated_columns: &HashSet<IndexType>,
-        left_conditions: &mut Vec<ScalarExpr>,
-        right_conditions: &mut Vec<ScalarExpr>,
-    ) -> Result<()> {
+    ) -> Result<Vec<ScalarExpr>> {
+        let mut conditions = vec![];
         for correlated_column in correlated_columns.iter() {
             let metadata = self.metadata.read();
             let column_entry = metadata.column(*correlated_column);
@@ -821,10 +765,15 @@ impl SubqueryRewriter {
                     visibility: Visibility::Visible,
                 },
             });
-            left_conditions.push(left_column);
-            right_conditions.push(right_column);
+            let condition = ScalarExpr::ComparisonExpr(ComparisonExpr {
+                op: ComparisonOp::Equal,
+                left: Box::new(left_column),
+                right: Box::new(right_column),
+                return_type: Box::new(DataType::Boolean),
+            });
+            conditions.push(condition);
         }
-        Ok(())
+        Ok(conditions)
     }
 
     // Check if need to join outer and inner table

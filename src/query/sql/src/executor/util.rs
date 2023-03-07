@@ -22,7 +22,9 @@ use common_functions::scalars::BUILTIN_FUNCTIONS;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
+use crate::ColumnSet;
 use crate::IndexType;
+use crate::ScalarExpr;
 
 /// Format the display name and index of a column into `"{display_name}"_index` format.
 pub fn format_field_name(display_name: &str, index: IndexType) -> String {
@@ -71,5 +73,51 @@ pub fn cast_expr_to_non_null_boolean<Index: ColumnIndex>(expr: Expr<Index>) -> R
             )?],
             &BUILTIN_FUNCTIONS,
         )
+    }
+}
+
+// Wrap the column references in a `ScalarExpr` with nullable type.
+// For example, `a` with physical type `Int` will be wrapped to `Nullable(Int)`.
+// This is used to support outer joins.
+pub fn wrap_nullable_column_ref(scalar: &mut ScalarExpr, columns: &ColumnSet) {
+    match scalar {
+        ScalarExpr::BoundColumnRef(column_ref) => {
+            if columns.contains(&column_ref.column.index)
+                && !column_ref.column.data_type.is_nullable()
+            {
+                column_ref.column.data_type =
+                    Box::new(DataType::Nullable(column_ref.column.data_type.clone()));
+            }
+        }
+        ScalarExpr::ConstantExpr(_) => {}
+        ScalarExpr::AndExpr(scalar) => {
+            wrap_nullable_column_ref(&mut scalar.left, columns);
+            wrap_nullable_column_ref(&mut scalar.right, columns);
+        }
+        ScalarExpr::OrExpr(scalar) => {
+            wrap_nullable_column_ref(&mut scalar.left, columns);
+            wrap_nullable_column_ref(&mut scalar.right, columns);
+        }
+        ScalarExpr::NotExpr(scalar) => {
+            wrap_nullable_column_ref(&mut scalar.argument, columns);
+        }
+        ScalarExpr::ComparisonExpr(scalar) => {
+            wrap_nullable_column_ref(&mut scalar.left, columns);
+            wrap_nullable_column_ref(&mut scalar.right, columns);
+        }
+        ScalarExpr::FunctionCall(scalar) => {
+            for arg in scalar.arguments.iter_mut() {
+                wrap_nullable_column_ref(arg, columns);
+            }
+        }
+        ScalarExpr::Unnest(scalar) => {
+            wrap_nullable_column_ref(&mut scalar.argument, columns);
+        }
+        ScalarExpr::CastExpr(scalar) => {
+            wrap_nullable_column_ref(&mut scalar.argument, columns);
+        }
+
+        ScalarExpr::AggregateFunction(_) => {}
+        ScalarExpr::SubqueryExpr(_) => {}
     }
 }
