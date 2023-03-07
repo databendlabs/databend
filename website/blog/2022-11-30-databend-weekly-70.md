@@ -87,7 +87,7 @@ Stay connected with the latest news about Databend.
 
 #### Infer Schema at a Glance
 
-You usually need to create a table before loading data from a file stored on a stage or somewhere. Unfortunately, sometimes you might not know the file schema to create the table or are unable to input the schema due to its complexity. 
+You usually need to create a table before loading data from a file stored on a stage or somewhere. Unfortunately, sometimes you might not know the file schema to create the table or are unable to input the schema due to its complexity.
 
 Introducing the capability to infer schema from an existing file will make the work much easier. You will even be able to query data directly from a stage using a SELECT statement like `select * from @my_stage`.
 
@@ -169,14 +169,3 @@ Thanks a lot to the contributors for their excellent work this week.
 [<img alt="xudong963" src="https://avatars.githubusercontent.com/u/41979257?v=4&s=117" width="117" />](https://github.com/xudong963) |[<img alt="youngsofun" src="https://avatars.githubusercontent.com/u/5782159?v=4&s=117" width="117" />](https://github.com/youngsofun) |[<img alt="yufan022" src="https://avatars.githubusercontent.com/u/30121694?v=4&s=117" width="117" />](https://github.com/yufan022) |[<img alt="zhang2014" src="https://avatars.githubusercontent.com/u/8087042?v=4&s=117" width="117" />](https://github.com/zhang2014) |[<img alt="zhyass" src="https://avatars.githubusercontent.com/u/34016424?v=4&s=117" width="117" />](https://github.com/zhyass) |
 :---: |:---: |:---: |:---: |:---: |
 [xudong963](https://github.com/xudong963) |[youngsofun](https://github.com/youngsofun) |[yufan022](https://github.com/yufan022) |[zhang2014](https://github.com/zhang2014) |[zhyass](https://github.com/zhyass) |
-
-## Connect With Us
-
-We'd love to hear from you. Feel free to run the code and see if Databend works for you. Submit an issue with your problem if you need help.
-
-[DatafuseLabs Community](https://github.com/datafuselabs/) is open to everyone who loves data warehouses. Please join the community and share your thoughts.
-
-- [Databend Website](https://databend.rs)
-- [GitHub Discussions](https://github.com/datafuselabs/databend/discussions) (Feature/Bug reports, Contributions)
-- [Twitter](https://twitter.com/DatabendLabs) (Get the news fast)
-- [Slack Channel](https://link.databend.rs/join-slack) (For live discussion with the Community)

@@ -28,7 +28,7 @@ use common_exception::Result;
 use common_expression::infer_table_schema;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
-use common_meta_app::principal::UserStageInfo;
+use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
@@ -64,7 +64,7 @@ impl CopyInterpreter {
 
     async fn build_copy_into_stage_pipeline(
         &self,
-        stage: &UserStageInfo,
+        stage: &StageInfo,
         path: &str,
         query: &Plan,
     ) -> Result<PipelineBuildResult> {
@@ -104,7 +104,7 @@ impl CopyInterpreter {
         let table_schema = infer_table_schema(&data_schema)?;
         let stage_table_info = StageTableInfo {
             schema: table_schema,
-            user_stage_info: stage.clone(),
+            stage_info: stage.clone(),
             path: path.to_string(),
             files: vec![],
             pattern: "".to_string(),
@@ -246,7 +246,7 @@ impl CopyInterpreter {
 
     async fn try_purge_files(
         ctx: Arc<QueryContext>,
-        stage_info: &UserStageInfo,
+        stage_info: &StageInfo,
         stage_file_infos: &[StageFileInfo],
     ) {
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
@@ -331,7 +331,7 @@ impl CopyInterpreter {
         stage_table.read_data(table_ctx, &read_source_plan, &mut build_res.main_pipeline)?;
 
         // Build Limit pipeline.
-        let limit = stage_table_info.user_stage_info.copy_options.size_limit;
+        let limit = stage_table_info.stage_info.copy_options.size_limit;
         if limit > 0 {
             build_res.main_pipeline.resize(1)?;
             build_res.main_pipeline.add_transform(
@@ -368,7 +368,7 @@ impl CopyInterpreter {
                 // capture out variable
                 let ctx = ctx.clone();
                 let to_table = to_table.clone();
-                let stage_info = stage_table_info_clone.user_stage_info.clone();
+                let stage_info = stage_table_info_clone.stage_info.clone();
                 let all_source_files = all_source_file_infos.clone();
                 let need_copied_files = need_copied_file_infos.clone();
                 let tenant = tenant.clone();

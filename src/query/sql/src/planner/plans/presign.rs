@@ -16,7 +16,7 @@ use common_expression::types::DataType;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
-use common_meta_app::principal::UserStageInfo;
+use common_meta_app::principal::StageInfo;
 use time::Duration;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,7 +27,7 @@ pub enum PresignAction {
 
 #[derive(Debug, Clone)]
 pub struct PresignPlan {
-    pub stage: Box<UserStageInfo>,
+    pub stage: Box<StageInfo>,
     pub path: String,
     pub action: PresignAction,
     pub expire: Duration,

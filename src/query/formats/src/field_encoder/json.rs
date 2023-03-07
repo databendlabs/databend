@@ -14,6 +14,7 @@
 
 use common_expression::types::array::ArrayColumn;
 use common_expression::types::decimal::DecimalColumn;
+use common_expression::types::string::StringColumn;
 use common_expression::types::ValueType;
 use common_expression::Column;
 use common_io::constants::FALSE_BYTES_LOWER;
@@ -22,12 +23,10 @@ use common_io::constants::TRUE_BYTES_LOWER;
 
 use crate::field_encoder::helpers::write_json_string;
 use crate::field_encoder::FieldEncoderRowBased;
-use crate::field_encoder::FieldEncoderValues;
 use crate::CommonSettings;
 use crate::FileFormatOptionsExt;
 
 pub struct FieldEncoderJSON {
-    pub nested: FieldEncoderValues,
     pub common_settings: CommonSettings,
     pub quote_denormals: bool,
     pub escape_forward_slashes: bool,
@@ -36,7 +35,6 @@ pub struct FieldEncoderJSON {
 impl FieldEncoderJSON {
     pub fn create(options: &FileFormatOptionsExt) -> Self {
         FieldEncoderJSON {
-            nested: FieldEncoderValues::create(options),
             common_settings: CommonSettings {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
@@ -71,16 +69,36 @@ impl FieldEncoderRowBased for FieldEncoderJSON {
         }
     }
 
+    fn write_variant(
+        &self,
+        column: &StringColumn,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+        _raw: bool,
+    ) {
+        let v = unsafe { column.index_unchecked(row_index) };
+        let s = jsonb::to_string(v);
+        self.write_string_inner(s.as_bytes(), out_buf, true);
+    }
+
     fn write_array<T: ValueType>(
         &self,
         column: &ArrayColumn<T>,
         row_index: usize,
         out_buf: &mut Vec<u8>,
-        raw: bool,
+        _raw: bool,
     ) {
-        let mut buf = vec![];
-        self.nested.write_array(column, row_index, &mut buf, false);
-        self.write_string_inner(&buf, out_buf, raw)
+        let start = unsafe { *column.offsets.get_unchecked(row_index) as usize };
+        let end = unsafe { *column.offsets.get_unchecked(row_index + 1) as usize };
+        out_buf.push(b'[');
+        let inner = &T::upcast_column(column.values.clone());
+        for i in start..end {
+            if i != start {
+                out_buf.extend_from_slice(b",");
+            }
+            self.write_field(inner, i, out_buf, false);
+        }
+        out_buf.push(b']');
     }
 
     fn write_map<T: ValueType>(
@@ -88,23 +106,45 @@ impl FieldEncoderRowBased for FieldEncoderJSON {
         column: &ArrayColumn<T>,
         row_index: usize,
         out_buf: &mut Vec<u8>,
-        raw: bool,
+        _raw: bool,
     ) {
-        let mut buf = vec![];
-        self.nested.write_map(column, row_index, &mut buf, false);
-        self.write_string_inner(&buf, out_buf, raw)
+        let start = unsafe { *column.offsets.get_unchecked(row_index) as usize };
+        let end = unsafe { *column.offsets.get_unchecked(row_index + 1) as usize };
+        out_buf.push(b'{');
+        let inner = &T::upcast_column(column.values.clone());
+        match inner {
+            Column::Tuple { fields, .. } => {
+                for i in start..end {
+                    if i != start {
+                        out_buf.extend_from_slice(b",");
+                    }
+                    self.write_field(&fields[0], i, out_buf, false);
+                    out_buf.extend_from_slice(b":");
+                    self.write_field(&fields[1], i, out_buf, false);
+                }
+            }
+            _ => unreachable!(),
+        }
+        out_buf.push(b'}');
     }
 
-    fn write_tuple(&self, columns: &[Column], row_index: usize, out_buf: &mut Vec<u8>, raw: bool) {
-        let mut buf = vec![];
-        self.nested.write_tuple(columns, row_index, &mut buf, false);
-        self.write_string_inner(&buf, out_buf, raw)
+    fn write_tuple(&self, columns: &[Column], row_index: usize, out_buf: &mut Vec<u8>, _raw: bool) {
+        // write tuple as JSON Object
+        out_buf.push(b'{');
+        for (i, inner) in columns.iter().enumerate() {
+            if i > 0 {
+                out_buf.extend_from_slice(b",");
+            }
+            let key = format!("{}", i + 1);
+            self.write_string_inner(key.as_bytes(), out_buf, false);
+            out_buf.extend_from_slice(b":");
+            self.write_field(inner, row_index, out_buf, false);
+        }
+        out_buf.push(b'}');
     }
 
     fn write_decimal(&self, column: &DecimalColumn, row_index: usize, out_buf: &mut Vec<u8>) {
         let data = column.index(row_index).unwrap().to_string();
-        out_buf.push(b'"');
         out_buf.extend_from_slice(data.as_bytes());
-        out_buf.push(b'"');
     }
 }

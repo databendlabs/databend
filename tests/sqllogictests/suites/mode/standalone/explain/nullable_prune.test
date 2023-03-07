@@ -46,7 +46,7 @@ query T
 explain select * from t_nullable_prune where a is null
 ----
 Filter
-├── filters: [not(is_not_null(t_nullable_prune.a (#0)))]
+├── filters: [NOT is_not_null(t_nullable_prune.a (#0))]
 ├── estimated rows: 4.00
 └── TableScan
     ├── table: default.default.t_nullable_prune
@@ -55,7 +55,7 @@ Filter
     ├── partitions total: 2
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    ├── push downs: [filters: [not(is_not_null(t_nullable_prune.a (#0)))], limit: NONE]
+    ├── push downs: [filters: [NOT is_not_null(t_nullable_prune.a (#0))], limit: NONE]
     └── estimated rows: 6.00
 
 statement ok

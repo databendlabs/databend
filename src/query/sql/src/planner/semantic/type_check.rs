@@ -733,7 +733,7 @@ impl<'a> TypeChecker<'a> {
                     let params = params
                         .iter()
                         .map(|literal| match literal {
-                            Literal::Integer(n) => Ok(*n as usize),
+                            Literal::UInt64(n) => Ok(*n as usize),
                             lit => Err(ErrorCode::SemanticError(format!(
                                 "Invalid parameter {lit} for scalar function"
                             ))
@@ -833,7 +833,7 @@ impl<'a> TypeChecker<'a> {
                         MapAccessor::Period { key } | MapAccessor::Colon { key } => {
                             Literal::String(key.name.clone())
                         }
-                        MapAccessor::PeriodNumber { key } => Literal::Integer(*key),
+                        MapAccessor::PeriodNumber { key } => Literal::UInt64(*key),
                         _ => {
                             return Err(ErrorCode::SemanticError(format!(
                                 "Unsupported accessor: {:?}",
@@ -1658,8 +1658,8 @@ impl<'a> TypeChecker<'a> {
                         Expr::BinaryOp {
                             op, left, right, ..
                         } => {
-                            if let Expr::Literal {span:_, lit:Literal::Integer(l)} = **left
-                                && let Expr::Literal {span:_, lit:Literal::Integer(r)} = **right {
+                            if let Expr::Literal {span:_, lit:Literal::UInt64(l)} = **left
+                                && let Expr::Literal {span:_, lit:Literal::UInt64(r)} = **right {
                                 match op {
                                     BinaryOperator::Plus => (l + r) as i32,
                                     BinaryOperator::Minus => (l - r) as i32,
@@ -1670,7 +1670,7 @@ impl<'a> TypeChecker<'a> {
                         Expr::UnaryOp { op, expr, .. } => {
                             if let Expr::Literal {
                                 span: _,
-                                lit: Literal::Integer(i),
+                                lit: Literal::UInt64(i),
                             } = **expr
                             {
                                 match op {
@@ -1683,7 +1683,7 @@ impl<'a> TypeChecker<'a> {
                             }
                         }
                         Expr::Literal {
-                            lit: Literal::Integer(i),
+                            lit: Literal::UInt64(i),
                             ..
                         } => *i as i32,
                         _ => -1,
@@ -1715,7 +1715,7 @@ impl<'a> TypeChecker<'a> {
                 let box (inner_expr, inner_type) = inner_res.unwrap();
                 Some(match inner_type {
                     DataType::Array(inner) => {
-                        let return_type = Box::new(inner.wrap_nullable());
+                        let return_type = Box::new(inner.unnest().wrap_nullable());
                         Ok(Box::new((
                             ScalarExpr::Unnest(Unnest {
                                 return_type,
@@ -1774,7 +1774,7 @@ impl<'a> TypeChecker<'a> {
         required_type: Option<DataType>,
     ) -> Result<Box<(common_expression::Literal, DataType)>> {
         let value = match literal {
-            Literal::Integer(uint) => {
+            Literal::UInt64(uint) => {
                 // how to use match range?
                 if *uint <= u8::MAX as u64 {
                     common_expression::Literal::UInt8(*uint as u8)
@@ -1786,6 +1786,35 @@ impl<'a> TypeChecker<'a> {
                     common_expression::Literal::UInt64(*uint)
                 }
             }
+            Literal::Int64(int) => {
+                if *int >= i8::MIN as i64 && *int <= i8::MAX as i64 {
+                    common_expression::Literal::Int8(*int as i8)
+                } else if *int >= i16::MIN as i64 && *int <= i16::MAX as i64 {
+                    common_expression::Literal::Int16(*int as i16)
+                } else if *int >= i32::MIN as i64 && *int <= i32::MAX as i64 {
+                    common_expression::Literal::Int32(*int as i32)
+                } else {
+                    common_expression::Literal::Int64(*int)
+                }
+            }
+            Literal::Decimal128 {
+                value,
+                precision,
+                scale,
+            } => common_expression::Literal::Decimal128 {
+                value: *value,
+                precision: *precision,
+                scale: *scale,
+            },
+            Literal::Decimal256 {
+                value,
+                precision,
+                scale,
+            } => common_expression::Literal::Decimal256 {
+                value: *value,
+                precision: *precision,
+                scale: *scale,
+            },
             Literal::Float(float) => common_expression::Literal::Float64(F64::from(*float)),
             Literal::String(string) => {
                 common_expression::Literal::String(string.as_bytes().to_vec())
@@ -1997,7 +2026,7 @@ impl<'a> TypeChecker<'a> {
             } = table_data_type
             {
                 let idx = match path_lit {
-                    Literal::Integer(idx) => {
+                    Literal::UInt64(idx) => {
                         if idx == 0 {
                             return Err(ErrorCode::SemanticError(
                                 "tuple index is starting from 1, but 0 is found".to_string(),
@@ -2076,7 +2105,7 @@ impl<'a> TypeChecker<'a> {
             {
                 let path = paths.pop_front().unwrap();
                 match path {
-                    Literal::Integer(idx) => {
+                    Literal::UInt64(idx) => {
                         if idx == 0 {
                             return Err(ErrorCode::SemanticError(
                                 "tuple index is starting from 1, but 0 is found".to_string(),

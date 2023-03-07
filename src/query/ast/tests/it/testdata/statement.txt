@@ -410,7 +410,7 @@ CreateTable(
                                 span: Some(
                                     59..60,
                                 ),
-                                lit: Integer(
+                                lit: UInt64(
                                     1,
                                 ),
                             },
@@ -484,7 +484,7 @@ CreateTable(
                                 span: Some(
                                     50..51,
                                 ),
-                                lit: Integer(
+                                lit: UInt64(
                                     1,
                                 ),
                             },
@@ -1294,7 +1294,7 @@ CreateView(
                                     span: Some(
                                         33..34,
                                     ),
-                                    lit: Integer(
+                                    lit: UInt64(
                                         3,
                                     ),
                                 },
@@ -1327,7 +1327,7 @@ CreateView(
                                     span: Some(
                                         53..57,
                                     ),
-                                    lit: Integer(
+                                    lit: UInt64(
                                         1000,
                                     ),
                                 },
@@ -1403,7 +1403,7 @@ AlterView(
                                     span: Some(
                                         32..33,
                                     ),
-                                    lit: Integer(
+                                    lit: UInt64(
                                         3,
                                     ),
                                 },
@@ -1436,7 +1436,7 @@ AlterView(
                                     span: Some(
                                         52..56,
                                     ),
-                                    lit: Integer(
+                                    lit: UInt64(
                                         1000,
                                     ),
                                 },
@@ -1542,7 +1542,7 @@ CreateView(
                                     span: Some(
                                         38..39,
                                     ),
-                                    lit: Integer(
+                                    lit: UInt64(
                                         3,
                                     ),
                                 },
@@ -1575,7 +1575,7 @@ CreateView(
                                     span: Some(
                                         58..62,
                                     ),
-                                    lit: Integer(
+                                    lit: UInt64(
                                         1000,
                                     ),
                                 },
@@ -1659,7 +1659,7 @@ AlterView(
                                     span: Some(
                                         37..38,
                                     ),
-                                    lit: Integer(
+                                    lit: UInt64(
                                         3,
                                     ),
                                 },
@@ -1692,7 +1692,7 @@ AlterView(
                                     span: Some(
                                         57..61,
                                     ),
-                                    lit: Integer(
+                                    lit: UInt64(
                                         1000,
                                     ),
                                 },
@@ -2033,7 +2033,7 @@ CreateTable(
                                 span: Some(
                                     30..31,
                                 ),
-                                lit: Integer(
+                                lit: UInt64(
                                     1,
                                 ),
                             },
@@ -2269,7 +2269,7 @@ Query(
                                 span: Some(
                                     45..46,
                                 ),
-                                lit: Integer(
+                                lit: UInt64(
                                     1,
                                 ),
                             },
@@ -2302,7 +2302,7 @@ Query(
                                     span: Some(
                                         55..56,
                                     ),
-                                    lit: Integer(
+                                    lit: UInt64(
                                         1,
                                     ),
                                 },
@@ -2364,7 +2364,7 @@ Query(
                             span: Some(
                                 83..84,
                             ),
-                            lit: Integer(
+                            lit: UInt64(
                                 1,
                             ),
                         },
@@ -5190,7 +5190,7 @@ Query(
                             span: Some(
                                 7..8,
                             ),
-                            lit: Integer(
+                            lit: UInt64(
                                 1,
                             ),
                         },
@@ -5214,7 +5214,7 @@ Query(
                                 span: Some(
                                     22..23,
                                 ),
-                                lit: Integer(
+                                lit: UInt64(
                                     1,
                                 ),
                             },
@@ -5238,7 +5238,7 @@ Query(
                                 span: Some(
                                     33..34,
                                 ),
-                                lit: Integer(
+                                lit: UInt64(
                                     1,
                                 ),
                             },
@@ -5246,7 +5246,7 @@ Query(
                                 span: Some(
                                     37..38,
                                 ),
-                                lit: Integer(
+                                lit: UInt64(
                                     1,
                                 ),
                             },
@@ -5255,7 +5255,7 @@ Query(
                             span: Some(
                                 43..44,
                             ),
-                            lit: Integer(
+                            lit: UInt64(
                                 1,
                             ),
                         },
@@ -5580,7 +5580,7 @@ Query(
                                     span: Some(
                                         42..43,
                                     ),
-                                    lit: Integer(
+                                    lit: UInt64(
                                         0,
                                     ),
                                 },
@@ -5913,7 +5913,7 @@ AlterTable(
                         span: Some(
                             41..42,
                         ),
-                        lit: Integer(
+                        lit: UInt64(
                             0,
                         ),
                     },
@@ -5963,7 +5963,7 @@ AlterTable(
                         span: Some(
                             41..44,
                         ),
-                        lit: Integer(
+                        lit: UInt64(
                             101,
                         ),
                     },
@@ -8130,7 +8130,7 @@ Update(
                         span: Some(
                             27..28,
                         ),
-                        lit: Integer(
+                        lit: UInt64(
                             1,
                         ),
                     },
@@ -8148,7 +8148,7 @@ Update(
                     span: Some(
                         34..35,
                     ),
-                    lit: Integer(
+                    lit: UInt64(
                         2,
                     ),
                 },
@@ -8178,7 +8178,7 @@ Update(
                     span: Some(
                         46..47,
                     ),
-                    lit: Integer(
+                    lit: UInt64(
                         3,
                     ),
                 },
@@ -8206,7 +8206,7 @@ SetVariable {
         span: Some(
             18..20,
         ),
-        lit: Integer(
+        lit: UInt64(
             10,
         ),
     },
@@ -8236,7 +8236,7 @@ SetVariable {
             span: Some(
                 18..20,
             ),
-            lit: Integer(
+            lit: UInt64(
                 10,
             ),
         },
@@ -8244,7 +8244,7 @@ SetVariable {
             span: Some(
                 21..22,
             ),
-            lit: Integer(
+            lit: UInt64(
                 2,
             ),
         },

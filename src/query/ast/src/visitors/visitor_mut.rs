@@ -331,6 +331,8 @@ pub trait VisitorMut: Sized {
 
     fn visit_show_functions(&mut self, _limit: &mut Option<ShowLimit>) {}
 
+    fn visit_show_table_functions(&mut self, _limit: &mut Option<ShowLimit>) {}
+
     fn visit_show_limit(&mut self, _limit: &mut ShowLimit) {}
 
     fn visit_kill(&mut self, _kill_target: &mut KillTarget, _object_id: &mut String) {}
@@ -348,6 +350,7 @@ pub trait VisitorMut: Sized {
     fn visit_set_role(&mut self, _is_default: bool, _role_name: &mut String) {}
 
     fn visit_insert(&mut self, _insert: &mut InsertStmt) {}
+    fn visit_replace(&mut self, _replace: &mut ReplaceStmt) {}
 
     fn visit_insert_source(&mut self, _insert_source: &mut InsertSource) {}
 

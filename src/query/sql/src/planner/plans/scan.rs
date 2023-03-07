@@ -20,6 +20,7 @@ use common_catalog::table::TableStatistics;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use itertools::Itertools;
+use roaring::RoaringBitmap;
 
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnSet;
@@ -119,6 +120,14 @@ impl std::hash::Hash for Scan {
 impl Operator for Scan {
     fn rel_op(&self) -> RelOp {
         RelOp::Scan
+    }
+
+    fn transformation_candidate_rules(&self) -> roaring::RoaringBitmap {
+        RoaringBitmap::new()
+    }
+
+    fn exploration_candidate_rules(&self) -> roaring::RoaringBitmap {
+        RoaringBitmap::new()
     }
 
     fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<RelationalProperty> {

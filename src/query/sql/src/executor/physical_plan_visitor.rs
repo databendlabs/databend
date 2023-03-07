@@ -29,6 +29,7 @@ use super::Project;
 use super::Sort;
 use super::TableScan;
 use super::Unnest;
+use crate::executor::RuntimeFilterSource;
 use crate::executor::UnionAll;
 
 pub trait PhysicalPlanReplacer {
@@ -49,6 +50,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::UnionAll(plan) => self.replace_union(plan),
             PhysicalPlan::DistributedInsertSelect(plan) => self.replace_insert_select(plan),
             PhysicalPlan::Unnest(plan) => self.replace_unnest(plan),
+            PhysicalPlan::RuntimeFilterSource(plan) => self.replace_runtime_filter_source(plan),
         }
     }
 
@@ -130,6 +132,7 @@ pub trait PhysicalPlanReplacer {
             join_type: plan.join_type.clone(),
             marker_index: plan.marker_index,
             from_correlated_subquery: plan.from_correlated_subquery,
+            contain_runtime_filter: plan.contain_runtime_filter,
             stat_info: plan.stat_info.clone(),
         }))
     }
@@ -220,8 +223,23 @@ pub trait PhysicalPlanReplacer {
         Ok(PhysicalPlan::Unnest(Unnest {
             plan_id: plan.plan_id,
             input: Box::new(input),
-            offsets: plan.offsets.clone(),
+            num_columns: plan.num_columns,
             stat_info: plan.stat_info.clone(),
+        }))
+    }
+
+    fn replace_runtime_filter_source(
+        &mut self,
+        plan: &RuntimeFilterSource,
+    ) -> Result<PhysicalPlan> {
+        let left_side = self.replace(&plan.left_side)?;
+        let right_side = self.replace(&plan.right_side)?;
+        Ok(PhysicalPlan::RuntimeFilterSource(RuntimeFilterSource {
+            plan_id: plan.plan_id,
+            left_side: Box::new(left_side),
+            right_side: Box::new(right_side),
+            left_runtime_filters: plan.left_runtime_filters.clone(),
+            right_runtime_filters: plan.right_runtime_filters.clone(),
         }))
     }
 }
@@ -277,7 +295,11 @@ impl PhysicalPlan {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::Unnest(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit)
+                }
+                PhysicalPlan::RuntimeFilterSource(plan) => {
+                    Self::traverse(&plan.left_side, pre_visit, visit, post_visit);
+                    Self::traverse(&plan.right_side, pre_visit, visit, post_visit);
                 }
             }
             post_visit(plan);

@@ -68,8 +68,8 @@ fn test_user_info() -> mt::principal::UserInfo {
     }
 }
 
-pub(crate) fn test_fs_stage_info() -> mt::principal::UserStageInfo {
-    mt::principal::UserStageInfo {
+pub(crate) fn test_fs_stage_info() -> mt::principal::StageInfo {
+    mt::principal::StageInfo {
         stage_name: "fs://dir/to/files".to_string(),
         stage_type: mt::principal::StageType::LegacyInternal,
         stage_params: mt::principal::StageParams {
@@ -107,8 +107,8 @@ pub(crate) fn test_fs_stage_info() -> mt::principal::UserStageInfo {
     }
 }
 
-pub(crate) fn test_s3_stage_info() -> mt::principal::UserStageInfo {
-    mt::principal::UserStageInfo {
+pub(crate) fn test_s3_stage_info() -> mt::principal::StageInfo {
+    mt::principal::StageInfo {
         stage_name: "s3://mybucket/data/files".to_string(),
         stage_type: mt::principal::StageType::External,
         stage_params: mt::principal::StageParams {
@@ -147,8 +147,8 @@ pub(crate) fn test_s3_stage_info() -> mt::principal::UserStageInfo {
     }
 }
 
-pub(crate) fn test_s3_stage_info_v16() -> mt::principal::UserStageInfo {
-    mt::principal::UserStageInfo {
+pub(crate) fn test_s3_stage_info_v16() -> mt::principal::StageInfo {
+    mt::principal::StageInfo {
         stage_name: "s3://mybucket/data/files".to_string(),
         stage_type: mt::principal::StageType::External,
         stage_params: mt::principal::StageParams {
@@ -189,8 +189,8 @@ pub(crate) fn test_s3_stage_info_v16() -> mt::principal::UserStageInfo {
     }
 }
 
-pub(crate) fn test_s3_stage_info_v14() -> mt::principal::UserStageInfo {
-    mt::principal::UserStageInfo {
+pub(crate) fn test_s3_stage_info_v14() -> mt::principal::StageInfo {
+    mt::principal::StageInfo {
         stage_name: "s3://mybucket/data/files".to_string(),
         stage_type: mt::principal::StageType::External,
         stage_params: mt::principal::StageParams {
@@ -232,8 +232,8 @@ pub(crate) fn test_s3_stage_info_v14() -> mt::principal::UserStageInfo {
 }
 
 // Version 4 added Google Cloud Storage as a stage backend, should be tested
-pub(crate) fn test_gcs_stage_info() -> mt::principal::UserStageInfo {
-    mt::principal::UserStageInfo {
+pub(crate) fn test_gcs_stage_info() -> mt::principal::StageInfo {
+    mt::principal::StageInfo {
         stage_name: "gcs://my_bucket/data/files".to_string(),
         stage_type: mt::principal::StageType::External,
         stage_params: mt::principal::StageParams {
@@ -270,8 +270,8 @@ pub(crate) fn test_gcs_stage_info() -> mt::principal::UserStageInfo {
 }
 
 // Version 13 added OSS as a stage backend, should be tested
-pub(crate) fn test_oss_stage_info() -> mt::principal::UserStageInfo {
-    mt::principal::UserStageInfo {
+pub(crate) fn test_oss_stage_info() -> mt::principal::StageInfo {
+    mt::principal::StageInfo {
         stage_name: "oss://my_bucket/data/files".to_string(),
         stage_type: mt::principal::StageType::External,
         stage_params: mt::principal::StageParams {
@@ -310,8 +310,8 @@ pub(crate) fn test_oss_stage_info() -> mt::principal::UserStageInfo {
 }
 
 // version 29 added WebHDFS as a stage backend, should be tested
-pub(crate) fn test_webhdfs_stage_info() -> mt::principal::UserStageInfo {
-    mt::principal::UserStageInfo {
+pub(crate) fn test_webhdfs_stage_info() -> mt::principal::StageInfo {
+    mt::principal::StageInfo {
         stage_name: "webhdfs://path/to/stage/files".to_string(),
         stage_type: mt::principal::StageType::External,
         stage_params: mt::principal::StageParams {
@@ -428,7 +428,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         p.ver = VER + 1;
         p.min_reader_ver = VER + 1;
 
-        let res = mt::principal::UserStageInfo::from_pb(p);
+        let res = mt::principal::StageInfo::from_pb(p);
         assert_eq!(
             Incompatible {
                 reason: format!(
@@ -447,7 +447,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         p.ver = VER + 1;
         p.min_reader_ver = VER + 1;
 
-        let res = mt::principal::UserStageInfo::from_pb(p);
+        let res = mt::principal::StageInfo::from_pb(p);
         assert_eq!(
             Incompatible {
                 reason: format!(
@@ -466,7 +466,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         p.ver = VER + 1;
         p.min_reader_ver = VER + 1;
 
-        let res = mt::principal::UserStageInfo::from_pb(p);
+        let res = mt::principal::StageInfo::from_pb(p);
         assert_eq!(
             Incompatible {
                 reason: format!(
@@ -485,7 +485,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         p.ver = VER + 1;
         p.min_reader_ver = VER + 1;
 
-        let res = mt::principal::UserStageInfo::from_pb(p);
+        let res = mt::principal::StageInfo::from_pb(p);
         assert_eq!(
             Incompatible {
                 reason: format!(
@@ -504,7 +504,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         p.ver = VER + 1;
         p.min_reader_ver = VER + 1;
 
-        let res = mt::principal::UserStageInfo::from_pb(p);
+        let res = mt::principal::StageInfo::from_pb(p);
         assert_eq!(
             Incompatible {
                 reason: format!(
@@ -523,7 +523,7 @@ fn test_user_incompatible() -> anyhow::Result<()> {
         p.ver = VER + 1;
         p.min_reader_ver = VER + 1;
 
-        let res = mt::principal::UserStageInfo::from_pb(p);
+        let res = mt::principal::StageInfo::from_pb(p);
         assert_eq!(
             Incompatible {
                 reason: format!(
@@ -737,8 +737,8 @@ fn test_old_stage_file() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub(crate) fn test_internal_stage_info_v17() -> mt::principal::UserStageInfo {
-    mt::principal::UserStageInfo {
+pub(crate) fn test_internal_stage_info_v17() -> mt::principal::StageInfo {
+    mt::principal::StageInfo {
         stage_name: "fs://dir/to/files".to_string(),
         stage_type: mt::principal::StageType::Internal,
         stage_params: mt::principal::StageParams {
@@ -771,8 +771,8 @@ pub(crate) fn test_internal_stage_info_v17() -> mt::principal::UserStageInfo {
     }
 }
 
-pub(crate) fn test_user_stage_info_v18() -> mt::principal::UserStageInfo {
-    mt::principal::UserStageInfo {
+pub(crate) fn test_stage_info_v18() -> mt::principal::StageInfo {
+    mt::principal::StageInfo {
         stage_name: "root".to_string(),
         stage_type: mt::principal::StageType::User,
         stage_params: mt::principal::StageParams {

@@ -32,7 +32,7 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::TableSchema;
-use common_meta_app::principal::UserStageInfo;
+use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -43,7 +43,7 @@ use opendal::Operator;
 
 pub struct ParquetTable {
     pub(super) read_options: ParquetReadOptions,
-    pub(super) stage_info: UserStageInfo,
+    pub(super) stage_info: StageInfo,
     pub(super) files_info: StageFilesInfo,
 
     pub(super) operator: Operator,
@@ -54,14 +54,14 @@ pub struct ParquetTable {
 
 impl ParquetTable {
     pub fn from_info(info: &ParquetTableInfo) -> Result<Arc<dyn Table>> {
-        let operator = init_stage_operator(&info.user_stage_info)?;
+        let operator = init_stage_operator(&info.stage_info)?;
 
         Ok(Arc::new(ParquetTable {
             table_info: info.table_info.clone(),
             arrow_schema: info.arrow_schema.clone(),
             operator,
             read_options: info.read_options,
-            stage_info: info.user_stage_info.clone(),
+            stage_info: info.stage_info.clone(),
             files_info: info.files_info.clone(),
         }))
     }
@@ -98,7 +98,7 @@ impl Table for ParquetTable {
             table_info: self.table_info.clone(),
             arrow_schema: self.arrow_schema.clone(),
             read_options: self.read_options,
-            user_stage_info: self.stage_info.clone(),
+            stage_info: self.stage_info.clone(),
             files_info: self.files_info.clone(),
         })
     }

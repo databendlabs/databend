@@ -44,8 +44,7 @@ impl Transform for ScatterTransform {
     const NAME: &'static str = "ScatterTransform";
 
     fn transform(&mut self, data: DataBlock) -> common_exception::Result<DataBlock> {
-        let blocks = self.scatter.execute(&data)?;
-        drop(data);
+        let blocks = self.scatter.execute(data)?;
 
         Ok(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
             blocks,

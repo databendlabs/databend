@@ -14,7 +14,7 @@ query T
 explain select t1.a from t1 where a > 0
 ----
 Filter
-├── filters: [gt(t1.a (#0), 0)]
+├── filters: [t1.a (#0) > 0]
 ├── estimated rows: 0.33
 └── TableScan
     ├── table: default.default.t1
@@ -23,7 +23,7 @@ Filter
     ├── partitions total: 1
     ├── partitions scanned: 0
     ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
-    ├── push downs: [filters: [gt(t1.a (#0), 0)], limit: NONE]
+    ├── push downs: [filters: [t1.a (#0) > 0], limit: NONE]
     ├── output columns: [a]
     └── estimated rows: 1.00
 
@@ -31,7 +31,7 @@ query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1)
 ----
 Filter
-├── filters: [or(gt(t1.a (#0), 3), and(gt(t2.a (#2), 5), gt(t1.a (#0), 1)))]
+├── filters: [t1.a (#0) > 3 OR t2.a (#2) > 5 AND t1.a (#0) > 1]
 ├── estimated rows: 0.14
 └── HashJoin
     ├── join type: INNER
@@ -40,7 +40,7 @@ Filter
     ├── filters: []
     ├── estimated rows: 0.43
     ├── Filter(Build)
-    │   ├── filters: [or(gt(t1.a (#0), 3), gt(t1.a (#0), 1))]
+    │   ├── filters: [t1.a (#0) > 3 OR t1.a (#0) > 1]
     │   ├── estimated rows: 0.56
     │   └── TableScan
     │       ├── table: default.default.t1
@@ -49,10 +49,10 @@ Filter
     │       ├── partitions total: 1
     │       ├── partitions scanned: 0
     │       ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
-    │       ├── push downs: [filters: [or(gt(t1.a (#0), 3), gt(t1.a (#0), 1))], limit: NONE]
+    │       ├── push downs: [filters: [t1.a (#0) > 3 OR t1.a (#0) > 1], limit: NONE]
     │       └── estimated rows: 1.00
     └── Filter(Probe)
-        ├── filters: [or(gt(t2.a (#2), 3), gt(t2.a (#2), 1))]
+        ├── filters: [t2.a (#2) > 3 OR t2.a (#2) > 1]
         ├── estimated rows: 3.12
         └── TableScan
             ├── table: default.default.t2
@@ -61,7 +61,7 @@ Filter
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            ├── push downs: [filters: [or(gt(t2.a (#2), 3), gt(t2.a (#2), 1))], limit: NONE]
+            ├── push downs: [filters: [t2.a (#2) > 3 OR t2.a (#2) > 1], limit: NONE]
             └── estimated rows: 5.00
 
 query T
@@ -260,17 +260,17 @@ Query (children 1)
     └── SelectQuery (children 1)
         └── SelectList (children 4)
             ├── Target (children 1)
-            │   └── Literal Integer(1)
+            │   └── Literal UInt64(1)
             ├── Target (children 1)
             │   └── Literal String("ab")
             ├── Target (alias a) (children 1)
             │   └── Literal Array (children 3)
-            │       ├── Literal Integer(1)
-            │       ├── Literal Integer(2)
-            │       └── Literal Integer(3)
+            │       ├── Literal UInt64(1)
+            │       ├── Literal UInt64(2)
+            │       └── Literal UInt64(3)
             └── Target (alias t) (children 1)
                 └── Literal Tuple (children 2)
-                    ├── Literal Integer(1)
+                    ├── Literal UInt64(1)
                     └── Literal String("a")
 
 query T
@@ -285,10 +285,10 @@ Query (children 1)
         │           ├── Conditions (children 2)
         │           │   ├── Function > (children 2)
         │           │   │   ├── ColumnIdentifier a
-        │           │   │   └── Literal Integer(1)
+        │           │   │   └── Literal UInt64(1)
         │           │   └── Function < (children 2)
         │           │       ├── ColumnIdentifier a
-        │           │       └── Literal Integer(10)
+        │           │       └── Literal UInt64(10)
         │           ├── Results (children 2)
         │           │   ├── Literal String("x")
         │           │   └── Literal String("y")
@@ -317,21 +317,21 @@ Query (children 3)
 │       │       │   ├── Function In (children 2)
 │       │       │   │   ├── ColumnIdentifier a
 │       │       │   │   └── List (children 2)
-│       │       │   │       ├── Literal Integer(1)
-│       │       │   │       └── Literal Integer(2)
+│       │       │   │       ├── Literal UInt64(1)
+│       │       │   │       └── Literal UInt64(2)
 │       │       │   └── Function > (children 2)
 │       │       │       ├── ColumnIdentifier b
-│       │       │       └── Literal Integer(0)
+│       │       │       └── Literal UInt64(0)
 │       │       └── Function < (children 2)
 │       │           ├── ColumnIdentifier b
-│       │           └── Literal Integer(100)
+│       │           └── Literal UInt64(100)
 │       └── GroupByList (children 1)
 │           └── ColumnIdentifier a
 ├── OrderByList (children 1)
 │   └── OrderByElement (children 1)
 │       └── ColumnIdentifier a
 └── LimitList (children 1)
-    └── Literal Integer(3)
+    └── Literal UInt64(3)
 
 query T
 explain ast select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b and t1.a > 2
@@ -357,7 +357,7 @@ Query (children 1)
                             │       └── ColumnIdentifier t2.b
                             └── Function > (children 2)
                                 ├── ColumnIdentifier t1.a
-                                └── Literal Integer(2)
+                                └── Literal UInt64(2)
 
 query T
 explain ast with cte (a, b) as (select 1, 2 union all select 3, 4) select a, b from cte
@@ -372,16 +372,16 @@ Query (children 2)
 │                   │   └── SelectQuery (children 1)
 │                   │       └── SelectList (children 2)
 │                   │           ├── Target (children 1)
-│                   │           │   └── Literal Integer(1)
+│                   │           │   └── Literal UInt64(1)
 │                   │           └── Target (children 1)
-│                   │               └── Literal Integer(2)
+│                   │               └── Literal UInt64(2)
 │                   └── QueryBody (children 1)
 │                       └── SelectQuery (children 1)
 │                           └── SelectList (children 2)
 │                               ├── Target (children 1)
-│                               │   └── Literal Integer(3)
+│                               │   └── Literal UInt64(3)
 │                               └── Target (children 1)
-│                                   └── Literal Integer(4)
+│                                   └── Literal UInt64(4)
 └── QueryBody (children 1)
     └── SelectQuery (children 2)
         ├── SelectList (children 2)
@@ -412,13 +412,13 @@ Delete (children 2)
     ├── Function AND (children 2)
     │   ├── Function > (children 2)
     │   │   ├── ColumnIdentifier a
-    │   │   └── Literal Integer(100)
+    │   │   └── Literal UInt64(100)
     │   └── Function > (children 2)
     │       ├── ColumnIdentifier b
-    │       └── Literal Integer(1)
+    │       └── Literal UInt64(1)
     └── Function < (children 2)
         ├── ColumnIdentifier b
-        └── Literal Integer(10)
+        └── Literal UInt64(10)
 
 skipif clickhouse
 query T
@@ -483,14 +483,14 @@ CreateView (children 2)
             │   └── Target (alias a) (children 1)
             │       └── Function % (children 2)
             │           ├── ColumnIdentifier number
-            │           └── Literal Integer(3)
+            │           └── Literal UInt64(3)
             ├── TableList (children 1)
             │   └── TableFunction numbers (children 1)
-            │       └── Literal Integer(100)
+            │       └── Literal UInt64(100)
             └── Where (children 1)
                 └── Function > (children 2)
                     ├── ColumnIdentifier number
-                    └── Literal Integer(10)
+                    └── Literal UInt64(10)
 
 query T
 explain ast show create table t1
@@ -516,7 +516,7 @@ Query (children 1)
         │   └── Target (children 1)
         │       └── Function + (children 2)
         │           ├── ColumnIdentifier unknown_table.a
-        │           └── Literal Integer(1)
+        │           └── Literal UInt64(1)
         └── TableList (children 1)
             └── TableIdentifier unknown_table1
 
@@ -550,7 +550,7 @@ query T
 explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4)
 ----
 Filter
-├── filters: [or(and(gt(t1.a (#0), 1), gt(t2.a (#2), 2)), and(lt(t1.b (#1), 3), lt(t2.b (#3), 4)))]
+├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4]
 ├── estimated rows: 0.71
 └── HashJoin
     ├── join type: CROSS
@@ -559,7 +559,7 @@ Filter
     ├── filters: []
     ├── estimated rows: 2.26
     ├── Filter(Build)
-    │   ├── filters: [or(gt(t1.a (#0), 1), lt(t1.b (#1), 3))]
+    │   ├── filters: [t1.a (#0) > 1 OR t1.b (#1) < 3]
     │   ├── estimated rows: 0.56
     │   └── TableScan
     │       ├── table: default.default.t1
@@ -568,10 +568,10 @@ Filter
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │       ├── push downs: [filters: [or(gt(t1.a (#0), 1), lt(t1.b (#1), 3))], limit: NONE]
+    │       ├── push downs: [filters: [t1.a (#0) > 1 OR t1.b (#1) < 3], limit: NONE]
     │       └── estimated rows: 1.00
     └── Filter(Probe)
-        ├── filters: [or(gt(t2.a (#2), 2), lt(t2.b (#3), 4))]
+        ├── filters: [t2.a (#2) > 2 OR t2.b (#3) < 4]
         ├── estimated rows: 4.06
         └── TableScan
             ├── table: default.default.t2
@@ -580,14 +580,14 @@ Filter
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            ├── push downs: [filters: [or(gt(t2.a (#2), 2), lt(t2.b (#3), 4))], limit: NONE]
+            ├── push downs: [filters: [t2.a (#2) > 2 OR t2.b (#3) < 4], limit: NONE]
             └── estimated rows: 5.00
 
 query T
 explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4) or t1.a = 2
 ----
 Filter
-├── filters: [or(or(and(gt(t1.a (#0), 1), gt(t2.a (#2), 2)), and(lt(t1.b (#1), 3), lt(t2.b (#3), 4))), eq(t1.a (#0), 2))]
+├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4 OR t1.a (#0) = 2]
 ├── estimated rows: 1.91
 └── HashJoin
     ├── join type: CROSS
@@ -596,7 +596,7 @@ Filter
     ├── filters: []
     ├── estimated rows: 3.52
     ├── Filter(Build)
-    │   ├── filters: [or(gt(t1.a (#0), 1), or(lt(t1.b (#1), 3), eq(t1.a (#0), 2)))]
+    │   ├── filters: [t1.a (#0) > 1 OR t1.b (#1) < 3 OR t1.a (#0) = 2]
     │   ├── estimated rows: 0.70
     │   └── TableScan
     │       ├── table: default.default.t1
@@ -605,7 +605,7 @@ Filter
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-    │       ├── push downs: [filters: [or(gt(t1.a (#0), 1), or(lt(t1.b (#1), 3), eq(t1.a (#0), 2)))], limit: NONE]
+    │       ├── push downs: [filters: [t1.a (#0) > 1 OR t1.b (#1) < 3 OR t1.a (#0) = 2], limit: NONE]
     │       └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.default.t2
@@ -627,7 +627,7 @@ query T
 explain select * from t1,t2, t3 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4) or t3.a = 2
 ----
 Filter
-├── filters: [or(or(and(gt(t1.a (#0), 1), gt(t2.a (#2), 2)), and(lt(t1.b (#1), 3), lt(t2.b (#3), 4))), eq(t3.a (#4), 2))]
+├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4 OR t3.a (#4) = 2]
 ├── estimated rows: 19.44
 └── HashJoin
     ├── join type: CROSS
@@ -679,7 +679,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 5.49
 ├── Filter(Build)
-│   ├── filters: [or(and(gt(t1.a (#0), 1), gt(t2.a (#2), 2)), and(lt(t1.b (#1), 3), lt(t2.b (#3), 4)))]
+│   ├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4]
 │   ├── estimated rows: 0.71
 │   └── HashJoin
 │       ├── join type: CROSS
@@ -688,7 +688,7 @@ HashJoin
 │       ├── filters: []
 │       ├── estimated rows: 2.26
 │       ├── Filter(Build)
-│       │   ├── filters: [or(gt(t1.a (#0), 1), lt(t1.b (#1), 3))]
+│       │   ├── filters: [t1.a (#0) > 1 OR t1.b (#1) < 3]
 │       │   ├── estimated rows: 0.56
 │       │   └── TableScan
 │       │       ├── table: default.default.t1
@@ -697,10 +697,10 @@ HashJoin
 │       │       ├── partitions total: 1
 │       │       ├── partitions scanned: 1
 │       │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-│       │       ├── push downs: [filters: [or(gt(t1.a (#0), 1), lt(t1.b (#1), 3))], limit: NONE]
+│       │       ├── push downs: [filters: [t1.a (#0) > 1 OR t1.b (#1) < 3], limit: NONE]
 │       │       └── estimated rows: 1.00
 │       └── Filter(Probe)
-│           ├── filters: [or(gt(t2.a (#2), 2), lt(t2.b (#3), 4))]
+│           ├── filters: [t2.a (#2) > 2 OR t2.b (#3) < 4]
 │           ├── estimated rows: 4.06
 │           └── TableScan
 │               ├── table: default.default.t2
@@ -709,10 +709,10 @@ HashJoin
 │               ├── partitions total: 1
 │               ├── partitions scanned: 1
 │               ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-│               ├── push downs: [filters: [or(gt(t2.a (#2), 2), lt(t2.b (#3), 4))], limit: NONE]
+│               ├── push downs: [filters: [t2.a (#2) > 2 OR t2.b (#3) < 4], limit: NONE]
 │               └── estimated rows: 5.00
 └── Filter(Probe)
-    ├── filters: [gt(t3.a (#4), 1)]
+    ├── filters: [t3.a (#4) > 1]
     ├── estimated rows: 7.78
     └── TableScan
         ├── table: default.default.t3
@@ -721,7 +721,7 @@ HashJoin
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [gt(t3.a (#4), 1)], limit: NONE]
+        ├── push downs: [filters: [t3.a (#4) > 1], limit: NONE]
         └── estimated rows: 10.00
 
 query T
@@ -735,7 +735,7 @@ Limit
     ├── sort keys: [a DESC NULLS LAST]
     ├── estimated rows: 1.01
     └── Filter
-        ├── filters: [or(and(or(gt(t1.a (#0), 1), lt(t1.b (#1), 2)), gt(t2.a (#2), 2)), and(lt(t1.b (#1), 3), lt(t2.b (#3), 4)))]
+        ├── filters: [(t1.a (#0) > 1 OR t1.b (#1) < 2) AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4]
         ├── estimated rows: 1.01
         └── HashJoin
             ├── join type: CROSS
@@ -744,7 +744,7 @@ Limit
             ├── filters: []
             ├── estimated rows: 2.86
             ├── Filter(Build)
-            │   ├── filters: [or(or(gt(t1.a (#0), 1), lt(t1.b (#1), 2)), lt(t1.b (#1), 3))]
+            │   ├── filters: [t1.a (#0) > 1 OR t1.b (#1) < 2 OR t1.b (#1) < 3]
             │   ├── estimated rows: 0.70
             │   └── TableScan
             │       ├── table: default.default.t1
@@ -753,10 +753,10 @@ Limit
             │       ├── partitions total: 1
             │       ├── partitions scanned: 1
             │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            │       ├── push downs: [filters: [or(or(gt(t1.a (#0), 1), lt(t1.b (#1), 2)), lt(t1.b (#1), 3))], limit: NONE]
+            │       ├── push downs: [filters: [t1.a (#0) > 1 OR t1.b (#1) < 2 OR t1.b (#1) < 3], limit: NONE]
             │       └── estimated rows: 1.00
             └── Filter(Probe)
-                ├── filters: [or(gt(t2.a (#2), 2), lt(t2.b (#3), 4))]
+                ├── filters: [t2.a (#2) > 2 OR t2.b (#3) < 4]
                 ├── estimated rows: 4.06
                 └── TableScan
                     ├── table: default.default.t2
@@ -765,7 +765,7 @@ Limit
                     ├── partitions total: 1
                     ├── partitions scanned: 1
                     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                    ├── push downs: [filters: [or(gt(t2.a (#2), 2), lt(t2.b (#3), 4))], limit: NONE]
+                    ├── push downs: [filters: [t2.a (#2) > 2 OR t2.b (#3) < 4], limit: NONE]
                     └── estimated rows: 5.00
 
 query T
@@ -778,7 +778,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 2.78
 ├── Filter(Build)
-│   ├── filters: [or(gt(t1.a (#0), 1), lt(t1.b (#1), 2))]
+│   ├── filters: [t1.a (#0) > 1 OR t1.b (#1) < 2]
 │   ├── estimated rows: 0.56
 │   └── TableScan
 │       ├── table: default.default.t1
@@ -787,7 +787,7 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-│       ├── push downs: [filters: [or(gt(t1.a (#0), 1), lt(t1.b (#1), 2))], limit: NONE]
+│       ├── push downs: [filters: [t1.a (#0) > 1 OR t1.b (#1) < 2], limit: NONE]
 │       └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t2

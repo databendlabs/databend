@@ -12,15 +12,17 @@ doctest = false
 [dependencies] # In alphabetical order
 # Workspace dependencies
 common-exception = { path = "../../common/exception" }
+common-io = { path = "../../common/io" }
 common-meta-app = { path = "../../meta/app" }
 
 # Crates.io dependencies
+ethnum = "1.3.2"
 fast-float = "0.2.0"
 itertools = "0.10.5"
 logos = "0.12.1"
 nom = "7.1.1"
 nom-rule = "0.3.0"
-pratt = "0.3.0"
+pratt = "0.4.0"
 pretty = "0.11.3"
 strum = "0.24"
 strum_macros = "0.24"

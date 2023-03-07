@@ -160,7 +160,7 @@ Query {
             span: Some(
                 93..94,
             ),
-            lit: Integer(
+            lit: UInt64(
                 1,
             ),
         },
@@ -441,7 +441,7 @@ Query {
             span: Some(
                 56..57,
             ),
-            lit: Integer(
+            lit: UInt64(
                 1,
             ),
         },
@@ -564,7 +564,7 @@ Query {
             span: Some(
                 56..57,
             ),
-            lit: Integer(
+            lit: UInt64(
                 2,
             ),
         },
@@ -574,7 +574,7 @@ Query {
             span: Some(
                 65..66,
             ),
-            lit: Integer(
+            lit: UInt64(
                 3,
             ),
         },
@@ -959,7 +959,7 @@ Query {
                         span: Some(
                             69..70,
                         ),
-                        lit: Integer(
+                        lit: UInt64(
                             1,
                         ),
                     },
@@ -1151,7 +1151,7 @@ Query {
                         span: Some(
                             63..64,
                         ),
-                        lit: Integer(
+                        lit: UInt64(
                             1,
                         ),
                     },
@@ -1413,7 +1413,7 @@ Query {
                                             span: Some(
                                                 92..93,
                                             ),
-                                            lit: Integer(
+                                            lit: UInt64(
                                                 1,
                                             ),
                                         },
@@ -1597,7 +1597,7 @@ Query {
                         span: Some(
                             150..151,
                         ),
-                        lit: Integer(
+                        lit: UInt64(
                             1,
                         ),
                     },
@@ -2300,7 +2300,7 @@ Query {
             span: Some(
                 649..651,
             ),
-            lit: Integer(
+            lit: UInt64(
                 10,
             ),
         },

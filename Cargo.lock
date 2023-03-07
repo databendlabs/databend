@@ -1213,15 +1213,17 @@ version = "0.1.0"
 dependencies = [
  "common-base",
  "common-exception",
+ "common-io",
  "common-meta-app",
  "criterion",
+ "ethnum",
  "fast-float",
  "goldenfile",
  "itertools",
  "logos",
  "nom",
  "nom-rule",
- "pratt",
+ "pratt 0.4.0",
  "pretty",
  "pretty_assertions",
  "regex",
@@ -1777,6 +1779,7 @@ dependencies = [
  "common-meta-embedded",
  "common-meta-kvapi",
  "common-meta-types",
+ "tokio-stream",
  "tracing",
 ]
 
@@ -2077,6 +2080,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "siphasher",
  "storages-common-blocks",
  "storages-common-cache",
  "storages-common-cache-manager",
@@ -2084,6 +2088,7 @@ dependencies = [
  "storages-common-pruner",
  "storages-common-table-meta",
  "streaming-decompression",
+ "tokio-rayon",
  "tracing",
  "typetag",
  "uuid",
@@ -2799,7 +2804,6 @@ dependencies = [
  "common-meta-api",
  "common-meta-app",
  "common-meta-client",
- "common-meta-embedded",
  "common-meta-kvapi",
  "common-meta-raft-store",
  "common-meta-sled-store",
@@ -2996,6 +3000,7 @@ dependencies = [
  "storages-common-cache-manager",
  "storages-common-index",
  "storages-common-table-meta",
+ "strength_reduce",
  "temp-env",
  "tempfile",
  "time 0.3.17",
@@ -5298,7 +5303,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea8dd3c6d80d1e61031aecc5fdfaf4b7d2324dbd94d575ac12f94e5d6856c2d4"
 dependencies = [
  "nom",
- "pratt",
+ "pratt 0.3.0",
  "proc-macro-error 1.0.4",
  "proc-macro2",
  "quote",
@@ -6098,6 +6103,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e31bbc12f7936a7b195790dd6d9b982b66c54f45ff6766decf25c44cac302dce"
 
 [[package]]
+name = "pratt"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17e0a4425d076f0718b820673a38fbf3747080c61017eeb0dd79bc7e472b8bb8"
+
+[[package]]
 name = "predicates"
 version = "2.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6638,15 +6649,6 @@ name = "regex-syntax"
 version = "0.6.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "456c603be3e8d448b072f410900c09faf164fbce2d480456f50eea6e25f9c848"
-
-[[package]]
-name = "remove_dir_all"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3acd125665422973a33ac9d3dd2df85edad0f4ae9b00dafb1a05e43a9f5ef8e7"
-dependencies = [
- "winapi",
-]
 
 [[package]]
 name = "rend"
@@ -7918,16 +7920,15 @@ dependencies = [
 
 [[package]]
 name = "tempfile"
-version = "3.3.0"
+version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5cdb1ef4eaeeaddc8fbd371e5017057064af0911902ef36b39801f67cc6d79e4"
+checksum = "af18f7ae1acd354b992402e9ec5864359d693cd8a79dcbef59f76891701c1e95"
 dependencies = [
  "cfg-if",
  "fastrand",
- "libc",
  "redox_syscall",
- "remove_dir_all",
- "winapi",
+ "rustix",
+ "windows-sys 0.42.0",
 ]
 
 [[package]]
@@ -8127,6 +8128,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "tokio-rayon"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cf33a76e0b1dd03b778f83244137bd59887abf25c0e87bc3e7071105f457693"
+dependencies = [
+ "rayon",
+ "tokio",
 ]
 
 [[package]]

@@ -30,7 +30,7 @@ use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ClusterStatistics;
 use storages_common_table_meta::table::TableCompression;
 
-use crate::io::write_block;
+use crate::io::serialize_block;
 use crate::io::write_data;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
@@ -192,7 +192,7 @@ impl Processor for SerializeDataTransform {
                 let schema = self.schema.clone();
 
                 let (file_size, col_metas) =
-                    write_block(&self.write_settings, &schema, block, &mut block_data)?;
+                    serialize_block(&self.write_settings, &schema, block, &mut block_data)?;
 
                 let (index_data, index_location, index_size) =
                     if let Some(bloom_index_state) = bloom_index_state {

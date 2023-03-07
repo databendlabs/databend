@@ -138,6 +138,8 @@ pub struct Join {
     // marker_index is for MarkJoin only.
     pub marker_index: Option<IndexType>,
     pub from_correlated_subquery: bool,
+    // It means that join has a corresponding runtime filter
+    pub contain_runtime_filter: bool,
 }
 
 impl Default for Join {
@@ -149,6 +151,7 @@ impl Default for Join {
             join_type: JoinType::Cross,
             marker_index: Default::default(),
             from_correlated_subquery: Default::default(),
+            contain_runtime_filter: false,
         }
     }
 }

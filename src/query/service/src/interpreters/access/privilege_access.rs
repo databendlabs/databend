@@ -217,6 +217,29 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
+            Plan::Replace(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        UserPrivilegeType::Insert,
+                    )
+                    .await?;
+                // TODO batch privilege checking api?
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        UserPrivilegeType::Delete,
+                    )
+                    .await?;
+            }
             Plan::Delete(plan) => {
                 session
                     .validate_privilege(

@@ -266,6 +266,8 @@ pub const CAST_FROM_STRING_RULES: AutoCastRules = &[
     (DataType::String, DataType::Number(NumberDataType::Int16)),
     (DataType::String, DataType::Number(NumberDataType::Int32)),
     (DataType::String, DataType::Number(NumberDataType::Int64)),
+    (DataType::String, DataType::Number(NumberDataType::Float32)),
+    (DataType::String, DataType::Number(NumberDataType::Float64)),
 ];
 
 #[allow(non_snake_case)]

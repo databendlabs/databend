@@ -20,7 +20,7 @@ use common_catalog::plan::ParquetReadOptions;
 use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_app::principal::UserStageInfo;
+use common_meta_app::principal::StageInfo;
 use common_storage::init_stage_operator;
 use common_storage::StageFilesInfo;
 use opendal::Operator;
@@ -30,7 +30,7 @@ use crate::ParquetTable;
 
 impl ParquetTable {
     pub async fn create(
-        stage_info: UserStageInfo,
+        stage_info: StageInfo,
         files_info: StageFilesInfo,
         read_options: ParquetReadOptions,
     ) -> Result<Arc<dyn Table>> {

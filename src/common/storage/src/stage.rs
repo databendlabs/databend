@@ -16,8 +16,8 @@ use std::path::Path;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::principal::StageInfo;
 use common_meta_app::principal::StageType;
-use common_meta_app::principal::UserStageInfo;
 use futures::TryStreamExt;
 use opendal::ObjectMetakey;
 use opendal::ObjectMode;
@@ -39,7 +39,7 @@ impl FileWithMeta {
     }
 }
 
-pub fn init_stage_operator(stage_info: &UserStageInfo) -> Result<Operator> {
+pub fn init_stage_operator(stage_info: &StageInfo) -> Result<Operator> {
     if stage_info.stage_type == StageType::External {
         Ok(init_operator(&stage_info.stage_params.storage)?)
     } else {

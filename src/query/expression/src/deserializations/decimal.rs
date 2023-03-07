@@ -61,7 +61,10 @@ impl<T: Decimal> DecimalDeserializer<T> {
                     );
                     Ok(())
                 } else {
-                    Err(parse_error("Incorrect json value for decimal"))
+                    let f = n.as_f64().unwrap() * (10_f64).powi(self.size.scale as i32);
+                    let n = T::from_float(f);
+                    self.values.push(n);
+                    Ok(())
                 }
             }
             serde_json::Value::String(s) => {

@@ -1,6 +1,6 @@
 
 select
-        sum(l_extendedprice) / 7.0::decimal(2,1) as avg_yearly
+        sum(l_extendedprice) / 7.0 as avg_yearly
 from
     lineitem,
     part
@@ -10,7 +10,7 @@ where
   and p_container = 'MED BOX'
   and l_quantity < (
     select
-            0.2::decimal(2, 1) * avg(l_quantity)
+            0.2 * avg(l_quantity)
     from
         lineitem
     where
