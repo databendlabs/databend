@@ -169,7 +169,7 @@ impl RaftStorage<TypeConfig> for RaftStoreBare {
 
     #[tracing::instrument(level = "debug", skip(self, hs), fields(id=self.id))]
     async fn save_vote(&mut self, hs: &Vote) -> Result<(), StorageError> {
-        info!("save_hard_state: {:?}", hs);
+        info!("save_vote: {:?}", hs);
 
         match self
             .raft_state
