@@ -14,7 +14,7 @@
 
 use std::collections::BTreeMap;
 
-use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::{DataSourcePlan, RuntimeFilterId};
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::DataBlock;
@@ -29,7 +29,6 @@ use common_meta_app::schema::TableInfo;
 use crate::executor::explain::PlanStatsInfo;
 use crate::optimizer::ColumnSet;
 use crate::plans::JoinType;
-use crate::plans::RuntimeFilterId;
 use crate::ColumnBinding;
 use crate::IndexType;
 
@@ -294,9 +293,7 @@ pub struct HashJoin {
     pub join_type: JoinType,
     pub marker_index: Option<IndexType>,
     pub from_correlated_subquery: bool,
-
-    // It means that join has a corresponding runtime filter
-    pub contain_runtime_filter: bool,
+    pub source_exprs: BTreeMap<RuntimeFilterId, RemoteExpr>,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -485,27 +482,6 @@ impl DistributedInsertSelect {
     }
 }
 
-// Build runtime predicate data from join build side
-// Then pass it to runtime filter on join probe side
-// It's the children of join node
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct RuntimeFilterSource {
-    /// A unique id of operator in a `PhysicalPlan` tree.
-    /// Only used for display.
-    pub plan_id: u32,
-
-    pub left_side: Box<PhysicalPlan>,
-    pub right_side: Box<PhysicalPlan>,
-    pub left_runtime_filters: BTreeMap<RuntimeFilterId, RemoteExpr>,
-    pub right_runtime_filters: BTreeMap<RuntimeFilterId, RemoteExpr>,
-}
-
-impl RuntimeFilterSource {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        self.left_side.output_schema()
-    }
-}
-
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum PhysicalPlan {
     TableScan(TableScan),
@@ -520,7 +496,6 @@ pub enum PhysicalPlan {
     HashJoin(HashJoin),
     Exchange(Exchange),
     UnionAll(UnionAll),
-    RuntimeFilterSource(RuntimeFilterSource),
 
     /// For insert into ... select ... in cluster
     DistributedInsertSelect(Box<DistributedInsertSelect>),
@@ -556,7 +531,6 @@ impl PhysicalPlan {
             PhysicalPlan::UnionAll(plan) => plan.output_schema(),
             PhysicalPlan::DistributedInsertSelect(plan) => plan.output_schema(),
             PhysicalPlan::Unnest(plan) => plan.output_schema(),
-            PhysicalPlan::RuntimeFilterSource(plan) => plan.output_schema(),
         }
     }
 
@@ -577,7 +551,6 @@ impl PhysicalPlan {
             PhysicalPlan::ExchangeSource(_) => "Exchange Source".to_string(),
             PhysicalPlan::ExchangeSink(_) => "Exchange Sink".to_string(),
             PhysicalPlan::Unnest(_) => "Unnest".to_string(),
-            PhysicalPlan::RuntimeFilterSource(_) => "RuntimeFilterSource".to_string(),
         }
     }
 
@@ -604,10 +577,6 @@ impl PhysicalPlan {
                 Box::new(std::iter::once(plan.input.as_ref()))
             }
             PhysicalPlan::Unnest(plan) => Box::new(std::iter::once(plan.input.as_ref())),
-            PhysicalPlan::RuntimeFilterSource(plan) => Box::new(
-                std::iter::once(plan.left_side.as_ref())
-                    .chain(std::iter::once(plan.right_side.as_ref())),
-            ),
         }
     }
 }

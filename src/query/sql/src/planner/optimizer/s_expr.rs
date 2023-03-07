@@ -189,7 +189,6 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         | RelOperator::UnionAll(_)
         | RelOperator::Sort(_)
         | RelOperator::DummyTableScan(_)
-        | RelOperator::RuntimeFilterSource(_)
         | RelOperator::Pattern(_) => false,
         RelOperator::Join(op) => {
             op.left_conditions.iter().any(find_subquery_in_expr)

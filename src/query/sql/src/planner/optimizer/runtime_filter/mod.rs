@@ -13,85 +13,130 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use common_catalog::plan::RuntimeFilterId;
 
 use common_exception::Result;
 
+use crate::binder::JoinPredicate;
+use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::Join;
-use crate::plans::JoinType;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
-use crate::plans::RuntimeFilterId;
-use crate::plans::RuntimeFilterSource;
+use crate::plans::RelOperator::Scan as RelScan;
+use crate::plans::Scan;
+use crate::IndexType;
 use crate::ScalarExpr;
 
 pub struct RuntimeFilterResult {
-    pub left_runtime_filters: BTreeMap<RuntimeFilterId, ScalarExpr>,
-    pub right_runtime_filters: BTreeMap<RuntimeFilterId, ScalarExpr>,
+    pub target_exprs: BTreeMap<RuntimeFilterId, ScalarExpr>,
+    pub source_exprs: BTreeMap<RuntimeFilterId, ScalarExpr>,
 }
 
-fn create_runtime_filters(join: &Join) -> Result<RuntimeFilterResult> {
-    let mut left_runtime_filters = BTreeMap::new();
-    let mut right_runtime_filters = BTreeMap::new();
-    for (idx, exprs) in join
+fn create_runtime_filters(id: &mut IndexType, join: &Join) -> Result<RuntimeFilterResult> {
+    let mut target_exprs = BTreeMap::new();
+    let mut source_exprs = BTreeMap::new();
+    for (source_expr, target_expr) in join
         .right_conditions
         .iter()
         .zip(join.left_conditions.iter())
-        .enumerate()
     {
-        right_runtime_filters.insert(RuntimeFilterId::new(idx), exprs.0.clone());
-        left_runtime_filters.insert(RuntimeFilterId::new(idx), exprs.1.clone());
+        source_exprs.insert(RuntimeFilterId::new(*id), source_expr.clone());
+        target_exprs.insert(RuntimeFilterId::new(*id), target_expr.clone());
+        *id += 1;
     }
     Ok(RuntimeFilterResult {
-        left_runtime_filters,
-        right_runtime_filters,
+        target_exprs,
+        source_exprs,
     })
-}
-
-fn wrap_runtime_filter_source(
-    s_expr: &SExpr,
-    runtime_filter_result: RuntimeFilterResult,
-) -> Result<SExpr> {
-    let source_node = RuntimeFilterSource {
-        left_runtime_filters: runtime_filter_result.left_runtime_filters,
-        right_runtime_filters: runtime_filter_result.right_runtime_filters,
-    };
-    let build_side = s_expr.child(1)?.clone();
-    let mut probe_side = s_expr.child(0)?.clone();
-    probe_side = SExpr::create_binary(source_node.into(), probe_side, build_side.clone());
-    let mut join: Join = s_expr.plan().clone().try_into()?;
-    join.contain_runtime_filter = true;
-    let s_expr = s_expr.replace_plan(RelOperator::Join(join));
-    Ok(s_expr.replace_children(vec![probe_side, build_side]))
 }
 
 // Traverse plan tree and check if exists join
 // Currently, only support inner join.
-pub fn try_add_runtime_filter_nodes(expr: &SExpr) -> Result<SExpr> {
+// If find join, then add runtime_filter to join probe scan node
+pub fn try_add_runtime_filter_to_scan(id: &mut IndexType, expr: &SExpr) -> Result<SExpr> {
     if expr.children().len() == 1 && expr.children()[0].is_pattern() {
         return Ok(expr.clone());
     }
-    let mut new_expr = expr.clone();
+
     if expr.plan.rel_op() == RelOp::Join {
         // Todo(xudong): develop a strategy to decide whether to add runtime filter node
-        new_expr = add_runtime_filter_nodes(expr)?;
+        let join: Join = expr.plan().clone().try_into()?;
+        let runtime_filter_result = create_runtime_filters(id, &join)?;
+        let left_child = expr.child(0)?;
+        let mut right_child = expr.child(1)?.clone();
+        right_child = right_child.replace_plan(RelOperator::Join(Join {
+            left_conditions: join.left_conditions,
+            right_conditions: join.right_conditions,
+            non_equi_conditions: join.non_equi_conditions,
+            join_type: join.join_type,
+            marker_index: join.marker_index,
+            from_correlated_subquery: join.from_correlated_subquery,
+            source_exprs: runtime_filter_result.source_exprs,
+        }));
+        let new_left_child =
+            add_runtime_filter_to_scan(runtime_filter_result.target_exprs, left_child)?;
+        expr.replace_children(vec![new_left_child, right_child]);
     }
 
     let mut children = vec![];
 
-    for child in new_expr.children.iter() {
-        children.push(try_add_runtime_filter_nodes(child)?);
+    for child in expr.children.iter() {
+        children.push(try_add_runtime_filter_to_scan(id, child)?);
     }
-    Ok(new_expr.replace_children(children))
+    Ok(expr.replace_children(children))
 }
 
-fn add_runtime_filter_nodes(expr: &SExpr) -> Result<SExpr> {
-    assert_eq!(expr.plan.rel_op(), RelOp::Join);
-    let join: Join = expr.plan().clone().try_into()?;
-    if join.join_type != JoinType::Inner {
-        return Ok(expr.clone());
+fn add_runtime_filter_to_scan(
+    target_exprs: BTreeMap<RuntimeFilterId, ScalarExpr>,
+    expr: &SExpr,
+) -> Result<SExpr> {
+    match expr.plan() {
+        RelOperator::Scan(op) => {
+            let new_expr = expr.replace_plan(RelScan(Scan {
+                table_index: op.table_index,
+                columns: op.columns.clone(),
+                push_down_predicates: op.push_down_predicates.clone(),
+                limit: op.limit.clone(),
+                order_by: op.order_by.clone(),
+                prewhere: op.prewhere.clone(),
+                runtime_filter_exprs: Some(target_exprs),
+                statistics: op.statistics.clone(),
+            }));
+            Ok(new_expr)
+        }
+        RelOperator::Join(_) => {
+            let left_child = expr.child(0)?;
+            let right_child = expr.child(1)?;
+            let rel_expr = RelExpr::with_s_expr(expr);
+            let left_prop = rel_expr.derive_relational_prop_child(0)?;
+            let right_prop = rel_expr.derive_relational_prop_child(1)?;
+            let mut left_target_exprs = BTreeMap::new();
+            let mut right_target_exprs = BTreeMap::new();
+            for target_expr in target_exprs.iter() {
+                let pred = JoinPredicate::new(target_expr.1, &left_prop, &right_prop);
+                match pred {
+                    JoinPredicate::Left(_) => {
+                        left_target_exprs.insert(target_expr.0.clone(), target_expr.1.clone());
+                    }
+                    JoinPredicate::Right(_) => {
+                        right_target_exprs.insert(target_expr.0.clone(), target_expr.1.clone());
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            let new_left_child = add_runtime_filter_to_scan(left_target_exprs, left_child)?;
+            let new_right_child = add_runtime_filter_to_scan(right_target_exprs, right_child)?;
+            Ok(expr.replace_children(vec![new_left_child, new_right_child]))
+        }
+        RelOperator::EvalScalar(_)
+        | RelOperator::Filter(_)
+        | RelOperator::Aggregate(_)
+        | RelOperator::Sort(_)
+        | RelOperator::Limit(_)
+        | RelOperator::UnionAll(_)
+        | RelOperator::DummyTableScan(_) => add_runtime_filter_to_scan(target_exprs, expr),
+        RelOperator::Exchange(_) | RelOperator::Pattern(_) => { unreachable!()}
     }
-    let runtime_filter_result = create_runtime_filters(&join)?;
-    wrap_runtime_filter_source(expr, runtime_filter_result)
 }

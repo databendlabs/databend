@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod runtime_filter_connector;
-mod runtime_filter_source;
+mod runtime_filter_collector;
 
-pub use runtime_filter_connector::RuntimeFilterConnector;
-pub use runtime_filter_source::RuntimeFilterState;
+
+pub use runtime_filter_collector::RuntimeFilterCollector;

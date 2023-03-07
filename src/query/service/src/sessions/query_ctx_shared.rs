@@ -40,6 +40,7 @@ use crate::auth::AuthMgr;
 use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::processors::transforms::RuntimeFilterCollector;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::Session;
 use crate::storages::Table;
@@ -83,6 +84,7 @@ pub struct QueryContextShared {
     /// partitions_sha for each table in the query. Not empty only when enabling query result cache.
     pub(in crate::sessions) partitions_shas: Arc<RwLock<Vec<String>>>,
     pub(in crate::sessions) cacheable: Arc<AtomicBool>,
+    pub(in crate::sessions) runtime_filter_collector: Arc<RwLock<RuntimeFilterCollector>>,
 }
 
 impl QueryContextShared {
@@ -115,6 +117,7 @@ impl QueryContextShared {
             on_error_map: Arc::new(RwLock::new(None)),
             partitions_shas: Arc::new(RwLock::new(vec![])),
             cacheable: Arc::new(AtomicBool::new(true)),
+            runtime_filter_collector: Arc::new(RwLock::new(RuntimeFilterCollector::new())),
         }))
     }
 

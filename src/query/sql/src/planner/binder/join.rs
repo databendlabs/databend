@@ -200,7 +200,7 @@ impl Binder {
             join_type,
             marker_index: None,
             from_correlated_subquery: false,
-            contain_runtime_filter: false,
+            source_exprs: Default::default(),
         };
         Ok(SExpr::create_binary(
             logical_join.into(),

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 use common_expression::types::DataType;
@@ -46,6 +47,19 @@ pub struct PrewhereInfo {
     pub filter: RemoteExpr<String>,
 }
 
+#[derive(
+Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, Ord, PartialOrd,
+)]
+pub struct RuntimeFilterId {
+    id: String,
+}
+
+impl RuntimeFilterId {
+    pub fn new(id: usize) -> Self {
+        RuntimeFilterId { id: id.to_string() }
+    }
+}
+
 /// Extras is a wrapper for push down items.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, PartialEq, Eq)]
 pub struct PushDownInfo {
@@ -62,6 +76,8 @@ pub struct PushDownInfo {
     pub limit: Option<usize>,
     /// Optional order_by expression plan, asc, null_first
     pub order_by: Vec<(RemoteExpr<String>, bool, bool)>,
+    /// runtime filter exprs, used by runtime filter in storage
+    pub runtime_filter_exprs: Option<BTreeMap<RuntimeFilterId, RemoteExpr<String>>>,
 }
 
 /// TopK is a wrapper for topk push down items.

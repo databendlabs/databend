@@ -543,6 +543,7 @@ impl Binder {
                         is_accurate,
                     },
                     prewhere: None,
+                    runtime_filter_exprs: None,
                 }
                 .into(),
             ),

@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
+use common_catalog::plan::RuntimeFilterId;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -125,6 +127,8 @@ impl Display for JoinType {
     }
 }
 
+
+
 /// Join operator. We will choose hash join by default.
 /// In the case that using hash join, the right child
 /// is always the build side, and the left child is always
@@ -138,8 +142,7 @@ pub struct Join {
     // marker_index is for MarkJoin only.
     pub marker_index: Option<IndexType>,
     pub from_correlated_subquery: bool,
-    // It means that join has a corresponding runtime filter
-    pub contain_runtime_filter: bool,
+    pub source_exprs: BTreeMap<RuntimeFilterId, ScalarExpr>,
 }
 
 impl Default for Join {
@@ -151,7 +154,7 @@ impl Default for Join {
             join_type: JoinType::Cross,
             marker_index: Default::default(),
             from_correlated_subquery: Default::default(),
-            contain_runtime_filter: false,
+            source_exprs: Default::default(),
         }
     }
 }

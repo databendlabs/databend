@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
+
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
 use common_expression::type_check::check_function;
@@ -21,6 +24,7 @@ use common_expression::RemoteExpr;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_sql::executor::HashJoin;
 use parking_lot::RwLock;
+use common_catalog::plan::RuntimeFilterId;
 
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::sql::plans::JoinType;
@@ -62,6 +66,7 @@ impl JoinState {
 pub struct HashJoinDesc {
     pub(crate) build_keys: Vec<Expr>,
     pub(crate) probe_keys: Vec<Expr>,
+    pub(crate) source_exprs: BTreeMap<RuntimeFilterId, RemoteExpr>,
     pub(crate) join_type: JoinType,
     pub(crate) other_predicate: Option<Expr>,
     pub(crate) marker_join_desc: MarkJoinDesc,
@@ -89,6 +94,7 @@ impl HashJoinDesc {
             join_type: join.join_type.clone(),
             build_keys,
             probe_keys,
+            source_exprs: join.source_exprs.clone(),
             other_predicate,
             marker_join_desc: MarkJoinDesc {
                 has_null: RwLock::new(false),

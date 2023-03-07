@@ -30,9 +30,9 @@ use common_expression::SortColumnDescription;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
-use common_pipeline_core::pipe::Pipe;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
+
+
+
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_sinks::EmptySink;
 use common_pipeline_sinks::Sinker;
@@ -54,7 +54,6 @@ use common_sql::executor::HashJoin;
 use common_sql::executor::Limit;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
-use common_sql::executor::RuntimeFilterSource;
 use common_sql::executor::Sort;
 use common_sql::executor::TableScan;
 use common_sql::executor::UnionAll;
@@ -73,7 +72,6 @@ use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::PartialSingleStateAggregator;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
-use crate::pipelines::processors::transforms::RuntimeFilterState;
 use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
 use crate::pipelines::processors::transforms::TransformLeftJoin;
@@ -89,12 +87,10 @@ use crate::pipelines::processors::LeftJoinCompactor;
 use crate::pipelines::processors::MarkJoinCompactor;
 use crate::pipelines::processors::RightJoinCompactor;
 use crate::pipelines::processors::SinkBuildHashTable;
-use crate::pipelines::processors::SinkRuntimeFilterSource;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::processors::TransformHashJoinProbe;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::processors::TransformResortAddOn;
-use crate::pipelines::processors::TransformRuntimeFilter;
 use crate::pipelines::processors::TransformSortPartial;
 use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
@@ -175,9 +171,6 @@ impl PipelineBuilder {
             PhysicalPlan::Exchange(_) => Err(ErrorCode::Internal(
                 "Invalid physical plan with PhysicalPlan::Exchange",
             )),
-            PhysicalPlan::RuntimeFilterSource(runtime_filter_source) => {
-                self.build_runtime_filter_source(runtime_filter_source)
-            }
         }
     }
 
@@ -229,13 +222,8 @@ impl PipelineBuilder {
                 Ok(ProcessorPtr::create(transform))
             }
         };
-        if hash_join_plan.contain_runtime_filter {
-            build_res.main_pipeline.duplicate(false)?;
-            self.join_state = Some(join_state);
-            self.index = Some(self.pipelines.len());
-        } else {
-            build_res.main_pipeline.add_sink(create_sink_processor)?;
-        }
+
+        build_res.main_pipeline.add_sink(create_sink_processor)?;
 
         self.pipelines.push(build_res.main_pipeline);
         self.pipelines
@@ -1000,80 +988,5 @@ impl PipelineBuilder {
         )?;
 
         Ok(())
-    }
-
-    pub fn build_runtime_filter_source(
-        &mut self,
-        runtime_filter_source: &RuntimeFilterSource,
-    ) -> Result<()> {
-        let state = self.build_runtime_filter_state(self.ctx.clone(), runtime_filter_source)?;
-        self.expand_runtime_filter_source(&runtime_filter_source.right_side, state.clone())?;
-        self.build_runtime_filter(&runtime_filter_source.left_side, state)?;
-        Ok(())
-    }
-
-    fn expand_runtime_filter_source(
-        &mut self,
-        _right_side: &PhysicalPlan,
-        state: Arc<RuntimeFilterState>,
-    ) -> Result<()> {
-        let pipeline = &mut self.pipelines[self.index.unwrap()];
-        let output_size = pipeline.output_len();
-        debug_assert!(output_size % 2 == 0);
-        let mut items = Vec::with_capacity(output_size);
-        //           Join
-        //          /   \
-        //        /      \
-        //   RFSource     \
-        //      /    \     \
-        //     /      \     \
-        // scan t1     scan t2
-        for _ in 0..output_size / 2 {
-            let input = InputPort::create();
-            items.push(PipeItem::create(
-                ProcessorPtr::create(Sinker::<SinkBuildHashTable>::create(
-                    input.clone(),
-                    SinkBuildHashTable::try_create(self.join_state.as_ref().unwrap().clone())?,
-                )),
-                vec![input],
-                vec![],
-            ));
-            let input = InputPort::create();
-            items.push(PipeItem::create(
-                ProcessorPtr::create(Sinker::<SinkRuntimeFilterSource>::create(
-                    input.clone(),
-                    SinkRuntimeFilterSource::new(state.clone()),
-                )),
-                vec![input],
-                vec![],
-            ));
-        }
-        pipeline.add_pipe(Pipe::create(output_size, 0, items));
-        Ok(())
-    }
-
-    fn build_runtime_filter(
-        &mut self,
-        left_side: &PhysicalPlan,
-        state: Arc<RuntimeFilterState>,
-    ) -> Result<()> {
-        self.build_pipeline(left_side)?;
-        self.main_pipeline.add_transform(|input, output| {
-            let processor = TransformRuntimeFilter::create(input, output, state.clone());
-            Ok(ProcessorPtr::create(processor))
-        })?;
-        Ok(())
-    }
-
-    fn build_runtime_filter_state(
-        &self,
-        ctx: Arc<QueryContext>,
-        runtime_filter_source: &RuntimeFilterSource,
-    ) -> Result<Arc<RuntimeFilterState>> {
-        Ok(Arc::new(RuntimeFilterState::new(
-            ctx,
-            runtime_filter_source.left_runtime_filters.clone(),
-            runtime_filter_source.right_runtime_filters.clone(),
-        )))
     }
 }

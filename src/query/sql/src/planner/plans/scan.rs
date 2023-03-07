@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -21,6 +22,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use itertools::Itertools;
 use roaring::RoaringBitmap;
+use common_catalog::plan::RuntimeFilterId;
 
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnSet;
@@ -67,6 +69,7 @@ pub struct Scan {
     pub limit: Option<usize>,
     pub order_by: Option<Vec<SortItem>>,
     pub prewhere: Option<Prewhere>,
+    pub runtime_filter_exprs: Option<BTreeMap<RuntimeFilterId, ScalarExpr>>,
 
     pub statistics: Statistics,
 }
@@ -93,6 +96,7 @@ impl Scan {
                 is_accurate: self.statistics.is_accurate,
             },
             prewhere,
+            runtime_filter_exprs: self.runtime_filter_exprs.clone(),
         }
     }
 }
