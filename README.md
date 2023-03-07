@@ -53,7 +53,7 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 
 - __Feature-Rich__
 
-  Support for atomic operations including `SELECT/INSERT/DELETE/UPDATE/COPY/ALTER` and advanced features like Time Travel, Multi Catalog(Apache Hive/Apache Iceberg).
+  Support for atomic operations including `SELECT/INSERT/DELETE/UPDATE/REPLACE/COPY/ALTER` and advanced features like Time Travel, Multi Catalog(Apache Hive/Apache Iceberg).
 
 
 - __Instant Elasticity__
