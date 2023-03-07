@@ -18,8 +18,12 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check::common_super_type;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 
+use crate::binder::wrap_cast_if_needed;
 use crate::binder::JoinPredicate;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::ColumnStat;
@@ -412,10 +416,35 @@ impl Operator for Join {
         let probe_physical_prop = rel_expr.derive_physical_prop_child(0)?;
         let build_physical_prop = rel_expr.derive_physical_prop_child(1)?;
 
-        let conditions = self.get_split_equi_conditions(
+        let mut conditions = self.get_split_equi_conditions(
             &rel_expr.derive_relational_prop_child(0)?,
             &rel_expr.derive_relational_prop_child(1)?,
         );
+
+        for (left_condition, right_condition) in conditions.iter_mut() {
+            let left_data_type = left_condition.as_expr_with_col_index()?.data_type().clone();
+            let right_data_type = right_condition
+                .as_expr_with_col_index()?
+                .data_type()
+                .clone();
+            // Cast left filter and right filter to common type.
+            if left_data_type != right_data_type {
+                let cast_type = common_super_type(
+                    left_data_type.clone(),
+                    right_data_type.clone(),
+                    &BUILTIN_FUNCTIONS.default_cast_rules,
+                )
+                .ok_or_else(|| {
+                    ErrorCode::IllegalDataType(format!(
+                        "cannot join on types {} and {}",
+                        left_data_type.sql_name(),
+                        right_data_type.sql_name()
+                    ))
+                })?;
+                *left_condition = wrap_cast_if_needed(left_condition, &cast_type);
+                *right_condition = wrap_cast_if_needed(right_condition, &cast_type);
+            }
+        }
 
         // if join/probe side is Serial or join key is empty, we use Serial distribution
         if probe_physical_prop.distribution == Distribution::Serial
