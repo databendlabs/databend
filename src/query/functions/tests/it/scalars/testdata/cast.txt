@@ -960,6 +960,103 @@ evaluation (internal):
 +--------+-----------------------------------------------------------------+
 
 
+ast            : CAST('010.010' AS DECIMAL(5,3))
+raw expr       : CAST("010.010" AS Decimal(5, 3))
+checked expr   : to_decimal<String>("010.010")
+optimized expr : 10.010_d128(5,3)
+output type    : Decimal(5, 3)
+output domain  : {10.010..=10.010}
+output         : 10.010
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST('010.010' AS DECIMAL(5,4))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ fail to decode string as decimal: Code: 1049, displayText = decimal overflow. while evaluating function `to_decimal("010.010")`
+
+
+
+ast            : CAST('010.010' AS DECIMAL(5,2))
+raw expr       : CAST("010.010" AS Decimal(5, 2))
+checked expr   : to_decimal<String>("010.010")
+optimized expr : 10.01_d128(5,2)
+output type    : Decimal(5, 2)
+output domain  : {10.01..=10.01}
+output         : 10.01
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST('010.010' AS DECIMAL(4,3))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ fail to decode string as decimal: Code: 1049, displayText = decimal overflow. while evaluating function `to_decimal("010.010")`
+
+
+
+ast            : CAST('010.010' AS DECIMAL(4,2))
+raw expr       : CAST("010.010" AS Decimal(4, 2))
+checked expr   : to_decimal<String>("010.010")
+optimized expr : 10.01_d128(4,2)
+output type    : Decimal(4, 2)
+output domain  : {10.01..=10.01}
+output         : 10.01
+
+
+ast            : CAST('-1010.010' AS DECIMAL(7,3))
+raw expr       : CAST("-1010.010" AS Decimal(7, 3))
+checked expr   : to_decimal<String>("-1010.010")
+optimized expr : -1010.010_d128(7,3)
+output type    : Decimal(7, 3)
+output domain  : {-1010.010..=-1010.010}
+output         : -1010.010
+
+
+ast            : CAST('00' AS DECIMAL(2,1))
+raw expr       : CAST("00" AS Decimal(2, 1))
+checked expr   : to_decimal<String>("00")
+optimized expr : 0.0_d128(2,1)
+output type    : Decimal(2, 1)
+output domain  : {0.0..=0.0}
+output         : 0.0
+
+
+ast            : CAST('0.0' AS DECIMAL(2,0))
+raw expr       : CAST("0.0" AS Decimal(2, 0))
+checked expr   : to_decimal<String>("0.0")
+optimized expr : 0_d128(2,0)
+output type    : Decimal(2, 0)
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : CAST('.0' AS DECIMAL(1,0))
+raw expr       : CAST(".0" AS Decimal(1, 0))
+checked expr   : to_decimal<String>(".0")
+optimized expr : 0_d128(1,0)
+output type    : Decimal(1, 0)
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : CAST('+1.0e-10' AS DECIMAL(11, 10))
+raw expr       : CAST("+1.0e-10" AS Decimal(11, 10))
+checked expr   : to_decimal<String>("+1.0e-10")
+optimized expr : 0.0000000001_d128(11,10)
+output type    : Decimal(11, 10)
+output domain  : {0.0000000001..=0.0000000001}
+output         : 0.0000000001
+
+
+ast            : CAST('-1.0e+10' AS DECIMAL(11, 0))
+raw expr       : CAST("-1.0e+10" AS Decimal(11, 0))
+checked expr   : to_decimal<String>("-1.0e+10")
+optimized expr : -10000000000_d128(11,0)
+output type    : Decimal(11, 0)
+output domain  : {-10000000000..=-10000000000}
+output         : -10000000000
+
+
 ast            : CAST(0 AS BOOLEAN)
 raw expr       : CAST(0_u8 AS Boolean)
 checked expr   : to_boolean<UInt8>(0_u8)
@@ -2804,6 +2901,94 @@ evaluation (internal):
 | bool   | Boolean([0b______10])                                                                                              |
 | Output | NullableColumn { column: StringColumn { data: 0x66616c736574727565, offsets: [0, 5, 9] }, validity: [0b______11] } |
 +--------+--------------------------------------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST('010.010' AS DECIMAL(5,3))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `String` to type `Decimal(5, 3) NULL`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST('010.010' AS DECIMAL(5,4))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `String` to type `Decimal(5, 4) NULL`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST('010.010' AS DECIMAL(5,2))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `String` to type `Decimal(5, 2) NULL`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST('010.010' AS DECIMAL(4,3))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `String` to type `Decimal(4, 3) NULL`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST('010.010' AS DECIMAL(4,2))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `String` to type `Decimal(4, 2) NULL`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST('-1010.010' AS DECIMAL(7,3))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `String` to type `Decimal(7, 3) NULL`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST('00' AS DECIMAL(2,1))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `String` to type `Decimal(2, 1) NULL`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST('0.0' AS DECIMAL(2,0))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `String` to type `Decimal(2, 0) NULL`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST('.0' AS DECIMAL(1,0))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `String` to type `Decimal(1, 0) NULL`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST('+1.0e-10' AS DECIMAL(11, 10))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `String` to type `Decimal(11, 10) NULL`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST('-1.0e+10' AS DECIMAL(11, 0))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `String` to type `Decimal(11, 0) NULL`
+
 
 
 ast            : TRY_CAST(0 AS BOOLEAN)
