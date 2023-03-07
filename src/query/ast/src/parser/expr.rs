@@ -284,6 +284,7 @@ pub enum ExprElement {
         distinct: bool,
         name: Identifier,
         args: Vec<Expr>,
+        window: Option<WindowSpec>,
         params: Vec<Literal>,
     },
     /// `CASE ... WHEN ... ELSE ...` expression
@@ -476,12 +477,14 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 name,
                 args,
                 params,
+                window,
             } => Expr::FunctionCall {
                 span: transform_span(elem.span.0),
                 distinct,
                 name,
                 args,
                 params,
+                window,
             },
             ExprElement::Case {
                 operand,
@@ -827,34 +830,84 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             }
         },
     );
+
+    let window_frame_bound_start = alt((
+        value(WindowFrameBound::CurrentRow, rule! { CURRENT ~ ROW }),
+        value(
+            WindowFrameBound::Preceding(None),
+            rule! { UNBOUNDED ~ LEADING },
+        ),
+        map(rule! { #subexpr(0) ~ PRECEDING }, |(expr, _)| {
+            WindowFrameBound::Preceding(Some(Box::new(expr)))
+        }),
+    ));
+
+    let window_frame_bound_end = alt((
+        value(WindowFrameBound::CurrentRow, rule! { CURRENT ~ ROW }),
+        value(
+            WindowFrameBound::Following(None),
+            rule! { UNBOUNDED ~ FOLLOWING },
+        ),
+        map(rule! { #subexpr(0) ~ FOLLOWING }, |(expr, _)| {
+            WindowFrameBound::Following(Some(Box::new(expr)))
+        }),
+    ));
+
+    let window_spec = map(
+        rule! {
+            (PARTITION ~ ^BY ~ #comma_separated_list1(subexpr(0)))?
+            ~ ( ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) )?
+            ~ (ROWS | RANGE) ~ (BETWEEN ~ #window_frame_bound_start ~ AND ~ #window_frame_bound_end)?
+        },
+        |(opt_partition, opt_order, unit, opt_between)| WindowSpec {
+            partition_by: opt_partition.map(|x| x.2).unwrap_or_default(),
+            order_by: opt_order.map(|x| x.2).unwrap_or_default(),
+            window_frame: opt_between.map(|x| {
+                let unit = match unit.kind {
+                    TokenKind::ROWS => WindowFrameUnits::Rows,
+                    TokenKind::RANGE => WindowFrameUnits::Range,
+                    _ => unreachable!(),
+                };
+                WindowFrame {
+                    units: unit,
+                    start_bound: x.1,
+                    end_bound: x.3,
+                }
+            }),
+        },
+    );
+
     let function_call = map(
         rule! {
             #function_name
-            ~ "("
-            ~ DISTINCT?
-            ~ #comma_separated_list0(subexpr(0))?
-            ~ ")"
-        },
-        |(name, _, opt_distinct, opt_args, _)| ExprElement::FunctionCall {
-            distinct: opt_distinct.is_some(),
-            name,
-            args: opt_args.unwrap_or_default(),
-            params: vec![],
-        },
-    );
-    let function_call_with_param = map(
-        rule! {
-            #function_name
-            ~ "(" ~ #comma_separated_list1(literal) ~ ")"
+            ~ ("(" ~ #comma_separated_list1(literal) ~ ")")?
+            ~ ( OVER ~ "(" ~ #window_spec ~ ")" )?
             ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
         },
-        |(name, _, params, _, _, opt_distinct, opt_args, _)| ExprElement::FunctionCall {
+        |(name, params, window, _, opt_distinct, opt_args, _)| ExprElement::FunctionCall {
             distinct: opt_distinct.is_some(),
             name,
             args: opt_args.unwrap_or_default(),
-            params,
+            params: params.map(|x| x.1).unwrap_or_default(),
+            window: window.map(|x| x.2),
         },
     );
+
+    let function_call_with_params = map(
+        rule! {
+            #function_name
+            ~ ("(" ~ #comma_separated_list1(literal) ~ ")")?
+            ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
+        },
+        |(name, params, _, opt_distinct, opt_args, _)| ExprElement::FunctionCall {
+            distinct: opt_distinct.is_some(),
+            name,
+            args: opt_args.unwrap_or_default(),
+            params: params.map(|x| x.1).unwrap_or_default(),
+            window: None,
+        },
+    );
+
     let case = map(
         rule! {
             CASE ~ #subexpr(0)?
@@ -1036,7 +1089,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
             | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
             | #count_all : "COUNT(*)"
-            | #function_call_with_param : "<function>"
+            | #function_call_with_params : "<function>"
             | #function_call : "<function>"
             | #case : "`CASE ... END`"
             | #subquery : "`(SELECT ...)`"

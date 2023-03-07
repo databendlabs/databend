@@ -23,6 +23,7 @@ use common_io::display_decimal_128;
 use common_io::display_decimal_256;
 use ethnum::i256;
 
+use super::OrderByExpr;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
 use crate::ast::Identifier;
@@ -146,7 +147,7 @@ pub enum Expr {
     CountAll { span: Span },
     /// `(foo, bar)`
     Tuple { span: Span, exprs: Vec<Expr> },
-    /// Scalar function call
+    /// Scalar/Agg/Window function call
     FunctionCall {
         span: Span,
         /// Set to true if the function is aggregate function with `DISTINCT`, like `COUNT(DISTINCT a)`
@@ -154,6 +155,7 @@ pub enum Expr {
         name: Identifier,
         args: Vec<Expr>,
         params: Vec<Literal>,
+        window: Option<WindowSpec>,
     },
     /// `CASE ... WHEN ... ELSE ...` expression
     Case {
@@ -454,6 +456,39 @@ pub enum TrimWhere {
     Both,
     Leading,
     Trailing,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct WindowSpec {
+    pub partition_by: Vec<Expr>,
+    pub order_by: Vec<OrderByExpr>,
+    pub window_frame: Option<WindowFrame>,
+}
+
+/// `RANGE UNBOUNDED PRECEDING` or `ROWS BETWEEN 5 PRECEDING AND CURRENT ROW`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WindowFrame {
+    pub units: WindowFrameUnits,
+    pub start_bound: WindowFrameBound,
+    pub end_bound: WindowFrameBound,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WindowFrameUnits {
+    Rows,
+    Range,
+    Groups,
+}
+
+/// Specifies [WindowFrame]'s `start_bound` and `end_bound`
+#[derive(Debug, Clone, PartialEq)]
+pub enum WindowFrameBound {
+    /// `CURRENT ROW`
+    CurrentRow,
+    /// `<N> PRECEDING` or `UNBOUNDED PRECEDING`
+    Preceding(Option<Box<Expr>>),
+    /// `<N> FOLLOWING` or `UNBOUNDED FOLLOWING`.
+    Following(Option<Box<Expr>>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -339,6 +339,8 @@ pub enum TokenKind {
     CROSS,
     #[token("CSV", ignore(ascii_case))]
     CSV,
+    #[token("CURRENT", ignore(ascii_case))]
+    CURRENT,
     #[token("CURRENT_TIMESTAMP", ignore(ascii_case))]
     CURRENT_TIMESTAMP,
     #[token("DATABASE", ignore(ascii_case))]
@@ -447,6 +449,8 @@ pub enum TokenKind {
     FORCE,
     #[token("FORMAT", ignore(ascii_case))]
     FORMAT,
+    #[token("FOLLOWING", ignore(ascii_case))]
+    FOLLOWING,
     #[token("FORMAT_NAME", ignore(ascii_case))]
     FORMAT_NAME,
     #[token("FORMATS", ignore(ascii_case))]
@@ -605,8 +609,12 @@ pub enum TokenKind {
     OUTER,
     #[token("ON_ERROR", ignore(ascii_case))]
     ON_ERROR,
+    #[token("OVER", ignore(ascii_case))]
+    OVER,
     #[token("OVERWRITE", ignore(ascii_case))]
     OVERWRITE,
+    #[token("PARTITION", ignore(ascii_case))]
+    PARTITION,
     #[token("PARQUET", ignore(ascii_case))]
     PARQUET,
     #[token("PATTERN", ignore(ascii_case))]
@@ -627,6 +635,8 @@ pub enum TokenKind {
     QUERY,
     #[token("QUOTE", ignore(ascii_case))]
     QUOTE,
+    #[token("RANGE", ignore(ascii_case))]
+    RANGE,
     #[token("RAWDEFLATE", ignore(ascii_case))]
     RAWDEFLATE,
     #[token("RECLUSTER", ignore(ascii_case))]
@@ -641,12 +651,18 @@ pub enum TokenKind {
     RENAME,
     #[token("REPLACE", ignore(ascii_case))]
     REPLACE,
+    #[token("ROW", ignore(ascii_case))]
+    ROW,
+    #[token("ROWS", ignore(ascii_case))]
+    ROWS,
     #[token("ROW_TAG", ignore(ascii_case))]
     ROW_TAG,
     #[token("GRANT", ignore(ascii_case))]
     GRANT,
     #[token("ROLE", ignore(ascii_case))]
     ROLE,
+    #[token("PRECEDING", ignore(ascii_case))]
+    PRECEDING,
     #[token("PRESIGN", ignore(ascii_case))]
     PRESIGN,
     #[token("PRIVILEGES", ignore(ascii_case))]
@@ -783,6 +799,8 @@ pub enum TokenKind {
     TUPLE,
     #[token("TYPE", ignore(ascii_case))]
     TYPE,
+    #[token("UNBOUNDED", ignore(ascii_case))]
+    UNBOUNDED,
     #[token("UNION", ignore(ascii_case))]
     UNION,
     #[token("UINT16", ignore(ascii_case))]

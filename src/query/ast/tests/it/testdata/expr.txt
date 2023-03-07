@@ -53,48 +53,11 @@ Literal {
 ---------- Input ----------
 char(0xD0, 0xBF, 0xD1)
 ---------- Output ---------
-char(208, 191, 209)
----------- AST ------------
-FunctionCall {
-    span: Some(
-        0..22,
-    ),
-    distinct: false,
-    name: Identifier {
-        name: "char",
-        quote: None,
-        span: Some(
-            0..4,
-        ),
-    },
-    args: [
-        Literal {
-            span: Some(
-                5..9,
-            ),
-            lit: UInt64(
-                208,
-            ),
-        },
-        Literal {
-            span: Some(
-                11..15,
-            ),
-            lit: UInt64(
-                191,
-            ),
-        },
-        Literal {
-            span: Some(
-                17..21,
-            ),
-            lit: UInt64(
-                209,
-            ),
-        },
-    ],
-    params: [],
-}
+error: 
+  --> SQL:1:5
+  |
+1 | char(0xD0, 0xBF, 0xD1)
+  |     ^
 
 
 ---------- Input ----------
@@ -736,6 +699,7 @@ FunctionCall {
         },
     ],
     params: [],
+    window: None,
 }
 
 
@@ -1244,6 +1208,7 @@ FunctionCall {
         },
     ],
     params: [],
+    window: None,
 }
 
 
@@ -1268,6 +1233,7 @@ FunctionCall {
     },
     args: [],
     params: [],
+    window: None,
 }
 
 
@@ -1290,6 +1256,7 @@ FunctionCall {
     },
     args: [],
     params: [],
+    window: None,
 }
 
 
@@ -1341,6 +1308,7 @@ FunctionCall {
         },
     ],
     params: [],
+    window: None,
 }
 
 
@@ -2071,6 +2039,7 @@ BinaryOp {
                     },
                 ],
                 params: [],
+                window: None,
             },
         },
         not: true,
@@ -2173,6 +2142,7 @@ BinaryOp {
             },
         ],
         params: [],
+        window: None,
     },
     right: Case {
         span: Some(
@@ -2214,6 +2184,7 @@ BinaryOp {
                         },
                     ],
                     params: [],
+                    window: None,
                 },
                 right: Literal {
                     span: Some(
@@ -2265,6 +2236,7 @@ BinaryOp {
                     },
                 ],
                 params: [],
+                window: None,
             },
         ),
     },
@@ -2645,40 +2617,11 @@ BinaryOp {
 ---------- Input ----------
 nullif(1, 1)
 ---------- Output ---------
-nullif(1, 1)
----------- AST ------------
-FunctionCall {
-    span: Some(
-        0..12,
-    ),
-    distinct: false,
-    name: Identifier {
-        name: "nullif",
-        quote: None,
-        span: Some(
-            0..6,
-        ),
-    },
-    args: [
-        Literal {
-            span: Some(
-                7..8,
-            ),
-            lit: UInt64(
-                1,
-            ),
-        },
-        Literal {
-            span: Some(
-                10..11,
-            ),
-            lit: UInt64(
-                1,
-            ),
-        },
-    ],
-    params: [],
-}
+error: 
+  --> SQL:1:7
+  |
+1 | nullif(1, 1)
+  |       ^
 
 
 ---------- Input ----------
@@ -2729,54 +2672,18 @@ FunctionCall {
         },
     ],
     params: [],
+    window: None,
 }
 
 
 ---------- Input ----------
 coalesce(1, 2, 3)
 ---------- Output ---------
-coalesce(1, 2, 3)
----------- AST ------------
-FunctionCall {
-    span: Some(
-        0..17,
-    ),
-    distinct: false,
-    name: Identifier {
-        name: "coalesce",
-        quote: None,
-        span: Some(
-            0..8,
-        ),
-    },
-    args: [
-        Literal {
-            span: Some(
-                9..10,
-            ),
-            lit: UInt64(
-                1,
-            ),
-        },
-        Literal {
-            span: Some(
-                12..13,
-            ),
-            lit: UInt64(
-                2,
-            ),
-        },
-        Literal {
-            span: Some(
-                15..16,
-            ),
-            lit: UInt64(
-                3,
-            ),
-        },
-    ],
-    params: [],
-}
+error: 
+  --> SQL:1:9
+  |
+1 | coalesce(1, 2, 3)
+  |         ^
 
 
 ---------- Input ----------
@@ -2841,46 +2748,18 @@ FunctionCall {
         },
     ],
     params: [],
+    window: None,
 }
 
 
 ---------- Input ----------
 ifnull(1, 1)
 ---------- Output ---------
-ifnull(1, 1)
----------- AST ------------
-FunctionCall {
-    span: Some(
-        0..12,
-    ),
-    distinct: false,
-    name: Identifier {
-        name: "ifnull",
-        quote: None,
-        span: Some(
-            0..6,
-        ),
-    },
-    args: [
-        Literal {
-            span: Some(
-                7..8,
-            ),
-            lit: UInt64(
-                1,
-            ),
-        },
-        Literal {
-            span: Some(
-                10..11,
-            ),
-            lit: UInt64(
-                1,
-            ),
-        },
-    ],
-    params: [],
-}
+error: 
+  --> SQL:1:7
+  |
+1 | ifnull(1, 1)
+  |       ^
 
 
 ---------- Input ----------
@@ -2931,6 +2810,7 @@ FunctionCall {
         },
     ],
     params: [],
+    window: None,
 }
 
 
@@ -3079,5 +2959,80 @@ Map {
         ),
     ],
 }
+
+
+---------- Input ----------
+ROW_NUMBER() OVER (ORDER BY salary DESC)
+---------- Output ---------
+error: 
+  --> SQL:1:20
+  |
+1 | ROW_NUMBER() OVER (ORDER BY salary DESC)
+  | ----------        -^^^^^ expected `)`, <QuotedString>, <LiteralInteger>, <LiteralFloat>, <MySQLLiteralHex>, <PGLiteralHex>, or 66 more ...
+  | |                 | 
+  | |                 while parsing `(<expr> [, ...])`
+  | while parsing expression
+
+
+---------- Input ----------
+SUM(salary) OVER ()
+---------- Output ---------
+error: 
+  --> SQL:1:13
+  |
+1 | SUM(salary) OVER ()
+  |             ^^^^
+
+
+---------- Input ----------
+AVG(salary) OVER (PARTITION BY department)
+---------- Output ---------
+error: 
+  --> SQL:1:29
+  |
+1 | AVG(salary) OVER (PARTITION BY department)
+  | ---              -          ^^ expected `)` or `,`
+  | |                |           
+  | |                while parsing `(<expr> [, ...])`
+  | while parsing expression
+
+
+---------- Input ----------
+SUM(salary) OVER (PARTITION BY department ORDER BY salary DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+---------- Output ---------
+error: 
+  --> SQL:1:29
+  |
+1 | SUM(salary) OVER (PARTITION BY department ORDER BY salary DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+  | ---              -          ^^ expected `)` or `,`
+  | |                |           
+  | |                while parsing `(<expr> [, ...])`
+  | while parsing expression
+
+
+---------- Input ----------
+AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) 
+---------- Output ---------
+error: 
+  --> SQL:1:29
+  |
+1 | AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) 
+  | ---              -          ^^ expected `)` or `,`
+  | |                |           
+  | |                while parsing `(<expr> [, ...])`
+  | while parsing expression
+
+
+---------- Input ----------
+COUNT(*) OVER (ORDER BY hire_date RANGE BETWEEN INTERVAL '7' DAY PRECEDING AND CURRENT ROW)
+---------- Output ---------
+error: 
+  --> SQL:1:16
+  |
+1 | COUNT(*) OVER (ORDER BY hire_date RANGE BETWEEN INTERVAL '7' DAY PRECEDING AND CURRENT ROW)
+  | -----         -^^^^^ expected `)`, <QuotedString>, <LiteralInteger>, <LiteralFloat>, <MySQLLiteralHex>, <PGLiteralHex>, or 66 more ...
+  | |             | 
+  | |             while parsing `(<expr> [, ...])`
+  | while parsing expression
 
 

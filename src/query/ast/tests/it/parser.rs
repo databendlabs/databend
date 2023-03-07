@@ -566,6 +566,13 @@ fn test_expr() {
         r#"a is distinct from b"#,
         r#"1 is not distinct from null"#,
         r#"{'k1':1,'k2':2}"#,
+        // window expr
+        r#"ROW_NUMBER() OVER (ORDER BY salary DESC)"#,
+        r#"SUM(salary) OVER ()"#,
+        r#"AVG(salary) OVER (PARTITION BY department)"#,
+        r#"SUM(salary) OVER (PARTITION BY department ORDER BY salary DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)"#,
+        r#"AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) "#,
+        r#"COUNT(*) OVER (ORDER BY hire_date RANGE BETWEEN INTERVAL '7' DAY PRECEDING AND CURRENT ROW)"#,
     ];
 
     for case in cases {
