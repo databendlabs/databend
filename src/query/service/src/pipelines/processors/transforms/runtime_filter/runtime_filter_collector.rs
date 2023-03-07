@@ -14,17 +14,20 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::sync::{Arc, mpsc, Mutex};
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::Sender;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 use common_catalog::plan::RuntimeFilterId;
 use common_catalog::table_context::TableContext;
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::RemoteExpr;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
-
 use storages_common_index::filters::FilterBuilder;
 use storages_common_index::filters::Xor8Builder;
 use storages_common_index::filters::Xor8Filter;
@@ -87,7 +90,7 @@ impl RuntimeFilterCollector {
             filters.insert(id.clone(), filter_builder.build()?);
         }
         let tx = self.filters_tx.lock().unwrap();
-        if let Err(_ ) = tx.send(filters) {
+        if let Err(_) = tx.send(filters) {
             return Err(ErrorCode::Internal("send runtime filters fail"));
         }
         Ok(())

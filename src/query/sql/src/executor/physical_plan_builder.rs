@@ -849,8 +849,8 @@ impl PhysicalPlanBuilder {
             .transpose()?;
 
         let runtime_filter_exprs = if let Some(exprs) = &scan.runtime_filter_exprs {
-            let mut new_exprs =  BTreeMap::new();
-            for (id,  expr) in exprs {
+            let mut new_exprs = BTreeMap::new();
+            for (id, expr) in exprs {
                 let remote_expr = expr.as_expr_with_col_name()?.as_remote_expr();
                 new_exprs.insert(id.clone(), remote_expr);
             }

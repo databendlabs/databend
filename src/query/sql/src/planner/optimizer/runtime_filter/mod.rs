@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use common_catalog::plan::RuntimeFilterId;
 
+use common_catalog::plan::RuntimeFilterId;
 use common_exception::Result;
 
 use crate::binder::JoinPredicate;
@@ -137,6 +137,8 @@ fn add_runtime_filter_to_scan(
         | RelOperator::Limit(_)
         | RelOperator::UnionAll(_)
         | RelOperator::DummyTableScan(_) => add_runtime_filter_to_scan(target_exprs, expr),
-        RelOperator::Exchange(_) | RelOperator::Pattern(_) => { unreachable!()}
+        RelOperator::Exchange(_) | RelOperator::Pattern(_) => {
+            unreachable!()
+        }
     }
 }

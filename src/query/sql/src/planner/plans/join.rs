@@ -17,8 +17,8 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
-use common_catalog::plan::RuntimeFilterId;
 
+use common_catalog::plan::RuntimeFilterId;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
@@ -126,8 +126,6 @@ impl Display for JoinType {
         }
     }
 }
-
-
 
 /// Join operator. We will choose hash join by default.
 /// In the case that using hash join, the right child

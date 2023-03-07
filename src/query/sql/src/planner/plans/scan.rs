@@ -16,13 +16,13 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_catalog::plan::RuntimeFilterId;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::TableStatistics;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use itertools::Itertools;
 use roaring::RoaringBitmap;
-use common_catalog::plan::RuntimeFilterId;
 
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnSet;

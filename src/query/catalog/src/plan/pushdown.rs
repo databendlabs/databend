@@ -48,7 +48,7 @@ pub struct PrewhereInfo {
 }
 
 #[derive(
-Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, Ord, PartialOrd,
+    Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, Ord, PartialOrd,
 )]
 pub struct RuntimeFilterId {
     id: String,

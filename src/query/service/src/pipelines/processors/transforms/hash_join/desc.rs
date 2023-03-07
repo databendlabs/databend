@@ -14,8 +14,8 @@
 
 use std::collections::BTreeMap;
 
-
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_catalog::plan::RuntimeFilterId;
 use common_exception::Result;
 use common_expression::type_check::check_function;
 use common_expression::DataBlock;
@@ -24,7 +24,6 @@ use common_expression::RemoteExpr;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_sql::executor::HashJoin;
 use parking_lot::RwLock;
-use common_catalog::plan::RuntimeFilterId;
 
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::sql::plans::JoinType;

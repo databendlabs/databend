@@ -30,9 +30,6 @@ use common_expression::SortColumnDescription;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
-
-
-
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_sinks::EmptySink;
 use common_pipeline_sinks::Sinker;

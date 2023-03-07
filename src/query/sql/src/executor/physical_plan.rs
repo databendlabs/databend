@@ -14,7 +14,8 @@
 
 use std::collections::BTreeMap;
 
-use common_catalog::plan::{DataSourcePlan, RuntimeFilterId};
+use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::RuntimeFilterId;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::DataBlock;

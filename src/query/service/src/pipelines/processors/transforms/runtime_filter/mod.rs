@@ -14,5 +14,4 @@
 
 mod runtime_filter_collector;
 
-
 pub use runtime_filter_collector::RuntimeFilterCollector;
