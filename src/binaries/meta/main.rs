@@ -203,7 +203,7 @@ async fn register_node(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), a
             "Leader node is replicated to local store. About to register node with grpc-advertise-addr"
         );
 
-        let res = do_register(&meta_node, &conf).await;
+        let res = do_register(meta_node, conf).await;
         info!("Register-node result: {:?}", res);
         match res {
             Ok(_) => {
