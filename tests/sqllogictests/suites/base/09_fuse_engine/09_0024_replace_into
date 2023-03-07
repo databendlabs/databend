@@ -1,0 +1,42 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_0023
+
+statement ok
+CREATE DATABASE db_09_0023
+
+statement ok
+USE db_09_0023
+
+#############
+# sub query #
+#############
+
+statement ok
+CREATE TABLE test(c1 int, c2 int);
+
+statement ok
+REPLACE INTO test ON(c1) select number, number from numbers(101);
+
+query IT
+SELECT sum(c1),  sum(c2) FROM test;
+----
+5050 5050
+
+statement ok
+REPLACE INTO test ON(c1) select number, 0 from numbers(101);
+
+query IT
+SELECT sum(c1),  sum(c2) FROM test;
+----
+5050 0
+
+statement ok
+DROP TABLE test;
+
+
+statement ok
+DROP DATABASE db_09_0023
+
+
+
+
