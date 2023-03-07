@@ -486,6 +486,8 @@ impl PhysicalPlanBuilder {
                                 ..
                             }) => agg.input.output_schema()?,
 
+                            PhysicalPlan::HashJoin(ref hash_join) => hash_join.output_schema()?,
+
                             _ => {
                                 return Err(ErrorCode::Internal(format!(
                                     "invalid input physical plan: {}",
@@ -553,6 +555,22 @@ impl PhysicalPlanBuilder {
                                 let before_group_by_schema = partial.input.output_schema()?;
                                 let limit = agg.limit;
 
+                                PhysicalPlan::AggregateFinal(AggregateFinal {
+                                    plan_id: self.next_plan_id(),
+                                    input: Box::new(input),
+                                    group_by: group_items,
+                                    agg_funcs,
+                                    before_group_by_schema,
+
+                                    stat_info: Some(stat_info),
+                                    limit,
+                                })
+                            }
+
+                            PhysicalPlan::HashJoin(ref hash_join) => {
+                                // TODO(dousir9) get the correct limit.
+                                let limit = Some(0);
+                                let before_group_by_schema = hash_join.output_schema()?;
                                 PhysicalPlan::AggregateFinal(AggregateFinal {
                                     plan_id: self.next_plan_id(),
                                     input: Box::new(input),

@@ -175,13 +175,35 @@ pub struct AggregatePartial {
 
 impl AggregatePartial {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        // TODO(dousir9) distinguish join scenario from other scenarios.
         let input_schema = self.input.output_schema()?;
         let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
+        // if we push down agg_partial below join, the fields must contain:
+        // (1) aggregates (added to the output_schema of the hash table, and then used by agg_final).
+        // (2) join conditions (used by build_keys/prob_keys).
+        // (3) group by expressions(equal to (2) now).
         for agg in self.agg_funcs.iter() {
             fields.push(DataField::new(
                 &agg.output_column.to_string(),
                 DataType::String,
             ));
+            let arg_indices = &agg.arg_indices;
+            for arg_index in arg_indices.into_iter() {
+                fields.push(DataField::new(
+                    &arg_index.to_string(),
+                    DataType::String,
+                ));
+            }
+        }
+        // Join conditions
+        // TODO(dousir9) may be we can replace group_by.iter() by reusing _group_by_key.
+        for id in self.group_by.iter() {
+            let data_type = self
+                .input.output_schema()?
+                .field_with_name(&id.to_string())?
+                .data_type()
+                .clone();
+            fields.push(DataField::new(&id.to_string(), data_type));
         }
         if !self.group_by.is_empty() {
             let method = DataBlock::choose_hash_method_with_types(

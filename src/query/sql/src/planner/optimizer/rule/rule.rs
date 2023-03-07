@@ -57,6 +57,7 @@ pub enum RuleID {
     MergeEvalScalar,
     MergeFilter,
     SplitAggregate,
+    PushDownAggregateJoin,
     FoldCountAggregate,
 
     // Exploration rules
@@ -91,6 +92,7 @@ impl Display for RuleID {
             RuleID::MergeFilter => write!(f, "MergeFilter"),
             RuleID::NormalizeScalarFilter => write!(f, "NormalizeScalarFilter"),
             RuleID::SplitAggregate => write!(f, "SplitAggregate"),
+            RuleID::PushDownAggregateJoin => write!(f, "PushDownAggregateJoin"),
             RuleID::NormalizeDisjunctiveFilter => write!(f, "NormalizeDisjunctiveFilter"),
             RuleID::FoldCountAggregate => write!(f, "FoldCountAggregate"),
 
