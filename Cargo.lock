@@ -1728,9 +1728,10 @@ dependencies = [
  "maplit",
  "num",
  "once_cell",
- "openraft",
+ "openraft 0.8.3",
  "pretty_assertions",
  "serde",
+ "serde_json",
  "tempfile",
  "tracing",
 ]
@@ -1747,7 +1748,7 @@ dependencies = [
  "common-meta-types",
  "common-tracing",
  "once_cell",
- "openraft",
+ "openraft 0.8.3",
  "pretty_assertions",
  "serde",
  "serde_json",
@@ -1795,7 +1796,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "once_cell",
- "openraft",
+ "openraft 0.8.3",
  "prost",
  "prost-build",
  "regex",
@@ -2815,7 +2816,6 @@ dependencies = [
  "databend-meta",
  "databend-query",
  "limits-rs",
- "openraft",
  "poem",
  "sentry",
  "serde",
@@ -2892,7 +2892,7 @@ dependencies = [
  "common-proto-conv",
  "common-protos",
  "common-tracing",
- "openraft",
+ "openraft 0.8.3",
  "serde",
  "serde_json",
  "tokio",
@@ -5524,8 +5524,9 @@ dependencies = [
 
 [[package]]
 name = "openraft"
-version = "0.7.4"
-source = "git+https://github.com/datafuselabs/openraft?tag=v0.7.4#959636885e2069c685b1bdb9ebc5a875565f4a8a"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83a564e30e56d0064e47f51cd6d480160f042a1f960dde15eaf2096be20d290e"
 dependencies = [
  "anyerror",
  "anyhow",
@@ -5538,6 +5539,31 @@ dependencies = [
  "maplit",
  "rand 0.8.5",
  "serde",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-futures",
+]
+
+[[package]]
+name = "openraft"
+version = "0.8.3"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.3-alpha.1#fc8cf0a20dcc9f53977fa55a037f16cf23cb7c26"
+dependencies = [
+ "anyerror",
+ "anyhow",
+ "async-trait",
+ "byte-unit",
+ "clap 3.2.23",
+ "derive_more",
+ "futures",
+ "maplit",
+ "openraft 0.7.5",
+ "pin-utils",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "tempfile",
  "thiserror",
  "tokio",
  "tracing",

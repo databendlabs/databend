@@ -11,10 +11,14 @@ id            = 4
 raft_dir      = "./.databend/new_meta1"
 raft_api_port = 29103
 
+# milli seconds
+heartbeat_interval = 200
+
 # Assign raft_{listen|advertise}_host in test config.
 # This allows you to catch a bug in unit tests when something goes wrong in raft meta nodes communication. 
 raft_listen_host = "127.0.0.1"
 raft_advertise_host = "localhost"
+
 
 # Start up mode: single node cluster
 single        = true

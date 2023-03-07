@@ -27,14 +27,17 @@ echo " === upgrade"
 echo " === export from $meta_dir"
 ./target/${BUILD_PROFILE}/databend-metactl --export --raft-dir "$meta_dir" >$exported
 
-echo " === check affected lines"
-count_of_diff=$(diff -y --suppress-common-lines "$meta_json" "$exported" | wc -l)
-if [ "$count_of_table_meta" == "$count_of_diff" ]; then
-    echo " === affected: $count_of_diff; OK"
-else
-    echo " === mismatching lines of upgraded: expect: $count_of_table_meta; got: $count_of_diff"
-    exit 1
-fi
+# # Because upgrading, the new meta-service will rewrite all records to a newer
+# # version. Therefore all lines will be affected.
+#
+# echo " === check affected lines"
+# count_of_diff=$(diff -y --suppress-common-lines "$meta_json" "$exported" | wc -l)
+# if [ "$count_of_table_meta" == "$count_of_diff" ]; then
+#     echo " === affected: $count_of_diff; OK"
+# else
+#     echo " === mismatching lines of upgraded: expect: $count_of_table_meta; got: $count_of_diff"
+#     exit 1
+# fi
 
 echo " === check ver"
 ./target/${BUILD_PROFILE}/databend-meta-upgrade-09 --cmd print --raft-dir "$meta_dir"

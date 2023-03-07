@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_meta_sled_store::SledBytesError;
+use common_meta_sled_store::SledSerde;
 use common_meta_types::AppliedState;
 use serde::Deserialize;
 use serde::Serialize;
@@ -24,4 +26,12 @@ use serde::Serialize;
 pub struct ClientLastRespValue {
     pub req_serial_num: u64,
     pub res: AppliedState,
+}
+
+impl SledSerde for ClientLastRespValue {
+    fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, SledBytesError>
+    where Self: Sized {
+        let s = serde_json::from_slice(v.as_ref())?;
+        Ok(s)
+    }
 }

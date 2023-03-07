@@ -13,12 +13,11 @@
 // limitations under the License.
 
 use common_meta_sled_store::SledKeySpace;
-use common_meta_types::LogEntry;
+use common_meta_types::Entry;
 use common_meta_types::LogIndex;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::SeqV;
-use openraft::raft::Entry;
 
 use crate::testing::fake_state_machine_meta::StateMachineMetaKey;
 use crate::testing::fake_state_machine_meta::StateMachineMetaValue;
@@ -30,7 +29,7 @@ impl SledKeySpace for Logs {
     const PREFIX: u8 = 1;
     const NAME: &'static str = "log";
     type K = LogIndex;
-    type V = Entry<LogEntry>;
+    type V = Entry;
 }
 
 /// Types for Node in SledTree

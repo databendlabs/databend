@@ -12,27 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::collections::BTreeSet;
 
 use common_base::base::tokio::sync::RwLockReadGuard;
 use common_meta_kvapi::kvapi::KVApi;
 use common_meta_raft_store::state_machine::StateMachine;
-use common_meta_sled_store::openraft::error::RemoveLearnerError;
+use common_meta_sled_store::openraft::ChangeMembers;
 use common_meta_stoerr::MetaStorageError;
 use common_meta_types::AppliedState;
+use common_meta_types::ClientWriteError;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
+use common_meta_types::MembershipNode;
 use common_meta_types::MetaDataError;
 use common_meta_types::MetaDataReadError;
 use common_meta_types::MetaOperationError;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
-use common_meta_types::RaftChangeMembershipError;
-use common_meta_types::RaftWriteError;
+use common_meta_types::RaftError;
 use common_meta_types::SeqV;
 use common_metrics::counter::Count;
+use maplit::btreemap;
+use maplit::btreeset;
 use tracing::debug;
-use tracing::error;
 use tracing::info;
 
 use crate::message::ForwardRequest;
@@ -51,7 +53,7 @@ use crate::store::RaftStore;
 /// A leader does not imply it is actually the leader granted by the cluster.
 /// It just means it believes it is the leader and have not yet perceived there is other newer leader.
 pub struct MetaLeader<'a> {
-    sto: &'a Arc<RaftStore>,
+    sto: &'a RaftStore,
     raft: &'a MetaRaft,
 }
 
@@ -120,19 +122,18 @@ impl<'a> MetaLeader<'a> {
     ///
     /// If the node is already in cluster membership, it still returns Ok.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn join(&self, req: JoinRequest) -> Result<(), RaftChangeMembershipError> {
+    pub async fn join(&self, req: JoinRequest) -> Result<(), RaftError<ClientWriteError>> {
         let node_id = req.node_id;
         let endpoint = req.endpoint;
         let metrics = self.raft.metrics().borrow().clone();
-        let membership = metrics.membership_config.membership.clone();
+        let membership = metrics.membership_config.membership();
 
-        if membership.contains(&node_id) {
+        let voters = membership.voter_ids().collect::<BTreeSet<_>>();
+
+        if voters.contains(&node_id) {
             return Ok(());
         }
 
-        // safe unwrap: if the first config is None, panic is the expected behavior here.
-        let mut membership = membership.get_ith_config(0).unwrap().clone();
-        membership.insert(node_id);
         let ent = LogEntry {
             txid: None,
             time_ms: None,
@@ -145,7 +146,12 @@ impl<'a> MetaLeader<'a> {
         };
         self.write(ent).await?;
 
-        self.raft.change_membership(membership, false).await?;
+        self.raft
+            .change_membership(
+                ChangeMembers::AddVoters(btreemap! {node_id=>MembershipNode{}}),
+                false,
+            )
+            .await?;
         Ok(())
     }
 
@@ -170,45 +176,12 @@ impl<'a> MetaLeader<'a> {
             return Ok(());
         }
 
-        // safe unwrap: if the first config is None, panic is the expected behavior here.
-        let membership = {
-            let sm = self.get_state_machine().await;
-            let m = sm.get_membership().map_err(|e| {
-                MetaDataError::ReadError(MetaDataReadError::new("get_membership()", "", &e))
-            })?;
-
-            // Safe unwrap(): can_leave() assert that m is not None.
-            m.unwrap().membership
-        };
-
         // 1. Remove it from membership if needed.
-        if membership.contains(&node_id) {
-            let mut config0 = membership.get_ith_config(0).unwrap().clone();
-            config0.remove(&node_id);
+        self.raft
+            .change_membership(ChangeMembers::RemoveVoters(btreeset! {node_id}), false)
+            .await?;
 
-            self.raft.change_membership(config0, true).await?;
-        }
-
-        // 2. Stop replication
-        let res = self.raft.remove_learner(node_id).await;
-        if let Err(e) = res {
-            match e {
-                RemoveLearnerError::ForwardToLeader(e) => {
-                    return Err(MetaOperationError::ForwardToLeader(e));
-                }
-                RemoveLearnerError::NotLearner(_e) => {
-                    error!("Node to leave the cluster is not a learner: {}", node_id);
-                }
-                RemoveLearnerError::NotExists(_e) => {
-                    info!("Node to leave the cluster does not exists: {}", node_id);
-                }
-                RemoveLearnerError::Fatal(e) => {
-                    return Err(MetaOperationError::DataError(MetaDataError::WriteError(e)));
-                }
-            }
-        }
-
-        // 3. Remove node info
+        // 2. Remove node info
         let ent = LogEntry {
             txid: None,
             time_ms: None,
@@ -223,7 +196,10 @@ impl<'a> MetaLeader<'a> {
     ///
     /// If the raft node is not a leader, it returns MetaRaftError::ForwardToLeader.
     #[tracing::instrument(level = "debug", skip(self, entry))]
-    pub async fn write(&self, mut entry: LogEntry) -> Result<AppliedState, RaftWriteError> {
+    pub async fn write(
+        &self,
+        mut entry: LogEntry,
+    ) -> Result<AppliedState, RaftError<ClientWriteError>> {
         // Add consistent clock time to log entry.
         entry.time_ms = Some(SeqV::<()>::now_ms());
 
@@ -232,20 +208,20 @@ impl<'a> MetaLeader<'a> {
 
         info!("write LogEntry: {}", entry);
         let write_res = self.raft.client_write(entry).await;
-        if let Ok(ok) = &write_res {
-            info!(
-                "raft.client_write res ok: log_id: {}, data: {}, membership: {:?}",
-                ok.log_id, ok.data, ok.membership
-            );
-        }
-        if let Err(err) = &write_res {
-            server_metrics::incr_proposals_failed();
-            info!("raft.client_write res err: {:?}", err);
-        }
 
         match write_res {
-            Ok(resp) => Ok(resp.data),
-            Err(cli_write_err) => Err(RaftWriteError::from_raft_err(cli_write_err)),
+            Ok(resp) => {
+                info!(
+                    "raft.client_write res ok: log_id: {}, data: {}, membership: {:?}",
+                    resp.log_id, resp.data, resp.membership
+                );
+                Ok(resp.data)
+            }
+            Err(raft_err) => {
+                server_metrics::incr_proposals_failed();
+                info!("raft.client_write res err: {:?}", raft_err);
+                Err(raft_err)
+            }
         }
     }
 
@@ -259,17 +235,20 @@ impl<'a> MetaLeader<'a> {
         };
         info!("check can_leave: id: {}, membership: {:?}", id, m);
 
-        let membership = match m {
+        let membership = match &m {
             None => {
                 return Ok(Err("no membership, can not leave".to_string()));
             }
-            Some(x) => x.membership,
+            Some(x) => x.membership(),
         };
 
-        let config0 = membership.get_ith_config(0).unwrap();
+        let last_config = membership.get_joint_config().last().unwrap();
 
-        if config0.contains(&id) && config0.len() == 1 {
-            return Ok(Err(format!("can not remove the last node: {:?}", config0)));
+        if last_config.contains(&id) && last_config.len() == 1 {
+            return Ok(Err(format!(
+                "can not remove the last node: {:?}",
+                last_config
+            )));
         }
 
         Ok(Ok(()))

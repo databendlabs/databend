@@ -158,3 +158,9 @@ impl From<tonic::Status> for MetaNetworkError {
         }
     }
 }
+
+impl From<tonic::transport::Error> for MetaNetworkError {
+    fn from(err: tonic::transport::Error) -> Self {
+        MetaNetworkError::ConnectionError(ConnectionError::new(err, ""))
+    }
+}
