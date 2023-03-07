@@ -227,8 +227,18 @@ impl PhysicalPlanBuilder {
             RelOperator::Join(join) => {
                 let build_side = self.build(s_expr.child(1)?).await?;
                 let probe_side = self.build(s_expr.child(0)?).await?;
-                let build_schema = build_side.output_schema()?;
-                let probe_schema = probe_side.output_schema()?;
+                let build_schema = match &build_side {
+                    PhysicalPlan::AggregatePartial(agg) => {
+                        agg.output_schema_for_hash_join()?
+                    },
+                    _ => build_side.output_schema()?
+                };
+                let probe_schema = match &probe_side {
+                    PhysicalPlan::AggregatePartial(agg) => {
+                        agg.output_schema_for_hash_join()?
+                    },
+                    _ => probe_side.output_schema()?
+                };
                 let merged_schema = DataSchemaRefExt::create(
                     probe_schema
                         .fields()
