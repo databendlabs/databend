@@ -137,9 +137,17 @@ docker run --net=host  datafuselabs/databend
 - [How to Load Data from Databend Stages](https://databend.rs/doc/load-data/stage)
 
 
-## Unloading Data from Databend
+### Unloading Data from Databend
 
 - [How to Unload Data from Databend](https://databend.rs/doc/unload-data/)
+
+### Managing Data
+
+- [COPY](https://databend.rs/doc/sql-commands/dml/dml-copy-into-table)
+- [INSERT](https://databend.rs/doc/sql-commands/dml/dml-insert)
+- [DELETE](https://databend.rs/doc/sql-commands/dml/dml-delete-from)
+- [UPDATE](https://databend.rs/doc/sql-commands/dml/dml-update)
+- [REPLACE](https://databend.rs/doc/sql-commands/dml/dml-replace)
 
 ### Managing Users
 
@@ -214,6 +222,7 @@ For general help in using Databend, please refer to the official documentation. 
 
 ## Roadmap
 
+- [Roadmap v1.1](https://github.com/datafuselabs/databend/issues/10334)
 - [Roadmap v1.0](https://github.com/datafuselabs/databend/issues/9604)
 - [Roadmap v0.9](https://github.com/datafuselabs/databend/issues/7052)
 - [Roadmap 2023](https://github.com/datafuselabs/databend/issues/9448)
