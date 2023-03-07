@@ -213,3 +213,52 @@ EvalScalar
 
 statement ok
 drop table explain_agg_t1;
+
+statement ok
+create table a (id int, val int);
+
+statement ok
+create table b (id int, val int);
+
+query T
+explain select b.id from a, b where a.id = b.id group by b.id;
+----
+AggregateFinal
+├── group by: [id]
+├── aggregate functions: []
+├── limit: 0
+├── estimated rows: 0.00
+└── HashJoin
+    ├── join type: INNER
+    ├── build keys: [b.id (#2)]
+    ├── probe keys: [a.id (#0)]
+    ├── filters: []
+    ├── estimated rows: 0.00
+    ├── AggregatePartial(Build)
+    │   ├── group by: [id]
+    │   ├── aggregate functions: []
+    │   ├── estimated rows: 0.00
+    │   └── TableScan
+    │       ├── table: default.default.b
+    │       ├── read rows: 0
+    │       ├── read bytes: 0
+    │       ├── partitions total: 0
+    │       ├── partitions scanned: 0
+    │       ├── push downs: [filters: [], limit: NONE]
+    │       ├── output columns: [id]
+    │       └── estimated rows: 0.00
+    └── TableScan(Probe)
+        ├── table: default.default.a
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [], limit: NONE]
+        ├── output columns: [id]
+        └── estimated rows: 0.00
+
+statement ok
+drop table a;
+
+statement ok
+drop table b;
