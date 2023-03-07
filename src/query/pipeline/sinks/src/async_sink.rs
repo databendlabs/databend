@@ -69,7 +69,7 @@ impl<T: AsyncSink + 'static> Drop for AsyncSinker<T> {
             self.called_on_finish = true;
             if let Some(mut inner) = self.inner.take() {
                 GlobalIORuntime::instance().spawn(async move {
-                    let _ = inner.on_finish();
+                    let _ = inner.on_finish().await;
                 });
             }
         }
