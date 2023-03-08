@@ -20,6 +20,7 @@ use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
+use common_meta_app::schema::TableStatistics;
 use common_meta_types::MatchSeq;
 use common_sql::field_default_value;
 use common_sql::plans::CreateTablePlan;
@@ -113,7 +114,7 @@ impl CreateTableInterpreter {
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
 
         // TODO: maybe the table creation and insertion should be a transaction, but it may require create_table support 2pc.
-        catalog.create_table(self.build_request()?).await?;
+        catalog.create_table(self.build_request(None)?).await?;
         let table = catalog
             .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
             .await?;
@@ -144,7 +145,7 @@ impl CreateTableInterpreter {
 
     async fn create_table(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
-        catalog.create_table(self.build_request()?).await?;
+        catalog.create_table(self.build_request(None)?).await?;
 
         Ok(PipelineBuildResult::create())
     }
@@ -153,7 +154,7 @@ impl CreateTableInterpreter {
     ///
     /// - Rebuild `DataSchema` with default exprs.
     /// - Update cluster key of table meta.
-    fn build_request(&self) -> Result<CreateTableReq> {
+    fn build_request(&self, statistics: Option<TableStatistics>) -> Result<CreateTableReq> {
         let mut fields = Vec::with_capacity(self.plan.schema.num_fields());
         for (idx, field) in self.plan.schema.fields().clone().into_iter().enumerate() {
             let field = if let Some(Some(default_expr)) = &self.plan.field_default_exprs.get(idx) {
@@ -177,7 +178,11 @@ impl CreateTableInterpreter {
             default_cluster_key: None,
             field_comments: self.plan.field_comments.clone(),
             drop_on: None,
-            statistics: Default::default(),
+            statistics: if let Some(stat) = statistics {
+                stat
+            } else {
+                Default::default()
+            },
             ..Default::default()
         };
         if let Some(cluster_key) = &self.plan.cluster_key {
