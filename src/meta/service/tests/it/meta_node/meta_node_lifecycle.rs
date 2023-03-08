@@ -643,7 +643,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
             .await?;
         log_index += 1;
 
-        want_hs = leader.sto.raft_state.read_hard_state()?;
+        want_hs = leader.sto.raft_state.read_vote()?;
 
         leader.stop().await?;
     }
@@ -675,7 +675,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
 
     info!("--- check hard state");
     {
-        let hs = leader.sto.raft_state.read_hard_state()?;
+        let hs = leader.sto.raft_state.read_vote()?;
         assert_eq!(want_hs, hs);
     }
 
