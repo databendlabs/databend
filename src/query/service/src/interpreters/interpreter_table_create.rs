@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRefExt;
@@ -150,28 +151,29 @@ impl CreateTableInterpreter {
 
     async fn create_table(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
-        if let Some(snapshot_loc) = self.plan.options.get(OPT_KEY_SNAPSHOT_LOCATION) {
-            let operator = self.ctx.get_data_operator()?.operator();
-            let reader = MetaReaders::table_snapshot_reader(operator);
+        let mut stat = None;
+        if !GlobalConfig::instance().query.management_mode {
+            if let Some(snapshot_loc) = self.plan.options.get(OPT_KEY_SNAPSHOT_LOCATION) {
+                let operator = self.ctx.get_data_operator()?.operator();
+                let reader = MetaReaders::table_snapshot_reader(operator);
 
-            let params = LoadParams {
-                location: snapshot_loc.clone(),
-                len_hint: None,
-                ver: TableSnapshot::VERSION,
-                put_cache: true,
-            };
+                let params = LoadParams {
+                    location: snapshot_loc.clone(),
+                    len_hint: None,
+                    ver: TableSnapshot::VERSION,
+                    put_cache: true,
+                };
 
-            let snapshot = reader.read(&params).await?;
-            let stat = Some(TableStatistics {
-                number_of_rows: snapshot.summary.row_count,
-                data_bytes: snapshot.summary.uncompressed_byte_size,
-                compressed_data_bytes: snapshot.summary.compressed_byte_size,
-                index_data_bytes: snapshot.summary.index_size,
-            });
-            catalog.create_table(self.build_request(stat)?).await?;
-        } else {
-            catalog.create_table(self.build_request(None)?).await?;
+                let snapshot = reader.read(&params).await?;
+                stat = Some(TableStatistics {
+                    number_of_rows: snapshot.summary.row_count,
+                    data_bytes: snapshot.summary.uncompressed_byte_size,
+                    compressed_data_bytes: snapshot.summary.compressed_byte_size,
+                    index_data_bytes: snapshot.summary.index_size,
+                });
+            }
         }
+        catalog.create_table(self.build_request(stat)?).await?;
 
         Ok(PipelineBuildResult::create())
     }
