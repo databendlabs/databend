@@ -61,7 +61,7 @@ query T
 explain select 1, number, number + 1, number -1 from numbers(10) group by number, abs(number), cast(number as int);
 ----
 EvalScalar
-├── expressions: [1, plus(group_item (#0), 1), minus(group_item (#0), 1)]
+├── expressions: [1, group_item (#0) + 1, group_item (#0) - 1]
 ├── estimated rows: 10.00
 └── AggregateFinal
     ├── group by: [number]

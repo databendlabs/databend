@@ -194,7 +194,7 @@ Limit
             ├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
             ├── estimated rows: 0.00
             └── EvalScalar
-                ├── expressions: [plus(t1.a (#0), 1), plus(t1.b (#1), 1), plus(t2.a (#2), 1)]
+                ├── expressions: [t1.a (#0) + 1, t1.b (#1) + 1, t2.a (#2) + 1]
                 ├── estimated rows: 0.00
                 └── HashJoin
                     ├── join type: INNER
