@@ -18,5 +18,12 @@ if [ $# -gt 0 ]; then
 fi
 echo "Run suites using argument: $RUN_DIR"
 
-echo "Starting databend-sqllogic tests"
-target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --enable_sandbox --parallel 8 --debug
+for i in `seq 1 3`
+do
+    echo "Starting databend-sqllogic tests $i"
+    target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --enable_sandbox --parallel 8 --debug
+
+    if [ $? -ne 0 ];then
+        break
+    fi
+done
