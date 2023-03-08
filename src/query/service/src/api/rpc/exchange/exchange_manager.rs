@@ -75,6 +75,22 @@ impl DataExchangeManager {
         GlobalInstance::get()
     }
 
+    pub fn get_query_ctx(&self, query_id: &str) -> Result<Arc<QueryContext>> {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        if let Some(coordinator) = queries_coordinator.get_mut(query_id) {
+            if let Some(coordinator) = &coordinator.info {
+                return Ok(coordinator.query_ctx.clone());
+            }
+        }
+
+        Err(ErrorCode::Internal(format!(
+            "Query {} not found in cluster.",
+            query_id
+        )))
+    }
+
     // Create connections for cluster all nodes. We will push data through this connection.
     pub async fn init_nodes_channel(&self, packet: &InitNodesChannelPacket) -> Result<()> {
         let mut request_exchanges = vec![];
