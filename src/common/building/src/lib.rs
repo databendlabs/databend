@@ -58,8 +58,10 @@ pub fn add_building_env_vars() {
             add_env_git_tag(&repo);
         }
         Err(e) => {
-            eprintln!("{}", e);
-            println!("cargo:rustc-env=VERGEN_GIT_SEMVER=unknown");
+            panic!(
+                "{}; The MetaClient is unable to proceed as it relies on the git-tag version for handshaking, which is not found.",
+                e
+            );
         }
     };
 }
