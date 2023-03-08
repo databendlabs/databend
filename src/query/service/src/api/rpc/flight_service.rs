@@ -158,15 +158,10 @@ impl FlightService for DatabendQueryFlightService {
                 FlightResult { body: vec![] }
             }
             FlightAction::InitNodesChannel(init_nodes_channel) => {
-                let spawner = DataExchangeManager::instance()
-                    .get_query_ctx(&init_nodes_channel.init_nodes_channel_packet.query_id)?;
-
-                match_join_handle(spawner.spawn(async move {
-                    DataExchangeManager::instance()
-                        .init_nodes_channel(&init_nodes_channel.init_nodes_channel_packet)
-                        .await
-                }))
-                .await?;
+                let publisher_packet = &init_nodes_channel.init_nodes_channel_packet;
+                DataExchangeManager::instance()
+                    .init_nodes_channel(publisher_packet)
+                    .await?;
 
                 FlightResult { body: vec![] }
             }
