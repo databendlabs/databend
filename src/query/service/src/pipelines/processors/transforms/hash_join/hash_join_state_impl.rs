@@ -37,13 +37,8 @@ impl HashJoinState for JoinHashTable {
     fn build(&self, input: DataBlock) -> Result<()> {
         // Collect runtime filters and send them to probe scan node.
         {
-            let _source_exprs = &self.hash_join_desc.build_keys;
             let runtime_filter_collector = self.ctx.get_runtime_filter_collector();
-            runtime_filter_collector.write().collect(
-                self.ctx.clone(),
-                &self.hash_join_desc.source_exprs,
-                &input,
-            )?;
+            runtime_filter_collector.collect(&self.hash_join_desc.source_exprs, &input)?;
         }
         // Collect build block and prepare for building hash table.
         let data_block_size_limit = self.ctx.get_settings().get_max_block_size()? * 16;
@@ -91,11 +86,6 @@ impl HashJoinState for JoinHashTable {
         let mut count = self.ref_count.lock().unwrap();
         *count -= 1;
         if *count == 0 {
-            // Send runtime filters
-            {
-                let runtime_filter_collector = self.ctx.get_runtime_filter_collector();
-                runtime_filter_collector.write().send()?;
-            }
             self.finish()?;
             let mut is_finished = self.is_finished.lock().unwrap();
             *is_finished = true;
@@ -163,6 +153,12 @@ impl HashJoinState for JoinHashTable {
                     }
                 }
             }};
+        }
+
+        // Send runtime filters
+        {
+            let runtime_filter_collector = self.ctx.get_runtime_filter_collector();
+            runtime_filter_collector.send()?;
         }
 
         {

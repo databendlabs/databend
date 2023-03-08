@@ -144,6 +144,15 @@ impl FuseTable {
                 cluster_keys,
             )?
         };
+        let runtime_filters = push_downs
+            .as_ref()
+            .and_then(|p| p.runtime_filter_exprs.clone());
+        if let Some(runtime_filters) = runtime_filters {
+            let collector = ctx.get_runtime_filter_collector();
+            // let mut recv = HashMap::new();
+            let filter_future = collector.recv();
+            // todo: how to use filter_future?
+        }
         let block_metas = pruner.pruning(segments_location).await?;
         let pruning_stats = pruner.pruning_stats();
 

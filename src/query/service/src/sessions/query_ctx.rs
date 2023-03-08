@@ -35,6 +35,7 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_args::TableArgs;
+use common_catalog::table_context::RuntimeFilter;
 use common_catalog::table_context::StageAttachment;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::ErrorCode;
@@ -156,11 +157,6 @@ impl QueryContext {
         self.shared.session.clone()
     }
 
-    // Get runtime filter collector
-    pub fn get_runtime_filter_collector(&self) -> Arc<RwLock<RuntimeFilterCollector>> {
-        self.shared.runtime_filter_collector.clone()
-    }
-
     // Get one session by session id.
     pub fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<Arc<Session>> {
         SessionManager::instance().get_session_by_id(id)
@@ -227,6 +223,10 @@ impl TableContext for QueryContext {
             DataSourceInfo::ParquetSource(table_info) => ParquetTable::from_info(table_info),
             DataSourceInfo::ResultScanSource(table_info) => ResultScan::from_info(table_info),
         }
+    }
+
+    fn get_runtime_filter_collector(&self) -> Arc<dyn RuntimeFilter> {
+        self.shared.runtime_filter_collector.clone()
     }
 
     fn get_scan_progress(&self) -> Arc<Progress> {

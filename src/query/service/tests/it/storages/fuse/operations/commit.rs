@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::RwLock;
 use std::time::Duration;
 
 use common_base::base::tokio;
@@ -29,6 +30,7 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::table::Table;
 use common_catalog::table_context::ProcessInfo;
+use common_catalog::table_context::RuntimeFilter;
 use common_catalog::table_context::StageAttachment;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -318,6 +320,10 @@ impl CtxDelegation {
 #[async_trait::async_trait]
 impl TableContext for CtxDelegation {
     fn build_table_from_source_plan(&self, _plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
+        todo!()
+    }
+
+    fn get_runtime_filter_collector(&self) -> Arc<RwLock<dyn RuntimeFilter>> {
         todo!()
     }
 

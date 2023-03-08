@@ -15,17 +15,20 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use async_trait::async_trait;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
+use common_expression::RemoteExpr;
 use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatOptions;
 use common_meta_app::principal::RoleInfo;
@@ -33,12 +36,15 @@ use common_meta_app::principal::UserInfo;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
+use parking_lot::RwLock;
+use storages_common_index::filters::Xor8Filter;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
 use crate::plan::DataSourcePlan;
 use crate::plan::PartInfoPtr;
 use crate::plan::Partitions;
+use crate::plan::RuntimeFilterId;
 use crate::table::Table;
 
 #[derive(Debug)]
@@ -68,6 +74,17 @@ pub struct StageAttachment {
 }
 
 #[async_trait::async_trait]
+pub trait RuntimeFilter: Send + Sync {
+    fn collect(
+        &self,
+        exprs: &BTreeMap<RuntimeFilterId, RemoteExpr>,
+        data: &DataBlock,
+    ) -> Result<()>;
+    fn send(&self) -> Result<()>;
+    async fn recv(&self) -> Result<Future<Output=Option<HashMap<RuntimeFilterId, Xor8Filter>>>>;
+}
+
+#[async_trait::async_trait]
 pub trait TableContext: Send + Sync {
     /// Build a table instance the plan wants to operate on.
     ///
@@ -75,6 +92,7 @@ pub trait TableContext: Send + Sync {
     /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
     fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>>;
 
+    fn get_runtime_filter_collector(&self) -> Arc<dyn RuntimeFilter>;
     fn get_scan_progress(&self) -> Arc<Progress>;
     fn get_scan_progress_value(&self) -> ProgressValues;
     fn get_write_progress(&self) -> Arc<Progress>;
