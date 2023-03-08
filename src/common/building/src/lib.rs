@@ -59,7 +59,7 @@ pub fn add_building_env_vars() {
         }
         Err(e) => {
             eprintln!("{}", e);
-            println!("cargo:rustc-env=VERGEN_GIT_SEMVER=unknown");
+            panic!("cargo:rustc-env=VERGEN_GIT_SEMVER=unknown")
         }
     };
 }
