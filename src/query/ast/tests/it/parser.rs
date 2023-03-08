@@ -167,6 +167,7 @@ fn test_statement() {
         r#"ALTER DATABASE c RENAME TO a;"#,
         r#"ALTER DATABASE ctl.c RENAME TO a;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
+        r#"GRANT CREATE, CREATE USER ON * TO 'test-grant'@'localhost';"#,
         r#"GRANT SELECT, CREATE ON * TO 'test-grant'@'localhost';"#,
         r#"GRANT SELECT, CREATE ON *.* TO 'test-grant'@'localhost';"#,
         r#"GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost';"#,
@@ -593,3 +594,4 @@ fn test_expr_error() {
         run_parser!(file, expr, case);
     }
 }
+

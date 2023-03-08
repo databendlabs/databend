@@ -1359,7 +1359,6 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
         value(UserPrivilegeType::Insert, rule! { INSERT }),
         value(UserPrivilegeType::Update, rule! { UPDATE }),
         value(UserPrivilegeType::Delete, rule! { DELETE }),
-        value(UserPrivilegeType::Create, rule! { CREATE }),
         value(UserPrivilegeType::Drop, rule! { DROP }),
         value(UserPrivilegeType::Alter, rule! { ALTER }),
         value(UserPrivilegeType::Super, rule! { SUPER }),
@@ -1367,6 +1366,7 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
         value(UserPrivilegeType::CreateRole, rule! { CREATE ~ ROLE }),
         value(UserPrivilegeType::Grant, rule! { GRANT }),
         value(UserPrivilegeType::CreateStage, rule! { CREATE ~ STAGE }),
+        value(UserPrivilegeType::Create, rule! { CREATE }),
         value(UserPrivilegeType::Set, rule! { SET }),
     ))(i)
 }
