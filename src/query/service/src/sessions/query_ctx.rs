@@ -292,6 +292,14 @@ impl TableContext for QueryContext {
         sha
     }
 
+    fn get_cacheable(&self) -> bool {
+        self.shared.cacheable.load(Ordering::Acquire)
+    }
+
+    fn set_cacheable(&self, cacheable: bool) {
+        self.shared.cacheable.store(cacheable, Ordering::Release);
+    }
+
     fn attach_query_str(&self, kind: String, query: &str) {
         self.shared.attach_query_str(kind, query);
     }

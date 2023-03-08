@@ -46,7 +46,7 @@ fn test_agg() {
     test_agg_covar_samp(file, eval_aggr);
     test_agg_covar_pop(file, eval_aggr);
     test_agg_retention(file, eval_aggr);
-    test_agg_stddev_pop(file, eval_aggr);
+    test_agg_stddev(file, eval_aggr);
     test_agg_window_funnel(file, eval_aggr);
     test_agg_approx_count_distinct(file, eval_aggr);
 }
@@ -70,7 +70,7 @@ fn test_agg_group_by() {
     test_agg_covar_samp(file, simulate_two_groups_group_by);
     test_agg_covar_pop(file, simulate_two_groups_group_by);
     test_agg_retention(file, simulate_two_groups_group_by);
-    test_agg_stddev_pop(file, simulate_two_groups_group_by);
+    test_agg_stddev(file, simulate_two_groups_group_by);
     test_agg_window_funnel(file, simulate_two_groups_group_by);
     test_agg_approx_count_distinct(file, simulate_two_groups_group_by);
 }
@@ -325,10 +325,17 @@ fn test_agg_retention(file: &mut impl Write, simulator: impl AggregationSimulato
     );
 }
 
-fn test_agg_stddev_pop(file: &mut impl Write, simulator: impl AggregationSimulator) {
+fn test_agg_stddev(file: &mut impl Write, simulator: impl AggregationSimulator) {
     run_agg_ast(file, "stddev_pop(a)", get_example().as_slice(), simulator);
     run_agg_ast(file, "stddev(x_null)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "std(1.0)", get_example().as_slice(), simulator);
+
+    run_agg_ast(file, "stddev_samp(a)", get_example().as_slice(), simulator);
+    run_agg_ast(
+        file,
+        "stddev_samp(x_null)",
+        get_example().as_slice(),
+        simulator,
+    );
 }
 
 fn test_agg_window_funnel(file: &mut impl Write, simulator: impl AggregationSimulator) {

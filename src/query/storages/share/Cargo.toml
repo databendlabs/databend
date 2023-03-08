@@ -23,4 +23,4 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 goldenfile = "1.4"
-tempfile = "3.3.0"
+tempfile = "3.4.0"

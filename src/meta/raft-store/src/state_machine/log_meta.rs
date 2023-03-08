@@ -14,12 +14,11 @@
 
 use std::fmt;
 
-use common_meta_sled_store::openraft;
 use common_meta_sled_store::sled;
 use common_meta_sled_store::SledBytesError;
 use common_meta_sled_store::SledOrderedSerde;
 use common_meta_types::anyerror::AnyError;
-use openraft::LogId;
+use common_meta_types::LogId;
 use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
@@ -65,5 +64,36 @@ impl SledOrderedSerde for LogMetaKey {
         }
 
         Err(SledBytesError::new(&AnyError::error("invalid key IVec")))
+    }
+}
+
+pub(crate) mod compat_with_07 {
+    use common_meta_sled_store::SledBytesError;
+    use common_meta_sled_store::SledSerde;
+    use common_meta_types::compat07;
+    use openraft::compat::Upgrade;
+
+    use super::LogMetaValue;
+
+    #[derive(Debug, serde::Serialize, serde::Deserialize)]
+    pub enum LogMetaValueCompat {
+        LogId(compat07::LogId),
+    }
+
+    impl Upgrade<LogMetaValue> for LogMetaValueCompat {
+        #[rustfmt::skip]
+        fn upgrade(self) -> LogMetaValue {
+            let Self::LogId(lid) = self;
+            LogMetaValue::LogId(lid.upgrade())
+        }
+    }
+
+    impl SledSerde for LogMetaValue {
+        fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, SledBytesError>
+        where Self: Sized {
+            let s: LogMetaValueCompat = serde_json::from_slice(v.as_ref())?;
+            let LogMetaValueCompat::LogId(log_id) = s;
+            Ok(LogMetaValue::LogId(log_id.upgrade()))
+        }
     }
 }

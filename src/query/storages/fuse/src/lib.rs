@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
-#![deny(unused_crate_dependencies)]
+//#![deny(unused_crate_dependencies)]
 #![feature(type_alias_impl_trait)]
 #![feature(io_error_other)]
 #![feature(once_cell)]

@@ -330,7 +330,7 @@ impl Binder {
         for expr in group_by.iter() {
             // If expr is a number literal, then this is a index group item.
             if let Expr::Literal {
-                lit: Literal::Integer(index),
+                lit: Literal::UInt64(index),
                 ..
             } = expr
             {

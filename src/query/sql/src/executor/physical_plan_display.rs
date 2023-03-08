@@ -31,6 +31,7 @@ use crate::executor::HashJoin;
 use crate::executor::Limit;
 use crate::executor::PhysicalPlan;
 use crate::executor::Project;
+use crate::executor::RuntimeFilterSource;
 use crate::executor::Sort;
 use crate::executor::TableScan;
 use crate::executor::UnionAll;
@@ -67,6 +68,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::UnionAll(union_all) => write!(f, "{}", union_all)?,
             PhysicalPlan::DistributedInsertSelect(insert_select) => write!(f, "{}", insert_select)?,
             PhysicalPlan::Unnest(unnest) => write!(f, "{}", unnest)?,
+            PhysicalPlan::RuntimeFilterSource(plan) => write!(f, "{}", plan)?,
         }
 
         for node in self.node.children() {
@@ -299,14 +301,14 @@ impl Display for DistributedInsertSelect {
     }
 }
 
+impl Display for RuntimeFilterSource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RuntimeFilterSource")
+    }
+}
+
 impl Display for Unnest {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let columns = self
-            .offsets
-            .iter()
-            .map(|v| v.to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-        write!(f, "Unnest: column: [{}]", columns)
+        write!(f, "Unnest: unnset num : {}", self.num_columns)
     }
 }

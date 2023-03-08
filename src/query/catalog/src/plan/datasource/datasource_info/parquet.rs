@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_expression::TableSchema;
-use common_meta_app::principal::UserStageInfo;
+use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableInfo;
 use common_storage::StageFilesInfo;
 
@@ -25,7 +25,7 @@ use crate::plan::datasource::datasource_info::parquet_read_options::ParquetReadO
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct ParquetTableInfo {
     pub read_options: ParquetReadOptions,
-    pub user_stage_info: UserStageInfo,
+    pub stage_info: StageInfo,
     pub files_info: StageFilesInfo,
 
     pub table_info: TableInfo,
@@ -38,6 +38,6 @@ impl ParquetTableInfo {
     }
 
     pub fn desc(&self) -> String {
-        self.user_stage_info.stage_name.clone()
+        self.stage_info.stage_name.clone()
     }
 }

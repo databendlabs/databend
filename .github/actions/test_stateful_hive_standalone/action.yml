@@ -69,7 +69,7 @@ runs:
       env:
         LD_LIBRARY_PATH: ${{ env.JAVA_HOME }}/lib/server:${{ env.LD_LIBRARY_PATH }}
       run: |
-        bash ./scripts/ci/ci-run-stateful-hive-tests-standalone-embed-meta.sh
+        bash ./scripts/ci/ci-run-stateful-hive-tests-standalone.sh
 
     - name: Stop containers
       if: always()

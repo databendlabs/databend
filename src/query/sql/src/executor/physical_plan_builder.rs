@@ -52,6 +52,7 @@ use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::EvalScalar;
 use crate::executor::FragmentKind;
 use crate::executor::PhysicalPlan;
+use crate::executor::RuntimeFilterSource;
 use crate::executor::SortDesc;
 use crate::executor::UnionAll;
 use crate::optimizer::ColumnSet;
@@ -298,61 +299,100 @@ impl PhysicalPlanBuilder {
                     marker_index: join.marker_index,
                     from_correlated_subquery: join.from_correlated_subquery,
 
+                    contain_runtime_filter: join.contain_runtime_filter,
                     stat_info: Some(stat_info),
                 }))
             }
 
             RelOperator::EvalScalar(eval_scalar) => {
+                // If there is `unnest` in `eval_scalar`, we should split the physical plan into three parts:
+                // 3. Eval After Unnest Scalar
+                // |_______2. Unnest
+                //         |_______1. Eval Before Unnest Scalar
+                // The input fields and the output fields of each part will be like:
+                // 1. [i1, i2, .., in] -> [i1, i2, .. in, b1, b2, .., bm] (m == before_unnest.len() == unnest.len())
+                // 2. [i1, i2, .. in, b1, b2, .., bm] -> [i1, i2, .. in, u1, u2, .., um] (`unnest` will replace the columns in place)
+                // 3. [i1, i2, .. in, u1, u2, .., un] -> [i1, i2, .. in, u1, u2, .., um, o1, o2, .., op] (p == after_unnest.len())
+
                 let input = Box::new(self.build(s_expr.child(0)?).await?);
                 let input_schema = input.output_schema()?;
-                // The begin offset of the eval scalar columns.
-                let offset = input_schema.fields().len();
 
-                // 1. Collect unnest scalars.
-                let mut unnest_scalars = vec![];
-                let exprs = eval_scalar
+                let mut before_exprs = vec![];
+                let mut unnest_offset = input_schema.fields().len();
+
+                // 1. Collect the before unnest scalars, unnest, and after unnest scalars.
+                let after_exprs = eval_scalar
                     .items
                     .iter()
-                    .enumerate()
-                    .map(|(i, item)| {
-                        let scalar = match &item.scalar {
-                            ScalarExpr::Unnest(crate::plans::Unnest { argument, .. }) => {
-                                unnest_scalars.push(i + offset);
-                                argument
-                            }
-                            _ => &item.scalar,
-                        };
+                    .map(|item| {
+                        // 1.1 Collect the before unnest scalars, and build into `RemoteExpr`.
+                        let mut before_scalars = vec![];
+                        item.scalar
+                            .collect_before_unnest_scalars(&mut before_scalars);
+                        let before =
+                            before_scalars
+                                .iter()
+                                .map(|scalar| {
+                                    let expr = scalar.as_expr_with_col_index()?.project_column_ref(
+                                        |index| input_schema.index_of(&index.to_string()).unwrap(),
+                                    );
+                                    let (expr, _) = ConstantFolder::fold(
+                                        &expr,
+                                        self.ctx.get_function_context()?,
+                                        &BUILTIN_FUNCTIONS,
+                                    );
+                                    Ok((expr.as_remote_expr(), item.index))
+                                })
+                                .collect::<Result<Vec<_>>>()?;
+                        before_exprs.extend(before);
 
-                        let expr = scalar
+                        // 1.2 Collect the after unnest scalars, and build into `RemoteExpr`.
+                        let expr = item
+                            .scalar
                             .as_expr_with_col_index()?
-                            .project_column_ref(|index| {
-                                input_schema.index_of(&index.to_string()).unwrap()
-                            });
+                            .project_column_ref_with_unnest_offset(
+                                |index| input_schema.index_of(&index.to_string()).unwrap(),
+                                &mut unnest_offset,
+                            );
                         let (expr, _) = ConstantFolder::fold(
                             &expr,
                             self.ctx.get_function_context()?,
                             &BUILTIN_FUNCTIONS,
                         );
+
+                        debug_assert!(
+                            unnest_offset == before_exprs.len() + input_schema.fields().len()
+                        );
                         Ok((expr.as_remote_expr(), item.index))
                     })
                     .collect::<Result<_>>()?;
 
-                // 2. There are unnest scalars,
-                // add Unnest operator after EvalScalar operator.
-                let eval_scalar_plan = PhysicalPlan::EvalScalar(EvalScalar {
-                    plan_id: self.next_plan_id(),
-                    input,
-                    exprs,
-                    stat_info: Some(stat_info.clone()),
-                });
-
-                Ok(if unnest_scalars.is_empty() {
-                    eval_scalar_plan
-                } else {
-                    PhysicalPlan::Unnest(Unnest {
+                // 2. Construct the physical plan.
+                Ok(if before_exprs.is_empty() {
+                    PhysicalPlan::EvalScalar(EvalScalar {
                         plan_id: self.next_plan_id(),
-                        input: Box::new(eval_scalar_plan),
-                        offsets: unnest_scalars,
+                        input,
+                        exprs: after_exprs,
+                        stat_info: Some(stat_info.clone()),
+                    })
+                } else {
+                    let num_unnest_columns = before_exprs.len();
+                    let before_plan = PhysicalPlan::EvalScalar(EvalScalar {
+                        plan_id: self.next_plan_id(),
+                        input,
+                        exprs: before_exprs,
+                        stat_info: Some(stat_info.clone()),
+                    });
+                    let unnest_plan = PhysicalPlan::Unnest(Unnest {
+                        plan_id: self.next_plan_id(),
+                        input: Box::new(before_plan),
+                        num_columns: num_unnest_columns,
+                        stat_info: Some(stat_info.clone()),
+                    });
+                    PhysicalPlan::EvalScalar(EvalScalar {
+                        plan_id: self.next_plan_id(),
+                        input: Box::new(unnest_plan),
+                        exprs: after_exprs,
                         stat_info: Some(stat_info),
                     })
                 })
@@ -656,6 +696,46 @@ impl PhysicalPlanBuilder {
                     schema: DataSchemaRefExt::create(fields),
 
                     stat_info: Some(stat_info),
+                }))
+            }
+            RelOperator::RuntimeFilterSource(op) => {
+                let left_side = Box::new(self.build(s_expr.child(0)?).await?);
+                let left_schema = left_side.output_schema()?;
+                let right_side = Box::new(self.build(s_expr.child(1)?).await?);
+                let right_schema = right_side.output_schema()?;
+                let mut left_runtime_filters = BTreeMap::new();
+                let mut right_runtime_filters = BTreeMap::new();
+                for (left, right) in op
+                    .left_runtime_filters
+                    .iter()
+                    .zip(op.right_runtime_filters.iter())
+                {
+                    left_runtime_filters.insert(
+                        left.0.clone(),
+                        left.1
+                            .as_expr_with_col_index()?
+                            .project_column_ref(|index| {
+                                left_schema.index_of(&index.to_string()).unwrap()
+                            })
+                            .as_remote_expr(),
+                    );
+                    right_runtime_filters.insert(
+                        right.0.clone(),
+                        right
+                            .1
+                            .as_expr_with_col_index()?
+                            .project_column_ref(|index| {
+                                right_schema.index_of(&index.to_string()).unwrap()
+                            })
+                            .as_remote_expr(),
+                    );
+                }
+                Ok(PhysicalPlan::RuntimeFilterSource(RuntimeFilterSource {
+                    plan_id: self.next_plan_id(),
+                    left_side,
+                    right_side,
+                    left_runtime_filters,
+                    right_runtime_filters,
                 }))
             }
             _ => Err(ErrorCode::Internal(format!(

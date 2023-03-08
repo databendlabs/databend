@@ -19,11 +19,12 @@ use common_base::base::tokio;
 use common_base::base::tokio::time::sleep;
 use common_meta_kvapi::kvapi::KVApi;
 use common_meta_sled_store::openraft::LogIdOptionExt;
-use common_meta_sled_store::openraft::State;
+use common_meta_sled_store::openraft::ServerState;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::Cmd;
 use common_meta_types::Endpoint;
 use common_meta_types::LogEntry;
+use common_meta_types::MembershipNode;
 use common_meta_types::NodeId;
 use common_meta_types::UpsertKV;
 use databend_meta::configs;
@@ -296,8 +297,8 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     tc2.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
     let meta_node = MetaNode::start(&tc0.config).await?;
-    // Initial log and add node-0 log.
-    let mut log_index = 2;
+    // Initial log, leader blank log, add node-0.
+    let mut log_index = 3;
 
     let res = meta_node
         .join_cluster(
@@ -434,8 +435,8 @@ async fn test_meta_node_leave() -> anyhow::Result<()> {
         };
 
         leader.handle_forwardable_request(req).await?;
-        // Remove node, no membership change
-        log_index += 1;
+        // Change membership, remove node
+        log_index += 2;
 
         leader
             .raft
@@ -582,13 +583,13 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
 
     mn0.raft
         .wait(timeout())
-        .state(State::Leader, "leader restart")
+        .state(ServerState::Leader, "leader restart")
         .await?;
     mn1.raft
         .wait(timeout())
-        .state(State::Learner, "learner restart")
+        .state(ServerState::Learner, "learner restart")
         .await?;
-    mn0.raft.add_learner(1, false).await?;
+    mn0.raft.add_learner(1, MembershipNode {}, false).await?;
     mn1.raft
         .wait(timeout())
         .current_leader(0, "node-1 has leader")
@@ -658,7 +659,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
     leader
         .raft
         .wait(timeout())
-        .state(State::Leader, "leader restart")
+        .state(ServerState::Leader, "leader restart")
         .await?;
     leader
         .raft

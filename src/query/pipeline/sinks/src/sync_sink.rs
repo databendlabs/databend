@@ -45,6 +45,15 @@ pub struct Sinker<T: Sink + 'static> {
     called_on_finish: bool,
 }
 
+impl<T: Sink + 'static> Drop for Sinker<T> {
+    fn drop(&mut self) {
+        if !self.called_on_finish {
+            self.called_on_finish = true;
+            let _ = self.inner.on_finish();
+        }
+    }
+}
+
 impl<T: Sink + 'static> Sinker<T> {
     pub fn create(input: Arc<InputPort>, inner: T) -> Box<dyn Processor> {
         Box::new(Sinker {

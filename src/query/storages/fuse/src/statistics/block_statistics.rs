@@ -23,6 +23,7 @@ use storages_common_table_meta::meta::ColumnStatistics;
 use crate::statistics::column_statistic;
 
 pub struct BlockStatistics {
+    // TODO rename to to num_rows
     pub block_rows_size: u64,
     pub block_bytes_size: u64,
     pub block_file_location: String,

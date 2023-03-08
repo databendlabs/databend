@@ -19,8 +19,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_management::*;
 use common_meta_app::principal::StageFile;
+use common_meta_app::principal::StageInfo;
 use common_meta_app::principal::StageParams;
-use common_meta_app::principal::UserStageInfo;
 use common_meta_app::storage::StorageParams;
 use common_meta_app::storage::StorageS3Config;
 use common_meta_embedded::MetaEmbedded;
@@ -112,8 +112,8 @@ async fn test_unknown_stage_drop_stage() -> Result<()> {
     Ok(())
 }
 
-fn create_test_stage_info() -> UserStageInfo {
-    UserStageInfo {
+fn create_test_stage_info() -> StageInfo {
+    StageInfo {
         stage_name: "mystage".to_string(),
         stage_params: StageParams {
             storage: StorageParams::S3(StorageS3Config {

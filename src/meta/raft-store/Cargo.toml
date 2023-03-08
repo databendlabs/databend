@@ -37,6 +37,7 @@ maplit = "1.0.2"
 num = "0.4.0"
 once_cell = "1.15.0"
 serde = { workspace = true }
+serde_json = { workspace = true }
 tracing = "0.1.36"
 
 [dev-dependencies]
@@ -44,4 +45,4 @@ common-base = { path = "../../common/base" }
 
 async-entry = "0.3.1"
 pretty_assertions = "1.3.0"
-tempfile = "3.3.0"
+tempfile = "3.4.0"

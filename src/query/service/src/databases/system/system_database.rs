@@ -40,6 +40,7 @@ use common_storages_system::QueryLogTable;
 use common_storages_system::RolesTable;
 use common_storages_system::SettingsTable;
 use common_storages_system::StagesTable;
+use common_storages_system::TableFunctionsTable;
 use common_storages_system::TablesTableWithHistory;
 use common_storages_system::TablesTableWithoutHistory;
 use common_storages_system::TracingTable;
@@ -88,6 +89,7 @@ impl SystemDatabase {
             BuildOptionsTable::create(sys_db_meta.next_table_id()),
             CatalogsTable::create(sys_db_meta.next_table_id()),
             QueryCacheTable::create(sys_db_meta.next_table_id()),
+            TableFunctionsTable::create(sys_db_meta.next_table_id()),
         ];
 
         for tbl in table_list.into_iter() {

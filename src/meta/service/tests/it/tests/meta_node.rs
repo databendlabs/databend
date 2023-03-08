@@ -18,10 +18,10 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_meta_sled_store::openraft::NodeId;
-use common_meta_sled_store::openraft::State;
+use common_meta_sled_store::openraft::ServerState;
 use common_meta_types::AppliedState;
 use common_meta_types::Node;
+use common_meta_types::NodeId;
 use databend_meta::meta_service::MetaNode;
 use databend_meta::Opened;
 use maplit::btreeset;
@@ -45,8 +45,8 @@ pub(crate) async fn start_meta_node_cluster(
     let leader = tc0.meta_node();
     test_contexts.push(tc0);
 
-    // membership log, blank log and add node
-    let mut log_index = 2;
+    // initialization log, blank log, add node
+    let mut log_index = 3;
     leader
         .raft
         .wait(timeout())
@@ -60,8 +60,8 @@ pub(crate) async fn start_meta_node_cluster(
         }
         let (_id, tc) = start_meta_node_non_voter(leader.clone(), *id).await?;
 
-        // Adding a node
-        log_index += 1;
+        // Adding a node, change membership
+        log_index += 2;
         tc.meta_node()
             .raft
             .wait(timeout())
@@ -74,8 +74,8 @@ pub(crate) async fn start_meta_node_cluster(
     for id in non_voters.iter() {
         let (_id, tc) = start_meta_node_non_voter(leader.clone(), *id).await?;
 
-        // Adding a node
-        log_index += 1;
+        // Adding a node, change membership
+        log_index += 2;
 
         tc.meta_node()
             .raft
@@ -97,7 +97,7 @@ pub(crate) async fn start_meta_node_cluster(
         leader
             .raft
             .wait(timeout())
-            .state(State::Leader, "check leader state")
+            .state(ServerState::Leader, "check leader state")
             .await?;
 
         for item in test_contexts.iter().take(voters.len()).skip(1) {
@@ -105,7 +105,7 @@ pub(crate) async fn start_meta_node_cluster(
                 .raft
                 .wait(timeout())
                 .state(
-                    State::Follower,
+                    ServerState::Follower,
                     format!("check follower-{} state", item.meta_node().sto.id),
                 )
                 .await?;
@@ -119,7 +119,7 @@ pub(crate) async fn start_meta_node_cluster(
                 .raft
                 .wait(timeout())
                 .state(
-                    State::Learner,
+                    ServerState::Learner,
                     format!("check learner-{} state", item.meta_node().sto.id),
                 )
                 .await?;
@@ -157,6 +157,11 @@ pub(crate) async fn start_meta_node_leader() -> anyhow::Result<(NodeId, MetaSrvT
 
     // boot up a single-node cluster
     let mn = MetaNode::boot(&tc.config).await?;
+
+    // // Disable heartbeat, because in openraft v0.8 heartbeat is a blank log.
+    // // Log index becomes non-deterministic.
+    // mn.raft.enable_heartbeat(false);
+
     tc.meta_node = Some(mn.clone());
 
     {
@@ -168,7 +173,7 @@ pub(crate) async fn start_meta_node_leader() -> anyhow::Result<(NodeId, MetaSrvT
 
         mn.raft
             .wait(timeout())
-            .state(State::Leader, "leader started")
+            .state(ServerState::Leader, "leader started")
             .await?;
 
         mn.raft
@@ -191,6 +196,10 @@ pub(crate) async fn start_meta_node_non_voter(
     let raft_conf = &tc.config.raft_config;
 
     let mn = MetaNode::open_create(raft_conf, None, Some(())).await?;
+
+    // // Disable heartbeat, because in openraft v0.8 heartbeat is a blank log.
+    // // Log index becomes non-deterministic.
+    // mn.raft.enable_heartbeat(false);
 
     assert!(!mn.is_opened());
 
@@ -219,7 +228,7 @@ pub(crate) async fn start_meta_node_non_voter(
         tc.assert_raft_server_connection().await?;
         mn.raft
             .wait(timeout())
-            .state(State::Learner, "learner started")
+            .state(ServerState::Learner, "learner started")
             .await?;
 
         mn.raft

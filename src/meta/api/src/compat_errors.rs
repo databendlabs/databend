@@ -49,6 +49,7 @@ where
 #[cfg(test)]
 mod tests {
     use common_meta_types::ForwardToLeader;
+    use common_meta_types::MembershipNode;
     use common_meta_types::MetaAPIError;
     use common_meta_types::MetaError;
 
@@ -57,7 +58,10 @@ mod tests {
 
     #[test]
     fn test_read_api_err_from_api_err() -> anyhow::Result<()> {
-        let me = MetaAPIError::ForwardToLeader(ForwardToLeader { leader_id: Some(1) });
+        let me = MetaAPIError::ForwardToLeader(ForwardToLeader {
+            leader_id: Some(1),
+            leader_node: Some(MembershipNode {}),
+        });
         let s = serde_json::to_string(&me)?;
 
         let ge: Compatible<KVAppError, MetaAPIError> = serde_json::from_str(&s)?;
@@ -74,7 +78,10 @@ mod tests {
     #[test]
     fn test_read_api_err_from_kv_app_err() -> anyhow::Result<()> {
         let me = KVAppError::MetaError(MetaError::APIError(MetaAPIError::ForwardToLeader(
-            ForwardToLeader { leader_id: Some(1) },
+            ForwardToLeader {
+                leader_id: Some(1),
+                leader_node: Some(MembershipNode {}),
+            },
         )));
         let s = serde_json::to_string(&me)?;
 

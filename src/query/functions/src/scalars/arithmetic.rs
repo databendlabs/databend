@@ -63,6 +63,7 @@ use common_io::display_decimal_256;
 use ethnum::i256;
 use lexical_core::FormattedSize;
 use num_traits::AsPrimitive;
+use ordered_float::OrderedFloat;
 
 use super::arithmetic_modulo::vectorize_modulo;
 use super::decimal::register_decimal_to_float32;
@@ -74,6 +75,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("minus", &["subtract", "neg", "negate"]);
     registry.register_aliases("div", &["intdiv"]);
     registry.register_aliases("modulo", &["mod"]);
+    registry.register_aliases("caret", &["exponentiation"]);
 
     register_unary_minus(registry);
     register_string_to_number(registry);
@@ -167,6 +169,7 @@ macro_rules! register_multiply {
         );
     };
 }
+
 macro_rules! register_divide {
     ( $lt:ty, $rt:ty, $registry:expr) => {
         type L = $lt;
@@ -186,6 +189,20 @@ macro_rules! register_divide {
                         output.push(((a.as_() : T) / b));
                     }
                 }),
+        );
+    };
+}
+
+macro_rules! register_caret {
+    ( $lt:ty, $rt:ty, $registry:expr) => {
+        type L = $lt;
+        type R = $rt;
+        type T = F64;
+        $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
+            "caret",
+            FunctionProperty::default(),
+            |_, _| FunctionDomain::Full,
+            |a, b, _| OrderedFloat((a.as_(): f64).powf(b.as_(): f64)),
         );
     };
 }
@@ -275,6 +292,9 @@ macro_rules! register_arithmetic {
     }
     {
         register_modulo!($lt, $rt, $registry);
+    }
+    {
+        register_caret!($lt, $rt, $registry);
     }};
 }
 

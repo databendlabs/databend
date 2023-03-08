@@ -25,10 +25,10 @@ use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_sinks::SyncSenderSink;
 use common_pipeline_sources::SyncReceiverSource;
+use common_pipeline_transforms::processors::transforms::TransformDummy;
 use databend_query::pipelines::executor::RunningGraph;
 use databend_query::pipelines::processors::port::InputPort;
 use databend_query::pipelines::processors::port::OutputPort;
-use databend_query::pipelines::processors::TransformDummy;
 use databend_query::pipelines::Pipeline;
 use databend_query::sessions::QueryContext;
 

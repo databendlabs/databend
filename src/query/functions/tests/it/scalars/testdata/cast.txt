@@ -221,8 +221,8 @@ output         : 0
 
 
 ast            : CAST(-1 AS VARIANT)
-raw expr       : CAST(minus(1_u8) AS Variant)
-checked expr   : to_variant<T0=Int16><T0>(minus<UInt8>(1_u8))
+raw expr       : CAST(-1_i8 AS Variant)
+checked expr   : to_variant<T0=Int8><T0>(-1_i8)
 optimized expr : 0x200000002000000240ff
 output type    : Variant
 output domain  : Undefined
@@ -230,8 +230,8 @@ output         : -1
 
 
 ast            : CAST(1.1 AS VARIANT)
-raw expr       : CAST(1.1_f64 AS Variant)
-checked expr   : to_variant<T0=Float64><T0>(1.1_f64)
+raw expr       : CAST(1.1_decimal(2, 1) AS Variant)
+checked expr   : to_variant<T0=Decimal(2, 1)><T0>(1.1_d128(2,1))
 optimized expr : 0x2000000020000009603ff199999999999a
 output type    : Variant
 output domain  : Undefined
@@ -377,8 +377,8 @@ error:
 
 
 ast            : CAST(-315360000000000 AS TIMESTAMP)
-raw expr       : CAST(minus(315360000000000_u64) AS Timestamp)
-checked expr   : to_timestamp<Int64>(minus<UInt64>(315360000000000_u64))
+raw expr       : CAST(-315360000000000_i64 AS Timestamp)
+checked expr   : to_timestamp<Int64>(-315360000000000_i64)
 optimized expr : -315360000000000
 output type    : Timestamp
 output domain  : {-315360000000000..=-315360000000000}
@@ -386,8 +386,8 @@ output         : 1960-01-04 00:00:00.000000
 
 
 ast            : CAST(-315360000000 AS TIMESTAMP)
-raw expr       : CAST(minus(315360000000_u64) AS Timestamp)
-checked expr   : to_timestamp<Int64>(minus<UInt64>(315360000000_u64))
+raw expr       : CAST(-315360000000_i64 AS Timestamp)
+checked expr   : to_timestamp<Int64>(-315360000000_i64)
 optimized expr : -315360000000000
 output type    : Timestamp
 output domain  : {-315360000000000..=-315360000000000}
@@ -395,8 +395,8 @@ output         : 1960-01-04 00:00:00.000000
 
 
 ast            : CAST(-100 AS TIMESTAMP)
-raw expr       : CAST(minus(100_u8) AS Timestamp)
-checked expr   : to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(100_u8)))
+raw expr       : CAST(-100_i8 AS Timestamp)
+checked expr   : to_timestamp<Int64>(to_int64<Int8>(-100_i8))
 optimized expr : -100000000
 output type    : Timestamp
 output domain  : {-100000000..=-100000000}
@@ -404,8 +404,8 @@ output         : 1969-12-31 23:58:20.000000
 
 
 ast            : CAST(-0 AS TIMESTAMP)
-raw expr       : CAST(minus(0_u8) AS Timestamp)
-checked expr   : to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(0_u8)))
+raw expr       : CAST(0_i8 AS Timestamp)
+checked expr   : to_timestamp<Int64>(to_int64<Int8>(0_i8))
 optimized expr : 0
 output type    : Timestamp
 output domain  : {0..=0}
@@ -483,8 +483,8 @@ evaluation (internal):
 
 
 ast            : CAST(TO_TIMESTAMP(-315360000000000) AS INT64)
-raw expr       : CAST(TO_TIMESTAMP(minus(315360000000000_u64)) AS Int64)
-checked expr   : to_int64<Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)))
+raw expr       : CAST(TO_TIMESTAMP(-315360000000000_i64) AS Int64)
+checked expr   : to_int64<Timestamp>(to_timestamp<Int64>(-315360000000000_i64))
 optimized expr : -315360000000000_i64
 output type    : Int64
 output domain  : {-315360000000000..=-315360000000000}
@@ -492,8 +492,8 @@ output         : -315360000000000
 
 
 ast            : CAST(TO_TIMESTAMP(-315360000000) AS INT64)
-raw expr       : CAST(TO_TIMESTAMP(minus(315360000000_u64)) AS Int64)
-checked expr   : to_int64<Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000_u64)))
+raw expr       : CAST(TO_TIMESTAMP(-315360000000_i64) AS Int64)
+checked expr   : to_int64<Timestamp>(to_timestamp<Int64>(-315360000000_i64))
 optimized expr : -315360000000000_i64
 output type    : Int64
 output domain  : {-315360000000000..=-315360000000000}
@@ -501,8 +501,8 @@ output         : -315360000000000
 
 
 ast            : CAST(TO_TIMESTAMP(-100) AS INT64)
-raw expr       : CAST(TO_TIMESTAMP(minus(100_u8)) AS Int64)
-checked expr   : to_int64<Timestamp>(to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(100_u8))))
+raw expr       : CAST(TO_TIMESTAMP(-100_i8) AS Int64)
+checked expr   : to_int64<Timestamp>(to_timestamp<Int64>(to_int64<Int8>(-100_i8)))
 optimized expr : -100000000_i64
 output type    : Int64
 output domain  : {-100000000..=-100000000}
@@ -510,8 +510,8 @@ output         : -100000000
 
 
 ast            : CAST(TO_TIMESTAMP(-0) AS INT64)
-raw expr       : CAST(TO_TIMESTAMP(minus(0_u8)) AS Int64)
-checked expr   : to_int64<Timestamp>(to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(0_u8))))
+raw expr       : CAST(TO_TIMESTAMP(0_i8) AS Int64)
+checked expr   : to_int64<Timestamp>(to_timestamp<Int64>(to_int64<Int8>(0_i8)))
 optimized expr : 0_i64
 output type    : Int64
 output domain  : {0..=0}
@@ -589,8 +589,8 @@ error:
 
 
 ast            : CAST(-354285 AS DATE)
-raw expr       : CAST(minus(354285_u32) AS Date)
-checked expr   : to_date<Int64>(minus<UInt32>(354285_u32))
+raw expr       : CAST(-354285_i32 AS Date)
+checked expr   : to_date<Int64>(to_int64<Int32>(-354285_i32))
 optimized expr : -354285
 output type    : Date
 output domain  : {-354285..=-354285}
@@ -598,8 +598,8 @@ output         : 1000-01-01
 
 
 ast            : CAST(-100 AS DATE)
-raw expr       : CAST(minus(100_u8) AS Date)
-checked expr   : to_date<Int64>(to_int64<Int16>(minus<UInt8>(100_u8)))
+raw expr       : CAST(-100_i8 AS Date)
+checked expr   : to_date<Int64>(to_int64<Int8>(-100_i8))
 optimized expr : -100
 output type    : Date
 output domain  : {-100..=-100}
@@ -607,8 +607,8 @@ output         : 1969-09-23
 
 
 ast            : CAST(-0 AS DATE)
-raw expr       : CAST(minus(0_u8) AS Date)
-checked expr   : to_date<Int64>(to_int64<Int16>(minus<UInt8>(0_u8)))
+raw expr       : CAST(0_i8 AS Date)
+checked expr   : to_date<Int64>(to_int64<Int8>(0_i8))
 optimized expr : 0
 output type    : Date
 output domain  : {0..=0}
@@ -675,8 +675,8 @@ evaluation (internal):
 
 
 ast            : CAST(TO_DATE(-354285) AS INT64)
-raw expr       : CAST(TO_DATE(minus(354285_u32)) AS Int64)
-checked expr   : to_int64<Date>(to_date<Int64>(minus<UInt32>(354285_u32)))
+raw expr       : CAST(TO_DATE(-354285_i32) AS Int64)
+checked expr   : to_int64<Date>(to_date<Int64>(to_int64<Int32>(-354285_i32)))
 optimized expr : -354285_i64
 output type    : Int64
 output domain  : {-354285..=-354285}
@@ -684,8 +684,8 @@ output         : -354285
 
 
 ast            : CAST(TO_DATE(-100) AS INT64)
-raw expr       : CAST(TO_DATE(minus(100_u8)) AS Int64)
-checked expr   : to_int64<Date>(to_date<Int64>(to_int64<Int16>(minus<UInt8>(100_u8))))
+raw expr       : CAST(TO_DATE(-100_i8) AS Int64)
+checked expr   : to_int64<Date>(to_date<Int64>(to_int64<Int8>(-100_i8)))
 optimized expr : -100_i64
 output type    : Int64
 output domain  : {-100..=-100}
@@ -693,8 +693,8 @@ output         : -100
 
 
 ast            : CAST(TO_DATE(-0) AS INT64)
-raw expr       : CAST(TO_DATE(minus(0_u8)) AS Int64)
-checked expr   : to_int64<Date>(to_date<Int64>(to_int64<Int16>(minus<UInt8>(0_u8))))
+raw expr       : CAST(TO_DATE(0_i8) AS Int64)
+checked expr   : to_int64<Date>(to_date<Int64>(to_int64<Int8>(0_i8)))
 optimized expr : 0_i64
 output type    : Int64
 output domain  : {0..=0}
@@ -960,6 +960,103 @@ evaluation (internal):
 +--------+-----------------------------------------------------------------+
 
 
+ast            : CAST('010.010' AS DECIMAL(5,3))
+raw expr       : CAST("010.010" AS Decimal(5, 3))
+checked expr   : to_decimal<String>("010.010")
+optimized expr : 10.010_d128(5,3)
+output type    : Decimal(5, 3)
+output domain  : {10.010..=10.010}
+output         : 10.010
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST('010.010' AS DECIMAL(5,4))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ fail to decode string as decimal: Code: 1049, displayText = decimal overflow. while evaluating function `to_decimal("010.010")`
+
+
+
+ast            : CAST('010.010' AS DECIMAL(5,2))
+raw expr       : CAST("010.010" AS Decimal(5, 2))
+checked expr   : to_decimal<String>("010.010")
+optimized expr : 10.01_d128(5,2)
+output type    : Decimal(5, 2)
+output domain  : {10.01..=10.01}
+output         : 10.01
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST('010.010' AS DECIMAL(4,3))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ fail to decode string as decimal: Code: 1049, displayText = decimal overflow. while evaluating function `to_decimal("010.010")`
+
+
+
+ast            : CAST('010.010' AS DECIMAL(4,2))
+raw expr       : CAST("010.010" AS Decimal(4, 2))
+checked expr   : to_decimal<String>("010.010")
+optimized expr : 10.01_d128(4,2)
+output type    : Decimal(4, 2)
+output domain  : {10.01..=10.01}
+output         : 10.01
+
+
+ast            : CAST('-1010.010' AS DECIMAL(7,3))
+raw expr       : CAST("-1010.010" AS Decimal(7, 3))
+checked expr   : to_decimal<String>("-1010.010")
+optimized expr : -1010.010_d128(7,3)
+output type    : Decimal(7, 3)
+output domain  : {-1010.010..=-1010.010}
+output         : -1010.010
+
+
+ast            : CAST('00' AS DECIMAL(2,1))
+raw expr       : CAST("00" AS Decimal(2, 1))
+checked expr   : to_decimal<String>("00")
+optimized expr : 0.0_d128(2,1)
+output type    : Decimal(2, 1)
+output domain  : {0.0..=0.0}
+output         : 0.0
+
+
+ast            : CAST('0.0' AS DECIMAL(2,0))
+raw expr       : CAST("0.0" AS Decimal(2, 0))
+checked expr   : to_decimal<String>("0.0")
+optimized expr : 0_d128(2,0)
+output type    : Decimal(2, 0)
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : CAST('.0' AS DECIMAL(1,0))
+raw expr       : CAST(".0" AS Decimal(1, 0))
+checked expr   : to_decimal<String>(".0")
+optimized expr : 0_d128(1,0)
+output type    : Decimal(1, 0)
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : CAST('+1.0e-10' AS DECIMAL(11, 10))
+raw expr       : CAST("+1.0e-10" AS Decimal(11, 10))
+checked expr   : to_decimal<String>("+1.0e-10")
+optimized expr : 0.0000000001_d128(11,10)
+output type    : Decimal(11, 10)
+output domain  : {0.0000000001..=0.0000000001}
+output         : 0.0000000001
+
+
+ast            : CAST('-1.0e+10' AS DECIMAL(11, 0))
+raw expr       : CAST("-1.0e+10" AS Decimal(11, 0))
+checked expr   : to_decimal<String>("-1.0e+10")
+optimized expr : -10000000000_d128(11,0)
+output type    : Decimal(11, 0)
+output domain  : {-10000000000..=-10000000000}
+output         : -10000000000
+
+
 ast            : CAST(0 AS BOOLEAN)
 raw expr       : CAST(0_u8 AS Boolean)
 checked expr   : to_boolean<UInt8>(0_u8)
@@ -1000,7 +1097,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(0.0 AS BOOLEAN)
-  | ^^^^^^^^^^^^^^^^^^^^ unable to cast type `Float64` to type `Boolean`
+  | ^^^^^^^^^^^^^^^^^^^^ unable to cast type `Decimal(1, 1)` to type `Boolean`
 
 
 
@@ -1008,7 +1105,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(1.0 AS BOOLEAN)
-  | ^^^^^^^^^^^^^^^^^^^^ unable to cast type `Float64` to type `Boolean`
+  | ^^^^^^^^^^^^^^^^^^^^ unable to cast type `Decimal(2, 1)` to type `Boolean`
 
 
 
@@ -1326,8 +1423,8 @@ evaluation (internal):
 
 
 ast            : CAST(TO_TIMESTAMP(-315360000000000) AS VARCHAR)
-raw expr       : CAST(TO_TIMESTAMP(minus(315360000000000_u64)) AS String)
-checked expr   : to_string<Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)))
+raw expr       : CAST(TO_TIMESTAMP(-315360000000000_i64) AS String)
+checked expr   : to_string<Timestamp>(to_timestamp<Int64>(-315360000000000_i64))
 optimized expr : "1960-01-04 00:00:00.000000"
 output type    : String
 output domain  : {"1960-01-04 00:00:00.000000"..="1960-01-04 00:00:00.000000"}
@@ -1335,8 +1432,8 @@ output         : "1960-01-04 00:00:00.000000"
 
 
 ast            : CAST(TO_TIMESTAMP(-315360000000) AS VARCHAR)
-raw expr       : CAST(TO_TIMESTAMP(minus(315360000000_u64)) AS String)
-checked expr   : to_string<Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000_u64)))
+raw expr       : CAST(TO_TIMESTAMP(-315360000000_i64) AS String)
+checked expr   : to_string<Timestamp>(to_timestamp<Int64>(-315360000000_i64))
 optimized expr : "1960-01-04 00:00:00.000000"
 output type    : String
 output domain  : {"1960-01-04 00:00:00.000000"..="1960-01-04 00:00:00.000000"}
@@ -1344,8 +1441,8 @@ output         : "1960-01-04 00:00:00.000000"
 
 
 ast            : CAST(TO_TIMESTAMP(-100) AS VARCHAR)
-raw expr       : CAST(TO_TIMESTAMP(minus(100_u8)) AS String)
-checked expr   : to_string<Timestamp>(to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(100_u8))))
+raw expr       : CAST(TO_TIMESTAMP(-100_i8) AS String)
+checked expr   : to_string<Timestamp>(to_timestamp<Int64>(to_int64<Int8>(-100_i8)))
 optimized expr : "1969-12-31 23:58:20.000000"
 output type    : String
 output domain  : {"1969-12-31 23:58:20.000000"..="1969-12-31 23:58:20.000000"}
@@ -1353,8 +1450,8 @@ output         : "1969-12-31 23:58:20.000000"
 
 
 ast            : CAST(TO_TIMESTAMP(-0) AS VARCHAR)
-raw expr       : CAST(TO_TIMESTAMP(minus(0_u8)) AS String)
-checked expr   : to_string<Timestamp>(to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(0_u8))))
+raw expr       : CAST(TO_TIMESTAMP(0_i8) AS String)
+checked expr   : to_string<Timestamp>(to_timestamp<Int64>(to_int64<Int8>(0_i8)))
 optimized expr : "1970-01-01 00:00:00.000000"
 output type    : String
 output domain  : {"1970-01-01 00:00:00.000000"..="1970-01-01 00:00:00.000000"}
@@ -1526,8 +1623,8 @@ evaluation (internal):
 
 
 ast            : CAST(TO_DATE(-354285) AS VARCHAR)
-raw expr       : CAST(TO_DATE(minus(354285_u32)) AS String)
-checked expr   : to_string<Date>(to_date<Int64>(minus<UInt32>(354285_u32)))
+raw expr       : CAST(TO_DATE(-354285_i32) AS String)
+checked expr   : to_string<Date>(to_date<Int64>(to_int64<Int32>(-354285_i32)))
 optimized expr : "1000-01-01"
 output type    : String
 output domain  : {"1000-01-01"..="1000-01-01"}
@@ -1535,8 +1632,8 @@ output         : "1000-01-01"
 
 
 ast            : CAST(TO_DATE(-100) AS VARCHAR)
-raw expr       : CAST(TO_DATE(minus(100_u8)) AS String)
-checked expr   : to_string<Date>(to_date<Int64>(to_int64<Int16>(minus<UInt8>(100_u8))))
+raw expr       : CAST(TO_DATE(-100_i8) AS String)
+checked expr   : to_string<Date>(to_date<Int64>(to_int64<Int8>(-100_i8)))
 optimized expr : "1969-09-23"
 output type    : String
 output domain  : {"1969-09-23"..="1969-09-23"}
@@ -1544,8 +1641,8 @@ output         : "1969-09-23"
 
 
 ast            : CAST(TO_DATE(-0) AS VARCHAR)
-raw expr       : CAST(TO_DATE(minus(0_u8)) AS String)
-checked expr   : to_string<Date>(to_date<Int64>(to_int64<Int16>(minus<UInt8>(0_u8))))
+raw expr       : CAST(TO_DATE(0_i8) AS String)
+checked expr   : to_string<Date>(to_date<Int64>(to_int64<Int8>(0_i8)))
 optimized expr : "1970-01-01"
 output type    : String
 output domain  : {"1970-01-01"..="1970-01-01"}
@@ -2040,8 +2137,8 @@ output         : 0
 
 
 ast            : TRY_CAST(-1 AS VARIANT)
-raw expr       : TRY_CAST(minus(1_u8) AS Variant)
-checked expr   : try_to_variant<T0=Int16><T0>(minus<UInt8>(1_u8))
+raw expr       : TRY_CAST(-1_i8 AS Variant)
+checked expr   : try_to_variant<T0=Int8><T0>(-1_i8)
 optimized expr : 0x200000002000000240ff
 output type    : Variant NULL
 output domain  : Undefined
@@ -2049,8 +2146,8 @@ output         : -1
 
 
 ast            : TRY_CAST(1.1 AS VARIANT)
-raw expr       : TRY_CAST(1.1_f64 AS Variant)
-checked expr   : try_to_variant<T0=Float64><T0>(1.1_f64)
+raw expr       : TRY_CAST(1.1_decimal(2, 1) AS Variant)
+checked expr   : try_to_variant<T0=Decimal(2, 1)><T0>(1.1_d128(2,1))
 optimized expr : 0x2000000020000009603ff199999999999a
 output type    : Variant NULL
 output domain  : Undefined
@@ -2188,8 +2285,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(-30610224000000001 AS TIMESTAMP)
-raw expr       : TRY_CAST(minus(30610224000000001_u64) AS Timestamp)
-checked expr   : try_to_timestamp<Int64>(minus<UInt64>(30610224000000001_u64))
+raw expr       : TRY_CAST(-30610224000000001_i64 AS Timestamp)
+checked expr   : try_to_timestamp<Int64>(-30610224000000001_i64)
 optimized expr : NULL
 output type    : Timestamp NULL
 output domain  : {NULL}
@@ -2197,8 +2294,8 @@ output         : NULL
 
 
 ast            : TRY_CAST(-315360000000000 AS TIMESTAMP)
-raw expr       : TRY_CAST(minus(315360000000000_u64) AS Timestamp)
-checked expr   : try_to_timestamp<Int64>(minus<UInt64>(315360000000000_u64))
+raw expr       : TRY_CAST(-315360000000000_i64 AS Timestamp)
+checked expr   : try_to_timestamp<Int64>(-315360000000000_i64)
 optimized expr : -315360000000000
 output type    : Timestamp NULL
 output domain  : {-315360000000000..=-315360000000000}
@@ -2206,8 +2303,8 @@ output         : 1960-01-04 00:00:00.000000
 
 
 ast            : TRY_CAST(-315360000000 AS TIMESTAMP)
-raw expr       : TRY_CAST(minus(315360000000_u64) AS Timestamp)
-checked expr   : try_to_timestamp<Int64>(minus<UInt64>(315360000000_u64))
+raw expr       : TRY_CAST(-315360000000_i64 AS Timestamp)
+checked expr   : try_to_timestamp<Int64>(-315360000000_i64)
 optimized expr : -315360000000000
 output type    : Timestamp NULL
 output domain  : {-315360000000000..=-315360000000000}
@@ -2215,8 +2312,8 @@ output         : 1960-01-04 00:00:00.000000
 
 
 ast            : TRY_CAST(-100 AS TIMESTAMP)
-raw expr       : TRY_CAST(minus(100_u8) AS Timestamp)
-checked expr   : try_to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(100_u8)))
+raw expr       : TRY_CAST(-100_i8 AS Timestamp)
+checked expr   : try_to_timestamp<Int64>(to_int64<Int8>(-100_i8))
 optimized expr : -100000000
 output type    : Timestamp NULL
 output domain  : {-100000000..=-100000000}
@@ -2224,8 +2321,8 @@ output         : 1969-12-31 23:58:20.000000
 
 
 ast            : TRY_CAST(-0 AS TIMESTAMP)
-raw expr       : TRY_CAST(minus(0_u8) AS Timestamp)
-checked expr   : try_to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(0_u8)))
+raw expr       : TRY_CAST(0_i8 AS Timestamp)
+checked expr   : try_to_timestamp<Int64>(to_int64<Int8>(0_i8))
 optimized expr : 0
 output type    : Timestamp NULL
 output domain  : {0..=0}
@@ -2304,8 +2401,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(TO_TIMESTAMP(-315360000000000) AS INT64)
-raw expr       : TRY_CAST(TO_TIMESTAMP(minus(315360000000000_u64)) AS Int64)
-checked expr   : try_to_int64<Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)))
+raw expr       : TRY_CAST(TO_TIMESTAMP(-315360000000000_i64) AS Int64)
+checked expr   : try_to_int64<Timestamp>(to_timestamp<Int64>(-315360000000000_i64))
 optimized expr : -315360000000000_i64
 output type    : Int64 NULL
 output domain  : {-315360000000000..=-315360000000000}
@@ -2313,8 +2410,8 @@ output         : -315360000000000
 
 
 ast            : TRY_CAST(TO_TIMESTAMP(-315360000000) AS INT64)
-raw expr       : TRY_CAST(TO_TIMESTAMP(minus(315360000000_u64)) AS Int64)
-checked expr   : try_to_int64<Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000_u64)))
+raw expr       : TRY_CAST(TO_TIMESTAMP(-315360000000_i64) AS Int64)
+checked expr   : try_to_int64<Timestamp>(to_timestamp<Int64>(-315360000000_i64))
 optimized expr : -315360000000000_i64
 output type    : Int64 NULL
 output domain  : {-315360000000000..=-315360000000000}
@@ -2322,8 +2419,8 @@ output         : -315360000000000
 
 
 ast            : TRY_CAST(TO_TIMESTAMP(-100) AS INT64)
-raw expr       : TRY_CAST(TO_TIMESTAMP(minus(100_u8)) AS Int64)
-checked expr   : try_to_int64<Timestamp>(to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(100_u8))))
+raw expr       : TRY_CAST(TO_TIMESTAMP(-100_i8) AS Int64)
+checked expr   : try_to_int64<Timestamp>(to_timestamp<Int64>(to_int64<Int8>(-100_i8)))
 optimized expr : -100000000_i64
 output type    : Int64 NULL
 output domain  : {-100000000..=-100000000}
@@ -2331,8 +2428,8 @@ output         : -100000000
 
 
 ast            : TRY_CAST(TO_TIMESTAMP(-0) AS INT64)
-raw expr       : TRY_CAST(TO_TIMESTAMP(minus(0_u8)) AS Int64)
-checked expr   : try_to_int64<Timestamp>(to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(0_u8))))
+raw expr       : TRY_CAST(TO_TIMESTAMP(0_i8) AS Int64)
+checked expr   : try_to_int64<Timestamp>(to_timestamp<Int64>(to_int64<Int8>(0_i8)))
 optimized expr : 0_i64
 output type    : Int64 NULL
 output domain  : {0..=0}
@@ -2402,8 +2499,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(-354286 AS DATE)
-raw expr       : TRY_CAST(minus(354286_u32) AS Date)
-checked expr   : try_to_date<Int64>(minus<UInt32>(354286_u32))
+raw expr       : TRY_CAST(-354286_i32 AS Date)
+checked expr   : try_to_date<Int64>(to_int64<Int32>(-354286_i32))
 optimized expr : NULL
 output type    : Date NULL
 output domain  : {NULL}
@@ -2411,8 +2508,8 @@ output         : NULL
 
 
 ast            : TRY_CAST(-354285 AS DATE)
-raw expr       : TRY_CAST(minus(354285_u32) AS Date)
-checked expr   : try_to_date<Int64>(minus<UInt32>(354285_u32))
+raw expr       : TRY_CAST(-354285_i32 AS Date)
+checked expr   : try_to_date<Int64>(to_int64<Int32>(-354285_i32))
 optimized expr : -354285
 output type    : Date NULL
 output domain  : {-354285..=-354285}
@@ -2420,8 +2517,8 @@ output         : 1000-01-01
 
 
 ast            : TRY_CAST(-100 AS DATE)
-raw expr       : TRY_CAST(minus(100_u8) AS Date)
-checked expr   : try_to_date<Int64>(to_int64<Int16>(minus<UInt8>(100_u8)))
+raw expr       : TRY_CAST(-100_i8 AS Date)
+checked expr   : try_to_date<Int64>(to_int64<Int8>(-100_i8))
 optimized expr : -100
 output type    : Date NULL
 output domain  : {-100..=-100}
@@ -2429,8 +2526,8 @@ output         : 1969-09-23
 
 
 ast            : TRY_CAST(-0 AS DATE)
-raw expr       : TRY_CAST(minus(0_u8) AS Date)
-checked expr   : try_to_date<Int64>(to_int64<Int16>(minus<UInt8>(0_u8)))
+raw expr       : TRY_CAST(0_i8 AS Date)
+checked expr   : try_to_date<Int64>(to_int64<Int8>(0_i8))
 optimized expr : 0
 output type    : Date NULL
 output domain  : {0..=0}
@@ -2498,8 +2595,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(TO_DATE(-354285) AS INT64)
-raw expr       : TRY_CAST(TO_DATE(minus(354285_u32)) AS Int64)
-checked expr   : try_to_int64<Date>(to_date<Int64>(minus<UInt32>(354285_u32)))
+raw expr       : TRY_CAST(TO_DATE(-354285_i32) AS Int64)
+checked expr   : try_to_int64<Date>(to_date<Int64>(to_int64<Int32>(-354285_i32)))
 optimized expr : -354285_i64
 output type    : Int64 NULL
 output domain  : {-354285..=-354285}
@@ -2507,8 +2604,8 @@ output         : -354285
 
 
 ast            : TRY_CAST(TO_DATE(-100) AS INT64)
-raw expr       : TRY_CAST(TO_DATE(minus(100_u8)) AS Int64)
-checked expr   : try_to_int64<Date>(to_date<Int64>(to_int64<Int16>(minus<UInt8>(100_u8))))
+raw expr       : TRY_CAST(TO_DATE(-100_i8) AS Int64)
+checked expr   : try_to_int64<Date>(to_date<Int64>(to_int64<Int8>(-100_i8)))
 optimized expr : -100_i64
 output type    : Int64 NULL
 output domain  : {-100..=-100}
@@ -2516,8 +2613,8 @@ output         : -100
 
 
 ast            : TRY_CAST(TO_DATE(-0) AS INT64)
-raw expr       : TRY_CAST(TO_DATE(minus(0_u8)) AS Int64)
-checked expr   : try_to_int64<Date>(to_date<Int64>(to_int64<Int16>(minus<UInt8>(0_u8))))
+raw expr       : TRY_CAST(TO_DATE(0_i8) AS Int64)
+checked expr   : try_to_int64<Date>(to_date<Int64>(to_int64<Int8>(0_i8)))
 optimized expr : 0_i64
 output type    : Int64 NULL
 output domain  : {0..=0}
@@ -2806,6 +2903,94 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------+
 
 
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST('010.010' AS DECIMAL(5,3))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `String` to type `Decimal(5, 3) NULL`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST('010.010' AS DECIMAL(5,4))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `String` to type `Decimal(5, 4) NULL`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST('010.010' AS DECIMAL(5,2))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `String` to type `Decimal(5, 2) NULL`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST('010.010' AS DECIMAL(4,3))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `String` to type `Decimal(4, 3) NULL`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST('010.010' AS DECIMAL(4,2))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `String` to type `Decimal(4, 2) NULL`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST('-1010.010' AS DECIMAL(7,3))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `String` to type `Decimal(7, 3) NULL`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST('00' AS DECIMAL(2,1))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `String` to type `Decimal(2, 1) NULL`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST('0.0' AS DECIMAL(2,0))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `String` to type `Decimal(2, 0) NULL`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST('.0' AS DECIMAL(1,0))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `String` to type `Decimal(1, 0) NULL`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST('+1.0e-10' AS DECIMAL(11, 10))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `String` to type `Decimal(11, 10) NULL`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST('-1.0e+10' AS DECIMAL(11, 0))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `String` to type `Decimal(11, 0) NULL`
+
+
+
 ast            : TRY_CAST(0 AS BOOLEAN)
 raw expr       : TRY_CAST(0_u8 AS Boolean)
 checked expr   : try_to_boolean<UInt8>(0_u8)
@@ -2846,7 +3031,7 @@ error:
   --> SQL:1:1
   |
 1 | TRY_CAST(0.0 AS BOOLEAN)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Float64` to type `Boolean NULL`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Decimal(1, 1)` to type `Boolean NULL`
 
 
 
@@ -2854,7 +3039,7 @@ error:
   --> SQL:1:1
   |
 1 | TRY_CAST(1.0 AS BOOLEAN)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Float64` to type `Boolean NULL`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Decimal(2, 1)` to type `Boolean NULL`
 
 
 
@@ -3201,8 +3386,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(TO_TIMESTAMP(-315360000000000) AS VARCHAR)
-raw expr       : TRY_CAST(TO_TIMESTAMP(minus(315360000000000_u64)) AS String)
-checked expr   : try_to_string<Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)))
+raw expr       : TRY_CAST(TO_TIMESTAMP(-315360000000000_i64) AS String)
+checked expr   : try_to_string<Timestamp>(to_timestamp<Int64>(-315360000000000_i64))
 optimized expr : "1960-01-04 00:00:00.000000"
 output type    : String NULL
 output domain  : {"1960-01-04 00:00:00.000000"..="1960-01-04 00:00:00.000000"}
@@ -3210,8 +3395,8 @@ output         : "1960-01-04 00:00:00.000000"
 
 
 ast            : TRY_CAST(TO_TIMESTAMP(-315360000000) AS VARCHAR)
-raw expr       : TRY_CAST(TO_TIMESTAMP(minus(315360000000_u64)) AS String)
-checked expr   : try_to_string<Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000_u64)))
+raw expr       : TRY_CAST(TO_TIMESTAMP(-315360000000_i64) AS String)
+checked expr   : try_to_string<Timestamp>(to_timestamp<Int64>(-315360000000_i64))
 optimized expr : "1960-01-04 00:00:00.000000"
 output type    : String NULL
 output domain  : {"1960-01-04 00:00:00.000000"..="1960-01-04 00:00:00.000000"}
@@ -3219,8 +3404,8 @@ output         : "1960-01-04 00:00:00.000000"
 
 
 ast            : TRY_CAST(TO_TIMESTAMP(-100) AS VARCHAR)
-raw expr       : TRY_CAST(TO_TIMESTAMP(minus(100_u8)) AS String)
-checked expr   : try_to_string<Timestamp>(to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(100_u8))))
+raw expr       : TRY_CAST(TO_TIMESTAMP(-100_i8) AS String)
+checked expr   : try_to_string<Timestamp>(to_timestamp<Int64>(to_int64<Int8>(-100_i8)))
 optimized expr : "1969-12-31 23:58:20.000000"
 output type    : String NULL
 output domain  : {"1969-12-31 23:58:20.000000"..="1969-12-31 23:58:20.000000"}
@@ -3228,8 +3413,8 @@ output         : "1969-12-31 23:58:20.000000"
 
 
 ast            : TRY_CAST(TO_TIMESTAMP(-0) AS VARCHAR)
-raw expr       : TRY_CAST(TO_TIMESTAMP(minus(0_u8)) AS String)
-checked expr   : try_to_string<Timestamp>(to_timestamp<Int64>(to_int64<Int16>(minus<UInt8>(0_u8))))
+raw expr       : TRY_CAST(TO_TIMESTAMP(0_i8) AS String)
+checked expr   : try_to_string<Timestamp>(to_timestamp<Int64>(to_int64<Int8>(0_i8)))
 optimized expr : "1970-01-01 00:00:00.000000"
 output type    : String NULL
 output domain  : {"1970-01-01 00:00:00.000000"..="1970-01-01 00:00:00.000000"}
@@ -3404,8 +3589,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(TO_DATE(-354285) AS VARCHAR)
-raw expr       : TRY_CAST(TO_DATE(minus(354285_u32)) AS String)
-checked expr   : try_to_string<Date>(to_date<Int64>(minus<UInt32>(354285_u32)))
+raw expr       : TRY_CAST(TO_DATE(-354285_i32) AS String)
+checked expr   : try_to_string<Date>(to_date<Int64>(to_int64<Int32>(-354285_i32)))
 optimized expr : "1000-01-01"
 output type    : String NULL
 output domain  : {"1000-01-01"..="1000-01-01"}
@@ -3413,8 +3598,8 @@ output         : "1000-01-01"
 
 
 ast            : TRY_CAST(TO_DATE(-100) AS VARCHAR)
-raw expr       : TRY_CAST(TO_DATE(minus(100_u8)) AS String)
-checked expr   : try_to_string<Date>(to_date<Int64>(to_int64<Int16>(minus<UInt8>(100_u8))))
+raw expr       : TRY_CAST(TO_DATE(-100_i8) AS String)
+checked expr   : try_to_string<Date>(to_date<Int64>(to_int64<Int8>(-100_i8)))
 optimized expr : "1969-09-23"
 output type    : String NULL
 output domain  : {"1969-09-23"..="1969-09-23"}
@@ -3422,8 +3607,8 @@ output         : "1969-09-23"
 
 
 ast            : TRY_CAST(TO_DATE(-0) AS VARCHAR)
-raw expr       : TRY_CAST(TO_DATE(minus(0_u8)) AS String)
-checked expr   : try_to_string<Date>(to_date<Int64>(to_int64<Int16>(minus<UInt8>(0_u8))))
+raw expr       : TRY_CAST(TO_DATE(0_i8) AS String)
+checked expr   : try_to_string<Date>(to_date<Int64>(to_int64<Int8>(0_i8)))
 optimized expr : "1970-01-01"
 output type    : String NULL
 output domain  : {"1970-01-01"..="1970-01-01"}

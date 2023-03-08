@@ -73,9 +73,9 @@ The following uses the MinIO + Databend standalone deployment in Linux of x64 as
 Download [MinIO](https://min.io/) from the official website and start it by running the following commands:
 
 ```Bash
-cd /data 
+cd /data
 mkdir minio
-cd minio 
+cd minio
 wget https://dl.min.io/server/minio/release/linux-amd64/minio
 export MINIO_ROOT_USER=minioadmin
 export MINIO_ROOT_PASSWORD=minioadmin
@@ -145,7 +145,7 @@ access_key_id = "minioadmin"
 secret_access_key = "minioadmin"
 ```
 
-### Start and Stop Databend 
+### Start and Stop Databend
 
 To start Databend, run the following command:
 
@@ -163,48 +163,34 @@ ps axu |grep databend
 To stop Databend, run the following command:
 
 ```bash
-./script/stop.sh 
+./script/stop.sh
 ```
 
 #### Connect to Databend
 
 Databend has three external service ports by default:
- 
-- MySQL: 3307 supports MySQL cli and application connection. 
-- ClickHouse: 8124 ClickHouse http handler protocol 
+
+- MySQL: 3307 supports MySQL cli and application connection.
+- ClickHouse: 8124 ClickHouse http handler protocol
 - [http prot: 8000](https://databend.rs/doc/integrations/api/rest) The Databend HTTP handler is a REST API
- 
+
 To connect to Databend using the MySQL client, run the following command:
 
 ```Bash
 mysql -h 127.0.0.1 -P3307 -uroot
 ```
 
->Note that the root user can log in without a password from localhost. Databend permission management refers to the design of MySQL 8.0 and allows you to manage Databend users in the same way as MySQL 8.0 user management. 
- 
-ClickHouse protocol using: https://databend.rs/doc/reference/api/clickhouse-handler 
- 
+>Note that the root user can log in without a password from localhost. Databend permission management refers to the design of MySQL 8.0 and allows you to manage Databend users in the same way as MySQL 8.0 user management.
+
+ClickHouse protocol using: https://databend.rs/doc/reference/api/clickhouse-handler
+
 You're all set up now. Use Databend as you're with MySQL.
 
 ## Other Resources
 - Loading data to Databend: https://databend.rs/doc/load-data/
 - Databend k8s opterator: https://github.com/datafuselabs/helm-charts
-- bendsql: https://github.com/databendcloud/bendsql 
+- bendsql: https://github.com/databendcloud/bendsql
 - Databend drivers:
   - Java Driver: https://github.com/databendcloud/databend-jdbc
   - Go Driver: https://github.com/databendcloud/databend-go
   - Python Driver: https://github.com/databendcloud/databend-py
-
-## Connect With Us
-
-Databend is an open source, flexible, low-cost repository for real-time analysis based on object storage. We look forward to your attention and explore Cloud native Data warehouse solutions together to build a new generation of open source Databend Cloud.
-
-- [Databend Website](https://databend.rs)
-
-- [Databend Cloud](https://databend.com)
-  
-- [GitHub Discussions](https://github.com/datafuselabs/databend/discussions)
-
-- [Twitter](https://twitter.com/DatabendLabs)
-
-- [Slack Channel](https://link.databend.rs/join-slack)

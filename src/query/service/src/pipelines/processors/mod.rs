@@ -15,8 +15,6 @@
 pub use common_pipeline_core::processors::*;
 pub(crate) mod transforms;
 
-pub use transforms::create_dummy_item;
-pub use transforms::create_dummy_items;
 pub use transforms::AggregatorParams;
 pub use transforms::BlockCompactor;
 pub use transforms::HashJoinDesc;
@@ -29,13 +27,14 @@ pub use transforms::ProfileWrapper;
 pub use transforms::RightJoinCompactor;
 pub use transforms::SerializerHashTable;
 pub use transforms::SinkBuildHashTable;
+pub use transforms::SinkRuntimeFilterSource;
 pub use transforms::SortMergeCompactor;
 pub use transforms::TransformBlockCompact;
 pub use transforms::TransformCastSchema;
 pub use transforms::TransformCompact;
 pub use transforms::TransformCreateSets;
-pub use transforms::TransformDummy;
 pub use transforms::TransformHashJoinProbe;
 pub use transforms::TransformLimit;
 pub use transforms::TransformResortAddOn;
+pub use transforms::TransformRuntimeFilter;
 pub use transforms::TransformSortPartial;

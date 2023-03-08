@@ -443,6 +443,28 @@ impl Display for Literal {
             Literal::UInt64(val) => write!(f, "{val}_u64"),
             Literal::Float32(val) => write!(f, "{val}_f32"),
             Literal::Float64(val) => write!(f, "{val}_f64"),
+            Literal::Decimal256 {
+                value,
+                precision,
+                scale,
+            } => write!(
+                f,
+                "{}_decimal({}, {})",
+                display_decimal_256(*value, *scale),
+                precision,
+                scale
+            ),
+            Literal::Decimal128 {
+                value,
+                precision,
+                scale,
+            } => write!(
+                f,
+                "{}_decimal({}, {})",
+                display_decimal_128(*value, *scale),
+                precision,
+                scale
+            ),
             Literal::String(val) => write!(f, "{:?}", String::from_utf8_lossy(val)),
         }
     }

@@ -14,13 +14,12 @@
 
 use std::fmt;
 
-use common_meta_sled_store::openraft;
 use common_meta_sled_store::sled;
 use common_meta_sled_store::SledBytesError;
 use common_meta_sled_store::SledOrderedSerde;
 use common_meta_types::anyerror::AnyError;
 use common_meta_types::NodeId;
-use openraft::storage::HardState;
+use common_meta_types::Vote;
 use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
@@ -44,7 +43,7 @@ pub enum RaftStateKey {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RaftStateValue {
     NodeId(NodeId),
-    HardState(HardState),
+    HardState(Vote),
     /// active state machine, previous state machine
     StateMachineId((u64, u64)),
 }
@@ -100,7 +99,7 @@ impl From<RaftStateValue> for NodeId {
     }
 }
 
-impl From<RaftStateValue> for HardState {
+impl From<RaftStateValue> for Vote {
     fn from(v: RaftStateValue) -> Self {
         match v {
             RaftStateValue::HardState(x) => x,
@@ -114,6 +113,48 @@ impl From<RaftStateValue> for (u64, u64) {
         match v {
             RaftStateValue::StateMachineId(x) => x,
             _ => panic!("expect StateMachineId"),
+        }
+    }
+}
+
+pub(crate) mod compat_with_07 {
+    use common_meta_sled_store::SledBytesError;
+    use common_meta_sled_store::SledSerde;
+    use common_meta_types::compat07;
+    use common_meta_types::NodeId;
+    use openraft::compat::Upgrade;
+
+    use crate::state::RaftStateValue;
+
+    #[derive(Debug, serde::Serialize, serde::Deserialize)]
+    pub enum RaftStateValueCompat {
+        NodeId(NodeId),
+        HardState(compat07::Vote),
+        StateMachineId((u64, u64)),
+    }
+
+    impl Upgrade<RaftStateValue> for RaftStateValueCompat {
+        #[rustfmt::skip]
+        fn upgrade(self) -> RaftStateValue {
+            match self{
+                Self::NodeId(nid)       => RaftStateValue::NodeId(nid),
+                Self::HardState(v)      => RaftStateValue::HardState(v.upgrade()),
+                Self::StateMachineId(x) => RaftStateValue::StateMachineId(x),
+            }
+        }
+    }
+
+    impl SledSerde for RaftStateValue {
+        fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, SledBytesError>
+        where Self: Sized {
+            let s: RaftStateValueCompat = serde_json::from_slice(v.as_ref())?;
+
+            let v = match s {
+                RaftStateValueCompat::NodeId(nid) => Self::NodeId(nid),
+                RaftStateValueCompat::HardState(h) => Self::HardState(h.upgrade()),
+                RaftStateValueCompat::StateMachineId(x) => Self::StateMachineId(x),
+            };
+            Ok(v)
         }
     }
 }

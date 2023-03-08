@@ -36,7 +36,6 @@ common-grpc = { path = "../common/grpc" }
 common-meta-api = { path = "../meta/api" }
 common-meta-app = { path = "../meta/app" }
 common-meta-client = { path = "../meta/client" }
-common-meta-embedded = { path = "../meta/embedded" }
 common-meta-kvapi = { path = "../meta/kvapi" }
 common-meta-raft-store = { path = "../meta/raft-store" }
 common-meta-sled-store = { path = "../meta/sled-store" }
@@ -55,7 +54,6 @@ anyhow = { workspace = true }
 clap = { workspace = true }
 comfy-table = "6.1.3"
 limits-rs = "0.1.0"
-openraft = { workspace = true }
 poem = { version = "1", features = ["rustls", "multipart", "compression"] }
 sentry = { version = "0.27.0", default-features = false, features = ["backtrace", "contexts", "panic", "rustls"] }
 serde = { workspace = true }

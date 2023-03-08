@@ -20,8 +20,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::MetaId;
 use common_storages_fuse::table_functions::InferSchemaTable;
+use itertools::Itertools;
 use parking_lot::RwLock;
 
+use super::UnnestTable;
 use crate::catalogs::SYS_TBL_FUC_ID_END;
 use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;
 use crate::storages::fuse::table_functions::ClusteringInformationTable;
@@ -136,10 +138,10 @@ impl TableFunctionFactory {
             (next_id(), Arc::new(InferSchemaTable::create)),
         );
 
-        // creators.insert(
-        //     "read_parquet".to_string(),
-        //     (next_id(), Arc::new(create_disabled_table_function)),
-        // );
+        creators.insert(
+            "unnest".to_string(),
+            (next_id(), Arc::new(UnnestTable::create)),
+        );
 
         TableFunctionFactory {
             creators: RwLock::new(creators),
@@ -154,5 +156,15 @@ impl TableFunctionFactory {
         })?;
         let func = factory.try_create("", &func_name, *id, tbl_args)?;
         Ok(func)
+    }
+
+    pub fn list(&self) -> Vec<String> {
+        self.creators
+            .read()
+            .iter()
+            .map(|(name, (id, _))| (name, id))
+            .sorted_by(|a, b| Ord::cmp(a.1, b.1))
+            .map(|(name, _)| name.clone())
+            .collect()
     }
 }

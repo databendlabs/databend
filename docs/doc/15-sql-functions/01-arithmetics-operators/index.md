@@ -1,6 +1,6 @@
 ---
 title: Arithmetic Operators
-title_includes: plus, minus, multiply, div, divide, mod, modulo, negate, +, -, /, %, * 
+title_includes: plus, minus, multiply, div, divide, mod, caret, modulo, negate, +, -, /, %, *, ^ 
 ---
 
 | Operator      | Description                                           | Example   | Result |
@@ -12,3 +12,4 @@ title_includes: plus, minus, multiply, div, divide, mod, modulo, negate, +, -, /
 | __*__         | Multiplies two numeric expressions                    | **4 * 1** | 4      |
 | **/**         | Divides one numeric expression (`a`) by another (`b`) | **4 / 2** | 2      |
 | **%**         | Computes the modulo of numeric expression             | **4 % 2** | 0      |
+| **^**         | Computes the exponentiation of numeric expression     | **4 ^ 2** | 16     |

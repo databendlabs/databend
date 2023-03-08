@@ -26,4 +26,4 @@ tracing = "0.1.36"
 walkdir = "2.3.2"
 
 [dev-dependencies]
-tempfile = "3.3.0"
+tempfile = "3.4.0"

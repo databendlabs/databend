@@ -8,7 +8,7 @@ Sort
 ├── sort keys: [a ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── Filter
-    ├── filters: [gt(t2.a (#0), 1)]
+    ├── filters: [t2.a (#0) > 1]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
@@ -16,7 +16,7 @@ Sort
         ├── read bytes: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [gt(t2.a (#0), 1)], limit: NONE]
+        ├── push downs: [filters: [t2.a (#0) > 1], limit: NONE]
         ├── output columns: [a]
         └── estimated rows: 0.00
 
@@ -27,7 +27,7 @@ Sort
 ├── sort keys: [a ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── Filter
-    ├── filters: [gt(t1.a (#0), 1)]
+    ├── filters: [t1.a (#0) > 1]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
@@ -35,7 +35,7 @@ Sort
         ├── read bytes: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [gt(t1.a (#0), 1)], limit: NONE]
+        ├── push downs: [filters: [t1.a (#0) > 1], limit: NONE]
         ├── output columns: [a]
         └── estimated rows: 0.00
 
@@ -46,7 +46,7 @@ Sort
 ├── sort keys: [a ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── Filter
-    ├── filters: [gt(t2.a (#0), 1)]
+    ├── filters: [t2.a (#0) > 1]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
@@ -54,7 +54,7 @@ Sort
         ├── read bytes: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [gt(t2.a (#0), 1)], limit: NONE]
+        ├── push downs: [filters: [t2.a (#0) > 1], limit: NONE]
         ├── output columns: [a]
         └── estimated rows: 0.00
 

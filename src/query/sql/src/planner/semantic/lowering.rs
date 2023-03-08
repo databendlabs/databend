@@ -108,7 +108,13 @@ impl ScalarExpr {
                 data_type: subquery.data_type(),
                 display_name: DUMMY_NAME.to_string(),
             },
-            ScalarExpr::Unnest(_) => unreachable!("Unnest cannot be lowered to RawExpr"),
+            ScalarExpr::Unnest(unnest) => RawExpr::ColumnRef {
+                // Rewrite to a ColumnRef
+                span: None,
+                id: DUMMY_NAME.to_string(),
+                data_type: *unnest.return_type.clone(),
+                display_name: DUMMY_NAME.to_string(),
+            },
         }
     }
 
@@ -200,9 +206,13 @@ impl ScalarExpr {
                 data_type: subquery.data_type(),
                 display_name: DUMMY_NAME.to_string(),
             },
-            ScalarExpr::Unnest(_) => {
-                unreachable!("Unnest cannot be converted to RawExpr")
-            }
+            ScalarExpr::Unnest(unnest) => RawExpr::ColumnRef {
+                // Rewrite to a ColumnRef
+                span: None,
+                id: DUMMY_INDEX,
+                data_type: *unnest.return_type.clone(),
+                display_name: DUMMY_NAME.to_string(),
+            },
         }
     }
 

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test UserStageInfo
+//! Test StageInfo
 
 use common_meta_app as mt;
 
@@ -22,7 +22,7 @@ use crate::user_proto_conv::test_gcs_stage_info;
 use crate::user_proto_conv::test_internal_stage_info_v17;
 use crate::user_proto_conv::test_oss_stage_info;
 use crate::user_proto_conv::test_s3_stage_info;
-use crate::user_proto_conv::test_user_stage_info_v18;
+use crate::user_proto_conv::test_stage_info_v18;
 use crate::user_proto_conv::test_webhdfs_stage_info;
 
 #[test]
@@ -57,9 +57,9 @@ fn test_user_stage_webhdfs_latest() -> anyhow::Result<()> {
 
 #[test]
 fn test_user_stage_webhdfs_v30() -> anyhow::Result<()> {
-    // Encoded data of version 30 of common_meta_app::principal::user_stage::UserStageInfo:
+    // Encoded data of version 30 of common_meta_app::principal::user_stage::StageInfo:
     // It is generated with common::test_pb_from_to().
-    let user_stage_info_v30 = vec![
+    let stage_info_v30 = vec![
         10, 29, 119, 101, 98, 104, 100, 102, 115, 58, 47, 47, 112, 97, 116, 104, 47, 116, 111, 47,
         115, 116, 97, 103, 101, 47, 102, 105, 108, 101, 115, 16, 1, 26, 81, 10, 79, 42, 77, 10, 27,
         104, 116, 116, 112, 115, 58, 47, 47, 119, 101, 98, 104, 100, 102, 115, 46, 101, 120, 97,
@@ -71,7 +71,7 @@ fn test_user_stage_webhdfs_v30() -> anyhow::Result<()> {
         116, 160, 6, 30, 168, 6, 24,
     ];
 
-    let want = || mt::principal::UserStageInfo {
+    let want = || mt::principal::StageInfo {
         stage_name: "webhdfs://path/to/stage/files".to_string(),
         stage_type: mt::principal::StageType::External,
         stage_params: mt::principal::StageParams {
@@ -104,7 +104,7 @@ fn test_user_stage_webhdfs_v30() -> anyhow::Result<()> {
         comment: "test".to_string(),
         ..Default::default()
     };
-    common::test_load_old(func_name!(), user_stage_info_v30.as_slice(), 30, want())?;
+    common::test_load_old(func_name!(), stage_info_v30.as_slice(), 30, want())?;
     common::test_pb_from_to(func_name!(), want())?;
 
     Ok(())
@@ -122,7 +122,7 @@ fn test_user_stage_fs_v22() -> anyhow::Result<()> {
         10, 3, 32, 154, 5, 16, 142, 8, 24, 1, 50, 4, 116, 101, 115, 116, 160, 6, 22, 168, 6, 1,
     ];
 
-    let want = mt::principal::UserStageInfo {
+    let want = mt::principal::StageInfo {
         stage_name: "fs://dir/to/files".to_string(),
         stage_type: mt::principal::StageType::LegacyInternal,
         stage_params: mt::principal::StageParams {
@@ -170,7 +170,7 @@ fn test_user_stage_fs_v21() -> anyhow::Result<()> {
         5, 16, 142, 8, 24, 1, 50, 4, 116, 101, 115, 116, 160, 6, 21, 168, 6, 1,
     ];
 
-    let want = mt::principal::UserStageInfo {
+    let want = mt::principal::StageInfo {
         stage_name: "fs://dir/to/files".to_string(),
         stage_type: mt::principal::StageType::LegacyInternal,
         stage_params: mt::principal::StageParams {
@@ -217,7 +217,7 @@ fn test_user_stage_fs_v20() -> anyhow::Result<()> {
         92, 58, 3, 114, 111, 119, 160, 6, 20, 168, 6, 1, 42, 10, 10, 3, 32, 154, 5, 16, 142, 8, 24,
         1, 50, 4, 116, 101, 115, 116, 160, 6, 20, 168, 6, 1,
     ];
-    let want = mt::principal::UserStageInfo {
+    let want = mt::principal::StageInfo {
         stage_name: "fs://dir/to/files".to_string(),
         stage_type: mt::principal::StageType::LegacyInternal,
         stage_params: mt::principal::StageParams {
@@ -265,7 +265,7 @@ fn test_user_stage_fs_v16() -> anyhow::Result<()> {
         160, 6, 16, 168, 6, 1,
     ];
 
-    let want = mt::principal::UserStageInfo {
+    let want = mt::principal::StageInfo {
         stage_name: "fs://dir/to/files".to_string(),
         stage_type: mt::principal::StageType::LegacyInternal,
         stage_params: mt::principal::StageParams {
@@ -319,7 +319,7 @@ fn test_user_stage_s3_v16() -> anyhow::Result<()> {
         4, 116, 101, 115, 116, 160, 6, 16, 168, 6, 1,
     ];
 
-    let want = mt::principal::UserStageInfo {
+    let want = mt::principal::StageInfo {
         stage_name: "s3://mybucket/data/files".to_string(),
         stage_type: mt::principal::StageType::External,
         stage_params: mt::principal::StageParams {
@@ -376,7 +376,7 @@ fn test_user_stage_gcs_v16() -> anyhow::Result<()> {
         24, 1, 50, 4, 116, 101, 115, 116, 160, 6, 16, 168, 6, 1,
     ];
     //
-    let want = mt::principal::UserStageInfo {
+    let want = mt::principal::StageInfo {
         stage_name: "gcs://my_bucket/data/files".to_string(),
         stage_type: mt::principal::StageType::External,
         stage_params: mt::principal::StageParams {
@@ -430,7 +430,7 @@ fn test_user_stage_oss_v16() -> anyhow::Result<()> {
         142, 8, 24, 1, 50, 4, 116, 101, 115, 116, 160, 6, 16, 168, 6, 1,
     ];
 
-    let want = mt::principal::UserStageInfo {
+    let want = mt::principal::StageInfo {
         stage_name: "oss://my_bucket/data/files".to_string(),
         stage_type: mt::principal::StageType::External,
         stage_params: mt::principal::StageParams {
@@ -489,7 +489,7 @@ fn test_user_stage_oss_v13() -> anyhow::Result<()> {
         154, 5, 16, 142, 8, 24, 1, 50, 4, 116, 101, 115, 116, 160, 6, 13, 168, 6, 1,
     ];
 
-    let want = mt::principal::UserStageInfo {
+    let want = mt::principal::StageInfo {
         stage_name: "oss://my_bucket/data/files".to_string(),
         stage_type: mt::principal::StageType::External,
         stage_params: mt::principal::StageParams {
@@ -548,7 +548,7 @@ fn test_user_stage_s3_v11() -> anyhow::Result<()> {
         4, 116, 101, 115, 116, 160, 6, 11, 168, 6, 1,
     ];
 
-    let want = mt::principal::UserStageInfo {
+    let want = mt::principal::StageInfo {
         stage_name: "s3://mybucket/data/files".to_string(),
         stage_type: mt::principal::StageType::External,
         stage_params: mt::principal::StageParams {
@@ -606,7 +606,7 @@ fn test_user_stage_s3_v8() -> anyhow::Result<()> {
         116, 101, 115, 116, 160, 6, 8, 168, 6, 1,
     ];
 
-    let want = mt::principal::UserStageInfo {
+    let want = mt::principal::StageInfo {
         stage_name: "s3://mybucket/data/files".to_string(),
         stage_type: mt::principal::StageType::External,
         stage_params: mt::principal::StageParams {
@@ -659,7 +659,7 @@ fn test_user_stage_fs_v6() -> anyhow::Result<()> {
         6, 6, 168, 6, 1,
     ];
 
-    let want = mt::principal::UserStageInfo {
+    let want = mt::principal::StageInfo {
         stage_name: "fs://dir/to/files".to_string(),
         stage_type: mt::principal::StageType::LegacyInternal,
         stage_params: mt::principal::StageParams {
@@ -712,7 +712,7 @@ fn test_user_stage_s3_v6() -> anyhow::Result<()> {
         116, 101, 115, 116, 160, 6, 6, 168, 6, 1,
     ];
 
-    let want = mt::principal::UserStageInfo {
+    let want = mt::principal::StageInfo {
         stage_name: "s3://mybucket/data/files".to_string(),
         stage_type: mt::principal::StageType::External,
         stage_params: mt::principal::StageParams {
@@ -768,7 +768,7 @@ fn test_user_stage_gcs_v6() -> anyhow::Result<()> {
         1, 50, 4, 116, 101, 115, 116, 160, 6, 6, 168, 6, 1,
     ];
     //
-    let want = mt::principal::UserStageInfo {
+    let want = mt::principal::StageInfo {
         stage_name: "gcs://my_bucket/data/files".to_string(),
         stage_type: mt::principal::StageType::External,
         stage_params: mt::principal::StageParams {
@@ -818,7 +818,7 @@ fn test_user_stage_fs_v4() -> anyhow::Result<()> {
         168, 6, 1,
     ];
 
-    let want = mt::principal::UserStageInfo {
+    let want = mt::principal::StageInfo {
         stage_name: "fs://dir/to/files".to_string(),
         stage_type: mt::principal::StageType::LegacyInternal,
         stage_params: mt::principal::StageParams {
@@ -871,7 +871,7 @@ fn test_user_stage_s3_v4() -> anyhow::Result<()> {
         115, 116, 160, 6, 4, 168, 6, 1,
     ];
 
-    let want = mt::principal::UserStageInfo {
+    let want = mt::principal::StageInfo {
         stage_name: "s3://mybucket/data/files".to_string(),
         stage_type: mt::principal::StageType::External,
         stage_params: mt::principal::StageParams {
@@ -926,7 +926,7 @@ fn test_user_stage_gcs_v4() -> anyhow::Result<()> {
         124, 34, 2, 47, 47, 40, 2, 160, 6, 4, 168, 6, 1, 42, 8, 10, 3, 32, 154, 5, 16, 142, 8, 50,
         4, 116, 101, 115, 116, 160, 6, 4, 168, 6, 1,
     ];
-    let want = mt::principal::UserStageInfo {
+    let want = mt::principal::StageInfo {
         stage_name: "gcs://my_bucket/data/files".to_string(),
         stage_type: mt::principal::StageType::External,
         stage_params: mt::principal::StageParams {
@@ -979,7 +979,7 @@ fn test_user_stage_s3_v1() -> anyhow::Result<()> {
         2, 160, 6, 1, 42, 8, 10, 3, 32, 154, 5, 16, 142, 8, 50, 4, 116, 101, 115, 116, 160, 6, 1,
     ];
 
-    let want = mt::principal::UserStageInfo {
+    let want = mt::principal::StageInfo {
         stage_name: "s3://mybucket/data/files".to_string(),
         stage_type: mt::principal::StageType::External,
         stage_params: mt::principal::StageParams {
@@ -1034,7 +1034,7 @@ fn test_internal_stage_v17() -> anyhow::Result<()> {
         116, 160, 6, 17, 168, 6, 1,
     ];
 
-    let want = mt::principal::UserStageInfo {
+    let want = mt::principal::StageInfo {
         stage_name: "fs://dir/to/files".to_string(),
         stage_type: mt::principal::StageType::Internal,
         stage_params: mt::principal::StageParams {
@@ -1072,7 +1072,7 @@ fn test_internal_stage_v17() -> anyhow::Result<()> {
 
 #[test]
 fn test_user_stage_v19() -> anyhow::Result<()> {
-    common::test_pb_from_to("user_stage_v19", test_user_stage_info_v18())?;
+    common::test_pb_from_to("user_stage_v19", test_stage_info_v18())?;
 
     // Encoded data of version v18 of user_stage:
     // It is generated with common::test_pb_from_to.
@@ -1083,7 +1083,7 @@ fn test_user_stage_v19() -> anyhow::Result<()> {
         24, 1, 50, 4, 116, 101, 115, 116, 160, 6, 19, 168, 6, 1,
     ];
 
-    let want = mt::principal::UserStageInfo {
+    let want = mt::principal::StageInfo {
         stage_name: "root".to_string(),
         stage_type: mt::principal::StageType::User,
         stage_params: mt::principal::StageParams {

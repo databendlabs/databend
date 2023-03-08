@@ -16,7 +16,7 @@ use common_base::base::tokio;
 use common_meta_raft_store::state_machine::testing::pretty_snapshot;
 use common_meta_raft_store::state_machine::testing::snapshot_logs;
 use common_meta_raft_store::state_machine::StateMachine;
-use common_meta_sled_store::openraft::LogId;
+use common_meta_types::new_log_id;
 
 use crate::init_raft_store_ut;
 use crate::testing::new_raft_test_context;
@@ -42,10 +42,11 @@ async fn test_state_machine_snapshot() -> anyhow::Result<()> {
     // take snapshot and check it
 
     {
-        let (snap, last_applied, id) = sm.build_snapshot()?;
+        let (snap, last_applied, last_membership, id) = sm.build_snapshot()?;
 
-        assert_eq!(Some(LogId { term: 1, index: 9 }), last_applied);
-        assert!(id.to_string().starts_with(&format!("{}-{}-", 1, 9)));
+        assert_eq!(Some(new_log_id(1, 0, 9)), last_applied);
+        assert_eq!(&Some(new_log_id(1, 0, 5)), last_membership.log_id());
+        assert!(id.to_string().starts_with(&format!("{}-{}-{}-", 1, 0, 9)));
 
         let res = pretty_snapshot(&snap.kvs);
         assert_eq!(want, res);
