@@ -527,6 +527,21 @@ pub enum UnaryOperator {
     Plus,
     Minus,
     Not,
+    Factorial,
+    PGSquareRoot,
+}
+
+impl UnaryOperator {
+    pub fn to_func_name(&self)->String{
+        match self {
+            //TODO(xieqijun) Not all new functions in the future are lowercase by default.
+            _ =>{
+            let name = format!("{:?}",self);
+                name.to_lowercase()
+            }
+        }
+    }
+
 }
 
 impl Expr {
@@ -602,6 +617,12 @@ impl Display for UnaryOperator {
             }
             UnaryOperator::Not => {
                 write!(f, "NOT")
+            }
+            UnaryOperator::PGSquareRoot=> {
+                write!(f, "|/")
+            }
+            UnaryOperator::Factorial => {
+                write!(f, "!")
             }
         }
     }

@@ -81,7 +81,8 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_string_to_number(registry);
     register_number_to_string(registry);
     register_number_to_number(registry);
-    register_arithmetic(registry);
+    register_binary_arithmetic(registry);
+    register_unary_arithmetic(registry);
 }
 
 macro_rules! register_plus {
@@ -274,7 +275,7 @@ macro_rules! register_modulo {
     };
 }
 
-macro_rules! register_arithmetic {
+macro_rules! register_binary_arithmetic {
     ( $lt:ty, $rt:ty, $registry:expr) => {{
         register_plus!($lt, $rt, $registry);
     }
@@ -298,13 +299,13 @@ macro_rules! register_arithmetic {
     }};
 }
 
-fn register_arithmetic(registry: &mut FunctionRegistry) {
+fn register_binary_arithmetic(registry: &mut FunctionRegistry) {
     for left in ALL_INTEGER_TYPES {
         for right in ALL_INTEGER_TYPES {
             with_integer_mapped_type!(|L| match left {
                 NumberDataType::L => with_integer_mapped_type!(|R| match right {
                     NumberDataType::R => {
-                        register_arithmetic!(L, R, registry);
+                        register_binary_arithmetic!(L, R, registry);
                     }
                     _ => unreachable!(),
                 }),
@@ -320,7 +321,7 @@ fn register_arithmetic(registry: &mut FunctionRegistry) {
             with_integer_mapped_type!(|L| match left {
                 NumberDataType::L => with_float_mapped_type!(|R| match right {
                     NumberDataType::R => {
-                        register_arithmetic!(L, R, registry);
+                        register_binary_arithmetic!(L, R, registry);
                     }
                     _ => unreachable!(),
                 }),
@@ -334,7 +335,7 @@ fn register_arithmetic(registry: &mut FunctionRegistry) {
             with_float_mapped_type!(|L| match left {
                 NumberDataType::L => with_integer_mapped_type!(|R| match right {
                     NumberDataType::R => {
-                        register_arithmetic!(L, R, registry);
+                        register_binary_arithmetic!(L, R, registry);
                     }
                     _ => unreachable!(),
                 }),
@@ -348,13 +349,60 @@ fn register_arithmetic(registry: &mut FunctionRegistry) {
             with_float_mapped_type!(|L| match left {
                 NumberDataType::L => with_float_mapped_type!(|R| match right {
                     NumberDataType::R => {
-                        register_arithmetic!(L, R, registry);
+                        register_binary_arithmetic!(L, R, registry);
                     }
                     _ => unreachable!(),
                 }),
                 _ => unreachable!(),
             });
         }
+    }
+}
+
+
+macro_rules! register_pg_square_root{
+    ( $n:ty, $registry:expr) => {
+        type N = $n;
+        type T = <N as ResultTypeOfUnary>::Sum;
+        $registry.register_1_arg::<NumberType<N>, NumberType<T>, _, _>(
+            "pgsquareroot",
+            FunctionProperty::default(),
+            |_| FunctionDomain::Full,
+            |a, _| (a.as_():T)*(a.as_():T),
+        );
+    };
+}
+
+macro_rules! register_factorial{
+    ( $n:ty, $registry:expr) => {
+        type N = $n;
+        type T = <N as ResultTypeOfUnary>::Sum;
+        $registry.register_1_arg::<NumberType<N>, NumberType<T>, _, _>(
+            "factorial",
+            FunctionProperty::default(),
+            |_| FunctionDomain::Full,
+            |a, _| (a.as_():T)*(a.as_():T),
+        );
+    };
+}
+
+macro_rules! register_unary_arithmetic {
+    ( $n:ty, $registry:expr) => {{
+        register_factorial!($n, $registry);
+    }
+    {
+        register_pg_square_root!($n, $registry);
+    }
+    };
+}
+
+fn register_unary_arithmetic(registry: &mut FunctionRegistry) {
+    for dest_ty in ALL_NUMERICS_TYPES{
+        with_number_mapped_type!(|DEST_TYPE| match dest_ty {
+            NumberDataType::DEST_TYPE => {
+                register_unary_arithmetic!(DEST_TYPE, registry);
+            }
+        });
     }
 }
 

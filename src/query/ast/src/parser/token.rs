@@ -213,7 +213,7 @@ pub enum TokenKind {
     ShiftRight,
     /// Exclamation Mark `!` used for PostgreSQL factorial operator
     #[token("!")]
-    ExclamationMark,
+    Factorial,
     /// Double Exclamation Mark `!!` used for PostgreSQL prefix factorial operator
     #[token("!!")]
     DoubleExclamationMark,
@@ -891,6 +891,7 @@ impl TokenKind {
                 | Ampersand
                 | Pipe
                 | Caret
+                |Factorial
                 | LBrace
                 | RBrace
                 | RArrow
@@ -902,7 +903,6 @@ impl TokenKind {
                 | ExclamationMarkTildeAsterisk
                 | ShiftLeft
                 | ShiftRight
-                | ExclamationMark
                 | DoubleExclamationMark
                 | AtSign
                 | PGSquareRoot
