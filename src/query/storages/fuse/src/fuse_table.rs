@@ -525,36 +525,14 @@ impl Table for FuseTable {
         self.do_analyze(&ctx).await
     }
 
-    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+    fn table_statistics(&self) -> Result<Option<TableStatistics>> {
         let s = &self.table_info.meta.statistics;
-        if s.number_of_rows != 0 {
-            Ok(Some(TableStatistics {
-                num_rows: Some(s.number_of_rows),
-                data_size: Some(s.data_bytes),
-                data_size_compressed: Some(s.compressed_data_bytes),
-                index_size: Some(s.index_data_bytes),
-            }))
-        } else {
-            // if number_of_rows == 0 means:
-            // 1. maybe table is create from a exists snapshot_loc, and not flush statistics we need read_table_snapshot and regenerate TableStatistics
-            // 2. maybe a new table with empty options
-            let stat = if let Some(snapshot) = self.read_table_snapshot().await? {
-                Some(TableStatistics {
-                    num_rows: Some(snapshot.summary.row_count),
-                    data_size: Some(snapshot.summary.uncompressed_byte_size),
-                    data_size_compressed: Some(snapshot.summary.compressed_byte_size),
-                    index_size: Some(snapshot.summary.index_size),
-                })
-            } else {
-                Some(TableStatistics {
-                    num_rows: None,
-                    data_size: None,
-                    data_size_compressed: None,
-                    index_size: None,
-                })
-            };
-            Ok(stat)
-        }
+        Ok(Some(TableStatistics {
+            num_rows: Some(s.number_of_rows),
+            data_size: Some(s.data_bytes),
+            data_size_compressed: Some(s.compressed_data_bytes),
+            index_size: Some(s.index_data_bytes),
+        }))
     }
 
     async fn column_statistics_provider(&self) -> Result<Box<dyn ColumnStatisticsProvider>> {

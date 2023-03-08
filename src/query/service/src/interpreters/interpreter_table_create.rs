@@ -24,7 +24,12 @@ use common_meta_app::schema::TableStatistics;
 use common_meta_types::MatchSeq;
 use common_sql::field_default_value;
 use common_sql::plans::CreateTablePlan;
+use common_storages_fuse::io::MetaReaders;
 use common_users::UserApiProvider;
+use storages_common_cache::LoadParams;
+use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::Versioned;
+use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 
 use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
@@ -145,7 +150,28 @@ impl CreateTableInterpreter {
 
     async fn create_table(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
-        catalog.create_table(self.build_request(None)?).await?;
+        if let Some(snapshot_loc) = self.plan.options.get(OPT_KEY_SNAPSHOT_LOCATION) {
+            let operator = self.ctx.get_data_operator()?.operator();
+            let reader = MetaReaders::table_snapshot_reader(operator);
+
+            let params = LoadParams {
+                location: snapshot_loc.clone(),
+                len_hint: None,
+                ver: TableSnapshot::VERSION,
+                put_cache: true,
+            };
+
+            let snapshot = reader.read(&params).await?;
+            let stat = Some(TableStatistics {
+                number_of_rows: snapshot.summary.row_count,
+                data_bytes: snapshot.summary.uncompressed_byte_size,
+                compressed_data_bytes: snapshot.summary.compressed_byte_size,
+                index_data_bytes: snapshot.summary.index_size,
+            });
+            catalog.create_table(self.build_request(stat)?).await?;
+        } else {
+            catalog.create_table(self.build_request(None)?).await?;
+        }
 
         Ok(PipelineBuildResult::create())
     }

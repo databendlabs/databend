@@ -225,7 +225,7 @@ pub trait Table: Sync + Send {
         Ok(())
     }
 
-    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+    fn table_statistics(&self) -> Result<Option<TableStatistics>> {
         Ok(None)
     }
 
@@ -390,7 +390,7 @@ pub enum AppendMode {
     Copy,
 }
 
-pub trait ColumnStatisticsProvider: Send {
+pub trait ColumnStatisticsProvider {
     // returns the statistics of the given column, if any.
     // column_id is just the index of the column in table's schema
     fn column_statistics(&self, column_id: ColumnId) -> Option<ColumnStatistics>;

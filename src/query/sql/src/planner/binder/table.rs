@@ -514,7 +514,7 @@ impl Binder {
         }
 
         let is_accurate = table.table().engine().to_lowercase() == "fuse";
-        let stat = table.table().table_statistics().await?;
+        let stat = table.table().table_statistics()?;
         Ok((
             SExpr::create_leaf(
                 Scan {
