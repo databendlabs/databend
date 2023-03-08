@@ -58,6 +58,6 @@ impl ClickHouseFederated {
             &SELECT_VERSION_REGEX,
             Self::select_function_block("version()", CLICKHOUSE_VERSION),
         )];
-        FederatedHelper::block_match_rule_2(query, rules)
+        FederatedHelper::block_match_rule(query, rules)
     }
 }

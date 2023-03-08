@@ -18,7 +18,6 @@ use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
 use regex::Regex;
-use regex::RegexSet;
 
 pub type LazyBlockFunc = fn(&str) -> Option<(TableSchemaRef, DataBlock)>;
 
@@ -26,25 +25,6 @@ pub struct FederatedHelper {}
 
 impl FederatedHelper {
     pub(crate) fn block_match_rule(
-        query: &str,
-        rules: Vec<(&str, Option<(TableSchemaRef, DataBlock)>)>,
-    ) -> Option<(TableSchemaRef, DataBlock)> {
-        let regex_rules = rules.iter().map(|x| x.0).collect::<Vec<_>>();
-        let regex_set = RegexSet::new(regex_rules).unwrap();
-        let matches = regex_set.matches(query.as_ref());
-        for (index, (_regex, data)) in rules.iter().enumerate() {
-            if matches.matched(index) {
-                return match data {
-                    None => Some((TableSchemaRefExt::create(vec![]), DataBlock::empty())),
-                    Some((schema, data_block)) => Some((schema.clone(), data_block.clone())),
-                };
-            }
-        }
-
-        None
-    }
-
-    pub(crate) fn block_match_rule_2(
         query: &str,
         rules: Vec<(&Regex, Option<(TableSchemaRef, DataBlock)>)>,
     ) -> Option<(TableSchemaRef, DataBlock)> {
@@ -62,13 +42,10 @@ impl FederatedHelper {
 
     pub fn lazy_block_match_rule(
         query: &str,
-        rules: Vec<(&str, LazyBlockFunc)>,
+        rules: Vec<(&Regex, LazyBlockFunc)>,
     ) -> Option<(TableSchemaRef, DataBlock)> {
-        let regex_rules = rules.iter().map(|x| x.0).collect::<Vec<_>>();
-        let regex_set = RegexSet::new(regex_rules).unwrap();
-        let matches = regex_set.matches(query.as_ref());
-        for (index, (_regex, func)) in rules.iter().enumerate() {
-            if matches.matched(index) {
+        for (_index, (regex, func)) in rules.iter().enumerate() {
+            if regex.is_match(query) {
                 return match func(query) {
                     None => Some((TableSchemaRefExt::create(vec![]), DataBlock::empty())),
                     Some((schema, data_block)) => Some((schema, data_block)),
