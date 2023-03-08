@@ -258,7 +258,10 @@ impl DataSchema {
     pub fn create_deserializers(&self, capacity: usize) -> Vec<TypeDeserializerImpl> {
         let mut deserializers = Vec::with_capacity(self.num_fields());
         for field in self.fields() {
-            deserializers.push(field.data_type.create_deserializer(capacity));
+            deserializers.push(TypeDeserializerImpl::with_capacity(
+                &field.data_type,
+                capacity,
+            ));
         }
         deserializers
     }
@@ -732,7 +735,7 @@ impl TableSchema {
         let mut deserializers = Vec::with_capacity(self.num_fields());
         for field in self.fields() {
             let data_type: DataType = field.data_type().into();
-            deserializers.push(data_type.create_deserializer(capacity));
+            deserializers.push(TypeDeserializerImpl::with_capacity(&data_type, capacity));
         }
         deserializers
     }

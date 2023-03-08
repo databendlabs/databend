@@ -32,7 +32,7 @@ impl TupleDeserializer {
     pub fn with_capacity(capacity: usize, inners: &[DataType]) -> Self {
         let inners = inners
             .iter()
-            .map(|d| d.create_deserializer(capacity))
+            .map(|ty| TypeDeserializerImpl::with_capacity(ty, capacity))
             .collect();
         Self { inners }
     }

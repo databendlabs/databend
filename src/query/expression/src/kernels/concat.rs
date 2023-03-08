@@ -42,6 +42,7 @@ use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::TypeDeserializer;
+use crate::TypeDeserializerImpl;
 use crate::Value;
 
 impl DataBlock {
@@ -141,9 +142,7 @@ impl Column {
                 let mut offsets = Vec::with_capacity(capacity + 1);
                 offsets.push(0);
                 let builder = ColumnBuilder::from_column(
-                    col.values
-                        .data_type()
-                        .create_deserializer(capacity)
+                    TypeDeserializerImpl::with_capacity(&col.values.data_type(), capacity)
                         .finish_to_column(),
                 );
                 let builder = ArrayColumnBuilder { builder, offsets };

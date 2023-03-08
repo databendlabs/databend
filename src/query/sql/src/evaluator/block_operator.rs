@@ -271,7 +271,7 @@ impl BlockOperator {
                 builder.builder.append_column(inner_col);
                 builder.validity.extend_constant(inner_len, true);
                 // Avoid using `if branch`.
-                let d = typ.default_value();
+                let d = Scalar::default_value(typ);
                 let defaults = ColumnBuilder::repeat(&d.as_ref(), len - inner_len, typ).build();
                 builder.builder.append_column(&defaults);
                 builder.validity.extend_constant(len - inner_len, false);
