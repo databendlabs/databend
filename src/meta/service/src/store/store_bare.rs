@@ -173,13 +173,13 @@ impl RaftStorage<TypeConfig> for RaftStoreBare {
 
         match self
             .raft_state
-            .write_hard_state(hs)
+            .save_vote(hs)
             .await
             .map_to_sto_err(ErrorSubject::Vote, ErrorVerb::Write)
         {
             Err(err) => {
                 return {
-                    raft_metrics::storage::incr_raft_storage_fail("save_hard_state", true);
+                    raft_metrics::storage::incr_raft_storage_fail("save_vote", true);
                     Err(err)
                 };
             }
@@ -349,14 +349,14 @@ impl RaftStorage<TypeConfig> for RaftStoreBare {
     async fn read_vote(&mut self) -> Result<Option<Vote>, StorageError> {
         match self
             .raft_state
-            .read_hard_state()
+            .read_vote()
             .map_to_sto_err(ErrorSubject::Vote, ErrorVerb::Read)
         {
             Err(err) => {
-                raft_metrics::storage::incr_raft_storage_fail("read_hard_state", false);
+                raft_metrics::storage::incr_raft_storage_fail("read_vote", false);
                 return Err(err);
             }
-            Ok(hard_state) => return Ok(hard_state),
+            Ok(vote) => return Ok(vote),
         }
     }
 

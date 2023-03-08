@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_io::prelude::*;
 
 mod array;
@@ -46,6 +47,10 @@ pub use variant::*;
 
 use crate::types::number::F32;
 use crate::types::number::F64;
+use crate::types::string::StringColumnBuilder;
+use crate::types::DataType;
+use crate::types::DecimalDataType;
+use crate::types::NumberDataType;
 use crate::Column;
 use crate::Scalar;
 
@@ -105,4 +110,64 @@ pub enum TypeDeserializerImpl {
     String(StringDeserializer),
     Struct(StructDeserializer),
     Variant(VariantDeserializer),
+}
+
+impl TypeDeserializerImpl {
+    pub fn with_capacity(ty: &DataType, capacity: usize) -> TypeDeserializerImpl {
+        match ty {
+            DataType::Null => 0.into(),
+            DataType::Boolean => MutableBitmap::with_capacity(capacity).into(),
+            DataType::String => StringColumnBuilder::with_capacity(capacity, capacity * 4).into(),
+            DataType::Number(num_ty) => match num_ty {
+                NumberDataType::UInt8 => {
+                    NumberDeserializer::<u8, u8>::with_capacity(capacity).into()
+                }
+                NumberDataType::UInt16 => {
+                    NumberDeserializer::<u16, u16>::with_capacity(capacity).into()
+                }
+                NumberDataType::UInt32 => {
+                    NumberDeserializer::<u32, u32>::with_capacity(capacity).into()
+                }
+                NumberDataType::UInt64 => {
+                    NumberDeserializer::<u64, u64>::with_capacity(capacity).into()
+                }
+                NumberDataType::Int8 => {
+                    NumberDeserializer::<i8, i8>::with_capacity(capacity).into()
+                }
+                NumberDataType::Int16 => {
+                    NumberDeserializer::<i16, i16>::with_capacity(capacity).into()
+                }
+                NumberDataType::Int32 => {
+                    NumberDeserializer::<i32, i32>::with_capacity(capacity).into()
+                }
+                NumberDataType::Int64 => {
+                    NumberDeserializer::<i64, i64>::with_capacity(capacity).into()
+                }
+                NumberDataType::Float32 => {
+                    NumberDeserializer::<F32, f32>::with_capacity(capacity).into()
+                }
+                NumberDataType::Float64 => {
+                    NumberDeserializer::<F64, f64>::with_capacity(capacity).into()
+                }
+            },
+            DataType::Date => DateDeserializer::with_capacity(capacity).into(),
+            DataType::Timestamp => TimestampDeserializer::with_capacity(capacity).into(),
+            DataType::Nullable(inner_ty) => {
+                NullableDeserializer::with_capacity(capacity, inner_ty.as_ref()).into()
+            }
+            DataType::Variant => VariantDeserializer::with_capacity(capacity).into(),
+            DataType::Array(ty) => ArrayDeserializer::with_capacity(capacity, ty).into(),
+            DataType::Map(ty) => MapDeserializer::with_capacity(capacity, ty).into(),
+            DataType::Tuple(types) => TupleDeserializer::with_capacity(capacity, types).into(),
+            DataType::Decimal(types) => match types {
+                DecimalDataType::Decimal128(_) => {
+                    DecimalDeserializer::<i128>::with_capacity(types, capacity).into()
+                }
+                DecimalDataType::Decimal256(_) => {
+                    DecimalDeserializer::<i256>::with_capacity(types, capacity).into()
+                }
+            },
+            _ => unimplemented!(),
+        }
+    }
 }
