@@ -71,7 +71,7 @@ where Self: Transform
                     }
                     expr
                 } else {
-                    let default_value = Scalar::default_value(&f.data_type());
+                    let default_value = Scalar::default_value(f.data_type());
                     Expr::Constant {
                         span: None,
                         scalar: default_value,
