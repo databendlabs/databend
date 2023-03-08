@@ -164,6 +164,31 @@ impl<'a> Evaluator<'a> {
                     self.run_cast(*span, expr.data_type(), dest_type, value)
                 }
             }
+            Expr::Catch {
+                expr, data_type, ..
+            } => Ok(match self.run(expr) {
+                Ok(value) => match value {
+                    Value::Scalar(scalar) => {
+                        Value::Scalar(Scalar::Tuple(vec![scalar, Scalar::Null]))
+                    }
+                    Value::Column(col) => {
+                        let len = col.len();
+                        Value::Column(Column::Tuple {
+                            fields: vec![col, Column::Null { len }],
+                            len,
+                        })
+                    }
+                },
+                Err(err) => {
+                    let msg = err.to_string();
+                    let res_type = &data_type.as_tuple().unwrap()[0];
+                    let res_val =
+                        ColumnBuilder::repeat(&res_type.default_value().as_ref(), 1, res_type)
+                            .build_scalar();
+                    let err_val = Scalar::String(msg.into_bytes());
+                    Value::Scalar(Scalar::Tuple(vec![res_val, err_val]))
+                }
+            }),
         };
 
         #[cfg(debug_assertions)]
@@ -768,6 +793,38 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                         .unwrap_or(cast_expr),
                     new_domain,
                 )
+            }
+            Expr::Catch {
+                span,
+                data_type,
+                expr,
+            } => {
+                let (inner, inner_domain) = self.fold_once(expr);
+                let inner_type = &data_type.as_tuple().unwrap()[0];
+
+                // If the inner expression is constant, we can safely remove the `catch` expression.
+                if inner.as_constant().is_some() {
+                    return (inner, inner_domain);
+                }
+
+                match inner_domain.as_ref().and_then(Domain::as_singleton) {
+                    Some(scalar) => (
+                        Expr::Constant {
+                            span: *span,
+                            scalar,
+                            data_type: inner_type.clone(),
+                        },
+                        inner_domain,
+                    ),
+                    None => (
+                        Expr::Catch {
+                            span: *span,
+                            data_type: data_type.clone(),
+                            expr: Box::new(inner),
+                        },
+                        None,
+                    ),
+                }
             }
             Expr::FunctionCall {
                 span,
