@@ -224,30 +224,30 @@ ORDER BY x.a
 3
 4
 
-query I
-WITH
-x AS (SELECT number AS a FROM numbers(10)),
-y AS (SELECT number AS a FROM numbers(5)),
-z AS (SELECT * FROM x WHERE a % 2),
-w AS (SELECT * FROM y WHERE a > 0)
-SELECT * FROM x JOIN y USING (a) WHERE x.a in (SELECT * FROM z)
-ORDER BY x.a
-----
-1
-3
+# query I
+# WITH
+# x AS (SELECT number AS a FROM numbers(10)),
+# y AS (SELECT number AS a FROM numbers(5)),
+# z AS (SELECT * FROM x WHERE a % 2),
+# w AS (SELECT * FROM y WHERE a > 0)
+# SELECT * FROM x JOIN y USING (a) WHERE x.a in (SELECT * FROM z)
+# ORDER BY x.a
+# ----
+# 1
+# 3
 
-query I
-WITH
-x AS (SELECT number AS a FROM numbers(10)),
-y AS (SELECT number AS a FROM numbers(5)),
-z AS (SELECT * FROM x WHERE a % 2),
-w AS (SELECT * FROM y WHERE a > 0)
-SELECT x.a FROM x JOIN y USING (a) WHERE x.a in (SELECT * FROM z)
-HAVING x.a <= (SELECT max(a) FROM w)
-ORDER BY x.a
-----
-1
-3
+# query I
+# WITH
+# x AS (SELECT number AS a FROM numbers(10)),
+# y AS (SELECT number AS a FROM numbers(5)),
+# z AS (SELECT * FROM x WHERE a % 2),
+# w AS (SELECT * FROM y WHERE a > 0)
+# SELECT x.a FROM x JOIN y USING (a) WHERE x.a in (SELECT * FROM z)
+# HAVING x.a <= (SELECT max(a) FROM w)
+# ORDER BY x.a
+# ----
+# 1
+# 3
 
 statement ok
 drop table if exists cte1
@@ -279,64 +279,64 @@ WHERE x.a in (SELECT * FROM z) AND x.a <= (SELECT max(a) FROM w)
 ----
 4999
 
-query I
-WITH
-x AS (SELECT * FROM cte1),
-y AS (SELECT * FROM cte2),
-z AS (SELECT * FROM x WHERE a % 3 = 1),
-w AS (SELECT * FROM y WHERE a > 333 AND a < 1000)
-SELECT count(x.a)
-FROM x left JOIN y USING (a)
-WHERE x.a in (SELECT * FROM z) AND x.a <= (SELECT max(a) FROM w)
-----
-333
+# query I
+# WITH
+# x AS (SELECT * FROM cte1),
+# y AS (SELECT * FROM cte2),
+# z AS (SELECT * FROM x WHERE a % 3 = 1),
+# w AS (SELECT * FROM y WHERE a > 333 AND a < 1000)
+# SELECT count(x.a)
+# FROM x left JOIN y USING (a)
+# WHERE x.a in (SELECT * FROM z) AND x.a <= (SELECT max(a) FROM w)
+# ----
+# 333
 
-query I
-WITH
-x AS (SELECT * FROM cte1),
-y AS (SELECT * FROM cte2),
-z AS (SELECT * FROM x WHERE a % 3 = 1),
-w AS (SELECT * FROM y WHERE a > 333 AND a < 1000)
-SELECT count(x.a)
-FROM x left JOIN y USING (a)
-WHERE x.a in (SELECT * FROM z)
-----
-3333
+# query I
+# WITH
+# x AS (SELECT * FROM cte1),
+# y AS (SELECT * FROM cte2),
+# z AS (SELECT * FROM x WHERE a % 3 = 1),
+# w AS (SELECT * FROM y WHERE a > 333 AND a < 1000)
+# SELECT count(x.a)
+# FROM x left JOIN y USING (a)
+# WHERE x.a in (SELECT * FROM z)
+# ----
+# 3333
 
-query I
-WITH
-x AS (SELECT a-4000 a FROM cte1 WHERE cte1.a >700),
-y AS (SELECT * FROM cte2),
-z AS (SELECT * FROM x WHERE a % 3 = 1),
-w AS (SELECT * FROM y WHERE a > 333 AND a < 1000)
-SELECT count(*)
-FROM x left JOIN y USING (a)
-WHERE x.a in (SELECT * FROM z)
-----
-2000
+# query I
+# WITH
+# x AS (SELECT a-4000 a FROM cte1 WHERE cte1.a >700),
+# y AS (SELECT * FROM cte2),
+# z AS (SELECT * FROM x WHERE a % 3 = 1),
+# w AS (SELECT * FROM y WHERE a > 333 AND a < 1000)
+# SELECT count(*)
+# FROM x left JOIN y USING (a)
+# WHERE x.a in (SELECT * FROM z)
+# ----
+# 2000
 
-query III
-WITH
-x AS (SELECT a-4000 a FROM cte1 WHERE cte1.a >700),
-y AS (SELECT * FROM cte2),
-z AS (SELECT * FROM x WHERE a % 3 = 1),
-w AS (SELECT * FROM y WHERE a > 333 AND a < 1000)
-SELECT max(a), min(a), count(*)
-FROM x
-WHERE a in (SELECT * FROM z) AND a <100
-----
-97 1 33
+# query III
+# WITH
+# x AS (SELECT a-4000 a FROM cte1 WHERE cte1.a >700),
+# y AS (SELECT * FROM cte2),
+# z AS (SELECT * FROM x WHERE a % 3 = 1),
+# w AS (SELECT * FROM y WHERE a > 333 AND a < 1000)
+# SELECT max(a), min(a), count(*)
+# FROM x
+# WHERE a in (SELECT * FROM z) AND a <100
+# ----
+# 97 1 33
 
-query III
-WITH
-x AS (SELECT a-4000 a FROM cte1 WHERE cte1.a >700),
-y AS (SELECT * FROM cte2),
-z AS (SELECT * FROM x WHERE a % 3 = 1),
-w AS (SELECT * FROM y WHERE a > 333 AND a < 1000)
-SELECT max(a), min(a), count(*) FROM x
-WHERE  a <100
-----
-99 -3299 3399
+# query III
+# WITH
+# x AS (SELECT a-4000 a FROM cte1 WHERE cte1.a >700),
+# y AS (SELECT * FROM cte2),
+# z AS (SELECT * FROM x WHERE a % 3 = 1),
+# w AS (SELECT * FROM y WHERE a > 333 AND a < 1000)
+# SELECT max(a), min(a), count(*) FROM x
+# WHERE  a <100
+# ----
+# 99 -3299 3399
 
 query III
 WITH

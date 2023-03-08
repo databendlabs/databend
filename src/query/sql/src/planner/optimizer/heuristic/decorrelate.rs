@@ -18,6 +18,7 @@ use std::collections::HashSet;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
+use common_expression::Literal;
 
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
@@ -28,7 +29,7 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner::binder::wrap_cast;
-use crate::plans::{Aggregate, ConstantExpr};
+use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
 use crate::plans::AndExpr;
@@ -36,6 +37,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ComparisonExpr;
 use crate::plans::ComparisonOp;
+use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
@@ -100,17 +102,17 @@ impl SubqueryRewriter {
             PatternPlan {
                 plan_type: RelOp::EvalScalar,
             }
-                .into(),
+            .into(),
             SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Filter,
                 }
-                    .into(),
+                .into(),
                 SExpr::create_leaf(
                     PatternPlan {
                         plan_type: RelOp::Scan,
                     }
-                        .into(),
+                    .into(),
                 ),
             ),
         );
@@ -182,7 +184,7 @@ impl SubqueryRewriter {
                 Filter {
                     predicates: left_filters,
                 }
-                    .into(),
+                .into(),
                 left_child,
             );
         }
@@ -200,7 +202,7 @@ impl SubqueryRewriter {
                 Filter {
                     predicates: right_filters,
                 }
-                    .into(),
+                .into(),
                 right_child,
             );
         }
@@ -288,13 +290,25 @@ impl SubqueryRewriter {
                 let op = subquery.compare_op.as_ref().unwrap().clone();
                 // Make <child_expr op right_condition> as non_equi_conditions even if op is equal operator.
                 // Because it's not null-safe.
-                // TODO(leiysky): use `IS NOT DISTINCT FROM` instead.
-                let _non_equi_conditions = vec![ScalarExpr::ComparisonExpr(ComparisonExpr {
-                    op,
-                    left: Box::new(child_expr),
-                    right: Box::new(right_condition),
-                    return_type: Box::new(DataType::Nullable(Box::new(DataType::Boolean))),
-                })];
+                conditions.push(
+                    AndExpr {
+                        left: Box::new(ScalarExpr::ComparisonExpr(ComparisonExpr {
+                            op,
+                            left: Box::new(child_expr),
+                            right: Box::new(right_condition),
+                            return_type: Box::new(DataType::Nullable(Box::new(DataType::Boolean))),
+                        })),
+                        right: Box::new(
+                            ConstantExpr {
+                                value: Literal::Boolean(true),
+                                data_type: Box::new(DataType::Boolean),
+                            }
+                            .into(),
+                        ),
+                        return_type: Box::new(DataType::Nullable(Box::new(DataType::Boolean))),
+                    }
+                    .into(),
+                );
                 let marker_index = if let Some(idx) = subquery.projection_index {
                     idx
                 } else {
@@ -310,7 +324,7 @@ impl SubqueryRewriter {
                     from_correlated_subquery: true,
                     contain_runtime_filter: false,
                 }
-                    .into();
+                .into();
                 Ok((
                     SExpr::create_binary(mark_join, left.clone(), flatten_plan),
                     UnnestResult::MarkJoin { marker_index },
@@ -345,13 +359,13 @@ impl SubqueryRewriter {
                 let column_entry = metadata.column(*correlated_column).clone();
                 let (name, data_type) = match &column_entry {
                     ColumnEntry::BaseTableColumn(BaseTableColumn {
-                                                     column_name,
-                                                     data_type,
-                                                     ..
-                                                 }) => (column_name, DataType::from(data_type)),
+                        column_name,
+                        data_type,
+                        ..
+                    }) => (column_name, DataType::from(data_type)),
                     ColumnEntry::DerivedColumn(DerivedColumn {
-                                                   alias, data_type, ..
-                                               }) => (alias, data_type.clone()),
+                        alias, data_type, ..
+                    }) => (alias, data_type.clone()),
                 };
                 self.derived_columns.insert(
                     *correlated_column,
@@ -372,7 +386,7 @@ impl SubqueryRewriter {
                     },
                     prewhere: None,
                 }
-                    .into(),
+                .into(),
             );
             // Todo(xudong963): Wrap logical get with distinct to eliminate duplicates rows.
             let cross_join = Join {
@@ -382,7 +396,7 @@ impl SubqueryRewriter {
                 from_correlated_subquery: false,
                 contain_runtime_filter: false,
             }
-                .into();
+            .into();
             return Ok(SExpr::create_binary(cross_join, logical_get, plan.clone()));
         }
 
@@ -490,7 +504,7 @@ impl SubqueryRewriter {
                         from_correlated_subquery: false,
                         contain_runtime_filter: false,
                     }
-                        .into(),
+                    .into(),
                     left_flatten_plan,
                     right_flatten_plan,
                 ))
@@ -569,7 +583,7 @@ impl SubqueryRewriter {
                         from_distinct: aggregate.from_distinct,
                         limit: aggregate.limit,
                     }
-                        .into(),
+                    .into(),
                     flatten_plan,
                 ))
             }
@@ -789,8 +803,8 @@ impl SubqueryRewriter {
                 .any(|column| correlated_columns.contains(column))
             {
                 if let ScalarExpr::ComparisonExpr(ComparisonExpr {
-                                                      left, right, op, ..
-                                                  }) = predicate
+                    left, right, op, ..
+                }) = predicate
                 {
                     if op == &ComparisonOp::Equal {
                         if let (
