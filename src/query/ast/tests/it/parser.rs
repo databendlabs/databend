@@ -357,6 +357,16 @@ fn test_statement() {
         r#"SET max_threads = 10*2;"#,
         r#"UNSET max_threads;"#,
         r#"UNSET (max_threads, sql_dialect);"#,
+        r#"SELECT t.c1 FROM @stage1/dir/file
+        ( file_format => 'PARQUET', FILES => ('file1', 'file2')) t;"#,
+        r#"select table0.c1, table1.c2 from
+            @stage1/dir/file ( FILE_FORMAT => 'parquet', FILES => ('file1', 'file2')) table0
+            left join table1;"#,
+        r#"SELECT c1 FROM 's3://test/bucket' (ENDPOINT_URL => 'xxx', PATTERN => '*.parquet') t;"#,
+        r#"CREATE FILE FORMAT my_csv
+            type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;"#,
+        r#"SHOW FILE FORMATS"#,
+        r#"DROP FILE FORMAT my_csv"#,
     ];
 
     for case in cases {

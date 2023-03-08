@@ -8301,3 +8301,370 @@ UnSetVariable(
 )
 
 
+---------- Input ----------
+SELECT t.c1 FROM @stage1/dir/file
+        ( file_format => 'PARQUET', FILES => ('file1', 'file2')) t;
+---------- Output ---------
+SELECT t.c1 FROM @stage1/dir/file (FILES => ('file1','file2'),FILE_FORMAT => 'PARQUET') AS t
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..100,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..100,
+                ),
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: ColumnRef {
+                            span: Some(
+                                7..11,
+                            ),
+                            database: None,
+                            table: Some(
+                                Identifier {
+                                    name: "t",
+                                    quote: None,
+                                    span: Some(
+                                        7..8,
+                                    ),
+                                },
+                            ),
+                            column: Identifier {
+                                name: "c1",
+                                quote: None,
+                                span: Some(
+                                    9..11,
+                                ),
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    Stage {
+                        span: Some(
+                            17..100,
+                        ),
+                        location: Stage(
+                            StageLocation {
+                                name: "stage1",
+                                path: "/dir/file",
+                            },
+                        ),
+                        options: SelectStageOptions {
+                            files: Some(
+                                [
+                                    "file1",
+                                    "file2",
+                                ],
+                            ),
+                            pattern: None,
+                            file_format: Some(
+                                "PARQUET",
+                            ),
+                            connection: {},
+                        },
+                        alias: Some(
+                            TableAlias {
+                                name: Identifier {
+                                    name: "t",
+                                    quote: None,
+                                    span: Some(
+                                        99..100,
+                                    ),
+                                },
+                                columns: [],
+                            },
+                        ),
+                    },
+                ],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select table0.c1, table1.c2 from
+            @stage1/dir/file ( FILE_FORMAT => 'parquet', FILES => ('file1', 'file2')) table0
+            left join table1;
+---------- Output ---------
+SELECT table0.c1, table1.c2 FROM @stage1/dir/file (FILES => ('file1','file2'),FILE_FORMAT => 'parquet') AS table0 LEFT OUTER JOIN table1
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..154,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..154,
+                ),
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: ColumnRef {
+                            span: Some(
+                                7..16,
+                            ),
+                            database: None,
+                            table: Some(
+                                Identifier {
+                                    name: "table0",
+                                    quote: None,
+                                    span: Some(
+                                        7..13,
+                                    ),
+                                },
+                            ),
+                            column: Identifier {
+                                name: "c1",
+                                quote: None,
+                                span: Some(
+                                    14..16,
+                                ),
+                            },
+                        },
+                        alias: None,
+                    },
+                    AliasedExpr {
+                        expr: ColumnRef {
+                            span: Some(
+                                18..27,
+                            ),
+                            database: None,
+                            table: Some(
+                                Identifier {
+                                    name: "table1",
+                                    quote: None,
+                                    span: Some(
+                                        18..24,
+                                    ),
+                                },
+                            ),
+                            column: Identifier {
+                                name: "c2",
+                                quote: None,
+                                span: Some(
+                                    25..27,
+                                ),
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    Join {
+                        span: Some(
+                            138..147,
+                        ),
+                        join: Join {
+                            op: LeftOuter,
+                            condition: None,
+                            left: Stage {
+                                span: Some(
+                                    45..125,
+                                ),
+                                location: Stage(
+                                    StageLocation {
+                                        name: "stage1",
+                                        path: "/dir/file",
+                                    },
+                                ),
+                                options: SelectStageOptions {
+                                    files: Some(
+                                        [
+                                            "file1",
+                                            "file2",
+                                        ],
+                                    ),
+                                    pattern: None,
+                                    file_format: Some(
+                                        "parquet",
+                                    ),
+                                    connection: {},
+                                },
+                                alias: Some(
+                                    TableAlias {
+                                        name: Identifier {
+                                            name: "table0",
+                                            quote: None,
+                                            span: Some(
+                                                119..125,
+                                            ),
+                                        },
+                                        columns: [],
+                                    },
+                                ),
+                            },
+                            right: Table {
+                                span: Some(
+                                    148..154,
+                                ),
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "table1",
+                                    quote: None,
+                                    span: Some(
+                                        148..154,
+                                    ),
+                                },
+                                alias: None,
+                                travel_point: None,
+                            },
+                        },
+                    },
+                ],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+SELECT c1 FROM 's3://test/bucket' (ENDPOINT_URL => 'xxx', PATTERN => '*.parquet') t;
+---------- Output ---------
+SELECT c1 FROM 's3://test/bucket' (PATTERN => '*.parquet', endpoint_url => 'xxx') AS t
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..83,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..83,
+                ),
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: ColumnRef {
+                            span: Some(
+                                7..9,
+                            ),
+                            database: None,
+                            table: None,
+                            column: Identifier {
+                                name: "c1",
+                                quote: None,
+                                span: Some(
+                                    7..9,
+                                ),
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    Stage {
+                        span: Some(
+                            15..83,
+                        ),
+                        location: Uri(
+                            "s3://test/bucket",
+                        ),
+                        options: SelectStageOptions {
+                            files: None,
+                            pattern: Some(
+                                "*.parquet",
+                            ),
+                            file_format: None,
+                            connection: {
+                                "endpoint_url": "xxx",
+                            },
+                        },
+                        alias: Some(
+                            TableAlias {
+                                name: Identifier {
+                                    name: "t",
+                                    quote: None,
+                                    span: Some(
+                                        82..83,
+                                    ),
+                                },
+                                columns: [],
+                            },
+                        ),
+                    },
+                ],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+CREATE FILE FORMAT my_csv
+            type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;
+---------- Output ---------
+CREATE FILE_FORMAT my_csv TYPE = CSV FIELD_DELIMITER = ',' RECORD_DELIMITER = '\n' QUOTE = '' ESCAPE = '' SKIP_HEADER = 1 NAN_DISPLAY = ''
+---------- AST ------------
+CreateFileFormat {
+    if_not_exists: false,
+    name: "my_csv",
+    file_format_options: FileFormatOptions {
+        format: Csv,
+        skip_header: 1,
+        field_delimiter: ",",
+        record_delimiter: "\n",
+        nan_display: "",
+        escape: "",
+        compression: None,
+        row_tag: "",
+        quote: "",
+        name: None,
+    },
+}
+
+
+---------- Input ----------
+SHOW FILE FORMATS
+---------- Output ---------
+SHOW FILE FORMATS
+---------- AST ------------
+ShowFileFormats
+
+
+---------- Input ----------
+DROP FILE FORMAT my_csv
+---------- Output ---------
+DROP FILE_FORMAT my_csv
+---------- AST ------------
+DropFileFormat {
+    if_exists: false,
+    name: "my_csv",
+}
+
+
