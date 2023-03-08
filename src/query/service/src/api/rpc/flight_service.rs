@@ -29,6 +29,8 @@ use common_arrow::arrow_format::flight::data::Result as FlightResult;
 use common_arrow::arrow_format::flight::data::SchemaResult;
 use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_server::FlightService;
+use common_base::match_join_handle;
+use common_base::runtime::TrySpawn;
 use tokio_stream::Stream;
 use tonic::Request;
 use tonic::Response as RawResponse;
@@ -139,27 +141,41 @@ impl FlightService for DatabendQueryFlightService {
         let action = request.into_inner();
         let flight_action: FlightAction = action.try_into()?;
 
-        let action_result = match &flight_action {
+        let action_result = match flight_action {
             FlightAction::InitQueryFragmentsPlan(init_query_fragments_plan) => {
                 let session = SessionManager::instance()
                     .create_session(SessionType::FlightRPC)
                     .await?;
                 let ctx = session.create_query_context().await?;
-                DataExchangeManager::instance()
-                    .init_query_fragments_plan(&ctx, &init_query_fragments_plan.executor_packet)?;
+
+                match_join_handle(ctx.spawn(async move {
+                    DataExchangeManager::instance()
+                        .init_query_fragments_plan(&ctx, &init_query_fragments_plan.executor_packet)
+                }))
+                .await?;
 
                 FlightResult { body: vec![] }
             }
             FlightAction::InitNodesChannel(init_nodes_channel) => {
-                let publisher_packet = &init_nodes_channel.init_nodes_channel_packet;
-                DataExchangeManager::instance()
-                    .init_nodes_channel(publisher_packet)
-                    .await?;
+                let ctx = DataExchangeManager::instance()
+                    .get_query_ctx(&init_nodes_channel.init_nodes_channel_packet.query_id)?;
+
+                match_join_handle(ctx.spawn(async move {
+                    DataExchangeManager::instance()
+                        .init_nodes_channel(&init_nodes_channel.init_nodes_channel_packet)
+                        .await
+                }))
+                .await?;
 
                 FlightResult { body: vec![] }
             }
             FlightAction::ExecutePartialQuery(query_id) => {
-                DataExchangeManager::instance().execute_partial_query(query_id)?;
+                let ctx = DataExchangeManager::instance().get_query_ctx(&query_id)?;
+
+                match_join_handle(ctx.spawn(async move {
+                    DataExchangeManager::instance().execute_partial_query(&query_id)
+                }))
+                .await?;
 
                 FlightResult { body: vec![] }
             }
