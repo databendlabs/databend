@@ -26,6 +26,12 @@ io-uring = [
     "common-meta-raft-store/io-uring",
 ]
 
+enable-histogram-metrics = [
+    "default",
+    "common-metrics/enable-histogram",
+    "databend-query/enable-histogram-metrics",
+]
+
 [dependencies]
 # Workspace dependencies
 common-base = { path = "../common/base" }
