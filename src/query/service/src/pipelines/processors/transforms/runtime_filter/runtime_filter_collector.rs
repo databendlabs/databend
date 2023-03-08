@@ -54,6 +54,7 @@ impl RuntimeFilter for RuntimeFilterCollector {
         exprs: &BTreeMap<RuntimeFilterId, RemoteExpr>,
         data: &DataBlock,
     ) -> Result<()> {
+        dbg!("collect");
         for (id, remote_expr) in exprs.iter() {
             let expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
             // expr represents equi condition in join build side

@@ -13,14 +13,17 @@
 //  limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_base::base::tokio;
 use common_catalog::plan::PartInfoPtr;
+use common_catalog::plan::RuntimeFilterId;
 use common_catalog::plan::StealablePartitions;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::RemoteExpr;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -35,10 +38,12 @@ use crate::operations::read::parquet_data_source::DataSourceMeta;
 use crate::MergeIOReadResult;
 
 pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
+    ctx: Arc<dyn TableContext>,
     id: usize,
     finished: bool,
     batch_size: usize,
     block_reader: Arc<BlockReader>,
+    runtime_filters: Option<BTreeMap<RuntimeFilterId, RemoteExpr<String>>>,
 
     output: Arc<OutputPort>,
     output_data: Option<(Vec<PartInfoPtr>, Vec<MergeIOReadResult>)>,
@@ -52,11 +57,13 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
         output: Arc<OutputPort>,
         block_reader: Arc<BlockReader>,
         partitions: StealablePartitions,
+        runtime_filters: Option<BTreeMap<RuntimeFilterId, RemoteExpr<String>>>,
     ) -> Result<ProcessorPtr> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
 
         if BLOCKING_IO {
             SyncSourcer::create(ctx.clone(), output.clone(), ReadParquetDataSource::<true> {
+                ctx,
                 id,
                 output,
                 batch_size,
@@ -64,11 +71,13 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
                 finished: false,
                 output_data: None,
                 partitions,
+                runtime_filters,
             })
         } else {
             Ok(ProcessorPtr::create(Box::new(ReadParquetDataSource::<
                 false,
             > {
+                ctx,
                 id,
                 output,
                 batch_size,
@@ -76,12 +85,18 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
                 finished: false,
                 output_data: None,
                 partitions,
+                runtime_filters,
             })))
         }
     }
 
     fn prune_by_runtime_filter(&mut self) -> Result<()> {
-        todo!()
+        if self.runtime_filters.is_some() {
+            let filters = self.ctx.get_runtime_filter_collector().recv()?;
+            dbg!(filters);
+            // Todo: use filters to do pruner again
+        }
+        Ok(())
     }
 }
 

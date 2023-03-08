@@ -129,6 +129,11 @@ pub fn build_fuse_parquet_source_pipeline(
 
     let mut source_builder = SourcePipeBuilder::create();
 
+    let runtime_filters = plan
+        .push_downs
+        .as_ref()
+        .and_then(|p| p.runtime_filter_exprs.clone());
+
     match block_reader.support_blocking_api() {
         true => {
             let partitions = dispatch_partitions(ctx.clone(), plan, max_threads);
@@ -144,6 +149,7 @@ pub fn build_fuse_parquet_source_pipeline(
                         output,
                         block_reader.clone(),
                         partitions.clone(),
+                        runtime_filters.clone(),
                     )?,
                 );
             }
@@ -165,6 +171,7 @@ pub fn build_fuse_parquet_source_pipeline(
                         output,
                         block_reader.clone(),
                         partitions.clone(),
+                        runtime_filters.clone(),
                     )?,
                 );
             }
