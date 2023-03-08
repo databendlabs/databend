@@ -38,6 +38,7 @@ use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::Scalar;
 use crate::TypeDeserializer;
+use crate::TypeDeserializerImpl;
 use crate::Value;
 
 // Block idx, row idx in the block, repeat times
@@ -240,10 +241,7 @@ impl Column {
                 let mut offsets = Vec::with_capacity(result_size + 1);
                 offsets.push(0);
                 let builder = ColumnBuilder::from_column(
-                    column
-                        .values
-                        .data_type()
-                        .create_deserializer(result_size)
+                    TypeDeserializerImpl::with_capacity(&column.values.data_type(), result_size)
                         .finish_to_column(),
                 );
                 let builder = ArrayColumnBuilder { builder, offsets };
