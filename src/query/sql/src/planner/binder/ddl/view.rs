@@ -39,7 +39,7 @@ impl Binder {
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
-        let (catalog, database, viewname) =
+        let (catalog, database, view_name) =
             self.normalize_object_identifier_triple(catalog, database, view);
         let column_names = columns
             .iter()
@@ -52,7 +52,7 @@ impl Binder {
             tenant,
             catalog,
             database,
-            viewname,
+            view_name,
             column_names,
             subquery,
         };
@@ -72,7 +72,7 @@ impl Binder {
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
-        let (catalog, database, viewname) =
+        let (catalog, database, view_name) =
             self.normalize_object_identifier_triple(catalog, database, view);
         let column_names = columns
             .iter()
@@ -84,7 +84,7 @@ impl Binder {
             tenant,
             catalog,
             database,
-            viewname,
+            view_name,
             column_names,
             subquery,
         };
@@ -103,14 +103,14 @@ impl Binder {
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
-        let (catalog, database, viewname) =
+        let (catalog, database, view_name) =
             self.normalize_object_identifier_triple(catalog, database, view);
         let plan = DropViewPlan {
             if_exists: *if_exists,
             tenant,
             catalog,
             database,
-            viewname,
+            view_name,
         };
         Ok(Plan::DropView(Box::new(plan)))
     }
