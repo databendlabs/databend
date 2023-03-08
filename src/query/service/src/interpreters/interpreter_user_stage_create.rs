@@ -69,7 +69,7 @@ impl Interpreter for CreateUserStageInterpreter {
 
         if user_stage.stage_type != StageType::External {
             let op = self.ctx.get_data_operator()?.operator();
-            op.object(&user_stage.stage_prefix()).create().await?
+            op.create(&user_stage.stage_prefix()).await?
         }
 
         let mut user_stage = user_stage;

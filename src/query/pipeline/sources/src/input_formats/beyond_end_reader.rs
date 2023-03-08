@@ -40,12 +40,11 @@ impl BeyondEndReader {
             let batch_size = 1024;
             let mut buf = vec![0u8; batch_size];
             let operator = self.ctx.source.get_operator()?;
-            let object = operator.object(&self.path);
             let offset = split_info.offset as u64;
             let size = split_info.size as u64;
             let offset = offset + size;
             let limit = size as usize;
-            let mut reader = object.range_reader(offset..).await?;
+            let mut reader = operator.range_reader(&self.path, offset..).await?;
             let mut num_read_total = 0;
             loop {
                 let num_read = reader.read(&mut buf[..]).await?;

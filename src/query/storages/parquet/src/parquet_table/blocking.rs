@@ -53,7 +53,7 @@ impl ParquetTable {
         // Infer schema from the first parquet file.
         // Assume all parquet files have the same schema.
         // If not, throw error during reading.
-        let mut reader = operator.object(path).blocking_reader()?;
+        let mut reader = operator.blocking().reader(path)?;
         let first_meta = pread::read_metadata(&mut reader).map_err(|e| {
             ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
         })?;

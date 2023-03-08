@@ -16,8 +16,8 @@ use common_arrow::parquet::read::read_metadata_async;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
-use opendal::ObjectReader;
 use opendal::Operator;
+use opendal::Reader;
 use storages_common_cache::InMemoryItemCacheReader;
 use storages_common_cache::LoadParams;
 use storages_common_cache::Loader;
@@ -117,12 +117,11 @@ impl Loader<BloomIndexMeta> for LoaderWrapper<Operator> {
     }
 }
 
-async fn bytes_reader(op: &Operator, path: &str, len_hint: Option<u64>) -> Result<ObjectReader> {
-    let object = op.object(path);
+async fn bytes_reader(op: &Operator, path: &str, len_hint: Option<u64>) -> Result<Reader> {
     let reader = if let Some(len) = len_hint {
-        object.range_reader(0..len).await?
+        op.range_reader(path, 0..len).await?
     } else {
-        object.reader().await?
+        op.reader(path).await?
     };
     Ok(reader)
 }

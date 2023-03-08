@@ -43,8 +43,7 @@ pub async fn save_share_spec(
                 .insert(share_name, share_spec_ext);
         }
         operator
-            .object(&location)
-            .write(serde_json::to_vec(&share_spec_vec)?)
+            .write(&location, serde_json::to_vec(&share_spec_vec)?)
             .await?;
     }
 
@@ -109,7 +108,7 @@ mod ext {
     ///   - "501248/" is the database id suffixed with '/'
     ///   - "501263/" is the table id  suffixed with '/'
     fn shared_table_prefix(operator: &Operator, database_id: u64, table_id: u64) -> String {
-        let operator_meta_data = operator.metadata();
+        let operator_meta_data = operator.info();
         let storage_prefix = operator_meta_data.root();
         let table_storage_prefix = table_storage_prefix(database_id, table_id);
         // storage_prefix has suffix character '/'
@@ -121,7 +120,7 @@ mod ext {
     ///   - "/query-storage-bd5efc6/tnc7yee14/" is the storage prefix
     ///   - "501248/" is the database id suffixed with '/'
     fn shared_database_prefix(operator: &Operator, database_id: u64) -> String {
-        let operator_meta_data = operator.metadata();
+        let operator_meta_data = operator.info();
         let storage_prefix = operator_meta_data.root();
         let database_storage_prefix = database_storage_prefix(database_id);
         // storage_prefix has suffix character '/'
@@ -132,7 +131,6 @@ mod ext {
     mod tests {
 
         use opendal::services::Fs;
-        use opendal::Builder;
 
         use super::*;
 
@@ -160,7 +158,7 @@ mod ext {
             let operator = {
                 let mut builder = Fs::default();
                 builder.root(test_root_str);
-                Operator::new(builder.build()?).finish()
+                Operator::new(builder)?.finish()
             };
 
             let share_spec_ext = ShareSpecExt::from_share_spec(share_spec, &operator);

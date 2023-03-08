@@ -64,8 +64,7 @@ where
 async fn write_to_storage<T>(data_accessor: &Operator, location: &str, meta: &T) -> Result<()>
 where T: Serialize {
     let bs = serde_json::to_vec(&meta).map_err(Error::other)?;
-    let object = data_accessor.object(location);
-    object.write(bs).await?;
+    data_accessor.write(location, bs).await?;
 
     Ok(())
 }

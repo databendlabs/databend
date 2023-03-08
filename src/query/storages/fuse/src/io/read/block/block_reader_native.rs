@@ -30,7 +30,7 @@ use common_expression::Column;
 use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::Value;
-use opendal::Object;
+use opendal::Operator;
 use storages_common_table_meta::meta::ColumnMeta;
 
 use crate::fuse_part::FusePartInfo;
@@ -69,7 +69,8 @@ impl BlockReader {
                 .collect::<Vec<_>>();
 
             join_handlers.push(Self::read_native_columns_data(
-                self.operator.object(&part.location),
+                self.operator.clone(),
+                &part.location,
                 index,
                 metas,
                 &part.range,
@@ -105,7 +106,8 @@ impl BlockReader {
     }
 
     pub async fn read_native_columns_data(
-        o: Object,
+        op: Operator,
+        path: &str,
         index: usize,
         metas: Vec<ColumnMeta>,
         range: &Option<Range<usize>>,
@@ -118,7 +120,7 @@ impl BlockReader {
                 native_meta = native_meta.slice(range.start, range.end);
             }
 
-            let reader = o.range_read(offset..offset + length).await?;
+            let reader = op.range_read(path, offset..offset + length).await?;
             let reader: Reader = Box::new(std::io::Cursor::new(reader));
 
             let native_reader = NativeReader::new(reader, native_meta.pages.clone(), vec![]);
@@ -137,7 +139,6 @@ impl BlockReader {
         let mut results: BTreeMap<usize, Vec<NativeReader<Reader>>> = BTreeMap::new();
         for (index, column_node) in self.project_column_nodes.iter().enumerate() {
             let op = self.operator.clone();
-            let location = part.location.clone();
             let metas: Vec<ColumnMeta> = column_node
                 .leaf_column_ids
                 .iter()
@@ -145,7 +146,8 @@ impl BlockReader {
                 .cloned()
                 .collect::<Vec<_>>();
 
-            let readers = Self::sync_read_native_column(op.object(&location), metas, &part.range)?;
+            let readers =
+                Self::sync_read_native_column(op.clone(), &part.location, metas, &part.range)?;
             results.insert(index, readers);
         }
 
@@ -153,7 +155,8 @@ impl BlockReader {
     }
 
     pub fn sync_read_native_column(
-        o: Object,
+        op: Operator,
+        path: &str,
         metas: Vec<ColumnMeta>,
         range: &Option<Range<usize>>,
     ) -> Result<Vec<NativeReader<Reader>>> {
@@ -167,7 +170,7 @@ impl BlockReader {
                 native_meta.offset,
                 native_meta.pages.iter().map(|p| p.length).sum::<u64>(),
             );
-            let reader = o.blocking_range_reader(offset..offset + length)?;
+            let reader = op.blocking().range_reader(path, offset..offset + length)?;
             let reader: Reader = Box::new(BufReader::new(reader));
 
             let native_reader = NativeReader::new(reader, native_meta.pages.clone(), vec![]);

@@ -309,8 +309,7 @@ impl Processor for FuseTableSink {
 
                 // write data block
                 self.data_accessor
-                    .object(&block_statistics.block_file_location)
-                    .write(data)
+                    .write(&block_statistics.block_file_location, data)
                     .await?;
 
                 // Perf.
@@ -370,7 +369,7 @@ impl Processor for FuseTableSink {
                 location,
                 segment,
             } => {
-                self.data_accessor.object(&location).write(data).await?;
+                self.data_accessor.write(&location, data).await?;
 
                 self.state = State::PreCommitSegment { location, segment };
             }
