@@ -62,12 +62,18 @@ impl SegmentPruner {
             if limit_pruner.exceeded() {
                 None
             } else {
-                segments.next().map(|(_segment_idx, segment_location)| {
+                segments.next().map(|(segment_idx, segment_location)| {
                     let pruning_ctx = self.pruning_ctx.clone();
                     let table_schema = self.table_schema.clone();
                     move |permit| async move {
-                        Self::segment_pruning(pruning_ctx, permit, table_schema, segment_location)
-                            .await
+                        Self::segment_pruning(
+                            pruning_ctx,
+                            permit,
+                            table_schema,
+                            segment_idx,
+                            segment_location,
+                        )
+                        .await
                     }
                 })
             }
@@ -98,6 +104,7 @@ impl SegmentPruner {
         pruning_ctx: Arc<PruningContext>,
         permit: OwnedSemaphorePermit,
         table_schema: TableSchemaRef,
+        segment_idx: usize,
         segment_location: SegmentLocation,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let dal = pruning_ctx.dal.clone();
@@ -142,7 +149,7 @@ impl SegmentPruner {
             // Block pruner.
             let block_pruner = BlockPruner::create(pruning_ctx)?;
             block_pruner
-                .pruning(segment_location, &segment_info)
+                .pruning(segment_idx, segment_location, &segment_info)
                 .await?
         } else {
             vec![]

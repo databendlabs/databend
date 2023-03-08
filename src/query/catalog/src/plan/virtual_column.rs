@@ -31,8 +31,8 @@ pub const SNAPSHOT_NAME: &str = "_snapshot_name";
 // meta data for generate virtual columns
 #[derive(Debug)]
 pub struct VirtualColumnMeta {
-    pub segment_idx: usize,
-    pub block_idx: usize,
+    pub segment_id: usize,
+    pub block_id: usize,
     pub block_location: String,
     pub segment_location: String,
     pub snapshot_location: String,
@@ -94,8 +94,8 @@ impl VirtualColumn {
     pub fn generate_column_values(&self, meta: &VirtualColumnMeta, num_rows: usize) -> BlockEntry {
         match &self.column_type {
             VirtualColumnType::RowId => {
-                let block_id = meta.block_idx as u64;
-                let seg_id = meta.segment_idx as u64;
+                let block_id = meta.block_id as u64;
+                let seg_id = meta.segment_id as u64;
                 let high_32bit = (seg_id << 48) + (block_id << 32);
                 let mut builder =
                     NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, num_rows);

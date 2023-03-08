@@ -25,10 +25,15 @@ use storages_common_table_meta::meta::ColumnStatistics;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct BlockMetaIndex {
+    // {segment|block}_id is used in `VirtualColumnMeta` to generate virtual column data,
+    // where older data has smaller id, but {segment|block}_idx is opposite,
+    // {segment|block}_id = {segment|block}_count - {segment|block}_idx - 1
     pub segment_idx: usize,
     pub block_idx: usize,
     pub range: Option<Range<usize>>,
+    pub block_id: usize,
     pub block_location: String,
+    pub segment_id: usize,
     pub segment_location: String,
     pub snapshot_location: Option<String>,
 }

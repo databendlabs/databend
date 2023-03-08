@@ -104,8 +104,8 @@ impl BlockReader {
                     let block_meta_index = fuse_part.block_meta_index().unwrap();
                     let mut new_data_block = data_block;
                     let virtual_column_meta = VirtualColumnMeta {
-                        segment_idx: block_meta_index.segment_idx,
-                        block_idx: block_meta_index.block_idx,
+                        segment_id: block_meta_index.segment_id,
+                        block_id: block_meta_index.block_id,
                         block_location: block_meta_index.block_location.clone(),
                         segment_location: block_meta_index.segment_location.clone(),
                         snapshot_location: block_meta_index.snapshot_location.clone().unwrap(),
