@@ -71,6 +71,8 @@ nohup bin/databend-query --config-file=configs/databend-query.toml 2>&1 >query.l
 
 ## Step 2: Upgrade databend-meta
 
+To upgrade the databend-meta service from version 0.8.xx, you need to use the binary file `databend-meta-upgrade-09`, which can be located in the `bin` folder of your current Databend installation directory.
+
 Follow the steps below to upgrade the databend-meta service:
 
 1. Shut down the running databend-meta service for all the clusters.
@@ -79,11 +81,7 @@ Follow the steps below to upgrade the databend-meta service:
 killall databend-meta
 ```
 
-2. (For upgrading from 0.8.xx only) Execute the following command in each node:
-
-:::note
-To upgrade the databend-meta service from version 0.8.xx, you need to use the binary file `databend-meta-upgrade-09`, which can be located in the `bin` folder of your current Databend installation directory.
-:::
+2. Execute the following command in each node:
 
 ```shell
 ./bin/databend-meta-upgrade-09 --cmd upgrade --raft-dir .databend/meta1/
