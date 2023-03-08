@@ -116,6 +116,6 @@ data_cache_storage = "none"
 
 [cache.disk]
 # cache path
-path = "./databend/_cache"
+path = "./.databend/_cache"
 # max bytes of cached data 20G
 max_bytes = 21474836480

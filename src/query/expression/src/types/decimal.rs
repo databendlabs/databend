@@ -291,6 +291,8 @@ pub trait Decimal:
         Self::to_column_from_buffer(value.into(), size)
     }
 
+    fn to_scalar(self, size: DecimalSize) -> DecimalScalar;
+
     fn with_size(&self, size: DecimalSize) -> Option<Self> {
         let multiplier = Self::e(size.scale as u32);
         let min_for_precision = Self::min_for_precision(size.precision);
@@ -390,6 +392,10 @@ impl Decimal for i128 {
     fn to_float64(self, scale: u8) -> f64 {
         let div = 10_f64.powi(scale as i32);
         self as f64 / div
+    }
+
+    fn to_scalar(self, size: DecimalSize) -> DecimalScalar {
+        DecimalScalar::Decimal128(self, size)
     }
 
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)> {
@@ -527,6 +533,10 @@ impl Decimal for i256 {
     fn to_float64(self, scale: u8) -> f64 {
         let div = 10_f64.powi(scale as i32);
         self.as_f64() / div
+    }
+
+    fn to_scalar(self, size: DecimalSize) -> DecimalScalar {
+        DecimalScalar::Decimal256(self, size)
     }
 
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)> {

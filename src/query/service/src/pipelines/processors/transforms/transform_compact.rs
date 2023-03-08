@@ -26,6 +26,7 @@ use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 
+// TODO NOT used?
 pub struct TransformCompact<T: Compactor + Send + 'static> {
     state: ProcessorState,
     compactor: T,

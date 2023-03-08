@@ -52,7 +52,7 @@ use common_formats::FastFieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
 use common_meta_app::principal::FileFormatOptions;
-use common_meta_app::principal::UserStageInfo;
+use common_meta_app::principal::StageInfo;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
@@ -132,7 +132,7 @@ impl InsertInterpreter {
 
     async fn try_purge_files(
         ctx: Arc<QueryContext>,
-        stage_info: &UserStageInfo,
+        stage_info: &StageInfo,
         stage_files: &[StageFileInfo],
     ) {
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
@@ -230,7 +230,7 @@ impl InsertInterpreter {
         let attachment_table_schema = infer_table_schema(&attachment_data_schema)?;
         let mut stage_table_info = StageTableInfo {
             schema: attachment_table_schema,
-            user_stage_info: stage_info,
+            stage_info,
             path: path.to_string(),
             files: vec![],
             pattern: "".to_string(),
@@ -280,13 +280,13 @@ impl InsertInterpreter {
 
         table.append_data(ctx.clone(), pipeline, AppendMode::Copy, false)?;
 
-        let user_stage_info_clone = stage_table_info.user_stage_info.clone();
+        let stage_info_clone = stage_table_info.stage_info.clone();
         pipeline.set_on_finished(move |may_error| {
             // capture out variable
             let overwrite = overwrite;
             let ctx = ctx.clone();
             let table = table.clone();
-            let stage_info = user_stage_info_clone.clone();
+            let stage_info = stage_info_clone.clone();
             let all_source_files = all_source_files.clone();
 
             match may_error {
@@ -904,13 +904,13 @@ async fn exprs_to_scalar(
 async fn parse_stage_location(
     ctx: &Arc<QueryContext>,
     location: &str,
-) -> Result<(UserStageInfo, String)> {
+) -> Result<(StageInfo, String)> {
     let s: Vec<&str> = location.split('@').collect();
     // @my_ext_stage/abc/
     let names: Vec<&str> = s[1].splitn(2, '/').filter(|v| !v.is_empty()).collect();
 
     let stage = if names[0] == "~" {
-        UserStageInfo::new_user_stage(&ctx.get_current_user()?.name)
+        StageInfo::new_user_stage(&ctx.get_current_user()?.name)
     } else {
         UserApiProvider::instance()
             .get_stage(&ctx.get_tenant(), names[0])

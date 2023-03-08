@@ -69,3 +69,15 @@ where T: Serialize {
 
     Ok(())
 }
+
+// TODO batch write
+// async fn batch_write_to_storage<T>(
+//    data_accessor: &Operator,
+//    location: &str,
+//    meta: &[&T],
+//) -> Result<()>
+// where
+//    T: Serialize,
+//{
+//    todo!()
+//}

@@ -1,0 +1,332 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_0023
+
+statement ok
+CREATE DATABASE db_09_0023
+
+statement ok
+USE db_09_0023
+
+############################
+# replace into empty table #
+############################
+
+statement ok
+CREATE TABLE test(a int);
+
+statement ok
+REPLACE INTO test ON CONFLICT(a) values(1), (2), (3)
+
+query I
+SELECT * FROM test
+----
+1
+2
+3
+
+statement ok
+DROP TABLE test;
+
+# on multiple column
+statement ok
+CREATE TABLE test(a int, b int, c int);
+
+statement ok
+REPLACE INTO test ON CONFLICT(a,b) values(1, 1, 1), (2, 1, 2), (3, 1, 3)
+
+query III
+SELECT * FROM test
+----
+1 1 1
+2 1 2
+3 1 3
+
+statement ok
+DROP TABLE test;
+
+###################
+# duplicated keys #
+###################
+
+statement ok
+CREATE TABLE test(a int);
+
+# note that "CONFLICT" is optional
+statement error 4000
+REPLACE INTO test ON(a) values(1), (2), (2)
+
+statement ok
+DROP TABLE test;
+
+statement ok
+CREATE TABLE test(a int);
+
+# note that "CONFLICT" is optional
+statement error 4000
+REPLACE INTO test ON(a) values(1), (2), (2)
+
+statement ok
+DROP TABLE test;
+
+# on multiple column
+statement ok
+CREATE TABLE test(a int, b int, c int);
+
+statement error 400
+REPLACE INTO test ON CONFLICT(a,b) values(1, 1, 1), (1, 1, 2), (3, 1, 3)
+
+statement ok
+DROP TABLE test;
+
+###################
+# non-empty table #
+###################
+
+statement ok
+CREATE TABLE test(a int);
+
+statement ok
+INSERT INTO test        values (1), (2), (3)
+
+statement ok
+REPLACE INTO test ON(a) values      (2), (3), (4)
+
+query I
+SELECT * FROM test order by a;
+----
+1
+2
+3
+4
+
+statement ok
+DROP TABLE test;
+
+
+# on multiple column
+statement ok
+CREATE TABLE test(a int, b int, c int);
+
+statement ok
+INSERT INTO test        values (1, 1, 1), (2, 1, 2), (3, 1, 3)
+
+statement error 400
+REPLACE INTO test ON CONFLICT(a,b) values (2, 1, 4), (3, 1, 5), (4, 1, 6)
+
+query III
+SELECT * FROM test order by c;
+----
+1 1 1
+2 1 4
+3 1 5
+4 1 6
+
+statement ok
+DROP TABLE test;
+
+
+############################
+# on conflict (2nd column) #
+############################
+
+statement ok
+CREATE TABLE test(c1 string, c2 int);
+
+statement ok
+INSERT INTO test values('a', 1), ('b', 2), ('c', 3)
+
+statement ok
+REPLACE INTO test ON(c2) values('replaced', 3), ('new', 4)
+
+query IT
+SELECT c2, c1 FROM test order by c2;
+----
+1 a
+2 b
+3 replaced
+4 new
+
+statement ok
+DROP TABLE test;
+
+
+
+# on multiple column (picking of non consecutive columns, the following case uses columns b and d )
+statement ok
+CREATE TABLE test(a int, b int, c int, d int);
+
+statement ok
+INSERT INTO test        values (1, 1, 1, 1), (1, 2, 2, 1), (1, 3, 3, 1)
+
+# duplicated on column (b, d)                    ^     ^       ^     ^
+#                                                |     |       |     |
+statement error 400
+REPLACE INTO test ON CONFLICT(b,d) values    (1, 2, 4, 1), (1, 3, 5, 1), (1, 4, 6, 1)
+
+query III
+SELECT * FROM test order by c;
+----
+1 1 1 1
+1 2 4 1
+1 3 5 1
+1 4 6 1
+
+statement ok
+DROP TABLE test;
+
+#############
+# sub query #
+#############
+
+statement ok
+CREATE TABLE test(c1 int, c2 int);
+
+statement ok
+REPLACE INTO test ON(c1) select number, number from numbers(101);
+
+query IT
+SELECT sum(c1),  sum(c2) FROM test;
+----
+5050 5050
+
+statement ok
+REPLACE INTO test ON(c1) select number, 0 from numbers(101);
+
+query IT
+SELECT sum(c1),  sum(c2) FROM test;
+----
+5050 0
+
+statement ok
+DROP TABLE test;
+
+
+###################
+# specify columns #
+###################
+
+statement ok
+CREATE TABLE test(c1 int, c2 int, a int);
+
+statement ok
+replace into test(c1, a) on(c1) values(1, 1), (2, 2);
+
+statement ok
+replace into test(c2, a) on(c2) values(3, 3), (4, 4);
+
+query III
+SELECT c1,  c2, a FROM test order by a;
+----
+1 0 1
+2 0 2
+0 3 3
+0 4 4
+
+###################
+# column mismatch #
+###################
+
+# num of column not match
+statement error 1303
+replace into test(c1) on(c1) values(1,2), (2,3), (3,4);
+
+statement error 1303
+replace into test(c1, c2, a) on(c1) values(1,2), (2,3), (3,4);
+
+statement error 1006
+replace into test(c1, c2, a) on(c1, c_not_exists) values(1,2), (2,3), (3,4);
+
+statement ok
+DROP TABLE test;
+
+##########################
+# deduplication semantic #
+##########################
+
+statement ok
+CREATE TABLE test(c1 int, c2 int);
+
+# duplicated on column c1
+statement ok
+insert into test values(1, 1), (1, 2), (1,3);
+
+statement ok
+replace into test on(c1) values(1, 4);
+
+query II
+SELECT * FROM test order by c1;
+----
+1 4
+
+statement ok
+DROP TABLE test;
+
+
+#####################################
+# clustered table not supported yet #
+#####################################
+
+statement ok
+create table t_clustered(a int,b int) CLUSTER BY(a);
+
+statement error 4000
+replace into t_clustered(a, b) on(a) values(1,2);
+
+statement ok
+DROP TABLE t_clustered;
+
+##############
+# from stage #
+##############
+
+statement ok
+CREATE TABLE tmp(id INTEGER, name VARCHAR, age INT)
+
+statement ok
+insert into tmp(id,name,age) values (1,'2',3), (4, '5', 6);
+
+statement ok
+CREATE STAGE IF NOT EXISTS test_stage;
+
+statement ok
+CREATE TABLE test(id INTEGER, name VARCHAR, age INT);
+
+statement ok
+copy into @test_stage from tmp FILE_FORMAT = (type = parquet);
+
+statement ok
+drop table tmp;
+
+statement ok
+replace into test on(id) select * from @test_stage (pattern => '.*parquet');
+
+query ITI
+select * from test order by id;
+----
+1 2 3
+4 5 6
+
+# replace-into twice
+statement ok
+replace into test on(id) select * from @test_stage (pattern => '.*parquet');
+
+# idempotent
+query ITI
+select * from test order by id;
+----
+1 2 3
+4 5 6
+
+statement ok
+DROP TABLE test;
+
+statement ok
+drop stage test_stage
+
+
+statement ok
+DROP DATABASE db_09_0023
+
+
+
+

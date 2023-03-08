@@ -79,6 +79,7 @@ impl Display for FormatContext {
                 RelOperator::UnionAll(_) => write!(f, "Union"),
                 RelOperator::Pattern(_) => write!(f, "Pattern"),
                 RelOperator::DummyTableScan(_) => write!(f, "DummyTableScan"),
+                RelOperator::RuntimeFilterSource(_) => write!(f, "RuntimeFilterSource"),
             },
             Self::Text(text) => write!(f, "{}", text),
         }

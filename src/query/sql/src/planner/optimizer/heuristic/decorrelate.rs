@@ -197,6 +197,7 @@ impl SubqueryRewriter {
             },
             marker_index: None,
             from_correlated_subquery: true,
+            contain_runtime_filter: false,
         };
 
         // Rewrite plan to semi-join.
@@ -263,6 +264,7 @@ impl SubqueryRewriter {
                     join_type: JoinType::Single,
                     marker_index: None,
                     from_correlated_subquery: true,
+                    contain_runtime_filter: false,
                 };
                 let s_expr = SExpr::create_binary(join_plan.into(), left.clone(), flatten_plan);
                 Ok((s_expr, UnnestResult::SingleJoin))
@@ -300,6 +302,7 @@ impl SubqueryRewriter {
                     join_type: JoinType::RightMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
+                    contain_runtime_filter: false,
                 };
                 let s_expr = SExpr::create_binary(join_plan.into(), left.clone(), flatten_plan);
                 Ok((s_expr, UnnestResult::MarkJoin { marker_index }))
@@ -356,6 +359,7 @@ impl SubqueryRewriter {
                     join_type: JoinType::RightMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
+                    contain_runtime_filter: false,
                 }
                 .into();
                 Ok((
@@ -432,6 +436,7 @@ impl SubqueryRewriter {
                 join_type: JoinType::Cross,
                 marker_index: None,
                 from_correlated_subquery: false,
+                contain_runtime_filter: false,
             }
             .into();
             return Ok(SExpr::create_binary(cross_join, logical_get, plan.clone()));
@@ -549,6 +554,7 @@ impl SubqueryRewriter {
                         join_type: join.join_type.clone(),
                         marker_index: join.marker_index,
                         from_correlated_subquery: false,
+                        contain_runtime_filter: false,
                     }
                     .into(),
                     left_flatten_plan,

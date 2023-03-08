@@ -187,6 +187,12 @@ impl ExecutorTasksQueue {
     pub fn get_finished_notify(&self) -> Arc<Notify> {
         self.finished_notify.clone()
     }
+
+    pub fn active_workers(&self) -> usize {
+        let workers_tasks = self.workers_tasks.lock();
+        workers_tasks.workers_waiting_status.total_size()
+            - workers_tasks.workers_waiting_status.waiting_size()
+    }
 }
 
 pub struct CompletedAsyncTask {

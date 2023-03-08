@@ -78,6 +78,7 @@ impl Plan {
 
             // Insert
             Plan::Insert(insert) => Ok(format!("{:?}", insert)),
+            Plan::Replace(replace) => Ok(format!("{:?}", replace)),
             Plan::Delete(delete) => Ok(format!("{:?}", delete)),
             Plan::Update(update) => Ok(format!("{:?}", update)),
 

@@ -330,6 +330,11 @@ impl DataBlock {
         self.meta.as_ref()
     }
 
+    #[inline]
+    pub fn get_owned_meta(self) -> Option<BlockMetaInfoPtr> {
+        self.meta
+    }
+
     pub fn from_arrow_chunk<A: AsRef<dyn Array>>(
         arrow_chunk: &ArrowChunk<A>,
         schema: &DataSchema,

@@ -517,6 +517,7 @@ pub fn can_auto_cast_to(
                 .all(|(src_ty, dest_ty)| can_auto_cast_to(src_ty, dest_ty, auto_cast_rules))
         }
         (DataType::Number(n), DataType::Decimal(_)) if !n.is_float() => true,
+        (DataType::String, DataType::Decimal(_)) => true,
         (DataType::Decimal(x), DataType::Decimal(y)) => x.precision() <= y.precision(),
         (DataType::Decimal(_), DataType::Number(NumberDataType::Float32)) => true,
         (DataType::Decimal(_), DataType::Number(NumberDataType::Float64)) => true,

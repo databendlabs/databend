@@ -15,7 +15,6 @@
 mod decorrelate;
 #[allow(clippy::module_inception)]
 mod heuristic;
-mod prewhere_optimization;
 mod prune_unused_columns;
 mod rule_list;
 mod subquery_rewriter;

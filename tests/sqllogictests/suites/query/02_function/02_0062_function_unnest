@@ -255,3 +255,33 @@ drop table t;
 statement ok
 DROP DATABASE db_02_0062;
 
+# Test table function
+
+query I
+select * from unnest([1,2,3]);
+----
+1
+2
+3
+
+query I
+select * from unnest([[1,2], [3,4,5]]);
+----
+1
+2
+3
+4
+5
+
+query I
+select * from unnest([[[1,2], [3,4]], [[5,6], [7,8,9]]]);
+----
+1
+2
+3
+4
+5
+6
+7
+8
+9

@@ -1223,7 +1223,7 @@ dependencies = [
  "logos",
  "nom",
  "nom-rule",
- "pratt",
+ "pratt 0.4.0",
  "pretty",
  "pretty_assertions",
  "regex",
@@ -1728,9 +1728,10 @@ dependencies = [
  "maplit",
  "num",
  "once_cell",
- "openraft",
+ "openraft 0.8.3",
  "pretty_assertions",
  "serde",
+ "serde_json",
  "tempfile",
  "tracing",
 ]
@@ -1747,7 +1748,7 @@ dependencies = [
  "common-meta-types",
  "common-tracing",
  "once_cell",
- "openraft",
+ "openraft 0.8.3",
  "pretty_assertions",
  "serde",
  "serde_json",
@@ -1779,6 +1780,7 @@ dependencies = [
  "common-meta-embedded",
  "common-meta-kvapi",
  "common-meta-types",
+ "tokio-stream",
  "tracing",
 ]
 
@@ -1794,7 +1796,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "once_cell",
- "openraft",
+ "openraft 0.8.3",
  "prost",
  "prost-build",
  "regex",
@@ -2079,6 +2081,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "siphasher",
  "storages-common-blocks",
  "storages-common-cache",
  "storages-common-cache-manager",
@@ -2086,6 +2089,7 @@ dependencies = [
  "storages-common-pruner",
  "storages-common-table-meta",
  "streaming-decompression",
+ "tokio-rayon",
  "tracing",
  "typetag",
  "uuid",
@@ -2812,7 +2816,6 @@ dependencies = [
  "databend-meta",
  "databend-query",
  "limits-rs",
- "openraft",
  "poem",
  "sentry",
  "serde",
@@ -2889,7 +2892,7 @@ dependencies = [
  "common-proto-conv",
  "common-protos",
  "common-tracing",
- "openraft",
+ "openraft 0.8.3",
  "serde",
  "serde_json",
  "tokio",
@@ -5300,7 +5303,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea8dd3c6d80d1e61031aecc5fdfaf4b7d2324dbd94d575ac12f94e5d6856c2d4"
 dependencies = [
  "nom",
- "pratt",
+ "pratt 0.3.0",
  "proc-macro-error 1.0.4",
  "proc-macro2",
  "quote",
@@ -5521,8 +5524,9 @@ dependencies = [
 
 [[package]]
 name = "openraft"
-version = "0.7.4"
-source = "git+https://github.com/datafuselabs/openraft?tag=v0.7.4#959636885e2069c685b1bdb9ebc5a875565f4a8a"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83a564e30e56d0064e47f51cd6d480160f042a1f960dde15eaf2096be20d290e"
 dependencies = [
  "anyerror",
  "anyhow",
@@ -5535,6 +5539,31 @@ dependencies = [
  "maplit",
  "rand 0.8.5",
  "serde",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-futures",
+]
+
+[[package]]
+name = "openraft"
+version = "0.8.3"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.3-alpha.1#fc8cf0a20dcc9f53977fa55a037f16cf23cb7c26"
+dependencies = [
+ "anyerror",
+ "anyhow",
+ "async-trait",
+ "byte-unit",
+ "clap 3.2.23",
+ "derive_more",
+ "futures",
+ "maplit",
+ "openraft 0.7.5",
+ "pin-utils",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "tempfile",
  "thiserror",
  "tokio",
  "tracing",
@@ -6098,6 +6127,12 @@ name = "pratt"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e31bbc12f7936a7b195790dd6d9b982b66c54f45ff6766decf25c44cac302dce"
+
+[[package]]
+name = "pratt"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17e0a4425d076f0718b820673a38fbf3747080c61017eeb0dd79bc7e472b8bb8"
 
 [[package]]
 name = "predicates"
@@ -8119,6 +8154,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "tokio-rayon"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cf33a76e0b1dd03b778f83244137bd59887abf25c0e87bc3e7071105f457693"
+dependencies = [
+ "rayon",
+ "tokio",
 ]
 
 [[package]]

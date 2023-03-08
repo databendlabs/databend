@@ -125,6 +125,10 @@ impl<'a> Binder {
                 self.bind_show_functions(bind_context, limit).await?
             }
 
+            Statement::ShowTableFunctions { limit } => {
+                self.bind_show_table_functions(bind_context, limit).await?
+            }
+
             Statement::Copy(stmt) => self.bind_copy(bind_context, stmt).await?,
 
             Statement::ShowMetrics => {
@@ -228,6 +232,7 @@ impl<'a> Binder {
                 self.bind_remove_stage(location, pattern).await?
             }
             Statement::Insert(stmt) => self.bind_insert(bind_context, stmt).await?,
+            Statement::Replace(stmt) => self.bind_replace(bind_context, stmt).await?,
             Statement::Delete {
                 table_reference,
                 selection,

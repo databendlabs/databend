@@ -16,12 +16,14 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use roaring::RoaringBitmap;
 
 use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
+use crate::optimizer::RuleID;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::IndexType;
@@ -42,6 +44,12 @@ pub struct SortItem {
 impl Operator for Sort {
     fn rel_op(&self) -> RelOp {
         RelOp::Sort
+    }
+
+    fn transformation_candidate_rules(&self) -> roaring::RoaringBitmap {
+        let mut ret = RoaringBitmap::new();
+        ret.push(RuleID::PushDownSortScan as u32);
+        ret
     }
 
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {

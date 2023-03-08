@@ -57,5 +57,5 @@ pub trait FilterBuilder {
     fn add_digests<'i, I: IntoIterator<Item = &'i u64>>(&mut self, digests: I);
 
     /// Build the filter with added keys.
-    fn build(self) -> Result<Self::Filter, Self::Error>;
+    fn build(&mut self) -> Result<Self::Filter, Self::Error>;
 }

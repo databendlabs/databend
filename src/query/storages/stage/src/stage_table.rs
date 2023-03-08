@@ -35,7 +35,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::DataBlock;
-use common_meta_app::principal::UserStageInfo;
+use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::input_formats::InputContext;
@@ -71,7 +71,7 @@ impl StageTable {
     }
 
     /// Get operator with correctly prefix.
-    pub fn get_op(stage: &UserStageInfo) -> Result<Operator> {
+    pub fn get_op(stage: &StageInfo) -> Result<Operator> {
         init_stage_operator(stage)
     }
 
@@ -79,7 +79,7 @@ impl StageTable {
         // 1. List all files.
         let path = &stage_info.path;
         let files = &stage_info.files;
-        let op = Self::get_op(&stage_info.user_stage_info)?;
+        let op = Self::get_op(&stage_info.stage_info)?;
         let mut all_files = if !files.is_empty() {
             let mut res = vec![];
             for file in files {
@@ -150,12 +150,12 @@ impl Table for StageTable {
         };
         let files = files.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
         let format =
-            InputContext::get_input_format(&stage_info.user_stage_info.file_format_options.format)?;
-        let operator = StageTable::get_op(&stage_info.user_stage_info)?;
+            InputContext::get_input_format(&stage_info.stage_info.file_format_options.format)?;
+        let operator = StageTable::get_op(&stage_info.stage_info)?;
         let splits = format
             .get_splits(
                 &files,
-                &stage_info.user_stage_info,
+                &stage_info.stage_info,
                 &operator,
                 &ctx.get_settings(),
             )
@@ -197,8 +197,8 @@ impl Table for StageTable {
         //  Build copy pipeline.
         let settings = ctx.get_settings();
         let schema = stage_table_info.schema.clone();
-        let stage_info = stage_table_info.user_stage_info.clone();
-        let operator = StageTable::get_op(&stage_table_info.user_stage_info)?;
+        let stage_info = stage_table_info.stage_info.clone();
+        let operator = StageTable::get_op(&stage_table_info.stage_info)?;
         let compact_threshold = self.get_block_compact_thresholds_with_default();
         let input_ctx = Arc::new(InputContext::try_create_from_copy(
             operator,
@@ -221,8 +221,8 @@ impl Table for StageTable {
         _: AppendMode,
         _: bool,
     ) -> Result<()> {
-        let single = self.table_info.user_stage_info.copy_options.single;
-        let op = StageTable::get_op(&self.table_info.user_stage_info)?;
+        let single = self.table_info.stage_info.copy_options.single;
+        let op = StageTable::get_op(&self.table_info.stage_info)?;
 
         let uuid = uuid::Uuid::new_v4().to_string();
         let group_id = AtomicUsize::new(0);

@@ -392,6 +392,7 @@ impl SubqueryRewriter {
                     join_type: JoinType::Single,
                     marker_index: None,
                     from_correlated_subquery: false,
+                    contain_runtime_filter: false,
                 }
                 .into();
                 let s_expr =
@@ -482,6 +483,7 @@ impl SubqueryRewriter {
                     join_type: JoinType::Cross,
                     marker_index: None,
                     from_correlated_subquery: false,
+                    contain_runtime_filter: false,
                 }
                 .into();
                 Ok((
@@ -545,6 +547,7 @@ impl SubqueryRewriter {
                     join_type: JoinType::RightMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: false,
+                    contain_runtime_filter: false,
                 }
                 .into();
                 let s_expr =

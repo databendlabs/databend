@@ -20,7 +20,6 @@ use once_cell::sync::Lazy;
 
 use super::prune_unused_columns::UnusedColumnPruner;
 use crate::optimizer::heuristic::decorrelate::decorrelate_subquery;
-use crate::optimizer::heuristic::prewhere_optimization::PrewhereOptimizer;
 use crate::optimizer::rule::RulePtr;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::ColumnSet;
@@ -54,7 +53,8 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
         RuleID::FoldCountAggregate,
         RuleID::SplitAggregate,
         RuleID::PushDownFilterScan,
-        RuleID::PushDownSortScan,
+        RuleID::PushDownPrewhere, /* PushDownPrwhere should be after all rules except PushDownFilterScan */
+        RuleID::PushDownSortScan, // PushDownFilterScan should be after PushDownPrewhere
     ]
 });
 
@@ -92,9 +92,6 @@ impl HeuristicOptimizer {
     }
 
     fn post_optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
-        let prewhere_optimizer = PrewhereOptimizer::new(self.metadata.clone());
-        let s_expr = prewhere_optimizer.prewhere_optimize(s_expr)?;
-
         let pruner = UnusedColumnPruner::new(self.metadata.clone());
         let require_columns: ColumnSet = self.bind_context.column_set();
         pruner.remove_unused_columns(&s_expr, require_columns)
@@ -103,12 +100,6 @@ impl HeuristicOptimizer {
     pub fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
         let pre_optimized = self.pre_optimize(s_expr)?;
         let optimized = self.optimize_expression(&pre_optimized)?;
-        let post_optimized = self.post_optimize(optimized)?;
-
-        // do it again, some rules may be missed after the post_optimized
-        // for example: push down sort + limit (topn) to scan
-        // TODO: if we push down the filter to scan, we need to remove the filter plan
-        let optimized = self.optimize_expression(&post_optimized)?;
         let post_optimized = self.post_optimize(optimized)?;
 
         Ok(post_optimized)

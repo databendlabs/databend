@@ -14,9 +14,10 @@
 
 use anyerror::AnyError;
 use common_meta_stoerr::MetaStorageError;
-use openraft::error::InitializeError;
 
+use crate::raft_types::InitializeError;
 use crate::MetaNetworkError;
+use crate::RaftError;
 
 /// Error raised when meta-server startup.
 #[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -44,4 +45,13 @@ pub enum MetaStartupError {
 
     #[error("{0}")]
     MetaServiceError(String),
+}
+
+impl From<RaftError<InitializeError>> for MetaStartupError {
+    fn from(value: RaftError<InitializeError>) -> Self {
+        match value {
+            RaftError::APIError(e) => e.into(),
+            RaftError::Fatal(f) => Self::MetaServiceError(f.to_string()),
+        }
+    }
 }

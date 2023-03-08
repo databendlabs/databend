@@ -228,6 +228,8 @@ impl InterpreterFactory {
 
             Plan::Insert(insert) => InsertInterpreter::try_create(ctx, *insert.clone(), false),
 
+            Plan::Replace(replace) => ReplaceInterpreter::try_create(ctx, *replace.clone()),
+
             Plan::Delete(delete) => Ok(Arc::new(DeleteInterpreter::try_create(
                 ctx,
                 *delete.clone(),

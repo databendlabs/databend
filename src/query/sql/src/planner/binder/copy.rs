@@ -33,7 +33,7 @@ use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::OnErrorMode;
-use common_meta_app::principal::UserStageInfo;
+use common_meta_app::principal::StageInfo;
 use common_users::UserApiProvider;
 use tracing::debug;
 
@@ -240,7 +240,7 @@ impl<'a> Binder {
             catalog: dst_catalog_name.to_string(),
             source_info: DataSourceInfo::StageSource(StageTableInfo {
                 schema: table.schema(),
-                user_stage_info: stage_info,
+                stage_info,
                 path,
                 files: stmt.files.clone(),
                 pattern: stmt.pattern.clone(),
@@ -293,13 +293,13 @@ impl<'a> Binder {
             ));
         }
 
-        let mut stage_info = UserStageInfo::new_external_stage(storage_params, &path);
+        let mut stage_info = StageInfo::new_external_stage(storage_params, &path);
         self.apply_stage_options(stmt, &mut stage_info).await?;
         let from = DataSourcePlan {
             catalog: dst_catalog_name.to_string(),
             source_info: DataSourceInfo::StageSource(StageTableInfo {
                 schema: table.schema(),
-                user_stage_info: stage_info,
+                stage_info,
                 path,
                 files: stmt.files.clone(),
                 pattern: stmt.pattern.clone(),
@@ -412,7 +412,7 @@ impl<'a> Binder {
             ));
         }
 
-        let mut stage_info = UserStageInfo::new_external_stage(storage_params, &path);
+        let mut stage_info = StageInfo::new_external_stage(storage_params, &path);
         self.apply_stage_options(stmt, &mut stage_info).await?;
 
         Ok(Plan::Copy(Box::new(CopyPlan::IntoStage {
@@ -476,7 +476,7 @@ impl<'a> Binder {
             ));
         }
 
-        let mut stage_info = UserStageInfo::new_external_stage(storage_params, &path);
+        let mut stage_info = StageInfo::new_external_stage(storage_params, &path);
         self.apply_stage_options(stmt, &mut stage_info).await?;
 
         Ok(Plan::Copy(Box::new(CopyPlan::IntoStage {
@@ -487,11 +487,7 @@ impl<'a> Binder {
         })))
     }
 
-    async fn apply_stage_options(
-        &mut self,
-        stmt: &CopyStmt,
-        stage: &mut UserStageInfo,
-    ) -> Result<()> {
+    async fn apply_stage_options(&mut self, stmt: &CopyStmt, stage: &mut StageInfo) -> Result<()> {
         if !stmt.file_format.is_empty() {
             stage.file_format_options = self.try_resolve_file_format(&stmt.file_format).await?;
         }
@@ -547,13 +543,13 @@ impl<'a> Binder {
 pub async fn parse_stage_location(
     ctx: &Arc<dyn TableContext>,
     location: &str,
-) -> Result<(UserStageInfo, String)> {
+) -> Result<(StageInfo, String)> {
     let s: Vec<&str> = location.split('@').collect();
     // @my_ext_stage/abc/
     let names: Vec<&str> = s[1].splitn(2, '/').filter(|v| !v.is_empty()).collect();
 
     let stage = if names[0] == "~" {
-        UserStageInfo::new_user_stage(&ctx.get_current_user()?.name)
+        StageInfo::new_user_stage(&ctx.get_current_user()?.name)
     } else {
         UserApiProvider::instance()
             .get_stage(&ctx.get_tenant(), names[0])
@@ -577,9 +573,9 @@ pub async fn parse_stage_location_v2(
     ctx: &Arc<dyn TableContext>,
     name: &str,
     path: &str,
-) -> Result<(UserStageInfo, String)> {
+) -> Result<(StageInfo, String)> {
     let stage = if name == "~" {
-        UserStageInfo::new_user_stage(&ctx.get_current_user()?.name)
+        StageInfo::new_user_stage(&ctx.get_current_user()?.name)
     } else {
         UserApiProvider::instance()
             .get_stage(&ctx.get_tenant(), name)

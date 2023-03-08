@@ -151,7 +151,7 @@ run_test() {
     config_path="$query_config_path"
 
     nohup "$query_new" -c "$config_path" --log-level DEBUG --meta-endpoints "0.0.0.0:9191" >query-current.log &
-    python3 scripts/ci/wait_tcp.py --timeout 5 --port 3307
+    python3 scripts/ci/wait_tcp.py --timeout 15 --port 3307
 
     echo " === Run test: fuse_compat_read with current query"
 

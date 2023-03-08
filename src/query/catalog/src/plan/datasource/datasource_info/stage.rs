@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
-use common_meta_app::principal::UserStageInfo;
+use common_meta_app::principal::StageInfo;
 
 use crate::plan::StageFileInfo;
 
@@ -28,7 +28,7 @@ pub struct StageTableInfo {
     pub path: String,
     pub files: Vec<String>,
     pub pattern: String,
-    pub user_stage_info: UserStageInfo,
+    pub stage_info: StageInfo,
     pub files_to_copy: Option<Vec<StageFileInfo>>,
 }
 
@@ -38,13 +38,13 @@ impl StageTableInfo {
     }
 
     pub fn desc(&self) -> String {
-        self.user_stage_info.stage_name.clone()
+        self.stage_info.stage_name.clone()
     }
 }
 
 impl Debug for StageTableInfo {
     // Ignore the schema.
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.user_stage_info)
+        write!(f, "{:?}", self.stage_info)
     }
 }

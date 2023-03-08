@@ -119,7 +119,7 @@ message UserIdentity {
   string hostname = 2;
 }
 
-message UserStageInfo {
+message StageInfo {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 

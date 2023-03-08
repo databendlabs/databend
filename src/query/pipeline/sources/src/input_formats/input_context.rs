@@ -34,7 +34,7 @@ use common_meta_app::principal::FileFormatOptions;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageFileCompression;
 use common_meta_app::principal::StageFileFormatType;
-use common_meta_app::principal::UserStageInfo;
+use common_meta_app::principal::StageInfo;
 use common_settings::Settings;
 use dashmap::DashMap;
 use opendal::Operator;
@@ -66,7 +66,7 @@ impl InputPlan {
 
 #[derive(Debug)]
 pub struct CopyIntoPlan {
-    pub stage_info: UserStageInfo,
+    pub stage_info: StageInfo,
 }
 
 #[derive(Debug)]
@@ -156,7 +156,7 @@ impl InputContext {
         operator: Operator,
         settings: Arc<Settings>,
         schema: TableSchemaRef,
-        stage_info: UserStageInfo,
+        stage_info: StageInfo,
         splits: Vec<Arc<SplitInfo>>,
         scan_progress: Arc<Progress>,
         block_compact_thresholds: BlockThresholds,

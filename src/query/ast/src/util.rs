@@ -363,7 +363,7 @@ pub fn transform_span(tokens: &[Token]) -> Span {
 
 pub fn run_pratt_parser<'a, I, P, E>(
     mut parser: P,
-    iter: &mut I,
+    iter: &I,
     rest: Input<'a>,
     input: Input<'a>,
 ) -> IResult<'a, P::Output>
@@ -373,7 +373,7 @@ where
     I: Iterator<Item = P::Input> + ExactSizeIterator + Clone,
 {
     let mut iter_cloned = iter.clone();
-    let mut iter = iter.peekable();
+    let mut iter = iter.clone().peekable();
     let len = iter.len();
     let expr = parser
         .parse_input(&mut iter, Precedence(0))

@@ -17,12 +17,14 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use roaring::RoaringBitmap;
 
 use crate::optimizer::ColumnSet;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
+use crate::optimizer::RuleID;
 use crate::optimizer::SelectivityEstimator;
 use crate::optimizer::Statistics;
 use crate::optimizer::MAX_SELECTIVITY;
@@ -50,6 +52,15 @@ impl Filter {
 impl Operator for Filter {
     fn rel_op(&self) -> RelOp {
         RelOp::Filter
+    }
+
+    fn transformation_candidate_rules(&self) -> roaring::RoaringBitmap {
+        let mut ret = (RuleID::NormalizeScalarFilter as u32
+            ..(RuleID::PushDownFilterSort as u32) + 1)
+            .collect::<RoaringBitmap>();
+        ret.push(RuleID::EliminateFilter as u32);
+        ret.push(RuleID::MergeFilter as u32);
+        ret
     }
 
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {

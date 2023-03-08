@@ -36,6 +36,14 @@ These tutorials are intended to help you get started with Databend:
 
 * [How to Unload Data from Databend](../12-unload-data/index.md)
 
+### Managing Data
+
+* [COPY](../14-sql-commands/10-dml/dml-copy-into-table.md)
+* [INSERT](../14-sql-commands/10-dml/dml-insert.md)
+* [DELETE](../14-sql-commands/10-dml/dml-delete-from.md)
+* [UPDATE](../14-sql-commands/10-dml/dml-update.md)
+* [REPLACE](../14-sql-commands/10-dml/dml-replace.md)
+
 ## Managing Users
 
 * [How to Create a User](../14-sql-commands/00-ddl/30-user/01-user-create-user.md)

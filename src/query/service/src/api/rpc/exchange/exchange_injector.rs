@@ -21,6 +21,7 @@ use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
+use common_pipeline_transforms::processors::transforms::TransformDummy;
 
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::rpc::exchange::serde::exchange_deserializer::TransformExchangeDeserializer;
@@ -32,7 +33,6 @@ use crate::api::DataExchange;
 use crate::api::ExchangeSorting;
 use crate::api::HashFlightScatter;
 use crate::api::ShuffleExchangeParams;
-use crate::pipelines::processors::TransformDummy;
 use crate::sessions::QueryContext;
 
 pub trait ExchangeInjector: Send + Sync + 'static {

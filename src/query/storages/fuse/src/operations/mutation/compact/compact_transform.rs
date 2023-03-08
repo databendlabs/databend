@@ -266,7 +266,7 @@ impl Processor for CompactTransform {
 
                     // serialize data block.
                     let mut block_data = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
-                    let (file_size, col_metas) = io::write_block(
+                    let (file_size, col_metas) = io::serialize_block(
                         &self.write_settings,
                         &self.schema,
                         new_block,
