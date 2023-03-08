@@ -363,6 +363,10 @@ fn test_statement() {
             @stage1/dir/file ( FILE_FORMAT => 'parquet', FILES => ('file1', 'file2')) table0
             left join table1;"#,
         r#"SELECT c1 FROM 's3://test/bucket' (ENDPOINT_URL => 'xxx', PATTERN => '*.parquet') t;"#,
+        r#"CREATE FILE FORMAT my_csv
+            type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;"#,
+        r#"SHOW FILE FORMATS"#,
+        r#"DROP FILE FORMAT my_csv"#,
     ];
 
     for case in cases {
