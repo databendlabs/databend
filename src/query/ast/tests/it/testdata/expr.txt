@@ -3519,3 +3519,199 @@ FunctionCall {
 }
 
 
+---------- Input ----------
+COUNT() OVER (ORDER BY hire_date ROWS UNBOUNDED PRECEDING)
+---------- Output ---------
+COUNT() OVER (ORDER BY hire_date ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..58,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "COUNT",
+        quote: None,
+        span: Some(
+            0..5,
+        ),
+    },
+    args: [],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [],
+            order_by: [
+                OrderByExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            23..32,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "hire_date",
+                            quote: None,
+                            span: Some(
+                                23..32,
+                            ),
+                        },
+                    },
+                    asc: None,
+                    nulls_first: None,
+                },
+            ],
+            window_frame: Some(
+                WindowFrame {
+                    units: Rows,
+                    start_bound: Preceding(
+                        Some(
+                            ColumnRef {
+                                span: Some(
+                                    38..47,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "UNBOUNDED",
+                                    quote: None,
+                                    span: Some(
+                                        38..47,
+                                    ),
+                                },
+                            },
+                        ),
+                    ),
+                    end_bound: Following(
+                        None,
+                    ),
+                },
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+COUNT() OVER (ORDER BY hire_date ROWS CURRENT ROW)
+---------- Output ---------
+COUNT() OVER (ORDER BY hire_date ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..50,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "COUNT",
+        quote: None,
+        span: Some(
+            0..5,
+        ),
+    },
+    args: [],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [],
+            order_by: [
+                OrderByExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            23..32,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "hire_date",
+                            quote: None,
+                            span: Some(
+                                23..32,
+                            ),
+                        },
+                    },
+                    asc: None,
+                    nulls_first: None,
+                },
+            ],
+            window_frame: Some(
+                WindowFrame {
+                    units: Rows,
+                    start_bound: CurrentRow,
+                    end_bound: Following(
+                        None,
+                    ),
+                },
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+COUNT() OVER (ORDER BY hire_date ROWS 3 PRECEDING)
+---------- Output ---------
+COUNT() OVER (ORDER BY hire_date ROWS BETWEEN 3 PRECEDING AND UNBOUNDED FOLLOWING)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..50,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "COUNT",
+        quote: None,
+        span: Some(
+            0..5,
+        ),
+    },
+    args: [],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [],
+            order_by: [
+                OrderByExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            23..32,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "hire_date",
+                            quote: None,
+                            span: Some(
+                                23..32,
+                            ),
+                        },
+                    },
+                    asc: None,
+                    nulls_first: None,
+                },
+            ],
+            window_frame: Some(
+                WindowFrame {
+                    units: Rows,
+                    start_bound: Preceding(
+                        Some(
+                            Literal {
+                                span: Some(
+                                    38..39,
+                                ),
+                                lit: UInt64(
+                                    3,
+                                ),
+                            },
+                        ),
+                    ),
+                    end_bound: Following(
+                        None,
+                    ),
+                },
+            ),
+        },
+    ),
+}
+
+

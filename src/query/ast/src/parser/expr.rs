@@ -831,61 +831,36 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
 
-    let window_frame_bound_start = alt((
-        value(WindowFrameBound::CurrentRow, rule! { CURRENT ~ ROW }),
-        map(rule! { #subexpr(0) ~ PRECEDING }, |(expr, _)| {
-            WindowFrameBound::Preceding(Some(Box::new(expr)))
-        }),
-        value(
-            WindowFrameBound::Preceding(None),
-            rule! { UNBOUNDED ~ PRECEDING },
+    let window_frame_between = alt((
+        map(
+            rule! { BETWEEN ~ #window_frame_bound ~ AND ~ #window_frame_bound },
+            |(_, s, _, e)| (s, e),
         ),
-        map(rule! { #subexpr(0) ~ FOLLOWING }, |(expr, _)| {
-            WindowFrameBound::Following(Some(Box::new(expr)))
+        map(rule! {#window_frame_bound}, |s| {
+            (s, WindowFrameBound::Following(None))
         }),
-        value(
-            WindowFrameBound::Following(None),
-            rule! { UNBOUNDED ~ FOLLOWING },
-        ),
-    ));
-
-    let window_frame_bound_end = alt((
-        value(WindowFrameBound::CurrentRow, rule! { CURRENT ~ ROW }),
-        map(rule! { #subexpr(0) ~ PRECEDING }, |(expr, _)| {
-            WindowFrameBound::Preceding(Some(Box::new(expr)))
-        }),
-        value(
-            WindowFrameBound::Preceding(None),
-            rule! { UNBOUNDED ~ PRECEDING },
-        ),
-        map(rule! { #subexpr(0) ~ FOLLOWING }, |(expr, _)| {
-            WindowFrameBound::Following(Some(Box::new(expr)))
-        }),
-        value(
-            WindowFrameBound::Following(None),
-            rule! { UNBOUNDED ~ FOLLOWING },
-        ),
     ));
 
     let window_spec = map(
         rule! {
             (PARTITION ~ ^BY ~ #comma_separated_list1(subexpr(0)))?
             ~ ( ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) )?
-            ~ ((ROWS | RANGE) ~ BETWEEN ~ #window_frame_bound_start ~ AND ~ #window_frame_bound_end)?
+            ~ ((ROWS | RANGE) ~ #window_frame_between)?
         },
-        |(opt_partition, opt_order, opt_between)| WindowSpec {
+        |(opt_partition, opt_order, between)| WindowSpec {
             partition_by: opt_partition.map(|x| x.2).unwrap_or_default(),
             order_by: opt_order.map(|x| x.2).unwrap_or_default(),
-            window_frame: opt_between.map(|x| {
+            window_frame: between.map(|x| {
                 let unit = match x.0.kind {
                     ROWS => WindowFrameUnits::Rows,
                     RANGE => WindowFrameUnits::Range,
                     _ => unreachable!(),
                 };
+                let bw = x.1;
                 WindowFrame {
                     units: unit,
-                    start_bound: x.2,
-                    end_bound: x.4,
+                    start_bound: bw.0,
+                    end_bound: bw.1,
                 }
             }),
         },
@@ -1131,6 +1106,26 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     )))(i)?;
 
     Ok((rest, WithSpan { span, elem }))
+}
+
+pub fn window_frame_bound(i: Input) -> IResult<WindowFrameBound> {
+    alt((
+        value(WindowFrameBound::CurrentRow, rule! { CURRENT ~ ROW }),
+        map(rule! { #subexpr(0) ~ PRECEDING }, |(expr, _)| {
+            WindowFrameBound::Preceding(Some(Box::new(expr)))
+        }),
+        value(
+            WindowFrameBound::Preceding(None),
+            rule! { UNBOUNDED ~ PRECEDING },
+        ),
+        map(rule! { #subexpr(0) ~ FOLLOWING }, |(expr, _)| {
+            WindowFrameBound::Following(Some(Box::new(expr)))
+        }),
+        value(
+            WindowFrameBound::Following(None),
+            rule! { UNBOUNDED ~ FOLLOWING },
+        ),
+    ))(i)
 }
 
 pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
