@@ -115,7 +115,7 @@ Exchange
             ├── Exchange(Build)
             │   ├── exchange type: Hash(t.b (#1))
             │   └── EvalScalar
-            │       ├── expressions: [plus(numbers.number (#0), 1)]
+            │       ├── expressions: [numbers.number (#0) + 1]
             │       ├── estimated rows: 1.00
             │       └── TableScan
             │           ├── table: default.system.numbers
