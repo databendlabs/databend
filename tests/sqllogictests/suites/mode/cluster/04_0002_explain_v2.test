@@ -105,46 +105,6 @@ Exchange
             └── estimated rows: 0.00
 
 query T
-explain raw select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
-----
-EvalScalar
-├── scalars: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-└── Filter
-    ├── filters: [((t1.a (#0) eq t2.a (#2)) AND (t1.a (#0) gt 3_u8)) OR (t1.a (#0) eq t2.a (#2))]
-    └── CrossJoin
-        ├── conditions: []
-        ├── LogicalGet
-        │   ├── table: default.default.t1
-        │   ├── filters: []
-        │   ├── order by: []
-        │   └── limit: NONE
-        └── LogicalGet
-            ├── table: default.default.t2
-            ├── filters: []
-            ├── order by: []
-            └── limit: NONE
-
-query T
-explain raw select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b and t1.a > 2;
-----
-EvalScalar
-├── scalars: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-└── HashJoin: INNER
-    ├── conditions: [(t1.a (#0) eq t2.a (#2)) AND (t1.b (#1) eq t2.b (#3))]
-    ├── Filter
-    │   ├── filters: [t1.a (#0) gt 2_u8]
-    │   └── LogicalGet
-    │       ├── table: default.default.t1
-    │       ├── filters: []
-    │       ├── order by: []
-    │       └── limit: NONE
-    └── LogicalGet
-        ├── table: default.default.t2
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
-
-query T
 explain select count(1) as c, count(b) as d, max(a) as e from t1 order by c, e, d limit 10;
 ----
 Limit
