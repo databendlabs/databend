@@ -38,7 +38,7 @@ impl ArrayDeserializer {
         let mut offsets = Vec::with_capacity(capacity + 1);
         offsets.push(0);
         Self {
-            inner: Box::new(inner_ty.create_deserializer(capacity)),
+            inner: Box::new(TypeDeserializerImpl::with_capacity(inner_ty, capacity)),
             inner_ty: inner_ty.clone(),
             offsets,
         }

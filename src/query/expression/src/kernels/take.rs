@@ -34,6 +34,7 @@ use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::TypeDeserializer;
+use crate::TypeDeserializerImpl;
 use crate::Value;
 
 impl DataBlock {
@@ -105,10 +106,7 @@ impl Column {
                 let mut offsets = Vec::with_capacity(length + 1);
                 offsets.push(0);
                 let builder = ColumnBuilder::from_column(
-                    column
-                        .values
-                        .data_type()
-                        .create_deserializer(length)
+                    TypeDeserializerImpl::with_capacity(&column.values.data_type(), self.len())
                         .finish_to_column(),
                 );
                 let builder = ArrayColumnBuilder { builder, offsets };
