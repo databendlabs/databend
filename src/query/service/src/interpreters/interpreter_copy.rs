@@ -17,7 +17,6 @@ use std::time::Instant;
 
 use chrono::Utc;
 use common_base::runtime::GlobalIORuntime;
-use common_catalog::catalog::Catalog;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::StageFileInfo;
 use common_catalog::plan::StageFileStatus;
@@ -126,70 +125,25 @@ impl CopyInterpreter {
         Ok(build_res)
     }
 
-    async fn do_upsert_copied_files_info_to_meta(
-        expire_at: Option<u64>,
-        tenant: String,
-        database_name: String,
-        table_id: u64,
-        catalog: Arc<dyn Catalog>,
-        copy_stage_files: &mut BTreeMap<String, TableCopiedFileInfo>,
-    ) -> Result<()> {
-        let req = UpsertTableCopiedFileReq {
-            table_id,
-            file_info: copy_stage_files.clone(),
-            expire_at,
-        };
-        catalog
-            .upsert_table_copied_file_info(&tenant, &database_name, req)
-            .await?;
-        copy_stage_files.clear();
-        Ok(())
-    }
-
-    async fn upsert_copied_files_info_to_meta(
+    async fn build_copied_files_info_to_meta_req(
         ctx: &Arc<QueryContext>,
-        tenant: String,
-        database_name: String,
         table_id: u64,
-        catalog: Arc<dyn Catalog>,
         copy_stage_files: BTreeMap<String, TableCopiedFileInfo>,
-    ) -> Result<()> {
+    ) -> Result<Option<UpsertTableCopiedFileReq>> {
         tracing::debug!("upsert_copied_files_info: {:?}", copy_stage_files);
 
         if copy_stage_files.is_empty() {
-            return Ok(());
+            return Ok(None);
         }
 
         let expire_hours = ctx.get_settings().get_load_file_metadata_expire_hours()?;
         let expire_at = expire_hours * 60 + Utc::now().timestamp() as u64;
-        let mut do_copy_stage_files = BTreeMap::new();
-        for (file_name, file_info) in copy_stage_files {
-            do_copy_stage_files.insert(file_name.clone(), file_info);
-            if do_copy_stage_files.len() > MAX_QUERY_COPIED_FILES_NUM {
-                CopyInterpreter::do_upsert_copied_files_info_to_meta(
-                    Some(expire_at),
-                    tenant.clone(),
-                    database_name.clone(),
-                    table_id,
-                    catalog.clone(),
-                    &mut do_copy_stage_files,
-                )
-                .await?;
-            }
-        }
-        if !do_copy_stage_files.is_empty() {
-            CopyInterpreter::do_upsert_copied_files_info_to_meta(
-                Some(expire_at),
-                tenant.clone(),
-                database_name.clone(),
-                table_id,
-                catalog.clone(),
-                &mut do_copy_stage_files,
-            )
-            .await?;
-        }
-
-        Ok(())
+        let req = UpsertTableCopiedFileReq {
+            table_id,
+            file_info: copy_stage_files,
+            expire_at: Some(expire_at),
+        };
+        Ok(Some(req))
     }
 
     pub async fn color_copied_files(
@@ -359,9 +313,6 @@ impl CopyInterpreter {
         // 2. purge the copied files
         // 3. update the NeedCopy file into to meta
         let stage_table_info_clone = stage_table_info.clone();
-        let catalog = self.ctx.get_catalog(catalog_name)?;
-        let tenant = self.ctx.get_tenant();
-        let database_name = database_name.to_string();
         let table_id = to_table.get_id();
         build_res.main_pipeline.set_on_finished(move |may_error| {
             if may_error.is_none() {
@@ -371,9 +322,9 @@ impl CopyInterpreter {
                 let stage_info = stage_table_info_clone.stage_info.clone();
                 let all_source_files = all_source_file_infos.clone();
                 let need_copied_files = need_copied_file_infos.clone();
-                let tenant = tenant.clone();
-                let database_name = database_name.clone();
-                let catalog = catalog.clone();
+                // let tenant = tenant.clone();
+                // let database_name = database_name.clone();
+                // let catalog = catalog.clone();
                 let mut copied_files = BTreeMap::new();
                 for file in &need_copied_files {
                     // Short the etag to 7 bytes for less space in metasrv.
@@ -396,8 +347,17 @@ impl CopyInterpreter {
                         operations.len(),
                         start.elapsed().as_secs()
                     );
+
+                    let upsert_copied_files_info_req =
+                        Self::build_copied_files_info_to_meta_req(&ctx, table_id, copied_files)
+                            .await?;
                     to_table
-                        .commit_insertion(ctx.clone(), operations, false)
+                        .commit_insertion(
+                            ctx.clone(),
+                            operations,
+                            upsert_copied_files_info_req,
+                            false,
+                        )
                         .await?;
 
                     // 2. Try to purge copied files if purge option is true, if error will skip.
@@ -417,23 +377,7 @@ impl CopyInterpreter {
                         .await;
                     }
 
-                    // 3. Upsert files(status with NeedCopy) info to meta.
-                    info!(
-                        "copy: try to upsert file infos:{} to meta, elapsed:{}",
-                        copied_files.len(),
-                        start.elapsed().as_secs()
-                    );
-                    CopyInterpreter::upsert_copied_files_info_to_meta(
-                        &ctx,
-                        tenant,
-                        database_name,
-                        table_id,
-                        catalog,
-                        copied_files,
-                    )
-                    .await?;
-
-                    // 4. log on_error mode errors.
+                    // 3. log on_error mode errors.
                     // todo(ariesdevil): persist errors with query_id
                     if let Some(error_map) = ctx.get_on_error_map() {
                         for (file_name, e) in error_map {

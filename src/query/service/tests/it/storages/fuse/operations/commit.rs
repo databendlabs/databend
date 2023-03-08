@@ -210,7 +210,7 @@ async fn test_abort_on_error() -> Result<()> {
             };
             let ctx = Arc::new(CtxDelegation::new(ctx, faked_catalog));
             let r = fuse_table
-                .commit_with_max_retry_elapsed(ctx, log, self.max_retry_time, overwrite)
+                .commit_with_max_retry_elapsed(ctx, log, None, self.max_retry_time, overwrite)
                 .await;
             if self.update_meta_error.is_some() {
                 assert_eq!(

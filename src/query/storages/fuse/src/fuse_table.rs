@@ -43,6 +43,7 @@ use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_sharing::create_share_table_operator;
 use common_sql::parse_exprs;
 use common_storage::init_operator;
@@ -402,6 +403,7 @@ impl Table for FuseTable {
             &self.meta_location_generator,
             new_snapshot,
             None,
+            &None,
             &self.operator,
         )
         .await
@@ -451,6 +453,7 @@ impl Table for FuseTable {
             &self.meta_location_generator,
             new_snapshot,
             None,
+            &None,
             &self.operator,
         )
         .await
@@ -500,6 +503,7 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         operations: Vec<DataBlock>,
+        copied_files: Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
     ) -> Result<()> {
         // only append operation supported currently
@@ -507,7 +511,8 @@ impl Table for FuseTable {
             .iter()
             .map(AppendOperationLogEntry::try_from)
             .collect::<Result<Vec<AppendOperationLogEntry>>>()?;
-        self.do_commit(ctx, append_log_entries, overwrite).await
+        self.do_commit(ctx, append_log_entries, copied_files, overwrite)
+            .await
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_truncate", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]

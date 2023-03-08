@@ -320,7 +320,7 @@ impl InsertInterpreter {
                             start.elapsed().as_secs()
                         );
                         table
-                            .commit_insertion(ctx.clone(), append_entries, overwrite)
+                            .commit_insertion(ctx.clone(), append_entries, None, overwrite)
                             .await?;
 
                         if stage_info.copy_options.purge {
@@ -473,7 +473,9 @@ impl Interpreter for InsertInterpreter {
                             let append_entries = ctx.consume_precommit_blocks();
                             // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
                             return GlobalIORuntime::instance().block_on(async move {
-                                table.commit_insertion(ctx, append_entries, overwrite).await
+                                table
+                                    .commit_insertion(ctx, append_entries, None, overwrite)
+                                    .await
                             });
                         }
 

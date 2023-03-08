@@ -1877,40 +1877,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 "upsert_table_copied_file_info"
             );
 
-            let mut condition = vec![txn_cond_seq(&tbid, Eq, tb_meta_seq)];
-            let mut if_then = vec![];
-            // `remove_table_copied_files` and `upsert_table_copied_file_info`
-            // all modify `TableCopiedFileInfo`,
-            // so there used to has `TableCopiedFileLockKey` in these two functions
-            // to protect TableCopiedFileInfo modification.
-            // In issue: https://github.com/datafuselabs/databend/issues/8897,
-            // there is chance that if copy files concurrently, `upsert_table_copied_file_info`
-            // may return `TxnRetryMaxTimes`.
-            // So now, in case that `TableCopiedFileInfo` has expire time, remove `TableCopiedFileLockKey`
-            // in each function. In this case there is chance that some `TableCopiedFileInfo` may not be
-            // removed in `remove_table_copied_files`, but these data can be purged in case of expire time.
-            for (file, file_info) in req.file_info.iter() {
-                let key = TableCopiedFileNameIdent {
-                    table_id,
-                    file: file.to_owned(),
-                };
-                let (file_seq, _): (_, Option<TableCopiedFileInfo>) =
-                    get_struct_value(self, &key).await?;
-
-                condition.push(txn_cond_seq(&key, Eq, file_seq));
-                match &req.expire_at {
-                    Some(expire_at) => {
-                        if_then.push(txn_op_put_with_expire(
-                            &key,
-                            serialize_struct(file_info)?,
-                            *expire_at,
-                        ));
-                    }
-                    None => {
-                        if_then.push(txn_op_put(&key, serialize_struct(file_info)?));
-                    }
-                }
-            }
+            let (condition, if_then) =
+                build_upsert_table_copied_file_info_conditions(self, &req, tb_meta_seq).await?;
 
             let txn_req = TxnRequest {
                 condition,
@@ -2103,7 +2071,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 )));
             }
 
-            let txn_req = TxnRequest {
+            let mut txn_req = TxnRequest {
                 condition: vec![
                     // table is not changed
                     txn_cond_seq(&tbid, Eq, tb_meta_seq),
@@ -2113,6 +2081,13 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 ],
                 else_then: vec![],
             };
+
+            if let Some(req) = &req.upsert_source_table {
+                let (conditions, match_operations) =
+                    build_upsert_table_copied_file_info_conditions(self, req, tb_meta_seq).await?;
+                txn_req.condition.extend(conditions);
+                txn_req.if_then.extend(match_operations)
+            }
 
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
@@ -2789,4 +2764,52 @@ async fn list_tables_from_share_db(
         DatabaseType::ShareDB(share),
     )
     .await
+}
+
+async fn build_upsert_table_copied_file_info_conditions<T>(
+    this: &T,
+    req: &UpsertTableCopiedFileReq,
+    tb_meta_seq: u64,
+) -> Result<(Vec<TxnCondition>, Vec<TxnOp>), KVAppError>
+where
+    T: kvapi::KVApi<Error = MetaError>,
+{
+    let table_id = req.table_id;
+    let tbid = TableId { table_id };
+
+    let mut condition = vec![txn_cond_seq(&tbid, Eq, tb_meta_seq)];
+    let mut if_then = vec![];
+    // `remove_table_copied_files` and `upsert_table_copied_file_info`
+    // all modify `TableCopiedFileInfo`,
+    // so there used to has `TableCopiedFileLockKey` in these two functions
+    // to protect TableCopiedFileInfo modification.
+    // In issue: https://github.com/datafuselabs/databend/issues/8897,
+    // there is chance that if copy files concurrently, `upsert_table_copied_file_info`
+    // may return `TxnRetryMaxTimes`.
+    // So now, in case that `TableCopiedFileInfo` has expire time, remove `TableCopiedFileLockKey`
+    // in each function. In this case there is chance that some `TableCopiedFileInfo` may not be
+    // removed in `remove_table_copied_files`, but these data can be purged in case of expire time.
+    for (file, file_info) in req.file_info.iter() {
+        let key = TableCopiedFileNameIdent {
+            table_id,
+            file: file.to_owned(),
+        };
+        let (file_seq, _): (_, Option<TableCopiedFileInfo>) = get_struct_value(this, &key).await?;
+
+        condition.push(txn_cond_seq(&key, Eq, file_seq));
+        match &req.expire_at {
+            Some(expire_at) => {
+                if_then.push(txn_op_put_with_expire(
+                    &key,
+                    serialize_struct(file_info)?,
+                    *expire_at,
+                ));
+            }
+            None => {
+                if_then.push(txn_op_put(&key, serialize_struct(file_info)?));
+            }
+        }
+    }
+
+    Ok((condition, if_then))
 }

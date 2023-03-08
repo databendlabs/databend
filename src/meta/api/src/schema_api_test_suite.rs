@@ -2025,6 +2025,7 @@ impl SchemaApiTestSuite {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
+                    upsert_source_table: None,
                 })
                 .await?;
 
@@ -2044,6 +2045,7 @@ impl SchemaApiTestSuite {
                         table_id,
                         seq: MatchSeq::Exact(table_version + 1),
                         new_table_meta: new_table_meta.clone(),
+                        upsert_source_table: None,
                     })
                     .await;
 

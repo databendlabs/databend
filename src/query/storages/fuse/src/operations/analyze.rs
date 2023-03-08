@@ -102,6 +102,7 @@ impl FuseTable {
                 &self.meta_location_generator,
                 new_snapshot,
                 Some(table_statistics),
+                &None,
                 &self.operator,
             )
             .await?;
