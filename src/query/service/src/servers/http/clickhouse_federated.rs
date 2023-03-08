@@ -19,17 +19,19 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
-use once_cell::sync::Lazy;
+use ctor::ctor;
 use regex::Regex;
 
 use crate::servers::federated_helper::FederatedHelper;
-
-const CLICKHOUSE_VERSION: &str = "8.12.14";
+use crate::servers::http::CLICKHOUSE_VERSION;
 
 pub struct ClickHouseFederated {}
 
-static FORMAT_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r".*(?i)FORMAT\s*([[:alpha:]]*)\s*;?$").unwrap());
+#[ctor]
+static SELECT_VERSION_REGEX: Regex = Regex::new(r".*(?i)SELECT\s*VERSION\(\)\s*;?$").unwrap();
+
+#[ctor]
+static FORMAT_REGEX: Regex = Regex::new(r".*(?i)FORMAT\s*([[:alpha:]]*)\s*;?$").unwrap();
 
 impl ClickHouseFederated {
     // Build block for select function.
@@ -52,10 +54,10 @@ impl ClickHouseFederated {
     }
 
     pub fn check(query: &str) -> Option<(TableSchemaRef, DataBlock)> {
-        let rules: Vec<(&str, Option<(TableSchemaRef, DataBlock)>)> = vec![(
-            "(?i)^(SELECT VERSION()(.*))",
+        let rules: Vec<(&Regex, Option<(TableSchemaRef, DataBlock)>)> = vec![(
+            &SELECT_VERSION_REGEX,
             Self::select_function_block("version()", CLICKHOUSE_VERSION),
         )];
-        FederatedHelper::block_match_rule(query, rules)
+        FederatedHelper::block_match_rule_2(query, rules)
     }
 }

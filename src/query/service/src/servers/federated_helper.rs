@@ -17,7 +17,8 @@
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
-use regex::bytes::RegexSet;
+use regex::Regex;
+use regex::RegexSet;
 
 pub type LazyBlockFunc = fn(&str) -> Option<(TableSchemaRef, DataBlock)>;
 
@@ -33,6 +34,22 @@ impl FederatedHelper {
         let matches = regex_set.matches(query.as_ref());
         for (index, (_regex, data)) in rules.iter().enumerate() {
             if matches.matched(index) {
+                return match data {
+                    None => Some((TableSchemaRefExt::create(vec![]), DataBlock::empty())),
+                    Some((schema, data_block)) => Some((schema.clone(), data_block.clone())),
+                };
+            }
+        }
+
+        None
+    }
+
+    pub(crate) fn block_match_rule_2(
+        query: &str,
+        rules: Vec<(&Regex, Option<(TableSchemaRef, DataBlock)>)>,
+    ) -> Option<(TableSchemaRef, DataBlock)> {
+        for (_index, (regex, data)) in rules.iter().enumerate() {
+            if regex.is_match(query) {
                 return match data {
                     None => Some((TableSchemaRefExt::create(vec![]), DataBlock::empty())),
                     Some((schema, data_block)) => Some((schema.clone(), data_block.clone())),
