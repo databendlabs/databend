@@ -15,18 +15,17 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use async_trait::async_trait;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::Domain;
 use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_io::prelude::FormatSettings;
@@ -36,8 +35,6 @@ use common_meta_app::principal::UserInfo;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
-use parking_lot::RwLock;
-use storages_common_index::filters::Xor8Filter;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
@@ -73,7 +70,6 @@ pub struct StageAttachment {
     pub values_str: String,
 }
 
-#[async_trait::async_trait]
 pub trait RuntimeFilter: Send + Sync {
     fn collect(
         &self,
@@ -81,7 +77,7 @@ pub trait RuntimeFilter: Send + Sync {
         data: &DataBlock,
     ) -> Result<()>;
     fn send(&self) -> Result<()>;
-    async fn recv(&self) -> Result<Future<Output=Option<HashMap<RuntimeFilterId, Xor8Filter>>>>;
+    fn recv(&self) -> Result<HashMap<RuntimeFilterId, Domain>>;
 }
 
 #[async_trait::async_trait]

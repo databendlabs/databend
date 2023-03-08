@@ -36,7 +36,7 @@ use crate::sql::planner::plans::JoinType;
 impl HashJoinState for JoinHashTable {
     fn build(&self, input: DataBlock) -> Result<()> {
         // Collect runtime filters and send them to probe scan node.
-        {
+        if self.ctx.get_settings().get_runtime_filter()? {
             let runtime_filter_collector = self.ctx.get_runtime_filter_collector();
             runtime_filter_collector.collect(&self.hash_join_desc.source_exprs, &input)?;
         }
@@ -156,7 +156,7 @@ impl HashJoinState for JoinHashTable {
         }
 
         // Send runtime filters
-        {
+        if self.ctx.get_settings().get_runtime_filter()? {
             let runtime_filter_collector = self.ctx.get_runtime_filter_collector();
             runtime_filter_collector.send()?;
         }

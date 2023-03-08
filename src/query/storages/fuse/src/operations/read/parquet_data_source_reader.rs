@@ -79,12 +79,17 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
             })))
         }
     }
+
+    fn prune_by_runtime_filter(&mut self) -> Result<()> {
+        todo!()
+    }
 }
 
 impl SyncSource for ReadParquetDataSource<true> {
     const NAME: &'static str = "SyncReadParquetDataSource";
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
+        self.prune_by_runtime_filter()?;
         match self.partitions.steal_one(self.id) {
             None => Ok(None),
             Some(part) => Ok(Some(DataBlock::empty_with_meta(DataSourceMeta::create(
@@ -133,6 +138,7 @@ impl Processor for ReadParquetDataSource<false> {
     }
 
     async fn async_process(&mut self) -> Result<()> {
+        self.prune_by_runtime_filter()?;
         let parts = self.partitions.steal(self.id, self.batch_size);
 
         if !parts.is_empty() {

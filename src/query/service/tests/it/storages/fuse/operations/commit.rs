@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use std::sync::RwLock;
 use std::time::Duration;
 
 use common_base::base::tokio;
@@ -323,7 +322,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_runtime_filter_collector(&self) -> Arc<RwLock<dyn RuntimeFilter>> {
+    fn get_runtime_filter_collector(&self) -> Arc<dyn RuntimeFilter> {
         todo!()
     }
 

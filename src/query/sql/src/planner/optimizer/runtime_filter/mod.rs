@@ -43,9 +43,13 @@ fn create_runtime_filters(id: &mut IndexType, join: &Join) -> Result<RuntimeFilt
         .iter()
         .zip(join.left_conditions.iter())
     {
-        source_exprs.insert(RuntimeFilterId::new(*id), source_expr.clone());
-        target_exprs.insert(RuntimeFilterId::new(*id), target_expr.clone());
-        *id += 1;
+        // Currently, only support targe_expr is column.
+        // `select * from t1 inner join t2 on t1.a + 1 = t2.a;` won't generate runtime filter.
+        if let ScalarExpr::BoundColumnRef(_) = target_expr {
+            source_exprs.insert(RuntimeFilterId::new(*id), source_expr.clone());
+            target_exprs.insert(RuntimeFilterId::new(*id), target_expr.clone());
+            *id += 1;
+        }
     }
     Ok(RuntimeFilterResult {
         target_exprs,
@@ -98,7 +102,7 @@ fn add_runtime_filter_to_scan(
                 table_index: op.table_index,
                 columns: op.columns.clone(),
                 push_down_predicates: op.push_down_predicates.clone(),
-                limit: op.limit.clone(),
+                limit: op.limit,
                 order_by: op.order_by.clone(),
                 prewhere: op.prewhere.clone(),
                 runtime_filter_exprs: Some(target_exprs),

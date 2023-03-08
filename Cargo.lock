@@ -1317,7 +1317,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "storages-common-index",
  "typetag",
 ]
 
