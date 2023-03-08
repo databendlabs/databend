@@ -15,12 +15,14 @@
 use std::fmt::Display;
 
 use anyerror::AnyError;
-use openraft::error::ChangeMembershipError;
-use openraft::error::Fatal;
-use openraft::error::ForwardToLeader;
 
+use crate::raft_types::ChangeMembershipError;
+use crate::raft_types::Fatal;
+use crate::raft_types::ForwardToLeader;
+use crate::ClientWriteError;
 use crate::InvalidReply;
 use crate::MetaNetworkError;
+use crate::RaftError;
 
 /// Errors raised when meta-service handling a request.
 #[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -41,6 +43,9 @@ pub enum MetaAPIError {
     DataError(#[from] MetaDataError),
 
     /// Error occurs on remote peer.
+    ///
+    /// A server side API does not emit such an error.
+    /// This is used for client-side to build a remote-error when receiving server errors
     #[error(transparent)]
     RemoteError(MetaDataError),
 }
@@ -116,5 +121,22 @@ impl From<InvalidReply> for MetaAPIError {
     fn from(e: InvalidReply) -> Self {
         let net_err = MetaNetworkError::from(e);
         Self::NetworkError(net_err)
+    }
+}
+
+impl From<RaftError<ClientWriteError>> for MetaAPIError {
+    fn from(value: RaftError<ClientWriteError>) -> Self {
+        match value {
+            RaftError::APIError(cli_write_err) => {
+                //
+                match cli_write_err {
+                    ClientWriteError::ForwardToLeader(f) => MetaAPIError::ForwardToLeader(f),
+                    ClientWriteError::ChangeMembershipError(c) => {
+                        MetaAPIError::DataError(MetaDataError::ChangeMembershipError(c))
+                    }
+                }
+            }
+            RaftError::Fatal(f) => MetaAPIError::DataError(MetaDataError::WriteError(f)),
+        }
     }
 }

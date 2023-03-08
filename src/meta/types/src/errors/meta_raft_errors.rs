@@ -13,24 +13,24 @@
 // limitations under the License.
 
 pub use openraft::error::ChangeMembershipError;
-pub use openraft::error::ClientWriteError;
 pub use openraft::error::EmptyMembership;
-pub use openraft::error::Fatal;
-pub use openraft::error::ForwardToLeader;
 pub use openraft::error::InProgress;
 pub use openraft::error::InitializeError;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::raft_types::ClientWriteError;
+use crate::raft_types::ForwardToLeader;
+use crate::MetaDataError;
 use crate::MetaOperationError;
+use crate::RaftError;
 
+// TODO: Remove this error because it has only one variant
+// ---
 /// Collection of errors that occur when writing a raft-log to local raft node.
 /// This does not include the errors raised when writing a membership log.
 #[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum RaftWriteError {
-    #[error(transparent)]
-    Fatal(#[from] Fatal),
-
     #[error(transparent)]
     ForwardToLeader(#[from] ForwardToLeader),
 }
@@ -38,7 +38,6 @@ pub enum RaftWriteError {
 impl RaftWriteError {
     pub fn from_raft_err(e: ClientWriteError) -> Self {
         match e {
-            ClientWriteError::Fatal(fatal) => fatal.into(),
             ClientWriteError::ForwardToLeader(to_leader) => to_leader.into(),
             ClientWriteError::ChangeMembershipError(_) => {
                 unreachable!("there should not be a ChangeMembershipError for client_write")
@@ -52,7 +51,6 @@ impl From<RaftWriteError> for RaftChangeMembershipError {
     fn from(e: RaftWriteError) -> Self {
         match e {
             RaftWriteError::ForwardToLeader(to_leader) => to_leader.into(),
-            RaftWriteError::Fatal(fatal) => fatal.into(),
         }
     }
 }
@@ -61,7 +59,6 @@ impl From<RaftWriteError> for MetaOperationError {
     fn from(e: RaftWriteError) -> Self {
         match e {
             RaftWriteError::ForwardToLeader(to_leader) => to_leader.into(),
-            RaftWriteError::Fatal(fatal) => Self::DataError(fatal.into()),
         }
     }
 }
@@ -73,8 +70,17 @@ impl From<RaftChangeMembershipError> for MetaOperationError {
     fn from(e: RaftChangeMembershipError) -> Self {
         match e {
             RaftChangeMembershipError::ForwardToLeader(to_leader) => to_leader.into(),
-            RaftChangeMembershipError::Fatal(fatal) => Self::DataError(fatal.into()),
+            // TODO: change-membership-error is not a data error.
             RaftChangeMembershipError::ChangeMembershipError(c) => Self::DataError(c.into()),
+        }
+    }
+}
+
+impl From<RaftError<ClientWriteError>> for MetaOperationError {
+    fn from(e: RaftError<ClientWriteError>) -> Self {
+        match e {
+            RaftError::APIError(cli_write_err) => cli_write_err.into(),
+            RaftError::Fatal(f) => Self::DataError(MetaDataError::WriteError(f)),
         }
     }
 }

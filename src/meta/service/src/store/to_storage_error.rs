@@ -15,9 +15,9 @@
 use anyerror::AnyError;
 use common_meta_sled_store::openraft;
 use common_meta_stoerr::MetaStorageError;
-use openraft::ErrorSubject;
+use common_meta_types::ErrorSubject;
+use common_meta_types::StorageError;
 use openraft::ErrorVerb;
-use openraft::StorageError;
 use openraft::StorageIOError;
 
 /// Convert MetaStorageError to openraft::StorageError;  

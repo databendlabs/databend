@@ -14,6 +14,7 @@
 
 #![allow(clippy::uninlined_format_args)]
 
+pub(crate) mod compat07;
 pub mod config;
 pub mod key_spaces;
 pub mod log;

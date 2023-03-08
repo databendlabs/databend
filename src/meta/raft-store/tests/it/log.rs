@@ -14,13 +14,12 @@
 
 use common_base::base::tokio;
 use common_meta_raft_store::log::RaftLog;
-use common_meta_sled_store::openraft;
+use common_meta_types::new_log_id;
 use common_meta_types::Cmd;
+use common_meta_types::Entry;
+use common_meta_types::EntryPayload;
 use common_meta_types::LogEntry;
 use common_meta_types::UpsertKV;
-use openraft::raft::Entry;
-use openraft::raft::EntryPayload;
-use openraft::LogId;
 
 use crate::init_raft_store_ut;
 use crate::testing::new_raft_test_context;
@@ -48,28 +47,25 @@ async fn test_raft_log_append_and_range_get() -> anyhow::Result<()> {
     let db = &tc.db;
     let rl = RaftLog::open(db, &tc.raft_config).await?;
 
-    let logs: Vec<Entry<LogEntry>> = vec![
+    let logs: Vec<Entry> = vec![
         Entry {
-            log_id: LogId { term: 1, index: 2 },
+            log_id: new_log_id(1, 0, 2),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId { term: 3, index: 4 },
+            log_id: new_log_id(3, 0, 4),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId { term: 1, index: 9 },
+            log_id: new_log_id(1, 0, 9),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId { term: 1, index: 10 },
+            log_id: new_log_id(1, 0, 10),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId {
-                term: 1,
-                index: 256,
-            },
+            log_id: new_log_id(1, 0, 256),
             payload: EntryPayload::Blank,
         },
     ];
@@ -120,13 +116,13 @@ async fn test_raft_log_insert() -> anyhow::Result<()> {
 
     assert_eq!(None, rl.logs().get(&5)?);
 
-    let logs: Vec<Entry<LogEntry>> = vec![
+    let logs: Vec<Entry> = vec![
         Entry {
-            log_id: LogId { term: 1, index: 2 },
+            log_id: new_log_id(1, 0, 2),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId { term: 3, index: 4 },
+            log_id: new_log_id(3, 0, 4),
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
                 time_ms: None,
@@ -154,13 +150,13 @@ async fn test_raft_log_get() -> anyhow::Result<()> {
 
     assert_eq!(None, rl.logs().get(&5)?);
 
-    let logs: Vec<Entry<LogEntry>> = vec![
+    let logs: Vec<Entry> = vec![
         Entry {
-            log_id: LogId { term: 1, index: 2 },
+            log_id: new_log_id(1, 0, 2),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId { term: 3, index: 4 },
+            log_id: new_log_id(3, 0, 4),
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
                 time_ms: None,
@@ -192,13 +188,13 @@ async fn test_raft_log_last() -> anyhow::Result<()> {
 
     assert_eq!(None, rl.logs().last()?);
 
-    let logs: Vec<Entry<LogEntry>> = vec![
+    let logs: Vec<Entry> = vec![
         Entry {
-            log_id: LogId { term: 1, index: 2 },
+            log_id: new_log_id(1, 0, 2),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId { term: 3, index: 4 },
+            log_id: new_log_id(3, 0, 4),
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
                 time_ms: None,
@@ -223,13 +219,13 @@ async fn test_raft_log_range_remove() -> anyhow::Result<()> {
     let db = &tc.db;
     let rl = RaftLog::open(db, &tc.raft_config).await?;
 
-    let logs: Vec<Entry<LogEntry>> = vec![
+    let logs: Vec<Entry> = vec![
         Entry {
-            log_id: LogId { term: 1, index: 2 },
+            log_id: new_log_id(1, 0, 2),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId { term: 3, index: 4 },
+            log_id: new_log_id(3, 0, 4),
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
                 time_ms: None,
@@ -237,18 +233,15 @@ async fn test_raft_log_range_remove() -> anyhow::Result<()> {
             }),
         },
         Entry {
-            log_id: LogId { term: 1, index: 9 },
+            log_id: new_log_id(1, 0, 9),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId { term: 1, index: 10 },
+            log_id: new_log_id(1, 0, 10),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId {
-                term: 1,
-                index: 256,
-            },
+            log_id: new_log_id(1, 0, 256),
             payload: EntryPayload::Blank,
         },
     ];

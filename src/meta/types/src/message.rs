@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use openraft::raft::AppendEntriesRequest;
-use openraft::raft::InstallSnapshotRequest;
-use openraft::raft::VoteRequest;
 use serde::Serialize;
 
 use crate::protobuf::RaftReply;
 use crate::protobuf::RaftRequest;
+use crate::raft_types::AppendEntriesRequest;
+use crate::raft_types::InstallSnapshotRequest;
+use crate::raft_types::VoteRequest;
 use crate::LogEntry;
 use crate::MetaAPIError;
 
@@ -41,7 +41,7 @@ impl TryFrom<RaftRequest> for LogEntry {
     }
 }
 
-impl tonic::IntoRequest<RaftRequest> for AppendEntriesRequest<LogEntry> {
+impl tonic::IntoRequest<RaftRequest> for AppendEntriesRequest {
     fn into_request(self) -> tonic::Request<RaftRequest> {
         let mes = RaftRequest {
             data: serde_json::to_string(&self).expect("fail to serialize"),
@@ -50,7 +50,7 @@ impl tonic::IntoRequest<RaftRequest> for AppendEntriesRequest<LogEntry> {
     }
 }
 
-impl tonic::IntoRequest<RaftRequest> for &AppendEntriesRequest<LogEntry> {
+impl tonic::IntoRequest<RaftRequest> for &AppendEntriesRequest {
     fn into_request(self) -> tonic::Request<RaftRequest> {
         let mes = RaftRequest {
             data: serde_json::to_string(self).expect("fail to serialize"),

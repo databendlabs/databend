@@ -29,6 +29,7 @@ use common_meta_sled_store::init_sled_db;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
+use common_meta_types::MetaAPIError;
 use common_meta_types::Node;
 use common_metrics::init_default_metrics_recorder;
 use common_tracing::init_logging;
@@ -136,51 +137,7 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Join result: {:?}", join_res);
 
-    info!(
-        "Register node to update raft_api_advertise_host_endpoint and grpc_api_advertise_address"
-    );
-    {
-        info!("Wait for active leader to register node");
-        let wait = meta_node.raft.wait(Some(Duration::from_secs(20)));
-        let metrics = wait
-            .metrics(|x| x.current_leader.is_some(), "receive an active leader")
-            .await?;
-
-        info!("Current raft node metrics: {:?}", metrics);
-
-        let leader_id = metrics.current_leader.unwrap();
-
-        for _i in 0..10 {
-            if meta_node.get_node(&leader_id).await?.is_none() {
-                warn!("Leader node is not replicated to local store, wait and try again");
-                sleep(Duration::from_millis(500)).await
-            } else {
-                info!(
-                    "Leader node is replicated to local store. About to register node with grpc-advertise-addr"
-                );
-                break;
-            }
-        }
-
-        let node_id = meta_node.sto.id;
-        let raft_endpoint = conf.raft_config.raft_api_advertise_host_endpoint();
-        let node = Node::new(node_id, raft_endpoint)
-            .with_grpc_advertise_address(conf.grpc_api_advertise_address());
-
-        let ent = LogEntry {
-            txid: None,
-            time_ms: None,
-            cmd: Cmd::AddNode {
-                node_id,
-                node,
-                overriding: true,
-            },
-        };
-        info!("Raft log entry for updating node: {:?}", ent);
-
-        meta_node.write(ent).await?;
-        info!("Done register")
-    }
+    register_node(&meta_node, &conf).await?;
 
     // Print information to users.
     println!("Databend Metasrv");
@@ -209,6 +166,98 @@ async fn main() -> anyhow::Result<()> {
     stop_handler.wait_to_terminate(stop_tx).await;
     info!("Databend-meta is done shutting down");
 
+    Ok(())
+}
+
+/// The meta service GRPC API address can be changed by administrator in the config file.
+///
+/// Thus every time a meta server starts up, re-register the node info to broadcast its latest grpc address
+async fn register_node(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), anyhow::Error> {
+    info!(
+        "Register node to update raft_api_advertise_host_endpoint and grpc_api_advertise_address"
+    );
+
+    let wait_leader_timeout = Duration::from_millis(conf.raft_config.election_timeout().1 * 10);
+    info!(
+        "Wait {:?} for active leader to register node, raft election timeouts: {:?}",
+        wait_leader_timeout,
+        conf.raft_config.election_timeout()
+    );
+
+    let wait = meta_node.raft.wait(Some(wait_leader_timeout));
+    let metrics = wait
+        .metrics(|x| x.current_leader.is_some(), "receive an active leader")
+        .await?;
+
+    info!("Current raft node metrics: {:?}", metrics);
+
+    let leader_id = metrics.current_leader.unwrap();
+
+    for _i in 0..20 {
+        if meta_node.get_node(&leader_id).await?.is_none() {
+            warn!("Leader node is not replicated to local store, wait and try again");
+            sleep(Duration::from_millis(500)).await
+        }
+
+        info!(
+            "Leader node is replicated to local store. About to register node with grpc-advertise-addr"
+        );
+
+        let res = do_register(meta_node, conf).await;
+        info!("Register-node result: {:?}", res);
+        match res {
+            Ok(_) => {
+                return Ok(());
+            }
+            Err(e) => {
+                match &e {
+                    MetaAPIError::ForwardToLeader(f) => {
+                        info!(
+                            "Leader changed, sleep a while and retry forwarding to {:?}",
+                            f
+                        );
+                        sleep(Duration::from_millis(500)).await;
+                        continue;
+                    }
+                    MetaAPIError::CanNotForward(any_err) => {
+                        info!(
+                            "Leader changed, can not forward, sleep a while and retry: {:?}",
+                            any_err
+                        );
+                        sleep(Duration::from_millis(500)).await;
+                        continue;
+                    }
+                    _ => {
+                        // un-handle-able error
+                        return Err(e.into());
+                    }
+                }
+            }
+        }
+    }
+
+    unreachable!("Tried too many times registering node")
+}
+
+async fn do_register(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), MetaAPIError> {
+    let node_id = meta_node.sto.id;
+    let raft_endpoint = conf.raft_config.raft_api_advertise_host_endpoint();
+    let node = Node::new(node_id, raft_endpoint)
+        .with_grpc_advertise_address(conf.grpc_api_advertise_address());
+
+    let ent = LogEntry {
+        txid: None,
+        time_ms: None,
+        cmd: Cmd::AddNode {
+            node_id,
+            node,
+            overriding: true,
+        },
+    };
+    info!("Raft log entry for updating node: {:?}", ent);
+
+    meta_node.write(ent).await?;
+    info!("Done register");
     Ok(())
 }
 

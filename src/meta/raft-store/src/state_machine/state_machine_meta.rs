@@ -14,13 +14,12 @@
 
 use std::fmt;
 
-use common_meta_sled_store::openraft;
-use common_meta_sled_store::openraft::EffectiveMembership;
 use common_meta_sled_store::sled;
 use common_meta_sled_store::SledBytesError;
 use common_meta_sled_store::SledOrderedSerde;
 use common_meta_types::anyerror::AnyError;
-use openraft::LogId;
+use common_meta_types::LogId;
+use common_meta_types::StoredMembership;
 use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
@@ -40,7 +39,7 @@ pub enum StateMachineMetaKey {
 pub enum StateMachineMetaValue {
     LogId(LogId),
     Bool(bool),
-    Membership(EffectiveMembership),
+    Membership(StoredMembership),
 }
 
 impl fmt::Display for StateMachineMetaKey {
@@ -82,5 +81,47 @@ impl SledOrderedSerde for StateMachineMetaKey {
         }
 
         Err(SledBytesError::new(&AnyError::error("invalid key IVec")))
+    }
+}
+
+pub(crate) mod compat_with_07 {
+    use common_meta_sled_store::SledBytesError;
+    use common_meta_sled_store::SledSerde;
+    use common_meta_types::compat07;
+    use openraft::compat::Upgrade;
+
+    use crate::state_machine::StateMachineMetaValue;
+
+    #[derive(Debug, serde::Serialize, serde::Deserialize)]
+    pub enum StateMachineMetaValueCompat {
+        LogId(compat07::LogId),
+        Bool(bool),
+        Membership(compat07::StoredMembership),
+    }
+
+    impl Upgrade<StateMachineMetaValue> for StateMachineMetaValueCompat {
+        #[rustfmt::skip]
+        fn upgrade(self) -> StateMachineMetaValue {
+            match self {
+                Self::LogId(lid)    => StateMachineMetaValue::LogId(lid.upgrade()),
+                Self::Bool(b)       => StateMachineMetaValue::Bool(b),
+                Self::Membership(m) => StateMachineMetaValue::Membership(m.upgrade()),
+            }
+        }
+    }
+
+    impl SledSerde for StateMachineMetaValue {
+        fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, SledBytesError>
+        where Self: Sized {
+            let s: StateMachineMetaValueCompat = serde_json::from_slice(v.as_ref())?;
+
+            let v = match s {
+                StateMachineMetaValueCompat::LogId(lid) => Self::LogId(lid.upgrade()),
+                StateMachineMetaValueCompat::Bool(b) => Self::Bool(b),
+                StateMachineMetaValueCompat::Membership(m) => Self::Membership(m.upgrade()),
+            };
+
+            Ok(v)
+        }
     }
 }

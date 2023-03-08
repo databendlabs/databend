@@ -562,7 +562,7 @@ impl MetaGrpcClient {
         )))
     }
 
-    #[tracing::instrument(level = "debug", err(Debug))]
+    #[tracing::instrument(level = "debug", skip(self), err(Debug))]
     async fn make_channel(&self, addr: Option<&String>) -> Result<Channel, MetaNetworkError> {
         let addr = if let Some(addr) = addr {
             addr.clone()
