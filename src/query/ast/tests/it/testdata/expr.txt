@@ -3100,7 +3100,7 @@ Map {
 ---------- Input ----------
 ROW_NUMBER() OVER (ORDER BY salary DESC)
 ---------- Output ---------
-ROW_NUMBER()
+ROW_NUMBER() OVER (ORDER BY salary DESC)
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -3150,7 +3150,7 @@ FunctionCall {
 ---------- Input ----------
 SUM(salary) OVER ()
 ---------- Output ---------
-SUM(salary)
+SUM(salary) OVER ()
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -3194,7 +3194,7 @@ FunctionCall {
 ---------- Input ----------
 AVG(salary) OVER (PARTITION BY department)
 ---------- Output ---------
-AVG(salary)
+AVG(salary) OVER (PARTITION BY department)
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -3253,7 +3253,7 @@ FunctionCall {
 ---------- Input ----------
 SUM(salary) OVER (PARTITION BY department ORDER BY salary DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
 ---------- Output ---------
-SUM(salary)
+SUM(salary) OVER (PARTITION BY department ORDER BY salary DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -3356,7 +3356,7 @@ FunctionCall {
 ---------- Input ----------
 AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) 
 ---------- Output ---------
-AVG(salary)
+AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -3451,7 +3451,7 @@ FunctionCall {
 ---------- Input ----------
 COUNT() OVER (ORDER BY hire_date RANGE BETWEEN INTERVAL '7' DAY PRECEDING AND CURRENT ROW)
 ---------- Output ---------
-COUNT()
+COUNT() OVER (ORDER BY hire_date RANGE BETWEEN INTERVAL '7' DAY PRECEDING AND CURRENT ROW)
 ---------- AST ------------
 FunctionCall {
     span: Some(

@@ -838,12 +838,26 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         }),
         value(
             WindowFrameBound::Preceding(None),
-            rule! { UNBOUNDED ~ LEADING },
+            rule! { UNBOUNDED ~ PRECEDING },
+        ),
+        map(rule! { #subexpr(0) ~ FOLLOWING }, |(expr, _)| {
+            WindowFrameBound::Following(Some(Box::new(expr)))
+        }),
+        value(
+            WindowFrameBound::Following(None),
+            rule! { UNBOUNDED ~ FOLLOWING },
         ),
     ));
 
     let window_frame_bound_end = alt((
         value(WindowFrameBound::CurrentRow, rule! { CURRENT ~ ROW }),
+        map(rule! { #subexpr(0) ~ PRECEDING }, |(expr, _)| {
+            WindowFrameBound::Preceding(Some(Box::new(expr)))
+        }),
+        value(
+            WindowFrameBound::Preceding(None),
+            rule! { UNBOUNDED ~ PRECEDING },
+        ),
         map(rule! { #subexpr(0) ~ FOLLOWING }, |(expr, _)| {
             WindowFrameBound::Following(Some(Box::new(expr)))
         }),

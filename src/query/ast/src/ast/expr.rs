@@ -477,7 +477,6 @@ pub struct WindowFrame {
 pub enum WindowFrameUnits {
     Rows,
     Range,
-    Groups,
 }
 
 /// Specifies [WindowFrame]'s `start_bound` and `end_bound`
@@ -868,6 +867,73 @@ impl Display for Literal {
     }
 }
 
+impl Display for WindowSpec {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut first = true;
+        if !self.partition_by.is_empty() {
+            first = false;
+            write!(f, "PARTITION BY ")?;
+            for (i, p) in self.partition_by.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{p}")?;
+            }
+        }
+
+        if !self.order_by.is_empty() {
+            if !first {
+                write!(f, " ")?;
+            }
+            first = false;
+            write!(f, "ORDER BY ")?;
+            for (i, o) in self.order_by.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{o}")?;
+            }
+        }
+
+        if let Some(frame) = &self.window_frame {
+            if !first {
+                write!(f, " ")?;
+            }
+            match frame.units {
+                WindowFrameUnits::Rows => {
+                    write!(f, "ROWS")?;
+                }
+                WindowFrameUnits::Range => {
+                    write!(f, "RANGE")?;
+                }
+            }
+            match (&frame.start_bound, &frame.end_bound) {
+                (WindowFrameBound::CurrentRow, WindowFrameBound::CurrentRow) => {
+                    write!(f, " CURRENT ROW")?
+                }
+                _ => {
+                    let format_frame = |frame: &WindowFrameBound| -> String {
+                        match frame {
+                            WindowFrameBound::CurrentRow => "CURRENT ROW".to_string(),
+                            WindowFrameBound::Preceding(None) => "UNBOUNDED PRECEDING".to_string(),
+                            WindowFrameBound::Following(None) => "UNBOUNDED FOLLOWING".to_string(),
+                            WindowFrameBound::Preceding(Some(n)) => format!("{} PRECEDING", n),
+                            WindowFrameBound::Following(Some(n)) => format!("{} FOLLOWING", n),
+                        }
+                    };
+                    write!(
+                        f,
+                        " BETWEEN {} AND {}",
+                        format_frame(&frame.start_bound),
+                        format_frame(&frame.end_bound)
+                    )?
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 impl Display for Expr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -1016,6 +1082,7 @@ impl Display for Expr {
                 name,
                 args,
                 params,
+                window,
                 ..
             } => {
                 write!(f, "{name}")?;
@@ -1030,6 +1097,10 @@ impl Display for Expr {
                 }
                 write_comma_separated_list(f, args)?;
                 write!(f, ")")?;
+
+                if let Some(window) = window {
+                    write!(f, " OVER ({window})")?;
+                }
             }
             Expr::Case {
                 operand,
