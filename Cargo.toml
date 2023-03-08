@@ -90,7 +90,16 @@ members = [
 [workspace.dependencies]
 # databend maintains:
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
-opendal = { version = "0.29.0" }
+opendal = { version = "0.29.0", features = [
+    "layers-tracing",
+    "layers-metrics",
+    "services-ipfs",
+    # Disable ftp support until https://github.com/datafuselabs/opendal/pull/1102 has been released
+    # "services-ftp",
+    "services-moka",
+    "services-redis",
+    "trust-dns",
+] }
 ordered-float = { version = "3.4.0", default-features = false }
 jsonb = { version = "0.1.1" }
 
