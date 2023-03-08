@@ -148,7 +148,8 @@ impl FlightService for DatabendQueryFlightService {
                     .await?;
                 let ctx = session.create_query_context().await?;
 
-                match_join_handle(ctx.spawn(async move {
+                let spawner = ctx.clone();
+                match_join_handle(spawner.spawn(async move {
                     DataExchangeManager::instance()
                         .init_query_fragments_plan(&ctx, &init_query_fragments_plan.executor_packet)
                 }))
@@ -157,10 +158,10 @@ impl FlightService for DatabendQueryFlightService {
                 FlightResult { body: vec![] }
             }
             FlightAction::InitNodesChannel(init_nodes_channel) => {
-                let ctx = DataExchangeManager::instance()
+                let spawner = DataExchangeManager::instance()
                     .get_query_ctx(&init_nodes_channel.init_nodes_channel_packet.query_id)?;
 
-                match_join_handle(ctx.spawn(async move {
+                match_join_handle(spawner.spawn(async move {
                     DataExchangeManager::instance()
                         .init_nodes_channel(&init_nodes_channel.init_nodes_channel_packet)
                         .await
@@ -170,9 +171,9 @@ impl FlightService for DatabendQueryFlightService {
                 FlightResult { body: vec![] }
             }
             FlightAction::ExecutePartialQuery(query_id) => {
-                let ctx = DataExchangeManager::instance().get_query_ctx(&query_id)?;
+                let spawner = DataExchangeManager::instance().get_query_ctx(&query_id)?;
 
-                match_join_handle(ctx.spawn(async move {
+                match_join_handle(spawner.spawn(async move {
                     DataExchangeManager::instance().execute_partial_query(&query_id)
                 }))
                 .await?;
