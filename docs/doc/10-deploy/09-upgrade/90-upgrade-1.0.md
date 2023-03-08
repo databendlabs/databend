@@ -41,14 +41,7 @@ table_cache_bloom_index_meta_count=3000
 table_cache_bloom_index_data_bytes=1073741824
 ```
 
-4. Add the following new settings to the `[query]` section in your configuration file `databend-query.toml`:
-
-```toml
-default_storage_format = 'parquet'
-default_compression = 'zstd'
-```
-
-5. Add the following cache settings to the end of your configuration file `databend-query.toml`:
+4. Add the following cache settings to the end of your configuration file `databend-query.toml`:
 
 ```toml
 # Cache config.
@@ -67,7 +60,7 @@ path = "./.databend/_cache"
 max_bytes = 21474836480
 ```
 
-6. Start the new databend-query service.
+5. Start the new databend-query service.
 
 ```shell
 cp ~/tmp/bin/databend-query bin/
@@ -78,8 +71,6 @@ nohup bin/databend-query --config-file=configs/databend-query.toml 2>&1 >query.l
 
 ## Step 2: Upgrade databend-meta
 
-To upgrade the databend-meta service, you need to use the binary file `databend-meta-upgrade-09`, which can be located in the `bin` folder of your current Databend installation directory.
-
 Follow the steps below to upgrade the databend-meta service:
 
 1. Shut down the running databend-meta service for all the clusters.
@@ -88,7 +79,11 @@ Follow the steps below to upgrade the databend-meta service:
 killall databend-meta
 ```
 
-2. Execute the following command in each node:
+2. (For upgrading from 0.8.xx only) Execute the following command in each node:
+
+:::note
+To upgrade the databend-meta service from version 0.8.xx, you need to use the binary file `databend-meta-upgrade-09`, which can be located in the `bin` folder of your current Databend installation directory.
+:::
 
 ```shell
 ./bin/databend-meta-upgrade-09 --cmd upgrade --raft-dir .databend/meta1/
@@ -119,4 +114,6 @@ Done writing back converted record, tree: state_machine/0
 All converted
 ```
 
-3. Start the new databend-meta service in each node.
+3. Replace the binary file `databend-meta` in the folder where Databend is installed with the newer version.
+
+4. Start the new databend-meta service in each node.
