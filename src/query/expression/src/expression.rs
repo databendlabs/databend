@@ -384,6 +384,26 @@ impl<Index: ColumnIndex> Expr<Index> {
                         ("noteq", [ref lhs, ref rhs]) => {
                             write_binary_op("<>", lhs, rhs, 20, min_precedence)
                         }
+                        ("plus", [ref expr]) => write_unary_op("+", expr, 50, min_precedence),
+                        ("minus", [ref expr]) => write_unary_op("-", expr, 50, min_precedence),
+                        ("plus", [ref lhs, ref rhs]) => {
+                            write_binary_op("+", lhs, rhs, 30, min_precedence)
+                        }
+                        ("minus", [ref lhs, ref rhs]) => {
+                            write_binary_op("-", lhs, rhs, 30, min_precedence)
+                        }
+                        ("multiply", [ref lhs, ref rhs]) => {
+                            write_binary_op("*", lhs, rhs, 40, min_precedence)
+                        }
+                        ("divide", [ref lhs, ref rhs]) => {
+                            write_binary_op("/", lhs, rhs, 40, min_precedence)
+                        }
+                        ("div", [ref lhs, ref rhs]) => {
+                            write_binary_op("DIV", lhs, rhs, 40, min_precedence)
+                        }
+                        ("modulo", [ref lhs, ref rhs]) => {
+                            write_binary_op("%", lhs, rhs, 40, min_precedence)
+                        }
                         _ => {
                             let mut s = String::new();
                             s += &function.signature.name;
