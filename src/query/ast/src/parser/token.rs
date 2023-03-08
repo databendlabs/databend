@@ -1059,6 +1059,9 @@ impl TokenKind {
             | TokenKind::ON
             | TokenKind::OF
             | TokenKind::ORDER
+            | TokenKind::OVER
+            | TokenKind::ROWS
+            | TokenKind::RANGE
             // | TokenKind::PRECISION
             // | TokenKind::RETURNING
             | TokenKind::TO
@@ -1173,6 +1176,9 @@ impl TokenKind {
             | TokenKind::ON
             | TokenKind::OF
             | TokenKind::ORDER
+            | TokenKind::OVER
+            | TokenKind::ROWS
+            | TokenKind::RANGE
             // | TokenKind::OVERLAPS
             // | TokenKind::RETURNING
             | TokenKind::STAGE

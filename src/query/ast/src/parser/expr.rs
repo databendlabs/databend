@@ -833,45 +833,45 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let window_frame_bound_start = alt((
         value(WindowFrameBound::CurrentRow, rule! { CURRENT ~ ROW }),
+        map(rule! { #subexpr(0) ~ PRECEDING }, |(expr, _)| {
+            WindowFrameBound::Preceding(Some(Box::new(expr)))
+        }),
         value(
             WindowFrameBound::Preceding(None),
             rule! { UNBOUNDED ~ LEADING },
         ),
-        map(rule! { #subexpr(0) ~ PRECEDING }, |(expr, _)| {
-            WindowFrameBound::Preceding(Some(Box::new(expr)))
-        }),
     ));
 
     let window_frame_bound_end = alt((
         value(WindowFrameBound::CurrentRow, rule! { CURRENT ~ ROW }),
+        map(rule! { #subexpr(0) ~ FOLLOWING }, |(expr, _)| {
+            WindowFrameBound::Following(Some(Box::new(expr)))
+        }),
         value(
             WindowFrameBound::Following(None),
             rule! { UNBOUNDED ~ FOLLOWING },
         ),
-        map(rule! { #subexpr(0) ~ FOLLOWING }, |(expr, _)| {
-            WindowFrameBound::Following(Some(Box::new(expr)))
-        }),
     ));
 
     let window_spec = map(
         rule! {
             (PARTITION ~ ^BY ~ #comma_separated_list1(subexpr(0)))?
             ~ ( ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) )?
-            ~ (ROWS | RANGE) ~ (BETWEEN ~ #window_frame_bound_start ~ AND ~ #window_frame_bound_end)?
+            ~ ((ROWS | RANGE) ~ BETWEEN ~ #window_frame_bound_start ~ AND ~ #window_frame_bound_end)?
         },
-        |(opt_partition, opt_order, unit, opt_between)| WindowSpec {
+        |(opt_partition, opt_order, opt_between)| WindowSpec {
             partition_by: opt_partition.map(|x| x.2).unwrap_or_default(),
             order_by: opt_order.map(|x| x.2).unwrap_or_default(),
             window_frame: opt_between.map(|x| {
-                let unit = match unit.kind {
-                    TokenKind::ROWS => WindowFrameUnits::Rows,
-                    TokenKind::RANGE => WindowFrameUnits::Range,
+                let unit = match x.0.kind {
+                    ROWS => WindowFrameUnits::Rows,
+                    RANGE => WindowFrameUnits::Range,
                     _ => unreachable!(),
                 };
                 WindowFrame {
                     units: unit,
-                    start_bound: x.1,
-                    end_bound: x.3,
+                    start_bound: x.2,
+                    end_bound: x.4,
                 }
             }),
         },
@@ -880,16 +880,29 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let function_call = map(
         rule! {
             #function_name
-            ~ ("(" ~ #comma_separated_list1(literal) ~ ")")?
-            ~ ( OVER ~ "(" ~ #window_spec ~ ")" )?
             ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
         },
-        |(name, params, window, _, opt_distinct, opt_args, _)| ExprElement::FunctionCall {
+        |(name, _, opt_distinct, opt_args, _)| ExprElement::FunctionCall {
             distinct: opt_distinct.is_some(),
             name,
             args: opt_args.unwrap_or_default(),
-            params: params.map(|x| x.1).unwrap_or_default(),
-            window: window.map(|x| x.2),
+            params: vec![],
+            window: None,
+        },
+    );
+
+    let function_call_with_window = map(
+        rule! {
+            #function_name
+            ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
+            ~ (OVER ~ "(" ~ #window_spec ~ ")")
+        },
+        |(name, _, opt_distinct, opt_args, _, window)| ExprElement::FunctionCall {
+            distinct: opt_distinct.is_some(),
+            name,
+            args: opt_args.unwrap_or_default(),
+            params: vec![],
+            window: Some(window.2),
         },
     );
 
@@ -1089,6 +1102,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
             | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
             | #count_all : "COUNT(*)"
+            | #function_call_with_window : "<function>"
             | #function_call_with_params : "<function>"
             | #function_call : "<function>"
             | #case : "`CASE ... END`"

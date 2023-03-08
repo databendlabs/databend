@@ -53,11 +53,49 @@ Literal {
 ---------- Input ----------
 char(0xD0, 0xBF, 0xD1)
 ---------- Output ---------
-error: 
-  --> SQL:1:5
-  |
-1 | char(0xD0, 0xBF, 0xD1)
-  |     ^
+char(208, 191, 209)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..22,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "char",
+        quote: None,
+        span: Some(
+            0..4,
+        ),
+    },
+    args: [
+        Literal {
+            span: Some(
+                5..9,
+            ),
+            lit: UInt64(
+                208,
+            ),
+        },
+        Literal {
+            span: Some(
+                11..15,
+            ),
+            lit: UInt64(
+                191,
+            ),
+        },
+        Literal {
+            span: Some(
+                17..21,
+            ),
+            lit: UInt64(
+                209,
+            ),
+        },
+    ],
+    params: [],
+    window: None,
+}
 
 
 ---------- Input ----------
@@ -2617,11 +2655,41 @@ BinaryOp {
 ---------- Input ----------
 nullif(1, 1)
 ---------- Output ---------
-error: 
-  --> SQL:1:7
-  |
-1 | nullif(1, 1)
-  |       ^
+nullif(1, 1)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..12,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "nullif",
+        quote: None,
+        span: Some(
+            0..6,
+        ),
+    },
+    args: [
+        Literal {
+            span: Some(
+                7..8,
+            ),
+            lit: UInt64(
+                1,
+            ),
+        },
+        Literal {
+            span: Some(
+                10..11,
+            ),
+            lit: UInt64(
+                1,
+            ),
+        },
+    ],
+    params: [],
+    window: None,
+}
 
 
 ---------- Input ----------
@@ -2679,11 +2747,49 @@ FunctionCall {
 ---------- Input ----------
 coalesce(1, 2, 3)
 ---------- Output ---------
-error: 
-  --> SQL:1:9
-  |
-1 | coalesce(1, 2, 3)
-  |         ^
+coalesce(1, 2, 3)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..17,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "coalesce",
+        quote: None,
+        span: Some(
+            0..8,
+        ),
+    },
+    args: [
+        Literal {
+            span: Some(
+                9..10,
+            ),
+            lit: UInt64(
+                1,
+            ),
+        },
+        Literal {
+            span: Some(
+                12..13,
+            ),
+            lit: UInt64(
+                2,
+            ),
+        },
+        Literal {
+            span: Some(
+                15..16,
+            ),
+            lit: UInt64(
+                3,
+            ),
+        },
+    ],
+    params: [],
+    window: None,
+}
 
 
 ---------- Input ----------
@@ -2755,11 +2861,41 @@ FunctionCall {
 ---------- Input ----------
 ifnull(1, 1)
 ---------- Output ---------
-error: 
-  --> SQL:1:7
-  |
-1 | ifnull(1, 1)
-  |       ^
+ifnull(1, 1)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..12,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "ifnull",
+        quote: None,
+        span: Some(
+            0..6,
+        ),
+    },
+    args: [
+        Literal {
+            span: Some(
+                7..8,
+            ),
+            lit: UInt64(
+                1,
+            ),
+        },
+        Literal {
+            span: Some(
+                10..11,
+            ),
+            lit: UInt64(
+                1,
+            ),
+        },
+    ],
+    params: [],
+    window: None,
+}
 
 
 ---------- Input ----------
@@ -2964,75 +3100,422 @@ Map {
 ---------- Input ----------
 ROW_NUMBER() OVER (ORDER BY salary DESC)
 ---------- Output ---------
-error: 
-  --> SQL:1:20
-  |
-1 | ROW_NUMBER() OVER (ORDER BY salary DESC)
-  | ----------        -^^^^^ expected `)`, <QuotedString>, <LiteralInteger>, <LiteralFloat>, <MySQLLiteralHex>, <PGLiteralHex>, or 66 more ...
-  | |                 | 
-  | |                 while parsing `(<expr> [, ...])`
-  | while parsing expression
+ROW_NUMBER()
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..40,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "ROW_NUMBER",
+        quote: None,
+        span: Some(
+            0..10,
+        ),
+    },
+    args: [],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [],
+            order_by: [
+                OrderByExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            28..34,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "salary",
+                            quote: None,
+                            span: Some(
+                                28..34,
+                            ),
+                        },
+                    },
+                    asc: Some(
+                        false,
+                    ),
+                    nulls_first: None,
+                },
+            ],
+            window_frame: None,
+        },
+    ),
+}
 
 
 ---------- Input ----------
 SUM(salary) OVER ()
 ---------- Output ---------
-error: 
-  --> SQL:1:13
-  |
-1 | SUM(salary) OVER ()
-  |             ^^^^
+SUM(salary)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..19,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "SUM",
+        quote: None,
+        span: Some(
+            0..3,
+        ),
+    },
+    args: [
+        ColumnRef {
+            span: Some(
+                4..10,
+            ),
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "salary",
+                quote: None,
+                span: Some(
+                    4..10,
+                ),
+            },
+        },
+    ],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [],
+            order_by: [],
+            window_frame: None,
+        },
+    ),
+}
 
 
 ---------- Input ----------
 AVG(salary) OVER (PARTITION BY department)
 ---------- Output ---------
-error: 
-  --> SQL:1:29
-  |
-1 | AVG(salary) OVER (PARTITION BY department)
-  | ---              -          ^^ expected `)` or `,`
-  | |                |           
-  | |                while parsing `(<expr> [, ...])`
-  | while parsing expression
+AVG(salary)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..42,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "AVG",
+        quote: None,
+        span: Some(
+            0..3,
+        ),
+    },
+    args: [
+        ColumnRef {
+            span: Some(
+                4..10,
+            ),
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "salary",
+                quote: None,
+                span: Some(
+                    4..10,
+                ),
+            },
+        },
+    ],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [
+                ColumnRef {
+                    span: Some(
+                        31..41,
+                    ),
+                    database: None,
+                    table: None,
+                    column: Identifier {
+                        name: "department",
+                        quote: None,
+                        span: Some(
+                            31..41,
+                        ),
+                    },
+                },
+            ],
+            order_by: [],
+            window_frame: None,
+        },
+    ),
+}
 
 
 ---------- Input ----------
 SUM(salary) OVER (PARTITION BY department ORDER BY salary DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
 ---------- Output ---------
-error: 
-  --> SQL:1:29
-  |
-1 | SUM(salary) OVER (PARTITION BY department ORDER BY salary DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
-  | ---              -          ^^ expected `)` or `,`
-  | |                |           
-  | |                while parsing `(<expr> [, ...])`
-  | while parsing expression
+SUM(salary)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..112,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "SUM",
+        quote: None,
+        span: Some(
+            0..3,
+        ),
+    },
+    args: [
+        ColumnRef {
+            span: Some(
+                4..10,
+            ),
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "salary",
+                quote: None,
+                span: Some(
+                    4..10,
+                ),
+            },
+        },
+    ],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [
+                ColumnRef {
+                    span: Some(
+                        31..41,
+                    ),
+                    database: None,
+                    table: None,
+                    column: Identifier {
+                        name: "department",
+                        quote: None,
+                        span: Some(
+                            31..41,
+                        ),
+                    },
+                },
+            ],
+            order_by: [
+                OrderByExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            51..57,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "salary",
+                            quote: None,
+                            span: Some(
+                                51..57,
+                            ),
+                        },
+                    },
+                    asc: Some(
+                        false,
+                    ),
+                    nulls_first: None,
+                },
+            ],
+            window_frame: Some(
+                WindowFrame {
+                    units: Rows,
+                    start_bound: Preceding(
+                        Some(
+                            ColumnRef {
+                                span: Some(
+                                    76..85,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "UNBOUNDED",
+                                    quote: None,
+                                    span: Some(
+                                        76..85,
+                                    ),
+                                },
+                            },
+                        ),
+                    ),
+                    end_bound: CurrentRow,
+                },
+            ),
+        },
+    ),
+}
 
 
 ---------- Input ----------
 AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) 
 ---------- Output ---------
-error: 
-  --> SQL:1:29
-  |
-1 | AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) 
-  | ---              -          ^^ expected `)` or `,`
-  | |                |           
-  | |                while parsing `(<expr> [, ...])`
-  | while parsing expression
+AVG(salary)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..102,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "AVG",
+        quote: None,
+        span: Some(
+            0..3,
+        ),
+    },
+    args: [
+        ColumnRef {
+            span: Some(
+                4..10,
+            ),
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "salary",
+                quote: None,
+                span: Some(
+                    4..10,
+                ),
+            },
+        },
+    ],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [
+                ColumnRef {
+                    span: Some(
+                        31..41,
+                    ),
+                    database: None,
+                    table: None,
+                    column: Identifier {
+                        name: "department",
+                        quote: None,
+                        span: Some(
+                            31..41,
+                        ),
+                    },
+                },
+            ],
+            order_by: [
+                OrderByExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            51..60,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "hire_date",
+                            quote: None,
+                            span: Some(
+                                51..60,
+                            ),
+                        },
+                    },
+                    asc: None,
+                    nulls_first: None,
+                },
+            ],
+            window_frame: Some(
+                WindowFrame {
+                    units: Rows,
+                    start_bound: Preceding(
+                        Some(
+                            Literal {
+                                span: Some(
+                                    74..75,
+                                ),
+                                lit: UInt64(
+                                    2,
+                                ),
+                            },
+                        ),
+                    ),
+                    end_bound: CurrentRow,
+                },
+            ),
+        },
+    ),
+}
 
 
 ---------- Input ----------
-COUNT(*) OVER (ORDER BY hire_date RANGE BETWEEN INTERVAL '7' DAY PRECEDING AND CURRENT ROW)
+COUNT() OVER (ORDER BY hire_date RANGE BETWEEN INTERVAL '7' DAY PRECEDING AND CURRENT ROW)
 ---------- Output ---------
-error: 
-  --> SQL:1:16
-  |
-1 | COUNT(*) OVER (ORDER BY hire_date RANGE BETWEEN INTERVAL '7' DAY PRECEDING AND CURRENT ROW)
-  | -----         -^^^^^ expected `)`, <QuotedString>, <LiteralInteger>, <LiteralFloat>, <MySQLLiteralHex>, <PGLiteralHex>, or 66 more ...
-  | |             | 
-  | |             while parsing `(<expr> [, ...])`
-  | while parsing expression
+COUNT()
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..90,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "COUNT",
+        quote: None,
+        span: Some(
+            0..5,
+        ),
+    },
+    args: [],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [],
+            order_by: [
+                OrderByExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            23..32,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "hire_date",
+                            quote: None,
+                            span: Some(
+                                23..32,
+                            ),
+                        },
+                    },
+                    asc: None,
+                    nulls_first: None,
+                },
+            ],
+            window_frame: Some(
+                WindowFrame {
+                    units: Range,
+                    start_bound: Preceding(
+                        Some(
+                            Interval {
+                                span: Some(
+                                    47..63,
+                                ),
+                                expr: Literal {
+                                    span: Some(
+                                        56..59,
+                                    ),
+                                    lit: String(
+                                        "7",
+                                    ),
+                                },
+                                unit: Day,
+                            },
+                        ),
+                    ),
+                    end_bound: CurrentRow,
+                },
+            ),
+        },
+    ),
+}
 
 
