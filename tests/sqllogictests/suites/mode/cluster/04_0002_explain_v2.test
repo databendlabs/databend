@@ -266,7 +266,7 @@ Limit
                 ├── filters: []
                 ├── estimated rows: 50.00
                 ├── Exchange(Build)
-                │   ├── exchange type: Hash(CAST(y.a (#1) AS UInt64 NULL))
+                │   ├── exchange type: Hash(y.a (#1))
                 │   └── TableScan
                 │       ├── table: default.system.numbers
                 │       ├── read rows: 5
