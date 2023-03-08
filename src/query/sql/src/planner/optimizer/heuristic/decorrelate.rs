@@ -28,7 +28,7 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner::binder::wrap_cast;
-use crate::plans::Aggregate;
+use crate::plans::{Aggregate, ConstantExpr};
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
 use crate::plans::AndExpr;
@@ -100,17 +100,17 @@ impl SubqueryRewriter {
             PatternPlan {
                 plan_type: RelOp::EvalScalar,
             }
-            .into(),
+                .into(),
             SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Filter,
                 }
-                .into(),
+                    .into(),
                 SExpr::create_leaf(
                     PatternPlan {
                         plan_type: RelOp::Scan,
                     }
-                    .into(),
+                        .into(),
                 ),
             ),
         );
@@ -142,9 +142,6 @@ impl SubqueryRewriter {
 
         // Second, we will check if the filter only contains equi-predicates.
         // This is not necessary, but it is a good heuristic for most cases.
-        // let mut left_conditions = vec![];
-        // let mut right_conditions = vec![];
-        // let mut non_equi_conditions = vec![];
         let mut conditions = vec![];
         let mut left_filters = vec![];
         let mut right_filters = vec![];
@@ -185,7 +182,7 @@ impl SubqueryRewriter {
                 Filter {
                     predicates: left_filters,
                 }
-                .into(),
+                    .into(),
                 left_child,
             );
         }
@@ -203,7 +200,7 @@ impl SubqueryRewriter {
                 Filter {
                     predicates: right_filters,
                 }
-                .into(),
+                    .into(),
                 right_child,
             );
         }
@@ -271,7 +268,7 @@ impl SubqueryRewriter {
                 let correlated_columns = subquery.outer_columns.clone();
                 let flatten_plan =
                     self.flatten(&subquery.subquery, &correlated_columns, flatten_info, false)?;
-                let conditions = self.get_correlated_conditions(&correlated_columns)?;
+                let mut conditions = self.get_correlated_conditions(&correlated_columns)?;
                 let output_column = subquery.output_column.clone();
                 let column_name = format!("subquery_{}", output_column.index);
                 let right_condition = wrap_cast(
@@ -291,6 +288,7 @@ impl SubqueryRewriter {
                 let op = subquery.compare_op.as_ref().unwrap().clone();
                 // Make <child_expr op right_condition> as non_equi_conditions even if op is equal operator.
                 // Because it's not null-safe.
+                // TODO(leiysky): use `IS NOT DISTINCT FROM` instead.
                 let _non_equi_conditions = vec![ScalarExpr::ComparisonExpr(ComparisonExpr {
                     op,
                     left: Box::new(child_expr),
@@ -312,7 +310,7 @@ impl SubqueryRewriter {
                     from_correlated_subquery: true,
                     contain_runtime_filter: false,
                 }
-                .into();
+                    .into();
                 Ok((
                     SExpr::create_binary(mark_join, left.clone(), flatten_plan),
                     UnnestResult::MarkJoin { marker_index },
@@ -347,13 +345,13 @@ impl SubqueryRewriter {
                 let column_entry = metadata.column(*correlated_column).clone();
                 let (name, data_type) = match &column_entry {
                     ColumnEntry::BaseTableColumn(BaseTableColumn {
-                        column_name,
-                        data_type,
-                        ..
-                    }) => (column_name, DataType::from(data_type)),
+                                                     column_name,
+                                                     data_type,
+                                                     ..
+                                                 }) => (column_name, DataType::from(data_type)),
                     ColumnEntry::DerivedColumn(DerivedColumn {
-                        alias, data_type, ..
-                    }) => (alias, data_type.clone()),
+                                                   alias, data_type, ..
+                                               }) => (alias, data_type.clone()),
                 };
                 self.derived_columns.insert(
                     *correlated_column,
@@ -374,7 +372,7 @@ impl SubqueryRewriter {
                     },
                     prewhere: None,
                 }
-                .into(),
+                    .into(),
             );
             // Todo(xudong963): Wrap logical get with distinct to eliminate duplicates rows.
             let cross_join = Join {
@@ -384,7 +382,7 @@ impl SubqueryRewriter {
                 from_correlated_subquery: false,
                 contain_runtime_filter: false,
             }
-            .into();
+                .into();
             return Ok(SExpr::create_binary(cross_join, logical_get, plan.clone()));
         }
 
@@ -492,7 +490,7 @@ impl SubqueryRewriter {
                         from_correlated_subquery: false,
                         contain_runtime_filter: false,
                     }
-                    .into(),
+                        .into(),
                     left_flatten_plan,
                     right_flatten_plan,
                 ))
@@ -571,7 +569,7 @@ impl SubqueryRewriter {
                         from_distinct: aggregate.from_distinct,
                         limit: aggregate.limit,
                     }
-                    .into(),
+                        .into(),
                     flatten_plan,
                 ))
             }
@@ -791,8 +789,8 @@ impl SubqueryRewriter {
                 .any(|column| correlated_columns.contains(column))
             {
                 if let ScalarExpr::ComparisonExpr(ComparisonExpr {
-                    left, right, op, ..
-                }) = predicate
+                                                      left, right, op, ..
+                                                  }) = predicate
                 {
                     if op == &ComparisonOp::Equal {
                         if let (
