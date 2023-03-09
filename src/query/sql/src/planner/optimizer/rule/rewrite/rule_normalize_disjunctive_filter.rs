@@ -71,7 +71,6 @@ fn normalize_predicate_scalar(
                     ScalarExpr::AndExpr(AndExpr {
                         left: Box::from(lhs),
                         right: Box::from(rhs),
-                        return_type: Box::new(return_type.clone()),
                     })
                 })
                 .expect("has at least two args")
@@ -84,7 +83,6 @@ fn normalize_predicate_scalar(
                     ScalarExpr::OrExpr(OrExpr {
                         left: Box::from(lhs),
                         right: Box::from(rhs),
-                        return_type: Box::new(return_type.clone()),
                     })
                 })
                 .expect("has at least two args")
@@ -143,7 +141,7 @@ impl Rule for RuleNormalizeDisjunctiveFilter {
             }
             rewritten_predicates.push(normalize_predicate_scalar(
                 rewritten_predicate_scalar,
-                predicate.data_type(),
+                predicate.data_type()?,
             ));
         }
         let mut split_predicates: Vec<ScalarExpr> = Vec::with_capacity(rewritten_predicates.len());

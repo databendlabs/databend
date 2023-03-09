@@ -43,20 +43,8 @@ pub enum ScalarExpr {
 }
 
 impl ScalarExpr {
-    pub fn data_type(&self) -> DataType {
-        match self {
-            ScalarExpr::BoundColumnRef(scalar) => (*scalar.column.data_type).clone(),
-            ScalarExpr::ConstantExpr(scalar) => (*scalar.data_type).clone(),
-            ScalarExpr::AndExpr(scalar) => (*scalar.return_type).clone(),
-            ScalarExpr::OrExpr(scalar) => (*scalar.return_type).clone(),
-            ScalarExpr::NotExpr(scalar) => (*scalar.return_type).clone(),
-            ScalarExpr::ComparisonExpr(scalar) => (*scalar.return_type).clone(),
-            ScalarExpr::AggregateFunction(scalar) => (*scalar.return_type).clone(),
-            ScalarExpr::FunctionCall(scalar) => (*scalar.return_type).clone(),
-            ScalarExpr::CastExpr(scalar) => (*scalar.target_type).clone(),
-            ScalarExpr::SubqueryExpr(scalar) => scalar.data_type(),
-            ScalarExpr::Unnest(scalar) => (*scalar.return_type).clone(),
-        }
+    pub fn data_type(&self) -> Result<DataType> {
+        Ok(self.as_expr_with_col_index()?.data_type().clone())
     }
 
     pub fn used_columns(&self) -> ColumnSet {
@@ -347,20 +335,17 @@ pub struct ConstantExpr {
 pub struct AndExpr {
     pub left: Box<ScalarExpr>,
     pub right: Box<ScalarExpr>,
-    pub return_type: Box<DataType>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct OrExpr {
     pub left: Box<ScalarExpr>,
     pub right: Box<ScalarExpr>,
-    pub return_type: Box<DataType>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct NotExpr {
     pub argument: Box<ScalarExpr>,
-    pub return_type: Box<DataType>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -417,7 +402,6 @@ pub struct ComparisonExpr {
     pub op: ComparisonOp,
     pub left: Box<ScalarExpr>,
     pub right: Box<ScalarExpr>,
-    pub return_type: Box<DataType>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -437,7 +421,6 @@ pub struct FunctionCall {
     pub arguments: Vec<ScalarExpr>,
 
     pub func_name: String,
-    pub return_type: Box<DataType>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -450,7 +433,6 @@ pub struct Unnest {
 pub struct CastExpr {
     pub is_try: bool,
     pub argument: Box<ScalarExpr>,
-    pub from_type: Box<DataType>,
     pub target_type: Box<DataType>,
 }
 

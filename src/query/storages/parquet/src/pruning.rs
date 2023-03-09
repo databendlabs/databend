@@ -708,7 +708,6 @@ mod tests {
                     }),
                 ],
                 func_name: "gt".to_string(),
-                return_type: Box::new(DataType::Boolean),
             });
             let filter = filter.as_expr_with_col_name()?;
             let pruner =
@@ -737,7 +736,6 @@ mod tests {
                     }),
                 ],
                 func_name: "lt".to_string(),
-                return_type: Box::new(DataType::Boolean),
             });
             let filter = filter.as_expr_with_col_name()?;
             let pruner =
@@ -766,7 +764,6 @@ mod tests {
                     }),
                 ],
                 func_name: "lte".to_string(),
-                return_type: Box::new(DataType::Boolean),
             });
             let filter = filter.as_expr_with_col_name()?;
             let pruner =
@@ -805,7 +802,6 @@ mod tests {
                     }),
                 ],
                 func_name: "gt".to_string(),
-                return_type: Box::new(DataType::Boolean),
             });
             let filter = filter.as_expr_with_col_name()?;
             let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filter)?;
@@ -835,7 +831,6 @@ mod tests {
                     }),
                 ],
                 func_name: "lte".to_string(),
-                return_type: Box::new(DataType::Boolean),
             });
             let filter = filter.as_expr_with_col_name()?;
             let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filter)?;
@@ -865,7 +860,6 @@ mod tests {
                     }),
                 ],
                 func_name: "gt".to_string(),
-                return_type: Box::new(DataType::Boolean),
             });
             let filter = filter.as_expr_with_col_name()?;
             let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filter)?;
@@ -895,7 +889,6 @@ mod tests {
                     }),
                 ],
                 func_name: "lte".to_string(),
-                return_type: Box::new(DataType::Boolean),
             });
             let filter = filter.as_expr_with_col_name()?;
             let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filter)?;
