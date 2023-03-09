@@ -55,11 +55,11 @@ impl Interpreter for CreateViewInterpreter {
             .list_tables(&self.plan.tenant, &self.plan.database)
             .await?
             .iter()
-            .any(|table| table.name() == self.plan.viewname.as_str())
+            .any(|table| table.name() == self.plan.view_name.as_str())
         {
             return Err(ErrorCode::ViewAlreadyExists(format!(
                 "{}.{} as view Already Exists",
-                self.plan.database, self.plan.viewname
+                self.plan.database, self.plan.view_name
             )));
         }
 
@@ -87,7 +87,7 @@ impl CreateViewInterpreter {
             format!(
                 "select * from ({}) {}({})",
                 self.plan.subquery,
-                self.plan.viewname,
+                self.plan.view_name,
                 self.plan.column_names.join(", ")
             )
         };
@@ -98,7 +98,7 @@ impl CreateViewInterpreter {
             name_ident: TableNameIdent {
                 tenant: self.plan.tenant.clone(),
                 db_name: self.plan.database.clone(),
-                table_name: self.plan.viewname.clone(),
+                table_name: self.plan.view_name.clone(),
             },
             table_meta: TableMeta {
                 engine: VIEW_ENGINE.to_string(),
