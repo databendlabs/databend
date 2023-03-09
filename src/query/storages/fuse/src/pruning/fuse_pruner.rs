@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::Semaphore;
@@ -164,8 +165,10 @@ impl FusePruner {
         &self,
         segment_locs: Vec<Location>,
         snapshot_loc: Option<String>,
+        segment_id_map: Option<HashMap<String, usize>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
-        let segment_locs = create_segment_location_vector(segment_locs, snapshot_loc);
+        let segment_locs =
+            create_segment_location_vector(segment_locs, snapshot_loc, segment_id_map);
         // Segment pruner.
         let segment_pruner =
             SegmentPruner::create(self.pruning_ctx.clone(), self.table_schema.clone())?;

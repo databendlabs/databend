@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::runtime::Runtime;
@@ -94,6 +95,7 @@ impl FuseTable {
             let push_downs = plan.push_downs.clone();
             let query_ctx = ctx.clone();
             let dal = self.operator.clone();
+            let plan = plan.clone();
 
             // TODO: need refactor
             pipeline.set_on_init(move || {
@@ -105,6 +107,24 @@ impl FuseTable {
                 let lazy_init_segments = lazy_init_segments.clone();
 
                 let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
+                    // if query from distribute query node, need to init segment id at first
+                    let segment_id_map = if plan.virtual_column_data_source.is_some() {
+                        let snapshot = table.read_table_snapshot().await?;
+                        if let Some(snapshot) = snapshot {
+                            let segment_count = snapshot.segments.len();
+                            let mut segment_id_map = HashMap::new();
+                            for (i, segmennt_loc) in snapshot.segments.iter().enumerate() {
+                                segment_id_map
+                                    .insert(segmennt_loc.0.to_string(), segment_count - i - 1);
+                            }
+                            Some(segment_id_map)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+
                     let (_statistics, partitions) = table
                         .prune_snapshot_blocks(
                             ctx,
@@ -113,6 +133,7 @@ impl FuseTable {
                             table_info,
                             lazy_init_segments,
                             0,
+                            segment_id_map,
                         )
                         .await?;
 

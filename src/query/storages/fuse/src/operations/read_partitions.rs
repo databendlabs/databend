@@ -89,6 +89,7 @@ impl FuseTable {
                     table_info,
                     segments_location,
                     summary,
+                    None,
                 )
                 .await
             }
@@ -96,6 +97,7 @@ impl FuseTable {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[tracing::instrument(level = "debug", name = "prune_snapshot_blocks", skip_all, fields(ctx.id = ctx.get_id().as_str()))]
     pub async fn prune_snapshot_blocks(
         &self,
@@ -105,6 +107,7 @@ impl FuseTable {
         table_info: TableInfo,
         segments_location: Vec<Location>,
         summary: usize,
+        segment_id_map: Option<HashMap<String, usize>>,
     ) -> Result<(PartStatistics, Partitions)> {
         let start = Instant::now();
         info!(
@@ -145,7 +148,9 @@ impl FuseTable {
             )?
         };
         let snapshot_loc = self.snapshot_loc().await?;
-        let block_metas = pruner.pruning(segments_location, snapshot_loc).await?;
+        let block_metas = pruner
+            .pruning(segments_location, snapshot_loc, segment_id_map)
+            .await?;
         let pruning_stats = pruner.pruning_stats();
 
         info!(
