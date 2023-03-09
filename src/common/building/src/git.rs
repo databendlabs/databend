@@ -14,20 +14,32 @@
 
 use std::collections::BTreeMap;
 
+use anyhow::Context;
 use anyhow::Result;
-use git2::DescribeFormatOptions;
-use git2::DescribeOptions;
-use git2::Repository;
+use gix::commit::describe::SelectRef;
+use gix::Repository;
 
 // Get the latest tag:
 // git describe --tags --abbrev=0
 // v0.6.99-nightly
 pub fn get_latest_tag(repo: &Repository) -> Result<String> {
-    let mut opts = DescribeOptions::new();
-    let mut format_options = DescribeFormatOptions::new();
-    let describe = repo.describe(opts.describe_tags())?;
-    let tag = describe.format(Some(format_options.abbreviated_size(0)))?;
-    Ok(tag)
+    let hc = repo.head_commit()?;
+
+    let desc = hc
+        .describe()
+        .names(SelectRef::AllTags)
+        .try_resolve()?
+        .with_context(|| {
+            format!(
+                "Did not find a single candidate ref for naming id '{}'",
+                hc.id
+            )
+        })?;
+    let tag = desc
+        .format()?
+        .name
+        .with_context(|| format!("Did not find a valid tag for '{}'", hc.id))?;
+    Ok(tag.to_string())
 }
 
 // Get commit author list
@@ -36,23 +48,23 @@ pub fn get_latest_tag(repo: &Repository) -> Result<String> {
 pub fn get_commit_authors(repo: &Repository) -> Result<String> {
     let mut authors: BTreeMap<String, String> = BTreeMap::new();
 
-    let mut revwalk = repo.revwalk()?;
-    revwalk.push_head()?;
+    let revwalk = repo
+        .rev_walk(Some(repo.head_id()?.detach()))
+        .all()?
+        .filter_map(Result::ok);
     for oid in revwalk {
-        let commit = repo.find_commit(oid?)?;
-        let author = commit.author();
-        match author.email() {
+        let obj = oid.try_object()?;
+        match obj {
             None => continue,
-            Some(email) => {
-                if authors.contains_key(email) {
+            Some(object) => {
+                let cm = object.try_into_commit()?;
+                let author = cm.author()?;
+                let email = author.email.to_string();
+                if authors.contains_key(&email) {
                     continue;
                 }
-                match author.name() {
-                    None => continue,
-                    Some(name) => {
-                        authors.insert(email.to_string(), name.to_string());
-                    }
-                }
+                let name = author.name.to_string();
+                authors.insert(email, name);
             }
         }
     }

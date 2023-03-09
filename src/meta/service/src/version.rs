@@ -19,7 +19,7 @@ use semver::Version;
 
 pub static METASRV_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
     let build_semver = option_env!("VERGEN_GIT_SEMVER");
-    let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");
+    let git_sha = option_env!("VERGEN_GIT_SHA");
     let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
     let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
 
