@@ -161,7 +161,12 @@ impl Binder {
                         expr: order.clone(),
                         name: projections[index].column_name.clone(),
                         index: projections[index].index,
-                        need_eval_scalar: true,
+                        need_eval_scalar: scalar_items.get(&item.index).map_or(
+                            false,
+                            |scalar_item| {
+                                !matches!(&scalar_item.scalar, ScalarExpr::BoundColumnRef(_))
+                            },
+                        ),
                     });
                 }
                 _ => {
