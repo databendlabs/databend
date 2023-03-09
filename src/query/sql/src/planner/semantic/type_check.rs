@@ -2077,9 +2077,9 @@ impl<'a> TypeChecker<'a> {
                 func_name: "get".to_string(),
             }
             .into();
-            scalar = wrap_cast(&scalar, &DataType::from(&table_data_type));
         }
-        Ok(Box::new((scalar, DataType::from(&table_data_type))))
+        let return_type = scalar.data_type()?;
+        Ok(Box::new((scalar, return_type)))
     }
 
     #[async_recursion::async_recursion]
