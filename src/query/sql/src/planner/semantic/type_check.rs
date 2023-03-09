@@ -2059,6 +2059,7 @@ impl<'a> TypeChecker<'a> {
                     func_name: "get".to_string(),
                 }
                 .into();
+                scalar = wrap_cast(&scalar, &DataType::from(&table_data_type));
                 continue;
             }
             let box (path_value, path_data_type) = self.resolve_literal(&path_lit, None)?;
@@ -2067,15 +2068,19 @@ impl<'a> TypeChecker<'a> {
                 data_type: Box::new(path_data_type.clone()),
             }
             .into();
+            if let TableDataType::Array(inner_type) = table_data_type {
+                table_data_type = *inner_type;
+            }
+            table_data_type = table_data_type.wrap_nullable();
             scalar = FunctionCall {
                 params: vec![],
                 arguments: vec![scalar.clone(), path_scalar],
                 func_name: "get".to_string(),
             }
             .into();
+            scalar = wrap_cast(&scalar, &DataType::from(&table_data_type));
         }
-        let return_type = scalar.data_type()?;
-        Ok(Box::new((scalar, return_type)))
+        Ok(Box::new((scalar, DataType::from(&table_data_type))))
     }
 
     #[async_recursion::async_recursion]
