@@ -96,25 +96,21 @@ impl<'a> AggregateRewriter<'a> {
             ScalarExpr::AndExpr(scalar) => Ok(AndExpr {
                 left: Box::new(self.visit(&scalar.left)?),
                 right: Box::new(self.visit(&scalar.right)?),
-                return_type: scalar.return_type.clone(),
             }
             .into()),
             ScalarExpr::OrExpr(scalar) => Ok(OrExpr {
                 left: Box::new(self.visit(&scalar.left)?),
                 right: Box::new(self.visit(&scalar.right)?),
-                return_type: scalar.return_type.clone(),
             }
             .into()),
             ScalarExpr::NotExpr(scalar) => Ok(NotExpr {
                 argument: Box::new(self.visit(&scalar.argument)?),
-                return_type: scalar.return_type.clone(),
             }
             .into()),
             ScalarExpr::ComparisonExpr(scalar) => Ok(ComparisonExpr {
                 op: scalar.op.clone(),
                 left: Box::new(self.visit(&scalar.left)?),
                 right: Box::new(self.visit(&scalar.right)?),
-                return_type: scalar.return_type.clone(),
             }
             .into()),
             ScalarExpr::FunctionCall(func) => {
@@ -127,14 +123,12 @@ impl<'a> AggregateRewriter<'a> {
                     params: func.params.clone(),
                     arguments: new_args,
                     func_name: func.func_name.clone(),
-                    return_type: func.return_type.clone(),
                 }
                 .into())
             }
             ScalarExpr::CastExpr(cast) => Ok(CastExpr {
                 is_try: cast.is_try,
                 argument: Box::new(self.visit(&cast.argument)?),
-                from_type: cast.from_type.clone(),
                 target_type: cast.target_type.clone(),
             }
             .into()),
@@ -169,7 +163,7 @@ impl<'a> AggregateRewriter<'a> {
                 let index = self
                     .metadata
                     .write()
-                    .add_derived_column(name.clone(), arg.data_type());
+                    .add_derived_column(name.clone(), arg.data_type()?);
 
                 // Generate a ColumnBinding for each argument of aggregates
                 let column_binding = ColumnBinding {
@@ -180,7 +174,7 @@ impl<'a> AggregateRewriter<'a> {
                     // can not be referenced, the name is only for debug
                     column_name: name,
                     index,
-                    data_type: Box::new(arg.data_type()),
+                    data_type: Box::new(arg.data_type()?),
                     visibility: Visibility::Visible,
                 };
                 replaced_args.push(
@@ -268,7 +262,7 @@ impl Binder {
                         None,
                         None,
                         item.alias.clone(),
-                        item.scalar.data_type(),
+                        item.scalar.data_type()?,
                     )
                 };
                 available_aliases.push((column, item.scalar.clone()));
@@ -343,7 +337,7 @@ impl Binder {
                     {
                         column_ref.column.clone()
                     } else {
-                        self.create_column_binding(None, None, alias, scalar.data_type())
+                        self.create_column_binding(None, None, alias, scalar.data_type()?)
                     };
                     bind_context.aggregate_info.group_items.push(ScalarItem {
                         scalar,
@@ -362,7 +356,7 @@ impl Binder {
                 self.metadata.clone(),
                 &[],
             );
-            let (scalar_expr, data_type) = scalar_binder
+            let (scalar_expr, _) = scalar_binder
                 .bind(expr)
                 .await
                 .or_else(|e| Self::resolve_alias_item(bind_context, expr, available_aliases, e))?;
@@ -386,7 +380,7 @@ impl Binder {
             } else {
                 self.metadata
                     .write()
-                    .add_derived_column(group_item_name.clone(), data_type.clone())
+                    .add_derived_column(group_item_name.clone(), scalar_expr.data_type()?)
             };
 
             bind_context.aggregate_info.group_items.push(ScalarItem {
@@ -509,7 +503,7 @@ impl Binder {
                 bind_context.aggregate_info.group_items.len() - 1,
             );
 
-            Ok((scalar.clone(), scalar.data_type()))
+            Ok((scalar.clone(), scalar.data_type()?))
         }
     }
 }

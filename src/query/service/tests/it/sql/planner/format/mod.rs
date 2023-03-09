@@ -116,7 +116,6 @@ fn test_format() {
                         }
                         .into(),
                     ],
-                    return_type: Box::new(DataType::Boolean),
                 }
                 .into(),
             ],

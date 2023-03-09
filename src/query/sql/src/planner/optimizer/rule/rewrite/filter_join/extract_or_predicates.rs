@@ -125,7 +125,6 @@ fn make_and_expr(scalars: &[ScalarExpr]) -> ScalarExpr {
     ScalarExpr::AndExpr(AndExpr {
         left: Box::new(scalars[0].clone()),
         right: Box::new(make_and_expr(&scalars[1..])),
-        return_type: Box::new(scalars[0].data_type()),
     })
 }
 
@@ -137,6 +136,5 @@ fn make_or_expr(scalars: &[ScalarExpr]) -> ScalarExpr {
     ScalarExpr::OrExpr(OrExpr {
         left: Box::new(scalars[0].clone()),
         right: Box::new(make_or_expr(&scalars[1..])),
-        return_type: Box::new(scalars[0].data_type()),
     })
 }

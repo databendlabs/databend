@@ -201,7 +201,7 @@ impl Binder {
                         None,
                         None,
                         format!("{:#}", order.expr),
-                        rewrite_scalar.data_type(),
+                        rewrite_scalar.data_type()?,
                     );
                     order_items.push(OrderItem {
                         expr: order.clone(),
@@ -368,53 +368,26 @@ impl Binder {
         match replacement_opt {
             Some(replacement) => Ok(replacement),
             None => match original_scalar {
-                ScalarExpr::AndExpr(AndExpr {
-                    left,
-                    right,
-                    return_type,
-                }) => {
+                ScalarExpr::AndExpr(AndExpr { left, right }) => {
                     let left =
                         Box::new(self.rewrite_scalar_with_replacement(left, replacement_fn)?);
                     let right =
                         Box::new(self.rewrite_scalar_with_replacement(right, replacement_fn)?);
-                    Ok(ScalarExpr::AndExpr(AndExpr {
-                        left,
-                        right,
-                        return_type: return_type.clone(),
-                    }))
+                    Ok(ScalarExpr::AndExpr(AndExpr { left, right }))
                 }
-                ScalarExpr::OrExpr(OrExpr {
-                    left,
-                    right,
-                    return_type,
-                }) => {
+                ScalarExpr::OrExpr(OrExpr { left, right }) => {
                     let left =
                         Box::new(self.rewrite_scalar_with_replacement(left, replacement_fn)?);
                     let right =
                         Box::new(self.rewrite_scalar_with_replacement(right, replacement_fn)?);
-                    Ok(ScalarExpr::OrExpr(OrExpr {
-                        left,
-                        right,
-                        return_type: return_type.clone(),
-                    }))
+                    Ok(ScalarExpr::OrExpr(OrExpr { left, right }))
                 }
-                ScalarExpr::NotExpr(NotExpr {
-                    argument,
-                    return_type,
-                }) => {
+                ScalarExpr::NotExpr(NotExpr { argument }) => {
                     let argument =
                         Box::new(self.rewrite_scalar_with_replacement(argument, replacement_fn)?);
-                    Ok(ScalarExpr::NotExpr(NotExpr {
-                        argument,
-                        return_type: return_type.clone(),
-                    }))
+                    Ok(ScalarExpr::NotExpr(NotExpr { argument }))
                 }
-                ScalarExpr::ComparisonExpr(ComparisonExpr {
-                    op,
-                    left,
-                    right,
-                    return_type,
-                }) => {
+                ScalarExpr::ComparisonExpr(ComparisonExpr { op, left, right }) => {
                     let left =
                         Box::new(self.rewrite_scalar_with_replacement(left, replacement_fn)?);
                     let right =
@@ -423,7 +396,6 @@ impl Binder {
                         op: op.clone(),
                         left,
                         right,
-                        return_type: return_type.clone(),
                     }))
                 }
                 ScalarExpr::AggregateFunction(AggregateFunction {
@@ -451,7 +423,6 @@ impl Binder {
                     params,
                     arguments,
                     func_name,
-                    return_type,
                 }) => {
                     let arguments = arguments
                         .iter()
@@ -461,13 +432,11 @@ impl Binder {
                         params: params.clone(),
                         arguments,
                         func_name: func_name.clone(),
-                        return_type: return_type.clone(),
                     }))
                 }
                 ScalarExpr::CastExpr(CastExpr {
                     is_try,
                     argument,
-                    from_type,
                     target_type,
                 }) => {
                     let argument =
@@ -475,7 +444,6 @@ impl Binder {
                     Ok(ScalarExpr::CastExpr(CastExpr {
                         is_try: *is_try,
                         argument,
-                        from_type: from_type.clone(),
                         target_type: target_type.clone(),
                     }))
                 }
