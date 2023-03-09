@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
 use common_ast::ast::Literal;
+use common_ast::ast::WindowSpec;
 use common_ast::walk_expr;
 use common_ast::Visitor;
 use common_exception::ErrorCode;
@@ -86,6 +87,7 @@ impl<'ast> Visitor<'ast> for UDFValidator {
         name: &'ast Identifier,
         args: &'ast [Expr],
         _params: &'ast [Literal],
+        over: &'ast Option<WindowSpec>,
     ) {
         let name = name.to_string();
         if !is_builtin_function(&name) && self.name.eq_ignore_ascii_case(&name) {
@@ -95,6 +97,20 @@ impl<'ast> Visitor<'ast> for UDFValidator {
 
         for arg in args {
             walk_expr(self, arg);
+        }
+
+        if let Some(over) = over {
+            over.partition_by
+                .iter()
+                .for_each(|expr| walk_expr(self, expr));
+            over.order_by
+                .iter()
+                .for_each(|expr| walk_expr(self, &expr.expr));
+
+            if let Some(frame) = &over.window_frame {
+                self.visit_frame_bound(&frame.start_bound);
+                self.visit_frame_bound(&frame.end_bound);
+            }
         }
     }
 }
