@@ -79,6 +79,8 @@ use jsonb::to_u64;
 use jsonb::JsonPathRef;
 
 pub fn register(registry: &mut FunctionRegistry) {
+    registry.register_aliases("json_object_keys", &["object_keys"]);
+
     registry.register_passthrough_nullable_1_arg::<StringType, VariantType, _, _>(
         "parse_json",
         FunctionProperty::default(),
@@ -147,7 +149,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_1_arg_core::<NullableType<VariantType>, NullableType<VariantType>, _, _>(
-        "object_keys",
+        "json_object_keys",
         FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_1_arg::<NullableType<VariantType>, NullableType<VariantType>>(|val, _| {
@@ -658,34 +660,34 @@ pub fn register(registry: &mut FunctionRegistry) {
         });
     }
 
-    registry.register_function_factory("object_construct", |_, args_type| {
+    registry.register_function_factory("json_object", |_, args_type| {
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "object_construct".to_string(),
+                name: "json_object".to_string(),
                 args_type: (0..args_type.len()).map(DataType::Generic).collect(),
                 return_type: DataType::Variant,
                 property: FunctionProperty::default(),
             },
             calc_domain: Box::new(|_| FunctionDomain::MayThrow),
-            eval: Box::new(move |args, ctx| object_construct_fn(args, ctx, false)),
+            eval: Box::new(move |args, ctx| json_object_fn(args, ctx, false)),
         }))
     });
 
-    registry.register_function_factory("object_construct_keep_null", |_, args_type| {
+    registry.register_function_factory("json_object_keep_null", |_, args_type| {
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "object_construct_keep_null".to_string(),
+                name: "json_object_keep_null".to_string(),
                 args_type: (0..args_type.len()).map(DataType::Generic).collect(),
                 return_type: DataType::Variant,
                 property: FunctionProperty::default(),
             },
             calc_domain: Box::new(|_| FunctionDomain::MayThrow),
-            eval: Box::new(move |args, ctx| object_construct_fn(args, ctx, true)),
+            eval: Box::new(move |args, ctx| json_object_fn(args, ctx, true)),
         }))
     });
 }
 
-fn object_construct_fn(
+fn json_object_fn(
     args: &[ValueRef<AnyType>],
     ctx: &mut EvalContext,
     keep_null: bool,
