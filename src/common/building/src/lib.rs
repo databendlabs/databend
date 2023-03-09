@@ -60,7 +60,6 @@ pub fn add_building_env_vars() {
                 "{}; The MetaClient is unable to proceed as it relies on the git-tag version for handshaking, which is not found.",
                 e
             );
-
         }
     };
 }
