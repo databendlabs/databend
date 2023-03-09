@@ -57,7 +57,7 @@ pub fn add_building_env_vars() {
         }
         Err(e) => {
             eprintln!("repository not found: {}", e);
-            println!("cargo:rustc-env=VERGEN_GIT_SEMVER=unknown");
+            println!("cargo:rustc-env=DATABEND_GIT_SEMVER=unknown");
         }
     };
 }
@@ -74,8 +74,8 @@ pub fn set_env_config() {
 
 pub fn add_env_git_tag(repo: &Repository) {
     match git::get_latest_tag(repo) {
-        Ok(tag) => println!("cargo:rustc-env=VERGEN_GIT_SEMVER={}", tag),
-        Err(e) => println!("cargo:rustc-env=VERGEN_GIT_SEMVER={}", e),
+        Ok(tag) => println!("cargo:rustc-env=DATABEND_GIT_SEMVER={}", tag),
+        Err(e) => println!("cargo:rustc-env=DATABEND_GIT_SEMVER={}", e),
     }
 }
 
