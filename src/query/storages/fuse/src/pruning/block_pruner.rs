@@ -86,7 +86,6 @@ impl BlockPruner {
 
             let pruning_stats = pruning_stats.clone();
             blocks.next().map(|(block_idx, block_meta)| {
-                let block_idx = block_num - block_idx - 1;
                 // Perf.
                 {
                     metrics_inc_blocks_range_pruning_before(1);
@@ -178,6 +177,8 @@ impl BlockPruner {
             if keep {
                 let block = segment_info.blocks[block_idx].clone();
 
+                debug_assert_eq!(block_location, block.location.0);
+
                 result.push((
                     BlockMetaIndex {
                         segment_idx,
@@ -185,7 +186,7 @@ impl BlockPruner {
                         range,
                         block_id: block_num - block_idx - 1,
                         block_location: block_location.clone(),
-                        segment_id: segment_location.segment_count - segment_idx - 1,
+                        segment_id: segment_location.segment_id,
                         segment_location: segment_location.location.0.clone(),
                         snapshot_location: segment_location.snapshot_loc.clone(),
                     },
@@ -218,7 +219,6 @@ impl BlockPruner {
         let block_num = segment_info.blocks.len();
         let mut result = Vec::with_capacity(segment_info.blocks.len());
         for (block_idx, block_meta) in segment_info.blocks.iter().enumerate() {
-            let block_idx = block_num - block_idx - 1;
             // Perf.
             {
                 metrics_inc_blocks_range_pruning_after(1);
@@ -252,7 +252,7 @@ impl BlockPruner {
                             range,
                             block_id: block_num - block_idx - 1,
                             block_location: block_meta.as_ref().location.0.clone(),
-                            segment_id: segment_location.segment_count - segment_idx - 1,
+                            segment_id: segment_location.segment_id,
                             segment_location: segment_location.location.0.clone(),
                             snapshot_location: segment_location.snapshot_loc.clone(),
                         },

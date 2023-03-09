@@ -14,8 +14,9 @@
 
 use storages_common_table_meta::meta::Location;
 
+#[derive(Debug)]
 pub struct SegmentLocation {
-    pub segment_count: usize,
+    pub segment_id: usize,
     pub location: Location,
     pub snapshot_loc: Option<String>,
 }
@@ -26,9 +27,9 @@ pub fn create_segment_location_vector(
 ) -> Vec<SegmentLocation> {
     let segment_count = locations.len();
     let mut seg_locations = Vec::with_capacity(segment_count);
-    for location in locations.iter() {
+    for (i, location) in locations.iter().enumerate() {
         seg_locations.push(SegmentLocation {
-            segment_count,
+            segment_id: segment_count - i - 1,
             location: location.to_owned(),
             snapshot_loc: snapshot_loc.clone(),
         });

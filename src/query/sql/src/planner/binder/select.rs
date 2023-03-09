@@ -273,7 +273,6 @@ impl Binder {
         // if `Expr` is virtual column, then add this virtual column into `BindContext`
         if let ScalarExpr::BoundColumnRef(ref column) = scalar {
             if let Some(ref virtual_column) = column.column.virtual_column {
-                // add virtual column binding into `BindContext`
                 bind_context.add_virtual_column_binding(
                     virtual_column,
                     &column.column,
