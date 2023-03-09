@@ -1200,7 +1200,7 @@ impl<'a> TypeChecker<'a> {
                 )))
             }
 
-            other=>{
+            other => {
                 let name = other.to_func_name();
                 self.resolve_function(span, name.as_str(), vec![], &[child], required_type)
                     .await

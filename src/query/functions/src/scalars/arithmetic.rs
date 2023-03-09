@@ -359,21 +359,20 @@ fn register_binary_arithmetic(registry: &mut FunctionRegistry) {
     }
 }
 
-
-macro_rules! register_pg_square_root{
+macro_rules! register_square_root {
     ( $n:ty, $registry:expr) => {
         type N = $n;
-        type T = <N as ResultTypeOfUnary>::Sum;
+        type T = F64;
         $registry.register_1_arg::<NumberType<N>, NumberType<T>, _, _>(
-            "pgsquareroot",
+            "squareroot",
             FunctionProperty::default(),
             |_| FunctionDomain::Full,
-            |a, _| (a.as_():T)*(a.as_():T),
+            |a, _| OrderedFloat((a.as_(): f64).sqrt()),
         );
     };
 }
 
-macro_rules! register_factorial{
+macro_rules! register_factorial {
     ( $n:ty, $registry:expr) => {
         type N = $n;
         type T = <N as ResultTypeOfUnary>::Sum;
@@ -381,7 +380,7 @@ macro_rules! register_factorial{
             "factorial",
             FunctionProperty::default(),
             |_| FunctionDomain::Full,
-            |a, _| (a.as_():T)*(a.as_():T),
+            |a, _| (a.as_(): T) * (a.as_(): T),
         );
     };
 }
@@ -391,13 +390,12 @@ macro_rules! register_unary_arithmetic {
         register_factorial!($n, $registry);
     }
     {
-        register_pg_square_root!($n, $registry);
-    }
-    };
+        register_square_root!($n, $registry);
+    }};
 }
 
 fn register_unary_arithmetic(registry: &mut FunctionRegistry) {
-    for dest_ty in ALL_NUMERICS_TYPES{
+    for dest_ty in ALL_NUMERICS_TYPES {
         with_number_mapped_type!(|DEST_TYPE| match dest_ty {
             NumberDataType::DEST_TYPE => {
                 register_unary_arithmetic!(DEST_TYPE, registry);

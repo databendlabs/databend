@@ -222,7 +222,7 @@ pub enum TokenKind {
     AtSign,
     /// A square root math operator in PostgreSQL
     #[token("|/")]
-    PGSquareRoot,
+    SquareRoot,
     /// A cube root math operator in PostgreSQL
     #[token("||/")]
     PGCubeRoot,
@@ -891,7 +891,7 @@ impl TokenKind {
                 | Ampersand
                 | Pipe
                 | Caret
-                |Factorial
+                | Factorial
                 | LBrace
                 | RBrace
                 | RArrow
@@ -905,7 +905,7 @@ impl TokenKind {
                 | ShiftRight
                 | DoubleExclamationMark
                 | AtSign
-                | PGSquareRoot
+                | SquareRoot
                 | PGCubeRoot
                 | EOI
         )

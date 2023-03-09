@@ -528,20 +528,19 @@ pub enum UnaryOperator {
     Minus,
     Not,
     Factorial,
-    PGSquareRoot,
+    SquareRoot,
 }
 
 impl UnaryOperator {
-    pub fn to_func_name(&self)->String{
+    pub fn to_func_name(&self) -> String {
         match self {
-            //TODO(xieqijun) Not all new functions in the future are lowercase by default.
-            _ =>{
-            let name = format!("{:?}",self);
+            // TODO(xieqijun) Not all new functions in the future are lowercase by default.
+            _ => {
+                let name = format!("{:?}", self);
                 name.to_lowercase()
             }
         }
     }
-
 }
 
 impl Expr {
@@ -618,7 +617,7 @@ impl Display for UnaryOperator {
             UnaryOperator::Not => {
                 write!(f, "NOT")
             }
-            UnaryOperator::PGSquareRoot=> {
+            UnaryOperator::SquareRoot => {
                 write!(f, "|/")
             }
             UnaryOperator::Factorial => {
@@ -926,7 +925,15 @@ impl Display for Expr {
                 write!(f, " BETWEEN {low} AND {high}")?;
             }
             Expr::UnaryOp { op, expr, .. } => {
-                write!(f, "({op} {expr})")?;
+                match op {
+                    // TODO (xieqijun) Maybe special attribute are provided to check whether the symbol is before or after.
+                    UnaryOperator::Factorial=> {
+                        write!(f, "({expr} {op})")?;
+                    }
+                    _ =>{
+                        write!(f, "({op} {expr})")?;
+                    }
+                }
             }
             Expr::BinaryOp {
                 op, left, right, ..

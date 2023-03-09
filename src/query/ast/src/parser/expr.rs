@@ -368,7 +368,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
 
                 UnaryOperator::Plus => Affix::Prefix(Precedence(50)),
                 UnaryOperator::Minus => Affix::Prefix(Precedence(50)),
-                UnaryOperator::PGSquareRoot=> Affix::Prefix(Precedence(60)),
+                UnaryOperator::SquareRoot => Affix::Prefix(Precedence(60)),
                 UnaryOperator::Factorial => Affix::Postfix(Precedence(60)),
             },
             ExprElement::BinaryOp { op } => match op {
@@ -611,6 +611,8 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
     }
 
     fn prefix(&mut self, elem: WithSpan<'a, ExprElement>, rhs: Expr) -> Result<Expr, &'static str> {
+        println!("postfix: {:?}", elem);
+        println!("rhs: {:?}", rhs);
         let expr = match elem.elem {
             ExprElement::UnaryOp { op } => Expr::UnaryOp {
                 span: transform_span(elem.span.0),
@@ -627,6 +629,8 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
         lhs: Expr,
         elem: WithSpan<'a, ExprElement>,
     ) -> Result<Expr, &'static str> {
+        println!("postfix: {:?}", elem);
+        println!("lhs: {:?}", lhs);
         let expr = match elem.elem {
             ExprElement::MapAccess { accessor } => Expr::MapAccess {
                 span: transform_span(elem.span.0),
@@ -662,6 +666,11 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 expr: Box::new(lhs),
                 target_type,
                 pg_style: true,
+            },
+            ExprElement::UnaryOp { op } => Expr::UnaryOp {
+                span: transform_span(elem.span.0),
+                op,
+                expr: Box::new(lhs),
             },
             _ => unreachable!(),
         };
@@ -1056,12 +1065,11 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
 pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
     // Plus and Minus are parsed as binary op at first.
-    alt((value(UnaryOperator::Not, rule! { NOT }),
-         value(UnaryOperator::Factorial, rule! { Factorial}),
-
-         value(UnaryOperator::PGSquareRoot, rule! { PGSquareRoot})
-    ))
-        (i)
+    alt((
+        value(UnaryOperator::Not, rule! { NOT }),
+        value(UnaryOperator::Factorial, rule! { Factorial}),
+        value(UnaryOperator::SquareRoot, rule! { SquareRoot}),
+    ))(i)
 }
 
 pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
