@@ -5549,7 +5549,7 @@ dependencies = [
 [[package]]
 name = "metrics"
 version = "0.20.1"
-source = "git+https://github.com/datafuse-extras/metrics.git?rev=bc49d03#bc49d0364bc53499cb43fa418b2c474ef3ef24f1"
+source = "git+https://github.com/datafuse-extras/metrics.git?rev=fc2ecd1#fc2ecd143dc0461166081f80bc76f0b38381f3a1"
 dependencies = [
  "ahash 0.7.6",
  "metrics-macros",
@@ -5574,7 +5574,7 @@ dependencies = [
 [[package]]
 name = "metrics-macros"
 version = "0.6.0"
-source = "git+https://github.com/datafuse-extras/metrics.git?rev=bc49d03#bc49d0364bc53499cb43fa418b2c474ef3ef24f1"
+source = "git+https://github.com/datafuse-extras/metrics.git?rev=fc2ecd1#fc2ecd143dc0461166081f80bc76f0b38381f3a1"
 dependencies = [
  "proc-macro2",
  "quote",
