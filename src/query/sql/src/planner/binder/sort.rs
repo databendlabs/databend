@@ -156,11 +156,12 @@ impl Binder {
                         ))
                         .set_span(order.expr.span()));
                     }
+
                     order_items.push(OrderItem {
                         expr: order.clone(),
                         name: projections[index].column_name.clone(),
                         index: projections[index].index,
-                        need_eval_scalar: false,
+                        need_eval_scalar: true,
                     });
                 }
                 _ => {
