@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_expression::types::boolean::BooleanDomain;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::nullable::NullableDomain;
+use common_expression::types::AnyType;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::types::GenericType;
@@ -34,6 +35,33 @@ use common_expression::ScalarRef;
 use common_expression::Value;
 use common_expression::ValueRef;
 
+/// Each result argument of `if` and `multi_if` is a tuple of (value, error).
+/// This function is used to split the [`ValueRef`] into the two parts.
+#[inline]
+fn unwrap_error<'a>(
+    val_with_error: &ValueRef<'a, AnyType>,
+) -> (ValueRef<'a, AnyType>, ValueRef<'a, AnyType>) {
+    match val_with_error {
+        ValueRef::Scalar(scalar) => {
+            let inner = scalar.as_tuple().unwrap();
+            let value = inner.first().unwrap().clone();
+            let error = inner.last().unwrap().clone();
+            (ValueRef::Scalar(value), ValueRef::Scalar(error))
+        }
+        ValueRef::Column(col) => {
+            let (inner_col, _) = col.as_tuple().unwrap();
+            let value = ValueRef::Column(inner_col.first().unwrap().clone());
+            let error = ValueRef::Column(inner_col.last().unwrap().clone());
+            (value, error)
+        }
+    }
+}
+
+#[inline(always)]
+fn unwrap_domain(domain: &Domain) -> Domain {
+    domain.as_tuple().unwrap()[0].clone()
+}
+
 pub fn register(registry: &mut FunctionRegistry) {
     // special case for multi_if to have better performance in fixed size loop
     registry.register_function_factory("if", |_, args_type| {
@@ -45,8 +73,14 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "if".to_string(),
                 args_type: vec![
                     DataType::Nullable(Box::new(DataType::Boolean)),
-                    DataType::Generic(0),
-                    DataType::Generic(0),
+                    DataType::Tuple(vec![
+                        DataType::Generic(0),
+                        DataType::Nullable(Box::new(DataType::String)),
+                    ]),
+                    DataType::Tuple(vec![
+                        DataType::Generic(0),
+                        DataType::Nullable(Box::new(DataType::String)),
+                    ]),
                 ],
                 return_type: DataType::Generic(0),
                 property: FunctionProperty::default(),
@@ -67,16 +101,16 @@ pub fn register(registry: &mut FunctionRegistry) {
 
                 let domain = match (has_true, has_null_or_false) {
                     (true, false) => {
-                        return FunctionDomain::Domain(args_domain[1].clone());
+                        return FunctionDomain::Domain(unwrap_domain(&args_domain[1]));
                     }
                     (false, true) => None,
-                    (true, true) => Some(args_domain[1].clone()),
+                    (true, true) => Some(unwrap_domain(&args_domain[1])),
                     _ => unreachable!(),
                 };
 
                 FunctionDomain::Domain(match domain {
-                    Some(domain) => domain.merge(args_domain.last().unwrap()),
-                    None => args_domain.last().unwrap().clone(),
+                    Some(domain) => domain.merge(&unwrap_domain(args_domain.last().unwrap())),
+                    None => unwrap_domain(args_domain.last().unwrap()),
                 })
             }),
             eval: Box::new(|args, ctx| {
@@ -88,6 +122,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                 let mut output_builder =
                     ColumnBuilder::with_capacity(&ctx.generics[0], len.unwrap_or(1));
 
+                let (values1, errors1) = unwrap_error(&args[1]);
+                let (values2, errors2) = unwrap_error(&args[2]);
+
+                let values = vec![values1, values2];
+                let errors = vec![errors1, errors2];
+
                 for row_idx in 0..(len.unwrap_or(1)) {
                     let flag = match &args[0] {
                         ValueRef::Scalar(ScalarRef::Null) => false,
@@ -98,13 +138,28 @@ pub fn register(registry: &mut FunctionRegistry) {
                         })) => validity.get_bit(row_idx) && cond_col.get_bit(row_idx),
                         _ => unreachable!(),
                     };
-                    let result_idx = if flag { 1 } else { 2 };
-                    match &args[result_idx] {
+                    let result_idx = 1 - flag as usize; // if flag { 0 } else { 1 }
+                    match &errors[result_idx] {
+                        ValueRef::Column(Column::Nullable(col)) => {
+                            match unsafe { &col.index_unchecked(row_idx) } {
+                                Some(ScalarRef::String(err)) => {
+                                    ctx.set_error(row_idx, &String::from_utf8_lossy(err));
+                                    ctx.set_already_rendered();
+                                    output_builder.push_default();
+                                    continue;
+                                }
+                                _ => {}
+                            }
+                        }
+                        _ => {}
+                    }
+                    match &values[result_idx] {
                         ValueRef::Scalar(scalar) => {
                             output_builder.push(scalar.clone());
                         }
                         ValueRef::Column(col) => {
-                            output_builder.push(col.index(row_idx).unwrap());
+                            let inner = unsafe { col.index_unchecked(row_idx) };
+                            output_builder.push(inner);
                         }
                     }
                 }
@@ -124,10 +179,16 @@ pub fn register(registry: &mut FunctionRegistry) {
             .flat_map(|_| {
                 [
                     DataType::Nullable(Box::new(DataType::Boolean)),
-                    DataType::Generic(0),
+                    DataType::Tuple(vec![
+                        DataType::Generic(0),
+                        DataType::Nullable(Box::new(DataType::String)),
+                    ]),
                 ]
             })
-            .chain([DataType::Generic(0)])
+            .chain([DataType::Tuple(vec![
+                DataType::Generic(0),
+                DataType::Nullable(Box::new(DataType::String)),
+            ])])
             .collect();
 
         Some(Arc::new(Function {
@@ -154,32 +215,35 @@ pub fn register(registry: &mut FunctionRegistry) {
                     };
                     match (&mut domain, has_true, has_null_or_false) {
                         (None, true, false) => {
-                            return FunctionDomain::Domain(args_domain[cond_idx + 1].clone());
+                            return FunctionDomain::Domain(unwrap_domain(
+                                &args_domain[cond_idx + 1],
+                            ));
                         }
                         (None, false, true) => {
                             continue;
                         }
                         (None, true, true) => {
-                            domain = Some(args_domain[cond_idx + 1].clone());
+                            domain = Some(unwrap_domain(&args_domain[cond_idx + 1]));
                         }
                         (Some(prev_domain), true, false) => {
                             return FunctionDomain::Domain(
-                                prev_domain.merge(&args_domain[cond_idx + 1]),
+                                prev_domain.merge(&unwrap_domain(&args_domain[cond_idx + 1])),
                             );
                         }
                         (Some(_), false, true) => {
                             continue;
                         }
                         (Some(prev_domain), true, true) => {
-                            domain = Some(prev_domain.merge(&args_domain[cond_idx + 1]));
+                            domain =
+                                Some(prev_domain.merge(&unwrap_domain(&args_domain[cond_idx + 1])));
                         }
                         (_, false, false) => unreachable!(),
                     }
                 }
 
                 FunctionDomain::Domain(match domain {
-                    Some(domain) => domain.merge(args_domain.last().unwrap()),
-                    None => args_domain.last().unwrap().clone(),
+                    Some(domain) => domain.merge(&unwrap_domain(args_domain.last().unwrap())),
+                    None => unwrap_domain(args_domain.last().unwrap()),
                 })
             }),
             eval: Box::new(|args, ctx| {
@@ -190,6 +254,14 @@ pub fn register(registry: &mut FunctionRegistry) {
 
                 let mut output_builder =
                     ColumnBuilder::with_capacity(&ctx.generics[0], len.unwrap_or(1));
+
+                let (values, errors) = args
+                    .iter()
+                    .skip(1)
+                    .step_by(2)
+                    .chain(vec![args.last().unwrap()])
+                    .map(unwrap_error)
+                    .unzip::<_, _, Vec<_>, Vec<_>>();
                 for row_idx in 0..(len.unwrap_or(1)) {
                     let result_idx = (0..args.len() - 1)
                         .step_by(2)
@@ -204,19 +276,33 @@ pub fn register(registry: &mut FunctionRegistry) {
                         })
                         .map(|idx| {
                             // The next argument of true condition is the value to return.
-                            idx + 1
+                            idx / 2
                         })
                         .unwrap_or_else(|| {
                             // If no true condition is found, the last argument is the value to return.
-                            args.len() - 1
+                            values.len() - 1
                         });
-
-                    match &args[result_idx] {
+                    match &errors[result_idx] {
+                        ValueRef::Column(Column::Nullable(col)) => {
+                            match unsafe { &col.index_unchecked(row_idx) } {
+                                Some(ScalarRef::String(err)) => {
+                                    ctx.set_error(row_idx, &String::from_utf8_lossy(err));
+                                    ctx.set_already_rendered();
+                                    output_builder.push_default();
+                                    continue;
+                                }
+                                _ => {}
+                            }
+                        }
+                        _ => {}
+                    }
+                    match &values[result_idx] {
                         ValueRef::Scalar(scalar) => {
                             output_builder.push(scalar.clone());
                         }
                         ValueRef::Column(col) => {
-                            output_builder.push(col.index(row_idx).unwrap());
+                            let inner = unsafe { col.index_unchecked(row_idx) };
+                            output_builder.push(inner);
                         }
                     }
                 }
