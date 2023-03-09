@@ -169,4 +169,37 @@ pub fn register(registry: &mut FunctionRegistry) {
             }),
         }))
     });
+
+    registry.register_function_factory("get", |params, args_type| {
+        // Tuple index starts from 1
+        let idx = params.first()?.checked_sub(1)?;
+        let fields_ty = match args_type.get(0)? {
+            DataType::Nullable(box DataType::Tuple(tys)) => tys,
+            _ => return None,
+        };
+        if idx >= fields_ty.len() {
+            return None;
+        }
+
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "get".to_string(),
+                args_type: vec![DataType::Nullable(Box::new(DataType::Tuple(
+                    (0..fields_ty.len())
+                        .map(|i| {
+                            if i == idx {
+                                DataType::Null
+                            } else {
+                                DataType::Generic(i)
+                            }
+                        })
+                        .collect(),
+                )))],
+                return_type: DataType::Null,
+                property: FunctionProperty::default(),
+            },
+            calc_domain: Box::new(move |_| FunctionDomain::Full),
+            eval: Box::new(move |_, _| Value::Scalar(Scalar::Null)),
+        }))
+    });
 }
