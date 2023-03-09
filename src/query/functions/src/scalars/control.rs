@@ -139,19 +139,15 @@ pub fn register(registry: &mut FunctionRegistry) {
                         _ => unreachable!(),
                     };
                     let result_idx = 1 - flag as usize; // if flag { 0 } else { 1 }
-                    match &errors[result_idx] {
-                        ValueRef::Column(Column::Nullable(col)) => {
-                            match unsafe { &col.index_unchecked(row_idx) } {
-                                Some(ScalarRef::String(err)) => {
-                                    ctx.set_error(row_idx, &String::from_utf8_lossy(err));
-                                    ctx.set_already_rendered();
-                                    output_builder.push_default();
-                                    continue;
-                                }
-                                _ => {}
-                            }
+                    if let ValueRef::Column(Column::Nullable(col)) = &errors[result_idx] {
+                        if let Some(ScalarRef::String(err)) =
+                            unsafe { &col.index_unchecked(row_idx) }
+                        {
+                            ctx.set_error(row_idx, &String::from_utf8_lossy(err));
+                            ctx.set_already_rendered();
+                            output_builder.push_default();
+                            continue;
                         }
-                        _ => {}
                     }
                     match &values[result_idx] {
                         ValueRef::Scalar(scalar) => {
@@ -282,19 +278,15 @@ pub fn register(registry: &mut FunctionRegistry) {
                             // If no true condition is found, the last argument is the value to return.
                             values.len() - 1
                         });
-                    match &errors[result_idx] {
-                        ValueRef::Column(Column::Nullable(col)) => {
-                            match unsafe { &col.index_unchecked(row_idx) } {
-                                Some(ScalarRef::String(err)) => {
-                                    ctx.set_error(row_idx, &String::from_utf8_lossy(err));
-                                    ctx.set_already_rendered();
-                                    output_builder.push_default();
-                                    continue;
-                                }
-                                _ => {}
-                            }
+                    if let ValueRef::Column(Column::Nullable(col)) = &errors[result_idx] {
+                        if let Some(ScalarRef::String(err)) =
+                            unsafe { &col.index_unchecked(row_idx) }
+                        {
+                            ctx.set_error(row_idx, &String::from_utf8_lossy(err));
+                            ctx.set_already_rendered();
+                            output_builder.push_default();
+                            continue;
                         }
-                        _ => {}
                     }
                     match &values[result_idx] {
                         ValueRef::Scalar(scalar) => {
