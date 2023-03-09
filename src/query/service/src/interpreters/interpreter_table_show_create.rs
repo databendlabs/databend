@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
@@ -22,6 +23,8 @@ use common_expression::DataSchemaRef;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_sql::plans::ShowCreateTablePlan;
+use common_storages_view::view_table::QUERY;
+use common_storages_view::view_table::VIEW_ENGINE;
 use storages_common_table_meta::table::is_internal_opt_key;
 use tracing::debug;
 
@@ -61,6 +64,34 @@ impl Interpreter for ShowCreateTableInterpreter {
 
         let name = table.name();
         let engine = table.engine();
+        if engine == VIEW_ENGINE {
+            if let Some(query) = table.options().get(QUERY) {
+                let view_create_sql = format!(
+                    "CREATE VIEW `{}`.`{}` AS {}",
+                    &self.plan.database, name, query
+                );
+                let block = DataBlock::new(
+                    vec![
+                        BlockEntry {
+                            data_type: DataType::String,
+                            value: Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
+                        },
+                        BlockEntry {
+                            data_type: DataType::String,
+                            value: Value::Scalar(Scalar::String(view_create_sql.into_bytes())),
+                        },
+                    ],
+                    1,
+                );
+                debug!("Show create view executor result: {:?}", block);
+
+                return PipelineBuildResult::from_blocks(vec![block]);
+            } else {
+                return Err(ErrorCode::Internal(
+                    "Logical error, View Table must have a SelectQuery inside.",
+                ));
+            }
+        }
         let schema = table.schema();
         let field_comments = table.field_comments();
         let n_fields = schema.fields().len();

@@ -22,6 +22,8 @@ io-uring = [
     "common-meta-raft-store/io-uring",
 ]
 
+enable-histogram = ["common-metrics/enable-histogram"]
+
 [dependencies]
 # Workspace dependencies
 common-arrow = { path = "../../common/arrow" }

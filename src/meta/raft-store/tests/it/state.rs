@@ -103,9 +103,9 @@ async fn test_raft_state_open_or_create() -> anyhow::Result<()> {
     init = "init_raft_store_ut!()",
     tracing_span = "debug"
 )]
-async fn test_raft_state_write_read_hard_state() -> anyhow::Result<()> {
+async fn test_raft_state_write_read_vote() -> anyhow::Result<()> {
     // - create a raft state
-    // - write hard_state and the read it.
+    // - write vote and the read it.
 
     let mut tc = new_raft_test_context();
     let db = &tc.db;
@@ -116,18 +116,18 @@ async fn test_raft_state_write_read_hard_state() -> anyhow::Result<()> {
 
     // read got a None
 
-    let got = rs.read_hard_state()?;
+    let got = rs.read_vote()?;
     assert_eq!(None, got);
 
     // write hard state
 
     let hs = Vote::new(10, 3);
 
-    rs.write_hard_state(&hs).await?;
+    rs.save_vote(&hs).await?;
 
     // read the written
 
-    let got = rs.read_hard_state()?;
+    let got = rs.read_vote()?;
     assert_eq!(Some(hs), got);
     Ok(())
 }

@@ -307,6 +307,7 @@ impl<'a> TypeChecker<'a> {
                                 },
                                 args: args.iter().copied().cloned().collect(),
                                 params: vec![],
+                                window: None,
                             },
                             None,
                         )
@@ -580,6 +581,7 @@ impl<'a> TypeChecker<'a> {
                                 },
                                 args: vec![*operand.clone(), c.clone()],
                                 params: vec![],
+                                window: None,
                             };
                             arguments.push(equal_expr)
                         }
@@ -1598,6 +1600,7 @@ impl<'a> TypeChecker<'a> {
                             },
                             args: vec![arg_x.clone()],
                             params: vec![],
+                            window: None,
                         },
                         None,
                     )
@@ -1635,6 +1638,7 @@ impl<'a> TypeChecker<'a> {
                         },
                         args: vec![(*arg).clone()],
                         params: vec![],
+                        window: None,
                     };
 
                     new_args.push(is_not_null_expr);
@@ -2366,6 +2370,7 @@ impl<'a> TypeChecker<'a> {
                     name,
                     args,
                     params,
+                    window,
                 } => Ok(Expr::FunctionCall {
                     span: *span,
                     distinct: *distinct,
@@ -2375,6 +2380,7 @@ impl<'a> TypeChecker<'a> {
                         .map(|arg| self.clone_expr_with_replacement(arg, replacement_fn))
                         .collect::<Result<Vec<Expr>>>()?,
                     params: params.clone(),
+                    window: window.clone(),
                 }),
                 Expr::Case {
                     span,
