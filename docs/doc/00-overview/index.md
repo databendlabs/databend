@@ -50,7 +50,7 @@ import TabItem from '@theme/TabItem';
 </TabItem>
 </Tabs>
 
-## Databend Architucture
+## Databend Architecture
 
 Databend's high-level architecture is composed of a meta-service layer, a compute layer, and a storage layer.
 
