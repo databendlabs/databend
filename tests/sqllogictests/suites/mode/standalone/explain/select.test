@@ -32,7 +32,7 @@ Filter
 ├── filters: [t1.a (#0) = 1, t1.b (#1) = 1]
 ├── estimated rows: 0.11
 └── EvalScalar
-    ├── expressions: [plus(numbers.number (#0), 1)]
+    ├── expressions: [numbers.number (#0) + 1]
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.system.numbers
@@ -47,7 +47,7 @@ query T
 explain select * from (select number as a, number + 1 as b from numbers(1)) as t1 where a = 1
 ----
 EvalScalar
-├── expressions: [plus(numbers.number (#0), 1)]
+├── expressions: [numbers.number (#0) + 1]
 ├── estimated rows: 0.33
 └── Filter
     ├── filters: [t1.a (#0) = 1]

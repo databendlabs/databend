@@ -20,6 +20,7 @@ use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::Expr;
+use common_expression::Scalar;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::parse_exprs;
@@ -70,7 +71,7 @@ where Self: Transform
                     }
                     expr
                 } else {
-                    let default_value = f.data_type().default_value();
+                    let default_value = Scalar::default_value(f.data_type());
                     Expr::Constant {
                         span: None,
                         scalar: default_value,

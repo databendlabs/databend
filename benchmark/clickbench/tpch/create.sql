@@ -81,4 +81,4 @@ CREATE TABLE IF NOT EXISTS supplier (
     s_phone STRING not null,
     s_acctbal DECIMAL(15, 2) not null,
     s_comment STRING not null
-) CLUSTER BY (ps_partkey);
+) CLUSTER BY (s_suppkey);

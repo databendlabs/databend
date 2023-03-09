@@ -586,7 +586,7 @@ impl ValueSource {
             .schema
             .fields()
             .iter()
-            .map(|f| f.data_type().create_deserializer(estimated_rows))
+            .map(|f| TypeDeserializerImpl::with_capacity(f.data_type(), estimated_rows))
             .collect::<Vec<_>>();
 
         let mut rows = 0;
@@ -811,7 +811,7 @@ async fn fill_default_value(
             map_exprs.push(expr);
         } else {
             let data_type = field.data_type().clone();
-            let default_value = data_type.default_value();
+            let default_value = DataScalar::default_value(&data_type);
             let expr = Expr::Constant {
                 span: None,
                 scalar: default_value,

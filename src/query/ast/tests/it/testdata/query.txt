@@ -1937,6 +1937,7 @@ Query {
                             },
                         ],
                         params: [],
+                        window: None,
                     },
                     alias: Some(
                         Identifier {
@@ -2056,6 +2057,7 @@ Query {
                                                 },
                                             ],
                                             params: [],
+                                            window: None,
                                         },
                                         alias: None,
                                     },

@@ -25,7 +25,7 @@ common-storage = { path = "../../../common/storage" }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }
 futures = "0.3.24"
-opendal = { workspace = true, features = ["layers-tracing", "layers-metrics"] }
+opendal = { workspace = true }
 parking_lot = "0.12.1"
 regex = "1.6.0"
 tracing = "0.1.36"

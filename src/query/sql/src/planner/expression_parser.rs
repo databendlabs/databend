@@ -200,6 +200,6 @@ pub fn field_default_value(ctx: Arc<dyn TableContext>, field: &TableField) -> Re
                 }
             }
         }
-        None => Ok(data_type.default_value()),
+        None => Ok(Scalar::default_value(&data_type)),
     }
 }

@@ -186,7 +186,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 .unwrap_or(FunctionDomain::Full)
         },
         |val, ctx| match val {
-            ValueRef::Scalar(None) => Value::Scalar(ctx.generics[0].default_value()),
+            ValueRef::Scalar(None) => Value::Scalar(Scalar::default_value(&ctx.generics[0])),
             ValueRef::Scalar(Some(scalar)) => Value::Scalar(scalar.to_owned()),
             ValueRef::Column(NullableColumn { column, .. }) => Value::Column(column),
         },

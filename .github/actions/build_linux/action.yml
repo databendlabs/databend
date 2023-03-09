@@ -34,7 +34,7 @@ runs:
             flags="-C target-feature=+sse4.2"
             ;;
           x86_64-unknown-linux-musl)
-            flags="-C target-feature=+sse4.2,link-arg=-Wl,--compress-debug-sections=zlib-gabi"
+            flags="-C target-feature=+sse4.2 -C link-arg=-Wl,--compress-debug-sections=zlib-gabi"
             ;;
           aarch64-unknown-linux-gnu)
             flags=""

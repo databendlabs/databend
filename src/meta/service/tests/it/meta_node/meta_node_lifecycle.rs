@@ -24,7 +24,6 @@ use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::Cmd;
 use common_meta_types::Endpoint;
 use common_meta_types::LogEntry;
-use common_meta_types::MembershipNode;
 use common_meta_types::NodeId;
 use common_meta_types::UpsertKV;
 use databend_meta::configs;
@@ -538,7 +537,6 @@ async fn test_meta_node_leave_last_not_allowed() -> anyhow::Result<()> {
 
 #[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_node_restart() -> anyhow::Result<()> {
-    // TODO check restarted follower.
     // - Start a leader and a non-voter;
     // - Restart them.
     // - Check old data an new written data.
@@ -546,8 +544,14 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     let (_nid0, tc0) = start_meta_node_leader().await?;
     let mn0 = tc0.meta_node();
 
+    // init, leader blank, add node, update membership;
+    let mut log_index = 3;
+
     let (_nid1, tc1) = start_meta_node_non_voter(mn0.clone(), 1).await?;
     let mn1 = tc1.meta_node();
+
+    // add node, update membership
+    log_index += 2;
 
     let sto0 = mn0.sto.clone();
     let sto1 = mn1.sto.clone();
@@ -555,6 +559,7 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     let meta_nodes = vec![mn0.clone(), mn1.clone()];
 
     assert_upsert_kv_synced(meta_nodes.clone(), "key1").await?;
+    log_index += 1;
 
     // stop
     info!("shutting down all");
@@ -589,10 +594,15 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
         .wait(timeout())
         .state(ServerState::Learner, "learner restart")
         .await?;
-    mn0.raft.add_learner(1, MembershipNode {}, false).await?;
+
     mn1.raft
         .wait(timeout())
         .current_leader(0, "node-1 has leader")
+        .await?;
+
+    mn0.raft
+        .wait(timeout())
+        .log(Some(log_index), "node-0 recovered committed index")
         .await?;
 
     assert_upsert_kv_synced(meta_nodes.clone(), "key2").await?;
@@ -643,7 +653,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
             .await?;
         log_index += 1;
 
-        want_hs = leader.sto.raft_state.read_hard_state()?;
+        want_hs = leader.sto.raft_state.read_vote()?;
 
         leader.stop().await?;
     }
@@ -675,7 +685,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
 
     info!("--- check hard state");
     {
-        let hs = leader.sto.raft_state.read_hard_state()?;
+        let hs = leader.sto.raft_state.read_vote()?;
         assert_eq!(want_hs, hs);
     }
 

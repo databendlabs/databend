@@ -27,6 +27,7 @@ use common_arrow::arrow::offset::OffsetsBuffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
+use ordered_float::OrderedFloat;
 use serde::de::Visitor;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -64,6 +65,7 @@ use crate::utils::arrow::deserialize_column;
 use crate::utils::arrow::serialize_column;
 use crate::with_decimal_type;
 use crate::with_number_type;
+use crate::TypeDeserializerImpl;
 
 #[derive(Debug, Clone, PartialEq, EnumAsInner)]
 pub enum Value<T: ValueType> {
@@ -77,9 +79,8 @@ pub enum ValueRef<'a, T: ValueType> {
     Column(T::Column),
 }
 
-#[derive(Debug, Clone, Default, EnumAsInner, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, EnumAsInner, Eq, Serialize, Deserialize)]
 pub enum Scalar {
-    #[default]
     Null,
     EmptyArray,
     EmptyMap,
@@ -273,6 +274,46 @@ impl Scalar {
             Scalar::Map(col) => ScalarRef::Map(col.clone()),
             Scalar::Tuple(fields) => ScalarRef::Tuple(fields.iter().map(Scalar::as_ref).collect()),
             Scalar::Variant(s) => ScalarRef::Variant(s.as_slice()),
+        }
+    }
+
+    pub fn default_value(ty: &DataType) -> Scalar {
+        match ty {
+            DataType::Null => Scalar::Null,
+            DataType::EmptyArray => Scalar::EmptyArray,
+            DataType::EmptyMap => Scalar::EmptyMap,
+            DataType::Boolean => Scalar::Boolean(false),
+            DataType::String => Scalar::String(vec![]),
+            DataType::Number(num_ty) => Scalar::Number(match num_ty {
+                NumberDataType::UInt8 => NumberScalar::UInt8(0),
+                NumberDataType::UInt16 => NumberScalar::UInt16(0),
+                NumberDataType::UInt32 => NumberScalar::UInt32(0),
+                NumberDataType::UInt64 => NumberScalar::UInt64(0),
+                NumberDataType::Int8 => NumberScalar::Int8(0),
+                NumberDataType::Int16 => NumberScalar::Int16(0),
+                NumberDataType::Int32 => NumberScalar::Int32(0),
+                NumberDataType::Int64 => NumberScalar::Int64(0),
+                NumberDataType::Float32 => NumberScalar::Float32(OrderedFloat(0.0)),
+                NumberDataType::Float64 => NumberScalar::Float64(OrderedFloat(0.0)),
+            }),
+            DataType::Decimal(ty) => Scalar::Decimal(ty.default_scalar()),
+            DataType::Timestamp => Scalar::Timestamp(0),
+            DataType::Date => Scalar::Date(0),
+            DataType::Nullable(_) => Scalar::Null,
+            DataType::Array(ty) => {
+                let builder = ColumnBuilder::with_capacity(ty, 0);
+                let col = builder.build();
+                Scalar::Array(col)
+            }
+            DataType::Map(ty) => {
+                let builder = ColumnBuilder::with_capacity(ty, 0);
+                let col = builder.build();
+                Scalar::Map(col)
+            }
+            DataType::Tuple(tys) => Scalar::Tuple(tys.iter().map(Scalar::default_value).collect()),
+            DataType::Variant => Scalar::Variant(vec![]),
+
+            _ => unimplemented!(),
         }
     }
 }
@@ -658,8 +699,7 @@ impl Column {
 
         if range.is_empty() {
             use crate::deserializations::TypeDeserializer;
-            let data_type = self.data_type();
-            let mut de = data_type.create_deserializer(0);
+            let mut de = TypeDeserializerImpl::with_capacity(&self.data_type(), 0);
             return de.finish_to_column();
         }
 
