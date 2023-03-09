@@ -301,7 +301,7 @@ impl<'a> Evaluator<'a> {
                     bitmap.extend_constant(self.input_columns.num_rows(), false);
                     return Err((
                         span,
-                        Value::Scalar(dest_type.default_value()),
+                        Value::Scalar(Scalar::default_value(dest_type)),
                         bitmap.into(),
                         format!("unable to cast type `{src_type}` to type `{dest_type}`"),
                     ));
@@ -313,7 +313,7 @@ impl<'a> Evaluator<'a> {
                         bitmap.extend_constant(self.input_columns.num_rows(), false);
                         return Err((
                             span,
-                            Value::Scalar(dest_type.default_value()),
+                            Value::Scalar(Scalar::default_value(dest_type)),
                             bitmap.into(),
                             format!("unable to cast type `NULL` to type `{dest_type}`"),
                         ));
@@ -450,7 +450,7 @@ impl<'a> Evaluator<'a> {
                 bitmap.extend_constant(self.input_columns.num_rows(), false);
                 Err((
                     span,
-                    Value::Scalar(dest_type.default_value()),
+                    Value::Scalar(Scalar::default_value(dest_type)),
                     bitmap.into(),
                     format!("unable to cast type `{src_type}` to type `{dest_type}`"),
                 ))
@@ -640,7 +640,7 @@ impl<'a> Evaluator<'a> {
                 bitmap.extend_constant(self.input_columns.num_rows(), false);
                 Err((
                     span,
-                    Value::Scalar(dest_type.default_value()),
+                    Value::Scalar(Scalar::default_value(dest_type)),
                     bitmap.into(),
                     format!("unable to cast type `{src_type}` to type `{dest_type}`"),
                 ))
