@@ -16,6 +16,7 @@ mid -> substr
 mod -> modulo
 neg -> minus
 negate -> minus
+object_keys -> json_object_keys
 octet_length -> length
 remove_nullable -> assume_not_null
 rlike -> regexp
@@ -1340,6 +1341,9 @@ Functions overloads:
 1 is_true(Boolean NULL) :: Boolean
 0 json_extract_path_text(String, String) :: String NULL
 1 json_extract_path_text(String NULL, String NULL) :: String NULL
+0 json_object FACTORY
+0 json_object_keep_null FACTORY
+0 json_object_keys(Variant NULL) :: Variant NULL
 0 left(String, UInt64) :: String
 1 left(String NULL, UInt64 NULL) :: String NULL
 0 length(Variant NULL) :: UInt32 NULL
@@ -2210,9 +2214,6 @@ Functions overloads:
 33 noteq(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
 34 noteq FACTORY
 0 now() :: Timestamp
-0 object_construct FACTORY
-0 object_construct_keep_null FACTORY
-0 object_keys(Variant NULL) :: Variant NULL
 0 oct(Int64) :: String
 1 oct(Int64 NULL) :: String NULL
 0 or(Boolean, Boolean) :: Boolean
