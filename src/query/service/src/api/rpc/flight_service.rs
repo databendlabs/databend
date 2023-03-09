@@ -29,8 +29,6 @@ use common_arrow::arrow_format::flight::data::Result as FlightResult;
 use common_arrow::arrow_format::flight::data::SchemaResult;
 use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_server::FlightService;
-use common_base::match_join_handle;
-use common_base::runtime::TrySpawn;
 use tokio_stream::Stream;
 use tonic::Request;
 use tonic::Response as RawResponse;
@@ -141,19 +139,14 @@ impl FlightService for DatabendQueryFlightService {
         let action = request.into_inner();
         let flight_action: FlightAction = action.try_into()?;
 
-        let action_result = match flight_action {
+        let action_result = match &flight_action {
             FlightAction::InitQueryFragmentsPlan(init_query_fragments_plan) => {
                 let session = SessionManager::instance()
                     .create_session(SessionType::FlightRPC)
                     .await?;
                 let ctx = session.create_query_context().await?;
-
-                let spawner = ctx.clone();
-                match_join_handle(spawner.spawn(async move {
-                    DataExchangeManager::instance()
-                        .init_query_fragments_plan(&ctx, &init_query_fragments_plan.executor_packet)
-                }))
-                .await?;
+                DataExchangeManager::instance()
+                    .init_query_fragments_plan(&ctx, &init_query_fragments_plan.executor_packet)?;
 
                 FlightResult { body: vec![] }
             }
@@ -166,12 +159,7 @@ impl FlightService for DatabendQueryFlightService {
                 FlightResult { body: vec![] }
             }
             FlightAction::ExecutePartialQuery(query_id) => {
-                let spawner = DataExchangeManager::instance().get_query_ctx(&query_id)?;
-
-                match_join_handle(spawner.spawn(async move {
-                    DataExchangeManager::instance().execute_partial_query(&query_id)
-                }))
-                .await?;
+                DataExchangeManager::instance().execute_partial_query(query_id)?;
 
                 FlightResult { body: vec![] }
             }

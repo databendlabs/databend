@@ -111,10 +111,6 @@ impl WorkersWaitingStatus {
         self.stack_size
     }
 
-    pub fn total_size(&self) -> usize {
-        self.worker_pos_in_stack.len()
-    }
-
     pub fn is_waiting(&self, thread: usize) -> bool {
         self.worker_pos_in_stack[thread] < self.stack_size
     }
