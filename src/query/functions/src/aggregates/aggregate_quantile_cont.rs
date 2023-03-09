@@ -36,18 +36,22 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
-use crate::aggregates::assert_arguments;
+use crate::aggregates::assert_unary_arguments;
+use crate::aggregates::assert_unary_params;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::StateAddr;
 use crate::with_simple_no_number_mapped_type;
+
+const MEDIAN: u8 = 0;
+const QUANTILE: u8 = 1;
 
 pub trait QuantileStateFunc<T: ValueType>: Send + Sync + 'static {
     fn new() -> Self;
     fn add(&mut self, other: T::ScalarRef<'_>);
     fn add_batch(&mut self, column: &T::Column, validity: Option<&Bitmap>) -> Result<()>;
     fn merge(&mut self, rhs: &Self) -> Result<()>;
-    fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()>;
+    fn merge_result(&mut self, builder: &mut ColumnBuilder, level: f64) -> Result<()>;
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()>;
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
 }
@@ -75,7 +79,7 @@ where
 impl<T> QuantileStateFunc<T> for QuantileState<T>
 where
     T: ValueType,
-    T::Scalar: Serialize + DeserializeOwned + Send + Sync,
+    T::Scalar: Serialize + DeserializeOwned + Send + Sync + Ord,
 {
     fn new() -> Self {
         Self::default()
@@ -120,12 +124,14 @@ where
         Ok(())
     }
 
-    fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&mut self, builder: &mut ColumnBuilder, level: f64) -> Result<()> {
         let builder = T::try_downcast_builder(builder).unwrap();
-        let idx = 0;
-        if idx >= self.value.len() {
+        let value_len = self.value.len();
+        let idx = ((value_len - 1) as f64 * level).floor() as usize;
+        if idx >= value_len {
             T::push_default(builder);
         } else {
+            self.value.as_mut_slice().select_nth_unstable(idx);
             let value = self.value.get(idx).unwrap();
             T::push_item(builder, T::to_scalar_ref(value));
         }
@@ -146,6 +152,7 @@ where
 pub struct AggregateQuantileContFunction<T, State> {
     display_name: String,
     return_type: DataType,
+    level: f64,
     _arguments: Vec<DataType>,
     _t: PhantomData<T>,
     _state: PhantomData<State>,
@@ -204,6 +211,23 @@ where
         Ok(())
     }
 
+    fn accumulate_keys(
+        &self,
+        places: &[StateAddr],
+        offset: usize,
+        columns: &[Column],
+        _input_rows: usize,
+    ) -> Result<()> {
+        let column = T::try_downcast_column(&columns[0]).unwrap();
+        let column_iter = T::iter_column(&column);
+        column_iter.zip(places.iter()).for_each(|(v, place)| {
+            let addr = place.next(offset);
+            let state = addr.get::<State>();
+            state.add(v.clone())
+        });
+        Ok(())
+    }
+
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
 
@@ -223,7 +247,7 @@ where
 
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<State>();
-        state.merge_result(builder)
+        state.merge_result(builder, self.level)
     }
 }
 
@@ -232,11 +256,17 @@ where
     State: QuantileStateFunc<T>,
     T: Send + Sync + ValueType,
 {
-    fn try_create(display_name: &str, return_type: DataType) -> Result<Arc<dyn AggregateFunction>> {
+    fn try_create(
+        display_name: &str,
+        return_type: DataType,
+        level: f64,
+        arguments: Vec<DataType>,
+    ) -> Result<Arc<dyn AggregateFunction>> {
         let func = AggregateQuantileContFunction::<T, State> {
             display_name: display_name.to_string(),
             return_type,
-            _arguments: vec![],
+            level,
+            _arguments: arguments,
             _t: PhantomData,
             _state: PhantomData,
         };
@@ -245,28 +275,52 @@ where
     }
 }
 
-pub fn try_create_aggregate_quantile_function(
+pub fn try_create_aggregate_quantile_function<const TYPE: u8>(
     display_name: &str,
-    _params: Vec<Scalar>,
+    params: Vec<Scalar>,
     arguments: Vec<DataType>,
 ) -> Result<AggregateFunctionRef> {
-    println!("quantile args: {:?}", arguments);
-    assert_arguments(display_name, arguments.len(), 2)?;
+    assert_unary_arguments(display_name, arguments.len())?;
+
+    let level = if TYPE == MEDIAN {
+        0.5f64
+    } else {
+        assert_unary_params(display_name, params.len())?;
+        let param = params[0].clone();
+        match param {
+            Scalar::Decimal(d) => {
+                let f = d.to_float64();
+                if f <= 0.01 || f >= 0.99 {
+                    return Err(ErrorCode::BadDataValueType(format!(
+                        "level range between 0.01 to 0.99, got: {:?}",
+                        f
+                    )));
+                }
+                f
+            }
+            Scalar::Number(NumberScalar::UInt64(i)) => {
+                if i == 0 {
+                    0.01f64
+                } else if i == 1 {
+                    0.99f64
+                } else {
+                    return Err(ErrorCode::BadDataValueType(format!(
+                        "level range between 0.01 to 0.99, got: {:?}",
+                        i
+                    )));
+                }
+            }
+            _ => {
+                return Err(ErrorCode::BadDataValueType(format!(
+                    "level param just support float type, got: {:?}",
+                    param
+                )));
+            }
+        }
+    };
+
     let data_type = arguments[0].clone();
-
-    for argument in arguments.iter() {
-        if !argument.is_boolean() {
-            return Err(ErrorCode::BadArguments(
-                "The arguments of AggregateRetention should be an expression which returns a Boolean result",
-            ));
-        }
-    }
-
     with_simple_no_number_mapped_type!(|T| match data_type {
-        DataType::T => {
-            type State = QuantileState<T>;
-            AggregateQuantileContFunction::<T, State>::try_create(display_name, data_type)
-        }
         DataType::Number(num_type) => {
             with_number_mapped_type!(|NUM| match num_type {
                 NumberDataType::NUM => {
@@ -274,6 +328,8 @@ pub fn try_create_aggregate_quantile_function(
                     AggregateQuantileContFunction::<NumberType<NUM>, State>::try_create(
                         display_name,
                         data_type,
+                        level,
+                        arguments,
                     )
                 }
             })
@@ -287,6 +343,8 @@ pub fn try_create_aggregate_quantile_function(
             AggregateQuantileContFunction::<DecimalType<i128>, State>::try_create(
                 display_name,
                 DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
+                level,
+                arguments,
             )
         }
         DataType::Decimal(DecimalDataType::Decimal256(s)) => {
@@ -298,15 +356,25 @@ pub fn try_create_aggregate_quantile_function(
             AggregateQuantileContFunction::<DecimalType<i256>, State>::try_create(
                 display_name,
                 DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
+                level,
+                arguments,
             )
         }
-        _ => {
-            type State = QuantileState<AnyType>;
-            AggregateQuantileContFunction::<AnyType, State>::try_create(display_name, data_type)
-        }
+        _ => Err(ErrorCode::BadDataValueType(format!(
+            "{} does not support type '{:?}'",
+            display_name, data_type
+        ))),
     })
 }
 
 pub fn aggregate_quantile_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_quantile_function))
+    AggregateFunctionDescription::creator(Box::new(
+        try_create_aggregate_quantile_function::<QUANTILE>,
+    ))
+}
+
+pub fn aggregate_median_function_desc() -> AggregateFunctionDescription {
+    AggregateFunctionDescription::creator(Box::new(
+        try_create_aggregate_quantile_function::<MEDIAN>,
+    ))
 }
