@@ -2059,7 +2059,6 @@ impl<'a> TypeChecker<'a> {
                     func_name: "get".to_string(),
                 }
                 .into();
-                scalar = wrap_cast(&scalar, &DataType::from(&table_data_type));
                 continue;
             }
             let box (path_value, path_data_type) = self.resolve_literal(&path_lit, None)?;
