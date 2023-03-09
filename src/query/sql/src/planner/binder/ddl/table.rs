@@ -964,7 +964,6 @@ impl Binder {
                     let is_try = schema_data_type.is_nullable();
                     let cast_expr_to_field_type = ScalarExpr::CastExpr(CastExpr {
                         is_try,
-                        from_type: Box::new(expr.data_type()),
                         target_type: Box::new(DataType::from(&schema_data_type)),
                         argument: Box::new(expr),
                     })
