@@ -14,16 +14,23 @@
 
 use std::sync::Arc;
 
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
+use common_meta_app::schema::TableStatistics;
 use common_meta_types::MatchSeq;
 use common_sql::field_default_value;
 use common_sql::plans::CreateTablePlan;
+use common_storages_fuse::io::MetaReaders;
 use common_users::UserApiProvider;
+use storages_common_cache::LoadParams;
+use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::Versioned;
+use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 
 use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
@@ -113,7 +120,7 @@ impl CreateTableInterpreter {
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
 
         // TODO: maybe the table creation and insertion should be a transaction, but it may require create_table support 2pc.
-        catalog.create_table(self.build_request()?).await?;
+        catalog.create_table(self.build_request(None)?).await?;
         let table = catalog
             .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
             .await?;
@@ -144,7 +151,29 @@ impl CreateTableInterpreter {
 
     async fn create_table(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
-        catalog.create_table(self.build_request()?).await?;
+        let mut stat = None;
+        if !GlobalConfig::instance().query.management_mode {
+            if let Some(snapshot_loc) = self.plan.options.get(OPT_KEY_SNAPSHOT_LOCATION) {
+                let operator = self.ctx.get_data_operator()?.operator();
+                let reader = MetaReaders::table_snapshot_reader(operator);
+
+                let params = LoadParams {
+                    location: snapshot_loc.clone(),
+                    len_hint: None,
+                    ver: TableSnapshot::VERSION,
+                    put_cache: true,
+                };
+
+                let snapshot = reader.read(&params).await?;
+                stat = Some(TableStatistics {
+                    number_of_rows: snapshot.summary.row_count,
+                    data_bytes: snapshot.summary.uncompressed_byte_size,
+                    compressed_data_bytes: snapshot.summary.compressed_byte_size,
+                    index_data_bytes: snapshot.summary.index_size,
+                });
+            }
+        }
+        catalog.create_table(self.build_request(stat)?).await?;
 
         Ok(PipelineBuildResult::create())
     }
@@ -153,7 +182,7 @@ impl CreateTableInterpreter {
     ///
     /// - Rebuild `DataSchema` with default exprs.
     /// - Update cluster key of table meta.
-    fn build_request(&self) -> Result<CreateTableReq> {
+    fn build_request(&self, statistics: Option<TableStatistics>) -> Result<CreateTableReq> {
         let mut fields = Vec::with_capacity(self.plan.schema.num_fields());
         for (idx, field) in self.plan.schema.fields().clone().into_iter().enumerate() {
             let field = if let Some(Some(default_expr)) = &self.plan.field_default_exprs.get(idx) {
@@ -177,7 +206,11 @@ impl CreateTableInterpreter {
             default_cluster_key: None,
             field_comments: self.plan.field_comments.clone(),
             drop_on: None,
-            statistics: Default::default(),
+            statistics: if let Some(stat) = statistics {
+                stat
+            } else {
+                Default::default()
+            },
             ..Default::default()
         };
         if let Some(cluster_key) = &self.plan.cluster_key {
