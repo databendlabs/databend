@@ -25,7 +25,7 @@ LIMIT 5;
 
 ### Lifecycle of Query Result Cache
 
-Each cached result set comes with a Time to Live (TTL) that is refreshed each time the cached result set is accessed. The default expiration time is 300 seconds, which can be modified through the setting `query_result_cache_ttl_secs`. The cached result set will no longer be available after it expires.
+Each cached result set comes with a Time to Live (TTL) that is refreshed each time the cached result set is accessed. The default expiration time is 300 seconds, which can be modified through the setting `query_result_cache_ttl_secs`. A cached result set will no longer be available after it expires.
 
 Cached results will become inaccurate when the underlying data (such as snapshot IDs, segment IDs, and partition locations) changes. In this case, you can still proceed with the cached results if you allow the inconsistence. To do so, set `query_result_cache_allow_inconsistent` to 1.
 
@@ -110,7 +110,7 @@ Upstream──►│Duplicate│ 4  │         │ 4  │ Result  │
 ```
 
 :::note
-If uncertain functions, such as `now()`, `rand()`, and `uuid()`, are used in a query, the result set will not be cached. In addition, system tables will not be cached, either.
+If a query includes functions like `now()`, `rand()`, or `uuid()`, the result set will not be cached. In addition, system tables will not be cached, either.
 
 Currently, the maximum amount of data cached for a query result is 1MiB. You can adjust the allowed cache size by setting `query_result_cache_max_bytes`.
 :::
