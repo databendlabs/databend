@@ -26,6 +26,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
+use common_expression::RawExpr;
 use common_expression::RemoteExpr;
 use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatOptions;
@@ -75,7 +76,8 @@ pub trait RuntimeFilter: Send + Sync {
         exprs: &BTreeMap<RuntimeFilterId, RemoteExpr>,
         data: &DataBlock,
     ) -> Result<()>;
-    fn consume(&self) -> Result<()>;
+    fn consume(&self, target_exprs: &BTreeMap<RuntimeFilterId, RawExpr<String>>) -> Result<()>;
+    fn get_filters(&self) -> Result<HashMap<RuntimeFilterId, RemoteExpr<String>>>;
 }
 
 #[async_trait::async_trait]

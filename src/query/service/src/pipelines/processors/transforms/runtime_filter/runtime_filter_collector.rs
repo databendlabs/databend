@@ -20,12 +20,19 @@ use std::sync::atomic::Ordering;
 use common_catalog::plan::RuntimeFilterId;
 use common_catalog::table_context::RuntimeFilter;
 use common_exception::Result;
+use common_expression::type_check::check;
+use common_expression::types::DataType;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::FunctionContext;
+use common_expression::Literal;
+use common_expression::RawExpr;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_sql::plans::ConstantExpr;
+use common_sql::plans::FunctionCall;
+use common_sql::ScalarExpr;
 use itertools::sorted;
 use parking_lot::RwLock;
 
@@ -52,26 +59,62 @@ impl RuntimeFilterCollector {
     }
 
     // Construct runtime filters by min/max values
-    fn construct_filters(&self) -> Result<()> {
+    fn construct_filters(
+        &self,
+        target_exprs: &BTreeMap<RuntimeFilterId, RawExpr<String>>,
+    ) -> Result<()> {
         if self.total_count.load(Ordering::Relaxed) < VALUE_SET_THRESH_HOLD {
-            return self.in_expr();
+            return self.in_expr(target_exprs);
         }
-        self.min_max()
+        self.min_max(target_exprs)
     }
 
     // Construct InExpr if total_count <= VALUE_SET_THRESH_HOLD
-    fn in_expr(&self) -> Result<()> {
+    fn in_expr(&self, target_exprs: &BTreeMap<RuntimeFilterId, RawExpr<String>>) -> Result<()> {
+        let mut filter_exprs = self.filter_exprs.write();
+        let value_sets = self.value_sets.read();
+        for (id, value_set) in value_sets.iter() {
+            if let Some(target_expr) = target_exprs.get(id) {
+                let mut args = vec![];
+                if !value_set.is_empty() {
+                    let mut array_args = vec![];
+                    for val in value_set {
+                        array_args.push(ScalarExpr::ConstantExpr (ConstantExpr{
+                            value: Literal::try_from(val.clone())?,
+                            data_type: Box::new(val.as_ref().infer_data_type()),
+                        }))
+                    }
+                    // Construct `array` function
+                    let array_func = ScalarExpr::FunctionCall(FunctionCall {
+                        params: vec![],
+                        arguments: array_args,
+                        func_name: "array".to_string(),
+                        return_type: Box::new(DataType::Array(Box::new(value_set[0].as_ref().infer_data_type()))),
+                    });
+                    // Let `array_func` as arg of `contain` function
+                    args.push(array_func.as_raw_expr_with_col_name())
+                }
+                args.push(target_expr.clone());
+                // Construct `contain` function
+                let contains_function = RawExpr::FunctionCall {
+                    span: None,
+                    name: "contains".to_string(),
+                    params: vec![],
+                    args,
+                };
+                let expr = check(&contains_function, &BUILTIN_FUNCTIONS)?;
+                filter_exprs.insert(id.clone(), expr.as_remote_expr());
+            }
+        }
         Ok(())
     }
 
     // Construct min-max Expr
-    fn min_max(&self) -> Result<()> {
+    fn min_max(&self, target_exprs: &BTreeMap<RuntimeFilterId, RawExpr<String>>) -> Result<()> {
         Ok(())
     }
 
     fn clear(&self) {
-        let mut filter_exprs = self.filter_exprs.write();
-        filter_exprs.clear();
         self.total_count.store(0, Ordering::Relaxed);
     }
 }
@@ -132,10 +175,15 @@ impl RuntimeFilter for RuntimeFilterCollector {
         Ok(())
     }
 
-    fn consume(&self) -> Result<()> {
-        self.construct_filters()?;
+    fn consume(&self, target_exprs: &BTreeMap<RuntimeFilterId, RawExpr<String>>) -> Result<()> {
+        self.construct_filters(target_exprs)?;
         self.clear();
         Ok(())
+    }
+
+    fn get_filters(&self) -> Result<HashMap<RuntimeFilterId, RemoteExpr<String>>> {
+        let filters = self.filter_exprs.read();
+        return  Ok((*filters).clone())
     }
 }
 

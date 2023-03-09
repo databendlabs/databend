@@ -281,6 +281,7 @@ impl PipelineBuilder {
         if runtime_filter_ids.is_some() {
             let processor = TransformRuntimeFilterPrunner::create(
                 self.ctx.clone(),
+                table.clone(),
                 runtime_filter_ids.unwrap(),
             );
             let pipe_item = PipeItem::create(ProcessorPtr::create(processor), vec![], vec![]);

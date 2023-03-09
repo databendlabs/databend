@@ -315,13 +315,8 @@ impl PhysicalPlanBuilder {
                         .target_exprs
                         .iter()
                         .map(|(id, scalar)| {
-                            let expr =
-                                scalar
-                                    .as_expr_with_col_index()?
-                                    .project_column_ref(|index| {
-                                        build_schema.index_of(&index.to_string()).unwrap()
-                                    });
-                            Ok((id.clone(), expr.as_remote_expr()))
+                            let expr = scalar.as_raw_expr_with_col_name();
+                            Ok((id.clone(), expr))
                         })
                         .collect::<Result<_>>()?,
                     stat_info: Some(stat_info),

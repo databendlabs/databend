@@ -158,7 +158,7 @@ impl HashJoinState for JoinHashTable {
         // consume min max values to construct runtime filters
         if self.ctx.get_settings().get_runtime_filter()? {
             let runtime_filter_collector = self.ctx.get_runtime_filter_collector();
-            runtime_filter_collector.consume()?;
+            runtime_filter_collector.consume(&self.hash_join_desc.target_exprs)?;
         }
 
         {

@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_expression::type_check::check_function;
 use common_expression::DataBlock;
 use common_expression::Expr;
+use common_expression::RawExpr;
 use common_expression::RemoteExpr;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_sql::executor::HashJoin;
@@ -66,7 +67,7 @@ pub struct HashJoinDesc {
     pub(crate) build_keys: Vec<Expr>,
     pub(crate) probe_keys: Vec<Expr>,
     pub(crate) source_exprs: BTreeMap<RuntimeFilterId, RemoteExpr>,
-    pub(crate) target_exprs: BTreeMap<RuntimeFilterId, RemoteExpr>,
+    pub(crate) target_exprs: BTreeMap<RuntimeFilterId, RawExpr<String>>,
     pub(crate) join_type: JoinType,
     pub(crate) other_predicate: Option<Expr>,
     pub(crate) marker_join_desc: MarkJoinDesc,

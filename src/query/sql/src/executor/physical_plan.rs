@@ -23,6 +23,7 @@ use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Literal;
+use common_expression::RawExpr;
 use common_expression::RemoteExpr;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
@@ -295,7 +296,7 @@ pub struct HashJoin {
     pub marker_index: Option<IndexType>,
     pub from_correlated_subquery: bool,
     pub source_exprs: BTreeMap<RuntimeFilterId, RemoteExpr>,
-    pub target_exprs: BTreeMap<RuntimeFilterId, RemoteExpr>,
+    pub target_exprs: BTreeMap<RuntimeFilterId, RawExpr<String>>,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
