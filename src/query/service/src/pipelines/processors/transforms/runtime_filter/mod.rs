@@ -13,5 +13,7 @@
 // limitations under the License.
 
 mod runtime_filter_collector;
+mod transform_runtime_filter_prunner;
 
 pub use runtime_filter_collector::RuntimeFilterCollector;
+pub use transform_runtime_filter_prunner::TransformRuntimeFilterPrunner;

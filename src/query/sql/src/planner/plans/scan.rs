@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -69,7 +68,7 @@ pub struct Scan {
     pub limit: Option<usize>,
     pub order_by: Option<Vec<SortItem>>,
     pub prewhere: Option<Prewhere>,
-    pub runtime_filter_exprs: Option<BTreeMap<RuntimeFilterId, ScalarExpr>>,
+    pub runtime_filter_ids: Option<Vec<RuntimeFilterId>>,
 
     pub statistics: Statistics,
 }
@@ -96,7 +95,7 @@ impl Scan {
                 is_accurate: self.statistics.is_accurate,
             },
             prewhere,
-            runtime_filter_exprs: self.runtime_filter_exprs.clone(),
+            runtime_filter_ids: self.runtime_filter_ids.clone(),
         }
     }
 }

@@ -141,6 +141,7 @@ pub struct Join {
     pub marker_index: Option<IndexType>,
     pub from_correlated_subquery: bool,
     pub source_exprs: BTreeMap<RuntimeFilterId, ScalarExpr>,
+    pub target_exprs: BTreeMap<RuntimeFilterId, ScalarExpr>,
 }
 
 impl Default for Join {
@@ -153,6 +154,7 @@ impl Default for Join {
             marker_index: Default::default(),
             from_correlated_subquery: Default::default(),
             source_exprs: Default::default(),
+            target_exprs: Default::default(),
         }
     }
 }

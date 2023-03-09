@@ -36,4 +36,5 @@ pub use transforms::TransformCreateSets;
 pub use transforms::TransformHashJoinProbe;
 pub use transforms::TransformLimit;
 pub use transforms::TransformResortAddOn;
+pub use transforms::TransformRuntimeFilterPrunner;
 pub use transforms::TransformSortPartial;

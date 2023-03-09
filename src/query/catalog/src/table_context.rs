@@ -25,7 +25,6 @@ use common_base::base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_expression::Domain;
 use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_io::prelude::FormatSettings;
@@ -76,8 +75,7 @@ pub trait RuntimeFilter: Send + Sync {
         exprs: &BTreeMap<RuntimeFilterId, RemoteExpr>,
         data: &DataBlock,
     ) -> Result<()>;
-    fn send(&self) -> Result<()>;
-    fn recv(&self) -> Result<HashMap<RuntimeFilterId, Domain>>;
+    fn consume(&self) -> Result<()>;
 }
 
 #[async_trait::async_trait]

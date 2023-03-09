@@ -143,7 +143,7 @@ fn test_to_partitions() -> Result<()> {
         limit: None,
         order_by: vec![],
         prewhere: None,
-        runtime_filter_exprs: None,
+        runtime_filter_ids: None,
     });
 
     let (stats, parts) =
@@ -185,7 +185,7 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
             prewhere: None,
             limit: None,
             order_by: vec![],
-            runtime_filter_exprs: None,
+            runtime_filter_ids: None,
         };
         let (stats, parts) = table.read_partitions(ctx.clone(), Some(push_downs)).await?;
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);

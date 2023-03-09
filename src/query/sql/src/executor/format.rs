@@ -107,20 +107,14 @@ fn table_scan_to_format_tree(
         })
         .unwrap_or_default();
 
-    let runtime_filters = plan
+    let runtime_filter_ids = plan
         .source
         .push_downs
         .as_ref()
         .and_then(|extras| {
-            extras.runtime_filter_exprs.as_ref().map(|exprs| {
-                exprs
-                    .iter()
-                    .map(|(id, expr)| {
-                        format!(
-                            "Id: {id}, Expr: {:?}",
-                            expr.as_expr(&BUILTIN_FUNCTIONS).sql_display()
-                        )
-                    })
+            extras.runtime_filter_ids.as_ref().map(|ids| {
+                ids.iter()
+                    .map(|id| format!("Id: {id}",))
                     .collect::<Vec<String>>()
             })
         })
@@ -142,7 +136,7 @@ fn table_scan_to_format_tree(
     children.extend(part_stats_info_to_format_tree(&plan.source.statistics));
     // Push downs.
     children.push(FormatTreeNode::new(format!(
-        "push downs: [filters: [{filters}], limit: {limit}, runtime_filters: [{runtime_filters}]]"
+        "push downs: [filters: [{filters}], limit: {limit}, runtime_filter_ids: [{runtime_filter_ids}]]"
     )));
 
     let output_columns = plan.source.output_schema.fields();

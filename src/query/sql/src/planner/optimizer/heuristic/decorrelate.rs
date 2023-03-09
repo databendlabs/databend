@@ -197,6 +197,7 @@ impl SubqueryRewriter {
             marker_index: None,
             from_correlated_subquery: true,
             source_exprs: Default::default(),
+            target_exprs: Default::default(),
         };
 
         // Rewrite plan to semi-join.
@@ -264,6 +265,7 @@ impl SubqueryRewriter {
                     marker_index: None,
                     from_correlated_subquery: true,
                     source_exprs: Default::default(),
+                    target_exprs: Default::default(),
                 };
                 let s_expr = SExpr::create_binary(join_plan.into(), left.clone(), flatten_plan);
                 Ok((s_expr, UnnestResult::SingleJoin))
@@ -302,6 +304,7 @@ impl SubqueryRewriter {
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
                     source_exprs: Default::default(),
+                    target_exprs: Default::default(),
                 };
                 let s_expr = SExpr::create_binary(join_plan.into(), left.clone(), flatten_plan);
                 Ok((s_expr, UnnestResult::MarkJoin { marker_index }))
@@ -358,6 +361,7 @@ impl SubqueryRewriter {
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
                     source_exprs: Default::default(),
+                    target_exprs: Default::default(),
                 }
                 .into();
                 Ok((
@@ -420,7 +424,7 @@ impl SubqueryRewriter {
                         is_accurate: false,
                     },
                     prewhere: None,
-                    runtime_filter_exprs: None,
+                    runtime_filter_ids: None,
                 }
                 .into(),
             );
@@ -433,6 +437,7 @@ impl SubqueryRewriter {
                 marker_index: None,
                 from_correlated_subquery: false,
                 source_exprs: Default::default(),
+                target_exprs: Default::default(),
             }
             .into();
             return Ok(SExpr::create_binary(cross_join, logical_get, plan.clone()));
@@ -547,6 +552,7 @@ impl SubqueryRewriter {
                         marker_index: join.marker_index,
                         from_correlated_subquery: false,
                         source_exprs: join.source_exprs.clone(),
+                        target_exprs: join.target_exprs.clone(),
                     }
                     .into(),
                     left_flatten_plan,

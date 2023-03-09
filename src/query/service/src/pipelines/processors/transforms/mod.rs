@@ -61,6 +61,7 @@ pub use hash_join::JoinHashTable;
 pub use hash_join::SerializerHashTable;
 pub use profile_wrapper::ProfileWrapper;
 pub use runtime_filter::RuntimeFilterCollector;
+pub use runtime_filter::TransformRuntimeFilterPrunner;
 pub use transform_add_const_columns::TransformAddConstColumns;
 pub use transform_block_compact::BlockCompactor;
 pub use transform_block_compact::TransformBlockCompact;

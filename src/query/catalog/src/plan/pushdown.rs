@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -84,8 +83,7 @@ pub struct PushDownInfo {
     pub limit: Option<usize>,
     /// Optional order_by expression plan, asc, null_first
     pub order_by: Vec<(RemoteExpr<String>, bool, bool)>,
-    /// runtime filter exprs, used by runtime filter in storage
-    pub runtime_filter_exprs: Option<BTreeMap<RuntimeFilterId, RemoteExpr<String>>>,
+    pub runtime_filter_ids: Option<Vec<RuntimeFilterId>>,
 }
 
 /// TopK is a wrapper for topk push down items.

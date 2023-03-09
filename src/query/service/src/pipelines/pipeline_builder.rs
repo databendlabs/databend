@@ -30,6 +30,8 @@ use common_expression::SortColumnDescription;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_pipeline_core::pipe::Pipe;
+use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_sinks::EmptySink;
 use common_pipeline_sinks::Sinker;
@@ -91,6 +93,7 @@ use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::processors::TransformSortPartial;
 use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
+use crate::pipelines::TransformRuntimeFilterPrunner;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -268,6 +271,22 @@ impl PipelineBuilder {
 
     fn build_table_scan(&mut self, scan: &TableScan) -> Result<()> {
         let table = self.ctx.build_table_from_source_plan(&scan.source)?;
+        // Create runtime filter pruner processor and add to pipeline
+        let runtime_filter_ids = scan
+            .source
+            .push_downs
+            .as_ref()
+            .and_then(|p| p.runtime_filter_ids.clone());
+
+        if runtime_filter_ids.is_some() {
+            let processor = TransformRuntimeFilterPrunner::create(
+                self.ctx.clone(),
+                runtime_filter_ids.unwrap(),
+            );
+            let pipe_item = PipeItem::create(ProcessorPtr::create(processor), vec![], vec![]);
+            let pipe = Pipe::create(0, 0, vec![pipe_item]);
+            self.main_pipeline.add_pipe(pipe);
+        }
         self.ctx.set_partitions(scan.source.parts.clone())?;
         table.read_data(self.ctx.clone(), &scan.source, &mut self.main_pipeline)?;
 

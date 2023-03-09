@@ -392,6 +392,7 @@ impl SubqueryRewriter {
                     marker_index: None,
                     from_correlated_subquery: false,
                     source_exprs: Default::default(),
+                    target_exprs: Default::default(),
                 }
                 .into();
                 let s_expr =
@@ -482,6 +483,7 @@ impl SubqueryRewriter {
                     marker_index: None,
                     from_correlated_subquery: false,
                     source_exprs: Default::default(),
+                    target_exprs: Default::default(),
                 }
                 .into();
                 Ok((
@@ -545,6 +547,7 @@ impl SubqueryRewriter {
                     marker_index: Some(marker_index),
                     from_correlated_subquery: false,
                     source_exprs: Default::default(),
+                    target_exprs: Default::default(),
                 }
                 .into();
                 let s_expr =

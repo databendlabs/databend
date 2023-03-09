@@ -151,6 +151,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             marker_index: plan.marker_index,
             from_correlated_subquery: plan.from_correlated_subquery,
             source_exprs: plan.source_exprs.clone(),
+            target_exprs: plan.target_exprs.clone(),
             stat_info: plan.stat_info.clone(),
         }))
     }

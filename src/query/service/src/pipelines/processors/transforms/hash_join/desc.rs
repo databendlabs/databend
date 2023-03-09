@@ -66,6 +66,7 @@ pub struct HashJoinDesc {
     pub(crate) build_keys: Vec<Expr>,
     pub(crate) probe_keys: Vec<Expr>,
     pub(crate) source_exprs: BTreeMap<RuntimeFilterId, RemoteExpr>,
+    pub(crate) target_exprs: BTreeMap<RuntimeFilterId, RemoteExpr>,
     pub(crate) join_type: JoinType,
     pub(crate) other_predicate: Option<Expr>,
     pub(crate) marker_join_desc: MarkJoinDesc,
@@ -94,6 +95,7 @@ impl HashJoinDesc {
             build_keys,
             probe_keys,
             source_exprs: join.source_exprs.clone(),
+            target_exprs: join.target_exprs.clone(),
             other_predicate,
             marker_join_desc: MarkJoinDesc {
                 has_null: RwLock::new(false),

@@ -295,6 +295,7 @@ pub struct HashJoin {
     pub marker_index: Option<IndexType>,
     pub from_correlated_subquery: bool,
     pub source_exprs: BTreeMap<RuntimeFilterId, RemoteExpr>,
+    pub target_exprs: BTreeMap<RuntimeFilterId, RemoteExpr>,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,

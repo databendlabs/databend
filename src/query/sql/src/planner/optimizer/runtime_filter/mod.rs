@@ -78,9 +78,12 @@ pub fn try_add_runtime_filter_to_scan(id: &mut IndexType, expr: &SExpr) -> Resul
                 marker_index: join.marker_index,
                 from_correlated_subquery: join.from_correlated_subquery,
                 source_exprs: runtime_filter_result.source_exprs,
+                target_exprs: runtime_filter_result.target_exprs.clone(),
             }));
-            let new_left_child =
-                add_runtime_filter_to_scan(runtime_filter_result.target_exprs, new_expr.child(0)?)?;
+            let new_left_child = add_runtime_filter_to_scan(
+                &runtime_filter_result.target_exprs,
+                new_expr.child(0)?,
+            )?;
             new_expr = new_expr.replace_children(vec![new_left_child, expr.child(1)?.clone()]);
         }
     }
@@ -93,7 +96,7 @@ pub fn try_add_runtime_filter_to_scan(id: &mut IndexType, expr: &SExpr) -> Resul
 }
 
 fn add_runtime_filter_to_scan(
-    target_exprs: BTreeMap<RuntimeFilterId, ScalarExpr>,
+    target_exprs: &BTreeMap<RuntimeFilterId, ScalarExpr>,
     expr: &SExpr,
 ) -> Result<SExpr> {
     match expr.plan() {
@@ -105,8 +108,8 @@ fn add_runtime_filter_to_scan(
                 limit: op.limit,
                 order_by: op.order_by.clone(),
                 prewhere: op.prewhere.clone(),
-                runtime_filter_exprs: Some(target_exprs),
                 statistics: op.statistics.clone(),
+                runtime_filter_ids: Some(target_exprs.keys().cloned().collect()),
             }));
             Ok(new_expr)
         }
@@ -130,8 +133,8 @@ fn add_runtime_filter_to_scan(
                     _ => unreachable!(),
                 }
             }
-            let new_left_child = add_runtime_filter_to_scan(left_target_exprs, left_child)?;
-            let new_right_child = add_runtime_filter_to_scan(right_target_exprs, right_child)?;
+            let new_left_child = add_runtime_filter_to_scan(&left_target_exprs, left_child)?;
+            let new_right_child = add_runtime_filter_to_scan(&right_target_exprs, right_child)?;
             Ok(expr.replace_children(vec![new_left_child, new_right_child]))
         }
         RelOperator::EvalScalar(_)

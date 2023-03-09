@@ -138,6 +138,7 @@ fn test_format() {
             marker_index: None,
             from_correlated_subquery: false,
             source_exprs: Default::default(),
+            target_exprs: Default::default(),
         }
         .into(),
         SExpr::create_unary(
@@ -160,7 +161,7 @@ fn test_format() {
                     limit: None,
                     order_by: None,
                     prewhere: None,
-                    runtime_filter_exprs: None,
+                    runtime_filter_ids: None,
                     statistics: Statistics {
                         statistics: None,
                         col_stats: Default::default(),
@@ -178,7 +179,7 @@ fn test_format() {
                 limit: None,
                 order_by: None,
                 prewhere: None,
-                runtime_filter_exprs: None,
+                runtime_filter_ids: None,
                 statistics: Statistics {
                     statistics: None,
                     col_stats: Default::default(),

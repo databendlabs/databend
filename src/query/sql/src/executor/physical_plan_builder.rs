@@ -311,6 +311,19 @@ impl PhysicalPlanBuilder {
                             Ok((id.clone(), expr.as_remote_expr()))
                         })
                         .collect::<Result<_>>()?,
+                    target_exprs: join
+                        .target_exprs
+                        .iter()
+                        .map(|(id, scalar)| {
+                            let expr =
+                                scalar
+                                    .as_expr_with_col_index()?
+                                    .project_column_ref(|index| {
+                                        build_schema.index_of(&index.to_string()).unwrap()
+                                    });
+                            Ok((id.clone(), expr.as_remote_expr()))
+                        })
+                        .collect::<Result<_>>()?,
                     stat_info: Some(stat_info),
                 }))
             }
@@ -848,13 +861,8 @@ impl PhysicalPlanBuilder {
             })
             .transpose()?;
 
-        let runtime_filter_exprs = if let Some(exprs) = &scan.runtime_filter_exprs {
-            let mut new_exprs = BTreeMap::new();
-            for (id, expr) in exprs {
-                let remote_expr = expr.as_expr_with_col_name()?.as_remote_expr();
-                new_exprs.insert(id.clone(), remote_expr);
-            }
-            Some(new_exprs)
+        let runtime_filter_ids = if let Some(ids) = &scan.runtime_filter_ids {
+            Some(ids.clone())
         } else {
             None
         };
@@ -863,7 +871,7 @@ impl PhysicalPlanBuilder {
             projection: Some(projection),
             filter: push_down_filter,
             prewhere: prewhere_info,
-            runtime_filter_exprs,
+            runtime_filter_ids,
             limit: scan.limit,
             order_by: order_by.unwrap_or_default(),
         })
