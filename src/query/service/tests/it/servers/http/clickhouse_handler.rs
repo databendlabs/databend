@@ -20,6 +20,7 @@ use databend_query::auth::AuthMgr;
 use databend_query::servers::http::middleware::HTTPSessionEndpoint;
 use databend_query::servers::http::middleware::HTTPSessionMiddleware;
 use databend_query::servers::http::v1::clickhouse_router;
+use databend_query::servers::http::CLICKHOUSE_VERSION;
 use databend_query::servers::HttpHandlerKind;
 use http::Uri;
 use poem::error::Result as PoemResult;
@@ -352,6 +353,21 @@ async fn test_multi_partition() -> PoemResult<()> {
             &body,
             "1\tmysql\n2\tdatabend\n1\tmysql\n2\tdatabend\n1\tmysql\n2\tdatabend\n"
         );
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_federated() -> PoemResult<()> {
+    let config = ConfigBuilder::create().build();
+    let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
+    let server = Server::new(&config).await;
+    {
+        let sql = "select version();";
+        let (status, body) = server.get(sql).await;
+        assert_ok!(status, body);
+        assert_eq!(&body, &(CLICKHOUSE_VERSION.to_string() + "\n"));
     }
 
     Ok(())

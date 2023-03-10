@@ -48,7 +48,7 @@ impl FuseTable {
             let new_snapshot_loc =
                 loc.snapshot_location_from_uuid(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
             let bytes = serde_json::to_vec(&new_snapshot)?;
-            self.operator.object(&new_snapshot_loc).write(bytes).await?;
+            self.operator.write(&new_snapshot_loc, bytes).await?;
 
             if purge {
                 let keep_last_snapshot = false;

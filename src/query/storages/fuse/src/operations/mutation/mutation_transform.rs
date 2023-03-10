@@ -153,7 +153,7 @@ impl MutationTransform {
         for segment in segments {
             let op = self.dal.clone();
             handles.push(async move {
-                op.object(&segment.location).write(segment.data).await?;
+                op.write(&segment.location, segment.data).await?;
                 if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
                     segment_cache.put(segment.location.clone(), segment.segment.clone());
                 }

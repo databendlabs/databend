@@ -171,7 +171,7 @@ impl FuseTable {
     }
 
     pub fn get_write_settings(&self) -> WriteSettings {
-        let default_rows_per_page = if self.operator.metadata().can_blocking() {
+        let default_rows_per_page = if self.operator.info().can_blocking() {
             DEFAULT_ROW_PER_PAGE_FOR_BLOCKING
         } else {
             DEFAULT_ROW_PER_PAGE
@@ -274,7 +274,7 @@ impl FuseTable {
         match self.table_info.db_type {
             DatabaseType::ShareDB(_) => {
                 let url = FUSE_TBL_LAST_SNAPSHOT_HINT;
-                let data = self.operator.object(url).read().await?;
+                let data = self.operator.read(url).await?;
                 let s = str::from_utf8(&data)?;
                 Ok(Some(s.to_string()))
             }

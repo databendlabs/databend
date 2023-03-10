@@ -98,9 +98,9 @@ pub struct Xor8FilterLoader {
 #[async_trait::async_trait]
 impl Loader<Xor8Filter> for Xor8FilterLoader {
     async fn load(&self, params: &LoadParams) -> Result<Xor8Filter> {
-        let reader = self.operator.object(&params.location);
-        let bytes = reader
-            .range_read(self.offset..self.offset + self.len)
+        let bytes = self
+            .operator
+            .range_read(&params.location, self.offset..self.offset + self.len)
             .await?;
 
         let page_meta_data = PageMetaData {

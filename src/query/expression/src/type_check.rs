@@ -31,8 +31,11 @@ use crate::types::number::NumberDataType;
 use crate::types::number::NumberScalar;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
+use crate::types::Number;
 use crate::AutoCastRules;
 use crate::ColumnIndex;
+use crate::ConstantFolder;
+use crate::FunctionContext;
 use crate::Scalar;
 
 pub fn check<Index: ColumnIndex>(
@@ -225,6 +228,34 @@ fn wrap_nullable_for_try_cast(span: Span, ty: &DataType) -> Result<DataType> {
                 .collect::<Result<Vec<_>>>()?,
         )))),
         _ => Ok(DataType::Nullable(Box::new(ty.clone()))),
+    }
+}
+
+pub fn check_number<Index: ColumnIndex, T: Number>(
+    span: Span,
+    func_ctx: FunctionContext,
+    expr: &Expr<Index>,
+    fn_registry: &FunctionRegistry,
+) -> Result<T> {
+    let (expr, _) = ConstantFolder::fold(expr, func_ctx, fn_registry);
+    match expr {
+        Expr::Constant {
+            scalar: Scalar::Number(num),
+            ..
+        } => T::try_downcast_scalar(&num).ok_or_else(|| {
+            ErrorCode::InvalidArgument(format!(
+                "Expect {}, but got {}",
+                T::data_type(),
+                expr.data_type()
+            ))
+            .set_span(span)
+        }),
+        _ => Err(ErrorCode::InvalidArgument(format!(
+            "Expect {}, but got {}",
+            T::data_type(),
+            expr.data_type()
+        ))
+        .set_span(span)),
     }
 }
 
