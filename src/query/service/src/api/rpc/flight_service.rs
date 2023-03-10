@@ -166,12 +166,7 @@ impl FlightService for DatabendQueryFlightService {
                 FlightResult { body: vec![] }
             }
             FlightAction::ExecutePartialQuery(query_id) => {
-                let spawner = DataExchangeManager::instance().get_query_ctx(&query_id)?;
-
-                match_join_handle(spawner.spawn(async move {
-                    DataExchangeManager::instance().execute_partial_query(&query_id)
-                }))
-                .await?;
+                DataExchangeManager::instance().execute_partial_query(&query_id)?;
 
                 FlightResult { body: vec![] }
             }

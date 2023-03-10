@@ -202,6 +202,16 @@ select number % 3,   sum(number), avg(number),  count() from numbers(100) group 
 1 1617 49.0 33
 2 1650 50.0 33
 
+query I
+SELECT median(number) from numbers_mt(10000)
+----
+4999
+
+query I
+SELECT quantile(0.6)(number) from numbers_mt(10000)
+----
+5999
+
 statement ok
 DROP DATABASE db1
 

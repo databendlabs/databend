@@ -153,22 +153,18 @@ fn replace_column_binding(
         ScalarExpr::AndExpr(expr) => Ok(ScalarExpr::AndExpr(AndExpr {
             left: Box::new(replace_column_binding(index_pairs, *expr.left)?),
             right: Box::new(replace_column_binding(index_pairs, *expr.right)?),
-            return_type: expr.return_type,
         })),
         ScalarExpr::OrExpr(expr) => Ok(ScalarExpr::OrExpr(OrExpr {
             left: Box::new(replace_column_binding(index_pairs, *expr.left)?),
             right: Box::new(replace_column_binding(index_pairs, *expr.right)?),
-            return_type: expr.return_type,
         })),
         ScalarExpr::NotExpr(expr) => Ok(ScalarExpr::NotExpr(NotExpr {
             argument: Box::new(replace_column_binding(index_pairs, *expr.argument)?),
-            return_type: expr.return_type,
         })),
         ScalarExpr::ComparisonExpr(expr) => Ok(ScalarExpr::ComparisonExpr(ComparisonExpr {
             op: expr.op,
             left: Box::new(replace_column_binding(index_pairs, *expr.left)?),
             right: Box::new(replace_column_binding(index_pairs, *expr.right)?),
-            return_type: expr.return_type,
         })),
         ScalarExpr::AggregateFunction(expr) => {
             Ok(ScalarExpr::AggregateFunction(AggregateFunction {
@@ -192,12 +188,10 @@ fn replace_column_binding(
                 .map(|arg| replace_column_binding(index_pairs, arg))
                 .collect::<Result<Vec<_>>>()?,
             func_name: expr.func_name,
-            return_type: expr.return_type,
         })),
         ScalarExpr::CastExpr(expr) => Ok(ScalarExpr::CastExpr(CastExpr {
             is_try: expr.is_try,
             argument: Box::new(replace_column_binding(index_pairs, *(expr.argument))?),
-            from_type: expr.from_type,
             target_type: expr.target_type,
         })),
         ScalarExpr::SubqueryExpr(_) => Err(ErrorCode::Unimplemented(

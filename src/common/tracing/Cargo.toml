@@ -22,7 +22,7 @@ common-exception = { path = "../exception" }
 console-subscriber = { version = "0.1.8", optional = true }
 opentelemetry = { version = "0.18.0", default-features = false, features = ["trace", "rt-tokio"] }
 opentelemetry-jaeger = { version = "0.17.0", features = ["rt-tokio"] }
-sentry-tracing = "0.27.0"
+sentry-tracing = "0.30.0"
 serde = { workspace = true }
 tonic = "0.8.1"
 tracing = "0.1.36"

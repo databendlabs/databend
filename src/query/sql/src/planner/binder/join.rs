@@ -608,8 +608,8 @@ impl<'a> JoinConditionResolver<'a> {
         let (left_columns, right_columns) = self.left_right_columns()?;
 
         // Bump types of left conditions and right conditions
-        let left_type = left.data_type();
-        let right_type = right.data_type();
+        let left_type = left.data_type()?;
+        let right_type = right.data_type()?;
         if left_type.ne(&right_type) {
             let least_super_type = common_super_type(
                 left_type.clone(),

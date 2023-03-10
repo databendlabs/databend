@@ -29,6 +29,14 @@ SHOW CREATE TABLE `test`.`b`
 b CREATE TABLE `b` (   `a` BIGINT,   `b` INT NULL DEFAULT NULL,   `c` VARCHAR,   `d` SMALLINT UNSIGNED NULL ) ENGINE=NULL COMMENT='test b'
 
 statement ok
+create view test.v_b as select * from `test`.`b`
+
+query TT
+show create table test.v_b
+----
+v_b CREATE VIEW `test`.`v_b` AS SELECT * FROM `test`.`b`
+
+statement ok
 CREATE TABLE test.c (a int) CLUSTER BY (a, a % 3)
 
 ## SQL LOGIC has bugs to compare these stmt

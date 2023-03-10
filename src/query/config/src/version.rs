@@ -15,8 +15,8 @@ use once_cell::sync::Lazy;
 use semver::Version;
 
 pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
-    let git_tag = option_env!("VERGEN_GIT_SEMVER");
-    let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");
+    let git_tag = option_env!("DATABEND_GIT_SEMVER");
+    let git_sha = option_env!("VERGEN_GIT_SHA");
     let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
     let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
 
@@ -33,8 +33,8 @@ pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
 
 pub static QUERY_SEMVER: Lazy<Version> = Lazy::new(|| {
     //
-    let build_semver = option_env!("VERGEN_GIT_SEMVER");
-    let semver = build_semver.expect("VERGEN_GIT_SEMVER can not be None");
+    let build_semver = option_env!("DATABEND_GIT_SEMVER");
+    let semver = build_semver.expect("DATABEND_GIT_SEMVER can not be None");
 
     let semver = semver.strip_prefix('v').unwrap_or(semver);
 

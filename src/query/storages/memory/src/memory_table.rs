@@ -178,7 +178,6 @@ impl Table for MemoryTable {
                     .fold(PartStatistics::default(), |mut stats, block| {
                         stats.read_rows += block.num_rows();
                         stats.read_bytes += (0..block.num_columns())
-                            .into_iter()
                             .collect::<Vec<usize>>()
                             .iter()
                             .filter(|cid| projection_filter(**cid))
