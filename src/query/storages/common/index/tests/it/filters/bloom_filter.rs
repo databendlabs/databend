@@ -81,13 +81,10 @@ fn test_bloom_filter() -> Result<()> {
                 },
                 BlockEntry {
                     data_type: map_ty.clone(),
-                    value: Value::Scalar(Scalar::Map(Column::Tuple {
-                        fields: vec![
-                            UInt8Type::from_data(vec![1, 2]),
-                            StringType::from_data(vec!["a", "b"]),
-                        ],
-                        len: 2,
-                    })),
+                    value: Value::Scalar(Scalar::Map(Column::Tuple(vec![
+                        UInt8Type::from_data(vec![1, 2]),
+                        StringType::from_data(vec!["a", "b"]),
+                    ]))),
                 },
             ],
             2,
