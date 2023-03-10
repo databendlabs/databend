@@ -30,4 +30,5 @@ runs:
       shell: bash
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
+        BUILD_PROFILE: ${{ inputs.profile }}
       run: bash ./scripts/ci/ci-run-sqllogic-tests.sh ${{ inputs.dirs }}
