@@ -16,9 +16,11 @@ use std::any::Any;
 use std::io::Cursor;
 
 use chrono_tz::Tz;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::read_decimal_from_json;
+use common_expression::serialize::read_decimal_from_json;
+use common_expression::serialize::uniform_date;
 use common_expression::types::array::ArrayColumnBuilder;
 use common_expression::types::date::check_date;
 use common_expression::types::decimal::Decimal;
@@ -30,12 +32,9 @@ use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::timestamp::check_timestamp;
 use common_expression::types::AnyType;
 use common_expression::types::NumberColumnBuilder;
-use common_expression::uniform_date;
 use common_expression::with_decimal_type;
 use common_expression::with_number_mapped_type;
-use common_expression::BooleanDeserializer;
 use common_expression::ColumnBuilder;
-use common_expression::StringDeserializer;
 use common_io::cursor_ext::BufferReadDateTimeExt;
 use common_io::cursor_ext::ReadNumberExt;
 use lexical_core::FromLexical;
@@ -92,7 +91,7 @@ impl FieldJsonAstDecoder {
         }
     }
 
-    fn read_bool(&self, column: &mut BooleanDeserializer, value: &Value) -> Result<()> {
+    fn read_bool(&self, column: &mut MutableBitmap, value: &Value) -> Result<()> {
         match value {
             Value::Bool(v) => column.push(*v),
             _ => return Err(ErrorCode::BadBytes("Incorrect boolean value")),
@@ -176,7 +175,7 @@ impl FieldJsonAstDecoder {
         Ok(())
     }
 
-    fn read_string(&self, column: &mut StringDeserializer, value: &Value) -> Result<()> {
+    fn read_string(&self, column: &mut StringColumnBuilder, value: &Value) -> Result<()> {
         match value {
             Value::String(s) => {
                 column.put_str(s.as_str());

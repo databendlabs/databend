@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,139 +14,102 @@
 
 use std::cmp::Ordering;
 
+use chrono::Datelike;
+use chrono::NaiveDate;
+use common_arrow::arrow::chunk::Chunk as ArrowChunk;
+use common_arrow::arrow::datatypes::DataType as ArrowDataType;
+use common_arrow::arrow::io::parquet::write::transverse;
+use common_arrow::arrow::io::parquet::write::RowGroupIterator;
+use common_arrow::arrow::io::parquet::write::WriteOptions;
+use common_arrow::parquet::compression::CompressionOptions;
+use common_arrow::parquet::encoding::Encoding;
+use common_arrow::parquet::metadata::ThriftFileMetaData;
+use common_arrow::parquet::write::Version;
+use common_arrow::write_parquet_file;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::FormatSettings;
 
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalSize;
-use crate::types::DecimalDataType;
-use crate::Column;
-use crate::Scalar;
-use crate::TypeDeserializer;
+use crate::DataBlock;
+use crate::TableSchema;
 
-pub struct DecimalDeserializer<T: Decimal> {
-    pub values: Vec<T>,
-    pub ty: DecimalDataType,
-    // for fast access
-    pub size: DecimalSize,
-}
+pub fn serialize_to_parquet_with_compression(
+    blocks: Vec<DataBlock>,
+    schema: impl AsRef<TableSchema>,
+    buf: &mut Vec<u8>,
+    compression: CompressionOptions,
+) -> Result<(u64, ThriftFileMetaData)> {
+    let arrow_schema = schema.as_ref().to_arrow();
 
-impl<T: Decimal> DecimalDeserializer<T> {
-    pub fn with_capacity(ty: &DecimalDataType, capacity: usize) -> Self {
-        Self {
-            size: ty.size(),
-            ty: *ty,
-            values: Vec::with_capacity(capacity),
-        }
+    let row_group_write_options = WriteOptions {
+        write_statistics: false,
+        compression,
+        version: Version::V2,
+        data_pagesize_limit: None,
+    };
+    let batches = blocks
+        .into_iter()
+        .map(ArrowChunk::try_from)
+        .collect::<Result<Vec<_>>>()?;
+
+    let encoding_map = |data_type: &ArrowDataType| match data_type {
+        ArrowDataType::Dictionary(..) => Encoding::RleDictionary,
+        _ => col_encoding(data_type),
+    };
+
+    let encodings: Vec<Vec<_>> = arrow_schema
+        .fields
+        .iter()
+        .map(|f| transverse(&f.data_type, encoding_map))
+        .collect::<Vec<_>>();
+
+    let row_groups = RowGroupIterator::try_new(
+        batches.into_iter().map(Ok),
+        &arrow_schema,
+        row_group_write_options,
+        encodings,
+    )?;
+
+    use common_arrow::parquet::write::WriteOptions as FileWriteOption;
+    let options = FileWriteOption {
+        write_statistics: false,
+        version: Version::V2,
+    };
+
+    match write_parquet_file(buf, row_groups, arrow_schema.clone(), options) {
+        Ok(result) => Ok(result),
+        Err(cause) => Err(ErrorCode::ParquetFileInvalid(cause.to_string())),
     }
 }
 
-impl<T: Decimal> DecimalDeserializer<T> {
-    pub fn de_json_inner(&mut self, value: &serde_json::Value) -> Result<()> {
-        match value {
-            serde_json::Value::Number(n) => {
-                if n.is_i64() {
-                    self.values.push(
-                        T::from_i64(n.as_i64().unwrap())
-                            .with_size(self.size)
-                            .ok_or_else(overflow_error)?,
-                    );
-                    Ok(())
-                } else if n.is_u64() {
-                    self.values.push(
-                        T::from_u64(n.as_u64().unwrap())
-                            .with_size(self.size)
-                            .ok_or_else(overflow_error)?,
-                    );
-                    Ok(())
-                } else {
-                    let f = n.as_f64().unwrap() * (10_f64).powi(self.size.scale as i32);
-                    let n = T::from_float(f);
-                    self.values.push(n);
-                    Ok(())
-                }
-            }
-            serde_json::Value::String(s) => {
-                let (n, _) = read_decimal_with_size::<T>(s.as_bytes(), self.size, true)?;
-                self.values.push(n);
-                Ok(())
-            }
-            _ => Err(ErrorCode::from("Incorrect json value for decimal")),
-        }
-    }
+pub fn serialize_to_parquet(
+    blocks: Vec<DataBlock>,
+    schema: impl AsRef<TableSchema>,
+    buf: &mut Vec<u8>,
+) -> Result<(u64, ThriftFileMetaData)> {
+    serialize_to_parquet_with_compression(blocks, schema, buf, CompressionOptions::Lz4Raw)
 }
 
-impl<T: Decimal> TypeDeserializer for DecimalDeserializer<T> {
-    fn memory_size(&self) -> usize {
-        self.values.len() * T::mem_size()
-    }
-
-    fn len(&self) -> usize {
-        self.values.len()
-    }
-
-    // See GroupHash.rs for StringColumn
-    #[allow(clippy::uninit_vec)]
-    fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
-        let t: T = T::de_binary(reader);
-        self.values.push(t);
-        Ok(())
-    }
-
-    fn de_default(&mut self) {
-        self.values.push(T::zero());
-    }
-
-    fn de_fixed_binary_batch(
-        &mut self,
-        reader: &[u8],
-        step: usize,
-        rows: usize,
-        _format: &FormatSettings,
-    ) -> Result<()> {
-        for row in 0..rows {
-            let mut row_reader = &reader[step * row..];
-            let value: T = T::de_binary(&mut row_reader);
-            self.values.push(value);
-        }
-        Ok(())
-    }
-
-    fn de_json(&mut self, value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {
-        self.de_json_inner(value)
-    }
-
-    fn append_data_value(&mut self, value: Scalar, _format: &FormatSettings) -> Result<()> {
-        let d = value
-            .as_decimal()
-            .ok_or_else(|| ErrorCode::from("Unable to get decimal value"))?;
-        let i = T::try_downcast_scalar(d)
-            .ok_or_else(|| ErrorCode::from("Unable to get decimal value"))?;
-        self.values.push(i);
-        Ok(())
-    }
-
-    fn pop_data_value(&mut self) -> Result<Scalar> {
-        match self.values.pop() {
-            Some(v) => Ok(T::upcast_scalar(v, self.size)),
-            None => Err(ErrorCode::from(
-                "Decimal column is empty when pop data value",
-            )),
-        }
-    }
-
-    fn finish_to_column(&mut self) -> Column {
-        Column::Decimal(T::to_column(std::mem::take(&mut self.values), self.size))
-    }
+pub fn col_encoding(_data_type: &ArrowDataType) -> Encoding {
+    // Although encoding does work, parquet2 has not implemented decoding of DeltaLengthByteArray yet, we fallback to Plain
+    // From parquet2: Decoding "DeltaLengthByteArray"-encoded required V2 pages is not yet implemented for Binary.
+    //
+    // match data_type {
+    //    ArrowDataType::Binary
+    //    | ArrowDataType::LargeBinary
+    //    | ArrowDataType::Utf8
+    //    | ArrowDataType::LargeUtf8 => Encoding::DeltaLengthByteArray,
+    //    _ => Encoding::Plain,
+    //}
+    Encoding::Plain
 }
 
-fn parse_error(msg: &str) -> ErrorCode {
-    ErrorCode::BadArguments(format!("bad decimal literal: {msg}"))
-}
+pub const EPOCH_DAYS_FROM_CE: i32 = 719_163;
 
-fn overflow_error() -> ErrorCode {
-    ErrorCode::Overflow("decimal overflow")
+#[inline]
+pub fn uniform_date(date: NaiveDate) -> i32 {
+    date.num_days_from_ce() - EPOCH_DAYS_FROM_CE
 }
 
 pub fn read_decimal_with_size<T: Decimal>(
@@ -156,18 +119,18 @@ pub fn read_decimal_with_size<T: Decimal>(
 ) -> Result<(T, usize)> {
     let (n, d, e, n_read) = read_decimal::<T>(buf, size.precision as u32, exact)?;
     if d as i32 + e > (size.precision - size.scale).into() {
-        return Err(overflow_error());
+        return Err(decimal_overflow_error());
     }
     let scale_diff = e + size.scale as i32;
     let n = match scale_diff.cmp(&0) {
         Ordering::Less => {
             // e < 0, than  -e is the actual scale, (-e) > scale means we need to cut more
             n.checked_div(T::e(-scale_diff as u32))
-                .ok_or_else(overflow_error)?
+                .ok_or_else(decimal_overflow_error)?
         }
         Ordering::Greater => n
             .checked_mul(T::e(scale_diff as u32))
-            .ok_or_else(overflow_error)?,
+            .ok_or_else(decimal_overflow_error)?,
         Ordering::Equal => n,
     };
     Ok((n, n_read))
@@ -188,7 +151,7 @@ pub fn read_decimal<T: Decimal>(
     exact: bool,
 ) -> Result<(T, u8, i32, usize)> {
     if buf.is_empty() {
-        return Err(parse_error("empty"));
+        return Err(decimal_parse_error("empty"));
     }
 
     let mut n = T::zero();
@@ -227,16 +190,18 @@ pub fn read_decimal<T: Decimal>(
             b'0'..=b'9' => {
                 digits += 1;
                 if digits > max_digits {
-                    return Err(overflow_error());
+                    return Err(decimal_overflow_error());
                 } else {
                     let v = buf[pos];
                     if v == b'0' {
                         zeros += 1;
                     } else {
-                        n = n.checked_mul(T::e(zeros + 1)).ok_or_else(overflow_error)?;
+                        n = n
+                            .checked_mul(T::e(zeros + 1))
+                            .ok_or_else(decimal_overflow_error)?;
                         n = n
                             .checked_add(T::from_u64((v - b'0') as u64))
-                            .ok_or_else(overflow_error)?;
+                            .ok_or_else(decimal_overflow_error)?;
                         zeros = 0;
                     }
                 }
@@ -254,7 +219,7 @@ pub fn read_decimal<T: Decimal>(
             }
             _ => {
                 if exact {
-                    return Err(parse_error("unexpected char"));
+                    return Err(decimal_parse_error("unexpected char"));
                 } else {
                     stop = pos as i32;
                     break;
@@ -265,7 +230,9 @@ pub fn read_decimal<T: Decimal>(
     }
 
     if zeros > 0 {
-        n = n.checked_mul(T::e(zeros)).ok_or_else(overflow_error)?;
+        n = n
+            .checked_mul(T::e(zeros))
+            .ok_or_else(decimal_overflow_error)?;
         zeros = 0;
     }
 
@@ -289,10 +256,12 @@ pub fn read_decimal<T: Decimal>(
                         continue;
                     } else {
                         let v = buf[pos];
-                        n = n.checked_mul(T::e(zeros + 1)).ok_or_else(overflow_error)?;
+                        n = n
+                            .checked_mul(T::e(zeros + 1))
+                            .ok_or_else(decimal_overflow_error)?;
                         n = n
                             .checked_add(T::from_u64((v - b'0') as u64))
-                            .ok_or_else(overflow_error)?;
+                            .ok_or_else(decimal_overflow_error)?;
                         digits += zeros + 1;
                         zeros = 0;
                     }
@@ -304,7 +273,7 @@ pub fn read_decimal<T: Decimal>(
                 }
                 _ => {
                     if exact {
-                        return Err(parse_error("unexpected char"));
+                        return Err(decimal_parse_error("unexpected char"));
                     } else {
                         stop = pos as i32;
                         break;
@@ -317,7 +286,7 @@ pub fn read_decimal<T: Decimal>(
 
     if digits == 0 && zeros == 0 && !leading_zero {
         // these are ok: 0 0.0 0. .0 +0
-        return Err(parse_error("no digits"));
+        return Err(decimal_parse_error("no digits"));
     }
 
     let mut exponent = if has_point {
@@ -329,7 +298,7 @@ pub fn read_decimal<T: Decimal>(
     if has_e && stop < 0 {
         let mut exp = 0i32;
         if pos == len - 1 {
-            return Err(parse_error("empty exponent"));
+            return Err(decimal_parse_error("empty exponent"));
         }
 
         let exp_sign = match buf[pos] {
@@ -345,7 +314,7 @@ pub fn read_decimal<T: Decimal>(
         };
 
         if pos == len - 1 {
-            return Err(parse_error("bad exponent"));
+            return Err(decimal_parse_error("bad exponent"));
         }
 
         for (i, v) in buf[pos..].iter().enumerate() {
@@ -356,7 +325,7 @@ pub fn read_decimal<T: Decimal>(
                 }
                 c => {
                     if exact {
-                        return Err(parse_error(&format!("unexpected char: {c}")));
+                        return Err(decimal_parse_error(&format!("unexpected char: {c}")));
                     } else {
                         stop = (pos + i) as i32;
                         break;
@@ -367,7 +336,7 @@ pub fn read_decimal<T: Decimal>(
         exponent += exp * exp_sign;
     }
 
-    let n = n.checked_mul(sign).ok_or_else(overflow_error)?;
+    let n = n.checked_mul(sign).ok_or_else(decimal_overflow_error)?;
     let n_read = if stop > 0 { stop as usize } else { len };
     Ok((n, digits as u8, exponent, n_read))
 }
@@ -381,11 +350,11 @@ pub fn read_decimal_from_json<T: Decimal>(
             if n.is_i64() {
                 Ok(T::from_i64(n.as_i64().unwrap())
                     .with_size(size)
-                    .ok_or_else(overflow_error)?)
+                    .ok_or_else(decimal_overflow_error)?)
             } else if n.is_u64() {
                 Ok(T::from_u64(n.as_u64().unwrap())
                     .with_size(size)
-                    .ok_or_else(overflow_error)?)
+                    .ok_or_else(decimal_overflow_error)?)
             } else {
                 let f = n.as_f64().unwrap() * (10_f64).powi(size.scale as i32);
                 let n = T::from_float(f);
@@ -398,4 +367,12 @@ pub fn read_decimal_from_json<T: Decimal>(
         }
         _ => Err(ErrorCode::from("Incorrect json value for decimal")),
     }
+}
+
+fn decimal_parse_error(msg: &str) -> ErrorCode {
+    ErrorCode::BadArguments(format!("bad decimal literal: {msg}"))
+}
+
+fn decimal_overflow_error() -> ErrorCode {
+    ErrorCode::Overflow("decimal overflow")
 }

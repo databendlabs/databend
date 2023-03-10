@@ -260,7 +260,7 @@ impl TestFixture {
                             .collect::<Vec<i32>>(),
                     );
                     let tuple_inner_columns = vec![column1, column2];
-                    let tuple_column = Column::Tuple (tuple_inner_columns);
+                    let tuple_column = Column::Tuple(tuple_inner_columns);
 
                     let columns = vec![column0, tuple_column];
 

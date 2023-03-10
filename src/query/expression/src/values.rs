@@ -73,7 +73,6 @@ use crate::with_decimal_mapped_type;
 use crate::with_decimal_type;
 use crate::with_number_mapped_type;
 use crate::with_number_type;
-use crate::TypeDeserializerImpl;
 
 #[derive(Debug, Clone, PartialEq, EnumAsInner)]
 pub enum Value<T: ValueType> {
@@ -695,9 +694,8 @@ impl Column {
         );
 
         if range.is_empty() {
-            use crate::deserializations::TypeDeserializer;
-            let mut de = TypeDeserializerImpl::with_capacity(&self.data_type(), 0);
-            return de.finish_to_column();
+            let builder = ColumnBuilder::with_capacity(&self.data_type(), 0);
+            return builder.build();
         }
 
         match self {

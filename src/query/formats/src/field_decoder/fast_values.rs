@@ -19,9 +19,11 @@ use std::io::BufRead;
 use std::io::Cursor;
 
 use bstr::ByteSlice;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::read_decimal_with_size;
+use common_expression::serialize::read_decimal_with_size;
+use common_expression::serialize::uniform_date;
 use common_expression::types::array::ArrayColumnBuilder;
 use common_expression::types::date::check_date;
 use common_expression::types::decimal::Decimal;
@@ -33,12 +35,9 @@ use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::timestamp::check_timestamp;
 use common_expression::types::AnyType;
 use common_expression::types::NumberColumnBuilder;
-use common_expression::uniform_date;
 use common_expression::with_decimal_type;
 use common_expression::with_number_mapped_type;
-use common_expression::BooleanDeserializer;
 use common_expression::ColumnBuilder;
-use common_expression::StringDeserializer;
 use common_io::constants::FALSE_BYTES_LOWER;
 use common_io::constants::INF_BYTES_LOWER;
 use common_io::constants::NAN_BYTES_LOWER;
@@ -135,7 +134,7 @@ impl FastFieldDecoderValues {
 
     fn read_bool<R: AsRef<[u8]>>(
         &self,
-        column: &mut BooleanDeserializer,
+        column: &mut MutableBitmap,
         reader: &mut Cursor<R>,
     ) -> Result<()> {
         if self.match_bytes(reader, &self.common_settings().true_bytes) {
@@ -226,7 +225,7 @@ impl FastFieldDecoderValues {
 
     fn read_string<R: AsRef<[u8]>>(
         &self,
-        column: &mut StringDeserializer,
+        column: &mut StringColumnBuilder,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {

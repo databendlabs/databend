@@ -21,7 +21,6 @@ use common_expression::types::array::ArrayColumnBuilder;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::AnyType;
 use common_expression::ColumnBuilder;
-use common_expression::StringDeserializer;
 use common_io::constants::FALSE_BYTES_LOWER;
 use common_io::constants::INF_BYTES_LOWER;
 use common_io::constants::NULL_BYTES_ESCAPE;
@@ -85,7 +84,7 @@ impl FieldDecoderRowBased for FieldDecoderCSV {
 
     fn read_string<R: AsRef<[u8]>>(
         &self,
-        column: &mut StringDeserializer,
+        column: &mut StringColumnBuilder,
         reader: &mut Cursor<R>,
         _raw: bool,
     ) -> Result<()> {

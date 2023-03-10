@@ -18,9 +18,11 @@ use std::io::Seek;
 use std::io::SeekFrom;
 
 use bstr::ByteSlice;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::read_decimal_with_size;
+use common_expression::serialize::read_decimal_with_size;
+use common_expression::serialize::uniform_date;
 use common_expression::types::array::ArrayColumnBuilder;
 use common_expression::types::date::check_date;
 use common_expression::types::decimal::Decimal;
@@ -32,10 +34,8 @@ use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::timestamp::check_timestamp;
 use common_expression::types::AnyType;
 use common_expression::types::NumberColumnBuilder;
-use common_expression::uniform_date;
 use common_expression::with_decimal_type;
 use common_expression::with_number_mapped_type;
-use common_expression::BooleanDeserializer;
 use common_expression::ColumnBuilder;
 use common_io::cursor_ext::BufferReadDateTimeExt;
 use common_io::cursor_ext::ReadBytesExt;
@@ -97,7 +97,7 @@ pub trait FieldDecoderRowBased: FieldDecoder {
 
     fn read_bool<R: AsRef<[u8]>>(
         &self,
-        column: &mut BooleanDeserializer,
+        column: &mut MutableBitmap,
         reader: &mut Cursor<R>,
         _raw: bool,
     ) -> Result<()> {
