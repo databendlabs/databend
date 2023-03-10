@@ -162,7 +162,10 @@ impl Processor for DeserializeDataTransform {
             self.output_data = Some(DataBlock::new_with_meta(
                 data_block.columns().to_vec(),
                 data_block.num_rows(),
-                Some(Box::new(part.block_meta_index().unwrap().to_owned())),
+                match part.block_meta_index() {
+                    Some(meta) => Some(Box::new(meta.to_owned())),
+                    None => None,
+                },
             ));
         }
 
