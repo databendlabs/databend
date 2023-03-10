@@ -12,11 +12,15 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::any::Any;
 use std::ops::Range;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoDowncast;
+use common_expression::BlockMetaInfoPtr;
 use common_expression::RemoteExpr;
 use common_expression::TableDataType;
 use common_expression::TableSchemaRef;
@@ -36,6 +40,35 @@ pub struct BlockMetaIndex {
     pub segment_id: usize,
     pub segment_location: String,
     pub snapshot_location: Option<String>,
+}
+
+#[typetag::serde(name = "block_meta_index")]
+impl BlockMetaInfo for BlockMetaIndex {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        match BlockMetaIndex::downcast_ref_from(info) {
+            None => false,
+            Some(other) => self == other,
+        }
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
+    }
+}
+
+impl BlockMetaIndex {
+    pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&BlockMetaIndex> {
+        match BlockMetaIndex::downcast_ref_from(info) {
+            Some(part_ref) => Ok(part_ref),
+            None => Err(ErrorCode::Internal(
+                "Cannot downcast from BlockMetaInfo to BlockMetaIndex.",
+            )),
+        }
+    }
 }
 
 /// TopN prunner.

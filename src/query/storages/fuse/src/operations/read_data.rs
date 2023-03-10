@@ -19,7 +19,6 @@ use common_base::runtime::Runtime;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::VirtualColumnDataSource;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -36,17 +35,10 @@ impl FuseTable {
     pub fn create_block_reader(
         &self,
         projection: Projection,
-        virtual_column_data_source: Option<VirtualColumnDataSource>,
         ctx: Arc<dyn TableContext>,
     ) -> Result<Arc<BlockReader>> {
         let table_schema = self.table_info.schema();
-        BlockReader::create(
-            self.operator.clone(),
-            table_schema,
-            projection,
-            virtual_column_data_source.map(|source| source.project_virtual_columns),
-            ctx,
-        )
+        BlockReader::create(self.operator.clone(), table_schema, projection, ctx)
     }
 
     // Build the block reader.
@@ -57,7 +49,6 @@ impl FuseTable {
     ) -> Result<Arc<BlockReader>> {
         self.create_block_reader(
             PushDownInfo::projection_of_push_downs(&self.table_info.schema(), &plan.push_downs),
-            plan.virtual_column_data_source.clone(),
             ctx,
         )
     }
@@ -108,7 +99,7 @@ impl FuseTable {
 
                 let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
                     // if query from distribute query node, need to init segment id at first
-                    let segment_id_map = if plan.virtual_column_data_source.is_some() {
+                    let segment_id_map = if plan.query_from_virtual_columns {
                         let snapshot = table.read_table_snapshot().await?;
                         if let Some(snapshot) = snapshot {
                             let segment_count = snapshot.segments.len();

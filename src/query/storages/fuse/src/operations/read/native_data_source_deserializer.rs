@@ -74,8 +74,6 @@ pub struct NativeDeserializeDataTransform {
     remain_columns: Vec<usize>,
 
     src_schema: DataSchema,
-    src_virtual_schema: Option<DataSchema>,
-
     output_schema: DataSchema,
     prewhere_filter: Arc<Option<Expr>>,
 
@@ -103,10 +101,6 @@ impl NativeDeserializeDataTransform {
         let scan_progress = ctx.get_scan_progress();
 
         let src_schema: DataSchema = (block_reader.schema().as_ref()).into();
-        let src_virtual_schema = block_reader
-            .projected_virtual_schema()
-            .as_ref()
-            .map(|projected_virtual_schema| projected_virtual_schema.into());
         let mut prewhere_columns: Vec<usize> =
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => (0..src_schema.num_fields()).collect(),
@@ -169,7 +163,6 @@ impl NativeDeserializeDataTransform {
                 prewhere_columns,
                 remain_columns,
                 src_schema,
-                src_virtual_schema,
                 output_schema,
                 prewhere_filter,
                 skipped_page: 0,
@@ -280,7 +273,7 @@ impl NativeDeserializeDataTransform {
     /// No more data need to read, finish process.
     fn finish_process(&mut self) -> Result<()> {
         let _ = self.chunks.pop_front();
-        let _ = self.parts.pop_front();
+        let _ = self.parts.pop_front().unwrap();
 
         self.inited = false;
         self.array_iters.clear();
@@ -292,12 +285,10 @@ impl NativeDeserializeDataTransform {
     fn finish_process_with_default_values(&mut self) -> Result<()> {
         let _ = self.chunks.pop_front();
         let part = self.parts.pop_front().unwrap();
-        let fuse_part = FusePartInfo::from_part(&part)?;
+        let part = FusePartInfo::from_part(&part)?;
 
-        let num_rows = fuse_part.nums_rows;
-        let data_block = self
-            .block_reader
-            .build_default_values_block(Some(part), num_rows)?;
+        let num_rows = part.nums_rows;
+        let data_block = self.block_reader.build_default_values_block(num_rows)?;
         let data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
 
         self.add_block(data_block)?;
@@ -584,29 +575,14 @@ impl Processor for NativeDeserializeDataTransform {
             };
 
             // Step 6: fill missing field default value if need
-            let mut block = if need_to_fill_data {
+            let block = if need_to_fill_data {
                 self.block_reader
                     .fill_missing_native_column_values(block, &self.parts)?
             } else {
                 block
             };
 
-            // Step 7: fill virtual column values if need
-            let src_schema = match self.src_virtual_schema {
-                Some(ref src_virtual_schema) => {
-                    let part = self.parts.pop_front().unwrap();
-                    let fuse_part = FusePartInfo::from_part(&part)?;
-                    block = self.block_reader.fill_virtual_column_values(
-                        fuse_part.nums_rows,
-                        Some(part),
-                        block,
-                    )?;
-                    src_virtual_schema
-                }
-                None => &self.src_schema,
-            };
-
-            let block = block.resort(src_schema, &self.output_schema)?;
+            let block = block.resort(&self.src_schema, &self.output_schema)?;
             // Step 7: Add the block to output data
             self.add_block(block)?;
         }

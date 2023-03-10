@@ -252,7 +252,7 @@ impl<'a> Binder {
             description: "".to_string(),
             tbl_args: None,
             push_downs: None,
-            virtual_column_data_source: None,
+            query_from_virtual_columns: false,
         };
 
         Ok(Plan::Copy(Box::new(CopyPlan::IntoTable {
@@ -311,7 +311,7 @@ impl<'a> Binder {
             description: "".to_string(),
             tbl_args: None,
             push_downs: None,
-            virtual_column_data_source: None,
+            query_from_virtual_columns: false,
         };
 
         Ok(Plan::Copy(Box::new(CopyPlan::IntoTable {

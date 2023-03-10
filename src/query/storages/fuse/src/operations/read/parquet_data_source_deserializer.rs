@@ -140,7 +140,6 @@ impl Processor for DeserializeDataTransform {
             let fuse_part = FusePartInfo::from_part(&part)?;
 
             let data_block = self.block_reader.deserialize_parquet_chunks_with_buffer(
-                Some(part.clone()),
                 &fuse_part.location,
                 fuse_part.nums_rows,
                 &fuse_part.compression,
@@ -160,7 +159,11 @@ impl Processor for DeserializeDataTransform {
             };
             self.scan_progress.incr(&progress_values);
 
-            self.output_data = Some(data_block);
+            self.output_data = Some(DataBlock::new_with_meta(
+                data_block.columns().to_vec(),
+                data_block.num_rows(),
+                Some(Box::new(fuse_part.block_meta_index().unwrap().to_owned())),
+            ));
         }
 
         Ok(())

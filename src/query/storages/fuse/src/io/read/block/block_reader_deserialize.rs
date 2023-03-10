@@ -79,7 +79,6 @@ impl BlockReader {
 
         match storage_format {
             FuseStorageFormat::Parquet => self.deserialize_parquet_chunks_with_buffer(
-                None,
                 &meta.location.0,
                 num_rows,
                 &meta.compression,
@@ -88,7 +87,6 @@ impl BlockReader {
                 None,
             ),
             FuseStorageFormat::Native => self.deserialize_native_chunks_with_buffer(
-                None,
                 &meta.location.0,
                 num_rows,
                 &meta.compression,

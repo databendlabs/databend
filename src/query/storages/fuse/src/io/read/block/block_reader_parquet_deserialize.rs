@@ -25,7 +25,6 @@ use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
 use common_catalog::plan::PartInfoPtr;
-use common_catalog::plan::VirtualColumnMeta;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
@@ -57,11 +56,10 @@ impl BlockReader {
         let start = Instant::now();
 
         if chunks.is_empty() {
-            return self.build_default_values_block(Some(part.clone()), fuse_part.nums_rows);
+            return self.build_default_values_block(fuse_part.nums_rows);
         }
 
         let deserialized_res = self.deserialize_parquet_chunks_with_buffer(
-            Some(part.clone()),
             &fuse_part.location,
             fuse_part.nums_rows,
             &fuse_part.compression,
@@ -78,56 +76,15 @@ impl BlockReader {
         deserialized_res
     }
 
-    pub fn build_default_values_block(
-        &self,
-        part: Option<PartInfoPtr>,
-        num_rows: usize,
-    ) -> Result<DataBlock> {
+    pub fn build_default_values_block(&self, num_rows: usize) -> Result<DataBlock> {
         let data_schema = self.data_schema();
         let default_vals = self.default_vals.clone();
-        let data_block =
-            DataBlock::create_with_default_value(&data_schema, &default_vals, num_rows)?;
-
-        self.fill_virtual_column_values(num_rows, part, data_block)
-    }
-
-    pub fn fill_virtual_column_values(
-        &self,
-        num_rows: usize,
-        part: Option<PartInfoPtr>,
-        data_block: DataBlock,
-    ) -> Result<DataBlock> {
-        match self.project_virtual_columns {
-            Some(ref project_virtual_columns) => match part {
-                Some(part) => {
-                    let fuse_part = FusePartInfo::from_part(&part)?;
-                    let block_meta_index = fuse_part.block_meta_index().unwrap();
-                    let mut new_data_block = data_block;
-                    let virtual_column_meta = VirtualColumnMeta {
-                        segment_id: block_meta_index.segment_id,
-                        block_id: block_meta_index.block_id,
-                        block_location: block_meta_index.block_location.clone(),
-                        segment_location: block_meta_index.segment_location.clone(),
-                        snapshot_location: block_meta_index.snapshot_location.clone().unwrap(),
-                    };
-                    for virtual_column in project_virtual_columns.values() {
-                        let column =
-                            virtual_column.generate_column_values(&virtual_column_meta, num_rows);
-                        new_data_block.add_column(column);
-                    }
-                    Ok(new_data_block)
-                }
-                None => Ok(data_block),
-            },
-            None => Ok(data_block),
-        }
+        DataBlock::create_with_default_value(&data_schema, &default_vals, num_rows)
     }
 
     /// Deserialize column chunks data from parquet format to DataBlock with a uncompressed buffer.
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn deserialize_parquet_chunks_with_buffer(
         &self,
-        part: Option<PartInfoPtr>,
         block_path: &str,
         num_rows: usize,
         compression: &Compression,
@@ -136,7 +93,7 @@ impl BlockReader {
         uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
     ) -> Result<DataBlock> {
         if column_chunks.is_empty() {
-            return self.build_default_values_block(part, num_rows);
+            return self.build_default_values_block(num_rows);
         }
 
         let mut need_default_vals = Vec::with_capacity(self.project_column_nodes.len());
@@ -199,8 +156,6 @@ impl BlockReader {
                 num_rows,
             )?
         };
-
-        let data_block = self.fill_virtual_column_values(num_rows, part, data_block)?;
 
         // populate cache if necessary
         if let Some(cache) = CacheManager::instance().get_table_data_array_cache() {

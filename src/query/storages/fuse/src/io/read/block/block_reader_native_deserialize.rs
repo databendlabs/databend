@@ -52,11 +52,10 @@ impl BlockReader {
         let start = Instant::now();
 
         if chunks.is_empty() {
-            return self.build_default_values_block(Some(part.clone()), fuse_part.nums_rows);
+            return self.build_default_values_block(fuse_part.nums_rows);
         }
 
         let deserialized_res = self.deserialize_native_chunks_with_buffer(
-            Some(part.clone()),
             &fuse_part.location,
             fuse_part.nums_rows,
             &fuse_part.compression,
@@ -77,7 +76,6 @@ impl BlockReader {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn deserialize_native_chunks_with_buffer(
         &self,
-        part: Option<PartInfoPtr>,
         block_path: &str,
         num_rows: usize,
         compression: &Compression,
@@ -86,7 +84,7 @@ impl BlockReader {
         uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
     ) -> Result<DataBlock> {
         if column_chunks.is_empty() {
-            return self.build_default_values_block(part, num_rows);
+            return self.build_default_values_block(num_rows);
         }
 
         let mut need_default_vals = Vec::with_capacity(self.project_column_nodes.len());

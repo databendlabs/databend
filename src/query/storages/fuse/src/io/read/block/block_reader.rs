@@ -19,7 +19,6 @@ use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_catalog::plan::Projection;
-use common_catalog::plan::VirtualColumn;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -42,12 +41,10 @@ pub struct BlockReader {
     pub(crate) operator: Operator,
     pub(crate) projection: Projection,
     pub(crate) projected_schema: TableSchemaRef,
-    pub(crate) projected_virtual_schema: Option<TableSchemaRef>,
     pub(crate) project_indices: BTreeMap<FieldIndex, (ColumnId, Field, DataType)>,
     pub(crate) project_column_nodes: Vec<ColumnNode>,
     pub(crate) parquet_schema_descriptor: SchemaDescriptor,
     pub(crate) default_vals: Vec<Scalar>,
-    pub(crate) project_virtual_columns: Option<BTreeMap<FieldIndex, VirtualColumn>>,
 }
 
 fn inner_project_field_default_values(default_vals: &[Scalar], paths: &[usize]) -> Result<Scalar> {
@@ -79,7 +76,6 @@ impl BlockReader {
         operator: Operator,
         schema: TableSchemaRef,
         projection: Projection,
-        project_virtual_columns: Option<BTreeMap<FieldIndex, VirtualColumn>>,
         ctx: Arc<dyn TableContext>,
     ) -> Result<Arc<BlockReader>> {
         // init projected_schema and default_vals of schema.fields
@@ -116,21 +112,6 @@ impl BlockReader {
             }
         };
 
-        let projected_virtual_schema =
-            if let Some(ref project_virtual_columns) = project_virtual_columns {
-                let mut schema = projected_schema.as_ref().clone();
-                for virtual_column in project_virtual_columns.values() {
-                    schema.add_virtual_column(
-                        virtual_column.column_name(),
-                        virtual_column.table_data_type(),
-                        virtual_column.column_id(),
-                    );
-                }
-                Some(Arc::new(schema))
-            } else {
-                None
-            };
-
         let arrow_schema = schema.to_arrow();
         let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
 
@@ -147,12 +128,10 @@ impl BlockReader {
             operator,
             projection,
             projected_schema,
-            projected_virtual_schema,
             project_indices,
             project_column_nodes,
             parquet_schema_descriptor,
             default_vals,
-            project_virtual_columns,
         }))
     }
 
@@ -180,10 +159,6 @@ impl BlockReader {
 
     pub fn schema(&self) -> TableSchemaRef {
         self.projected_schema.clone()
-    }
-
-    pub fn projected_virtual_schema(&self) -> &Option<TableSchemaRef> {
-        &self.projected_virtual_schema
     }
 
     pub fn data_fields(&self) -> Vec<DataField> {

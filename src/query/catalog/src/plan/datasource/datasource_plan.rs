@@ -12,25 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-use std::sync::Arc;
-
-use common_expression::FieldIndex;
-use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 
 use crate::plan::datasource::datasource_info::DataSourceInfo;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::PushDownInfo;
-use crate::plan::VirtualColumn;
 use crate::table_args::TableArgs;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct VirtualColumnDataSource {
-    pub schema: Arc<TableSchema>,
-    pub project_virtual_columns: BTreeMap<FieldIndex, VirtualColumn>,
-}
 
 // TODO: Delete the scan plan field, but it depends on plan_parser:L394
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -47,8 +35,7 @@ pub struct DataSourcePlan {
 
     pub tbl_args: Option<TableArgs>,
     pub push_downs: Option<PushDownInfo>,
-
-    pub virtual_column_data_source: Option<VirtualColumnDataSource>,
+    pub query_from_virtual_columns: bool,
 }
 
 impl DataSourcePlan {

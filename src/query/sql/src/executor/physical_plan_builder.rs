@@ -21,7 +21,6 @@ use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::VirtualColumnDataSource;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -215,14 +214,6 @@ impl PhysicalPlanBuilder {
                     }
                     table_schema = Arc::new(schema);
                 }
-                let virtual_column_data_source = if !project_virtual_columns.is_empty() {
-                    Some(VirtualColumnDataSource {
-                        schema: table_schema.clone(),
-                        project_virtual_columns,
-                    })
-                } else {
-                    None
-                };
 
                 let push_downs = self.push_downs(scan, &table_schema, has_inner_column)?;
 
@@ -231,17 +222,22 @@ impl PhysicalPlanBuilder {
                         self.ctx.clone(),
                         table_entry.catalog().to_string(),
                         Some(push_downs),
-                        virtual_column_data_source,
+                        Some(project_virtual_columns.clone()),
                     )
                     .await?;
 
+                let virtual_column = if project_virtual_columns.is_empty() {
+                    None
+                } else {
+                    Some(project_virtual_columns)
+                };
                 Ok(PhysicalPlan::TableScan(TableScan {
                     plan_id: self.next_plan_id(),
                     name_mapping,
                     source: Box::new(source),
                     table_index: scan.table_index,
-
                     stat_info: Some(stat_info),
+                    virtual_column,
                 }))
             }
             RelOperator::DummyTableScan(_) => {
@@ -263,10 +259,10 @@ impl PhysicalPlanBuilder {
                     name_mapping: BTreeMap::from([("dummy".to_string(), DUMMY_COLUMN_INDEX)]),
                     source: Box::new(source),
                     table_index: DUMMY_TABLE_INDEX,
-
                     stat_info: Some(PlanStatsInfo {
                         estimated_rows: 1.0,
                     }),
+                    virtual_column: None,
                 }))
             }
             RelOperator::Join(join) => {

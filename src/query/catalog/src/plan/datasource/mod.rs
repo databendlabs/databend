@@ -17,4 +17,3 @@ mod datasource_plan;
 
 pub use datasource_info::*;
 pub use datasource_plan::DataSourcePlan;
-pub use datasource_plan::VirtualColumnDataSource;

@@ -8337,6 +8337,7 @@ dependencies = [
  "storages-common-index",
  "storages-common-table-meta",
  "tracing",
+ "typetag",
 ]
 
 [[package]]
