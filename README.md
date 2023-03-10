@@ -10,17 +10,8 @@
 
 </h4>
 
-<div>
-<a href="https://link.databend.rs/join-slack">
-<img src="https://img.shields.io/badge/slack-databend-0abd59?logo=slack" alt="slack" />
-</a>
-
 <a href="https://link.databend.rs/join-discord">
 <img src="https://img.shields.io/discord/1023794859972235304?label=discord&logo=discord&color=0abd59" alt="discord" />
-</a>
-
-<a href="https://link.databend.rs/join-matrix">
-<img src="https://img.shields.io/matrix/databend-general:matrix.org?logo=matrix&label=databend&color=0abd59" alt="matrix" />
 </a>
 
 <a href="https://link.databend.rs/join-feishu">
