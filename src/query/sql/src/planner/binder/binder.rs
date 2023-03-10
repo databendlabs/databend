@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_ast::ast::format_statement;
 use common_ast::ast::ExplainKind;
+use common_ast::ast::Identifier;
 use common_ast::ast::Statement;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
@@ -27,6 +28,7 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_meta_app::principal::UserDefinedFunction;
 
+use crate::normalize_identifier;
 use crate::planner::udf_validator::UDFValidator;
 use crate::plans::AlterUDFPlan;
 use crate::plans::CallPlan;
@@ -424,5 +426,25 @@ impl<'a> Binder {
             visibility: Visibility::Visible,
             virtual_column: None,
         }
+    }
+
+    /// Normalize [[<catalog>].<database>].<object>
+    /// object like table, view ...
+    pub fn normalize_object_identifier_triple(
+        &self,
+        catalog: &Option<Identifier>,
+        database: &Option<Identifier>,
+        object: &Identifier,
+    ) -> (String, String, String) {
+        let catalog_name = catalog
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database_name = database
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .unwrap_or_else(|| self.ctx.get_current_database());
+        let object_name = normalize_identifier(object, &self.name_resolution_ctx).name;
+        (catalog_name, database_name, object_name)
     }
 }

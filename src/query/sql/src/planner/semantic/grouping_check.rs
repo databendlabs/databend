@@ -54,7 +54,7 @@ impl<'a> GroupingChecker<'a> {
                 table_name: None,
                 column_name: "group_item".to_string(),
                 index: column.index,
-                data_type: Box::new(column.scalar.data_type()),
+                data_type: Box::new(column.scalar.data_type()?),
                 visibility: Visibility::Visible,
                 virtual_column: None,
             };
@@ -76,25 +76,21 @@ impl<'a> GroupingChecker<'a> {
             ScalarExpr::AndExpr(scalar) => Ok(AndExpr {
                 left: Box::new(self.resolve(&scalar.left, span)?),
                 right: Box::new(self.resolve(&scalar.right, span)?),
-                return_type: scalar.return_type.clone(),
             }
             .into()),
             ScalarExpr::OrExpr(scalar) => Ok(OrExpr {
                 left: Box::new(self.resolve(&scalar.left, span)?),
                 right: Box::new(self.resolve(&scalar.right, span)?),
-                return_type: scalar.return_type.clone(),
             }
             .into()),
             ScalarExpr::NotExpr(scalar) => Ok(NotExpr {
                 argument: Box::new(self.resolve(&scalar.argument, span)?),
-                return_type: scalar.return_type.clone(),
             }
             .into()),
             ScalarExpr::ComparisonExpr(scalar) => Ok(ComparisonExpr {
                 op: scalar.op.clone(),
                 left: Box::new(self.resolve(&scalar.left, span)?),
                 right: Box::new(self.resolve(&scalar.right, span)?),
-                return_type: scalar.return_type.clone(),
             }
             .into()),
             ScalarExpr::FunctionCall(func) => {
@@ -107,14 +103,12 @@ impl<'a> GroupingChecker<'a> {
                     params: func.params.clone(),
                     arguments: args,
                     func_name: func.func_name.clone(),
-                    return_type: func.return_type.clone(),
                 }
                 .into())
             }
             ScalarExpr::CastExpr(cast) => Ok(CastExpr {
                 is_try: cast.is_try,
                 argument: Box::new(self.resolve(&cast.argument, span)?),
-                from_type: cast.from_type.clone(),
                 target_type: cast.target_type.clone(),
             }
             .into()),
@@ -141,7 +135,7 @@ impl<'a> GroupingChecker<'a> {
                         table_name: None,
                         column_name: agg.display_name.clone(),
                         index: agg_func.index,
-                        data_type: Box::new(agg_func.scalar.data_type()),
+                        data_type: Box::new(agg_func.scalar.data_type()?),
                         visibility: Visibility::Visible,
                         virtual_column: None,
                     };

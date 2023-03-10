@@ -785,16 +785,12 @@ async fn fill_default_value(
         let tokens = tokenize_sql(default_expr)?;
         let backtrace = Backtrace::new();
         let ast = parse_expr(&tokens, Dialect::PostgreSQL, &backtrace)?;
-        let (mut scalar, ty) = binder.bind(&ast).await?;
-
-        if !field.data_type().eq(&ty) {
-            scalar = ScalarExpr::CastExpr(CastExpr {
-                is_try: false,
-                argument: Box::new(scalar),
-                from_type: Box::new(ty),
-                target_type: Box::new(field.data_type().clone()),
-            })
-        }
+        let (mut scalar, _) = binder.bind(&ast).await?;
+        scalar = ScalarExpr::CastExpr(CastExpr {
+            is_try: false,
+            argument: Box::new(scalar),
+            target_type: Box::new(field.data_type().clone()),
+        });
 
         let expr = scalar
             .as_expr_with_col_index()?
@@ -858,16 +854,13 @@ async fn exprs_to_scalar(
             }
         }
 
-        let (mut scalar, data_type) = scalar_binder.bind(expr).await?;
+        let (mut scalar, _) = scalar_binder.bind(expr).await?;
         let field_data_type = schema.field(i).data_type();
-        if &data_type != field_data_type {
-            scalar = ScalarExpr::CastExpr(CastExpr {
-                is_try: false,
-                argument: Box::new(scalar),
-                from_type: Box::new(data_type),
-                target_type: Box::new(field_data_type.clone()),
-            })
-        }
+        scalar = ScalarExpr::CastExpr(CastExpr {
+            is_try: false,
+            argument: Box::new(scalar),
+            target_type: Box::new(field_data_type.clone()),
+        });
         let expr = scalar
             .as_expr_with_col_index()?
             .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());

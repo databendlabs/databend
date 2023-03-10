@@ -503,7 +503,6 @@ impl Binder {
                         }
                         .into(),
                     ),
-                    from_type: Box::new(*left_col.data_type.clone()),
                     target_type: Box::new(coercion_types[idx].clone()),
                 };
                 left_scalar_items.push(ScalarItem {
@@ -529,7 +528,6 @@ impl Binder {
                         }
                         .into(),
                     ),
-                    from_type: Box::new(*right_col.data_type.clone()),
                     target_type: Box::new(coercion_types[idx].clone()),
                 };
                 right_scalar_items.push(ScalarItem {

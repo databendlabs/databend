@@ -295,7 +295,6 @@ fn remove_column_nullable(
             ScalarExpr::AndExpr(AndExpr {
                 left: Box::new(left_expr),
                 right: Box::new(right_expr),
-                return_type: expr.return_type.clone(),
             })
         }
         ScalarExpr::OrExpr(expr) => {
@@ -311,7 +310,6 @@ fn remove_column_nullable(
             ScalarExpr::OrExpr(OrExpr {
                 left: Box::new(left_expr),
                 right: Box::new(right_expr),
-                return_type: expr.return_type.clone(),
             })
         }
         ScalarExpr::NotExpr(expr) => {
@@ -319,7 +317,6 @@ fn remove_column_nullable(
                 remove_column_nullable(&expr.argument, left_prop, right_prop, join_type, metadata)?;
             ScalarExpr::NotExpr(NotExpr {
                 argument: Box::new(new_expr),
-                return_type: expr.return_type.clone(),
             })
         }
         ScalarExpr::ComparisonExpr(expr) => {
@@ -336,7 +333,6 @@ fn remove_column_nullable(
                 op: expr.op.clone(),
                 left: Box::new(left_expr),
                 right: Box::new(right_expr),
-                return_type: expr.return_type.clone(),
             })
         }
         ScalarExpr::AggregateFunction(expr) => {
@@ -374,7 +370,6 @@ fn remove_column_nullable(
                 params: expr.params.clone(),
                 arguments: args,
                 func_name: expr.func_name.clone(),
-                return_type: expr.return_type.clone(),
             })
         }
         ScalarExpr::CastExpr(expr) => {
@@ -383,7 +378,6 @@ fn remove_column_nullable(
             ScalarExpr::CastExpr(CastExpr {
                 is_try: expr.is_try,
                 argument: Box::new(new_expr),
-                from_type: expr.from_type.clone(),
                 target_type: expr.target_type.clone(),
             })
         }

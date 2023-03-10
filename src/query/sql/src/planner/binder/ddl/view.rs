@@ -39,15 +39,8 @@ impl Binder {
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
-        let catalog = catalog
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let viewname = normalize_identifier(view, &self.name_resolution_ctx).name;
+        let (catalog, database, view_name) =
+            self.normalize_object_identifier_triple(catalog, database, view);
         let column_names = columns
             .iter()
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
@@ -59,7 +52,7 @@ impl Binder {
             tenant,
             catalog,
             database,
-            viewname,
+            view_name,
             column_names,
             subquery,
         };
@@ -79,15 +72,8 @@ impl Binder {
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
-        let catalog = catalog
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let viewname = normalize_identifier(view, &self.name_resolution_ctx).name;
+        let (catalog, database, view_name) =
+            self.normalize_object_identifier_triple(catalog, database, view);
         let column_names = columns
             .iter()
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
@@ -98,7 +84,7 @@ impl Binder {
             tenant,
             catalog,
             database,
-            viewname,
+            view_name,
             column_names,
             subquery,
         };
@@ -117,22 +103,14 @@ impl Binder {
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
-        let catalog = catalog
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let viewname = normalize_identifier(view, &self.name_resolution_ctx).name;
-
+        let (catalog, database, view_name) =
+            self.normalize_object_identifier_triple(catalog, database, view);
         let plan = DropViewPlan {
             if_exists: *if_exists,
             tenant,
             catalog,
             database,
-            viewname,
+            view_name,
         };
         Ok(Plan::DropView(Box::new(plan)))
     }

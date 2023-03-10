@@ -191,15 +191,8 @@ impl Binder {
             table,
         } = stmt;
 
-        let catalog = catalog
-            .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
 
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("Table", DataType::String),
@@ -223,15 +216,8 @@ impl Binder {
             table,
         } = stmt;
 
-        let catalog = catalog
-            .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("Field", DataType::String),
             DataField::new("Type", DataType::String),
@@ -333,15 +319,8 @@ impl Binder {
             uri_location,
         } = stmt;
 
-        let catalog = catalog
-            .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
 
         // Take FUSE engine AS default engine
         let engine = engine.unwrap_or(Engine::Fuse);
@@ -547,15 +526,8 @@ impl Binder {
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
-        let catalog = catalog
-            .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
 
         Ok(Plan::DropTable(Box::new(DropTablePlan {
             if_exists: *if_exists,
@@ -578,15 +550,8 @@ impl Binder {
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
-        let catalog = catalog
-            .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
 
         Ok(Plan::UndropTable(Box::new(UndropTablePlan {
             tenant,
@@ -616,17 +581,7 @@ impl Binder {
             ..
         } = table_reference
         {
-            (
-                catalog.as_ref().map_or_else(
-                    || self.ctx.get_current_catalog(),
-                    |i| normalize_identifier(i, &self.name_resolution_ctx).name,
-                ),
-                database.as_ref().map_or_else(
-                    || self.ctx.get_current_database(),
-                    |i| normalize_identifier(i, &self.name_resolution_ctx).name,
-                ),
-                normalize_identifier(table, &self.name_resolution_ctx).name,
-            )
+            self.normalize_object_identifier_triple(catalog, database, table)
         } else {
             return Err(ErrorCode::Internal(
                 "should not happen, parser should have report error already",
@@ -757,24 +712,11 @@ impl Binder {
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
-        let catalog = catalog
-            .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
-        let new_catalog = new_catalog
-            .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let new_database = new_database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let new_table = normalize_identifier(new_table, &self.name_resolution_ctx).name;
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
+
+        let (new_catalog, new_database, new_table) =
+            self.normalize_object_identifier_triple(new_catalog, new_database, new_table);
 
         if new_catalog != catalog {
             return Err(ErrorCode::BadArguments(
@@ -808,15 +750,8 @@ impl Binder {
             purge,
         } = stmt;
 
-        let catalog = catalog
-            .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
 
         Ok(Plan::TruncateTable(Box::new(TruncateTablePlan {
             catalog,
@@ -838,15 +773,8 @@ impl Binder {
             action: ast_action,
         } = stmt;
 
-        let catalog = catalog
-            .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
         let action = match ast_action {
             AstOptimizeTableAction::All => OptimizeTableAction::All,
             AstOptimizeTableAction::Purge { before } => {
@@ -894,15 +822,8 @@ impl Binder {
             table,
         } = stmt;
 
-        let catalog = catalog
-            .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
 
         Ok(Plan::AnalyzeTable(Box::new(AnalyzeTablePlan {
             catalog,
@@ -921,15 +842,8 @@ impl Binder {
             table,
         } = stmt;
 
-        let catalog = catalog
-            .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
 
         Ok(Plan::ExistsTable(Box::new(ExistsTablePlan {
             catalog,
@@ -964,7 +878,6 @@ impl Binder {
                     let is_try = schema_data_type.is_nullable();
                     let cast_expr_to_field_type = ScalarExpr::CastExpr(CastExpr {
                         is_try,
-                        from_type: Box::new(expr.data_type()),
                         target_type: Box::new(DataType::from(&schema_data_type)),
                         argument: Box::new(expr),
                     })
@@ -1005,16 +918,9 @@ impl Binder {
                 database,
                 table,
             } => {
-                let catalog = catalog
-                    .as_ref()
-                    .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-                    .unwrap_or_else(|| self.ctx.get_current_catalog());
-                let database = database.as_ref().map_or_else(
-                    || self.ctx.get_current_database(),
-                    |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
-                );
-                let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
-                let table = self.ctx.get_table(&catalog, &database, &table_name).await?;
+                let (catalog, database, table) =
+                    self.normalize_object_identifier_triple(catalog, database, table);
+                let table = self.ctx.get_table(&catalog, &database, &table).await?;
 
                 if table.engine() == VIEW_ENGINE {
                     let query = table.get_table_info().options().get(QUERY).unwrap();

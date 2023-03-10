@@ -165,14 +165,14 @@ impl SubqueryRewriter {
                 }
 
                 JoinPredicate::Both { left, right } => {
-                    if left.data_type().eq(&right.data_type()) {
+                    if left.data_type()?.eq(&right.data_type()?) {
                         left_conditions.push(left.clone());
                         right_conditions.push(right.clone());
                         continue;
                     }
                     let join_type = common_super_type(
-                        left.data_type(),
-                        right.data_type(),
+                        left.data_type()?,
+                        right.data_type()?,
                         &BUILTIN_FUNCTIONS.default_cast_rules,
                     )
                     .ok_or_else(|| ErrorCode::Internal("Cannot find common type"))?;
@@ -342,7 +342,6 @@ impl SubqueryRewriter {
                     op,
                     left: Box::new(child_expr),
                     right: Box::new(right_condition),
-                    return_type: Box::new(DataType::Nullable(Box::new(DataType::Boolean))),
                 })];
                 let marker_index = if let Some(idx) = subquery.projection_index {
                     idx
@@ -730,7 +729,6 @@ impl SubqueryRewriter {
                 Ok(ScalarExpr::AndExpr(AndExpr {
                     left: Box::new(left),
                     right: Box::new(right),
-                    return_type: and_expr.return_type.clone(),
                 }))
             }
             ScalarExpr::OrExpr(or_expr) => {
@@ -739,14 +737,12 @@ impl SubqueryRewriter {
                 Ok(ScalarExpr::OrExpr(OrExpr {
                     left: Box::new(left),
                     right: Box::new(right),
-                    return_type: or_expr.return_type.clone(),
                 }))
             }
             ScalarExpr::NotExpr(not_expr) => {
                 let argument = self.flatten_scalar(&not_expr.argument, correlated_columns)?;
                 Ok(ScalarExpr::NotExpr(NotExpr {
                     argument: Box::new(argument),
-                    return_type: not_expr.return_type.clone(),
                 }))
             }
             ScalarExpr::ComparisonExpr(comparison_expr) => {
@@ -756,7 +752,6 @@ impl SubqueryRewriter {
                     op: comparison_expr.op.clone(),
                     left: Box::new(left),
                     right: Box::new(right),
-                    return_type: comparison_expr.return_type.clone(),
                 }))
             }
             ScalarExpr::AggregateFunction(agg) => {
@@ -782,7 +777,6 @@ impl SubqueryRewriter {
                     params: fun_call.params.clone(),
                     arguments,
                     func_name: fun_call.func_name.clone(),
-                    return_type: fun_call.return_type.clone(),
                 }))
             }
             ScalarExpr::CastExpr(cast_expr) => {
@@ -790,7 +784,6 @@ impl SubqueryRewriter {
                 Ok(ScalarExpr::CastExpr(CastExpr {
                     is_try: cast_expr.is_try,
                     argument: Box::new(scalar),
-                    from_type: cast_expr.from_type.clone(),
                     target_type: cast_expr.target_type.clone(),
                 }))
             }

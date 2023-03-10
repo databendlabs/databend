@@ -482,7 +482,7 @@ impl PhysicalPlanBuilder {
                                         name: agg.func_name.clone(),
                                         args: agg.args.iter().map(|s| {
                                             s.data_type()
-                                        }).collect(),
+                                        }).collect::<Result<_>>()?,
                                         params: agg.params.clone(),
                                         return_type: *agg.return_type.clone(),
                                     },
@@ -529,7 +529,7 @@ impl PhysicalPlanBuilder {
                                         &agg.group_items
                                             .iter()
                                             .map(|v| v.scalar.data_type())
-                                            .collect::<Vec<_>>(),
+                                            .collect::<Result<Vec<_>>>()?,
                                     )?
                                     .data_type();
 
@@ -582,7 +582,7 @@ impl PhysicalPlanBuilder {
                                         name: agg.func_name.clone(),
                                         args: agg.args.iter().map(|s| {
                                             s.data_type()
-                                        }).collect(),
+                                        }).collect::<Result<_>>()?,
                                         params: agg.params.clone(),
                                         return_type: *agg.return_type.clone(),
                                     },
@@ -872,7 +872,6 @@ impl PhysicalPlanBuilder {
                         ScalarExpr::AndExpr(AndExpr {
                             left: Box::new(lhs),
                             right: Box::new(rhs),
-                            return_type: Box::new(DataType::Boolean),
                         })
                     })
                     .expect("there should be at least one predicate in prewhere");
