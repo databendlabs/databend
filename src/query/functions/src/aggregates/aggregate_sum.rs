@@ -245,13 +245,11 @@ where T: Decimal
                 builder.push(value);
                 Ok(())
             }
-            None => {
-                return Err(ErrorCode::Overflow(format!(
-                    "Decimal overflow: {} > (precision: {})",
-                    self.value,
-                    T::max_of_max_precision()
-                )));
-            }
+            None => Err(ErrorCode::Overflow(format!(
+                "Decimal overflow: {} > (precision: {})",
+                self.value,
+                T::max_of_max_precision()
+            ))),
         }
     }
 }

@@ -115,7 +115,6 @@ impl HiveCatalog {
 
         let partitions = partition_names
             .chunks(max_partitions)
-            .into_iter()
             .flat_map(|names| {
                 client
                     .get_partitions_by_names(db_name.clone(), tbl_name.clone(), names.to_vec())

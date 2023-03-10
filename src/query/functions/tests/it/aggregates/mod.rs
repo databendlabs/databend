@@ -196,7 +196,6 @@ pub fn simulate_two_groups_group_by(
     func.init_state(addr2.into());
 
     let places = (0..rows)
-        .into_iter()
         .map(|i| {
             if i % 2 == 0 {
                 addr1.into()
