@@ -26,7 +26,7 @@ pub struct FederatedHelper {}
 impl FederatedHelper {
     pub(crate) fn block_match_rule(
         query: &str,
-        rules: Vec<(&Regex, Option<(TableSchemaRef, DataBlock)>)>,
+        rules: &[(Regex, Option<(TableSchemaRef, DataBlock)>)],
     ) -> Option<(TableSchemaRef, DataBlock)> {
         for (_index, (regex, data)) in rules.iter().enumerate() {
             if regex.is_match(query) {
@@ -42,7 +42,7 @@ impl FederatedHelper {
 
     pub fn lazy_block_match_rule(
         query: &str,
-        rules: Vec<(&Regex, LazyBlockFunc)>,
+        rules: &[(Regex, LazyBlockFunc)],
     ) -> Option<(TableSchemaRef, DataBlock)> {
         for (_index, (regex, func)) in rules.iter().enumerate() {
             if regex.is_match(query) {
