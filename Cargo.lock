@@ -1443,6 +1443,7 @@ dependencies = [
  "common-settings",
  "jsonb",
  "lexical-core",
+ "match-template",
  "micromarshal",
  "num",
  "ordered-float 3.4.0",

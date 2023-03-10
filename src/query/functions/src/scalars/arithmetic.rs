@@ -57,7 +57,6 @@ use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::Scalar;
-use common_expression::TypeDeserializer;
 use common_io::display_decimal_128;
 use common_io::display_decimal_256;
 use ethnum::i256;
@@ -743,34 +742,30 @@ fn decimal_to_string(
 
     let from_type = from_type.as_decimal().unwrap();
 
-    let result = match from_type {
+    let column = match from_type {
         DecimalDataType::Decimal128(_) => {
             let (buffer, from_size) = i128::try_downcast_column(&column).unwrap();
-
             let mut builder = StringColumnBuilder::with_capacity(buffer.len(), buffer.len() * 10);
             for x in buffer {
                 builder.put_str(&display_decimal_128(x, from_size.scale));
                 builder.commit_row();
             }
-            builder.finish_to_column()
+            builder
         }
-
         DecimalDataType::Decimal256(_) => {
             let (buffer, from_size) = i256::try_downcast_column(&column).unwrap();
-
             let mut builder = StringColumnBuilder::with_capacity(buffer.len(), buffer.len() * 10);
             for x in buffer {
                 builder.put_str(&display_decimal_256(x, from_size.scale));
                 builder.commit_row();
             }
-            builder.finish_to_column()
+            builder
         }
     };
 
     if is_scalar {
-        let scalar = result.index(0).unwrap();
-        Value::Scalar(scalar.to_owned())
+        Value::Scalar(Scalar::String(column.build_scalar()))
     } else {
-        Value::Column(result)
+        Value::Column(Column::String(column.build()))
     }
 }

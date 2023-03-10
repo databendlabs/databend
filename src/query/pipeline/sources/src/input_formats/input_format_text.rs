@@ -24,10 +24,9 @@ use common_compress::DecompressState;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Column;
+use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
-use common_expression::TypeDeserializer;
-use common_expression::TypeDeserializerImpl;
 use common_formats::FieldDecoder;
 use common_formats::FileFormatOptionsExt;
 use common_meta_app::principal::StageFileFormatType;
@@ -233,7 +232,7 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
     ) -> Result<HashMap<u16, InputError>>;
 
     fn on_error_continue(
-        columns: &mut Vec<TypeDeserializerImpl>,
+        columns: &mut Vec<ColumnBuilder>,
         num_rows: usize,
         e: ErrorCode,
         error_map: &mut HashMap<u16, InputError>,
@@ -241,7 +240,7 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
         columns.iter_mut().for_each(|c| {
             // check if parts of columns inserted data, if so, pop it.
             if c.len() > num_rows {
-                c.pop_data_value().expect("must success");
+                c.pop().expect("must success");
             }
         });
         error_map
@@ -251,7 +250,7 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
     }
 
     fn on_error_abort(
-        columns: &mut Vec<TypeDeserializerImpl>,
+        columns: &mut Vec<ColumnBuilder>,
         num_rows: usize,
         abort_num: u64,
         error_count: &AtomicU64,
@@ -263,7 +262,7 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
         columns.iter_mut().for_each(|c| {
             // check if parts of columns inserted data, if so, pop it.
             if c.len() > num_rows {
-                c.pop_data_value().expect("must success");
+                c.pop().expect("must success");
             }
         });
         Ok(())
@@ -451,7 +450,7 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningStateMaybeCompressed
 pub struct BlockBuilder<T> {
     pub field_decoder: Arc<dyn FieldDecoder>,
     pub ctx: Arc<InputContext>,
-    pub mutable_columns: Vec<TypeDeserializerImpl>,
+    pub mutable_columns: Vec<ColumnBuilder>,
     pub num_rows: usize,
     phantom: PhantomData<T>,
 }
@@ -461,13 +460,15 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
         let columns: Vec<Column> = self
             .mutable_columns
             .iter_mut()
-            .map(|deserializer| deserializer.finish_to_column())
+            .map(|col| {
+                let empty_builder = ColumnBuilder::with_capacity(
+                    &col.data_type(),
+                    self.ctx.block_compact_thresholds.min_rows_per_block,
+                );
+                std::mem::replace(col, empty_builder).build()
+            })
             .collect();
 
-        self.mutable_columns = self
-            .ctx
-            .schema
-            .create_deserializers(self.ctx.block_compact_thresholds.min_rows_per_block);
         self.num_rows = 0;
 
         if columns.is_empty() || columns[0].len() == 0 {
@@ -501,7 +502,15 @@ impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
     fn create(ctx: Arc<InputContext>) -> Self {
         let columns = ctx
             .schema
-            .create_deserializers(ctx.block_compact_thresholds.min_rows_per_block);
+            .fields()
+            .iter()
+            .map(|f| {
+                ColumnBuilder::with_capacity(
+                    &f.data_type().into(),
+                    ctx.block_compact_thresholds.min_rows_per_block,
+                )
+            })
+            .collect();
         let field_decoder = T::create_field_decoder(&ctx.format_options);
 
         BlockBuilder {

@@ -19,8 +19,8 @@ use std::sync::Arc;
 use bstr::ByteSlice;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ColumnBuilder;
 use common_expression::TableSchemaRef;
-use common_expression::TypeDeserializerImpl;
 use common_formats::FieldDecoder;
 use common_formats::FieldJsonAstDecoder;
 use common_formats::FileFormatOptionsExt;
@@ -42,7 +42,7 @@ impl InputFormatNDJson {
     fn read_row(
         field_decoder: &FieldJsonAstDecoder,
         buf: &[u8],
-        deserializers: &mut [TypeDeserializerImpl],
+        columns: &mut [ColumnBuilder],
         schema: &TableSchemaRef,
     ) -> Result<()> {
         let mut json: serde_json::Value = serde_json::from_reader(buf)?;
@@ -54,13 +54,13 @@ impl InputFormatNDJson {
             }
         }
 
-        for (f, deser) in schema.fields().iter().zip(deserializers.iter_mut()) {
+        for (f, column) in schema.fields().iter().zip(columns.iter_mut()) {
             let value = if field_decoder.ident_case_sensitive {
                 &json[f.name().to_owned()]
             } else {
                 &json[f.name().to_lowercase()]
             };
-            field_decoder.read_field(deser, value).map_err(|e| {
+            field_decoder.read_field(column, value).map_err(|e| {
                 let value_str = format!("{:?}", value);
                 ErrorCode::BadBytes(format!(
                     "{}. column={} value={}",

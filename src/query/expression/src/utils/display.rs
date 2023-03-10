@@ -171,11 +171,7 @@ impl Debug for Column {
             Column::Array(col) => write!(f, "{col:?}"),
             Column::Map(col) => write!(f, "{col:?}"),
             Column::Nullable(col) => write!(f, "{col:?}"),
-            Column::Tuple { fields, len } => f
-                .debug_struct("Tuple")
-                .field("fields", fields)
-                .field("len", len)
-                .finish(),
+            Column::Tuple(fields) => f.debug_tuple("Tuple").field(fields).finish(),
             Column::Variant(col) => write!(f, "{col:?}"),
         }
     }

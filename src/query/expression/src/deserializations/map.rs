@@ -171,11 +171,7 @@ impl TypeDeserializer for MapDeserializer {
     fn finish_to_column(&mut self) -> Column {
         let key_col = self.key.finish_to_column();
         let value_col = self.value.finish_to_column();
-        let len = key_col.len();
-        let values = Column::Tuple {
-            fields: vec![key_col, value_col],
-            len,
-        };
+        let values = Column::Tuple(vec![key_col, value_col]);
         let offsets = std::mem::take(&mut self.offsets);
         Column::Map(Box::new(ArrayColumn {
             values,

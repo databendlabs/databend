@@ -127,10 +127,7 @@ fn test_ft_tuple_stats_block_stats() -> common_exception::Result<()> {
         Int32Type::from_data(vec![1, 2, 3]),
         Int32Type::from_data(vec![4, 5, 6]),
     ];
-    let column = Column::Tuple {
-        fields: inner_columns,
-        len: 3,
-    };
+    let column = Column::Tuple(inner_columns);
 
     let block = DataBlock::new_from_columns(vec![column]);
 

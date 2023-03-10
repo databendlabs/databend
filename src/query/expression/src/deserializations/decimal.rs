@@ -371,3 +371,31 @@ pub fn read_decimal<T: Decimal>(
     let n_read = if stop > 0 { stop as usize } else { len };
     Ok((n, digits as u8, exponent, n_read))
 }
+
+pub fn read_decimal_from_json<T: Decimal>(
+    value: &serde_json::Value,
+    size: DecimalSize,
+) -> Result<T> {
+    match value {
+        serde_json::Value::Number(n) => {
+            if n.is_i64() {
+                Ok(T::from_i64(n.as_i64().unwrap())
+                    .with_size(size)
+                    .ok_or_else(overflow_error)?)
+            } else if n.is_u64() {
+                Ok(T::from_u64(n.as_u64().unwrap())
+                    .with_size(size)
+                    .ok_or_else(overflow_error)?)
+            } else {
+                let f = n.as_f64().unwrap() * (10_f64).powi(size.scale as i32);
+                let n = T::from_float(f);
+                Ok(n)
+            }
+        }
+        serde_json::Value::String(s) => {
+            let (n, _) = read_decimal_with_size::<T>(s.as_bytes(), size, true)?;
+            Ok(n)
+        }
+        _ => Err(ErrorCode::from("Incorrect json value for decimal")),
+    }
+}

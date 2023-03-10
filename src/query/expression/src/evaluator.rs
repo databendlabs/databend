@@ -364,7 +364,7 @@ impl<'a> Evaluator<'a> {
                             .collect::<Result<Vec<_>>>()?;
                         Ok(Value::Scalar(Scalar::Tuple(new_fields)))
                     }
-                    Value::Column(Column::Tuple { fields, len }) => {
+                    Value::Column(Column::Tuple(fields)) => {
                         let new_fields = fields
                             .into_iter()
                             .zip(fields_src_ty.iter())
@@ -374,10 +374,7 @@ impl<'a> Evaluator<'a> {
                                     .map(|val| val.into_column().unwrap())
                             })
                             .collect::<Result<_>>()?;
-                        Ok(Value::Column(Column::Tuple {
-                            fields: new_fields,
-                            len,
-                        }))
+                        Ok(Value::Column(Column::Tuple(new_fields)))
                     }
                     other => unreachable!("source: {}", other),
                 }
@@ -545,7 +542,7 @@ impl<'a> Evaluator<'a> {
                             .collect::<Result<_>>()?;
                         Ok(Value::Scalar(Scalar::Tuple(new_fields)))
                     }
-                    Value::Column(Column::Tuple { fields, len }) => {
+                    Value::Column(Column::Tuple(fields)) => {
                         let new_fields = fields
                             .into_iter()
                             .zip(fields_src_ty.iter())
@@ -557,10 +554,7 @@ impl<'a> Evaluator<'a> {
                                     .unwrap())
                             })
                             .collect::<Result<_>>()?;
-                        let new_col = Column::Tuple {
-                            fields: new_fields,
-                            len,
-                        };
+                        let new_col = Column::Tuple(new_fields);
                         Ok(Value::Column(new_col))
                     }
                     other => unreachable!("source: {}", other),

@@ -62,7 +62,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             ValueRef::Column(col) => col.clone(),
                         })
                         .collect();
-                    Value::Column(Column::Tuple { fields, len })
+                    Value::Column(Column::Tuple(fields))
                 } else {
                     // All args are scalars, so we return a scalar as result
                     let fields = args
@@ -101,9 +101,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             }),
             eval: Box::new(move |args, _| match &args[0] {
                 ValueRef::Scalar(ScalarRef::Tuple(fields)) => Value::Scalar(fields[idx].to_owned()),
-                ValueRef::Column(Column::Tuple { fields, .. }) => {
-                    Value::Column(fields[idx].to_owned())
-                }
+                ValueRef::Column(Column::Tuple(fields)) => Value::Column(fields[idx].to_owned()),
                 _ => unreachable!(),
             }),
         }))
@@ -144,7 +142,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 ValueRef::Scalar(ScalarRef::Null) => Value::Scalar(Scalar::Null),
                 ValueRef::Scalar(ScalarRef::Tuple(fields)) => Value::Scalar(fields[idx].to_owned()),
                 ValueRef::Column(Column::Nullable(box NullableColumn {
-                    column: Column::Tuple { fields, .. },
+                    column: Column::Tuple(fields),
                     validity,
                 })) => Value::Column(Column::Nullable(Box::new(NullableColumn {
                     column: fields[idx].to_owned(),

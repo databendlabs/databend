@@ -41,8 +41,6 @@ use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
-use crate::TypeDeserializer;
-use crate::TypeDeserializerImpl;
 use crate::Value;
 
 impl DataBlock {
@@ -141,10 +139,7 @@ impl Column {
             Column::Array(col) | Column::Map(col) => {
                 let mut offsets = Vec::with_capacity(capacity + 1);
                 offsets.push(0);
-                let builder = ColumnBuilder::from_column(
-                    TypeDeserializerImpl::with_capacity(&col.values.data_type(), capacity)
-                        .finish_to_column(),
-                );
+                let builder = ColumnBuilder::with_capacity(&col.values.data_type(), capacity);
                 let builder = ArrayColumnBuilder { builder, offsets };
                 Self::concat_value_types::<ArrayType<AnyType>>(builder, columns)
             }
@@ -163,20 +158,17 @@ impl Column {
 
                 Column::Nullable(Box::new(NullableColumn { column, validity }))
             }
-            Column::Tuple { fields, .. } => {
+            Column::Tuple(fields) => {
                 let fields = (0..fields.len())
                     .map(|idx| {
                         let cs: Vec<Column> = columns
                             .iter()
-                            .map(|col| col.as_tuple().unwrap().0[idx].clone())
+                            .map(|col| col.as_tuple().unwrap()[idx].clone())
                             .collect();
                         Self::concat(&cs)
                     })
                     .collect();
-                Column::Tuple {
-                    fields,
-                    len: capacity,
-                }
+                Column::Tuple(fields)
             }
             Column::Variant(_) => {
                 let data_capacity = columns.iter().map(|c| c.memory_size() - c.len() * 8).sum();

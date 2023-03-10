@@ -37,8 +37,6 @@ use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::Scalar;
-use crate::TypeDeserializer;
-use crate::TypeDeserializerImpl;
 use crate::Value;
 
 // Block idx, row idx in the block, repeat times
@@ -240,10 +238,7 @@ impl Column {
             Column::Array(column) | Column::Map(column) => {
                 let mut offsets = Vec::with_capacity(result_size + 1);
                 offsets.push(0);
-                let builder = ColumnBuilder::from_column(
-                    TypeDeserializerImpl::with_capacity(&column.values.data_type(), result_size)
-                        .finish_to_column(),
-                );
+                let builder = ColumnBuilder::with_capacity(&column.values.data_type(), result_size);
                 let builder = ArrayColumnBuilder { builder, offsets };
                 Self::take_block_value_types::<ArrayType<AnyType>>(columns, builder, indices)
             }
@@ -289,7 +284,7 @@ impl Column {
                 let inner_columns = columns
                     .iter()
                     .map(|c| match c {
-                        Column::Tuple { fields, .. } => fields.clone(),
+                        Column::Tuple(fields) => fields.clone(),
                         _ => unreachable!(),
                     })
                     .collect::<Vec<_>>();
@@ -306,10 +301,7 @@ impl Column {
                     })
                     .collect();
 
-                Column::Tuple {
-                    fields,
-                    len: result_size,
-                }
+                Column::Tuple(fields)
             }
             Column::Variant(_) => {
                 let builder = VariantType::create_builder(result_size, &[]);

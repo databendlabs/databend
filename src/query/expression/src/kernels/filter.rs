@@ -36,8 +36,6 @@ use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
-use crate::TypeDeserializer;
-use crate::TypeDeserializerImpl;
 use crate::Value;
 
 impl DataBlock {
@@ -136,10 +134,7 @@ impl Column {
             Column::Array(column) | Column::Map(column) => {
                 let mut offsets = Vec::with_capacity(length + 1);
                 offsets.push(0);
-                let builder = ColumnBuilder::from_column(
-                    TypeDeserializerImpl::with_capacity(&column.values.data_type(), length)
-                        .finish_to_column(),
-                );
+                let builder = ColumnBuilder::with_capacity(&column.values.data_type(), length);
                 let builder = ArrayColumnBuilder { builder, offsets };
                 Self::filter_scalar_types::<ArrayType<AnyType>>(column, builder, filter)
             }
@@ -155,10 +150,9 @@ impl Column {
                     validity: BooleanType::try_downcast_column(&validity).unwrap(),
                 }))
             }
-            Column::Tuple { fields, .. } => {
-                let len = filter.len() - filter.unset_bits();
+            Column::Tuple(fields) => {
                 let fields = fields.iter().map(|c| c.filter(filter)).collect();
-                Column::Tuple { fields, len }
+                Column::Tuple(fields)
             }
             Column::Variant(column) => {
                 let bytes_per_row = column.data.len() / filter.len().max(1);

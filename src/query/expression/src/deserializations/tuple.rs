@@ -121,7 +121,6 @@ impl TypeDeserializer for TupleDeserializer {
             .iter_mut()
             .map(|f| f.finish_to_column())
             .collect();
-        let len = fields.iter().map(|f| f.len()).next().unwrap_or(0);
-        Column::Tuple { fields, len }
+        Column::Tuple(fields)
     }
 }

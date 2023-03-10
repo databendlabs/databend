@@ -39,14 +39,13 @@ use common_expression::types::number::NumberScalar;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::BlockEntry;
+use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::Expr;
 use common_expression::Scalar as DataScalar;
-use common_expression::TypeDeserializer;
-use common_expression::TypeDeserializerImpl;
 use common_expression::Value;
 use common_formats::FastFieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
@@ -582,11 +581,11 @@ impl ValueSource {
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<DataBlock> {
-        let mut desers = self
+        let mut columns = self
             .schema
             .fields()
             .iter()
-            .map(|f| TypeDeserializerImpl::with_capacity(f.data_type(), estimated_rows))
+            .map(|f| ColumnBuilder::with_capacity(f.data_type(), estimated_rows))
             .collect::<Vec<_>>();
 
         let mut rows = 0;
@@ -606,7 +605,7 @@ impl ValueSource {
             self.parse_next_row(
                 &field_decoder,
                 reader,
-                &mut desers,
+                &mut columns,
                 positions,
                 &self.bind_context,
                 self.metadata.clone(),
@@ -619,11 +618,10 @@ impl ValueSource {
             return Ok(DataBlock::empty_with_schema(self.schema.clone()));
         }
 
-        let columns = desers
-            .iter_mut()
-            .map(|deser| deser.finish_to_column())
+        let columns = columns
+            .into_iter()
+            .map(|col| col.build())
             .collect::<Vec<_>>();
-
         Ok(DataBlock::new_from_columns(columns))
     }
 
@@ -632,13 +630,13 @@ impl ValueSource {
         &self,
         field_decoder: &FastFieldDecoderValues,
         reader: &mut Cursor<R>,
-        desers: &mut [TypeDeserializerImpl],
+        columns: &mut [ColumnBuilder],
         positions: &mut VecDeque<usize>,
         bind_context: &BindContext,
         metadata: MetadataRef,
     ) -> Result<()> {
         let _ = reader.ignore_white_spaces();
-        let col_size = desers.len();
+        let col_size = columns.len();
         let start_pos_of_row = reader.checkpoint();
 
         // Start of the row --- '('
@@ -660,12 +658,12 @@ impl ValueSource {
             let _ = reader.ignore_white_spaces();
             let col_end = if col_idx + 1 == col_size { b')' } else { b',' };
 
-            let deser = desers
+            let col = columns
                 .get_mut(col_idx)
-                .ok_or_else(|| ErrorCode::Internal("Deserializer is None"))?;
+                .ok_or_else(|| ErrorCode::Internal("ColumnBuilder is None"))?;
 
             let (need_fallback, pop_count) = field_decoder
-                .read_field(deser, reader, positions)
+                .read_field(col, reader, positions)
                 .map(|_| {
                     let _ = reader.ignore_white_spaces();
                     let need_fallback = reader.ignore_byte(col_end).not();
@@ -673,10 +671,10 @@ impl ValueSource {
                 })
                 .unwrap_or((true, col_idx));
 
-            // Deserializer and expr-parser both will eat the end ')' of the row.
+            // ColumnBuilder and expr-parser both will eat the end ')' of the row.
             if need_fallback {
-                for deser in desers.iter_mut().take(pop_count) {
-                    deser.pop_data_value()?;
+                for col in columns.iter_mut().take(pop_count) {
+                    col.pop();
                 }
                 skip_to_next_row(reader, 1)?;
                 let end_pos_of_row = reader.position();
@@ -704,9 +702,8 @@ impl ValueSource {
                 )
                 .await?;
 
-                let format = self.ctx.get_format_settings()?;
-                for (append_idx, deser) in desers.iter_mut().enumerate().take(col_size) {
-                    deser.append_data_value(values[append_idx].clone(), &format)?;
+                for (append_idx, col) in columns.iter_mut().enumerate().take(col_size) {
+                    col.push(values[append_idx].as_ref());
                 }
                 reader.set_position(end_pos_of_row);
                 return Ok(());
