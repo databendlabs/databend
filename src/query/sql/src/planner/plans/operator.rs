@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use roaring::RoaringBitmap;
 
 use super::aggregate::Aggregate;
 use super::dummy_table_scan::DummyTableScan;
@@ -33,7 +32,6 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
-use crate::optimizer::RuleID;
 use crate::plans::runtime_filter_source::RuntimeFilterSource;
 use crate::plans::Exchange;
 
@@ -42,16 +40,6 @@ pub trait Operator {
 
     fn is_pattern(&self) -> bool {
         false
-    }
-
-    fn transformation_candidate_rules(&self) -> roaring::RoaringBitmap {
-        (RuleID::NormalizeScalarFilter as u32..RuleID::CommuteJoin as u32)
-            .collect::<RoaringBitmap>()
-    }
-
-    fn exploration_candidate_rules(&self) -> roaring::RoaringBitmap {
-        (RuleID::CommuteJoin as u32..(RuleID::RightExchangeJoin as u32) + 1)
-            .collect::<RoaringBitmap>()
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty>;

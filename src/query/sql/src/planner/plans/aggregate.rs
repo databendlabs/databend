@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use roaring::RoaringBitmap;
 
 use crate::optimizer::ColumnSet;
 use crate::optimizer::Distribution;
@@ -24,7 +23,6 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
-use crate::optimizer::RuleID;
 use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
@@ -79,13 +77,6 @@ impl Aggregate {
 impl Operator for Aggregate {
     fn rel_op(&self) -> RelOp {
         RelOp::Aggregate
-    }
-
-    fn transformation_candidate_rules(&self) -> roaring::RoaringBitmap {
-        let mut ret = RoaringBitmap::new();
-        ret.push(RuleID::SplitAggregate as u32);
-        ret.push(RuleID::FoldCountAggregate as u32);
-        ret
     }
 
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
