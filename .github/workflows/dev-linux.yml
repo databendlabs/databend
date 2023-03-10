@@ -83,6 +83,34 @@ jobs:
           target: ${{ matrix.arch }}-unknown-linux-musl
           profile: debug
 
+  tmp_build_musl_release:
+    timeout-minutes: 30
+    name: build_${{ matrix.arch }}_musl
+    runs-on: [self-hosted, X64, Linux, dev]
+    strategy:
+      matrix:
+        arch:
+          - x86_64
+          - aarch64
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags,  metasrv and metaclient need tag as its version.
+          fetch-depth: 0
+      - uses: ./.github/actions/build_linux
+        env:
+          # To avoid the `undefined reference to pthread_getname_np` error during linking,
+          # here we override set config environment var `je_cv_pthread_getname_np` to `no`,
+          # as suggested by tikv-jemalloc-sys's maintainer @BusyJay:
+          # https://github.com/tikv/jemallocator/issues/30#issuecomment-1183786410
+          #
+          # Hopefully this trick can be removed when rust upgraded to musl 1.2.3
+          # https://github.com/rust-lang/rust/pull/102891
+          je_cv_pthread_getname_np: no
+        with:
+          target: ${{ matrix.arch }}-unknown-linux-musl
+          profile: release
+
   test_unit:
     runs-on: [self-hosted, X64, Linux, dev]
     steps:
@@ -165,6 +193,35 @@ jobs:
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
+      - name: Upload failure
+        if: failure() || cancelled()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-sqllogic-standalone-${{ matrix.handlers }}-${{ matrix.dirs }}
+
+  tmp_test_sqllogic_standalone_linux_musl_release:
+    name: test_sqllogic_${{ matrix.dirs }}_standalone_linux
+    runs-on: [self-hosted, X64, Linux, dev]
+    needs: tmp_build_musl_release
+    strategy:
+      matrix:
+        dirs:
+          - "base"
+          - "query"
+          - "standalone"
+          - "ydb"
+          - "crdb"
+          - "duckdb"
+        handlers:
+          - "mysql,http,clickhouse"
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/test_sqllogic_standalone_linux
+        timeout-minutes: 30
+        with:
+          dirs: ${{ matrix.dirs }}
+          handlers: ${{ matrix.handlers }}
+          profile: release
       - name: Upload failure
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure
