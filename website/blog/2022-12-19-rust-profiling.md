@@ -4,6 +4,7 @@ description: CPU and Memory Profiling
 slug: profiling-rust
 date: 2022-12-19
 tags: [databend, CPU, Memory, Profiling]
+cover_url: cpu-and-memory.png
 authors:
 - name: BohuTANG
   url: https://github.com/BohuTANG
