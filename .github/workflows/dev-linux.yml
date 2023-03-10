@@ -143,7 +143,7 @@ jobs:
 #      - uses: ./.github/actions/test_meta_cluster
 #        timeout-minutes: 10
 
-  tmp_test_sqllogic_standalone_linux:
+  tmp_test_sqllogic_standalone_linux_release:
     name: test_sqllogic_${{ matrix.dirs }}_standalone_linux
     runs-on: [self-hosted, X64, Linux, dev]
     needs: tmp_build_gnu_release
