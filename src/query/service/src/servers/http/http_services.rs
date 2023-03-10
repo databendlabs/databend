@@ -82,27 +82,41 @@ impl HttpHandler {
         })
     }
 
-    async fn build_router(&self, config: &InnerConfig, sock: SocketAddr) -> impl Endpoint {
-        let ep = match self.kind {
-            HttpHandlerKind::Query => Route::new()
-                .at(
-                    "/",
-                    get(poem::endpoint::make_sync(move |_| {
-                        HttpHandlerKind::Query.usage(sock)
-                    })),
-                )
-                .nest("/clickhouse", clickhouse_router())
-                .nest("/v1/query", query_route())
-                .at("/v1/streaming_load", put(streaming_load))
-                .at("/v1/upload_to_stage", put(upload_to_stage)),
-            HttpHandlerKind::Clickhouse => Route::new().nest("/", clickhouse_router()),
-        };
-
+    fn wrap_auth(&self, config: &InnerConfig, ep: Route) -> impl Endpoint {
         let auth_manager = AuthMgr::create(config);
         let session_middleware = HTTPSessionMiddleware::create(self.kind, auth_manager);
+        ep.with(session_middleware).boxed()
+    }
 
-        ep.with(session_middleware)
-            .with(NormalizePath::new(TrailingSlash::Trim))
+    async fn build_router(&self, config: &InnerConfig, sock: SocketAddr) -> impl Endpoint {
+        let ep_v1 = Route::new()
+            .nest("/query", query_route())
+            .at("/streaming_load", put(streaming_load))
+            .at("/upload_to_stage", put(upload_to_stage));
+        let ep_v1 = self.wrap_auth(config, ep_v1);
+
+        let ep_clickhouse = Route::new().nest("/", clickhouse_router());
+        let ep_clickhouse = self.wrap_auth(config, ep_clickhouse);
+
+        let ep_usage = Route::new().at(
+            "/",
+            get(poem::endpoint::make_sync(move |_| {
+                HttpHandlerKind::Query.usage(sock)
+            })),
+        );
+        let ep_health = Route::new().at("/", get(poem::endpoint::make_sync(move |_| "ok")));
+
+        let ep = match self.kind {
+            HttpHandlerKind::Query => Route::new()
+                .at("/", ep_usage)
+                .nest("/health", ep_health)
+                .nest("/v1", ep_v1)
+                .nest("/clickhouse", ep_clickhouse),
+            HttpHandlerKind::Clickhouse => Route::new()
+                .nest("/", ep_clickhouse)
+                .nest("/health", ep_health),
+        };
+        ep.with(NormalizePath::new(TrailingSlash::Trim))
             .with(CatchPanic::new())
             .boxed()
     }
