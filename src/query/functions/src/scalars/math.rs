@@ -22,9 +22,12 @@ use common_expression::types::number::F64;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
+use common_expression::types::UInt16Type;
+use common_expression::types::UInt64Type;
 use common_expression::types::ALL_FLOAT_TYPES;
 use common_expression::types::ALL_INTEGER_TYPES;
 use common_expression::types::ALL_NUMERICS_TYPES;
+use common_expression::types::ALL_UNSIGNED_INTEGER_TYPES;
 use common_expression::with_number_mapped_type;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
@@ -346,6 +349,17 @@ pub fn register(registry: &mut FunctionRegistry) {
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
                 registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
+                    "cbrt",
+                    FunctionProperty::default(),
+                    |_| FunctionDomain::Full,
+                    |val, _| (val.as_(): F64).cbrt(),
+                );
+            }
+        });
+
+        with_number_mapped_type!(|NUM_TYPE| match ty {
+            NumberDataType::NUM_TYPE => {
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
                     "ln",
                     FunctionProperty::default(),
                     |_| FunctionDomain::Full,
@@ -398,6 +412,19 @@ pub fn register(registry: &mut FunctionRegistry) {
                     );
             }
         });
+    }
+
+    for ty in ALL_INTEGER_TYPES {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
+            NumberDataType::NUM_TYPE => {
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<i64>, _, _>(
+                    "factorial",
+                    FunctionProperty::default(),
+                    |_| FunctionDomain::Full,
+                    |val, _| factorial(val.as_(): i64),
+                );
+            }
+        })
     }
 }
 
@@ -457,3 +484,7 @@ type LnFunction = GenericLogFunction<EBase>;
 type LogFunction = GenericLogFunction<EBase>;
 type Log10Function = GenericLogFunction<TenBase>;
 type Log2Function = GenericLogFunction<TwoBase>;
+
+fn factorial(n: i64) -> i64 {
+    if n <= 0 { 1 } else { n * factorial(n - 1) }
+}

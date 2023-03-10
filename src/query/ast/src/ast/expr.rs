@@ -514,6 +514,7 @@ impl BinaryOperator {
             BinaryOperator::BitwiseOr => "bit_or".to_string(),
             BinaryOperator::BitwiseAnd => "bit_and".to_string(),
             BinaryOperator::BitwiseXor => "bit_xor".to_string(),
+            BinaryOperator::Caret => "pow".to_string(),
             _ => {
                 let name = format!("{:?}", self);
                 name.to_lowercase()
@@ -529,12 +530,15 @@ pub enum UnaryOperator {
     Not,
     Factorial,
     SquareRoot,
+    CubeRoot,
 }
 
 impl UnaryOperator {
     pub fn to_func_name(&self) -> String {
         match self {
             // TODO(xieqijun) Not all new functions in the future are lowercase by default.
+            UnaryOperator::SquareRoot => "sqrt".to_string(),
+            UnaryOperator::CubeRoot => "cube".to_string(),
             _ => {
                 let name = format!("{:?}", self);
                 name.to_lowercase()
@@ -619,6 +623,9 @@ impl Display for UnaryOperator {
             }
             UnaryOperator::SquareRoot => {
                 write!(f, "|/")
+            }
+            UnaryOperator::CubeRoot => {
+                write!(f, "||/")
             }
             UnaryOperator::Factorial => {
                 write!(f, "!")
@@ -927,10 +934,10 @@ impl Display for Expr {
             Expr::UnaryOp { op, expr, .. } => {
                 match op {
                     // TODO (xieqijun) Maybe special attribute are provided to check whether the symbol is before or after.
-                    UnaryOperator::Factorial=> {
+                    UnaryOperator::Factorial => {
                         write!(f, "({expr} {op})")?;
                     }
-                    _ =>{
+                    _ => {
                         write!(f, "({op} {expr})")?;
                     }
                 }

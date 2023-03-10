@@ -369,6 +369,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 UnaryOperator::Plus => Affix::Prefix(Precedence(50)),
                 UnaryOperator::Minus => Affix::Prefix(Precedence(50)),
                 UnaryOperator::SquareRoot => Affix::Prefix(Precedence(60)),
+                UnaryOperator::CubeRoot => Affix::Prefix(Precedence(60)),
                 UnaryOperator::Factorial => Affix::Postfix(Precedence(60)),
             },
             ExprElement::BinaryOp { op } => match op {
@@ -1069,6 +1070,7 @@ pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
         value(UnaryOperator::Not, rule! { NOT }),
         value(UnaryOperator::Factorial, rule! { Factorial}),
         value(UnaryOperator::SquareRoot, rule! { SquareRoot}),
+        value(UnaryOperator::CubeRoot, rule! { CubeRoot}),
     ))(i)
 }
 

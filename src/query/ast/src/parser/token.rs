@@ -225,7 +225,7 @@ pub enum TokenKind {
     SquareRoot,
     /// A cube root math operator in PostgreSQL
     #[token("||/")]
-    PGCubeRoot,
+    CubeRoot,
     /// Placeholder used in prepared stmt
     #[token("?")]
     Placeholder,
@@ -906,7 +906,7 @@ impl TokenKind {
                 | DoubleExclamationMark
                 | AtSign
                 | SquareRoot
-                | PGCubeRoot
+                | CubeRoot
                 | EOI
         )
     }

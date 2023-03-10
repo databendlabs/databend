@@ -76,6 +76,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("div", &["intdiv"]);
     registry.register_aliases("modulo", &["mod"]);
     registry.register_aliases("caret", &["exponentiation"]);
+    registry.register_aliases("caret", &["exponentiation"]);
 
     register_unary_minus(registry);
     register_string_to_number(registry);
@@ -386,12 +387,14 @@ macro_rules! register_factorial {
 }
 
 macro_rules! register_unary_arithmetic {
-    ( $n:ty, $registry:expr) => {{
-        register_factorial!($n, $registry);
-    }
-    {
-        register_square_root!($n, $registry);
-    }};
+    ( $n:ty, $registry:expr) => {
+        //     {
+        //     register_factorial!($n, $registry);
+        // }
+        {
+            register_square_root!($n, $registry);
+        }
+    };
 }
 
 fn register_unary_arithmetic(registry: &mut FunctionRegistry) {
