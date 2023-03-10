@@ -46,9 +46,7 @@ impl ParquetTable {
         {
             prj.clone()
         } else {
-            let indices = (0..self.arrow_schema.fields.len())
-                .into_iter()
-                .collect::<Vec<usize>>();
+            let indices = (0..self.arrow_schema.fields.len()).collect::<Vec<usize>>();
             Projection::Columns(indices)
         };
 

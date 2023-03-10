@@ -78,8 +78,11 @@ impl AuthType {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Default,
+)]
 pub enum AuthInfo {
+    #[default]
     None,
     Password {
         hash_value: Vec<u8>,
@@ -241,12 +244,6 @@ impl AuthInfo {
     }
 }
 
-impl Default for AuthInfo {
-    fn default() -> Self {
-        AuthInfo::None
-    }
-}
-
 #[derive(
     serde::Serialize,
     serde::Deserialize,
@@ -258,9 +255,11 @@ impl Default for AuthInfo {
     Ord,
     PartialOrd,
     num_derive::FromPrimitive,
+    Default,
 )]
 pub enum PasswordHashMethod {
     DoubleSha1 = 1,
+    #[default]
     Sha256 = 2,
 }
 
@@ -274,11 +273,5 @@ impl PasswordHashMethod {
 
     fn to_string(self, hash_value: &[u8]) -> String {
         hex::encode(hash_value)
-    }
-}
-
-impl Default for PasswordHashMethod {
-    fn default() -> Self {
-        PasswordHashMethod::Sha256
     }
 }

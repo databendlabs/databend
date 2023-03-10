@@ -30,7 +30,7 @@ impl AsRef<Value> for VariantValue {
     }
 }
 
-#[allow(clippy::derive_hash_xor_eq)]
+#[allow(clippy::derived_hash_with_manual_eq)]
 impl Hash for VariantValue {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let v = self.as_ref().to_string();

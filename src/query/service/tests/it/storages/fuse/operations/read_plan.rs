@@ -69,12 +69,10 @@ fn test_to_partitions() -> Result<()> {
     // generates fake data.
     // for simplicity, we set `in_memory_size` and the `len` to the value of `col_id`
     let cols_stats = (0..num_of_col)
-        .into_iter()
         .map(|field_index| (field_index as ColumnId, col_stats_gen(field_index)))
         .collect::<HashMap<_, _>>();
 
     let cols_metas = (0..num_of_col)
-        .into_iter()
         .map(|field_index| (field_index as ColumnId, col_metas_gen(field_index)))
         .collect::<HashMap<_, _>>();
 
@@ -101,14 +99,10 @@ fn test_to_partitions() -> Result<()> {
     ));
 
     let blocks_metas = (0..num_of_block)
-        .into_iter()
         .map(|_| (None, block_meta.clone()))
         .collect::<Vec<_>>();
 
-    let column_nodes = (0..num_of_col)
-        .into_iter()
-        .map(col_nodes_gen)
-        .collect::<Vec<_>>();
+    let column_nodes = (0..num_of_col).map(col_nodes_gen).collect::<Vec<_>>();
 
     let column_nodes = ColumnNodes { column_nodes };
 
@@ -124,7 +118,6 @@ fn test_to_partitions() -> Result<()> {
     // CASE II: col pruning
     // projection which keeps the odd ones
     let field_indices = (0..num_of_col)
-        .into_iter()
         .filter(|v| v & 1 != 0)
         .collect::<Vec<usize>>();
     let proj = Projection::Columns(field_indices.clone());

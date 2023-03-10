@@ -38,8 +38,8 @@ pub async fn presign_files(
         request_files,
         None,
     );
-    return match SharingAccessor::get_presigned_files(&input).await {
+    match SharingAccessor::get_presigned_files(&input).await {
         Ok(output) => Ok(Json(output)),
         Err(e) => Err(BadRequest(e)),
-    };
+    }
 }

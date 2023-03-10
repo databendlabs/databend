@@ -2513,7 +2513,6 @@ impl<'a> TypeChecker<'a> {
             } => TableDataType::Tuple {
                 fields_name: match fields_name {
                     None => (0..fields_type.len())
-                        .into_iter()
                         .map(|i| (i + 1).to_string())
                         .collect(),
                     Some(names) => names.clone(),
