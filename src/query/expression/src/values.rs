@@ -1891,7 +1891,7 @@ impl ColumnBuilder {
             }
             ColumnBuilder::String(builder) | ColumnBuilder::Variant(builder) => {
                 let offset: u64 = reader.read_uvarint()?;
-                builder.data.resize(offset as usize + builder.len(), 0);
+                builder.data.resize(offset as usize + builder.data.len(), 0);
                 let last = *builder.offsets.last().unwrap() as usize;
                 reader.read_exact(&mut builder.data[last..last + offset as usize])?;
                 builder.commit_row();
@@ -1976,7 +1976,7 @@ impl ColumnBuilder {
             ColumnBuilder::String(builder) | ColumnBuilder::Variant(builder) => {
                 for row in 0..rows {
                     let reader = &reader[step * row..];
-                    builder.put_slice(&reader);
+                    builder.put_slice(reader);
                     builder.commit_row();
                 }
             }
