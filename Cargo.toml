@@ -90,7 +90,7 @@ members = [
 [workspace.dependencies]
 # databend maintains:
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
-opendal = { path = "../opendal", features = [
+opendal = { version = "0.30", features = [
     "layers-tracing",
     "layers-metrics",
     "services-ipfs",
