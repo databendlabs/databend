@@ -299,12 +299,12 @@ impl<'a> Evaluator<'a> {
                 Value::Scalar(Scalar::Null) => {
                     let mut bitmap = MutableBitmap::new();
                     bitmap.extend_constant(self.input_columns.num_rows(), false);
-                    return Err((
+                    Err((
                         span,
                         Value::Scalar(Scalar::default_value(dest_type)),
                         bitmap.into(),
                         format!("unable to cast type `{src_type}` to type `{dest_type}`"),
-                    ));
+                    ))
                 }
                 Value::Scalar(_) => self.run_cast(span, inner_src_ty, dest_type, value),
                 Value::Column(Column::Nullable(col)) => {
@@ -315,7 +315,7 @@ impl<'a> Evaluator<'a> {
                             span,
                             Value::Scalar(Scalar::default_value(dest_type)),
                             bitmap.into(),
-                            format!("unable to cast type `NULL` to type `{dest_type}`"),
+                            format!("unable to cast `NULL` to type `{dest_type}`"),
                         ));
                     }
                     let column = self
