@@ -57,10 +57,10 @@ use common_users::UserApiProvider;
 
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
+use crate::binder::wrap_cast;
 use crate::binder::Binder;
 use crate::binder::NameResolutionResult;
 use crate::optimizer::RelExpr;
-use crate::planner::binder::wrap_cast_if_needed;
 use crate::planner::metadata::optimize_remove_count_args;
 use crate::plans::AggregateFunction;
 use crate::plans::AndExpr;
@@ -188,7 +188,7 @@ impl<'a> TypeChecker<'a> {
                         (BoundColumnRef { column }.into(), data_type)
                     }
                     NameResolutionResult::Alias { scalar, .. } => {
-                        (scalar.clone(), scalar.data_type())
+                        (scalar.clone(), scalar.data_type()?)
                     }
                 };
 
@@ -307,6 +307,7 @@ impl<'a> TypeChecker<'a> {
                                 },
                                 args: args.iter().copied().cloned().collect(),
                                 params: vec![],
+                                window: None,
                             },
                             None,
                         )
@@ -395,7 +396,6 @@ impl<'a> TypeChecker<'a> {
                         AndExpr {
                             left: Box::new(ge_func),
                             right: Box::new(le_func),
-                            return_type: Box::new(data_type.clone()),
                         }
                         .into(),
                         data_type,
@@ -436,7 +436,6 @@ impl<'a> TypeChecker<'a> {
                         OrExpr {
                             left: Box::new(lt_func),
                             right: Box::new(gt_func),
-                            return_type: Box::new(data_type.clone()),
                         }
                         .into(),
                         data_type,
@@ -513,7 +512,7 @@ impl<'a> TypeChecker<'a> {
             Expr::Cast {
                 expr, target_type, ..
             } => {
-                let box (scalar, data_type) = self.resolve(expr, required_type).await?;
+                let box (scalar, _) = self.resolve(expr, required_type).await?;
                 let raw_expr = RawExpr::Cast {
                     span: None,
                     is_try: false,
@@ -526,7 +525,6 @@ impl<'a> TypeChecker<'a> {
                     CastExpr {
                         is_try: false,
                         argument: Box::new(scalar),
-                        from_type: Box::new(data_type),
                         target_type: Box::new(expr.data_type().clone()),
                     }
                     .into(),
@@ -537,7 +535,7 @@ impl<'a> TypeChecker<'a> {
             Expr::TryCast {
                 expr, target_type, ..
             } => {
-                let box (scalar, data_type) = self.resolve(expr, required_type).await?;
+                let box (scalar, _) = self.resolve(expr, required_type).await?;
                 let raw_expr = RawExpr::Cast {
                     span: None,
                     is_try: true,
@@ -550,7 +548,6 @@ impl<'a> TypeChecker<'a> {
                     CastExpr {
                         is_try: true,
                         argument: Box::new(scalar),
-                        from_type: Box::new(data_type),
                         target_type: Box::new(expr.data_type().clone()),
                     }
                     .into(),
@@ -580,6 +577,7 @@ impl<'a> TypeChecker<'a> {
                                 },
                                 args: vec![*operand.clone(), c.clone()],
                                 params: vec![],
+                                window: None,
                             };
                             arguments.push(equal_expr)
                         }
@@ -977,7 +975,7 @@ impl<'a> TypeChecker<'a> {
         for argument in arguments {
             let box (arg, mut arg_type) = self.resolve(argument, None).await?;
             if let ScalarExpr::SubqueryExpr(subquery) = &arg {
-                if subquery.typ == SubqueryType::Scalar && !arg.data_type().is_nullable() {
+                if subquery.typ == SubqueryType::Scalar && !arg.data_type()?.is_nullable() {
                     arg_type = arg_type.wrap_nullable();
                 }
             }
@@ -998,7 +996,7 @@ impl<'a> TypeChecker<'a> {
         }
 
         // rewrite_collation
-        let func_name = if self.function_need_collation(func_name, &args)
+        let func_name = if self.function_need_collation(func_name, &args)?
             && self.ctx.get_settings().get_collation()? == "utf8"
         {
             format!("{func_name}_utf8")
@@ -1042,7 +1040,6 @@ impl<'a> TypeChecker<'a> {
                 params,
                 arguments: args,
                 func_name: func_name.to_string(),
-                return_type: Box::new(expr.data_type().clone()),
             }
             .into(),
             expr.data_type().clone(),
@@ -1072,10 +1069,8 @@ impl<'a> TypeChecker<'a> {
                 let (positive, data_type) = *self
                     .resolve_binary_op(span, &positive_op, left, right, required_type)
                     .await?;
-                let return_type = Box::new(data_type.clone());
                 let scalar = ScalarExpr::NotExpr(NotExpr {
                     argument: Box::new(positive),
-                    return_type,
                 });
                 Ok(Box::new((scalar, data_type)))
             }
@@ -1104,7 +1099,6 @@ impl<'a> TypeChecker<'a> {
                         op,
                         left: Box::new(left),
                         right: Box::new(right),
-                        return_type: Box::new(data_type.clone()),
                     }
                     .into(),
                     data_type,
@@ -1128,7 +1122,6 @@ impl<'a> TypeChecker<'a> {
                     AndExpr {
                         left: Box::new(left),
                         right: Box::new(right),
-                        return_type: Box::new(data_type.clone()),
                     }
                     .into(),
                     data_type,
@@ -1152,7 +1145,6 @@ impl<'a> TypeChecker<'a> {
                     OrExpr {
                         left: Box::new(left),
                         right: Box::new(right),
-                        return_type: Box::new(data_type.clone()),
                     }
                     .into(),
                     data_type,
@@ -1202,7 +1194,6 @@ impl<'a> TypeChecker<'a> {
                 Ok(Box::new((
                     NotExpr {
                         argument: Box::new(argument),
-                        return_type: Box::new(data_type.clone()),
                     }
                     .into(),
                     data_type,
@@ -1298,7 +1289,7 @@ impl<'a> TypeChecker<'a> {
             ASTIntervalKind::Year => {
                 self.resolve_function(
                     span,
-                    "to_start_of_year",vec![], 
+                    "to_start_of_year", vec![],
                     &[date],
                     None,
                 )
@@ -1307,7 +1298,7 @@ impl<'a> TypeChecker<'a> {
             ASTIntervalKind::Quarter => {
                 self.resolve_function(
                     span,
-                    "to_start_of_quarter",vec![], 
+                    "to_start_of_quarter", vec![],
                     &[date],
                     None,
                 )
@@ -1316,7 +1307,7 @@ impl<'a> TypeChecker<'a> {
             ASTIntervalKind::Month => {
                 self.resolve_function(
                     span,
-                    "to_start_of_month",vec![], 
+                    "to_start_of_month", vec![],
                     &[date],
                     None,
                 )
@@ -1325,7 +1316,7 @@ impl<'a> TypeChecker<'a> {
             ASTIntervalKind::Day => {
                 self.resolve_function(
                     span,
-                    "to_start_of_day",vec![], 
+                    "to_start_of_day", vec![],
                     &[date],
                     None,
                 )
@@ -1334,7 +1325,7 @@ impl<'a> TypeChecker<'a> {
             ASTIntervalKind::Hour => {
                 self.resolve_function(
                     span,
-                    "to_start_of_hour",vec![], 
+                    "to_start_of_hour", vec![],
                     &[date],
                     None,
                 )
@@ -1343,7 +1334,7 @@ impl<'a> TypeChecker<'a> {
             ASTIntervalKind::Minute => {
                 self.resolve_function(
                     span,
-                    "to_start_of_minute",vec![], 
+                    "to_start_of_minute", vec![],
                     &[date],
                     None,
                 )
@@ -1352,7 +1343,7 @@ impl<'a> TypeChecker<'a> {
             ASTIntervalKind::Second => {
                 self.resolve_function(
                     span,
-                    "to_start_of_second",vec![], 
+                    "to_start_of_second", vec![],
                     &[date],
                     None,
                 )
@@ -1406,12 +1397,12 @@ impl<'a> TypeChecker<'a> {
                     *data_type.clone(),
                     &BUILTIN_FUNCTIONS.default_cast_rules,
                 )
-                .ok_or_else(|| {
-                    ErrorCode::Internal(format!(
-                        "Subquery type {scalar_data_type} and expression {data_type} cannot be matched"
-                    ))
-                })?;
-                scalar = wrap_cast_if_needed(&scalar, &coercion_type);
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "Subquery type {scalar_data_type} and expression {data_type} cannot be matched"
+                        ))
+                    })?;
+                scalar = wrap_cast(&scalar, &coercion_type);
                 data_type = Box::new(coercion_type);
             }
             child_scalar = Some(Box::new(scalar));
@@ -1598,6 +1589,7 @@ impl<'a> TypeChecker<'a> {
                             },
                             args: vec![arg_x.clone()],
                             params: vec![],
+                            window: None,
                         },
                         None,
                     )
@@ -1635,6 +1627,7 @@ impl<'a> TypeChecker<'a> {
                         },
                         args: vec![(*arg).clone()],
                         params: vec![],
+                        window: None,
                     };
 
                     new_args.push(is_not_null_expr);
@@ -1662,14 +1655,14 @@ impl<'a> TypeChecker<'a> {
                         Expr::BinaryOp {
                             op, left, right, ..
                         } => {
-                            if let Expr::Literal {span:_, lit:Literal::UInt64(l)} = **left
-                                && let Expr::Literal {span:_, lit:Literal::UInt64(r)} = **right {
+                            if let Expr::Literal { span: _, lit: Literal::UInt64(l) } = **left
+                                && let Expr::Literal { span: _, lit: Literal::UInt64(r) } = **right {
                                 match op {
                                     BinaryOperator::Plus => (l + r) as i32,
                                     BinaryOperator::Minus => (l - r) as i32,
                                     _ => -1,
                                 }
-                            } else {-1}
+                            } else { -1 }
                         }
                         Expr::UnaryOp { op, expr, .. } => {
                             if let Expr::Literal {
@@ -2064,7 +2057,6 @@ impl<'a> TypeChecker<'a> {
                     params: vec![idx],
                     arguments: vec![scalar.clone()],
                     func_name: "get".to_string(),
-                    return_type: Box::new(DataType::from(&table_data_type)),
                 }
                 .into();
                 continue;
@@ -2078,16 +2070,16 @@ impl<'a> TypeChecker<'a> {
             if let TableDataType::Array(inner_type) = table_data_type {
                 table_data_type = *inner_type;
             }
-            table_data_type = TableDataType::wrap_nullable(&table_data_type);
+            table_data_type = table_data_type.wrap_nullable();
             scalar = FunctionCall {
                 params: vec![],
                 arguments: vec![scalar.clone(), path_scalar],
                 func_name: "get".to_string(),
-                return_type: Box::new(DataType::from(&table_data_type)),
             }
             .into();
         }
-        Ok(Box::new((scalar, DataType::from(&table_data_type))))
+        let return_type = scalar.data_type()?;
+        Ok(Box::new((scalar, return_type)))
     }
 
     #[async_recursion::async_recursion]
@@ -2166,7 +2158,7 @@ impl<'a> TypeChecker<'a> {
                         (BoundColumnRef { column }.into(), data_type)
                     }
                     NameResolutionResult::Alias { scalar, .. } => {
-                        (scalar.clone(), scalar.data_type())
+                        (scalar.clone(), scalar.data_type()?)
                     }
                 };
                 Ok(Box::new((scalar, data_type)))
@@ -2179,11 +2171,11 @@ impl<'a> TypeChecker<'a> {
                         params: vec![idx],
                         arguments: vec![scalar.clone()],
                         func_name: "get".to_string(),
-                        return_type: Box::new(DataType::from(&table_data_type)),
                     }
                     .into();
+                    scalar = wrap_cast(&scalar, &DataType::from(&table_data_type));
                 }
-                let return_type = scalar.data_type();
+                let return_type = scalar.data_type()?;
                 Ok(Box::new((scalar, return_type)))
             }
         }
@@ -2366,6 +2358,7 @@ impl<'a> TypeChecker<'a> {
                     name,
                     args,
                     params,
+                    window,
                 } => Ok(Expr::FunctionCall {
                     span: *span,
                     distinct: *distinct,
@@ -2375,6 +2368,7 @@ impl<'a> TypeChecker<'a> {
                         .map(|arg| self.clone_expr_with_replacement(arg, replacement_fn))
                         .collect::<Result<Vec<Expr>>>()?,
                     params: params.clone(),
+                    window: window.clone(),
                 }),
                 Expr::Case {
                     span,
@@ -2467,12 +2461,13 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    fn function_need_collation(&self, name: &str, args: &[ScalarExpr]) -> bool {
+    fn function_need_collation(&self, name: &str, args: &[ScalarExpr]) -> Result<bool> {
         let names = vec!["substr", "substring", "length"];
-        !args.is_empty()
-            && matches!(args[0].data_type().remove_nullable(), DataType::String)
+        let result = !args.is_empty()
+            && matches!(args[0].data_type()?.remove_nullable(), DataType::String)
             && self.ctx.get_settings().get_collation().unwrap() != "binary"
-            && names.contains(&name)
+            && names.contains(&name);
+        Ok(result)
     }
 
     pub fn resolve_type_name(type_name: &TypeName) -> Result<TableDataType> {

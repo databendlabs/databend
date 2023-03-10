@@ -65,6 +65,7 @@ impl ProcessorAsyncTask {
 
         let processor_id = unsafe { processor.id() };
         let processor_name = unsafe { processor.name() };
+        let queue_clone = queue.clone();
         let inner = async move {
             let start = Instant::now();
             let mut inner = inner.boxed();
@@ -74,12 +75,14 @@ impl ProcessorAsyncTask {
                 match futures::future::select(interval, inner).await {
                     Either::Left((_, right)) => {
                         inner = right;
+                        let active_workers = queue_clone.active_workers();
                         tracing::warn!(
-                            "Very slow processor async task, query_id:{:?}, processor id: {:?}, name: {:?}, elapsed: {:?}",
+                            "Very slow processor async task, query_id:{:?}, processor id: {:?}, name: {:?}, elapsed: {:?}, active sync workers: {:?}",
                             query_id,
                             processor_id,
                             processor_name,
-                            start.elapsed()
+                            start.elapsed(),
+                            active_workers,
                         );
                     }
                     Either::Right((res, _)) => {

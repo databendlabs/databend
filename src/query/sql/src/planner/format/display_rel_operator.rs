@@ -15,7 +15,6 @@
 use std::fmt::Display;
 
 use common_ast::ast::FormatTreeNode;
-use common_expression::types::DataType;
 use itertools::Itertools;
 
 use crate::optimizer::SExpr;
@@ -364,7 +363,6 @@ pub fn logical_join_to_format_tree(
                 op: ComparisonOp::Equal,
                 left: Box::new(left.clone()),
                 right: Box::new(right.clone()),
-                return_type: Box::new(DataType::Boolean),
             }
             .into()
         })
@@ -380,7 +378,6 @@ pub fn logical_join_to_format_tree(
             ScalarExpr::AndExpr(AndExpr {
                 left: Box::new(prev),
                 right: Box::new(next.clone()),
-                return_type: Box::new(DataType::Boolean),
             })
         });
         format_scalar(&metadata, &pred)

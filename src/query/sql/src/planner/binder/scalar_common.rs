@@ -213,16 +213,6 @@ pub fn wrap_cast(scalar: &ScalarExpr, target_type: &DataType) -> ScalarExpr {
     ScalarExpr::CastExpr(CastExpr {
         is_try: false,
         argument: Box::new(scalar.clone()),
-        from_type: Box::new(scalar.data_type()),
         target_type: Box::new(target_type.clone()),
     })
-}
-
-/// Wrap a cast expression with given target type if the scalar is not of the target type
-pub fn wrap_cast_if_needed(scalar: &ScalarExpr, target_type: &DataType) -> ScalarExpr {
-    if &scalar.data_type() == target_type {
-        scalar.clone()
-    } else {
-        wrap_cast(scalar, target_type)
-    }
 }

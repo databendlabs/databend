@@ -44,7 +44,7 @@ impl ExecutorTasksQueue {
     }
 
     pub fn finish(&self, workers_condvar: Arc<WorkersCondvar>) {
-        self.finished.store(true, Ordering::Relaxed);
+        self.finished.store(true, Ordering::SeqCst);
         self.finished_notify.notify_waiters();
 
         let mut workers_tasks = self.workers_tasks.lock();
@@ -63,7 +63,7 @@ impl ExecutorTasksQueue {
     }
 
     pub fn is_finished(&self) -> bool {
-        self.finished.load(Ordering::Relaxed)
+        self.finished.load(Ordering::SeqCst)
     }
 
     /// Pull task from the global task queue
@@ -186,6 +186,12 @@ impl ExecutorTasksQueue {
 
     pub fn get_finished_notify(&self) -> Arc<Notify> {
         self.finished_notify.clone()
+    }
+
+    pub fn active_workers(&self) -> usize {
+        let workers_tasks = self.workers_tasks.lock();
+        workers_tasks.workers_waiting_status.total_size()
+            - workers_tasks.workers_waiting_status.waiting_size()
     }
 }
 

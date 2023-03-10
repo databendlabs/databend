@@ -56,13 +56,13 @@ impl Interpreter for AlterViewInterpreter {
             .await?
             .iter()
             .any(|table| {
-                table.name() == self.plan.viewname.as_str()
+                table.name() == self.plan.view_name.as_str()
                     && table.get_table_info().engine() == VIEW_ENGINE
             })
         {
             return Err(ErrorCode::ViewAlreadyExists(format!(
                 "{}.{} view does not exist",
-                self.plan.database, self.plan.viewname
+                self.plan.database, self.plan.view_name
             )));
         }
 
@@ -78,7 +78,7 @@ impl AlterViewInterpreter {
             .get_table(
                 self.plan.tenant.as_str(),
                 self.plan.database.as_str(),
-                self.plan.viewname.as_str(),
+                self.plan.view_name.as_str(),
             )
             .await?;
         catalog
@@ -105,7 +105,7 @@ impl AlterViewInterpreter {
             format!(
                 "select * from ({}) {}({})",
                 self.plan.subquery,
-                self.plan.viewname,
+                self.plan.view_name,
                 self.plan.column_names.join(", ")
             )
         };
@@ -116,7 +116,7 @@ impl AlterViewInterpreter {
             name_ident: TableNameIdent {
                 tenant: self.plan.tenant.clone(),
                 db_name: self.plan.database.clone(),
-                table_name: self.plan.viewname.clone(),
+                table_name: self.plan.view_name.clone(),
             },
             table_meta: TableMeta {
                 engine: VIEW_ENGINE.to_string(),

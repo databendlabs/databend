@@ -34,11 +34,21 @@ fi
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../tests" || exit
 
-echo "Starting databend-test"
+for i in `seq 1 3`
+do
+    echo "Starting databend-test $i"
+    ./databend-test $1 --mode 'standalone' --run-dir 1_stateful
 
-./databend-test $1 --mode 'standalone' --run-dir 1_stateful
+    if [ $? -ne 0 ];then
+        break
+    fi
 
-# only expected to get adopted in stateful tests
-if [[ "$ALLOW_SHARING" == "true" ]]; then
-	./databend-test $1 --mode 'standalone' --run-dir 3_stateful_sharing
-fi
+    # only expected to get adopted in stateful tests
+    if [[ "$ALLOW_SHARING" == "true" ]]; then
+      ./databend-test $1 --mode 'standalone' --run-dir 3_stateful_sharing
+    fi
+
+    if [ $? -ne 0 ];then
+        break
+    fi
+done

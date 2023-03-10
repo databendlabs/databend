@@ -149,6 +149,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 .into_iter()
                 .map(|param| match param {
                     ASTLiteral::UInt64(u) => u as usize,
+                    ASTLiteral::Decimal128 { .. } => 0_usize,
                     _ => unimplemented!(),
                 })
                 .collect(),

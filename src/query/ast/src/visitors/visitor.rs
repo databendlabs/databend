@@ -207,9 +207,32 @@ pub trait Visitor<'ast>: Sized {
         _name: &'ast Identifier,
         args: &'ast [Expr],
         _params: &'ast [Literal],
+        over: &'ast Option<WindowSpec>,
     ) {
         for arg in args {
             walk_expr(self, arg);
+        }
+
+        if let Some(over) = over {
+            over.partition_by
+                .iter()
+                .for_each(|expr| walk_expr(self, expr));
+            over.order_by
+                .iter()
+                .for_each(|expr| walk_expr(self, &expr.expr));
+
+            if let Some(frame) = &over.window_frame {
+                self.visit_frame_bound(&frame.start_bound);
+                self.visit_frame_bound(&frame.end_bound);
+            }
+        }
+    }
+
+    fn visit_frame_bound(&mut self, bound: &'ast WindowFrameBound) {
+        match bound {
+            WindowFrameBound::Preceding(Some(expr)) => walk_expr(self, expr.as_ref()),
+            WindowFrameBound::Following(Some(expr)) => walk_expr(self, expr.as_ref()),
+            _ => {}
         }
     }
 

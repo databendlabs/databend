@@ -73,7 +73,7 @@ HashJoin
 │   ├── filters: [t1.c (#3) = 1]
 │   ├── estimated rows: 0.33
 │   └── EvalScalar
-│       ├── expressions: [plus(numbers.number (#0), 1), plus(numbers.number (#0), 1), plus(numbers.number (#0), 1)]
+│       ├── expressions: [numbers.number (#0) + 1, numbers.number (#0) + 1, numbers.number (#0) + 1]
 │       ├── estimated rows: 1.00
 │       └── TableScan
 │           ├── table: default.system.numbers
@@ -84,7 +84,7 @@ HashJoin
 │           ├── push downs: [filters: [], limit: NONE]
 │           └── estimated rows: 1.00
 └── EvalScalar(Probe)
-    ├── expressions: [plus(numbers.number (#9), 1)]
+    ├── expressions: [numbers.number (#9) + 1]
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.system.numbers
@@ -128,7 +128,7 @@ Filter
     │               │   ├── filters: [t2.c (#8) = 1]
     │               │   ├── estimated rows: 0.33
     │               │   └── EvalScalar
-    │               │       ├── expressions: [plus(numbers.number (#5), 1), plus(numbers.number (#5), 1)]
+    │               │       ├── expressions: [numbers.number (#5) + 1, numbers.number (#5) + 1]
     │               │       ├── estimated rows: 1.00
     │               │       └── TableScan
     │               │           ├── table: default.system.numbers
@@ -139,7 +139,7 @@ Filter
     │               │           ├── push downs: [filters: [], limit: NONE]
     │               │           └── estimated rows: 1.00
     │               └── EvalScalar(Probe)
-    │                   ├── expressions: [plus(numbers.number (#14), 1)]
+    │                   ├── expressions: [numbers.number (#14) + 1]
     │                   ├── estimated rows: 1.00
     │                   └── TableScan
     │                       ├── table: default.system.numbers
@@ -150,7 +150,7 @@ Filter
     │                       ├── push downs: [filters: [], limit: NONE]
     │                       └── estimated rows: 1.00
     └── EvalScalar(Probe)
-        ├── expressions: [plus(numbers.number (#0), 1)]
+        ├── expressions: [numbers.number (#0) + 1]
         ├── estimated rows: 1.00
         └── TableScan
             ├── table: default.system.numbers

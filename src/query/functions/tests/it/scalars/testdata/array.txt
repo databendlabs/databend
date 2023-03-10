@@ -126,6 +126,15 @@ output domain  : {NULL}
 output         : NULL
 
 
+ast            : [NULL][0]
+raw expr       : get(array(NULL), 0_u8)
+checked expr   : get<Array(NULL) NULL, UInt64 NULL>(CAST(array<T0=NULL><T0>(NULL) AS Array(NULL) NULL), CAST(0_u8 AS UInt64 NULL))
+optimized expr : NULL
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : [true, false][1]
 raw expr       : get(array(true, false), 1_u8)
 checked expr   : get<T0=Boolean><Array(T0 NULL), UInt64>(CAST(array<T0=Boolean><T0, T0>(true, false) AS Array(Boolean NULL)), to_uint64<UInt8>(1_u8))

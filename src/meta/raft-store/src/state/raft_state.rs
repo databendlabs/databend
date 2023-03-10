@@ -29,9 +29,9 @@ use crate::state::RaftStateValue;
 
 /// Raft state stores everything else other than log and state machine, which includes:
 /// id: NodeId,
-/// hard_state:
-///      current_term,
-///      voted_for,
+/// vote:
+///      term,
+///      node_id,
 #[derive(Debug)]
 pub struct RaftState {
     pub id: NodeId,
@@ -118,7 +118,7 @@ impl RaftState {
         self.set_node_id(self.id).await
     }
 
-    pub async fn write_hard_state(&self, vote: &Vote) -> Result<(), MetaStorageError> {
+    pub async fn save_vote(&self, vote: &Vote) -> Result<(), MetaStorageError> {
         let state = self.state();
         state
             .insert(&RaftStateKey::HardState, &RaftStateValue::HardState(*vote))
@@ -126,7 +126,7 @@ impl RaftState {
         Ok(())
     }
 
-    pub fn read_hard_state(&self) -> Result<Option<Vote>, MetaStorageError> {
+    pub fn read_vote(&self) -> Result<Option<Vote>, MetaStorageError> {
         let state = self.state();
         let hs = state.get(&RaftStateKey::HardState)?;
         let hs = hs.map(Vote::from);

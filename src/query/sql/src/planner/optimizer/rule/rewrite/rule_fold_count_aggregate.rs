@@ -81,7 +81,7 @@ impl Rule for RuleFoldCountAggregate {
                         && (agg_func.args.is_empty()
                             || !matches!(
                                 agg_func.args[0].data_type(),
-                                DataType::Nullable(_) | DataType::Null
+                                Ok(DataType::Nullable(_)) | Ok(DataType::Null)
                             ))
                         && !agg_func.distinct
                 }
@@ -93,7 +93,7 @@ impl Rule for RuleFoldCountAggregate {
                 ScalarExpr::AggregateFunction(agg_func) => {
                     agg_func.func_name == "count"
                         && (agg_func.args.is_empty()
-                            || matches!(agg_func.args[0].data_type(), DataType::Nullable(_)))
+                            || matches!(agg_func.args[0].data_type(), Ok(DataType::Nullable(_))))
                         && !agg_func.distinct
                 }
                 _ => false,
@@ -104,7 +104,7 @@ impl Rule for RuleFoldCountAggregate {
             for item in scalars.iter_mut() {
                 item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
                     value: Literal::UInt64(card),
-                    data_type: Box::new(item.scalar.data_type()),
+                    data_type: Box::new(item.scalar.data_type()?),
                 });
             }
             let eval_scalar = EvalScalar { items: scalars };
@@ -125,7 +125,7 @@ impl Rule for RuleFoldCountAggregate {
                     if agg_func.args.is_empty() {
                         item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
                             value: Literal::UInt64(table_card),
-                            data_type: Box::new(item.scalar.data_type()),
+                            data_type: Box::new(item.scalar.data_type()?),
                         });
                         return Ok(());
                     } else {
@@ -135,7 +135,7 @@ impl Rule for RuleFoldCountAggregate {
                             if let Some(card) = col_stat {
                                 item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
                                     value: Literal::UInt64(table_card - card.null_count),
-                                    data_type: Box::new(item.scalar.data_type()),
+                                    data_type: Box::new(item.scalar.data_type()?),
                                 });
                             } else {
                                 return Ok(());
