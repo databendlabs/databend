@@ -4,6 +4,7 @@ description: About Databend engine
 slug: databend-engine
 date: 2022-07-05
 tags: [databend, git, cloud warehouse]
+cover_url: from-git-to-fuse-engine.png
 authors:
 - name: BohuTANG
   url: https://github.com/BohuTANG
@@ -11,7 +12,7 @@ authors:
 ---
 
 > Databend, developed with Rust, is a new open-source data warehouse architected toward the cloud. It is committed to providing fast elastic expansion capabilities and a pay-as-you-go user experience.
-> GitHub：https://github.com/datafuselabs/databend
+> GitHub: https://github.com/datafuselabs/databend
 
 ## Introduction
 
@@ -172,7 +173,7 @@ git cat-file -p bdea812b9602ed3c6662a2231b3f1e7b52dc1ccb
 
 ## Fuse Engine
 
-Databend's Fuse Engine was designed in a way similar to Git. It introduces three description files：
+Databend's Fuse Engine was designed in a way similar to Git. It introduces three description files:
 
 * Snapshot: Describes segment object information.
 * Segment: Describes block object information.
@@ -243,8 +244,8 @@ CREATE TABLE git(file VARCHAR, content VARCHAR);
    Fuse Engine now keeps two versions of the data:
 
    ```shell
-   ID efe2687fd1fc48f8b414b5df2cec1e19，Version2
-   ID 6450690b09c449939a83268c49c12bb2，Version1
+   ID efe2687fd1fc48f8b414b5df2cec1e19, Version2
+   ID 6450690b09c449939a83268c49c12bb2, Version1
    ```
 
    That's very similar to Git. Right?
