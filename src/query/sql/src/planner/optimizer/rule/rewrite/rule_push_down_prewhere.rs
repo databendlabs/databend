@@ -114,6 +114,17 @@ impl RulePushDownPrewhere {
             let columns = Self::collect_columns(pred);
             prewhere_pred.push(pred.clone());
             prewhere_columns.extend(&columns);
+
+            let pred_string = format!("{:?}", pred);
+
+            // TODO(leisky), this is very hacky now
+            // To avoid:
+            // MySQL [(none)]> SELECT b, SUM(a) AS sum FROM test GROUP BY b HAVING b=21 ORDER BY b;
+            // ERROR 1105 (HY000)
+            if pred_string.contains("\"group_item\"") {
+                // cannot optimize
+                return Ok(s_expr.clone());
+            }
         }
 
         get.prewhere = if prewhere_pred.is_empty() {
