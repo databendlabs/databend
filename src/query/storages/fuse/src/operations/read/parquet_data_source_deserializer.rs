@@ -137,13 +137,13 @@ impl Processor for DeserializeDataTransform {
             let start = Instant::now();
 
             let columns_chunks = read_res.columns_chunks()?;
-            let fuse_part = FusePartInfo::from_part(&part)?;
+            let part = FusePartInfo::from_part(&part)?;
 
             let data_block = self.block_reader.deserialize_parquet_chunks_with_buffer(
-                &fuse_part.location,
-                fuse_part.nums_rows,
-                &fuse_part.compression,
-                &fuse_part.columns_meta,
+                &part.location,
+                part.nums_rows,
+                &part.compression,
+                &part.columns_meta,
                 columns_chunks,
                 Some(self.uncompressed_buffer.clone()),
             )?;
@@ -162,7 +162,7 @@ impl Processor for DeserializeDataTransform {
             self.output_data = Some(DataBlock::new_with_meta(
                 data_block.columns().to_vec(),
                 data_block.num_rows(),
-                Some(Box::new(fuse_part.block_meta_index().unwrap().to_owned())),
+                Some(Box::new(part.block_meta_index().unwrap().to_owned())),
             ));
         }
 

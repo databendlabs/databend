@@ -48,18 +48,18 @@ impl BlockReader {
         part: PartInfoPtr,
         chunks: HashMap<ColumnId, DataItem>,
     ) -> Result<DataBlock> {
-        let fuse_part = FusePartInfo::from_part(&part)?;
+        let part = FusePartInfo::from_part(&part)?;
         let start = Instant::now();
 
         if chunks.is_empty() {
-            return self.build_default_values_block(fuse_part.nums_rows);
+            return self.build_default_values_block(part.nums_rows);
         }
 
         let deserialized_res = self.deserialize_native_chunks_with_buffer(
-            &fuse_part.location,
-            fuse_part.nums_rows,
-            &fuse_part.compression,
-            &fuse_part.columns_meta,
+            &part.location,
+            part.nums_rows,
+            &part.compression,
+            &part.columns_meta,
             chunks,
             None,
         );
@@ -73,7 +73,6 @@ impl BlockReader {
     }
 
     /// Deserialize column chunks data from native format to DataBlock with a uncompressed buffer.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn deserialize_native_chunks_with_buffer(
         &self,
         block_path: &str,

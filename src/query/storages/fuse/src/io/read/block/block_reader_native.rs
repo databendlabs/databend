@@ -182,10 +182,9 @@ impl BlockReader {
         data_block: DataBlock,
         parts: &VecDeque<PartInfoPtr>,
     ) -> Result<DataBlock> {
-        let fuse_part = FusePartInfo::from_part(&parts[0])?;
+        let part = FusePartInfo::from_part(&parts[0])?;
 
-        let data_block_column_ids: HashSet<ColumnId> =
-            fuse_part.columns_meta.keys().cloned().collect();
+        let data_block_column_ids: HashSet<ColumnId> = part.columns_meta.keys().cloned().collect();
         let default_vals = self.default_vals.clone();
 
         DataBlock::create_with_default_value_and_block(
