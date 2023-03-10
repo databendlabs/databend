@@ -85,7 +85,7 @@ jobs:
 
   tmp_build_musl_release:
     timeout-minutes: 30
-    name: build_${{ matrix.arch }}_musl
+    name: tmp_build_${{ matrix.arch }}_musl_release
     runs-on: [self-hosted, X64, Linux, dev]
     strategy:
       matrix:
@@ -200,7 +200,7 @@ jobs:
           name: test-sqllogic-standalone-${{ matrix.handlers }}-${{ matrix.dirs }}
 
   tmp_test_sqllogic_standalone_linux_musl_release:
-    name: test_sqllogic_${{ matrix.dirs }}_standalone_linux
+    name: tmp_test_sqllogic_${{ matrix.dirs }}_standalone_linux_musl_release
     runs-on: [self-hosted, X64, Linux, dev]
     needs: tmp_build_musl_release
     strategy:
