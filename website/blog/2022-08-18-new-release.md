@@ -4,6 +4,7 @@ description: Databend V0.8 Release Notes
 slug: databend-release-v0.8
 date: 2022-08-18
 tags: [databend, V0.8]
+cover_url: databend-veight.png
 authors:
 - name: Xuanwo
   url: https://github.com/Xuanwo
@@ -41,7 +42,7 @@ select vip_info.Client_ID, vip_info.Region
     on vip_info.Client_ID = purchase_records.Client_ID;
 ```
 
-### New Parser: The Best Parser！
+### New Parser: The Best Parser!
 
 While refactoring Planner, the databend community has implemented a new nom-based Parser that balances development efficiency with user experience.
 
