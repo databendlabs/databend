@@ -22,7 +22,7 @@ use std::sync::Arc;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::eval_function;
+use common_expression::type_check::check_number;
 use common_expression::types::number::Number;
 use common_expression::types::number::UInt8Type;
 use common_expression::types::ArgType;
@@ -36,9 +36,9 @@ use common_expression::types::ValueType;
 use common_expression::with_integer_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
+use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
-use common_expression::Value;
 use common_io::prelude::*;
 use num_traits::AsPrimitive;
 use serde::de::DeserializeOwned;
@@ -356,24 +356,21 @@ where
         arguments: Vec<DataType>,
     ) -> Result<AggregateFunctionRef> {
         let event_size = arguments.len() - 1;
-        let (window, _) = eval_function(
+        let window = check_number(
             None,
-            "to_uint64",
-            [(
-                Value::Scalar(params[0].clone()),
-                params[0].as_ref().infer_data_type(),
-            )],
             FunctionContext::default(),
-            1,
+            &Expr::<usize>::Cast {
+                span: None,
+                is_try: false,
+                expr: Box::new(Expr::Constant {
+                    span: None,
+                    scalar: params[0].clone(),
+                    data_type: params[0].as_ref().infer_data_type(),
+                }),
+                dest_type: DataType::Number(NumberDataType::UInt64),
+            },
             &BUILTIN_FUNCTIONS,
         )?;
-        let window = window
-            .into_scalar()
-            .unwrap()
-            .into_number()
-            .unwrap()
-            .into_u_int64()
-            .unwrap();
 
         Ok(Arc::new(Self {
             display_name: display_name.to_owned(),
