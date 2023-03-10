@@ -21,7 +21,9 @@ use common_exception::Result;
 use common_exception::Span;
 use common_expression::converts::scalar_to_datavalue;
 use common_expression::eval_function;
+use common_expression::types::AnyType;
 use common_expression::types::DataType;
+use common_expression::types::MapType;
 use common_expression::types::NullableType;
 use common_expression::types::Number;
 use common_expression::types::NumberDataType;
@@ -144,19 +146,48 @@ impl BloomIndex {
         let mut columns = Vec::new();
         for i in 0..num_columns {
             let data_type = &data_blocks_tobe_indexed[0].get_by_offset(i).data_type;
-            if Xor8Filter::supported_type(data_type) {
-                fields.push(source_schema.field(i));
+            match data_type {
+                DataType::Map(box inner_ty) => {
+                    // Add bloom filter for the value of map type
+                    let val_type = match inner_ty {
+                        DataType::Tuple(kv_tys) => kv_tys[1].clone(),
+                        _ => unreachable!(),
+                    };
+                    if Xor8Filter::supported_type(&val_type) {
+                        fields.push(source_schema.field(i));
 
-                let source_columns = data_blocks_tobe_indexed
-                    .iter()
-                    .map(|block| {
-                        let value = &block.get_by_offset(i).value;
-                        value.convert_to_full_column(data_type, block.num_rows())
-                    })
-                    .collect::<Vec<_>>();
-                let column = Column::concat(&source_columns);
-                columns.push((column, data_type.clone()));
-            }
+                        let source_columns = data_blocks_tobe_indexed
+                            .iter()
+                            .map(|block| {
+                                let value = &block.get_by_offset(i).value;
+                                let column =
+                                    value.convert_to_full_column(data_type, block.num_rows());
+                                let map_column =
+                                    MapType::<AnyType, AnyType>::try_downcast_column(&column)
+                                        .unwrap();
+                                map_column.values.values
+                            })
+                            .collect::<Vec<_>>();
+                        let column = Column::concat(&source_columns);
+                        columns.push((column, val_type));
+                    }
+                }
+                _ => {
+                    if Xor8Filter::supported_type(data_type) {
+                        fields.push(source_schema.field(i));
+
+                        let source_columns = data_blocks_tobe_indexed
+                            .iter()
+                            .map(|block| {
+                                let value = &block.get_by_offset(i).value;
+                                value.convert_to_full_column(data_type, block.num_rows())
+                            })
+                            .collect::<Vec<_>>();
+                        let column = Column::concat(&source_columns);
+                        columns.push((column, data_type.clone()));
+                    }
+                }
+            };
         }
         if columns.is_empty() {
             return Ok(None);
@@ -203,8 +234,13 @@ impl BloomIndex {
             let filter = filter_builder.build()?;
 
             if let Some(len) = filter.len() {
-                let idx = source_schema.index_of(field.name().as_str()).unwrap();
-                column_distinct_count.insert(idx, len);
+                match field.data_type() {
+                    TableDataType::Map(_) => {}
+                    _ => {
+                        let idx = source_schema.index_of(field.name().as_str()).unwrap();
+                        column_distinct_count.insert(idx, len);
+                    }
+                }
             }
 
             let filter_name = Self::build_filter_column_name(version, field)?;
@@ -386,7 +422,8 @@ fn visit_expr_column_eq_constant(
     expr: &mut Expr<String>,
     visitor: &mut impl FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<String>>>,
 ) -> Result<()> {
-    // Find patterns like `Column = <constant>` or `<constant> = Column`.
+    // Find patterns like `Column = <constant>`, `<constant> = Column`,
+    // or `MapColumn[<key>] = <constant>`, `<constant> = MapColumn[<key>]`
     match expr {
         Expr::FunctionCall {
             span,
@@ -409,6 +446,48 @@ fn visit_expr_column_eq_constant(
                     return Ok(());
                 }
             }
+            [
+                Expr::FunctionCall { id, args, .. },
+                Expr::Constant { scalar, .. },
+            ]
+            | [
+                Expr::Constant { scalar, .. },
+                Expr::FunctionCall { id, args, .. },
+            ] => {
+                if id.name() == "get" {
+                    if let Some(new_expr) =
+                        visit_map_column(*span, args, scalar, return_type, visitor)?
+                    {
+                        *expr = new_expr;
+                        return Ok(());
+                    }
+                }
+            }
+            [
+                Expr::FunctionCall { id, args, .. },
+                Expr::Cast {
+                    expr: box cast_expr,
+                    ..
+                },
+            ]
+            | [
+                Expr::Cast {
+                    expr: box cast_expr,
+                    ..
+                },
+                Expr::FunctionCall { id, args, .. },
+            ] => {
+                if let Expr::Constant { scalar, .. } = cast_expr {
+                    if id.name() == "get" {
+                        if let Some(new_expr) =
+                            visit_map_column(*span, args, scalar, return_type, visitor)?
+                        {
+                            *expr = new_expr;
+                            return Ok(());
+                        }
+                    }
+                }
+            }
             _ => (),
         },
         _ => (),
@@ -428,4 +507,23 @@ fn visit_expr_column_eq_constant(
     }
 
     Ok(())
+}
+
+fn visit_map_column(
+    span: Span,
+    args: &[Expr<String>],
+    scalar: &Scalar,
+    return_type: &DataType,
+    visitor: &mut impl FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<String>>>,
+) -> Result<Option<Expr<String>>> {
+    if let Expr::ColumnRef { id, data_type, .. } = &args[0] {
+        if let DataType::Map(box inner_ty) = data_type.remove_nullable() {
+            let val_type = match inner_ty {
+                DataType::Tuple(kv_tys) => kv_tys[1].clone(),
+                _ => unreachable!(),
+            };
+            return visitor(span, id, scalar, &val_type, return_type);
+        }
+    }
+    Ok(None)
 }

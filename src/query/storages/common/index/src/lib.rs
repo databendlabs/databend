@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+#![feature(box_patterns)]
 
 mod bloom_index;
 pub mod filters;
