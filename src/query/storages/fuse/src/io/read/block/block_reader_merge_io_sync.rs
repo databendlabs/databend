@@ -19,7 +19,7 @@ use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
-use opendal::Object;
+use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::TableDataCacheKey;
 use storages_common_cache_manager::CacheManager;
@@ -33,10 +33,11 @@ use crate::MergeIOReadResult;
 impl BlockReader {
     pub fn sync_merge_io_read(
         read_settings: &ReadSettings,
-        object: Object,
+        op: Operator,
+        location: &str,
         raw_ranges: Vec<(ColumnId, Range<u64>)>,
     ) -> Result<MergeIOReadResult> {
-        let path = object.path().to_string();
+        let path = location.to_string();
 
         // Build merged read ranges.
         let ranges = raw_ranges
@@ -54,7 +55,8 @@ impl BlockReader {
         let mut io_res = Vec::with_capacity(merged_ranges.len());
         for (idx, range) in merged_ranges.iter().enumerate() {
             io_res.push(Self::sync_read_range(
-                object.clone(),
+                op.clone(),
+                location,
                 idx,
                 range.start,
                 range.end,
@@ -118,20 +120,21 @@ impl BlockReader {
             }
         }
 
-        let object = self.operator.object(&part.location);
-        let mut merge_io_result = Self::sync_merge_io_read(settings, object, ranges)?;
+        let mut merge_io_result =
+            Self::sync_merge_io_read(settings, self.operator.clone(), &part.location, ranges)?;
         merge_io_result.cached_column_array = cached_column_array;
         Ok(merge_io_result)
     }
 
     #[inline]
     pub fn sync_read_range(
-        o: Object,
+        op: Operator,
+        path: &str,
         index: usize,
         start: u64,
         end: u64,
     ) -> Result<(usize, Vec<u8>)> {
-        let chunk = o.blocking_range_read(start..end)?;
+        let chunk = op.blocking().range_read(path, start..end)?;
         Ok((index, chunk))
     }
 }

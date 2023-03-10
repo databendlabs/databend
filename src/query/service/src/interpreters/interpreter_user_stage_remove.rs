@@ -65,7 +65,7 @@ impl Interpreter for RemoveUserStageInterpreter {
         };
 
         for name in files.iter().map(|f| f.path.as_str()) {
-            op.object(name).delete().await?;
+            op.delete(name).await?;
         }
 
         Ok(PipelineBuildResult::create())

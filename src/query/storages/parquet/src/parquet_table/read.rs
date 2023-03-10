@@ -143,7 +143,7 @@ impl ParquetTable {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
 
         // Add source pipe.
-        if self.operator.metadata().can_blocking() {
+        if self.operator.info().can_blocking() {
             pipeline.add_source(
                 |output| SyncParquetSource::create(ctx.clone(), output, source_reader.clone()),
                 max_threads,

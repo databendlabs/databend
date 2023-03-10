@@ -38,18 +38,16 @@ impl Files {
 
         // OpenDAL support delete via a stream. But it will cause higher
         // ranked problems. So let's write them by hand.
-        let bo = self.operator.batch();
-
         let mut paths = Vec::with_capacity(1000);
         for path in iter {
             paths.push(path);
             if paths.len() >= 1000 {
-                bo.remove(mem::take(&mut paths)).await?;
+                self.operator.remove(mem::take(&mut paths)).await?;
             }
         }
 
         if !paths.is_empty() {
-            bo.remove(mem::take(&mut paths)).await?;
+            self.operator.remove(mem::take(&mut paths)).await?;
         }
 
         Ok(())

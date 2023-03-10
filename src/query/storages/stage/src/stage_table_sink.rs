@@ -258,7 +258,7 @@ impl Processor for StageTableSink {
             State::NeedWrite(bytes, remainng_block) => {
                 let path = self.unload_path();
 
-                self.data_accessor.object(&path).write(bytes).await?;
+                self.data_accessor.write(&path, bytes).await?;
 
                 match remainng_block {
                     Some(block) => self.state = State::NeedSerialize(block),
