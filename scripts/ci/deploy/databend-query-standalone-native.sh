@@ -26,8 +26,8 @@ echo "Waiting on databend-meta 10 seconds..."
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
 
 echo 'Start databend-query with native...'
-cp scripts/ci/deploy/config/databend-query-node-1.toml  native.toml
-sed -i "s/default_storage_format = 'parquet'/default_storage_format = 'native'/g"  native.toml
+cp scripts/ci/deploy/config/databend-query-node-1.toml native.toml
+sed -i "s/default_storage_format = 'parquet'/default_storage_format = 'native'/g" native.toml
 nohup target/${BUILD_PROFILE}/databend-query -c native --internal-enable-sandbox-tenant &
 
 echo "Waiting on databend-query 10 seconds..."

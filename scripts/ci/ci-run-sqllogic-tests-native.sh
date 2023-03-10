@@ -9,7 +9,6 @@ export STORAGE_ALLOW_INSECURE=true
 echo "Starting standalone DatabendQuery and DatabendMeta"
 ./scripts/ci/deploy/databend-query-standalone-native.sh
 
-
 TEST_HANDLERS=${TEST_HANDLERS:-"mysql,http,clickhouse"}
 BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
@@ -21,4 +20,3 @@ echo "Run suites using argument: $RUN_DIR"
 
 echo "Starting databend-sqllogic tests"
 target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --skip_dir management,mode,explain --enable_sandbox --parallel 8 --debug
-
