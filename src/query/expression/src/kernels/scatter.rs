@@ -208,11 +208,10 @@ impl Column {
                 let mut offsets = Vec::with_capacity(length + 1);
                 offsets.push(0);
                 let builder = ColumnBuilder::from_column(
-                    TypeDeserializerImpl::with_capacity(&column.values.data_type(), length)
-                        .finish_to_column(),
+                    ColumnBuilder::with_capacity(&column.values.data_type(), length).build(),
                 );
                 let (key_builder, val_builder) = match builder {
-                    ColumnBuilder::Tuple { fields, .. } => (fields[0].clone(), fields[1].clone()),
+                    ColumnBuilder::Tuple(fields) => (fields[0].clone(), fields[1].clone()),
                     _ => unreachable!(),
                 };
                 let builder = KvColumnBuilder {
