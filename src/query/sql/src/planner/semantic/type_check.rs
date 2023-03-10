@@ -39,13 +39,13 @@ use common_exception::Span;
 use common_expression::infer_schema_type;
 use common_expression::type_check;
 use common_expression::type_check::check_literal;
+use common_expression::type_check::check_number;
 use common_expression::type_check::common_super_type;
 use common_expression::types::decimal::DecimalDataType;
 use common_expression::types::decimal::DecimalSize;
 use common_expression::types::number::F64;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::ConstantFolder;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::RawExpr;
@@ -1648,32 +1648,26 @@ impl<'a> TypeChecker<'a> {
             ("last_query_id", args) => {
                 // last_query_id(index) returns query_id in current session by index
                 let res: Result<i64> = try {
-                    if args.len() != 1 {
+                    if args.len() > 1 {
                         return Some(Err(ErrorCode::BadArguments(
-                            "last_query_id only need one integer argument",
+                            "last_query_id needs at most one integer argument",
                         )
                         .set_span(span)));
                     }
-                    let box (scalar, _) = self
-                        .resolve(args[0], Some(DataType::Number(NumberDataType::Int64)))
-                        .await?;
+                    if args.is_empty() {
+                        -1
+                    } else {
+                        let box (scalar, _) = self
+                            .resolve(args[0], Some(DataType::Number(NumberDataType::Int64)))
+                            .await?;
 
-                    let expr = scalar.as_expr_with_col_index()?;
-                    let (expr, _) = ConstantFolder::fold(
-                        &expr,
-                        self.ctx.get_function_context()?,
-                        &BUILTIN_FUNCTIONS,
-                    );
-                    match expr {
-                        common_expression::Expr::Constant { scalar, .. } => {
-                            *scalar.as_number().unwrap().as_int64().unwrap()
-                        }
-                        _ => {
-                            return Some(Err(ErrorCode::BadArguments(
-                                "last_query_id only need one integer argument",
-                            )
-                            .set_span(span)));
-                        }
+                        let expr = scalar.as_expr_with_col_index()?;
+                        check_number::<_, i64>(
+                            span,
+                            self.ctx.get_function_context()?,
+                            &expr,
+                            &BUILTIN_FUNCTIONS,
+                        )?
                     }
                 };
 
