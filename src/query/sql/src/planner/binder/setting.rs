@@ -49,11 +49,10 @@ impl Binder {
         );
         let variable = variable.name.clone();
 
-        let (scalar, data_type) = *type_checker.resolve(value, None).await?;
+        let (scalar, _) = *type_checker.resolve(value, None).await?;
         let scalar = ScalarExpr::CastExpr(CastExpr {
             is_try: false,
             argument: Box::new(scalar),
-            from_type: Box::new(data_type),
             target_type: Box::new(DataType::String),
         });
         let expr = scalar.as_expr_with_col_index()?;

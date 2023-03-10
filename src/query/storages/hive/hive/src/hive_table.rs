@@ -281,9 +281,7 @@ impl HiveTable {
                 )),
             }
         } else {
-            let col_ids = (0..self.table_info.schema().fields().len())
-                .into_iter()
-                .collect::<Vec<usize>>();
+            let col_ids = (0..self.table_info.schema().fields().len()).collect::<Vec<usize>>();
             Ok(col_ids)
         }
     }

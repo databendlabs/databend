@@ -387,6 +387,7 @@ pub fn try_check_function<Index: ColumnIndex>(
         .collect::<Result<Vec<_>>>()?;
 
     let return_type = subst.apply(&sig.return_type)?;
+    assert!(!return_type.has_nested_nullable());
 
     let generics = subst
         .0

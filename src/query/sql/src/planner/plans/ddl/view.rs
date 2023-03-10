@@ -22,7 +22,7 @@ pub struct CreateViewPlan {
     pub tenant: String,
     pub catalog: String,
     pub database: String,
-    pub viewname: String,
+    pub view_name: String,
     pub column_names: Vec<String>,
     pub subquery: String,
 }
@@ -38,7 +38,7 @@ pub struct AlterViewPlan {
     pub tenant: String,
     pub catalog: String,
     pub database: String,
-    pub viewname: String,
+    pub view_name: String,
     pub column_names: Vec<String>,
     pub subquery: String,
 }
@@ -55,7 +55,7 @@ pub struct DropViewPlan {
     pub tenant: String,
     pub catalog: String,
     pub database: String,
-    pub viewname: String,
+    pub view_name: String,
 }
 
 impl DropViewPlan {

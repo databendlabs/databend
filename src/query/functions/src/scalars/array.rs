@@ -169,6 +169,13 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| Value::Scalar(()),
     );
 
+    registry.register_2_arg_core::<NullableType<ArrayType<NullType>>, NullableType<UInt64Type>, NullType, _, _>(
+        "get",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        |_, _, _| Value::Scalar(()),
+    );
+
     registry.register_combine_nullable_2_arg::<ArrayType<NullableType<GenericType<0>>>, UInt64Type, GenericType<0>, _, _>(
         "get",
         FunctionProperty::default(),

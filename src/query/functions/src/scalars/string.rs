@@ -808,7 +808,7 @@ mod soundex {
     // https://github.com/mysql/mysql-server/blob/3290a66c89eb1625a7058e0ef732432b6952b435/sql/item_strfunc.cc#L1919
     #[inline(always)]
     pub fn is_uni_alphabetic(c: char) -> bool {
-        ('a'..='z').contains(&c) || ('A'..='Z').contains(&c) || c as i32 >= 0xC0
+        c.is_ascii_lowercase() || c.is_ascii_uppercase() || c as i32 >= 0xC0
     }
 }
 
