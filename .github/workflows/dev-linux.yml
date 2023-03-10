@@ -165,6 +165,7 @@ jobs:
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
+          profile: release
       - name: Upload failure
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure
