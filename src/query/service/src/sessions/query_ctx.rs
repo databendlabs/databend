@@ -256,6 +256,21 @@ impl TableContext for QueryContext {
         self.partition_queue.write().pop_front()
     }
 
+    fn get_all_partitions(&self) -> VecDeque<PartInfoPtr> {
+        let partitions = self.partition_queue.read();
+        (*partitions).clone()
+    }
+
+    fn contain_partition(&self, part: &PartInfoPtr) -> bool {
+        let partitions = self.partition_queue.read();
+        for partition in partitions.iter() {
+            if part.equals(partition) {
+                return true;
+            }
+        }
+        false
+    }
+
     fn get_partitions(&self, num: usize) -> Vec<PartInfoPtr> {
         let mut res = Vec::with_capacity(num);
         let mut partition_queue = self.partition_queue.write();
@@ -272,6 +287,15 @@ impl TableContext for QueryContext {
         }
 
         res
+    }
+
+    fn set_parts(&self, parts: VecDeque<PartInfoPtr>) -> Result<()> {
+        let mut partition_queue = self.partition_queue.write();
+        partition_queue.clear();
+        for part in parts {
+            partition_queue.push_back(part);
+        }
+        Ok(())
     }
 
     // Update the context partition pool from the pipeline builder.

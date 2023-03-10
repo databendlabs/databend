@@ -16,7 +16,8 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_catalog::plan::{PushDownInfo, RuntimeFilterId};
+use common_catalog::plan::PushDownInfo;
+use common_catalog::plan::RuntimeFilterId;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -74,7 +75,7 @@ impl Processor for TransformRuntimeFilterPrunner {
                 }
             }
             if filters.len() == self.runtime_filter_ids.len() {
-                break
+                break;
             }
         }
         let push_down = PushDownInfo {
@@ -87,7 +88,10 @@ impl Processor for TransformRuntimeFilterPrunner {
             runtime_filter_ids: None,
         };
 
-        let (_, partitions) = self.table.read_partitions(self.ctx.clone(), Some(push_down)).await?;
+        let (_, partitions) = self
+            .table
+            .read_partitions(self.ctx.clone(), Some(push_down))
+            .await?;
         self.ctx.set_partitions(partitions)?;
         self.is_finished = true;
         Ok(())

@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -97,7 +98,10 @@ pub trait TableContext: Send + Sync {
     fn get_result_progress_value(&self) -> ProgressValues;
 
     fn get_partition(&self) -> Option<PartInfoPtr>;
+    fn get_all_partitions(&self) -> VecDeque<PartInfoPtr>;
+    fn contain_partition(&self, part: &PartInfoPtr) -> bool;
     fn get_partitions(&self, num: usize) -> Vec<PartInfoPtr>;
+    fn set_parts(&self, parts: VecDeque<PartInfoPtr>) -> Result<()>;
     fn set_partitions(&self, partitions: Partitions) -> Result<()>;
     fn add_partitions_sha(&self, sha: String);
     fn get_partitions_shas(&self) -> Vec<String>;

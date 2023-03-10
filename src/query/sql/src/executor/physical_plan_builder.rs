@@ -856,11 +856,7 @@ impl PhysicalPlanBuilder {
             })
             .transpose()?;
 
-        let runtime_filter_ids = if let Some(ids) = &scan.runtime_filter_ids {
-            Some(ids.clone())
-        } else {
-            None
-        };
+        let runtime_filter_ids = scan.runtime_filter_ids.as_ref().cloned();
 
         Ok(PushDownInfo {
             projection: Some(projection),

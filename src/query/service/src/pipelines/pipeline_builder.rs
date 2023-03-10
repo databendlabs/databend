@@ -278,11 +278,11 @@ impl PipelineBuilder {
             .as_ref()
             .and_then(|p| p.runtime_filter_ids.clone());
 
-        if runtime_filter_ids.is_some() {
+        if let Some(runtime_filter_ids) = runtime_filter_ids {
             let processor = TransformRuntimeFilterPrunner::create(
                 self.ctx.clone(),
                 table.clone(),
-                runtime_filter_ids.unwrap(),
+                runtime_filter_ids,
             );
             let pipe_item = PipeItem::create(ProcessorPtr::create(processor), vec![], vec![]);
             let pipe = Pipe::create(0, 0, vec![pipe_item]);

@@ -39,6 +39,7 @@ pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     finished: bool,
     batch_size: usize,
     block_reader: Arc<BlockReader>,
+    ctx: Arc<dyn TableContext>,
 
     output: Arc<OutputPort>,
     output_data: Option<(Vec<PartInfoPtr>, Vec<MergeIOReadResult>)>,
@@ -64,6 +65,7 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
                 finished: false,
                 output_data: None,
                 partitions,
+                ctx,
             })
         } else {
             Ok(ProcessorPtr::create(Box::new(ReadParquetDataSource::<
@@ -76,6 +78,7 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
                 finished: false,
                 output_data: None,
                 partitions,
+                ctx,
             })))
         }
     }
@@ -87,13 +90,18 @@ impl SyncSource for ReadParquetDataSource<true> {
     fn generate(&mut self) -> Result<Option<DataBlock>> {
         match self.partitions.steal_one(self.id) {
             None => Ok(None),
-            Some(part) => Ok(Some(DataBlock::empty_with_meta(DataSourceMeta::create(
-                vec![part.clone()],
-                vec![self.block_reader.sync_read_columns_data_by_merge_io(
-                    &ReadSettings::from_ctx(&self.partitions.ctx)?,
-                    part,
-                )?],
-            )))),
+            Some(part) => {
+                if !self.ctx.contain_partition(&part) {
+                    return Ok(None);
+                }
+                Ok(Some(DataBlock::empty_with_meta(DataSourceMeta::create(
+                    vec![part.clone()],
+                    vec![self.block_reader.sync_read_columns_data_by_merge_io(
+                        &ReadSettings::from_ctx(&self.partitions.ctx)?,
+                        part,
+                    )?],
+                ))))
+            }
         }
     }
 }
@@ -134,10 +142,15 @@ impl Processor for ReadParquetDataSource<false> {
 
     async fn async_process(&mut self) -> Result<()> {
         let parts = self.partitions.steal(self.id, self.batch_size);
-
-        if !parts.is_empty() {
-            let mut chunks = Vec::with_capacity(parts.len());
-            for part in &parts {
+        let mut filtered_parts = vec![];
+        for part in parts.into_iter() {
+            if self.ctx.contain_partition(&part) {
+                filtered_parts.push(part);
+            }
+        }
+        if !filtered_parts.is_empty() {
+            let mut chunks = Vec::with_capacity(filtered_parts.len());
+            for part in &filtered_parts {
                 let part = part.clone();
                 let block_reader = self.block_reader.clone();
                 let settings = ReadSettings::from_ctx(&self.partitions.ctx)?;
@@ -159,7 +172,7 @@ impl Processor for ReadParquetDataSource<false> {
                 });
             }
 
-            self.output_data = Some((parts, futures::future::try_join_all(chunks).await?));
+            self.output_data = Some((filtered_parts, futures::future::try_join_all(chunks).await?));
             return Ok(());
         }
 

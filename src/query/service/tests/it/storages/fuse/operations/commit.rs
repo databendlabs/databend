@@ -14,6 +14,7 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
@@ -354,7 +355,19 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn get_all_partitions(&self) -> VecDeque<PartInfoPtr> {
+        todo!()
+    }
+
+    fn contain_partition(&self, _part: &PartInfoPtr) -> bool {
+        todo!()
+    }
+
     fn get_partitions(&self, _: usize) -> Vec<PartInfoPtr> {
+        todo!()
+    }
+
+    fn set_parts(&self, _parts: VecDeque<PartInfoPtr>) -> Result<()> {
         todo!()
     }
 

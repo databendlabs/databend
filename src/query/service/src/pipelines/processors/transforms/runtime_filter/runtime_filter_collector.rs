@@ -79,7 +79,7 @@ impl RuntimeFilterCollector {
                 if !value_set.is_empty() {
                     let mut array_args = vec![];
                     for val in value_set {
-                        array_args.push(ScalarExpr::ConstantExpr (ConstantExpr{
+                        array_args.push(ScalarExpr::ConstantExpr(ConstantExpr {
                             value: Literal::try_from(val.clone())?,
                             data_type: Box::new(val.as_ref().infer_data_type()),
                         }))
@@ -89,7 +89,9 @@ impl RuntimeFilterCollector {
                         params: vec![],
                         arguments: array_args,
                         func_name: "array".to_string(),
-                        return_type: Box::new(DataType::Array(Box::new(value_set[0].as_ref().infer_data_type()))),
+                        return_type: Box::new(DataType::Array(Box::new(
+                            value_set[0].as_ref().infer_data_type(),
+                        ))),
                     });
                     // Let `array_func` as arg of `contain` function
                     args.push(array_func.as_raw_expr_with_col_name())
@@ -110,8 +112,8 @@ impl RuntimeFilterCollector {
     }
 
     // Construct min-max Expr
-    fn min_max(&self, target_exprs: &BTreeMap<RuntimeFilterId, RawExpr<String>>) -> Result<()> {
-        Ok(())
+    fn min_max(&self, _target_exprs: &BTreeMap<RuntimeFilterId, RawExpr<String>>) -> Result<()> {
+        todo!()
     }
 
     fn clear(&self) {
@@ -183,7 +185,7 @@ impl RuntimeFilter for RuntimeFilterCollector {
 
     fn get_filters(&self) -> Result<HashMap<RuntimeFilterId, RemoteExpr<String>>> {
         let filters = self.filter_exprs.read();
-        return  Ok((*filters).clone())
+        Ok((*filters).clone())
     }
 }
 
