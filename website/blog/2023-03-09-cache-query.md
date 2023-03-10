@@ -5,6 +5,8 @@ slug: cache
 date: 2023-03-09
 tags: [cache]
 category: Engineering
+cover_url: cache.png
+image: cache.png
 authors:
 - name: Yijun Zhao
   url: https://github.com/ariesdevil
