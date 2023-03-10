@@ -4,6 +4,7 @@ description: time travel
 slug: time-travel
 date: 2022-09-08
 tags: [databend, time travel]
+cover_url: find-peter-parker.png
 authors:
 - name: wubx
   url: https://github.com/wubx

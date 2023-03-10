@@ -25,11 +25,14 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
+use ctor::ctor;
+use regex::Regex;
 
 use crate::servers::federated_helper::FederatedHelper;
 use crate::servers::federated_helper::LazyBlockFunc;
 use crate::servers::mysql::MYSQL_VERSION;
 
+#[allow(dead_code)]
 pub struct MySQLFederated {
     mysql_version: String,
     databend_version: String,
@@ -147,122 +150,129 @@ impl MySQLFederated {
 
     // Check SELECT @@variable, @@variable
     fn federated_select_variable_check(&self, query: &str) -> Option<(TableSchemaRef, DataBlock)> {
-        let rules: Vec<(&str, LazyBlockFunc)> = vec![
-            ("(?i)^(SELECT @@(.*))", Self::select_variable_data_block),
+        #[ctor]
+        static SELECT_VARIABLES_LAZY_RULES: Vec<(Regex, LazyBlockFunc)> = vec![
             (
-                "(?i)^(/\\* mysql-connector-java(.*))",
-                Self::select_variable_data_block,
+                Regex::new("(?i)^(SELECT @@(.*))").unwrap(),
+                MySQLFederated::select_variable_data_block,
+            ),
+            (
+                Regex::new("(?i)^(/\\* mysql-connector-java(.*))").unwrap(),
+                MySQLFederated::select_variable_data_block,
             ),
         ];
-        FederatedHelper::lazy_block_match_rule(query, rules)
+
+        FederatedHelper::lazy_block_match_rule(query, &SELECT_VARIABLES_LAZY_RULES)
     }
 
     // Check SHOW VARIABLES LIKE.
     fn federated_show_variables_check(&self, query: &str) -> Option<(TableSchemaRef, DataBlock)> {
-        let rules: Vec<(&str, Option<(TableSchemaRef, DataBlock)>)> = vec![
-            // sqlalchemy < 1.4.30
+        #[ctor]
+        static SHOW_VARIABLES_RULES: Vec<(Regex, Option<(TableSchemaRef, DataBlock)>)> = vec![
             (
-                "(?i)^(SHOW VARIABLES LIKE 'sql_mode'(.*))",
-                Self::show_variables_block(
+                // sqlalchemy < 1.4.30
+                Regex::new("(?i)^(SHOW VARIABLES LIKE 'sql_mode'(.*))").unwrap(),
+                MySQLFederated::show_variables_block(
                     "sql_mode",
                     "ONLY_FULL_GROUP_BY STRICT_TRANS_TABLES NO_ZERO_IN_DATE NO_ZERO_DATE ERROR_FOR_DIVISION_BY_ZERO NO_ENGINE_SUBSTITUTION",
                 ),
             ),
             (
-                "(?i)^(SHOW VARIABLES LIKE 'lower_case_table_names'(.*))",
-                Self::show_variables_block("lower_case_table_names", "0"),
+                Regex::new("(?i)^(SHOW VARIABLES LIKE 'lower_case_table_names'(.*))").unwrap(),
+                MySQLFederated::show_variables_block("lower_case_table_names", "0"),
             ),
             (
-                "(?i)^(show collation where(.*))",
-                Self::show_variables_block("", ""),
+                Regex::new("(?i)^(show collation where(.*))").unwrap(),
+                MySQLFederated::show_variables_block("", ""),
             ),
             (
-                "(?i)^(SHOW VARIABLES(.*))",
-                Self::show_variables_block("", ""),
+                Regex::new("(?i)^(SHOW VARIABLES(.*))").unwrap(),
+                MySQLFederated::show_variables_block("", ""),
             ),
         ];
-        FederatedHelper::block_match_rule(query, rules)
+
+        FederatedHelper::block_match_rule(query, &SHOW_VARIABLES_RULES)
     }
 
     // Check for SET or others query, this is the final check of the federated query.
     fn federated_mixed_check(&self, query: &str) -> Option<(TableSchemaRef, DataBlock)> {
-        let rules: Vec<(&str, Option<(TableSchemaRef, DataBlock)>)> = vec![
+        #[ctor]
+        static MIXED_RULES: Vec<(Regex, Option<(TableSchemaRef, DataBlock)>)> = vec![
             (
-                r"(?i)^(SELECT VERSION\(\s*\))",
-                Self::select_function_block(
+                Regex::new(r"(?i)^(SELECT VERSION\(\s*\))").unwrap(),
+                MySQLFederated::select_function_block(
                     "version()",
-                    format!("{}-{}", self.mysql_version, self.databend_version.clone()).as_str(),
+                    format!("{}-{}", MYSQL_VERSION, DATABEND_COMMIT_VERSION.clone()).as_str(),
                 ),
             ),
             // Txn.
-            ("(?i)^(ROLLBACK(.*))", None),
-            ("(?i)^(COMMIT(.*))", None),
-            ("(?i)^(START(.*))", None),
-            // Set.
-            ("(?i)^(SET NAMES(.*))", None),
-            ("(?i)^(SET character_set_results(.*))", None),
-            ("(?i)^(SET net_write_timeout(.*))", None),
-            ("(?i)^(SET FOREIGN_KEY_CHECKS(.*))", None),
-            ("(?i)^(SET AUTOCOMMIT(.*))", None),
-            ("(?i)^(SET SQL_LOG_BIN(.*))", None),
-            ("(?i)^(SET sql_mode(.*))", None),
-            ("(?i)^(SET SQL_SELECT_LIMIT(.*))", None),
-            ("(?i)^(SET @@(.*))", None),
+            (Regex::new("(?i)^(ROLLBACK(.*))").unwrap(), None),
+            (Regex::new("(?i)^(COMMIT(.*))").unwrap(), None),
+            (Regex::new("(?i)^(START(.*))").unwrap(), None),
+            (Regex::new("(?i)^(SET NAMES(.*))").unwrap(), None),
+            (Regex::new("(?i)^(SET character_set_results(.*))").unwrap(), None),
+            (Regex::new("(?i)^(SET net_write_timeout(.*))").unwrap(), None),
+            (Regex::new("(?i)^(SET FOREIGN_KEY_CHECKS(.*))").unwrap(), None),
+            (Regex::new("(?i)^(SET AUTOCOMMIT(.*))").unwrap(), None),
+            (Regex::new("(?i)^(SET SQL_LOG_BIN(.*))").unwrap(), None),
+            (Regex::new("(?i)^(SET sql_mode(.*))").unwrap(), None),
+            (Regex::new("(?i)^(SET SQL_SELECT_LIMIT(.*))").unwrap(), None),
+            (Regex::new("(?i)^(SET @@(.*))").unwrap(), None),
             // Now databend not support charset and collation
             // https://github.com/datafuselabs/databend/issues/5853
-            ("(?i)^(SHOW COLLATION)", None),
-            ("(?i)^(SHOW CHARSET)", None),
+            (Regex::new("(?i)^(SHOW COLLATION)").unwrap(), None),
+            (Regex::new("(?i)^(SHOW CHARSET)").unwrap(), None),
             (
                 // SELECT TIMEDIFF(NOW(), UTC_TIMESTAMP());
-                "(?i)^(SELECT TIMEDIFF\\(NOW\\(\\), UTC_TIMESTAMP\\(\\)\\))",
-                Self::select_function_block("TIMEDIFF(NOW(), UTC_TIMESTAMP())", "00:00:00"),
+                Regex::new("(?i)^(SELECT TIMEDIFF\\(NOW\\(\\), UTC_TIMESTAMP\\(\\)\\))").unwrap(),
+                MySQLFederated::select_function_block("TIMEDIFF(NOW(), UTC_TIMESTAMP())", "00:00:00"),
             ),
             // mysqldump.
-            ("(?i)^(SET SESSION(.*))", None),
-            ("(?i)^(SET SQL_QUOTE_SHOW_CREATE(.*))", None),
-            ("(?i)^(LOCK TABLES(.*))", None),
-            ("(?i)^(UNLOCK TABLES(.*))", None),
+            (Regex::new("(?i)^(SET SESSION(.*))").unwrap(), None),
+            (Regex::new("(?i)^(SET SQL_QUOTE_SHOW_CREATE(.*))").unwrap(), None),
+            (Regex::new("(?i)^(LOCK TABLES(.*))").unwrap(), None),
+            (Regex::new("(?i)^(UNLOCK TABLES(.*))").unwrap(), None),
             (
-                "(?i)^(SELECT LOGFILE_GROUP_NAME, FILE_NAME, TOTAL_EXTENTS, INITIAL_SIZE, ENGINE, EXTRA FROM INFORMATION_SCHEMA.FILES(.*))",
+                Regex::new("(?i)^(SELECT LOGFILE_GROUP_NAME, FILE_NAME, TOTAL_EXTENTS, INITIAL_SIZE, ENGINE, EXTRA FROM INFORMATION_SCHEMA.FILES(.*))").unwrap(),
                 None,
             ),
             // mydumper.
-            ("(?i)^(/\\*!80003 SET(.*) \\*/)$", None),
-            ("(?i)^(SHOW MASTER STATUS)", None),
-            ("(?i)^(SHOW ALL SLAVES STATUS)", None),
-            ("(?i)^(LOCK BINLOG FOR BACKUP)", None),
-            ("(?i)^(LOCK TABLES FOR BACKUP)", None),
-            ("(?i)^(UNLOCK BINLOG(.*))", None),
-            ("(?i)^(/\\*!40101 SET(.*) \\*/)$", None),
+            (Regex::new("(?i)^(/\\*!80003 SET(.*) \\*/)$").unwrap(), None),
+            (Regex::new("(?i)^(SHOW MASTER STATUS)").unwrap(), None),
+            (Regex::new("(?i)^(SHOW ALL SLAVES STATUS)").unwrap(), None),
+            (Regex::new("(?i)^(LOCK BINLOG FOR BACKUP)").unwrap(), None),
+            (Regex::new("(?i)^(LOCK TABLES FOR BACKUP)").unwrap(), None),
+            (Regex::new("(?i)^(UNLOCK BINLOG(.*))").unwrap(), None),
+            (Regex::new("(?i)^(/\\*!40101 SET(.*) \\*/)$").unwrap(), None),
             // DBeaver.
-            ("(?i)^(SHOW WARNINGS)", None),
-            ("(?i)^(/\\* ApplicationName=(.*)SHOW WARNINGS)", None),
-            ("(?i)^(/\\* ApplicationName=(.*)SHOW PLUGINS)", None),
-            ("(?i)^(/\\* ApplicationName=(.*)SHOW COLLATION)", None),
-            ("(?i)^(/\\* ApplicationName=(.*)SHOW CHARSET)", None),
-            ("(?i)^(/\\* ApplicationName=(.*)SHOW ENGINES)", None),
-            ("(?i)^(/\\* ApplicationName=(.*)SELECT @@(.*))", None),
-            ("(?i)^(/\\* ApplicationName=(.*)SHOW @@(.*))", None),
+            (Regex::new("(?i)^(SHOW WARNINGS)").unwrap(), None),
+            (Regex::new("(?i)^(/\\* ApplicationName=(.*)SHOW WARNINGS)").unwrap(), None),
+            (Regex::new("(?i)^(/\\* ApplicationName=(.*)SHOW PLUGINS)").unwrap(), None),
+            (Regex::new("(?i)^(/\\* ApplicationName=(.*)SHOW COLLATION)").unwrap(), None),
+            (Regex::new("(?i)^(/\\* ApplicationName=(.*)SHOW CHARSET)").unwrap(), None),
+            (Regex::new("(?i)^(/\\* ApplicationName=(.*)SHOW ENGINES)").unwrap(), None),
+            (Regex::new("(?i)^(/\\* ApplicationName=(.*)SELECT @@(.*))").unwrap(), None),
+            (Regex::new("(?i)^(/\\* ApplicationName=(.*)SHOW @@(.*))").unwrap(), None),
             (
-                "(?i)^(/\\* ApplicationName=(.*)SET net_write_timeout(.*))",
+                Regex::new("(?i)^(/\\* ApplicationName=(.*)SET net_write_timeout(.*))").unwrap(),
                 None,
             ),
             (
-                "(?i)^(/\\* ApplicationName=(.*)SET SQL_SELECT_LIMIT(.*))",
+                Regex::new("(?i)^(/\\* ApplicationName=(.*)SET SQL_SELECT_LIMIT(.*))").unwrap(),
                 None,
             ),
-            ("(?i)^(/\\* ApplicationName=(.*)SHOW VARIABLES(.*))", None),
+            (Regex::new("(?i)^(/\\* ApplicationName=(.*)SHOW VARIABLES(.*))").unwrap(), None),
             // mysqldump 5.7.16
-            ("(?i)^(/\\*!40100 SET(.*) \\*/)$", None),
-            ("(?i)^(/\\*!40103 SET(.*) \\*/)$", None),
-            ("(?i)^(/\\*!40111 SET(.*) \\*/)$", None),
-            ("(?i)^(/\\*!40101 SET(.*) \\*/)$", None),
-            ("(?i)^(/\\*!40014 SET(.*) \\*/)$", None),
-            ("(?i)^(/\\*!40000 SET(.*) \\*/)$", None),
-            ("(?i)^(/\\*!40000 ALTER(.*) \\*/)$", None),
+            (Regex::new("(?i)^(/\\*!40100 SET(.*) \\*/)$").unwrap(), None),
+            (Regex::new("(?i)^(/\\*!40103 SET(.*) \\*/)$").unwrap(), None),
+            (Regex::new("(?i)^(/\\*!40111 SET(.*) \\*/)$").unwrap(), None),
+            (Regex::new("(?i)^(/\\*!40101 SET(.*) \\*/)$").unwrap(), None),
+            (Regex::new("(?i)^(/\\*!40014 SET(.*) \\*/)$").unwrap(), None), 
+            (Regex::new("(?i)^(/\\*!40000 SET(.*) \\*/)$").unwrap(), None),
+            (Regex::new("(?i)^(/\\*!40000 ALTER(.*) \\*/)$").unwrap(), None),
         ];
 
-        FederatedHelper::block_match_rule(query, rules)
+        FederatedHelper::block_match_rule(query, &MIXED_RULES)
     }
 
     // Check the query is a federated or driver setup command.
