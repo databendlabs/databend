@@ -242,7 +242,6 @@ impl TestFixture {
         (
             schema,
             (0..num_of_block)
-                .into_iter()
                 .map(|idx| {
                     let column0 = Int32Type::from_data(
                         std::iter::repeat_with(|| idx as i32 + start)

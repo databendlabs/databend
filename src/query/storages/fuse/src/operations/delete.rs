@@ -387,8 +387,6 @@ impl FuseTable {
     }
 
     pub fn all_column_indices(&self) -> Vec<FieldIndex> {
-        (0..self.table_info.schema().fields().len())
-            .into_iter()
-            .collect::<Vec<FieldIndex>>()
+        (0..self.table_info.schema().fields().len()).collect::<Vec<FieldIndex>>()
     }
 }

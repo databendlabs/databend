@@ -29,6 +29,8 @@ use super::aggregate_window_funnel::aggregate_window_funnel_function_desc;
 use super::AggregateCountFunction;
 use super::AggregateFunctionFactory;
 use super::AggregateIfCombinator;
+use crate::aggregates::aggregate_quantile_cont::aggregate_median_function_desc;
+use crate::aggregates::aggregate_quantile_cont::aggregate_quantile_function_desc;
 use crate::aggregates::aggregate_retention::aggregate_retention_function_desc;
 use crate::aggregates::aggregate_sum::aggregate_sum_function_desc;
 
@@ -54,12 +56,13 @@ impl Aggregators {
         factory.register("stddev_pop", aggregate_stddev_pop_function_desc());
         factory.register("stddev", aggregate_stddev_pop_function_desc());
         factory.register("std", aggregate_stddev_pop_function_desc());
+        factory.register("quantile", aggregate_quantile_function_desc());
+        factory.register("median", aggregate_median_function_desc());
         factory.register("window_funnel", aggregate_window_funnel_function_desc());
         factory.register(
             "approx_count_distinct",
             aggregate_approx_count_distinct_function_desc(),
         );
-
         factory.register("retention", aggregate_retention_function_desc());
     }
 
