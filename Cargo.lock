@@ -1407,7 +1407,6 @@ dependencies = [
  "dashmap",
  "educe",
  "enum-as-inner",
- "enum_dispatch",
  "ethnum",
  "futures",
  "goldenfile",

@@ -282,7 +282,6 @@ impl FastFieldDecoderValues {
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
         reader.must_ignore_byte(b'[')?;
-        let _idx = 0;
         for idx in 0.. {
             let _ = reader.ignore_white_spaces();
             if reader.ignore_byte(b']') {
