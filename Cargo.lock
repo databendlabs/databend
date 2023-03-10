@@ -6049,7 +6049,7 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.29.1"
+version = "0.30.0"
 dependencies = [
  "anyhow",
  "async-compat",
