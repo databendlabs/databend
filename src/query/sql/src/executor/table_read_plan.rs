@@ -101,7 +101,7 @@ impl ToReadDataSourcePlan for dyn Table {
             description,
             tbl_args: self.table_args(),
             push_downs,
-            query_from_virtual_columns: virtual_columns.is_some(),
+            query_virtual_columns: virtual_columns.is_some(),
         })
     }
 }

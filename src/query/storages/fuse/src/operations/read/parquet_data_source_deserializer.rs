@@ -22,6 +22,7 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
+use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
@@ -159,14 +160,16 @@ impl Processor for DeserializeDataTransform {
             };
             self.scan_progress.incr(&progress_values);
 
-            self.output_data = Some(DataBlock::new_with_meta(
-                data_block.columns().to_vec(),
-                data_block.num_rows(),
-                match part.block_meta_index() {
-                    Some(meta) => Some(Box::new(meta.to_owned())),
-                    None => None,
-                },
-            ));
+            // Fill `BlockMetaIndex` as `DataBlock.meta` if query virtual columns,
+            // `FillVirtualColumnProcessor` will generate virtual columns using `BlockMetaIndex` in next pipeline.
+            if self.block_reader.query_virtual_columns() {
+                let meta: Option<BlockMetaInfoPtr> =
+                    Some(Box::new(part.block_meta_index().unwrap().to_owned()));
+                self.output_data = Some(data_block.add_meta(meta)?);
+            } else {
+                println!("none meta");
+                self.output_data = Some(data_block);
+            };
         }
 
         Ok(())

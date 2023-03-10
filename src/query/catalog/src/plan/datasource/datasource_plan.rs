@@ -35,7 +35,7 @@ pub struct DataSourcePlan {
 
     pub tbl_args: Option<TableArgs>,
     pub push_downs: Option<PushDownInfo>,
-    pub query_from_virtual_columns: bool,
+    pub query_virtual_columns: bool,
 }
 
 impl DataSourcePlan {

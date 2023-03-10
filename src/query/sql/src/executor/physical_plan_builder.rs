@@ -222,7 +222,11 @@ impl PhysicalPlanBuilder {
                         self.ctx.clone(),
                         table_entry.catalog().to_string(),
                         Some(push_downs),
-                        Some(project_virtual_columns.clone()),
+                        if project_virtual_columns.is_empty() {
+                            None
+                        } else {
+                            Some(project_virtual_columns.clone())
+                        },
                     )
                     .await?;
 

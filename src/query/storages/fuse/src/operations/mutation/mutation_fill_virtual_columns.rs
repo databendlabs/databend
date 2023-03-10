@@ -115,7 +115,11 @@ impl Processor for FillVirtualColumnProcessor {
                 let column = virtual_column.generate_column_values(&virtual_column_meta, num_rows);
                 data_block.add_column(column);
             }
-            self.output_data = Some(data_block.to_owned());
+            // output datablock MUST with empty meta
+            self.output_data = Some(DataBlock::new(
+                data_block.columns().to_vec(),
+                data_block.num_rows(),
+            ));
         }
         Ok(())
     }
