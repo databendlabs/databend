@@ -152,7 +152,7 @@ impl TableMutationAggregator {
         for segment in segments {
             let op = self.dal.clone();
             handles.push(async move {
-                op.object(&segment.path).write(segment.raw_data).await?;
+                op.write(&segment.path, segment.raw_data).await?;
                 if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
                     segment_cache.put(segment.path.clone(), segment.segment.clone());
                 }

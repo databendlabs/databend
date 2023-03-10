@@ -22,7 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
 use futures::future::try_join_all;
-use opendal::Object;
+use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::TableDataCacheKey;
 use storages_common_cache_manager::CacheManager;
@@ -43,7 +43,8 @@ impl BlockReader {
     /// if the last io request size is larger than storage_io_page_bytes_for_read(Default is 512KB).
     async fn merge_io_read(
         read_settings: &ReadSettings,
-        object: Object,
+        op: Operator,
+        location: &str,
         raw_ranges: Vec<(ColumnId, Range<u64>)>,
     ) -> Result<MergeIOReadResult> {
         if raw_ranges.is_empty() {
@@ -51,7 +52,7 @@ impl BlockReader {
             let read_res = MergeIOReadResult::create(
                 OwnerMemory::create(vec![]),
                 raw_ranges.len(),
-                object.path().to_string(),
+                location.to_string(),
                 CacheManager::instance().get_table_data_cache(),
             );
             return Ok(read_res);
@@ -79,7 +80,8 @@ impl BlockReader {
             }
 
             read_handlers.push(UnlimitedFuture::create(Self::read_range(
-                object.clone(),
+                op.clone(),
+                location,
                 idx,
                 range.start,
                 range.end,
@@ -92,7 +94,7 @@ impl BlockReader {
         let mut read_res = MergeIOReadResult::create(
             owner_memory,
             raw_ranges.len(),
-            object.path().to_string(),
+            location.to_string(),
             table_data_cache,
         );
 
@@ -108,9 +110,7 @@ impl BlockReader {
             let (merged_range_idx, merged_range) = match range_merger.get(column_range.clone()) {
                 None => Err(ErrorCode::Internal(format!(
                     "It's a terrible bug, not found raw range:[{:?}], path:{} from merged ranges\n: {:?}",
-                    column_range,
-                    object.path(),
-                    merged_ranges
+                    column_range, location, merged_ranges
                 ))),
                 Some((index, range)) => Ok((index, range)),
             }?;
@@ -170,9 +170,8 @@ impl BlockReader {
             }
         }
 
-        let object = self.operator.object(location);
-
-        let mut merge_io_read_res = Self::merge_io_read(settings, object, ranges).await?;
+        let mut merge_io_read_res =
+            Self::merge_io_read(settings, self.operator.clone(), location, ranges).await?;
         // TODO set
         merge_io_read_res.cached_column_data = cached_column_data;
         merge_io_read_res.cached_column_array = cached_column_array;
@@ -181,12 +180,13 @@ impl BlockReader {
 
     #[inline]
     pub async fn read_range(
-        o: Object,
+        op: Operator,
+        path: &str,
         index: usize,
         start: u64,
         end: u64,
     ) -> Result<(usize, Vec<u8>)> {
-        let chunk = o.range_read(start..end).await?;
+        let chunk = op.range_read(path, start..end).await?;
         Ok((index, chunk))
     }
 }

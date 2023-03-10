@@ -35,7 +35,7 @@ impl ParquetTable {
         read_options: ParquetReadOptions,
     ) -> Result<Arc<dyn Table>> {
         let operator = init_stage_operator(&stage_info)?;
-        if operator.metadata().can_blocking() {
+        if operator.info().can_blocking() {
             return Self::blocking_create(operator, read_options, stage_info, files_info);
         }
         let first_file = files_info.first_file(&operator).await?;
@@ -58,7 +58,7 @@ impl ParquetTable {
         // Infer schema from the first parquet file.
         // Assume all parquet files have the same schema.
         // If not, throw error during reading.
-        let mut reader = operator.object(path).reader().await?;
+        let mut reader = operator.reader(path).await?;
         let first_meta = pread::read_metadata_async(&mut reader).await.map_err(|e| {
             ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
         })?;

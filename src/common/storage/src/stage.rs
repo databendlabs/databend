@@ -19,8 +19,8 @@ use common_exception::Result;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::principal::StageType;
 use futures::TryStreamExt;
-use opendal::ObjectMetakey;
-use opendal::ObjectMode;
+use opendal::EntryMode;
+use opendal::Metakey;
 use opendal::Operator;
 use regex::Regex;
 
@@ -82,7 +82,7 @@ impl StageFilesInfo {
                     .join(file)
                     .to_string_lossy()
                     .to_string();
-                let meta = operator.object(&full_path).stat().await?;
+                let meta = operator.stat(&full_path).await?;
                 if meta.mode().is_file() {
                     res.push(FileWithMeta::new(&full_path))
                 } else {
@@ -129,7 +129,7 @@ impl StageFilesInfo {
                     .join(file)
                     .to_string_lossy()
                     .to_string();
-                let meta = operator.object(&full_path).blocking_stat()?;
+                let meta = operator.blocking().stat(&full_path)?;
                 if meta.mode().is_file() {
                     res.push(FileWithMeta::new(&full_path))
                 } else {
@@ -155,16 +155,15 @@ async fn list_files_with_pattern(
     pattern: Option<Regex>,
     first_only: bool,
 ) -> Result<Vec<FileWithMeta>> {
-    let root_obj = operator.object(path);
-    let root_meta = root_obj.metadata(ObjectMetakey::Mode).await;
+    let root_meta = operator.stat(path).await;
     match root_meta {
         Ok(meta) => match meta.mode() {
-            ObjectMode::FILE => return Ok(vec![FileWithMeta::new(path)]),
-            ObjectMode::DIR => {}
-            ObjectMode::Unknown => return Err(ErrorCode::BadArguments("object mode is unknown")),
+            EntryMode::FILE => return Ok(vec![FileWithMeta::new(path)]),
+            EntryMode::DIR => {}
+            EntryMode::Unknown => return Err(ErrorCode::BadArguments("object mode is unknown")),
         },
         Err(e) => {
-            if e.kind() == opendal::ErrorKind::ObjectNotFound {
+            if e.kind() == opendal::ErrorKind::NotFound {
                 return Ok(vec![]);
             } else {
                 return Err(e.into());
@@ -174,9 +173,9 @@ async fn list_files_with_pattern(
 
     // path is a dir
     let mut files = Vec::new();
-    let mut list = operator.object(path).scan().await?;
+    let mut list = operator.scan(path).await?;
     while let Some(obj) = list.try_next().await? {
-        let meta = obj.metadata(ObjectMetakey::Mode).await?;
+        let meta = operator.metadata(&obj, Metakey::Mode).await?;
         if check_file(obj.path(), meta.mode(), &pattern) {
             files.push(FileWithMeta::new(obj.path()));
             if first_only {
@@ -187,7 +186,7 @@ async fn list_files_with_pattern(
     Ok(files)
 }
 
-fn check_file(path: &str, mode: ObjectMode, pattern: &Option<Regex>) -> bool {
+fn check_file(path: &str, mode: EntryMode, pattern: &Option<Regex>) -> bool {
     if mode.is_file() {
         match pattern {
             Some(p) => p.is_match(path),
@@ -204,16 +203,17 @@ fn blocking_list_files_with_pattern(
     pattern: Option<Regex>,
     first_only: bool,
 ) -> Result<Vec<FileWithMeta>> {
-    let root_obj = operator.object(path);
-    let root_meta = root_obj.blocking_metadata(ObjectMetakey::Mode);
+    let operator = operator.blocking();
+
+    let root_meta = operator.stat(path);
     match root_meta {
         Ok(meta) => match meta.mode() {
-            ObjectMode::FILE => return Ok(vec![FileWithMeta::new(path)]),
-            ObjectMode::DIR => {}
-            ObjectMode::Unknown => return Err(ErrorCode::BadArguments("object mode is unknown")),
+            EntryMode::FILE => return Ok(vec![FileWithMeta::new(path)]),
+            EntryMode::DIR => {}
+            EntryMode::Unknown => return Err(ErrorCode::BadArguments("object mode is unknown")),
         },
         Err(e) => {
-            if e.kind() == opendal::ErrorKind::ObjectNotFound {
+            if e.kind() == opendal::ErrorKind::NotFound {
                 return Ok(vec![]);
             } else {
                 return Err(e.into());
@@ -223,10 +223,10 @@ fn blocking_list_files_with_pattern(
 
     // path is a dir
     let mut files = Vec::new();
-    let list = root_obj.blocking_list()?;
+    let list = operator.list(path)?;
     for obj in list {
         let obj = obj?;
-        let meta = obj.blocking_metadata(ObjectMetakey::Mode)?;
+        let meta = operator.metadata(&obj, Metakey::Mode)?;
         if check_file(obj.path(), meta.mode(), &pattern) {
             files.push(FileWithMeta::new(obj.path()));
             if first_only {

@@ -38,11 +38,10 @@ impl MetaDataReader {
 #[async_trait::async_trait]
 impl Loader<FileMetaData> for LoaderWrapper<Operator> {
     async fn load(&self, params: &LoadParams) -> Result<FileMetaData> {
-        let object = self.0.object(&params.location);
         let mut reader = if let Some(len) = params.len_hint {
-            object.range_reader(0..len).await?
+            self.0.range_reader(&params.location, 0..len).await?
         } else {
-            object.reader().await?
+            self.0.reader(&params.location).await?
         };
         read_metadata_async(&mut reader).await.map_err(|err| {
             ErrorCode::Internal(format!(

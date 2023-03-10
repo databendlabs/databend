@@ -399,6 +399,13 @@ impl FunctionID {
             FunctionID::Factory { id, .. } => *id,
         }
     }
+
+    pub fn name(&self) -> &String {
+        match self {
+            FunctionID::Builtin { name, .. } => name,
+            FunctionID::Factory { name, .. } => name,
+        }
+    }
 }
 
 pub fn wrap_nullable<F>(f: F) -> impl Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType>
