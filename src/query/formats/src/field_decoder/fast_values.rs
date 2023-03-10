@@ -50,7 +50,6 @@ use common_io::cursor_ext::ReadCheckPointExt;
 use common_io::cursor_ext::ReadNumberExt;
 use common_io::prelude::FormatSettings;
 use lexical_core::FromLexical;
-use match_template;
 use num::cast::AsPrimitive;
 
 use crate::CommonSettings;

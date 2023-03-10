@@ -36,3 +36,6 @@ storages-common-table-meta = { path = "../storages/common/table-meta" }
 common-arrow = { path = "../../common/arrow" }
 
 pretty_assertions = "1.3.0"
+
+[package.metadata.cargo-machete]
+ignored = ["match-template"]
