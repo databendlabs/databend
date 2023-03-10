@@ -1976,7 +1976,7 @@ impl ColumnBuilder {
             ColumnBuilder::String(builder) | ColumnBuilder::Variant(builder) => {
                 for row in 0..rows {
                     let reader = &reader[step * row..];
-                    builder.put_slice(&reader[..step]);
+                    builder.put_slice(&reader);
                     builder.commit_row();
                 }
             }
