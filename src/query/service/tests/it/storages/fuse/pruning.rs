@@ -124,7 +124,6 @@ async fn test_block_pruner() -> Result<()> {
     // - there will be `num_blocks` blocks, for each block, it comprises of `row_per_block` rows,
     //    in our case, there will be 10 blocks, and 10 rows for each block
     let blocks = (0..num_blocks)
-        .into_iter()
         .map(|idx| {
             DataBlock::new_from_columns(vec![
                 // value of column a always equals  1
