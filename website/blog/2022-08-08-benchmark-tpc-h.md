@@ -3,6 +3,7 @@ title: Benchmarking Databend using TPC-H
 description: Benchmarking Databend using TPC-H
 date: 2022-08-08
 tags: [databend, benchmark, TPC-H]
+cover_url: databend-using-TPC-H.png
 authors:
 - name: BohuTANG
   url: https://github.com/BohuTANG

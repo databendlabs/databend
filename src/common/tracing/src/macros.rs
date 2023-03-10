@@ -36,7 +36,8 @@ macro_rules! databend_semver {
         unsafe {
             INIT.call_once(|| {
                 RELEASE = option_env!("CARGO_PKG_NAME").and_then(|name| {
-                    option_env!("VERGEN_GIT_SEMVER").map(|version| format!("{}@{}", name, version))
+                    option_env!("DATABEND_GIT_SEMVER")
+                        .map(|version| format!("{}@{}", name, version))
                 });
             });
             RELEASE.as_ref().map(|x| {

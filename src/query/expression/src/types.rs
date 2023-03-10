@@ -125,6 +125,16 @@ impl DataType {
         }
     }
 
+    pub fn has_nested_nullable(&self) -> bool {
+        match self {
+            DataType::Nullable(box DataType::Nullable(_) | box DataType::Null) => true,
+            DataType::Array(ty) => ty.has_nested_nullable(),
+            DataType::Map(ty) => ty.has_nested_nullable(),
+            DataType::Tuple(tys) => tys.iter().any(|ty| ty.has_nested_nullable()),
+            _ => false,
+        }
+    }
+
     pub fn is_unsigned_numeric(&self) -> bool {
         match self {
             DataType::Number(ty) => ALL_UNSIGNED_INTEGER_TYPES.contains(ty),

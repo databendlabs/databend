@@ -72,6 +72,7 @@ fn test_get(file: &mut impl Write) {
     run_ast(file, "[1, 2]['a']", &[]);
     run_ast(file, "[][1]", &[]);
     run_ast(file, "[][NULL]", &[]);
+    run_ast(file, "[NULL][0]", &[]);
     run_ast(file, "[true, false][1]", &[]);
     run_ast(file, "['a', 'b', 'c'][2]", &[]);
     run_ast(file, "[1, 2, 3][1]", &[]);

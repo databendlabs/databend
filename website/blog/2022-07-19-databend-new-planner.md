@@ -4,6 +4,7 @@ description: The New Databend SQL Planner
 slug: new-planner
 date: 2022-07-19
 tags: [databend, planner]
+cover_url: new-databend-sql-planner.png
 authors:
 - name: Yu Lei
   url: https://github.com/leiysky
@@ -84,7 +85,7 @@ With this framework, we can easily define the syntax for a statement. Taking the
 
 ![image](/img/blog/new-planner-7.png)
 
-The elegant syntax brings more fun to the work of coding a parser. Try it out if you’re interested.
+The elegant syntax brings more fun to the work of coding a parser. Try it out if you're interested.
 
 ### Binder
 
@@ -131,4 +132,4 @@ Building a SQL planner from the ground up is a very challenging job, but the red
 
   - More optimization rules
 
-Currently, we’re in the middle of migrating to the new SQL planner. We will release an announcement when the migration is complete (around July 2022). Stay tuned.
+Currently, we're in the middle of migrating to the new SQL planner. We will release an announcement when the migration is complete (around July 2022). Stay tuned.

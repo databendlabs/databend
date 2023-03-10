@@ -39,7 +39,6 @@ use tracing::debug;
 
 use crate::binder::location::parse_uri_location;
 use crate::binder::Binder;
-use crate::normalize_identifier;
 use crate::plans::CopyPlan;
 use crate::plans::Plan;
 use crate::plans::ValidationMode;
@@ -60,16 +59,8 @@ impl<'a> Binder {
                     table,
                 },
             ) => {
-                let catalog_name = catalog
-                    .as_ref()
-                    .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-                    .unwrap_or_else(|| self.ctx.get_current_catalog());
-                let database_name = database
-                    .as_ref()
-                    .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-                    .unwrap_or_else(|| self.ctx.get_current_database());
-                let table = normalize_identifier(table, &self.name_resolution_ctx).name;
-
+                let (catalog_name, database_name, table_name) =
+                    self.normalize_object_identifier_triple(catalog, database, table);
                 self.bind_copy_from_stage_into_table(
                     bind_context,
                     stmt,
@@ -77,7 +68,7 @@ impl<'a> Binder {
                     &stage_location.path,
                     &catalog_name,
                     &database_name,
-                    &table,
+                    &table_name,
                 )
                 .await
             }
@@ -89,15 +80,8 @@ impl<'a> Binder {
                     table,
                 },
             ) => {
-                let catalog_name = catalog
-                    .as_ref()
-                    .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-                    .unwrap_or_else(|| self.ctx.get_current_catalog());
-                let database_name = database
-                    .as_ref()
-                    .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-                    .unwrap_or_else(|| self.ctx.get_current_database());
-                let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+                let (catalog_name, database_name, table_name) =
+                    self.normalize_object_identifier_triple(catalog, database, table);
 
                 let mut ul = UriLocation {
                     protocol: uri_location.protocol.clone(),
@@ -113,7 +97,7 @@ impl<'a> Binder {
                     &mut ul,
                     &catalog_name,
                     &database_name,
-                    &table,
+                    &table_name,
                 )
                 .await
             }
@@ -125,22 +109,15 @@ impl<'a> Binder {
                 },
                 CopyUnit::StageLocation(stage_location),
             ) => {
-                let catalog_name = catalog
-                    .as_ref()
-                    .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-                    .unwrap_or_else(|| self.ctx.get_current_catalog());
-                let database_name = database
-                    .as_ref()
-                    .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-                    .unwrap_or_else(|| self.ctx.get_current_database());
-                let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+                let (catalog_name, database_name, table_name) =
+                    self.normalize_object_identifier_triple(catalog, database, table);
 
                 self.bind_copy_from_table_into_stage(
                     bind_context,
                     stmt,
                     &catalog_name,
                     &database_name,
-                    &table,
+                    &table_name,
                     &stage_location.name,
                     &stage_location.path,
                 )
@@ -154,15 +131,8 @@ impl<'a> Binder {
                 },
                 CopyUnit::UriLocation(uri_location),
             ) => {
-                let catalog_name = catalog
-                    .as_ref()
-                    .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-                    .unwrap_or_else(|| self.ctx.get_current_catalog());
-                let database_name = database
-                    .as_ref()
-                    .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-                    .unwrap_or_else(|| self.ctx.get_current_database());
-                let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+                let (catalog_name, database_name, table) =
+                    self.normalize_object_identifier_triple(catalog, database, table);
 
                 let mut ul = UriLocation {
                     protocol: uri_location.protocol.clone(),

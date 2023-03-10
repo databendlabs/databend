@@ -132,7 +132,7 @@ impl SharingAccessor {
     ) -> Result<Vec<PresignFileResponse>> {
         let accessor = Self::instance();
         let table = accessor.get_shared_table(input).await?;
-        return match table {
+        match table {
             Some(t) => {
                 let mut presigned_files = vec![];
                 for f in input.request_files.iter() {
@@ -142,6 +142,6 @@ impl SharingAccessor {
                 Ok(presigned_files)
             }
             None => Ok(vec![]),
-        };
+        }
     }
 }

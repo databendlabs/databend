@@ -4,6 +4,7 @@ description: JSON
 slug: json-datatypes
 date: 2022-09-14
 tags: [databend, JSON]
+cover_url: desiging-querying-json.png
 authors:
 - name: baishen
   url: https://github.com/b41sh

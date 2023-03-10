@@ -4,6 +4,7 @@ description: A quick Databend deployment guide
 slug: deploy-databend-on-laptop
 date: 2022-06-09
 tags: [databend, deploy]
+cover_url: deploying-databend-on-laptop.png
 authors:
 - name: Eric
   url: https://github.com/soyeric128

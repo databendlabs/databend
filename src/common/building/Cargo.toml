@@ -14,6 +14,7 @@ test = false
 anyhow = { workspace = true }
 cargo-license = "0.5.1"
 cargo_metadata = "0.15.0"
-git2 = { version = "0.16.1", default-features = false }
+gix = "0.36.1"
 tracing = "0.1.36"
-vergen = "7.5.1"
+# TODO(xuanwo): vergion > 8.0.0-beta.5 requires time > 0.3.17 which is not compatible with opendal
+vergen = { version = "<=8.0.0-beta.5", features = ["build", "cargo", "git", "rustc", "gix"] }

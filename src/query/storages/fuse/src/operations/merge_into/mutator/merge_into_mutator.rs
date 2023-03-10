@@ -82,9 +82,7 @@ impl MergeIntoOperationAggregator {
         let deletion_accumulator = DeletionAccumulator::default();
         let segment_reader =
             MetaReaders::segment_info_reader(data_accessor.clone(), table_schema.clone());
-        let indices = (0..table_schema.fields().len())
-            .into_iter()
-            .collect::<Vec<usize>>();
+        let indices = (0..table_schema.fields().len()).collect::<Vec<usize>>();
         let projection = Projection::Columns(indices);
         let block_reader =
             BlockReader::create(data_accessor.clone(), table_schema, projection, ctx.clone())?;

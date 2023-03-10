@@ -11,6 +11,9 @@ edition = { workspace = true }
 doctest = false
 test = false
 
+[features]
+enable-histogram-metrics = ["common-metrics/enable-histogram"]
+
 [dependencies]
 common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }

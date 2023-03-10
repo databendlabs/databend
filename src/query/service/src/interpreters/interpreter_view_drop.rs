@@ -45,10 +45,10 @@ impl Interpreter for DropViewInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let catalog_name = self.plan.catalog.clone();
         let db_name = self.plan.database.clone();
-        let viewname = self.plan.viewname.clone();
+        let view_name = self.plan.view_name.clone();
         let tbl = self
             .ctx
-            .get_table(&catalog_name, &db_name, &viewname)
+            .get_table(&catalog_name, &db_name, &view_name)
             .await
             .ok();
 
@@ -57,9 +57,9 @@ impl Interpreter for DropViewInterpreter {
                 return Err(ErrorCode::Internal(format!(
                     "{}.{} is not VIEW, please use `DROP TABLE {}.{}`",
                     &self.plan.database,
-                    &self.plan.viewname,
+                    &self.plan.view_name,
                     &self.plan.database,
-                    &self.plan.viewname
+                    &self.plan.view_name
                 )));
             }
 

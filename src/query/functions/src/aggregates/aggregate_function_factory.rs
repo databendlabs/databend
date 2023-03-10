@@ -254,7 +254,6 @@ impl AggregateFunctionFactory {
     pub fn registered_features(&self) -> Vec<AggregateFunctionFeatures> {
         self.case_insensitive_desc
             .values()
-            .into_iter()
             .map(|v| &v.features)
             .cloned()
             .collect::<Vec<_>>()

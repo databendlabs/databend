@@ -4,6 +4,7 @@ description: They Use Mergify
 slug: they-use-mergify
 date: 2022-07-20
 tags: [databend, mergify]
+cover_url: they-use-mergify.png
 authors:
 - name: Xuanwo
   url: https://github.com/Xuanwo
@@ -32,7 +33,7 @@ Of course! So [Databend](https://github.com/datafuselabs/databend) is a modern e
 
 Right now, we have more than 100 contributors on Databend, with about 30 of them contributing continuously.
 
-**What’s your GitHub workflow on this project?**
+**What's your GitHub workflow on this project?**
 
 Databend is a very new project and it doesn’t have a stable release yet, so our pull request \[PR\] workflow is quite simple. All our contributions go through GitHub PRs. For every PR, we use [GitHub Actions as the CI](https://github.com/features/actions), where we run `cargo check`, `cargo fmt`, `cargo clippy`, and all our test cases. If all the checks pass, we merge the PR. And once on the main branch, the PR runs production CI, which goes through all test cases with the release build. We then release a nightly version daily, uploading our release builds to GitHub releases and the [Docker Hub Registry](https://hub.docker.com/_/registry).
 
@@ -60,24 +61,24 @@ The automatic merge! And with the help of the Mergify team, we enabled the merge
 
 **What is your favorite Mergify feature and why?**
 
-Oh, I love PR actions. Although I can implement the same features with GitHub Actions, I find Mergify’s PR actions more simple and exciting. For example, last week, we introduced a new requirement that every PR must be semantic—we want all PRs to contain a valid title starting with a type like “fix”, “feat”, or “refactor”.
+Oh, I love PR actions. Although I can implement the same features with GitHub Actions, I find Mergify's PR actions more simple and exciting. For example, last week, we introduced a new requirement that every PR must be semantic—we want all PRs to contain a valid title starting with a type like "fix", "feat", or "refactor".
 
 ![image](/img/blog/they-use-mergify-4.png)
 
 [Actions](https://docs.mergify.com/actions/) 
 
-With the help of Mergify, I only needed to create some rules, such as adding corresponding labels if the PR title starts with “fix”, comment in the PR with a help message if the PR title doesn’t fulfill the requirements, and add post checks so that we can mark the PR as not mergeable.
+With the help of Mergify, I only needed to create some rules, such as adding corresponding labels if the PR title starts with "fix", comment in the PR with a help message if the PR title doesn't fulfill the requirements, and add post checks so that we can mark the PR as not mergeable.
 
 This feature is very cool, and I would love to have it on issues too!
 
-**What has been the most significant impact of using Mergify on your team’s performance so far?**
+**What has been the most significant impact of using Mergify on your team's performance so far?**
 
-Our teams don’t need to worry about merges anymore! We can start jobs without having to wait on the PRs.  
+Our teams don't need to worry about merges anymore! We can start jobs without having to wait on the PRs.  
 
 **What would be your n°1 tip for someone new to Mergify?**
 
-Don’t try to migrate all your workloads to Mergify in one go. Migrating things one by one and progressively will make your lives easier.
+Don't try to migrate all your workloads to Mergify in one go. Migrating things one by one and progressively will make your lives easier.
 
 **If you had time to contribute to the Mergify project, what would your contribution be about?**
 
-I used to contribute to Mergify regarding a small documentation typo. But I am not comfortable contributing to more complex issues because Mergify uses Python, a programming language I’m unfamiliar with. But if I could contribute to one feature, it would be about commands. Mergify only supports a small set of commands. Maybe we could define new commands in PR rules and allow users to call them with Mergify bots. This feature would be exciting to me!
+I used to contribute to Mergify regarding a small documentation typo. But I am not comfortable contributing to more complex issues because Mergify uses Python, a programming language I'm unfamiliar with. But if I could contribute to one feature, it would be about commands. Mergify only supports a small set of commands. Maybe we could define new commands in PR rules and allow users to call them with Mergify bots. This feature would be exciting to me!
