@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -22,6 +21,7 @@ use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockThresholds;
 use common_expression::DataBlock;
+use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransform;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CacheManager;
@@ -31,15 +31,12 @@ use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use tracing::Instrument;
 
-use super::compact_meta::CompactSourceMeta2;
 use crate::io::try_join_futures;
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::mutation::compact::CompactSourceMeta;
 use crate::operations::mutation::AbortOperation;
+use crate::operations::mutation::BlockCompactMutator;
 use crate::operations::mutation::MutationSinkMeta;
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::Event;
-use crate::pipelines::processors::Processor;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
 
@@ -49,55 +46,35 @@ struct SerializedSegment {
     segment: Arc<SegmentInfo>,
 }
 
-pub struct CompactAggregatorTransform {
+pub struct CompactAggregator {
     ctx: Arc<dyn TableContext>,
     dal: Operator,
     location_gen: TableMetaLocationGenerator,
 
     // locations all the merged segments.
-    pub merged_segments: BTreeMap<usize, Location>,
+    merged_segments: BTreeMap<usize, Location>,
     // summarised statistics of all the merged segments
-    pub merged_statistics: Statistics,
+    merged_statistics: Statistics,
     merge_blocks: HashMap<usize, BTreeMap<usize, Arc<BlockMeta>>>,
     thresholds: BlockThresholds,
     abort_operation: AbortOperation,
-
-    inputs: Vec<Arc<InputPort>>,
-
-    cur_input_index: usize,
-    output: Arc<OutputPort>,
-    output_data: Option<DataBlock>,
 }
 
-impl CompactAggregatorTransform {
-    fn get_current_input(&mut self) -> Option<Arc<InputPort>> {
-        let mut finished = true;
-        let mut index = self.cur_input_index;
-
-        loop {
-            let input = &self.inputs[index];
-
-            if !input.is_finished() {
-                finished = false;
-                input.set_need_data();
-
-                if input.has_data() {
-                    self.cur_input_index = index;
-                    return Some(input.clone());
-                }
-            }
-
-            index += 1;
-            if index == self.inputs.len() {
-                index = 0;
-            }
-
-            if index == self.cur_input_index {
-                return match finished {
-                    true => Some(input.clone()),
-                    false => None,
-                };
-            }
+impl CompactAggregator {
+    pub fn new(
+        dal: Operator,
+        location_gen: TableMetaLocationGenerator,
+        mutator: BlockCompactMutator,
+    ) -> Self {
+        Self {
+            ctx: mutator.ctx.clone(),
+            dal,
+            location_gen,
+            merged_segments: mutator.unchanged_segments_map,
+            merged_statistics: mutator.unchanged_segment_statistics,
+            merge_blocks: mutator.unchanged_blocks_map,
+            thresholds: mutator.thresholds,
+            abort_operation: AbortOperation::default(),
         }
     }
 
@@ -133,57 +110,27 @@ impl CompactAggregatorTransform {
 }
 
 #[async_trait::async_trait]
-impl Processor for CompactAggregatorTransform {
-    fn name(&self) -> String {
-        "CompactAggregatorTransform".to_string()
+impl AsyncAccumulatingTransform for CompactAggregator {
+    const NAME: &'static str = "CompactAggregator";
+
+    async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
+        if let Some(meta) = data
+            .get_meta()
+            .and_then(CompactSourceMeta::downcast_ref_from)
+        {
+            self.abort_operation.add_block(&meta.block);
+            self.merge_blocks
+                .entry(meta.index.segment_idx)
+                .and_modify(|v| {
+                    v.insert(meta.index.block_idx, meta.block.clone());
+                })
+                .or_insert(BTreeMap::from([(meta.index.block_idx, meta.block.clone())]));
+        }
+        // no partial output
+        Ok(None)
     }
 
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn event(&mut self) -> Result<Event> {
-        if self.output.is_finished() {
-            for input in &self.inputs {
-                input.finish();
-            }
-            return Ok(Event::Finished);
-        }
-
-        if !self.output.can_push() {
-            return Ok(Event::NeedConsume);
-        }
-
-        if let Some(data_block) = self.output_data.take() {
-            self.output.push_data(Ok(data_block));
-            return Ok(Event::NeedConsume);
-        }
-
-        let current_input = self.get_current_input();
-        if let Some(cur_input) = current_input {
-            if cur_input.is_finished() {
-                return Ok(Event::Async);
-            } else {
-                let input_data = cur_input.pull_data().unwrap()?;
-                if let Some(meta) = input_data
-                    .get_meta()
-                    .and_then(CompactSourceMeta2::downcast_ref_from)
-                {
-                    self.abort_operation.add_block(&meta.block);
-                    self.merge_blocks
-                        .entry(meta.index.segment_idx)
-                        .and_modify(|v| {
-                            v.insert(meta.index.block_idx, meta.block.clone());
-                        })
-                        .or_insert(BTreeMap::from([(meta.index.block_idx, meta.block.clone())]));
-                }
-                cur_input.set_need_data();
-            }
-        }
-        Ok(Event::NeedData)
-    }
-
-    async fn async_process(&mut self) -> Result<()> {
+    async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
         let mut serialized_segments = Vec::with_capacity(self.merge_blocks.len());
         for (segment_idx, block_map) in std::mem::take(&mut self.merge_blocks) {
             let blocks: Vec<_> = block_map.into_values().collect();
@@ -215,7 +162,6 @@ impl Processor for CompactAggregatorTransform {
             std::mem::take(&mut self.merged_statistics),
             std::mem::take(&mut self.abort_operation),
         );
-        self.output_data = Some(DataBlock::empty_with_meta(meta));
-        Ok(())
+        Ok(Some(DataBlock::empty_with_meta(meta)))
     }
 }
