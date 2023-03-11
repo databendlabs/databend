@@ -12,22 +12,18 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::future::Future;
 use std::sync::Arc;
 
-use common_base::base::tokio::sync::Semaphore;
-use common_base::runtime::Runtime;
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
-use futures_util::future;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use tracing::Instrument;
 
+use crate::io::try_join_futures;
 use crate::io::MetaReaders;
 
 // Read segment related operations.
@@ -154,48 +150,4 @@ impl SegmentsIO {
         )
         .await
     }
-}
-
-pub async fn try_join_futures<Fut>(
-    ctx: Arc<dyn TableContext>,
-    futures: impl IntoIterator<Item = Fut>,
-    thread_name: String,
-) -> Result<Vec<Fut::Output>>
-where
-    Fut: Future + Send + 'static,
-    Fut::Output: Send + 'static,
-{
-    let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
-    let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
-
-    // 1. build the runtime.
-    let semaphore = Semaphore::new(max_io_requests);
-    let segments_runtime = Arc::new(Runtime::with_worker_threads(
-        max_runtime_threads,
-        Some(thread_name),
-    )?);
-
-    // 2. spawn all the tasks to the runtime.
-    let join_handlers = segments_runtime.try_spawn_batch(semaphore, futures).await?;
-
-    // 3. get all the result.
-    future::try_join_all(join_handlers)
-        .instrument(tracing::debug_span!("try_join_futures_all"))
-        .await
-        .map_err(|e| ErrorCode::StorageOther(format!("try join futures failure, {}", e)))
-}
-
-/// This is a workaround to address `higher-ranked lifetime error` from rustc
-///
-/// TODO: remove me after rustc works with try_join_futures directly.
-pub async fn try_join_futures_with_vec<Fut>(
-    ctx: Arc<dyn TableContext>,
-    futures: Vec<Fut>,
-    thread_name: String,
-) -> Result<Vec<Fut::Output>>
-where
-    Fut: Future + Send + 'static,
-    Fut::Output: Send + 'static,
-{
-    try_join_futures(ctx, futures, thread_name).await
 }
