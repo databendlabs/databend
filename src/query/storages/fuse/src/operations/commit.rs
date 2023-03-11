@@ -421,11 +421,10 @@ impl FuseTable {
                         "removing uncommitted table snapshot at location {}, of table {}, {}",
                         snapshot_location, table_info.desc, table_info.ident
                     );
-                    let _ = operator.object(&snapshot_location).delete().await;
+                    let _ = operator.delete(&snapshot_location).await;
                     if need_to_save_statistics {
                         let _ = operator
-                            .object(&snapshot.table_statistics_location.unwrap())
-                            .delete()
+                            .delete(&snapshot.table_statistics_location.unwrap())
                             .await;
                     }
                 }
@@ -490,15 +489,17 @@ impl FuseTable {
 
         let hint_path = location_generator.gen_last_snapshot_hint_location();
         let last_snapshot_path = {
-            let operator_meta_data = operator.metadata();
+            let operator_meta_data = operator.info();
             let storage_prefix = operator_meta_data.root();
             format!("{}{}", storage_prefix, last_snapshot_path)
         };
 
-        let object = operator.object(&hint_path);
-        object.write(last_snapshot_path).await.unwrap_or_else(|e| {
-            warn!("write last snapshot hint failure. {}", e);
-        });
+        operator
+            .write(&hint_path, last_snapshot_path)
+            .await
+            .unwrap_or_else(|e| {
+                warn!("write last snapshot hint failure. {}", e);
+            });
     }
 
     pub async fn commit_mutation(
@@ -696,12 +697,12 @@ mod utils {
                 let block_location = &block.location.0;
                 // if deletion operation failed (after DAL retried)
                 // we just left them there, and let the "major GC" collect them
-                let _ = operator.object(block_location).delete().await;
+                let _ = operator.delete(block_location).await;
                 if let Some(index) = &block.bloom_filter_index_location {
-                    let _ = operator.object(&index.0).delete().await;
+                    let _ = operator.delete(&index.0).await;
                 }
             }
-            let _ = operator.object(&entry.segment_location).delete().await;
+            let _ = operator.delete(&entry.segment_location).await;
         }
         Ok(())
     }

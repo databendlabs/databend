@@ -446,7 +446,7 @@ impl Processor for CompactTransform {
                 location,
                 segment,
             } => {
-                self.dal.object(&location).write(data).await?;
+                self.dal.write(&location, data).await?;
                 self.state = State::Output { location, segment };
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),

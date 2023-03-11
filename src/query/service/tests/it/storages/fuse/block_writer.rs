@@ -74,7 +74,7 @@ impl<'a> BlockWriter<'a> {
         let mut buf = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
         let (file_size, col_metas) = serialize_block(&write_settings, schema, block, &mut buf)?;
 
-        data_accessor.object(&location.0).write(buf).await?;
+        data_accessor.write(&location.0, buf).await?;
 
         let block_meta = BlockMeta::new(
             row_count,
@@ -116,7 +116,7 @@ impl<'a> BlockWriter<'a> {
                 TableCompression::None,
             )?;
 
-            data_accessor.object(&location.0).write(data).await?;
+            data_accessor.write(&location.0, data).await?;
 
             Ok((size, Some(location)))
         } else {

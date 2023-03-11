@@ -233,7 +233,7 @@ async fn test_accumulator() -> common_exception::Result<()> {
     let (schema, blocks) = TestFixture::gen_sample_blocks(10, 1);
     let mut stats_acc = StatisticsAccumulator::default();
 
-    let operator = Operator::create(opendal::services::Memory::default())?.finish();
+    let operator = Operator::new(opendal::services::Memory::default())?.finish();
     let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
     for item in blocks {
         let block = item?;

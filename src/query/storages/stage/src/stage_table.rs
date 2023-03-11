@@ -45,9 +45,9 @@ use opendal::Operator;
 use parking_lot::Mutex;
 use regex::Regex;
 
+use crate::format_stage_file_info;
 use crate::list_file;
 use crate::stage_table_sink::StageTableSink;
-use crate::stat_file;
 
 /// TODO: we need to track the data metrics in stage table.
 pub struct StageTable {
@@ -86,8 +86,9 @@ impl StageTable {
                 // Here we add the path to the file: /path/to/path/file1.
                 let new_path = Path::new(path).join(file).to_string_lossy().to_string();
 
-                if let Some(info) = stat_file(op.object(&new_path)).await? {
-                    res.push(info);
+                if !new_path.ends_with('/') {
+                    let meta = op.stat(&new_path).await?;
+                    res.push(format_stage_file_info(new_path, &meta))
                 }
             }
             res

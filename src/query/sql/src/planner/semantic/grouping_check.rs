@@ -49,14 +49,18 @@ impl<'a> GroupingChecker<'a> {
             .get(&format!("{:?}", scalar))
         {
             let column = &self.bind_context.aggregate_info.group_items[*index];
-            let column_binding = ColumnBinding {
-                database_name: None,
-                table_name: None,
-                column_name: "group_item".to_string(),
-                index: column.index,
-                data_type: Box::new(column.scalar.data_type()?),
-                visibility: Visibility::Visible,
-                virtual_column: None,
+            let column_binding = if let ScalarExpr::BoundColumnRef(column_ref) = &column.scalar {
+                column_ref.column.clone()
+            } else {
+                ColumnBinding {
+                    database_name: None,
+                    table_name: None,
+                    column_name: "group_item".to_string(),
+                    index: column.index,
+                    data_type: Box::new(column.scalar.data_type()?),
+                    visibility: Visibility::Visible,
+                    virtual_column: None,
+                }
             };
             return Ok(BoundColumnRef {
                 column: column_binding,

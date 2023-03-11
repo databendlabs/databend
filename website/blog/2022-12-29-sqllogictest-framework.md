@@ -3,6 +3,7 @@ title: Rewrite sqllogictest framework in rust
 description: sqllogictest, rust
 date: 2022-12-29
 tags: [databend, sqllogictest, rust]
+cover_url: rewrite-in-rust.png
 authors:
 - name: Xudong
   url: https://github.com/xudong963

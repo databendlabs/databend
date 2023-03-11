@@ -389,40 +389,13 @@ impl CopyInterpreter {
                 }
 
                 return GlobalIORuntime::instance().block_on(async move {
-                    // 1. Commit data.
+                    // 1. Commit data to table.
                     let operations = ctx.consume_precommit_blocks();
-                    info!(
-                        "copy: try to commit operations:{}, elapsed:{}",
-                        operations.len(),
-                        start.elapsed().as_secs()
-                    );
                     to_table
                         .commit_insertion(ctx.clone(), operations, false)
                         .await?;
 
-                    // 2. Try to purge copied files if purge option is true, if error will skip.
-                    // If a file is already copied(status with AlreadyCopied) we will try to purge them.
-
-                    if stage_info.copy_options.purge {
-                        info!(
-                            "copy: try to purge files:{}, elapsed:{}",
-                            all_source_files.len(),
-                            start.elapsed().as_secs()
-                        );
-                        CopyInterpreter::try_purge_files(
-                            ctx.clone(),
-                            &stage_info,
-                            &all_source_files,
-                        )
-                        .await;
-                    }
-
-                    // 3. Upsert files(status with NeedCopy) info to meta.
-                    info!(
-                        "copy: try to upsert file infos:{} to meta, elapsed:{}",
-                        copied_files.len(),
-                        start.elapsed().as_secs()
-                    );
+                    // 2. Upsert files(status with NeedCopy) info to meta.
                     CopyInterpreter::upsert_copied_files_info_to_meta(
                         &ctx,
                         tenant,
@@ -433,7 +406,7 @@ impl CopyInterpreter {
                     )
                     .await?;
 
-                    // 4. log on_error mode errors.
+                    // 3. log on_error mode errors.
                     // todo(ariesdevil): persist errors with query_id
                     if let Some(error_map) = ctx.get_on_error_map() {
                         for (file_name, e) in error_map {
@@ -444,6 +417,23 @@ impl CopyInterpreter {
                                 e.to_string()
                             );
                         }
+                    }
+
+                    // 4. Try to purge copied files if purge option is true, if error will skip.
+                    // If a file is already copied(status with AlreadyCopied) we will try to purge them.
+                    if stage_info.copy_options.purge {
+                        let purge_start = Instant::now();
+                        CopyInterpreter::try_purge_files(
+                            ctx.clone(),
+                            &stage_info,
+                            &all_source_files,
+                        )
+                        .await;
+                        info!(
+                            "copy: try to purge files:{}, elapsed:{}",
+                            all_source_files.len(),
+                            purge_start.elapsed().as_secs()
+                        );
                     }
 
                     info!(

@@ -94,8 +94,7 @@ impl ResultCacheReader {
     }
 
     async fn read_result_from_cache(&self, location: &str) -> Result<Vec<DataBlock>> {
-        let object = self.operator.object(location);
-        let data = object.read().await?;
+        let data = self.operator.read(location).await?;
         let mut reader = Cursor::new(data);
         let meta = read_metadata(&mut reader)?;
         let arrow_schema = infer_schema(&meta)?;
@@ -118,8 +117,7 @@ impl ResultCacheReader {
         operator: Operator,
         location: &str,
     ) -> Result<(TableSchema, Vec<u8>)> {
-        let object = operator.object(location);
-        let data = object.read().await?;
+        let data = operator.read(location).await?;
         let mut reader = Cursor::new(data.clone());
         let meta = read_metadata(&mut reader)?;
         let arrow_schema = infer_schema(&meta)?;
