@@ -164,7 +164,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                 let (data_tx, data_rx) = tokio::sync::mpsc::channel(ctx.num_prefetch_per_split());
                 let split_clone = s.clone();
                 let ctx_clone2 = ctx_clone.clone();
-                tokio::spawn(async move {
+                GlobalIORuntime::instance().spawn(async move {
                     if let Err(e) =
                         Self::copy_reader_with_aligner(ctx_clone2, split_clone, data_tx).await
                     {
@@ -201,7 +201,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                 let ctx_clone2 = ctx_clone.clone();
                 let row_batch_tx = data_tx.clone();
                 let splits = splits.to_owned().clone();
-                tokio::spawn(async move {
+                GlobalIORuntime::instance().spawn(async move {
                     let mut futs = FuturesUnordered::new();
                     for s in splits.into_iter() {
                         let fut =
