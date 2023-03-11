@@ -162,7 +162,7 @@ impl Processor for DeserializeDataTransform {
 
             // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
             // `FillInternalColumnProcessor` will generate internal columns using `BlockMetaIndex` in next pipeline.
-            if self.block_reader.query_virtual_columns() {
+            if self.block_reader.query_internal_columns() {
                 let meta: Option<BlockMetaInfoPtr> =
                     Some(Box::new(part.block_meta_index().unwrap().to_owned()));
                 self.output_data = Some(data_block.add_meta(meta)?);

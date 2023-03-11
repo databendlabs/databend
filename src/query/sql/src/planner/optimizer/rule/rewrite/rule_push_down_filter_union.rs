@@ -142,7 +142,7 @@ fn replace_column_binding(
                     index: *index_pairs.get(&index).unwrap(),
                     data_type: column.column.data_type,
                     visibility: Visibility::Visible,
-                    virtual_column: None,
+                    internal_column: None,
                 };
                 return Ok(ScalarExpr::BoundColumnRef(BoundColumnRef {
                     column: new_column,

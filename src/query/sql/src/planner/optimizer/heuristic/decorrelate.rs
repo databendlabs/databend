@@ -329,7 +329,7 @@ impl SubqueryRewriter {
                             index: output_column.index,
                             data_type: output_column.data_type,
                             visibility: Visibility::Visible,
-                            virtual_column: None,
+                            internal_column: None,
                         },
                     }),
                     &subquery.data_type,
@@ -402,9 +402,9 @@ impl SubqueryRewriter {
                     ColumnEntry::DerivedColumn(DerivedColumn {
                         alias, data_type, ..
                     }) => (alias, data_type.clone()),
-                    ColumnEntry::InternalColumn(TableInternalColumn { virtual_column, .. }) => {
-                        (virtual_column.column_name(), virtual_column.data_type())
-                    }
+                    ColumnEntry::InternalColumn(TableInternalColumn {
+                        internal_column, ..
+                    }) => (internal_column.column_name(), internal_column.data_type()),
                 };
                 self.derived_columns.insert(
                     *correlated_column,
@@ -475,8 +475,9 @@ impl SubqueryRewriter {
                             data_type.clone()
                         }
                         ColumnEntry::InternalColumn(TableInternalColumn {
-                            virtual_column, ..
-                        }) => virtual_column.data_type(),
+                            internal_column,
+                            ..
+                        }) => internal_column.data_type(),
                     };
                     let column_binding = ColumnBinding {
                         database_name: None,
@@ -485,7 +486,7 @@ impl SubqueryRewriter {
                         index: *derived_column,
                         data_type: Box::from(data_type.clone()),
                         visibility: Visibility::Visible,
-                        virtual_column: None,
+                        internal_column: None,
                     };
                     items.push(ScalarItem {
                         scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -594,9 +595,9 @@ impl SubqueryRewriter {
                                 data_type.clone()
                             }
                             ColumnEntry::InternalColumn(TableInternalColumn {
-                                virtual_column,
+                                internal_column,
                                 ..
-                            }) => virtual_column.data_type(),
+                            }) => internal_column.data_type(),
                         };
                         ColumnBinding {
                             database_name: None,
@@ -605,7 +606,7 @@ impl SubqueryRewriter {
                             index: *derived_column,
                             data_type: Box::from(data_type.clone()),
                             visibility: Visibility::Visible,
-                            virtual_column: None,
+                            internal_column: None,
                         }
                     };
                     group_items.push(ScalarItem {
@@ -716,7 +717,7 @@ impl SubqueryRewriter {
                             index: *index,
                             data_type: column_binding.data_type.clone(),
                             visibility: column_binding.visibility,
-                            virtual_column: None,
+                            internal_column: None,
                         },
                     }));
                 }
@@ -807,9 +808,9 @@ impl SubqueryRewriter {
                     DataType::from(data_type)
                 }
                 ColumnEntry::DerivedColumn(DerivedColumn { data_type, .. }) => data_type.clone(),
-                ColumnEntry::InternalColumn(TableInternalColumn { virtual_column, .. }) => {
-                    virtual_column.data_type()
-                }
+                ColumnEntry::InternalColumn(TableInternalColumn {
+                    internal_column, ..
+                }) => internal_column.data_type(),
             };
             let right_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
                 column: ColumnBinding {
@@ -819,7 +820,7 @@ impl SubqueryRewriter {
                     index: *correlated_column,
                     data_type: Box::from(data_type.clone()),
                     visibility: Visibility::Visible,
-                    virtual_column: None,
+                    internal_column: None,
                 },
             });
             let derive_column = self.derived_columns.get(correlated_column).unwrap();
@@ -831,7 +832,7 @@ impl SubqueryRewriter {
                     index: *derive_column,
                     data_type: Box::from(data_type.clone()),
                     visibility: Visibility::Visible,
-                    virtual_column: None,
+                    internal_column: None,
                 },
             });
             left_conditions.push(left_column);

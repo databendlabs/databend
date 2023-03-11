@@ -267,9 +267,9 @@ fn scan_to_format_tree(
                                     ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) =>
                                         alias,
                                     ColumnEntry::InternalColumn(TableInternalColumn {
-                                        virtual_column,
+                                        internal_column,
                                         ..
-                                    }) => virtual_column.column_name(),
+                                    }) => internal_column.column_name(),
                                 },
                                 item.index,
                                 if item.asc { "ASC" } else { "DESC" }
@@ -336,9 +336,9 @@ fn logical_get_to_format_tree(
                                     ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) =>
                                         alias,
                                     ColumnEntry::InternalColumn(TableInternalColumn {
-                                        virtual_column,
+                                        internal_column,
                                         ..
-                                    }) => virtual_column.column_name(),
+                                    }) => internal_column.column_name(),
                                 },
                                 item.index,
                                 if item.asc { "ASC" } else { "DESC" }
@@ -568,9 +568,9 @@ fn sort_to_format_tree(
             let name = match metadata.column(item.index) {
                 ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => column_name,
                 ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
-                ColumnEntry::InternalColumn(TableInternalColumn { virtual_column, .. }) => {
-                    virtual_column.column_name()
-                }
+                ColumnEntry::InternalColumn(TableInternalColumn {
+                    internal_column, ..
+                }) => internal_column.column_name(),
             };
             format!(
                 "{} (#{}) {}",

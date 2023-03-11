@@ -131,7 +131,7 @@ impl FuseTable {
             description,
             tbl_args: self.table_args(),
             push_downs: None,
-            query_virtual_columns: false,
+            query_internal_columns: false,
         };
 
         ctx.set_partitions(plan.parts.clone())?;

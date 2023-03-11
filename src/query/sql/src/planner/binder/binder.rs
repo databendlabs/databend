@@ -424,7 +424,7 @@ impl<'a> Binder {
             index,
             data_type: Box::new(data_type),
             visibility: Visibility::Visible,
-            virtual_column: None,
+            internal_column: None,
         }
     }
 

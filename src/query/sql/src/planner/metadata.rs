@@ -154,14 +154,14 @@ impl Metadata {
     pub fn add_virtual_table_column(
         &mut self,
         table_index: IndexType,
-        virtual_column: InternalColumn,
+        internal_column: InternalColumn,
     ) -> IndexType {
         let column_index = self.columns.len();
         self.columns
             .push(ColumnEntry::InternalColumn(TableInternalColumn {
                 table_index,
                 column_index,
-                virtual_column,
+                internal_column,
             }));
         column_index
     }
@@ -348,7 +348,7 @@ pub struct DerivedColumn {
 pub struct TableInternalColumn {
     pub table_index: IndexType,
     pub column_index: IndexType,
-    pub virtual_column: InternalColumn,
+    pub internal_column: InternalColumn,
 }
 
 #[derive(Clone, Debug)]
@@ -368,7 +368,7 @@ impl ColumnEntry {
         match self {
             ColumnEntry::BaseTableColumn(base) => base.column_index,
             ColumnEntry::DerivedColumn(derived) => derived.column_index,
-            ColumnEntry::InternalColumn(virtual_column) => virtual_column.column_index,
+            ColumnEntry::InternalColumn(internal_column) => internal_column.column_index,
         }
     }
 }

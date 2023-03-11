@@ -278,7 +278,7 @@ fn remove_column_nullable(
                     index: column.column.index,
                     data_type,
                     visibility: column.column.visibility.clone(),
-                    virtual_column: column.column.virtual_column.clone(),
+                    internal_column: column.column.internal_column.clone(),
                 },
             })
         }

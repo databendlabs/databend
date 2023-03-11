@@ -98,7 +98,7 @@ impl PhysicalPlanBuilder {
         schema: &TableSchema,
         columns: &ColumnSet,
         has_inner_column: bool,
-        ignore_virtual_column: bool,
+        ignore_internal_column: bool,
     ) -> Projection {
         if !has_inner_column {
             let mut col_indices = Vec::new();
@@ -108,11 +108,13 @@ impl PhysicalPlanBuilder {
                         column_name
                     }
                     ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
-                    ColumnEntry::InternalColumn(TableInternalColumn { virtual_column, .. }) => {
-                        if ignore_virtual_column {
+                    ColumnEntry::InternalColumn(TableInternalColumn {
+                        internal_column, ..
+                    }) => {
+                        if ignore_internal_column {
                             continue;
                         }
-                        virtual_column.column_name()
+                        internal_column.column_name()
                     }
                 };
                 col_indices.push(schema.index_of(name).unwrap());
@@ -143,7 +145,7 @@ impl PhysicalPlanBuilder {
                         col_indices.insert(column.index(), vec![idx]);
                     }
                     ColumnEntry::InternalColumn(TableInternalColumn { column_index, .. }) => {
-                        if !ignore_virtual_column {
+                        if !ignore_internal_column {
                             col_indices.insert(*column_index, vec![*column_index]);
                         }
                     }
@@ -162,7 +164,7 @@ impl PhysicalPlanBuilder {
             RelOperator::Scan(scan) => {
                 let mut has_inner_column = false;
                 let mut name_mapping = BTreeMap::new();
-                let mut project_virtual_columns = BTreeMap::new();
+                let mut project_internal_columns = BTreeMap::new();
                 let metadata = self.metadata.read().clone();
                 for index in scan.columns.iter() {
                     let column = metadata.column(*index);
@@ -173,11 +175,11 @@ impl PhysicalPlanBuilder {
                             has_inner_column = true;
                         }
                     } else if let ColumnEntry::InternalColumn(TableInternalColumn {
-                        virtual_column,
+                        internal_column,
                         ..
                     }) = column
                     {
-                        project_virtual_columns.insert(*index, virtual_column.to_owned());
+                        project_internal_columns.insert(*index, internal_column.to_owned());
                     }
 
                     let name = match column {
@@ -186,8 +188,9 @@ impl PhysicalPlanBuilder {
                         }
                         ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
                         ColumnEntry::InternalColumn(TableInternalColumn {
-                            virtual_column, ..
-                        }) => virtual_column.column_name(),
+                            internal_column,
+                            ..
+                        }) => internal_column.column_name(),
                     };
                     if let Some(prewhere) = &scan.prewhere {
                         // if there is a prewhere optimization,
@@ -203,13 +206,13 @@ impl PhysicalPlanBuilder {
                 let table_entry = metadata.table(scan.table_index);
                 let table = table_entry.table();
                 let mut table_schema = table.schema();
-                if !project_virtual_columns.is_empty() {
+                if !project_internal_columns.is_empty() {
                     let mut schema = table_schema.as_ref().clone();
-                    for virtual_column in project_virtual_columns.values() {
-                        schema.add_virtual_column(
-                            virtual_column.column_name(),
-                            virtual_column.table_data_type(),
-                            virtual_column.column_id(),
+                    for internal_column in project_internal_columns.values() {
+                        schema.add_internal_column(
+                            internal_column.column_name(),
+                            internal_column.table_data_type(),
+                            internal_column.column_id(),
                         );
                     }
                     table_schema = Arc::new(schema);
@@ -222,18 +225,18 @@ impl PhysicalPlanBuilder {
                         self.ctx.clone(),
                         table_entry.catalog().to_string(),
                         Some(push_downs),
-                        if project_virtual_columns.is_empty() {
+                        if project_internal_columns.is_empty() {
                             None
                         } else {
-                            Some(project_virtual_columns.clone())
+                            Some(project_internal_columns.clone())
                         },
                     )
                     .await?;
 
-                let virtual_column = if project_virtual_columns.is_empty() {
+                let internal_column = if project_internal_columns.is_empty() {
                     None
                 } else {
-                    Some(project_virtual_columns)
+                    Some(project_internal_columns)
                 };
                 Ok(PhysicalPlan::TableScan(TableScan {
                     plan_id: self.next_plan_id(),
@@ -241,7 +244,7 @@ impl PhysicalPlanBuilder {
                     source: Box::new(source),
                     table_index: scan.table_index,
                     stat_info: Some(stat_info),
-                    virtual_column,
+                    internal_column,
                 }))
             }
             RelOperator::DummyTableScan(_) => {
@@ -266,7 +269,7 @@ impl PhysicalPlanBuilder {
                     stat_info: Some(PlanStatsInfo {
                         estimated_rows: 1.0,
                     }),
-                    virtual_column: None,
+                    internal_column: None,
                 }))
             }
             RelOperator::Join(join) => {
@@ -915,11 +918,11 @@ impl PhysicalPlanBuilder {
                                 alias, data_type, ..
                             }) => (alias.clone(), data_type.clone()),
                             ColumnEntry::InternalColumn(TableInternalColumn {
-                                virtual_column,
+                                internal_column,
                                 ..
                             }) => (
-                                virtual_column.column_name().to_owned(),
-                                virtual_column.data_type(),
+                                internal_column.column_name().to_owned(),
+                                internal_column.data_type(),
                             ),
                         };
 

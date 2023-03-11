@@ -117,7 +117,7 @@ fn test_format() {
                                 index: col1,
                                 data_type: Box::new(DataType::Boolean),
                                 visibility: Visibility::Visible,
-                                virtual_column: None,
+                                internal_column: None,
                             },
                         }
                         .into(),
@@ -139,7 +139,7 @@ fn test_format() {
                         index: col2,
                         data_type: Box::new(DataType::Boolean),
                         visibility: Visibility::Visible,
-                        virtual_column: None,
+                        internal_column: None,
                     },
                 }
                 .into(),

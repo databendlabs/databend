@@ -59,7 +59,7 @@ impl<'a> GroupingChecker<'a> {
                     index: column.index,
                     data_type: Box::new(column.scalar.data_type()?),
                     visibility: Visibility::Visible,
-                    virtual_column: None,
+                    internal_column: None,
                 }
             };
             return Ok(BoundColumnRef {
@@ -141,7 +141,7 @@ impl<'a> GroupingChecker<'a> {
                         index: agg_func.index,
                         data_type: Box::new(agg_func.scalar.data_type()?),
                         visibility: Visibility::Visible,
-                        virtual_column: None,
+                        internal_column: None,
                     };
                     return Ok(BoundColumnRef {
                         column: column_binding,

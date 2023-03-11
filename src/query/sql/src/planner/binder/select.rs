@@ -159,7 +159,7 @@ impl Binder {
         s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
 
         // add internal column binding into expr
-        s_expr = from_context.add_virtual_column_into_expr(s_expr);
+        s_expr = from_context.add_internal_column_into_expr(s_expr);
 
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
@@ -272,9 +272,9 @@ impl Binder {
         let (scalar, _) = scalar_binder.bind(expr).await?;
         // if `Expr` is internal column, then add this internal column into `BindContext`
         if let ScalarExpr::BoundColumnRef(ref column) = scalar {
-            if let Some(ref virtual_column) = column.column.virtual_column {
-                bind_context.add_virtual_column_binding(
-                    virtual_column,
+            if let Some(ref internal_column) = column.column.internal_column {
+                bind_context.add_internal_column_binding(
+                    internal_column,
                     &column.column,
                     self.metadata.clone(),
                 );
@@ -493,7 +493,7 @@ impl Binder {
                     index: new_column_index,
                     data_type: Box::new(coercion_types[idx].clone()),
                     visibility: Visibility::Visible,
-                    virtual_column: None,
+                    internal_column: None,
                 };
                 let left_coercion_expr = CastExpr {
                     is_try: false,

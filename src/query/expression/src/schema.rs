@@ -383,7 +383,7 @@ impl TableSchema {
     }
 
     // Every internal column has constant column id, no need to generate column id of internal columns.
-    pub fn add_virtual_column(
+    pub fn add_internal_column(
         &mut self,
         name: &str,
         data_type: TableDataType,

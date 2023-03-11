@@ -50,7 +50,7 @@ pub struct TableScan {
     pub table_index: IndexType,
     pub stat_info: Option<PlanStatsInfo>,
 
-    pub virtual_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
+    pub internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
 }
 
 impl TableScan {

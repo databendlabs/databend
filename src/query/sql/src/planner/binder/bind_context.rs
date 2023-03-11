@@ -64,7 +64,7 @@ pub struct ColumnBinding {
 
     pub visibility: Visibility,
 
-    pub virtual_column: Option<InternalColumn>,
+    pub internal_column: Option<InternalColumn>,
 }
 
 impl PartialEq for ColumnBinding {
@@ -95,7 +95,7 @@ pub struct BindContext {
     pub columns: Vec<ColumnBinding>,
 
     // map internal column id to (table_index, column_index)
-    pub bound_virtual_columns: BTreeMap<ColumnId, (IndexType, IndexType)>,
+    pub bound_internal_columns: BTreeMap<ColumnId, (IndexType, IndexType)>,
 
     pub aggregate_info: AggregateInfo,
 
@@ -121,7 +121,7 @@ impl BindContext {
         Self {
             parent: None,
             columns: Vec::new(),
-            bound_virtual_columns: BTreeMap::new(),
+            bound_internal_columns: BTreeMap::new(),
             aggregate_info: AggregateInfo::default(),
             in_grouping: false,
             ctes_map: Box::new(DashMap::new()),
@@ -133,7 +133,7 @@ impl BindContext {
         BindContext {
             parent: Some(parent.clone()),
             columns: vec![],
-            bound_virtual_columns: BTreeMap::new(),
+            bound_internal_columns: BTreeMap::new(),
             aggregate_info: Default::default(),
             in_grouping: false,
             ctes_map: parent.ctes_map.clone(),
@@ -234,17 +234,17 @@ impl BindContext {
             }
 
             // look up internal column
-            if let Some(virtual_column) =
-                InternalColumnFactory::instance().get_virtual_column(column)
+            if let Some(internal_column) =
+                InternalColumnFactory::instance().get_internal_column(column)
             {
                 let column_binding = ColumnBinding {
                     database_name: database.map(|n| n.to_owned()),
                     table_name: table.map(|n| n.to_owned()),
-                    column_name: virtual_column.column_name().to_owned(),
+                    column_name: internal_column.column_name().to_owned(),
                     index: bind_context.columns.len(),
-                    data_type: Box::new(virtual_column.data_type()),
+                    data_type: Box::new(internal_column.data_type()),
                     visibility: Visibility::Visible,
-                    virtual_column: Some(virtual_column),
+                    internal_column: Some(internal_column),
                 };
                 result.push(NameResolutionResult::Column(column_binding));
                 break;
@@ -331,7 +331,7 @@ impl BindContext {
         DataSchemaRefExt::create(fields)
     }
 
-    fn get_virtual_column_table_index(
+    fn get_internal_column_table_index(
         column_binding: &ColumnBinding,
         metadata: MetadataRef,
     ) -> (IndexType, Option<String>, Option<String>) {
@@ -362,24 +362,24 @@ impl BindContext {
     }
 
     // add internal column binding into `BindContext`
-    pub fn add_virtual_column_binding(
+    pub fn add_internal_column_binding(
         &mut self,
-        virtual_column: &InternalColumn,
+        internal_column: &InternalColumn,
         column_binding: &ColumnBinding,
         metadata: MetadataRef,
     ) {
-        let column_id = virtual_column.column_id();
+        let column_id = internal_column.column_id();
         if let std::collections::btree_map::Entry::Vacant(e) =
-            self.bound_virtual_columns.entry(column_id)
+            self.bound_internal_columns.entry(column_id)
         {
             // New added internal column MUST at the end of `columns` array.
             debug_assert_eq!(column_binding.index, self.columns.len());
 
             let (table_index, database_name, table_name) =
-                BindContext::get_virtual_column_table_index(column_binding, metadata.clone());
+                BindContext::get_internal_column_table_index(column_binding, metadata.clone());
 
             let mut metadata = metadata.write();
-            metadata.add_virtual_table_column(table_index, virtual_column.to_owned());
+            metadata.add_virtual_table_column(table_index, internal_column.to_owned());
             self.columns.push(ColumnBinding {
                 database_name,
                 table_name,
@@ -387,18 +387,18 @@ impl BindContext {
                 index: column_binding.index,
                 data_type: column_binding.data_type.clone(),
                 visibility: Visibility::Visible,
-                virtual_column: None,
+                internal_column: None,
             });
 
             e.insert((table_index, column_binding.index));
         }
     }
 
-    pub fn add_virtual_column_into_expr(&self, s_expr: SExpr) -> SExpr {
-        let bound_virtual_columns = &self.bound_virtual_columns;
+    pub fn add_internal_column_into_expr(&self, s_expr: SExpr) -> SExpr {
+        let bound_internal_columns = &self.bound_internal_columns;
         let mut s_expr = s_expr;
-        for (table_index, column_index) in bound_virtual_columns.values() {
-            s_expr = SExpr::add_virtual_column_index(&s_expr, *table_index, *column_index);
+        for (table_index, column_index) in bound_internal_columns.values() {
+            s_expr = SExpr::add_internal_column_index(&s_expr, *table_index, *column_index);
         }
         s_expr
     }

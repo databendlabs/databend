@@ -201,8 +201,9 @@ fn project_to_format_tree(
                     ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) =>
                         column_name,
                     ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
-                    ColumnEntry::InternalColumn(TableInternalColumn { virtual_column, .. }) =>
-                        virtual_column.column_name(),
+                    ColumnEntry::InternalColumn(TableInternalColumn {
+                        internal_column, ..
+                    }) => internal_column.column_name(),
                 },
                 column
             )
@@ -277,9 +278,9 @@ pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata
                         column_name
                     }
                     ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
-                    ColumnEntry::InternalColumn(TableInternalColumn { virtual_column, .. }) => {
-                        virtual_column.column_name().to_string()
-                    }
+                    ColumnEntry::InternalColumn(TableInternalColumn {
+                        internal_column, ..
+                    }) => internal_column.column_name().to_string(),
                 }
             })
             .collect::<Vec<_>>()
@@ -300,9 +301,9 @@ fn aggregate_partial_to_format_tree(
             let name = match column {
                 ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => column_name,
                 ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
-                ColumnEntry::InternalColumn(TableInternalColumn { virtual_column, .. }) => {
-                    virtual_column.column_name().to_string()
-                }
+                ColumnEntry::InternalColumn(TableInternalColumn {
+                    internal_column, ..
+                }) => internal_column.column_name().to_string(),
             };
             Ok(name)
         })
@@ -353,9 +354,9 @@ fn aggregate_final_to_format_tree(
             let name = match column {
                 ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => column_name,
                 ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
-                ColumnEntry::InternalColumn(TableInternalColumn { virtual_column, .. }) => {
-                    virtual_column.column_name().to_string()
-                }
+                ColumnEntry::InternalColumn(TableInternalColumn {
+                    internal_column, ..
+                }) => internal_column.column_name().to_string(),
             };
             Ok(name)
         })
@@ -416,8 +417,10 @@ fn sort_to_format_tree(
                     ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) =>
                         column_name,
                     ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
-                    ColumnEntry::InternalColumn(TableInternalColumn { virtual_column, .. }) => {
-                        virtual_column.column_name().to_string()
+                    ColumnEntry::InternalColumn(TableInternalColumn {
+                        internal_column, ..
+                    }) => {
+                        internal_column.column_name().to_string()
                     }
                 },
                 if sort_key.asc { "ASC" } else { "DESC" },

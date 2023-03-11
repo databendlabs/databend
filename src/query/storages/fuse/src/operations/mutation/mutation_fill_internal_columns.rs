@@ -31,7 +31,7 @@ use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::Processor;
 
 pub struct FillInternalColumnProcessor {
-    virtual_columns: BTreeMap<FieldIndex, InternalColumn>,
+    internal_columns: BTreeMap<FieldIndex, InternalColumn>,
     data_blocks: VecDeque<(BlockMetaIndex, DataBlock)>,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
@@ -40,12 +40,12 @@ pub struct FillInternalColumnProcessor {
 
 impl FillInternalColumnProcessor {
     pub fn create(
-        virtual_columns: BTreeMap<FieldIndex, InternalColumn>,
+        internal_columns: BTreeMap<FieldIndex, InternalColumn>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Self {
         Self {
-            virtual_columns,
+            internal_columns,
             data_blocks: VecDeque::new(),
             input,
             output,
@@ -104,15 +104,16 @@ impl Processor for FillInternalColumnProcessor {
     fn process(&mut self) -> Result<()> {
         if let Some((block_meta, data_block)) = self.data_blocks.front_mut() {
             let num_rows = data_block.num_rows();
-            let virtual_column_meta = InternalColumnMeta {
+            let internal_column_meta = InternalColumnMeta {
                 segment_id: block_meta.segment_id,
                 block_id: block_meta.block_id,
                 block_location: block_meta.block_location.clone(),
                 segment_location: block_meta.segment_location.clone(),
                 snapshot_location: block_meta.snapshot_location.clone().unwrap(),
             };
-            for virtual_column in self.virtual_columns.values() {
-                let column = virtual_column.generate_column_values(&virtual_column_meta, num_rows);
+            for internal_column in self.internal_columns.values() {
+                let column =
+                    internal_column.generate_column_values(&internal_column_meta, num_rows);
                 data_block.add_column(column);
             }
             // output datablock MUST with empty meta

@@ -317,7 +317,7 @@ impl SubqueryRewriter {
                         index,
                         data_type,
                         visibility: Visibility::Visible,
-                        virtual_column: None,
+                        internal_column: None,
                     },
                 });
 
@@ -438,7 +438,7 @@ impl SubqueryRewriter {
                                 index: agg_func_index,
                                 data_type: Box::new(agg_func.return_type()?),
                                 visibility: Visibility::Visible,
-                                virtual_column: None,
+                                internal_column: None,
                             },
                         }
                         .into(),
@@ -489,7 +489,7 @@ impl SubqueryRewriter {
                             index: output_column.index,
                             data_type: output_column.data_type,
                             visibility: Visibility::Visible,
-                            virtual_column: None,
+                            internal_column: None,
                         },
                     }),
                     &subquery.data_type,

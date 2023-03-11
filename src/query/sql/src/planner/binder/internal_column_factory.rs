@@ -26,34 +26,34 @@ use common_exception::Result;
 use common_expression::types::DataType;
 
 pub struct InternalColumnFactory {
-    virtual_columns: BTreeMap<String, InternalColumn>,
+    internal_columns: BTreeMap<String, InternalColumn>,
 }
 
 impl InternalColumnFactory {
     pub fn init() -> Result<()> {
-        let mut virtual_columns = BTreeMap::new();
+        let mut internal_columns = BTreeMap::new();
 
-        virtual_columns.insert(
+        internal_columns.insert(
             ROW_ID.to_string(),
             InternalColumn::new(ROW_ID, InternalColumnType::RowId),
         );
 
-        virtual_columns.insert(
+        internal_columns.insert(
             BLOCK_NAME.to_string(),
             InternalColumn::new(BLOCK_NAME, InternalColumnType::BlockName),
         );
 
-        virtual_columns.insert(
+        internal_columns.insert(
             SEGMENT_NAME.to_string(),
             InternalColumn::new(SEGMENT_NAME, InternalColumnType::SegmentName),
         );
 
-        virtual_columns.insert(
+        internal_columns.insert(
             SNAPSHOT_NAME.to_string(),
             InternalColumn::new(SNAPSHOT_NAME, InternalColumnType::SnapshotName),
         );
 
-        GlobalInstance::set(Arc::new(InternalColumnFactory { virtual_columns }));
+        GlobalInstance::set(Arc::new(InternalColumnFactory { internal_columns }));
         Ok(())
     }
 
@@ -62,22 +62,22 @@ impl InternalColumnFactory {
     }
 
     pub fn get_data_type(&self, name: &str) -> Option<DataType> {
-        self.virtual_columns
+        self.internal_columns
             .get(name)
-            .map(|virtual_column| virtual_column.data_type())
+            .map(|internal_column| internal_column.data_type())
     }
 
-    pub fn get_virtual_column(&self, name: &str) -> Option<InternalColumn> {
-        self.virtual_columns
+    pub fn get_internal_column(&self, name: &str) -> Option<InternalColumn> {
+        self.internal_columns
             .get(name)
-            .map(|virtual_column| virtual_column.to_owned())
+            .map(|internal_column| internal_column.to_owned())
     }
 
-    pub fn all_virtual_columns(&self) -> Vec<InternalColumn> {
-        self.virtual_columns.values().cloned().collect()
+    pub fn all_internal_columns(&self) -> Vec<InternalColumn> {
+        self.internal_columns.values().cloned().collect()
     }
 
-    pub fn virtual_columns(&self) -> &BTreeMap<String, InternalColumn> {
-        &self.virtual_columns
+    pub fn internal_columns(&self) -> &BTreeMap<String, InternalColumn> {
+        &self.internal_columns
     }
 }

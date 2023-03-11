@@ -280,10 +280,10 @@ impl PipelineBuilder {
         table.read_data(self.ctx.clone(), &scan.source, &mut self.main_pipeline)?;
 
         // Fill internal columns if needed.
-        if let Some(virtual_columns) = &scan.virtual_column {
+        if let Some(internal_columns) = &scan.internal_column {
             self.main_pipeline.add_transform(|input, output| {
                 Ok(ProcessorPtr::create(Box::new(
-                    FillInternalColumnProcessor::create(virtual_columns.clone(), input, output),
+                    FillInternalColumnProcessor::create(internal_columns.clone(), input, output),
                 )))
             })?;
         }

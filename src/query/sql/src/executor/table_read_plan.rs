@@ -40,7 +40,7 @@ pub trait ToReadDataSourcePlan {
         ctx: Arc<dyn TableContext>,
         catalog: String,
         push_downs: Option<PushDownInfo>,
-        virtual_columns: Option<BTreeMap<FieldIndex, InternalColumn>>,
+        internal_columns: Option<BTreeMap<FieldIndex, InternalColumn>>,
     ) -> Result<DataSourcePlan>;
 }
 
@@ -51,7 +51,7 @@ impl ToReadDataSourcePlan for dyn Table {
         ctx: Arc<dyn TableContext>,
         catalog: String,
         push_downs: Option<PushDownInfo>,
-        virtual_columns: Option<BTreeMap<FieldIndex, InternalColumn>>,
+        internal_columns: Option<BTreeMap<FieldIndex, InternalColumn>>,
     ) -> Result<DataSourcePlan> {
         let (statistics, parts) = self
             .read_partitions(ctx.clone(), push_downs.clone())
@@ -79,13 +79,13 @@ impl ToReadDataSourcePlan for dyn Table {
             _ => schema.clone(),
         };
 
-        if let Some(ref virtual_columns) = virtual_columns {
+        if let Some(ref internal_columns) = internal_columns {
             let mut schema = output_schema.as_ref().clone();
-            for virtual_column in virtual_columns.values() {
-                schema.add_virtual_column(
-                    virtual_column.column_name(),
-                    virtual_column.table_data_type(),
-                    virtual_column.column_id(),
+            for internal_column in internal_columns.values() {
+                schema.add_internal_column(
+                    internal_column.column_name(),
+                    internal_column.table_data_type(),
+                    internal_column.column_id(),
                 );
             }
             output_schema = Arc::new(schema);
@@ -101,7 +101,7 @@ impl ToReadDataSourcePlan for dyn Table {
             description,
             tbl_args: self.table_args(),
             push_downs,
-            query_virtual_columns: virtual_columns.is_some(),
+            query_internal_columns: internal_columns.is_some(),
         })
     }
 }
