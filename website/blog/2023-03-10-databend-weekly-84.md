@@ -3,7 +3,7 @@ title: "This Week in Databend #84"
 date: 2023-03-10
 slug: 2023-03-10-databend-weekly
 tags: [databend, weekly]
-description: "Learn about the latest updates of Databend in a week!"
+description: "Get to know the latest updates on Databend this week!"
 contributors:
   - name: andylokandy
   - name: ariesdevil
@@ -38,7 +38,7 @@ authors:
 
 [Databend](https://github.com/datafuselabs/databend) is a modern cloud data warehouse, serving your massive-scale analytics needs at low cost and complexity. Open source alternative to Snowflake. Also available in the cloud: <https://app.databend.com> .
 
-> :loudspeaker: This week we announced the official release of Databend v1.0. This is an important milestone, to learn more, please check out our blog: https://databend.rs/blog/databend-release-v1.0
+> :loudspeaker: We announced the milestone release of Databend 1.0 this week. For what's new in the release, please read this post: <https://databend.rs/blog/databend-release-v1.0> .
 
 ## What's On In Databend
 
@@ -46,9 +46,9 @@ Stay connected with the latest news about Databend.
 
 ### SQL: `REPLACE INTO`
 
-The `REPLACE INTO` statement is a powerful way to insert or update data in Databend. It allows you to specify a conflict key (not necessarily a primary key) that determines whether a new row should be inserted or an existing row should be updated.
+The `REPLACE INTO` statement is a powerful way to insert or update data in Databend. It allows you to specify a conflict key that determines whether a new row should be inserted or an existing row should be updated.
 
-If a row with the same conflict key already exists in the table, it will be replaced by the new data. Otherwise, a new row will be added with the new data. You can use this statement to easily sync data from different sources or handle duplicate records.
+If a row with the same conflict key already exists in the table, Databend will update the row with the new data. Otherwise, the new data will be added to the table as a new row. You can use this statement to easily sync data from different sources or handle duplicate records.
 
 ```sql
 #> CREATE TABLE employees(id INT, name VARCHAR, salary INT);
@@ -66,23 +66,17 @@ If you want to learn more details about `REPLACE INTO` statement, please read th
 - [Docs | DML Commands - REPLACE](https://databend.rs/doc/sql-commands/dml/dml-replace)
 - [PR | feat: replace into statement](https://github.com/datafuselabs/databend/pull/10191)
 
-Also, we plan to gradually transition to the `MERGE INTO` statement based on this, and if you are interested in this topic, you can also follow this issue:
+### RFC: Transform with Copy Into
 
-- [Issue | tracking: `MERGE` #10373](https://github.com/datafuselabs/databend/issues/10373)
-
-### RFC: Transform During Load
-
-Currently, we support stage table function, so we can transform when insert from stage into table.
+Databend is currently capable of transforming and inserting data from a stage into a table. For example, you can run a SQL statement like this:
 
 ```sql
 insert into table1 from (select c1， c2 from @stage1/path/to/dir);
 ```
 
-but this still missing one feature of `COPY INTO`: incremental load (remember files already loaded).
+The COPY INTO command needs a similar feature as well to support incremental data loading from a stage.
 
-We plan to support transform when copying from stage to table, which enables a series of features such as incremental load and auto cast.
-
-If you are interested in this topic, you can read the following two RFCs:
+If you're interested, check the following RFCs:
 
 - [Docs | RFCs - Transform During Load](https://databend.rs/doc/contributing/rfcs/transform-during-load)
 - [Docs | RFCs - Stage With Schema](https://databend.rs/doc/contributing/rfcs/stage-with-schema)
@@ -95,7 +89,7 @@ Discover some fascinating code snippets or projects that showcase our work or le
 
 Databend has upgraded its Rust toolchain to `nightly-2023-03-10`. Please remember to run `cargo clean` after pulling the latest code.
 
-We fixed some clippy warnings that we encountered. One notable thing is that we now use `#[default]` to annotate the default value of an `enum`, as shown below.
+We also fixed some clippy warnings. We now use `#[default]` to annotate the default value of an `enum`, as shown below.
 
 ```rust
 #[derive(Debug, Default)]
@@ -114,7 +108,7 @@ If you are interested in this Rust trick, you can read this RFC: [`derive_defaul
 
 **Removing `Object` Abstraction**
 
-The term `Object` is applied in various fields, making it difficult to provide a concise definition of `opendal::Object`. We eliminated the intermediate API layer of `Object` and enabled users to directly utilize `Operator`. For example:
+The term `Object` was applied in various fields, so it used to be difficult to provide a concise definition of `opendal::Object`. We eliminated the intermediate API layer of `Object` so users can now directly utilize the `Operator`, for example:
 
 ```diff
 # get metadata of a path
@@ -124,7 +118,7 @@ The term `Object` is applied in various fields, making it difficult to provide a
 
 **Bindings for JavaScript and Python**
 
-With [@suyanhanx](https://github.com/suyanhanx) [@messense](https://github.com/messense) [@Xuanwo](https://github.com/Xuanwo) and others' help, we released opendal's JavaScript and Python bindings. Now users of these languages can access data in various services with opendal. This is useful for Data Scientist and Data Analyst who **only** need opendal and **no** other SDKs.
+We have released OpenDAL's JavaScript and Python bindings, thanks to [@suyanhanx](https://github.com/suyanhanx), [@messense](https://github.com/messense), [@Xuanwo](https://github.com/Xuanwo), and others who were involved, Now, users of these languages can access data from various services using OpenDAL. This is especially useful for data scientists and data analysts who only require OpenDAL and do not need any other SDKs.
 
 Here is a Python example:
 
@@ -142,7 +136,7 @@ We're always open to cutting-edge technologies and innovative ideas. You're more
 
 ### Support More Mathematical Operators like PostgreSQL
 
-More mathematical operators in SQL expressions are wanted to perform complex calculations on data without having to write them in another language or use external tools.
+More mathematical operators in SQL expressions are required to perform complex calculations instead of writing them in another language or using external tools.
 
 | Operator | Description         | Example    | Result |
 | -------- | ------------------- | ---------- | ------ |
@@ -158,7 +152,7 @@ More mathematical operators in SQL expressions are wanted to perform complex cal
 | <<       | bitwise shift left  | 1 << 4     | 16     |
 | >>       | bitwise shift right | 8 >> 2     | 2      |
 
-[@jun0315](https://github.com/jun0315) is working on this issue and has made some great progress. If you are interested in this feature, you are welcome to join the contribution.
+[@jun0315](https://github.com/jun0315) is working on it and has made some great progress. If you are interested in this feature, feel free to drop in and contribute.
 
 [Issue 10233: Feature: support more pg functions](https://github.com/datafuselabs/databend/issues/10233)
 
