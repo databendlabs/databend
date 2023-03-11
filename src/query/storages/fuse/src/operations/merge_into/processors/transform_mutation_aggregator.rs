@@ -30,7 +30,7 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use tracing::debug;
 
-use crate::io::try_join_futures_with_vec;
+use crate::io::execute_futures_in_parallel;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::merge_into::mutation_meta::mutation_log::CommitMeta;
@@ -160,7 +160,7 @@ impl TableMutationAggregator {
             });
         }
 
-        try_join_futures_with_vec(
+        execute_futures_in_parallel(
             self.ctx.clone(),
             handles,
             "mutation-write-segments-worker".to_owned(),
