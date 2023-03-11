@@ -151,7 +151,7 @@ impl Metadata {
         column_index
     }
 
-    pub fn add_virtual_table_column(
+    pub fn add_internal_column(
         &mut self,
         table_index: IndexType,
         internal_column: InternalColumn,
