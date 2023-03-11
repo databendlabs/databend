@@ -279,7 +279,7 @@ impl HttpQuery {
         let query_id_clone = id.clone();
 
         let schema = ExecuteState::get_schema(&sql, ctx.clone()).await?;
-        let ctx_runtime = ctx.try_get_shared_contex_runtime()?;
+        let ctx_runtime = ctx.try_get_shared_context_runtime()?;
         ctx_runtime.try_spawn(async move {
             let state = state_clone.clone();
             if let Err(e) =

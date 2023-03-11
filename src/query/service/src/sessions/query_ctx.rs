@@ -204,7 +204,7 @@ impl QueryContext {
         self.shared.get_on_error_map()
     }
 
-    pub fn try_get_shared_contex_runtime(&self) -> Result<Arc<Runtime>> {
+    pub fn try_get_shared_context_runtime(&self) -> Result<Arc<Runtime>> {
         self.shared.try_get_runtime()
     }
 }
