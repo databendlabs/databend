@@ -22,6 +22,8 @@ use common_exception::Result;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::SegmentInfo;
 
+use crate::operations::merge_into::mutation_meta::mutation_log::BlockMetaIndex;
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum CompactTask {
     // Only one block, no need to do a compact.
@@ -73,6 +75,45 @@ impl CompactPartInfo {
             Some(part_ref) => Ok(part_ref),
             None => Err(ErrorCode::Internal(
                 "Cannot downcast from PartInfo to CompactPartInfo.",
+            )),
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct CompactPartInfo2 {
+    pub blocks: Vec<Arc<BlockMeta>>,
+    pub index: BlockMetaIndex,
+}
+
+#[typetag::serde(name = "compact")]
+impl PartInfo for CompactPartInfo2 {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
+        match info.as_any().downcast_ref::<CompactPartInfo2>() {
+            None => false,
+            Some(other) => self == other,
+        }
+    }
+
+    fn hash(&self) -> u64 {
+        0
+    }
+}
+
+impl CompactPartInfo2 {
+    pub fn create(blocks: Vec<Arc<BlockMeta>>, index: BlockMetaIndex) -> PartInfoPtr {
+        Arc::new(Box::new(CompactPartInfo2 { blocks, index }))
+    }
+
+    pub fn from_part(info: &PartInfoPtr) -> Result<&CompactPartInfo2> {
+        match info.as_any().downcast_ref::<CompactPartInfo2>() {
+            Some(part_ref) => Ok(part_ref),
+            None => Err(ErrorCode::Internal(
+                "Cannot downcast from PartInfo to CompactPartInfo2.",
             )),
         }
     }

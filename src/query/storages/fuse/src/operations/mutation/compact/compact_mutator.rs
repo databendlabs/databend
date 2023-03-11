@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::vec;
 
-use super::compact_part::CompactTask;
 use common_catalog::plan::Partitions;
+use common_catalog::plan::PartitionsShuffleKind;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use opendal::Operator;
@@ -25,8 +29,9 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 
-use super::compact_part::CompactPartInfo;
 use crate::io::SegmentsIO;
+use crate::operations::merge_into::mutation_meta::mutation_log::BlockMetaIndex;
+use crate::operations::mutation::CompactPartInfo2;
 use crate::operations::CompactOptions;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::TableContext;
@@ -34,34 +39,38 @@ use crate::TableContext;
 #[derive(Clone)]
 pub struct BlockCompactMutator {
     pub ctx: Arc<dyn TableContext>,
-
-    pub compact_params: CompactOptions,
     pub operator: Operator,
-    // The order of the unchanged segments in snapshot.
-    pub unchanged_segment_indices: Vec<usize>,
+
+    pub thresholds: BlockThresholds,
+    pub compact_params: CompactOptions,
+    pub column_ids: HashSet<u32>,
+
+    // A set of Parts.
+    pub compact_tasks: Partitions,
+    pub unchanged_blocks_map: HashMap<usize, BTreeMap<usize, Arc<BlockMeta>>>,
     // locations all the unchanged segments.
-    pub unchanged_segment_locations: Vec<Location>,
+    pub unchanged_segments_map: BTreeMap<usize, Location>,
     // summarised statistics of all the unchanged segments
     pub unchanged_segment_statistics: Statistics,
-}
-
-struct CompactSegmentTask {
-    order: usize,
-    task: Vec<Arc<SegmentInfo>>,
 }
 
 impl BlockCompactMutator {
     pub fn new(
         ctx: Arc<dyn TableContext>,
+        thresholds: BlockThresholds,
         compact_params: CompactOptions,
+        column_ids: HashSet<u32>,
         operator: Operator,
     ) -> Self {
         Self {
             ctx,
-            compact_params,
             operator,
-            unchanged_segment_indices: Vec::new(),
-            unchanged_segment_locations: Vec::new(),
+            thresholds,
+            compact_params,
+            column_ids,
+            unchanged_blocks_map: HashMap::new(),
+            compact_tasks: Partitions::create_nolazy(PartitionsShuffleKind::Mod, vec![]),
+            unchanged_segments_map: BTreeMap::new(),
             unchanged_segment_statistics: Statistics::default(),
         }
     }
@@ -79,98 +88,122 @@ impl BlockCompactMutator {
             .into_iter()
             .collect::<Result<Vec<_>>>()?;
 
-        let segment_tasks = self.gen_segment_tasks(&segment_infos, segment_locations)?;
-        if segment_tasks.is_empty() {
-            return Ok(false);
-        }
-
-        Ok(true)
-    }
-
-    fn gen_segment_tasks(&mut self, segment_infos: &Vec<Arc<SegmentInfo>>, segment_locations: &Vec<Location>) -> Result<Vec<CompactSegmentTask>>{
         let number_segments = segment_infos.len();
         let limit = self.compact_params.limit.unwrap_or(number_segments);
-        let mut order = 0;
         let mut end = 0;
+        let mut segment_idx = 0;
         let mut compacted_segment_cnt = 0;
 
-        let mut builder = SegmentTaskBuilder::new(self.compact_params.block_per_seg as u64);
-        let mut segment_tasks = Vec::new();
-
+        let mut checker = SegmentCompactChecker::new(self.compact_params.block_per_seg as u64);
         for (idx, segment) in segment_infos.iter().enumerate() {
-            let tasks = builder.add(segment.clone());
-            for task in tasks {
-                if SegmentTaskBuilder::check_for_compact(&task) {
-                    compacted_segment_cnt += task.len();
-                    segment_tasks.push(CompactSegmentTask {
-                        order,
-                        task,
-                    });
+            let segments_vec = checker.add(segment.clone());
+            for segments in segments_vec {
+                if SegmentCompactChecker::check_for_compact(&segments) {
+                    compacted_segment_cnt += segments.len();
+                    self.build_compact_tasks(segments, segment_idx);
                 } else {
-                    self.unchanged_segment_locations
-                        .push(segment_locations[idx].clone());
-                    self.unchanged_segment_indices.push(order);
+                    self.unchanged_segments_map
+                        .insert(segment_idx, segment_locations[idx].clone());
                     merge_statistics_mut(
                         &mut self.unchanged_segment_statistics,
                         &segment_infos[idx].summary,
                     )?;
                 }
-                order += 1;
+                segment_idx += 1;
             }
             end = idx + 1;
-            if compacted_segment_cnt + builder.segments.len() >= limit {
+            if compacted_segment_cnt + checker.segments.len() >= limit {
                 break;
             }
         }
 
-        if !builder.segments.is_empty() {
-            let task = std::mem::take(&mut builder.segments);
-            if SegmentTaskBuilder::check_for_compact(&task) {
-                segment_tasks.push(CompactSegmentTask {
-                    order,
-                    task,
-                });
+        if !checker.segments.is_empty() {
+            let segments = std::mem::take(&mut checker.segments);
+            if SegmentCompactChecker::check_for_compact(&segments) {
+                self.build_compact_tasks(segments, segment_idx);
             } else {
-                self.unchanged_segment_locations
-                    .push(segment_locations[end - 1].clone());
-                self.unchanged_segment_indices.push(order);
+                self.unchanged_segments_map
+                    .insert(segment_idx, segment_locations[end - 1].clone());
                 merge_statistics_mut(
                     &mut self.unchanged_segment_statistics,
                     &segment_infos[end - 1].summary,
                 )?;
             }
-            order += 1;
+            segment_idx += 1;
         }
 
         if end < number_segments {
             for i in end..number_segments {
-                self.unchanged_segment_locations
-                    .push(segment_locations[i].clone());
-                self.unchanged_segment_indices.push(order);
-                merge_statistics_mut(&mut self.unchanged_segment_statistics, &segment_infos[i].summary)?;
-                order += 1;
+                self.unchanged_segments_map
+                    .insert(segment_idx, segment_locations[i].clone());
+                merge_statistics_mut(
+                    &mut self.unchanged_segment_statistics,
+                    &segment_infos[i].summary,
+                )?;
+                segment_idx += 1;
             }
         }
-        Ok(segment_tasks)
+        Ok(self.compact_tasks.is_empty())
     }
 
-    fn gen_block_tasks() {
+    // Select the row_count >= min_rows_per_block or block_size >= max_bytes_per_block
+    // as the perfect_block condition(N for short). Gets a set of segments, iterates
+    // through the blocks, and finds the blocks >= N and blocks < 2N as a task.
+    fn build_compact_tasks(&mut self, segments: Vec<Arc<SegmentInfo>>, segment_idx: usize) {
+        let mut builder = CompactTaskBuilder::new(self.column_ids.clone());
+        let mut tasks = VecDeque::new();
+        let mut block_idx = 0;
+        // The order of the compact is from old to new.
+        for segment in segments.iter().rev() {
+            for block in segment.blocks.iter() {
+                let (unchanged, need_take) = builder.add(block, self.thresholds);
+                if need_take {
+                    tasks.push_back((block_idx, builder.take_blocks()));
+                    block_idx += 1;
+                }
+                if unchanged {
+                    self.unchanged_blocks_map
+                        .entry(segment_idx)
+                        .and_modify(|v| {
+                            v.insert(block_idx, block.clone());
+                        })
+                        .or_insert(BTreeMap::from([(block_idx, block.clone())]));
+                    block_idx += 1;
+                }
+            }
+        }
+        if !builder.is_empty() {
+            let (index, mut blocks) = tasks.pop_back().unwrap_or((0, vec![]));
+            blocks.extend(builder.take_blocks());
+            tasks.push_back((index, builder.take_blocks()));
+        }
 
+        let mut partitions = tasks
+            .into_iter()
+            .map(|(block_idx, blocks)| {
+                CompactPartInfo2::create(blocks, BlockMetaIndex {
+                    segment_idx,
+                    block_idx,
+                    range: None,
+                })
+            })
+            .collect();
+        self.compact_tasks.partitions.append(&mut partitions);
     }
 }
 
-#[derive(Default)]
-struct SegmentTaskBuilder {
+struct SegmentCompactChecker {
     segments: Vec<Arc<SegmentInfo>>,
-    block_count: u64,
+    total_block_count: u64,
     threshold: u64,
 }
 
-impl SegmentTaskBuilder {
+impl SegmentCompactChecker {
     fn new(threshold: u64) -> Self {
         Self {
             threshold,
-            ..Default::default()
+            total_block_count: 0,
+            segments: vec![],
         }
     }
 
@@ -181,14 +214,14 @@ impl SegmentTaskBuilder {
     }
 
     fn add(&mut self, segment: Arc<SegmentInfo>) -> Vec<Vec<Arc<SegmentInfo>>> {
-        self.block_count += segment.summary.block_count;
-        if self.block_count < self.threshold {
+        self.total_block_count += segment.summary.block_count;
+        if self.total_block_count < self.threshold {
             self.segments.push(segment);
             return vec![];
         }
 
-        if self.block_count > 2 * self.threshold {
-            self.block_count = 0;
+        if self.total_block_count > 2 * self.threshold {
+            self.total_block_count = 0;
             let trivial = vec![segment];
             if self.segments.is_empty() {
                 return vec![trivial];
@@ -197,66 +230,71 @@ impl SegmentTaskBuilder {
             }
         }
 
-        self.block_count = 0;
+        self.total_block_count = 0;
         self.segments.push(segment);
         vec![std::mem::take(&mut self.segments)]
     }
 }
 
-
-#[derive(Default)]
-struct BlockTaskBuilder {
+struct CompactTaskBuilder {
+    column_ids: HashSet<u32>,
     blocks: Vec<Arc<BlockMeta>>,
     total_rows: usize,
     total_size: usize,
 }
 
-impl BlockTaskBuilder {
+impl CompactTaskBuilder {
+    fn new(column_ids: HashSet<u32>) -> Self {
+        Self {
+            column_ids,
+            blocks: vec![],
+            total_rows: 0,
+            total_size: 0,
+        }
+    }
+
     fn is_empty(&self) -> bool {
         self.blocks.is_empty()
     }
 
-    fn add(&mut self, block: &Arc<BlockMeta>, thresholds: BlockThresholds) -> Vec<CompactTask> {
+    fn take_blocks(&mut self) -> Vec<Arc<BlockMeta>> {
+        self.total_rows = 0;
+        self.total_size = 0;
+        std::mem::take(&mut self.blocks)
+    }
+
+    fn check_column_ids(&self, block: &Arc<BlockMeta>) -> bool {
+        let column_ids: HashSet<u32> = block.col_metas.keys().cloned().collect();
+        self.column_ids == column_ids
+    }
+
+    fn add(&mut self, block: &Arc<BlockMeta>, thresholds: BlockThresholds) -> (bool, bool) {
         self.total_rows += block.row_count as usize;
         self.total_size += block.block_size as usize;
 
         if !thresholds.check_large_enough(self.total_rows, self.total_size) {
             // blocks < N
             self.blocks.push(block.clone());
-            return vec![];
+            return (false, false);
         }
 
-        let tasks = if !thresholds.check_for_compact(self.total_rows, self.total_size) {
-            // blocks > 2N
-            let trivial_task = CompactTask::Trivial(block.clone());
-            if !self.blocks.is_empty() {
-                let compact_task = Self::create_task(std::mem::take(&mut self.blocks));
-                vec![compact_task, trivial_task]
+        if self.blocks.is_empty() {
+            if self.check_column_ids(block) {
+                self.total_rows = 0;
+                self.total_size = 0;
+                return (true, false);
             } else {
-                vec![trivial_task]
+                self.blocks.push(block.clone());
+                return (false, true);
             }
-        } else {
-            // N <= blocks < 2N
-            self.blocks.push(block.clone());
-            vec![Self::create_task(std::mem::take(&mut self.blocks))]
-        };
-
-        self.total_rows = 0;
-        self.total_size = 0;
-        tasks
-    }
-
-    fn finalize(&mut self, task: Option<CompactTask>) -> CompactTask {
-        let mut blocks = task.map_or(vec![], |t| t.get_block_metas());
-        blocks.extend(std::mem::take(&mut self.blocks));
-        Self::create_task(blocks)
-    }
-
-    fn create_task(blocks: Vec<Arc<BlockMeta>>) -> CompactTask {
-        match blocks.len() {
-            0 => panic!("the blocks is empty"),
-            1 => CompactTask::Trivial(blocks[0].clone()),
-            _ => CompactTask::Normal(blocks),
         }
+
+        // N <= blocks < 2N
+        if thresholds.check_for_compact(self.total_rows, self.total_size) {
+            self.blocks.push(block.clone());
+            return (false, true);
+        }
+
+        return (true, true);
     }
 }

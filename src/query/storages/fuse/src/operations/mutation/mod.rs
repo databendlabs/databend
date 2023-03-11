@@ -26,6 +26,7 @@ mod serialize_data_transform;
 pub use abort_operation::AbortOperation;
 pub use base_mutator::BaseMutator;
 pub use compact::BlockCompactMutator;
+pub use compact::CompactPartInfo2;
 pub use compact::CompactSource;
 pub use compact::CompactTransform;
 pub use compact::MergeSegmentsTransform;

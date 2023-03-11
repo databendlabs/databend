@@ -21,9 +21,11 @@ use common_exception::Result;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
+use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::SegmentInfo;
 
 use super::compact_part::CompactTask;
+use crate::operations::merge_into::mutation_meta::mutation_log::BlockMetaIndex;
 use crate::operations::mutation::AbortOperation;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -62,6 +64,36 @@ impl CompactSourceMeta {
                 "Cannot downcast from BlockMetaInfo to CompactSourceMeta.",
             )),
         }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct CompactSourceMeta2 {
+    pub block: Arc<BlockMeta>,
+    pub index: BlockMetaIndex,
+}
+
+#[typetag::serde(name = "compact_source_meta")]
+impl BlockMetaInfo for CompactSourceMeta2 {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        match CompactSourceMeta2::downcast_ref_from(info) {
+            None => false,
+            Some(other) => self == other,
+        }
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
+    }
+}
+
+impl CompactSourceMeta2 {
+    pub fn create(index: BlockMetaIndex, block: Arc<BlockMeta>) -> BlockMetaInfoPtr {
+        Box::new(CompactSourceMeta2 { index, block })
     }
 }
 
