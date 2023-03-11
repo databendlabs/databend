@@ -188,6 +188,7 @@ pub struct HttpQuery {
     page_manager: Arc<TokioMutex<PageManager>>,
     config: HttpQueryConfig,
     expire_state: Arc<TokioMutex<ExpireState>>,
+    _runtime_reference: Arc<common_base::runtime::Runtime>,
 }
 
 impl HttpQuery {
@@ -278,7 +279,8 @@ impl HttpQuery {
         let query_id_clone = id.clone();
 
         let schema = ExecuteState::get_schema(&sql, ctx.clone()).await?;
-        ctx.try_spawn(async move {
+        let ctx_runtime = ctx.try_get_shared_contex_runtime()?;
+        ctx_runtime.try_spawn(async move {
             let state = state_clone.clone();
             if let Err(e) =
                 ExecuteState::try_start_query(state, &sql, session, ctx_clone.clone(), block_sender)
@@ -318,7 +320,9 @@ impl HttpQuery {
             page_manager: data,
             config,
             expire_state: Arc::new(TokioMutex::new(ExpireState::Working)),
+            _runtime_reference: ctx_runtime,
         };
+
         Ok(Arc::new(query))
     }
 

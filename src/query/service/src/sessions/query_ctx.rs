@@ -28,6 +28,7 @@ use std::time::SystemTime;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
+use common_base::runtime::Runtime;
 use common_base::runtime::TrySpawn;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
@@ -201,6 +202,10 @@ impl QueryContext {
 
     pub fn get_on_error_map(&self) -> Option<HashMap<String, ErrorCode>> {
         self.shared.get_on_error_map()
+    }
+
+    pub fn try_get_shared_contex_runtime(&self) -> Result<Arc<Runtime>> {
+        self.shared.try_get_runtime()
     }
 }
 
