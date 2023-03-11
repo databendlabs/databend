@@ -75,7 +75,7 @@ use crate::BindContext;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
 use crate::IndexType;
-use crate::TableVirtualColumn;
+use crate::TableInternalColumn;
 
 impl Binder {
     pub(super) async fn bind_one_table(
@@ -524,8 +524,9 @@ impl Binder {
                             ColumnEntry::DerivedColumn(DerivedColumn { column_index, .. }) => {
                                 column_index
                             }
-                            ColumnEntry::VirtualColumn(TableVirtualColumn {
-                                column_index, ..
+                            ColumnEntry::InternalColumn(TableInternalColumn {
+                                column_index,
+                                ..
                             }) => column_index,
                         })
                         .collect(),

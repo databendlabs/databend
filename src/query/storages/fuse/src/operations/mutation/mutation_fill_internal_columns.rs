@@ -17,8 +17,8 @@ use std::collections::BTreeMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_catalog::plan::VirtualColumn;
-use common_catalog::plan::VirtualColumnMeta;
+use common_catalog::plan::InternalColumn;
+use common_catalog::plan::InternalColumnMeta;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
@@ -30,17 +30,17 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::Processor;
 
-pub struct FillVirtualColumnProcessor {
-    virtual_columns: BTreeMap<FieldIndex, VirtualColumn>,
+pub struct FillInternalColumnProcessor {
+    virtual_columns: BTreeMap<FieldIndex, InternalColumn>,
     data_blocks: VecDeque<(BlockMetaIndex, DataBlock)>,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
 }
 
-impl FillVirtualColumnProcessor {
+impl FillInternalColumnProcessor {
     pub fn create(
-        virtual_columns: BTreeMap<FieldIndex, VirtualColumn>,
+        virtual_columns: BTreeMap<FieldIndex, InternalColumn>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Self {
@@ -55,9 +55,9 @@ impl FillVirtualColumnProcessor {
 }
 
 #[async_trait::async_trait]
-impl Processor for FillVirtualColumnProcessor {
+impl Processor for FillInternalColumnProcessor {
     fn name(&self) -> String {
-        "FillVirtualColumnProcessor".to_string()
+        "FillInternalColumnProcessor".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -104,7 +104,7 @@ impl Processor for FillVirtualColumnProcessor {
     fn process(&mut self) -> Result<()> {
         if let Some((block_meta, data_block)) = self.data_blocks.front_mut() {
             let num_rows = data_block.num_rows();
-            let virtual_column_meta = VirtualColumnMeta {
+            let virtual_column_meta = InternalColumnMeta {
                 segment_id: block_meta.segment_id,
                 block_id: block_meta.block_id,
                 block_location: block_meta.block_location.clone(),

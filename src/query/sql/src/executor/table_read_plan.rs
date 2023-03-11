@@ -16,8 +16,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::InternalColumn;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::VirtualColumn;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -40,7 +40,7 @@ pub trait ToReadDataSourcePlan {
         ctx: Arc<dyn TableContext>,
         catalog: String,
         push_downs: Option<PushDownInfo>,
-        virtual_columns: Option<BTreeMap<FieldIndex, VirtualColumn>>,
+        virtual_columns: Option<BTreeMap<FieldIndex, InternalColumn>>,
     ) -> Result<DataSourcePlan>;
 }
 
@@ -51,7 +51,7 @@ impl ToReadDataSourcePlan for dyn Table {
         ctx: Arc<dyn TableContext>,
         catalog: String,
         push_downs: Option<PushDownInfo>,
-        virtual_columns: Option<BTreeMap<FieldIndex, VirtualColumn>>,
+        virtual_columns: Option<BTreeMap<FieldIndex, InternalColumn>>,
     ) -> Result<DataSourcePlan> {
         let (statistics, parts) = self
             .read_partitions(ctx.clone(), push_downs.clone())

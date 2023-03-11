@@ -160,8 +160,8 @@ impl Processor for DeserializeDataTransform {
             };
             self.scan_progress.incr(&progress_values);
 
-            // Fill `BlockMetaIndex` as `DataBlock.meta` if query virtual columns,
-            // `FillVirtualColumnProcessor` will generate virtual columns using `BlockMetaIndex` in next pipeline.
+            // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
+            // `FillInternalColumnProcessor` will generate internal columns using `BlockMetaIndex` in next pipeline.
             if self.block_reader.query_virtual_columns() {
                 let meta: Option<BlockMetaInfoPtr> =
                     Some(Box::new(part.block_meta_index().unwrap().to_owned()));

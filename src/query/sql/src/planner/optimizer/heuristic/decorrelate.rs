@@ -60,7 +60,7 @@ use crate::ColumnEntry;
 use crate::DerivedColumn;
 use crate::IndexType;
 use crate::MetadataRef;
-use crate::TableVirtualColumn;
+use crate::TableInternalColumn;
 
 /// Decorrelate subqueries inside `s_expr`.
 ///
@@ -402,7 +402,7 @@ impl SubqueryRewriter {
                     ColumnEntry::DerivedColumn(DerivedColumn {
                         alias, data_type, ..
                     }) => (alias, data_type.clone()),
-                    ColumnEntry::VirtualColumn(TableVirtualColumn { virtual_column, .. }) => {
+                    ColumnEntry::InternalColumn(TableInternalColumn { virtual_column, .. }) => {
                         (virtual_column.column_name(), virtual_column.data_type())
                     }
                 };
@@ -474,7 +474,7 @@ impl SubqueryRewriter {
                         ColumnEntry::DerivedColumn(DerivedColumn { data_type, .. }) => {
                             data_type.clone()
                         }
-                        ColumnEntry::VirtualColumn(TableVirtualColumn {
+                        ColumnEntry::InternalColumn(TableInternalColumn {
                             virtual_column, ..
                         }) => virtual_column.data_type(),
                     };
@@ -593,7 +593,7 @@ impl SubqueryRewriter {
                             ColumnEntry::DerivedColumn(DerivedColumn { data_type, .. }) => {
                                 data_type.clone()
                             }
-                            ColumnEntry::VirtualColumn(TableVirtualColumn {
+                            ColumnEntry::InternalColumn(TableInternalColumn {
                                 virtual_column,
                                 ..
                             }) => virtual_column.data_type(),
@@ -807,7 +807,7 @@ impl SubqueryRewriter {
                     DataType::from(data_type)
                 }
                 ColumnEntry::DerivedColumn(DerivedColumn { data_type, .. }) => data_type.clone(),
-                ColumnEntry::VirtualColumn(TableVirtualColumn { virtual_column, .. }) => {
+                ColumnEntry::InternalColumn(TableInternalColumn { virtual_column, .. }) => {
                     virtual_column.data_type()
                 }
             };

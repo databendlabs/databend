@@ -62,7 +62,7 @@ use common_sql::plans::JoinType;
 use common_sql::ColumnBinding;
 use common_sql::IndexType;
 use common_storage::DataOperator;
-use common_storages_fuse::operations::FillVirtualColumnProcessor;
+use common_storages_fuse::operations::FillInternalColumnProcessor;
 
 use super::processors::ProfileWrapper;
 use crate::api::DefaultExchangeInjector;
@@ -279,11 +279,11 @@ impl PipelineBuilder {
         self.ctx.set_partitions(scan.source.parts.clone())?;
         table.read_data(self.ctx.clone(), &scan.source, &mut self.main_pipeline)?;
 
-        // Fill virtual columns if needed.
+        // Fill internal columns if needed.
         if let Some(virtual_columns) = &scan.virtual_column {
             self.main_pipeline.add_transform(|input, output| {
                 Ok(ProcessorPtr::create(Box::new(
-                    FillVirtualColumnProcessor::create(virtual_columns.clone(), input, output),
+                    FillInternalColumnProcessor::create(virtual_columns.clone(), input, output),
                 )))
             })?;
         }

@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 
 use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::VirtualColumn;
+use common_catalog::plan::InternalColumn;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::DataBlock;
@@ -50,7 +50,7 @@ pub struct TableScan {
     pub table_index: IndexType,
     pub stat_info: Option<PlanStatsInfo>,
 
-    pub virtual_column: Option<BTreeMap<FieldIndex, VirtualColumn>>,
+    pub virtual_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
 }
 
 impl TableScan {

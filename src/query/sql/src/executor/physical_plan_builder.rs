@@ -68,7 +68,7 @@ use crate::ColumnEntry;
 use crate::DerivedColumn;
 use crate::Metadata;
 use crate::MetadataRef;
-use crate::TableVirtualColumn;
+use crate::TableInternalColumn;
 use crate::DUMMY_COLUMN_INDEX;
 use crate::DUMMY_TABLE_INDEX;
 
@@ -108,7 +108,7 @@ impl PhysicalPlanBuilder {
                         column_name
                     }
                     ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
-                    ColumnEntry::VirtualColumn(TableVirtualColumn { virtual_column, .. }) => {
+                    ColumnEntry::InternalColumn(TableInternalColumn { virtual_column, .. }) => {
                         if ignore_virtual_column {
                             continue;
                         }
@@ -142,7 +142,7 @@ impl PhysicalPlanBuilder {
                         let idx = schema.index_of(alias).unwrap();
                         col_indices.insert(column.index(), vec![idx]);
                     }
-                    ColumnEntry::VirtualColumn(TableVirtualColumn { column_index, .. }) => {
+                    ColumnEntry::InternalColumn(TableInternalColumn { column_index, .. }) => {
                         if !ignore_virtual_column {
                             col_indices.insert(*column_index, vec![*column_index]);
                         }
@@ -172,7 +172,7 @@ impl PhysicalPlanBuilder {
                         if path_indices.is_some() {
                             has_inner_column = true;
                         }
-                    } else if let ColumnEntry::VirtualColumn(TableVirtualColumn {
+                    } else if let ColumnEntry::InternalColumn(TableInternalColumn {
                         virtual_column,
                         ..
                     }) = column
@@ -185,7 +185,7 @@ impl PhysicalPlanBuilder {
                             column_name
                         }
                         ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
-                        ColumnEntry::VirtualColumn(TableVirtualColumn {
+                        ColumnEntry::InternalColumn(TableInternalColumn {
                             virtual_column, ..
                         }) => virtual_column.column_name(),
                     };
@@ -802,8 +802,8 @@ impl PhysicalPlanBuilder {
             table_schema,
             &scan.columns,
             has_inner_column,
-            // for projection, we need to ignore read data from virtual column,
-            // or else in read_partition when search virtual column from table schema will core.
+            // for projection, we need to ignore read data from internal column,
+            // or else in read_partition when search internal column from table schema will core.
             true,
         );
 
@@ -914,7 +914,7 @@ impl PhysicalPlanBuilder {
                             ColumnEntry::DerivedColumn(DerivedColumn {
                                 alias, data_type, ..
                             }) => (alias.clone(), data_type.clone()),
-                            ColumnEntry::VirtualColumn(TableVirtualColumn {
+                            ColumnEntry::InternalColumn(TableInternalColumn {
                                 virtual_column,
                                 ..
                             }) => (

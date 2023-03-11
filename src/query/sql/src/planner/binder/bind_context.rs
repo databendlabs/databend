@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use std::hash::Hash;
 
 use common_ast::ast::TableAlias;
-use common_catalog::plan::VirtualColumn;
+use common_catalog::plan::InternalColumn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
@@ -28,7 +28,7 @@ use common_expression::DataSchemaRefExt;
 use dashmap::DashMap;
 
 use super::AggregateInfo;
-use super::VirtualColumnFactory;
+use super::InternalColumnFactory;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::ScalarExpr;
@@ -64,7 +64,7 @@ pub struct ColumnBinding {
 
     pub visibility: Visibility,
 
-    pub virtual_column: Option<VirtualColumn>,
+    pub virtual_column: Option<InternalColumn>,
 }
 
 impl PartialEq for ColumnBinding {
@@ -94,7 +94,7 @@ pub struct BindContext {
 
     pub columns: Vec<ColumnBinding>,
 
-    // map virtual column id to (table_index, column_index)
+    // map internal column id to (table_index, column_index)
     pub bound_virtual_columns: BTreeMap<ColumnId, (IndexType, IndexType)>,
 
     pub aggregate_info: AggregateInfo,
@@ -233,9 +233,9 @@ impl BindContext {
                 break;
             }
 
-            // look up virtual column
+            // look up internal column
             if let Some(virtual_column) =
-                VirtualColumnFactory::instance().get_virtual_column(column)
+                InternalColumnFactory::instance().get_virtual_column(column)
             {
                 let column_binding = ColumnBinding {
                     database_name: database.map(|n| n.to_owned()),
@@ -361,10 +361,10 @@ impl BindContext {
         )
     }
 
-    // add virtual column binding into `BindContext`
+    // add internal column binding into `BindContext`
     pub fn add_virtual_column_binding(
         &mut self,
-        virtual_column: &VirtualColumn,
+        virtual_column: &InternalColumn,
         column_binding: &ColumnBinding,
         metadata: MetadataRef,
     ) {
@@ -372,7 +372,7 @@ impl BindContext {
         if let std::collections::btree_map::Entry::Vacant(e) =
             self.bound_virtual_columns.entry(column_id)
         {
-            // New added virtual column MUST at the end of `columns` array.
+            // New added internal column MUST at the end of `columns` array.
             debug_assert_eq!(column_binding.index, self.columns.len());
 
             let (table_index, database_name, table_name) =

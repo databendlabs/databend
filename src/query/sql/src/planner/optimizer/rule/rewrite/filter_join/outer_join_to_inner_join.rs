@@ -249,8 +249,8 @@ fn remove_column_nullable(
                         need_remove = false;
                     }
                 }
-                // None of virtual columns will be nullable, so just ignore virtual column type entry
-                ColumnEntry::VirtualColumn(..) => {}
+                // None of internal columns will be nullable, so just ignore internal column type entry
+                ColumnEntry::InternalColumn(..) => {}
             }
             match join_type {
                 JoinType::Left => {

@@ -44,7 +44,7 @@ use crate::planner::DUMMY_TABLE_INDEX;
 use crate::BaseTableColumn;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
-use crate::TableVirtualColumn;
+use crate::TableInternalColumn;
 
 impl PhysicalPlan {
     pub fn format(
@@ -201,7 +201,7 @@ fn project_to_format_tree(
                     ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) =>
                         column_name,
                     ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
-                    ColumnEntry::VirtualColumn(TableVirtualColumn { virtual_column, .. }) =>
+                    ColumnEntry::InternalColumn(TableInternalColumn { virtual_column, .. }) =>
                         virtual_column.column_name(),
                 },
                 column
@@ -277,7 +277,7 @@ pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata
                         column_name
                     }
                     ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
-                    ColumnEntry::VirtualColumn(TableVirtualColumn { virtual_column, .. }) => {
+                    ColumnEntry::InternalColumn(TableInternalColumn { virtual_column, .. }) => {
                         virtual_column.column_name().to_string()
                     }
                 }
@@ -300,7 +300,7 @@ fn aggregate_partial_to_format_tree(
             let name = match column {
                 ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => column_name,
                 ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
-                ColumnEntry::VirtualColumn(TableVirtualColumn { virtual_column, .. }) => {
+                ColumnEntry::InternalColumn(TableInternalColumn { virtual_column, .. }) => {
                     virtual_column.column_name().to_string()
                 }
             };
@@ -353,7 +353,7 @@ fn aggregate_final_to_format_tree(
             let name = match column {
                 ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => column_name,
                 ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
-                ColumnEntry::VirtualColumn(TableVirtualColumn { virtual_column, .. }) => {
+                ColumnEntry::InternalColumn(TableInternalColumn { virtual_column, .. }) => {
                     virtual_column.column_name().to_string()
                 }
             };
@@ -416,7 +416,7 @@ fn sort_to_format_tree(
                     ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) =>
                         column_name,
                     ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
-                    ColumnEntry::VirtualColumn(TableVirtualColumn { virtual_column, .. }) => {
+                    ColumnEntry::InternalColumn(TableInternalColumn { virtual_column, .. }) => {
                         virtual_column.column_name().to_string()
                     }
                 },

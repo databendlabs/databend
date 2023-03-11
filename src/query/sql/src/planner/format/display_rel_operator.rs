@@ -37,7 +37,7 @@ use crate::BaseTableColumn;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
 use crate::MetadataRef;
-use crate::TableVirtualColumn;
+use crate::TableInternalColumn;
 
 #[derive(Clone)]
 pub enum FormatContext {
@@ -266,7 +266,7 @@ fn scan_to_format_tree(
                                     }) => column_name,
                                     ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) =>
                                         alias,
-                                    ColumnEntry::VirtualColumn(TableVirtualColumn {
+                                    ColumnEntry::InternalColumn(TableInternalColumn {
                                         virtual_column,
                                         ..
                                     }) => virtual_column.column_name(),
@@ -335,7 +335,7 @@ fn logical_get_to_format_tree(
                                     }) => column_name,
                                     ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) =>
                                         alias,
-                                    ColumnEntry::VirtualColumn(TableVirtualColumn {
+                                    ColumnEntry::InternalColumn(TableInternalColumn {
                                         virtual_column,
                                         ..
                                     }) => virtual_column.column_name(),
@@ -568,7 +568,7 @@ fn sort_to_format_tree(
             let name = match metadata.column(item.index) {
                 ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => column_name,
                 ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
-                ColumnEntry::VirtualColumn(TableVirtualColumn { virtual_column, .. }) => {
+                ColumnEntry::InternalColumn(TableInternalColumn { virtual_column, .. }) => {
                     virtual_column.column_name()
                 }
             };

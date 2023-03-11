@@ -28,9 +28,9 @@ pub const BLOCK_NAME: &str = "_block_name";
 pub const SEGMENT_NAME: &str = "_segment_name";
 pub const SNAPSHOT_NAME: &str = "_snapshot_name";
 
-// meta data for generate virtual columns
+// meta data for generate internal columns
 #[derive(Debug)]
-pub struct VirtualColumnMeta {
+pub struct InternalColumnMeta {
     pub segment_id: usize,
     pub block_id: usize,
     pub block_location: String,
@@ -39,7 +39,7 @@ pub struct VirtualColumnMeta {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub enum VirtualColumnType {
+pub enum InternalColumnType {
     RowId,
     BlockName,
     SegmentName,
@@ -47,29 +47,29 @@ pub enum VirtualColumnType {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct VirtualColumn {
+pub struct InternalColumn {
     pub column_name: String,
-    pub column_type: VirtualColumnType,
+    pub column_type: InternalColumnType,
 }
 
-impl VirtualColumn {
-    pub fn new(name: &str, column_type: VirtualColumnType) -> Self {
-        VirtualColumn {
+impl InternalColumn {
+    pub fn new(name: &str, column_type: InternalColumnType) -> Self {
+        InternalColumn {
             column_name: name.to_string(),
             column_type,
         }
     }
 
-    pub fn column_type(&self) -> &VirtualColumnType {
+    pub fn column_type(&self) -> &InternalColumnType {
         &self.column_type
     }
 
     pub fn table_data_type(&self) -> TableDataType {
         match &self.column_type {
-            VirtualColumnType::RowId => TableDataType::Number(NumberDataType::UInt64),
-            VirtualColumnType::BlockName => TableDataType::String,
-            VirtualColumnType::SegmentName => TableDataType::String,
-            VirtualColumnType::SnapshotName => TableDataType::String,
+            InternalColumnType::RowId => TableDataType::Number(NumberDataType::UInt64),
+            InternalColumnType::BlockName => TableDataType::String,
+            InternalColumnType::SegmentName => TableDataType::String,
+            InternalColumnType::SnapshotName => TableDataType::String,
         }
     }
 
@@ -84,16 +84,16 @@ impl VirtualColumn {
 
     pub fn column_id(&self) -> ColumnId {
         match &self.column_type {
-            VirtualColumnType::RowId => u32::MAX,
-            VirtualColumnType::BlockName => u32::MAX - 1,
-            VirtualColumnType::SegmentName => u32::MAX - 2,
-            VirtualColumnType::SnapshotName => u32::MAX - 3,
+            InternalColumnType::RowId => u32::MAX,
+            InternalColumnType::BlockName => u32::MAX - 1,
+            InternalColumnType::SegmentName => u32::MAX - 2,
+            InternalColumnType::SnapshotName => u32::MAX - 3,
         }
     }
 
-    pub fn generate_column_values(&self, meta: &VirtualColumnMeta, num_rows: usize) -> BlockEntry {
+    pub fn generate_column_values(&self, meta: &InternalColumnMeta, num_rows: usize) -> BlockEntry {
         match &self.column_type {
-            VirtualColumnType::RowId => {
+            InternalColumnType::RowId => {
                 let block_id = meta.block_id as u64;
                 let seg_id = meta.segment_id as u64;
                 let high_32bit = (seg_id << 48) + (block_id << 32);
@@ -108,7 +108,7 @@ impl VirtualColumn {
                     value: Value::Column(Column::Number(builder.build())),
                 }
             }
-            VirtualColumnType::BlockName => {
+            InternalColumnType::BlockName => {
                 let mut builder = StringColumnBuilder::with_capacity(1, meta.block_location.len());
                 builder.put_str(&meta.block_location);
                 builder.commit_row();
@@ -117,7 +117,7 @@ impl VirtualColumn {
                     value: Value::Column(Column::String(builder.build())),
                 }
             }
-            VirtualColumnType::SegmentName => {
+            InternalColumnType::SegmentName => {
                 let mut builder =
                     StringColumnBuilder::with_capacity(1, meta.segment_location.len());
                 builder.put_str(&meta.segment_location);
@@ -127,7 +127,7 @@ impl VirtualColumn {
                     value: Value::Column(Column::String(builder.build())),
                 }
             }
-            VirtualColumnType::SnapshotName => {
+            InternalColumnType::SnapshotName => {
                 let mut builder =
                     StringColumnBuilder::with_capacity(1, meta.snapshot_location.len());
                 builder.put_str(&meta.snapshot_location);

@@ -158,7 +158,7 @@ impl Binder {
 
         s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
 
-        // add virtual column binding into expr
+        // add internal column binding into expr
         s_expr = from_context.add_virtual_column_into_expr(s_expr);
 
         let mut output_context = BindContext::new();
@@ -270,7 +270,7 @@ impl Binder {
             &[],
         );
         let (scalar, _) = scalar_binder.bind(expr).await?;
-        // if `Expr` is virtual column, then add this virtual column into `BindContext`
+        // if `Expr` is internal column, then add this internal column into `BindContext`
         if let ScalarExpr::BoundColumnRef(ref column) = scalar {
             if let Some(ref virtual_column) = column.column.virtual_column {
                 bind_context.add_virtual_column_binding(

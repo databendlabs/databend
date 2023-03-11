@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
-use common_catalog::plan::VirtualColumn;
+use common_catalog::plan::InternalColumn;
 use common_catalog::table::Table;
 use common_expression::types::DataType;
 use common_expression::TableDataType;
@@ -110,7 +110,7 @@ impl Metadata {
                 ColumnEntry::BaseTableColumn(BaseTableColumn { table_index, .. }) => {
                     index == *table_index
                 }
-                ColumnEntry::VirtualColumn(TableVirtualColumn { table_index, .. }) => {
+                ColumnEntry::InternalColumn(TableInternalColumn { table_index, .. }) => {
                     index == *table_index
                 }
                 _ => false,
@@ -154,11 +154,11 @@ impl Metadata {
     pub fn add_virtual_table_column(
         &mut self,
         table_index: IndexType,
-        virtual_column: VirtualColumn,
+        virtual_column: InternalColumn,
     ) -> IndexType {
         let column_index = self.columns.len();
         self.columns
-            .push(ColumnEntry::VirtualColumn(TableVirtualColumn {
+            .push(ColumnEntry::InternalColumn(TableInternalColumn {
                 table_index,
                 column_index,
                 virtual_column,
@@ -345,10 +345,10 @@ pub struct DerivedColumn {
 }
 
 #[derive(Clone, Debug)]
-pub struct TableVirtualColumn {
+pub struct TableInternalColumn {
     pub table_index: IndexType,
     pub column_index: IndexType,
-    pub virtual_column: VirtualColumn,
+    pub virtual_column: InternalColumn,
 }
 
 #[derive(Clone, Debug)]
@@ -360,7 +360,7 @@ pub enum ColumnEntry {
     DerivedColumn(DerivedColumn),
 
     /// Virtual columns, such as `_row_id`, `_segment_name`, etc.
-    VirtualColumn(TableVirtualColumn),
+    InternalColumn(TableInternalColumn),
 }
 
 impl ColumnEntry {
@@ -368,7 +368,7 @@ impl ColumnEntry {
         match self {
             ColumnEntry::BaseTableColumn(base) => base.column_index,
             ColumnEntry::DerivedColumn(derived) => derived.column_index,
-            ColumnEntry::VirtualColumn(virtual_column) => virtual_column.column_index,
+            ColumnEntry::InternalColumn(virtual_column) => virtual_column.column_index,
         }
     }
 }

@@ -22,7 +22,7 @@ use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_sql::binder::VirtualColumnFactory;
+use common_sql::binder::InternalColumnFactory;
 use common_sql::plans::Join;
 use common_sql::plans::Scan;
 use common_sql::plans::Statistics;
@@ -77,7 +77,7 @@ fn test_format() {
     };
 
     GlobalInstance::init_testing(&thread_name);
-    let _ = VirtualColumnFactory::init();
+    let _ = InternalColumnFactory::init();
 
     let mut metadata = Metadata::default();
     let tab1 = metadata.add_table(

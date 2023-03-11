@@ -196,10 +196,10 @@ impl Binder {
                         &[],
                     );
                     let (bound_expr, _) = scalar_binder.bind(expr).await?;
-                    // if `Expr` is virtual column, then add this virtual column into `BindContext`
+                    // if `Expr` is internal column, then add this internal column into `BindContext`
                     if let ScalarExpr::BoundColumnRef(ref column) = bound_expr {
                         if let Some(ref virtual_column) = column.column.virtual_column {
-                            // add virtual column binding into `BindContext`
+                            // add internal column binding into `BindContext`
                             input_context.add_virtual_column_binding(
                                 virtual_column,
                                 &column.column,
