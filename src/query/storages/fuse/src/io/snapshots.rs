@@ -37,7 +37,7 @@ use tracing::info;
 use tracing::warn;
 use tracing::Instrument;
 
-use crate::io::try_join_futures;
+use crate::io::execute_futures_in_parallel;
 use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
 use crate::io::TableMetaLocationGenerator;
@@ -168,7 +168,7 @@ impl SnapshotsIO {
             })
         });
 
-        try_join_futures(
+        execute_futures_in_parallel(
             self.ctx.clone(),
             tasks,
             "fuse-req-snapshots-worker".to_owned(),

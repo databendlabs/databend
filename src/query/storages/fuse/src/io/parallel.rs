@@ -1,4 +1,4 @@
-//  Copyright 2022 Datafuse Labs.
+//  Copyright 2023 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ use tracing::Instrument;
 /// Run multiple futures parallel
 /// using a semaphore to limit the parallelism number, and a specified thread pool to run the futures.
 /// It waits for all futures to complete and returns their results.
-pub async fn try_join_futures<Fut>(
+pub async fn execute_futures_in_parallel<Fut>(
     ctx: Arc<dyn TableContext>,
     futures: impl IntoIterator<Item = Fut>,
     thread_name: String,
@@ -45,27 +45,12 @@ where
         Some(thread_name),
     )?);
 
-    // 2. spawn all the tasks to the runtime.
+    // 2. spawn all the tasks to the runtime with semaphore.
     let join_handlers = runtime.try_spawn_batch(semaphore, futures).await?;
 
     // 3. get all the result.
     future::try_join_all(join_handlers)
-        .instrument(tracing::debug_span!("try_join_futures_all"))
+        .instrument(tracing::debug_span!("execute_futures_in_parallel"))
         .await
-        .map_err(|e| ErrorCode::StorageOther(format!("try join futures failure, {}", e)))
-}
-
-/// This is a workaround to address `higher-ranked lifetime error` from rustc
-///
-/// TODO: remove me after rustc works with try_join_futures directly.
-pub async fn try_join_futures_with_vec<Fut>(
-    ctx: Arc<dyn TableContext>,
-    futures: Vec<Fut>,
-    thread_name: String,
-) -> Result<Vec<Fut::Output>>
-where
-    Fut: Future + Send + 'static,
-    Fut::Output: Send + 'static,
-{
-    try_join_futures(ctx, futures, thread_name).await
+        .map_err(|e| ErrorCode::StorageOther(format!("try join all futures failure, {}", e)))
 }

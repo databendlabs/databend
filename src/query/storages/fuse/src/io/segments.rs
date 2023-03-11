@@ -23,7 +23,7 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use tracing::Instrument;
 
-use crate::io::try_join_futures;
+use crate::io::execute_futures_in_parallel;
 use crate::io::MetaReaders;
 
 // Read segment related operations.
@@ -88,7 +88,7 @@ impl SegmentsIO {
             }
         });
 
-        try_join_futures(
+        execute_futures_in_parallel(
             self.ctx.clone(),
             tasks,
             "fuse-req-segments-worker".to_owned(),
@@ -143,7 +143,7 @@ impl SegmentsIO {
             })
         });
 
-        try_join_futures(
+        execute_futures_in_parallel(
             self.ctx.clone(),
             tasks,
             "fuse-req-segments-worker".to_owned(),

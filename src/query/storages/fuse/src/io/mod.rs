@@ -22,8 +22,7 @@ mod write;
 
 pub use files::Files;
 pub use locations::TableMetaLocationGenerator;
-pub use parallel::try_join_futures;
-pub use parallel::try_join_futures_with_vec;
+pub use parallel::execute_futures_in_parallel;
 pub use read::BlockReader;
 pub use read::BloomBlockFilterReader;
 pub use read::MergeIOReadResult;
