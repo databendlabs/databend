@@ -379,7 +379,7 @@ impl BindContext {
                 BindContext::get_internal_column_table_index(column_binding, metadata.clone());
 
             let mut metadata = metadata.write();
-            metadata.add_virtual_table_column(table_index, internal_column.to_owned());
+            metadata.add_internal_column(table_index, internal_column.to_owned());
             self.columns.push(ColumnBinding {
                 database_name,
                 table_name,
