@@ -31,7 +31,7 @@ use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use tracing::Instrument;
 
-use crate::io::try_join_futures;
+use crate::io::execute_futures_in_parallel;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::compact::CompactSourceMeta;
 use crate::operations::mutation::AbortOperation;
@@ -79,8 +79,7 @@ impl CompactAggregator {
     }
 
     async fn write_segment(dal: Operator, segment: SerializedSegment) -> Result<()> {
-        dal.object(&segment.location)
-            .write(serde_json::to_vec(&segment.segment)?)
+        dal.write(&segment.location, serde_json::to_vec(&segment.segment)?)
             .await?;
         if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
             segment_cache.put(segment.location.clone(), segment.segment.clone());
@@ -97,7 +96,7 @@ impl CompactAggregator {
             })
         });
 
-        try_join_futures(
+        execute_futures_in_parallel(
             self.ctx.clone(),
             tasks,
             "compact-write-segments-worker".to_owned(),
