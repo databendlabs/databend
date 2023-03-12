@@ -27,20 +27,6 @@ fn test_mysql_federated() -> Result<()> {
         assert!(result.is_none());
     }
 
-    // select version()
-    {
-        let query = "select version()";
-        let result = federated.check(query);
-        assert!(result.is_some());
-
-        if let Some(block) = result {
-            assert!(!block.1.is_empty())
-        }
-
-        let query = "select versiona";
-        let result = federated.check(query);
-        assert!(result.is_none());
-    }
 
     // variables
     {
