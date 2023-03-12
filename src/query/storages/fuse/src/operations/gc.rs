@@ -132,8 +132,8 @@ impl FuseTable {
                     None,
                     &ListSnapshotLiteOption::NeedSegmentsWithExclusion(segments_excluded.clone()),
                     min_snapshot_timestamp,
-                    |x| {
-                        self.data_metrics.set_status(&x);
+                    |status| {
+                        ctx.set_status_info(&status);
                     },
                 )
                 .await?;
@@ -221,7 +221,7 @@ impl FuseTable {
                     "gc: scan table statistic files:{} takes:{} sec.",
                     status_ts_scan_count, status_ts_scan_cost,
                 );
-                self.data_metrics.set_status(&status);
+                ctx.set_status_info(&status);
                 info!(status);
             }
         }
@@ -301,7 +301,7 @@ impl FuseTable {
                         status_segment_to_be_purged_count,
                         start.elapsed().as_secs()
                     );
-                    self.data_metrics.set_status(&status);
+                    ctx.set_status_info(&status);
                     info!(status);
                 }
             }
@@ -346,7 +346,7 @@ impl FuseTable {
                         status_purged_count,
                         start.elapsed().as_secs()
                     );
-                    self.data_metrics.set_status(&status);
+                    ctx.set_status_info(&status);
                     info!(status);
                 }
             }
@@ -376,7 +376,7 @@ impl FuseTable {
                         status_purged_count,
                         start.elapsed().as_secs()
                     );
-                    self.data_metrics.set_status(&status);
+                    ctx.set_status_info(&status);
                     info!(status);
                 }
             }
