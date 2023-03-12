@@ -2032,7 +2032,6 @@ dependencies = [
  "dashmap",
  "globiter",
  "itertools",
- "num",
  "num-derive",
  "num-traits",
  "once_cell",
