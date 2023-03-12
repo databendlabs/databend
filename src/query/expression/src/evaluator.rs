@@ -188,10 +188,7 @@ impl<'a> Evaluator<'a> {
                     }
                     Value::Column(col) => {
                         let len = col.len();
-                        Value::Column(Column::Tuple {
-                            fields: vec![col, Column::Null { len }],
-                            len,
-                        })
+                        Value::Column(Column::Tuple(vec![col, Column::Null { len }]))
                     }
                 },
                 Err((_, value, bitmap, err)) => {
@@ -210,10 +207,7 @@ impl<'a> Evaluator<'a> {
                         column: err_col,
                         validity: bitmap,
                     }));
-                    Value::Column(Column::Tuple {
-                        fields: vec![value_col, err_col],
-                        len: num_rows,
-                    })
+                    Value::Column(Column::Tuple(vec![value_col, err_col]))
                 }
             }),
         };
