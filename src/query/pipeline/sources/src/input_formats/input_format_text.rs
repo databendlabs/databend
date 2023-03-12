@@ -314,7 +314,7 @@ impl<T: InputFormatTextBase> InputFormat for T {
                     split_size
                 );
                 let file = Arc::new(FileInfo {
-                    path: path.clone(),
+                    path,
                     size,
                     num_splits: split_offsets.len(),
                     compress_alg,
@@ -331,7 +331,7 @@ impl<T: InputFormatTextBase> InputFormat for T {
                 }
             } else {
                 let file = Arc::new(FileInfo {
-                    path: path.clone(),
+                    path,
                     size, // dummy
                     num_splits: 1,
                     compress_alg,

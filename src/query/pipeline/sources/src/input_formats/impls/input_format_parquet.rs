@@ -77,6 +77,7 @@ impl InputFormat for InputFormatParquet {
         _settings: &Arc<Settings>,
     ) -> Result<Vec<Arc<SplitInfo>>> {
         let mut infos = vec![];
+        let mut schema = None;
         for info in file_infos {
             let size = info.size as usize;
             let path = info.path.clone();
@@ -84,8 +85,10 @@ impl InputFormat for InputFormatParquet {
             let mut reader = op.reader(&path).await?;
             let mut file_meta = read_metadata_async(&mut reader).await?;
             let row_groups = mem::take(&mut file_meta.row_groups);
-            let infer_schema = infer_schema(&file_meta)?;
-            let fields = Arc::new(infer_schema.fields);
+            if schema.is_none() {
+                schema = Some(infer_schema(&file_meta)?);
+            }
+            let fields = Arc::new(schema.clone().unwrap().fields);
             let read_file_meta = Arc::new(FileMeta { fields });
 
             let file_info = Arc::new(FileInfo {
