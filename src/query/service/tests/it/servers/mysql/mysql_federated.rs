@@ -27,7 +27,6 @@ fn test_mysql_federated() -> Result<()> {
         assert!(result.is_none());
     }
 
-
     // variables
     {
         let query = "select @@tx_isolation, @@session.tx_isolation";
