@@ -40,7 +40,7 @@ impl Operator for Limit {
     }
 
     fn transformation_candidate_rules(&self) -> roaring::RoaringBitmap {
-        (RuleID::PushDownLimitUnion as u32..RuleID::FoldCountAggregate as u32)
+        (RuleID::PushDownLimitUnion as u32..RuleID::SplitAggregate as u32)
             .collect::<RoaringBitmap>()
     }
 
