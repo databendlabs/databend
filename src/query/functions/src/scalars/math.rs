@@ -476,7 +476,7 @@ impl<T: Base> GenericLogFunction<T> {
         S: AsPrimitive<F64>,
         B: AsPrimitive<F64>,
     {
-        val.as_().log(base.as_())
+        val.as_(). log(base.as_())
     }
 }
 

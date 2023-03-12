@@ -368,8 +368,10 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
 
                 UnaryOperator::Plus => Affix::Prefix(Precedence(50)),
                 UnaryOperator::Minus => Affix::Prefix(Precedence(50)),
+                UnaryOperator::BitwiseNot=> Affix::Postfix(Precedence(50)),
                 UnaryOperator::SquareRoot => Affix::Prefix(Precedence(60)),
                 UnaryOperator::CubeRoot => Affix::Prefix(Precedence(60)),
+                UnaryOperator::Abs=> Affix::Prefix(Precedence(60)),
                 UnaryOperator::Factorial => Affix::Postfix(Precedence(60)),
             },
             ExprElement::BinaryOp { op } => match op {
@@ -1071,6 +1073,7 @@ pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
         value(UnaryOperator::Factorial, rule! { Factorial}),
         value(UnaryOperator::SquareRoot, rule! { SquareRoot}),
         value(UnaryOperator::CubeRoot, rule! { CubeRoot}),
+        value(UnaryOperator::Abs, rule! { Abs}),
     ))(i)
 }
 
@@ -1102,9 +1105,9 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
             value(BinaryOperator::NotRegexp, rule! { NOT ~ REGEXP }),
             value(BinaryOperator::RLike, rule! { RLIKE }),
             value(BinaryOperator::NotRLike, rule! { NOT ~ RLIKE }),
-            value(BinaryOperator::BitwiseOr, rule! { "|" }),
-            value(BinaryOperator::BitwiseAnd, rule! { "&" }),
-            value(BinaryOperator::BitwiseXor, rule! { "#" }),
+            value(BinaryOperator::BitwiseOr, rule! { BitWiseOr }),
+            value(BinaryOperator::BitwiseAnd, rule! { BitWiseAnd }),
+            value(BinaryOperator::BitwiseXor, rule! { BitWiseXor }),
         )),
     ))(i)
 }

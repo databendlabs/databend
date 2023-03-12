@@ -531,14 +531,16 @@ pub enum UnaryOperator {
     Factorial,
     SquareRoot,
     CubeRoot,
+    Abs,
+    BitwiseNot,
 }
 
 impl UnaryOperator {
     pub fn to_func_name(&self) -> String {
         match self {
-            // TODO(xieqijun) Not all new functions in the future are lowercase by default.
             UnaryOperator::SquareRoot => "sqrt".to_string(),
             UnaryOperator::CubeRoot => "cube".to_string(),
+            UnaryOperator::BitwiseNot => "bit_not".to_string(),
             _ => {
                 let name = format!("{:?}", self);
                 name.to_lowercase()
@@ -629,6 +631,12 @@ impl Display for UnaryOperator {
             }
             UnaryOperator::Factorial => {
                 write!(f, "!")
+            }
+            UnaryOperator::Abs => {
+                write!(f, "@")
+            }
+            UnaryOperator::BitwiseNot => {
+                write!(f, "~")
             }
         }
     }
