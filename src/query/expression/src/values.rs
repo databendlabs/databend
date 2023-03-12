@@ -1735,9 +1735,15 @@ impl ColumnBuilder {
             ColumnBuilder::String(_) => DataType::String,
             ColumnBuilder::Timestamp(_) => DataType::Timestamp,
             ColumnBuilder::Date(_) => DataType::Date,
-            ColumnBuilder::Array(_) => DataType::Array(Box::new(self.data_type())),
-            ColumnBuilder::Map(_) => DataType::Map(Box::new(self.data_type())),
-            ColumnBuilder::Nullable(c) => DataType::Nullable(Box::new(c.builder.data_type())),
+            ColumnBuilder::Array(col) => {
+                let inner = col.builder.data_type();
+                DataType::Array(Box::new(inner))
+            }
+            ColumnBuilder::Map(col) => {
+                let inner = col.builder.data_type();
+                DataType::Map(Box::new(inner))
+            }
+            ColumnBuilder::Nullable(col) => DataType::Nullable(Box::new(col.builder.data_type())),
             ColumnBuilder::Tuple(fields) => {
                 DataType::Tuple(fields.iter().map(|f| f.data_type()).collect::<Vec<_>>())
             }

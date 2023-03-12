@@ -45,7 +45,7 @@ use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::Expr;
-use common_expression::Scalar as DataScalar;
+use common_expression::Scalar;
 use common_expression::Value;
 use common_formats::FastFieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
@@ -153,7 +153,7 @@ impl InsertInterpreter {
         }
     }
 
-    async fn prepared_values(&self, values_str: &str) -> Result<(DataSchemaRef, Vec<DataScalar>)> {
+    async fn prepared_values(&self, values_str: &str) -> Result<(DataSchemaRef, Vec<Scalar>)> {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
         let tokens = tokenize_sql(values_str)?;
@@ -588,17 +588,16 @@ impl ValueSource {
             .map(|f| ColumnBuilder::with_capacity(f.data_type(), estimated_rows))
             .collect::<Vec<_>>();
 
-        let mut rows = 0;
         let format = self.ctx.get_format_settings()?;
         let field_decoder = FastFieldDecoderValues::create_for_insert(format);
 
-        loop {
+        for row in 0.. {
             let _ = reader.ignore_white_spaces();
             if reader.eof() {
                 break;
             }
             // Not the first row
-            if rows != 0 {
+            if row != 0 {
                 reader.must_ignore_byte(b',')?;
             }
 
@@ -611,11 +610,6 @@ impl ValueSource {
                 self.metadata.clone(),
             )
             .await?;
-            rows += 1;
-        }
-
-        if rows == 0 {
-            return Ok(DataBlock::empty_with_schema(self.schema.clone()));
         }
 
         let columns = columns
@@ -702,8 +696,8 @@ impl ValueSource {
                 )
                 .await?;
 
-                for (append_idx, col) in columns.iter_mut().enumerate().take(col_size) {
-                    col.push(values[append_idx].as_ref());
+                for (col, scalar) in columns.iter_mut().zip(values) {
+                    col.push(scalar.as_ref());
                 }
                 reader.set_position(end_pos_of_row);
                 return Ok(());
@@ -798,13 +792,13 @@ async fn fill_default_value(
         if field.data_type().is_nullable() {
             let expr = Expr::Constant {
                 span: None,
-                scalar: DataScalar::Null,
+                scalar: Scalar::Null,
                 data_type: field.data_type().clone(),
             };
             map_exprs.push(expr);
         } else {
             let data_type = field.data_type().clone();
-            let default_value = DataScalar::default_value(&data_type);
+            let default_value = Scalar::default_value(&data_type);
             let expr = Expr::Constant {
                 span: None,
                 scalar: default_value,
@@ -823,7 +817,7 @@ async fn exprs_to_scalar(
     name_resolution_ctx: &NameResolutionContext,
     bind_context: &BindContext,
     metadata: MetadataRef,
-) -> Result<Vec<DataScalar>> {
+) -> Result<Vec<Scalar>> {
     let schema_fields_len = schema.fields().len();
     if exprs.len() != schema_fields_len {
         return Err(ErrorCode::TableSchemaMismatch(format!(
@@ -870,7 +864,7 @@ async fn exprs_to_scalar(
     let one_row_chunk = DataBlock::new(
         vec![BlockEntry {
             data_type: DataType::Number(NumberDataType::UInt8),
-            value: Value::Scalar(DataScalar::Number(NumberScalar::UInt8(1))),
+            value: Value::Scalar(Scalar::Number(NumberScalar::UInt8(1))),
         }],
         1,
     );
@@ -880,13 +874,13 @@ async fn exprs_to_scalar(
         ctx: func_ctx,
     };
     let res = expression_transform.transform(one_row_chunk)?;
-    let data_scalars: Vec<DataScalar> = res
+    let scalars: Vec<Scalar> = res
         .columns()
         .iter()
         .skip(1)
         .map(|col| unsafe { col.value.as_ref().index_unchecked(0).to_owned() })
         .collect();
-    Ok(data_scalars)
+    Ok(scalars)
 }
 
 // TODO:(everpcpc) tmp copy from src/query/sql/src/planner/binder/copy.rs

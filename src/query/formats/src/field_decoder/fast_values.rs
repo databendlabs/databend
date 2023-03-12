@@ -168,7 +168,6 @@ impl FastFieldDecoderValues {
             column.push_null();
         } else if reader.ignore_bytes(b"NULL") || reader.ignore_bytes(b"null") {
             column.push_null();
-            return Ok(());
         } else {
             self.read_field(&mut column.builder, reader, positions)?;
             column.validity.push(true);

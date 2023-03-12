@@ -355,6 +355,7 @@ impl NullableColumnBuilder<AnyType> {
         if self.validity.pop()? {
             Some(Some(self.builder.pop().unwrap()))
         } else {
+            self.builder.pop().unwrap();
             Some(None)
         }
     }
