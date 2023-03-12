@@ -33,27 +33,32 @@ use crate::MetadataRef;
 
 pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
     vec![
+        // Filter
         RuleID::NormalizeDisjunctiveFilter,
         RuleID::NormalizeScalarFilter,
         RuleID::EliminateFilter,
-        RuleID::EliminateEvalScalar,
         RuleID::MergeFilter,
-        RuleID::MergeEvalScalar,
         RuleID::PushDownFilterUnion,
         RuleID::PushDownFilterAggregate,
+        RuleID::PushDownFilterSort,
+        RuleID::PushDownFilterEvalScalar,
+        RuleID::PushDownFilterJoin,
+        RuleID::PushDownFilterScan,
+        // EvalScalar
+        RuleID::EliminateEvalScalar,
+        RuleID::MergeEvalScalar,
+        // Limit
         RuleID::PushDownLimitUnion,
         RuleID::RulePushDownLimitExpression,
         RuleID::PushDownLimitSort,
         RuleID::PushDownLimitAggregate,
         RuleID::PushDownLimitOuterJoin,
         RuleID::PushDownLimitScan,
-        RuleID::PushDownFilterSort,
-        RuleID::PushDownFilterEvalScalar,
-        RuleID::PushDownFilterJoin,
+        // Agg
         RuleID::FoldCountAggregate,
         RuleID::SplitAggregate,
-        RuleID::PushDownFilterScan,
         RuleID::PushDownPrewhere, /* PushDownPrwhere should be after all rules except PushDownFilterScan */
+        // Sort
         RuleID::PushDownSortScan, // PushDownFilterScan should be after PushDownPrewhere
     ]
 });

@@ -39,6 +39,7 @@ pub trait Rule {
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum RuleID {
     // Rewrite rules
+    // Filter
     NormalizeScalarFilter,
     NormalizeDisjunctiveFilter,
     PushDownFilterAggregate,
@@ -47,20 +48,29 @@ pub enum RuleID {
     PushDownFilterJoin,
     PushDownFilterScan,
     PushDownFilterSort,
+    EliminateFilter,
+    MergeFilter,
+
+    // EvalScalar
+    EliminateEvalScalar,
+    MergeEvalScalar,
+
+    // Limit
     PushDownLimitUnion,
     PushDownLimitOuterJoin,
     RulePushDownLimitExpression,
     PushDownLimitSort,
     PushDownLimitAggregate,
     PushDownLimitScan,
-    PushDownSortScan,
-    EliminateEvalScalar,
-    EliminateFilter,
-    MergeEvalScalar,
-    MergeFilter,
+
+    // Agg
     SplitAggregate,
     FoldCountAggregate,
+
     PushDownPrewhere,
+
+    // Sort
+    PushDownSortScan,
 
     // Exploration rules
     CommuteJoin,
