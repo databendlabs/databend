@@ -130,7 +130,8 @@ impl HeuristicOptimizer {
     fn get_rule(&self, rule_id: u32) -> Result<RulePtr> {
         unsafe {
             RULE_FACTORY.create_rule(
-                DEFAULT_REWRITE_RULES[rule_id as usize],
+                // DEFAULT_REWRITE_RULES[rule_id as usize],
+                *std::mem::transmute::<u64, &RuleID>(rule_id as u64),
                 Some(self.metadata.clone()),
             )
         }

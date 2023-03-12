@@ -59,10 +59,8 @@ impl Operator for EvalScalar {
     }
 
     fn transformation_candidate_rules(&self) -> roaring::RoaringBitmap {
-        let mut ret = RoaringBitmap::new();
-        ret.push(RuleID::EliminateEvalScalar as u32);
-        ret.push(RuleID::MergeEvalScalar as u32);
-        ret
+        (RuleID::EliminateEvalScalar as u32..RuleID::PushDownLimitUnion as u32)
+            .collect::<RoaringBitmap>()
     }
 
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {

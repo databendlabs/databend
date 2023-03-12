@@ -55,12 +55,8 @@ impl Operator for Filter {
     }
 
     fn transformation_candidate_rules(&self) -> roaring::RoaringBitmap {
-        let mut ret = (RuleID::NormalizeScalarFilter as u32
-            ..(RuleID::PushDownFilterSort as u32) + 1)
-            .collect::<RoaringBitmap>();
-        ret.push(RuleID::EliminateFilter as u32);
-        ret.push(RuleID::MergeFilter as u32);
-        ret
+        (RuleID::NormalizeScalarFilter as u32..RuleID::EliminateEvalScalar as u32)
+            .collect::<RoaringBitmap>()
     }
 
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
