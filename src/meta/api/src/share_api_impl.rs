@@ -43,11 +43,11 @@ use crate::db_has_to_exist;
 use crate::fetch_id;
 use crate::get_db_or_err;
 use crate::get_object_shared_by_share_ids;
+use crate::get_pb_value;
 use crate::get_share_account_meta_or_err;
 use crate::get_share_id_to_name_or_err;
 use crate::get_share_meta_by_id_or_err;
 use crate::get_share_or_err;
-use crate::get_struct_value;
 use crate::get_u64_value;
 use crate::id_generator::IdGenerator;
 use crate::is_db_need_to_be_remove;
@@ -957,7 +957,7 @@ async fn get_share_database_name(
             ShareGrantObject::Database(db_id) => {
                 let id_to_name = DatabaseIdToName { db_id };
                 let (name_ident_seq, name_ident): (_, Option<DatabaseNameIdent>) =
-                    get_struct_value(kv_api, &id_to_name).await?;
+                    get_pb_value(kv_api, &id_to_name).await?;
                 if name_ident_seq == 0 || name_ident.is_none() {
                     return Err(KVAppError::AppError(AppError::UnknownShare(
                         UnknownShare::new(&share_name.share_name, ""),
@@ -1128,7 +1128,7 @@ async fn get_object_name_from_id(
         ShareGrantObject::Database(db_id) => {
             let db_id_key = DatabaseIdToName { db_id };
             let (_db_name_seq, db_name): (_, Option<DatabaseNameIdent>) =
-                get_struct_value(kv_api, &db_id_key).await?;
+                get_pb_value(kv_api, &db_id_key).await?;
             match db_name {
                 Some(db_name) => Ok(Some(ShareGrantObjectName::Database(db_name.db_name))),
                 None => Ok(None),
@@ -1137,7 +1137,7 @@ async fn get_object_name_from_id(
         ShareGrantObject::Table(table_id) => {
             let table_id_key = TableIdToName { table_id };
             let (_db_id_table_name_seq, table_name): (_, Option<DBIdTableName>) =
-                get_struct_value(kv_api, &table_id_key).await?;
+                get_pb_value(kv_api, &table_id_key).await?;
             match table_name {
                 Some(table_name) => Ok(Some(ShareGrantObjectName::Table(
                     database_name.as_ref().unwrap().to_string(),
@@ -1161,7 +1161,7 @@ async fn create_db_name_to_id_key_if_need(
         if let ShareGrantObjectSeqAndId::Database(_, db_id, _) = seq_and_id {
             let db_id_key = DatabaseIdToName { db_id: *db_id };
             let (db_name_seq, _): (_, Option<DatabaseNameIdent>) =
-                get_struct_value(kv_api, &db_id_key).await?;
+                get_pb_value(kv_api, &db_id_key).await?;
             if db_name_seq == 0 {
                 condition.push(txn_cond_seq(&db_id_key, Eq, 0));
 
@@ -1263,7 +1263,7 @@ async fn get_share_object_seq_and_id(
 
             let tbid = TableId { table_id };
             let (table_meta_seq, table_meta): (_, Option<TableMeta>) =
-                get_struct_value(kv_api, &tbid).await?;
+                get_pb_value(kv_api, &tbid).await?;
 
             if table_meta_seq == 0 {
                 return Err(KVAppError::AppError(AppError::UnknownTable(
@@ -1450,7 +1450,7 @@ async fn convert_share_meta_to_spec(
             let id_key = DatabaseIdToName { db_id };
 
             let (_db_meta_seq, db_name): (_, Option<DatabaseNameIdent>) =
-                get_struct_value(kv_api, &id_key).await?;
+                get_pb_value(kv_api, &id_key).await?;
             if let Some(db_name) = db_name {
                 Some(ShareDatabaseSpec {
                     name: db_name.db_name,
@@ -1471,7 +1471,7 @@ async fn convert_share_meta_to_spec(
         if let ShareGrantObject::Table(table_id) = entry.object {
             let table_id_to_name_key = TableIdToName { table_id };
             let (_table_id_to_name_seq, table_name): (_, Option<DBIdTableName>) =
-                get_struct_value(kv_api, &table_id_to_name_key).await?;
+                get_pb_value(kv_api, &table_id_to_name_key).await?;
             if let Some(table_name) = table_name {
                 tables.push(ShareTableSpec::new(
                     &table_name.table_name,
