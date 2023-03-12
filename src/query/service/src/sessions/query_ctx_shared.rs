@@ -117,7 +117,7 @@ impl QueryContextShared {
             on_error_map: Arc::new(RwLock::new(None)),
             partitions_shas: Arc::new(RwLock::new(vec![])),
             cacheable: Arc::new(AtomicBool::new(true)),
-            status: Arc::new(Default::default()),
+            status: Arc::new(RwLock::new("null".to_string())),
         }))
     }
 
