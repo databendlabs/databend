@@ -164,9 +164,7 @@ impl FastFieldDecoderValues {
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
-        if reader.eof() {
-            column.push_null();
-        } else if reader.ignore_bytes(b"NULL") || reader.ignore_bytes(b"null") {
+        if reader.eof() || reader.ignore_bytes(b"NULL") || reader.ignore_bytes(b"null") {
             column.push_null();
         } else {
             self.read_field(&mut column.builder, reader, positions)?;
