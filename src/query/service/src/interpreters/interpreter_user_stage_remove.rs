@@ -15,13 +15,11 @@
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_sql::plans::RemoveStagePlan;
 use common_storages_fuse::io::Files;
 use common_storages_stage::list_file;
 use common_storages_stage::StageTable;
-use regex::Regex;
 use tracing::error;
 
 use crate::interpreters::Interpreter;
@@ -50,21 +48,7 @@ impl Interpreter for RemoveUserStageInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.plan.clone();
         let op = StageTable::get_op(&self.plan.stage)?;
-        let mut stage_files = list_file(&op, &plan.path).await?;
-
-        let files = if plan.pattern.is_empty() {
-            stage_files
-        } else {
-            let regex = Regex::new(&plan.pattern).map_err(|e| {
-                ErrorCode::SyntaxException(format!(
-                    "Pattern format invalid, got:{}, error:{:?}",
-                    &plan.pattern, e
-                ))
-            })?;
-
-            stage_files.retain(|v| regex.is_match(&v.path));
-            stage_files
-        };
+        let files = list_file(&op, &plan.path, &plan.pattern).await?;
 
         let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
         let file_op = Files::create(table_ctx, op);

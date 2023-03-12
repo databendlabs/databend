@@ -16,12 +16,14 @@ use chrono::TimeZone;
 use chrono::Utc;
 use common_catalog::plan::StageFileInfo;
 use common_catalog::plan::StageFileStatus;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::TryStreamExt;
 use opendal::Entry;
 use opendal::Metadata;
 use opendal::Metakey;
 use opendal::Operator;
+use regex::Regex;
 use tracing::warn;
 
 /// List files from DAL in recursive way.
@@ -31,7 +33,7 @@ use tracing::warn;
 /// - If not exist, we will try to list `path/` too.
 ///
 /// TODO(@xuanwo): return a stream instead.
-pub async fn list_file(op: &Operator, path: &str) -> Result<Vec<StageFileInfo>> {
+pub async fn list_file(op: &Operator, path: &str, pattern: &str) -> Result<Vec<StageFileInfo>> {
     let mut files = Vec::new();
 
     // - If the path itself is a dir, return directly.
@@ -63,6 +65,19 @@ pub async fn list_file(op: &Operator, path: &str) -> Result<Vec<StageFileInfo>> 
             Err(e) => warn!("ignore listing {path}/, because: {:?}", e),
         };
     }
+
+    let files = if pattern.is_empty() {
+        files
+    } else {
+        let regex = Regex::new(pattern).map_err(|e| {
+            ErrorCode::SyntaxException(format!(
+                "Pattern format invalid, got:{}, error:{:?}",
+                pattern, e
+            ))
+        })?;
+        files.retain(|v| regex.is_match(&v.path));
+        files
+    };
 
     Ok(files)
 }
