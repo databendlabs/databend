@@ -12,59 +12,62 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use num_traits::FromPrimitive;
-use roaring::RoaringBitmap;
+use std::collections::HashMap;
+use std::collections::HashSet;
 
+use common_exception::ErrorCode;
+use common_exception::Result;
+
+use crate::optimizer::rule::factory::RuleFactory;
 use crate::optimizer::rule::RuleID;
+use crate::optimizer::rule::RulePtr;
 
 /// Set of `Rule`
-#[derive(Debug, Clone, PartialEq, Default)]
 pub struct RuleSet {
-    rules: RoaringBitmap,
+    rules: HashMap<RuleID, RulePtr>,
 }
 
 impl RuleSet {
     pub fn create() -> Self {
         RuleSet {
-            rules: RoaringBitmap::new(),
+            rules: HashMap::new(),
         }
     }
 
-    pub fn create_with_ids(ids: Vec<RuleID>) -> Self {
+    pub fn create_with_ids(ids: Vec<RuleID>) -> Result<Self> {
+        let factory = RuleFactory::create();
         let mut rule_set = Self::create();
         for id in ids {
-            rule_set.rules.insert(id as u32);
+            if rule_set.contains(&id) {
+                return Err(ErrorCode::Internal(format!("Duplicated Rule: {id}",)));
+            }
+            rule_set.insert(factory.create_rule(id, None)?);
         }
-        rule_set
+
+        Ok(rule_set)
     }
 
-    pub fn insert(&mut self, id: RuleID) {
-        self.rules.insert(id as u32);
+    pub fn insert(&mut self, rule: RulePtr) {
+        self.rules.insert(rule.id(), rule);
     }
 
     pub fn contains(&self, id: &RuleID) -> bool {
-        self.rules.contains(*id as u32)
+        self.rules.contains_key(id)
     }
 
-    pub fn remove(&mut self, id: &RuleID) {
-        self.rules.remove(*id as u32);
+    pub fn iter(&self) -> impl Iterator<Item = &RulePtr> {
+        self.rules.values()
     }
 
-    pub fn intersect(&self, other: &RuleSet) -> RuleSet {
-        let mut rule_set = Self::create();
-        rule_set.rules = self.rules.clone() & other.rules.clone();
-        rule_set
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = RuleID> + '_ {
-        self.rules.iter().map(|v| RuleID::from_u32(v).unwrap())
+    pub fn get(&self, id: &RuleID) -> Option<&RulePtr> {
+        self.rules.get(id)
     }
 }
 
 /// A bitmap to store information about applied rules
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct AppliedRules {
-    rules: RuleSet,
+    rules: HashSet<RuleID>,
 }
 
 impl AppliedRules {

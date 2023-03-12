@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use common_exception::Result;
+use once_cell::sync::Lazy;
+use roaring::RoaringBitmap;
 
 use super::rewrite::RuleEliminateEvalScalar;
 use super::rewrite::RuleFoldCountAggregate;
@@ -47,16 +49,36 @@ use crate::optimizer::rule::RuleID;
 use crate::optimizer::rule::RulePtr;
 use crate::MetadataRef;
 
-pub struct RuleFactory;
+// read only, so thread safe
+pub static mut RULE_FACTORY: Lazy<RuleFactory> = Lazy::new(RuleFactory::create);
+
+pub struct RuleFactory {
+    pub transformation_rules: roaring::RoaringBitmap,
+    pub exploration_rules: roaring::RoaringBitmap,
+}
 
 impl RuleFactory {
-    pub fn create_rule(id: RuleID, metadata: MetadataRef) -> Result<RulePtr> {
+    pub fn create() -> Self {
+        RuleFactory {
+            transformation_rules: (RuleID::NormalizeScalarFilter as u32
+                ..RuleID::CommuteJoin as u32)
+                .collect::<RoaringBitmap>(),
+            exploration_rules: (RuleID::CommuteJoin as u32..(RuleID::RightExchangeJoin as u32) + 1)
+                .collect::<RoaringBitmap>(),
+        }
+    }
+
+    pub fn create_rule(&self, id: RuleID, metadata: Option<MetadataRef>) -> Result<RulePtr> {
         match id {
             RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new())),
             RuleID::PushDownFilterUnion => Ok(Box::new(RulePushDownFilterUnion::new())),
             RuleID::PushDownFilterEvalScalar => Ok(Box::new(RulePushDownFilterEvalScalar::new())),
-            RuleID::PushDownFilterJoin => Ok(Box::new(RulePushDownFilterJoin::new(metadata))),
-            RuleID::PushDownFilterScan => Ok(Box::new(RulePushDownFilterScan::new(metadata))),
+            RuleID::PushDownFilterJoin => {
+                Ok(Box::new(RulePushDownFilterJoin::new(metadata.unwrap())))
+            }
+            RuleID::PushDownFilterScan => {
+                Ok(Box::new(RulePushDownFilterScan::new(metadata.unwrap())))
+            }
             RuleID::PushDownFilterSort => Ok(Box::new(RulePushDownFilterSort::new())),
             RuleID::PushDownLimitUnion => Ok(Box::new(RulePushDownLimitUnion::new())),
             RuleID::PushDownLimitScan => Ok(Box::new(RulePushDownLimitScan::new())),
@@ -82,7 +104,7 @@ impl RuleFactory {
             RuleID::LeftExchangeJoin => Ok(Box::new(RuleLeftExchangeJoin::new())),
             RuleID::RightExchangeJoin => Ok(Box::new(RuleRightExchangeJoin::new())),
             RuleID::ExchangeJoin => Ok(Box::new(RuleExchangeJoin::new())),
-            RuleID::PushDownPrewhere => Ok(Box::new(RulePushDownPrewhere::new(metadata))),
+            RuleID::PushDownPrewhere => Ok(Box::new(RulePushDownPrewhere::new(metadata.unwrap()))),
         }
     }
 }
