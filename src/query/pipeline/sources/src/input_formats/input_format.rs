@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::plan::StageFileInfo;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
 use common_meta_app::principal::StageInfo;
@@ -28,7 +29,7 @@ use crate::input_formats::SplitInfo;
 pub trait InputFormat: Send + Sync {
     async fn get_splits(
         &self,
-        files: &[String],
+        file_infos: Vec<StageFileInfo>,
         stage_info: &StageInfo,
         op: &Operator,
         settings: &Arc<Settings>,

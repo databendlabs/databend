@@ -19,6 +19,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use common_catalog::plan::StageFileInfo;
 use common_compress::DecompressDecoder;
 use common_compress::DecompressState;
 use common_exception::ErrorCode;
@@ -287,17 +288,19 @@ impl<T: InputFormatTextBase> InputFormatPipe for InputFormatTextPipe<T> {
 impl<T: InputFormatTextBase> InputFormat for T {
     async fn get_splits(
         &self,
-        files: &[String],
+        file_infos: Vec<StageFileInfo>,
         stage_info: &StageInfo,
-        op: &Operator,
+        _op: &Operator,
         _settings: &Arc<Settings>,
     ) -> Result<Vec<Arc<SplitInfo>>> {
         let mut infos = vec![];
-        for path in files {
-            let size = op.stat(path).await?.content_length() as usize;
+        for info in file_infos {
+            let size = info.size as usize;
+            let path = info.path.clone();
+
             let compress_alg = InputContext::get_compression_alg_copy(
                 stage_info.file_format_options.compression,
-                path,
+                &path,
             )?;
             let split_size = stage_info.copy_options.split_size;
             if compress_alg.is_none() && T::is_splittable() && split_size > 0 {
