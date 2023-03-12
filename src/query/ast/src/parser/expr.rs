@@ -369,10 +369,10 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
 
                 UnaryOperator::Plus => Affix::Prefix(Precedence(50)),
                 UnaryOperator::Minus => Affix::Prefix(Precedence(50)),
-                UnaryOperator::BitwiseNot=> Affix::Postfix(Precedence(50)),
+                UnaryOperator::BitwiseNot => Affix::Postfix(Precedence(50)),
                 UnaryOperator::SquareRoot => Affix::Prefix(Precedence(60)),
                 UnaryOperator::CubeRoot => Affix::Prefix(Precedence(60)),
-                UnaryOperator::Abs=> Affix::Prefix(Precedence(60)),
+                UnaryOperator::Abs => Affix::Prefix(Precedence(60)),
                 UnaryOperator::Factorial => Affix::Postfix(Precedence(60)),
             },
             ExprElement::BinaryOp { op } => match op {
@@ -397,8 +397,12 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 BinaryOperator::BitwiseAnd => Affix::Infix(Precedence(22), Associativity::Left),
                 BinaryOperator::BitwiseXor => Affix::Infix(Precedence(22), Associativity::Left),
 
-                BinaryOperator::BitwiseShiftLeft => Affix::Infix(Precedence(23), Associativity::Left),
-                BinaryOperator::BitwiseShiftRight=> Affix::Infix(Precedence(23), Associativity::Left),
+                BinaryOperator::BitwiseShiftLeft => {
+                    Affix::Infix(Precedence(23), Associativity::Left)
+                }
+                BinaryOperator::BitwiseShiftRight => {
+                    Affix::Infix(Precedence(23), Associativity::Left)
+                }
 
                 BinaryOperator::Xor => Affix::Infix(Precedence(24), Associativity::Left),
 

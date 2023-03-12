@@ -22,12 +22,9 @@ use common_expression::types::number::F64;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
-use common_expression::types::UInt16Type;
-use common_expression::types::UInt64Type;
 use common_expression::types::ALL_FLOAT_TYPES;
 use common_expression::types::ALL_INTEGER_TYPES;
 use common_expression::types::ALL_NUMERICS_TYPES;
-use common_expression::types::ALL_UNSIGNED_INTEGER_TYPES;
 use common_expression::with_number_mapped_type;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
@@ -268,13 +265,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         |lhs, rhs, _| OrderedFloat(lhs.0.pow(rhs.0)),
     );
 
-    registry.register_2_arg::<NumberType<NUm>, NumberType<F64>, NumberType<F64>, _, _>(
-        "pow",
-        FunctionProperty::default(),
-        |_, _| FunctionDomain::Full,
-        |lhs, rhs, _| OrderedFloat(lhs.0.pow(rhs.0)),
-    );
-
     for ty in ALL_NUMERICS_TYPES {
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
@@ -483,7 +473,7 @@ impl<T: Base> GenericLogFunction<T> {
         S: AsPrimitive<F64>,
         B: AsPrimitive<F64>,
     {
-        val.as_(). log(base.as_())
+        val.as_().log(base.as_())
     }
 }
 

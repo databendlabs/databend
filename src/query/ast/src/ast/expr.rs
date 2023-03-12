@@ -761,10 +761,10 @@ impl Display for BinaryOperator {
             BinaryOperator::BitwiseXor => {
                 write!(f, "#")
             }
-            BinaryOperator::BitwiseShiftLeft=> {
+            BinaryOperator::BitwiseShiftLeft => {
                 write!(f, "<<")
             }
-            BinaryOperator::BitwiseShiftRight=> {
+            BinaryOperator::BitwiseShiftRight => {
                 write!(f, ">>")
             }
         }
