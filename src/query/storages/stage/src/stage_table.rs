@@ -210,6 +210,7 @@ impl Table for StageTable {
             ctx.get_scan_progress(),
             compact_threshold,
         )?);
+
         input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;
         ctx.set_on_error_map(input_ctx.get_maximum_error_per_file());
         Ok(())

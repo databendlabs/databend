@@ -49,7 +49,7 @@ use crate::sessions::TableContext;
 use crate::sql::plans::CopyPlan;
 use crate::sql::plans::Plan;
 
-const MAX_QUERY_COPIED_FILES_NUM: usize = 50;
+const MAX_QUERY_COPIED_FILES_NUM: usize = 1000;
 
 pub struct CopyInterpreter {
     ctx: Arc<QueryContext>,
@@ -217,7 +217,7 @@ impl CopyInterpreter {
         }
 
         // Colored.
-        let mut results = vec![];
+        let mut results = Vec::with_capacity(files.len());
         for mut file in files {
             if let Some(copied_file) = copied_files.get(&file.path) {
                 match &copied_file.etag {
@@ -280,10 +280,23 @@ impl CopyInterpreter {
         let start = Instant::now();
         let ctx = self.ctx.clone();
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
+
+        // Status.
+        ctx.set_status_info("begin to list files");
+
         let mut stage_table_info = stage_table_info.clone();
         let mut all_source_file_infos = StageTable::list_files(&stage_table_info).await?;
 
+        // Status.
+        ctx.set_status_info(&format!(
+            "end to list files: {}",
+            all_source_file_infos.len()
+        ));
+
         if !force {
+            // Status.
+            ctx.set_status_info("begin to color copied files");
+
             all_source_file_infos = CopyInterpreter::color_copied_files(
                 &table_ctx,
                 catalog_name,
@@ -293,7 +306,11 @@ impl CopyInterpreter {
             )
             .await?;
 
-            // Need copied file info.
+            // Status.
+            ctx.set_status_info(&format!(
+                "end to color copied files: {}",
+                all_source_file_infos.len()
+            ));
         }
 
         let mut need_copied_file_infos = vec![];
@@ -315,14 +332,19 @@ impl CopyInterpreter {
             return Ok(build_res);
         }
 
-        stage_table_info.files_to_copy = Some(need_copied_file_infos.clone());
+        // Status.
+        ctx.set_status_info("begin to read stage table read plan");
 
+        stage_table_info.files_to_copy = Some(need_copied_file_infos.clone());
         let stage_table = StageTable::try_create(stage_table_info.clone())?;
         let read_source_plan = {
             stage_table
                 .read_plan_with_catalog(ctx.clone(), catalog_name.to_string(), None)
                 .await?
         };
+
+        // Status.
+        ctx.set_status_info("begin to read stage table data");
 
         let to_table = ctx
             .get_table(catalog_name, database_name, table_name)
@@ -429,17 +451,24 @@ impl CopyInterpreter {
                             &all_source_files,
                         )
                         .await;
-                        info!(
-                            "copy: try to purge files:{}, elapsed:{}",
+
+                        let status = format!(
+                            "try to purge files:{}, elapsed:{}",
                             all_source_files.len(),
                             purge_start.elapsed().as_secs()
                         );
+                        info!(status);
+
+                        // Status.
+                        ctx.set_status_info(&status);
                     }
 
-                    info!(
-                        "copy: all copy finished, elapsed:{}",
-                        start.elapsed().as_secs()
-                    );
+                    let status =
+                        format!("all copy finished, elapsed:{}", start.elapsed().as_secs());
+                    info!(status);
+
+                    // Status.
+                    ctx.set_status_info(&status);
 
                     Ok(())
                 });
