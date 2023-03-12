@@ -34,6 +34,7 @@ use common_arrow::parquet::metadata::ColumnChunkMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::read_metadata;
 use common_arrow::read_columns_async;
+use common_catalog::plan::StageFileInfo;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -70,23 +71,28 @@ fn col_offset(meta: &ColumnChunkMetaData) -> i64 {
 impl InputFormat for InputFormatParquet {
     async fn get_splits(
         &self,
-        files: &[String],
+        file_infos: Vec<StageFileInfo>,
         _stage_info: &StageInfo,
         op: &Operator,
         _settings: &Arc<Settings>,
     ) -> Result<Vec<Arc<SplitInfo>>> {
         let mut infos = vec![];
-        for path in files {
-            let size = op.stat(path).await?.content_length() as usize;
-            let mut reader = op.reader(path).await?;
+        let mut schema = None;
+        for info in file_infos {
+            let size = info.size as usize;
+            let path = info.path.clone();
+
+            let mut reader = op.reader(&path).await?;
             let mut file_meta = read_metadata_async(&mut reader).await?;
             let row_groups = mem::take(&mut file_meta.row_groups);
-            let infer_schema = infer_schema(&file_meta)?;
-            let fields = Arc::new(infer_schema.fields);
+            if schema.is_none() {
+                schema = Some(infer_schema(&file_meta)?);
+            }
+            let fields = Arc::new(schema.clone().unwrap().fields);
             let read_file_meta = Arc::new(FileMeta { fields });
 
             let file_info = Arc::new(FileInfo {
-                path: path.clone(),
+                path,
                 size,
                 num_splits: row_groups.len(),
                 compress_alg: None,
