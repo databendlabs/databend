@@ -2,7 +2,7 @@
 title: Sentry
 ---
 
-[Sentry](sentry.io) is a developer-first error tracking and performance monitoring platform that helps developers see what actually matters, solve quicker, and learn continuously about their applications.
+[Sentry](https://sentry.io/welcome/) is a developer-first error tracking and performance monitoring platform that helps developers see what actually matters, solve quicker, and learn continuously about their applications.
 
 Databend provides integration with both Cloud and self-hosted Sentry solutions. The following tutorial walks you through the integration process.
 
