@@ -268,6 +268,13 @@ pub fn register(registry: &mut FunctionRegistry) {
         |lhs, rhs, _| OrderedFloat(lhs.0.pow(rhs.0)),
     );
 
+    registry.register_2_arg::<NumberType<NUm>, NumberType<F64>, NumberType<F64>, _, _>(
+        "pow",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        |lhs, rhs, _| OrderedFloat(lhs.0.pow(rhs.0)),
+    );
+
     for ty in ALL_NUMERICS_TYPES {
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {

@@ -522,6 +522,8 @@ pub enum BinaryOperator {
     BitwiseOr,
     BitwiseAnd,
     BitwiseXor,
+    BitwiseShiftLeft,
+    BitwiseShiftRight,
 }
 
 impl BinaryOperator {
@@ -548,6 +550,8 @@ impl BinaryOperator {
             BinaryOperator::BitwiseOr => "bit_or".to_string(),
             BinaryOperator::BitwiseAnd => "bit_and".to_string(),
             BinaryOperator::BitwiseXor => "bit_xor".to_string(),
+            BinaryOperator::BitwiseShiftLeft => "bit_shift_left".to_string(),
+            BinaryOperator::BitwiseShiftRight => "bit_shift_right".to_string(),
             BinaryOperator::Caret => "pow".to_string(),
             _ => {
                 let name = format!("{:?}", self);
@@ -756,6 +760,12 @@ impl Display for BinaryOperator {
             }
             BinaryOperator::BitwiseXor => {
                 write!(f, "#")
+            }
+            BinaryOperator::BitwiseShiftLeft=> {
+                write!(f, "<<")
+            }
+            BinaryOperator::BitwiseShiftRight=> {
+                write!(f, ">>")
             }
         }
     }
