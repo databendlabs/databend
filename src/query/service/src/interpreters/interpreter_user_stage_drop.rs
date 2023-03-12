@@ -66,7 +66,7 @@ impl Interpreter for DropUserStageInterpreter {
         if let Ok(stage) = stage {
             if !matches!(&stage.stage_type, StageType::External) {
                 let op = StageTable::get_op(&stage)?;
-                op.batch().remove_all("/").await?;
+                op.remove_all("/").await?;
                 info!(
                     "drop stage {:?} with all objects removed in stage",
                     stage.stage_name

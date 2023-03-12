@@ -81,8 +81,7 @@ pub fn serialize_block(
 
 /// Take ownership here to avoid extra copy.
 pub async fn write_data(data: Vec<u8>, data_accessor: &Operator, location: &str) -> Result<()> {
-    let o = data_accessor.object(location);
-    o.write(data).await?;
+    data_accessor.write(location, data).await?;
 
     Ok(())
 }

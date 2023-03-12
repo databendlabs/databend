@@ -167,11 +167,11 @@ async fn test_last_snapshot_hint() -> Result<()> {
     let location = fuse_table
         .meta_location_generator()
         .gen_last_snapshot_hint_location();
-    let storage_meta_data = operator.metadata();
+    let storage_meta_data = operator.info();
     let storage_prefix = storage_meta_data.root();
 
     let expected = format!("{}{}", storage_prefix, last_snapshot_location);
-    let content = operator.object(location.as_str()).read().await?;
+    let content = operator.read(location.as_str()).await?;
 
     assert_eq!(content.as_slice(), expected.as_bytes());
 
@@ -225,7 +225,7 @@ async fn test_abort_on_error() -> Result<()> {
 
             let operator = fuse_table.get_operator();
             let table_data_prefix = fuse_table.meta_location_generator().prefix();
-            let storage_meta_data = operator.metadata();
+            let storage_meta_data = operator.info();
             let storage_prefix = storage_meta_data.root();
 
             let mut ss_count = 0;
@@ -345,6 +345,12 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn get_status_info(&self) -> String {
+        "".to_string()
+    }
+
+    fn set_status_info(&self, _info: &str) {}
+
     fn get_partition(&self) -> Option<PartInfoPtr> {
         todo!()
     }
@@ -362,6 +368,14 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_partitions_shas(&self) -> Vec<String> {
+        todo!()
+    }
+
+    fn get_cacheable(&self) -> bool {
+        todo!()
+    }
+
+    fn set_cacheable(&self, _: bool) {
         todo!()
     }
 

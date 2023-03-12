@@ -136,7 +136,7 @@ impl BlockReader {
     }
 
     pub fn support_blocking_api(&self) -> bool {
-        self.operator.metadata().can_blocking()
+        self.operator.info().can_blocking()
     }
 
     // Build non duplicate leaf_indices to avoid repeated read column from parquet

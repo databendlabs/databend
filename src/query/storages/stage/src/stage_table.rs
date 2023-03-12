@@ -43,11 +43,10 @@ use common_pipeline_sources::input_formats::SplitInfo;
 use common_storage::init_stage_operator;
 use opendal::Operator;
 use parking_lot::Mutex;
-use regex::Regex;
 
+use crate::format_stage_file_info;
 use crate::list_file;
 use crate::stage_table_sink::StageTableSink;
-use crate::stat_file;
 
 /// TODO: we need to track the data metrics in stage table.
 pub struct StageTable {
@@ -76,38 +75,24 @@ impl StageTable {
     }
 
     pub async fn list_files(stage_info: &StageTableInfo) -> Result<Vec<StageFileInfo>> {
-        // 1. List all files.
         let path = &stage_info.path;
         let files = &stage_info.files;
         let op = Self::get_op(&stage_info.stage_info)?;
-        let mut all_files = if !files.is_empty() {
+        let all_files = if !files.is_empty() {
             let mut res = vec![];
             for file in files {
                 // Here we add the path to the file: /path/to/path/file1.
                 let new_path = Path::new(path).join(file).to_string_lossy().to_string();
 
-                if let Some(info) = stat_file(op.object(&new_path)).await? {
-                    res.push(info);
+                if !new_path.ends_with('/') {
+                    let meta = op.stat(&new_path).await?;
+                    res.push(format_stage_file_info(new_path, &meta))
                 }
             }
             res
         } else {
-            list_file(&op, path).await?
+            list_file(&op, path, &stage_info.pattern).await?
         };
-
-        // 2. Retain pattern match files.
-        {
-            let pattern = &stage_info.pattern;
-            if !pattern.is_empty() {
-                let regex = Regex::new(pattern).map_err(|e| {
-                    ErrorCode::SyntaxException(format!(
-                        "Pattern format invalid, got:{}, error:{:?}",
-                        pattern, e
-                    ))
-                })?;
-                all_files.retain(|v| regex.is_match(&v.path));
-            }
-        }
 
         Ok(all_files)
     }
@@ -209,6 +194,7 @@ impl Table for StageTable {
             ctx.get_scan_progress(),
             compact_threshold,
         )?);
+
         input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;
         ctx.set_on_error_map(input_ctx.get_maximum_error_per_file());
         Ok(())

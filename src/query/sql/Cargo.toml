@@ -46,8 +46,10 @@ chrono = { workspace = true }
 dashmap = "5.4"
 globiter = "0.1"
 itertools = "0.10.5"
+num-derive = "0.3.3"
+num-traits = "0.2.15"
 once_cell = "1.15.0"
-opendal = { workspace = true, features = ["layers-tracing", "layers-metrics"] }
+opendal = { workspace = true }
 ordered-float = { workspace = true }
 parking_lot = "0.12.1"
 percent-encoding = "2"

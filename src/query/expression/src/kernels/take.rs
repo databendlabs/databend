@@ -15,14 +15,17 @@
 use common_exception::Result;
 use itertools::Itertools;
 
+use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::decimal::DecimalColumn;
+use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::ArrayType;
 use crate::types::BooleanType;
+use crate::types::MapType;
 use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::ValueType;
@@ -34,6 +37,7 @@ use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::TypeDeserializer;
+use crate::TypeDeserializerImpl;
 use crate::Value;
 
 impl DataBlock {
@@ -101,18 +105,34 @@ impl Column {
                     .unwrap();
                 Column::Date(d)
             }
-            Column::Array(column) | Column::Map(column) => {
+            Column::Array(column) => {
                 let mut offsets = Vec::with_capacity(length + 1);
                 offsets.push(0);
                 let builder = ColumnBuilder::from_column(
-                    column
-                        .values
-                        .data_type()
-                        .create_deserializer(length)
+                    TypeDeserializerImpl::with_capacity(&column.values.data_type(), self.len())
                         .finish_to_column(),
                 );
                 let builder = ArrayColumnBuilder { builder, offsets };
                 Self::take_value_types::<ArrayType<AnyType>, _>(column, builder, indices)
+            }
+            Column::Map(column) => {
+                let mut offsets = Vec::with_capacity(length + 1);
+                offsets.push(0);
+                let builder = ColumnBuilder::from_column(
+                    TypeDeserializerImpl::with_capacity(&column.values.data_type(), self.len())
+                        .finish_to_column(),
+                );
+                let (key_builder, val_builder) = match builder {
+                    ColumnBuilder::Tuple { fields, .. } => (fields[0].clone(), fields[1].clone()),
+                    _ => unreachable!(),
+                };
+                let builder = KvColumnBuilder {
+                    keys: key_builder,
+                    values: val_builder,
+                };
+                let builder = ArrayColumnBuilder { builder, offsets };
+                let column = ArrayColumn::try_downcast(column).unwrap();
+                Self::take_value_types::<MapType<AnyType, AnyType>, _>(&column, builder, indices)
             }
             Column::Nullable(c) => {
                 let column = c.column.take(indices);

@@ -16,9 +16,10 @@ use std::fmt;
 
 use common_meta_sled_store::SledBytesError;
 use common_meta_sled_store::SledOrderedSerde;
+use common_meta_sled_store::SledSerde;
 use common_meta_types::anyerror::AnyError;
-use openraft::LogId;
-use openraft::Membership;
+use common_meta_types::LogId;
+use common_meta_types::Membership;
 use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
@@ -106,5 +107,13 @@ impl From<StateMachineMetaValue> for Membership {
             StateMachineMetaValue::Membership(x) => x,
             _ => panic!("expect Membership"),
         }
+    }
+}
+
+impl SledSerde for StateMachineMetaValue {
+    fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, SledBytesError>
+    where Self: Sized {
+        let s = serde_json::from_slice(v.as_ref())?;
+        Ok(s)
     }
 }

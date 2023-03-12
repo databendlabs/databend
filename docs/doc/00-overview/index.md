@@ -50,7 +50,7 @@ import TabItem from '@theme/TabItem';
 </TabItem>
 </Tabs>
 
-## Databend Architucture
+## Databend Architecture
 
 Databend's high-level architecture is composed of a meta-service layer, a compute layer, and a storage layer.
 
@@ -148,6 +148,7 @@ The Databend community is open to data professionals, students, and anyone who h
 
 ## Roadmap
 
+- [Roadmap v1.1](https://github.com/datafuselabs/databend/issues/10334)
 - [Roadmap v1.0](https://github.com/datafuselabs/databend/issues/9604)
 - [Roadmap v0.9](https://github.com/datafuselabs/databend/issues/7052)
 - [Roadmap 2023](https://github.com/datafuselabs/databend/issues/9448)

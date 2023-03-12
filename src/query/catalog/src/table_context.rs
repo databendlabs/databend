@@ -81,12 +81,16 @@ pub trait TableContext: Send + Sync {
     fn get_write_progress_value(&self) -> ProgressValues;
     fn get_result_progress(&self) -> Arc<Progress>;
     fn get_result_progress_value(&self) -> ProgressValues;
+    fn get_status_info(&self) -> String;
+    fn set_status_info(&self, info: &str);
 
     fn get_partition(&self) -> Option<PartInfoPtr>;
     fn get_partitions(&self, num: usize) -> Vec<PartInfoPtr>;
     fn set_partitions(&self, partitions: Partitions) -> Result<()>;
     fn add_partitions_sha(&self, sha: String);
     fn get_partitions_shas(&self) -> Vec<String>;
+    fn get_cacheable(&self) -> bool;
+    fn set_cacheable(&self, cacheable: bool);
 
     fn attach_query_str(&self, kind: String, query: &str);
     fn get_query_str(&self) -> String;

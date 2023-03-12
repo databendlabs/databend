@@ -290,11 +290,12 @@ pub trait InputFormatPipe: Sized + Send + 'static {
     ) -> Result<()> {
         tracing::debug!("started");
         let operator = ctx.source.get_operator()?;
-        let object = operator.object(&split_info.file.path);
         let offset = split_info.offset as u64;
         let size = split_info.size;
         let mut batch_size = ctx.read_batch_size.min(size);
-        let mut reader = object.range_reader(offset..offset + size as u64).await?;
+        let mut reader = operator
+            .range_reader(&split_info.file.path, offset..offset + size as u64)
+            .await?;
         let mut total_read = 0;
         loop {
             batch_size = batch_size.min(size - total_read);

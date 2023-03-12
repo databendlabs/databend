@@ -41,14 +41,17 @@ use crate::aggregates::aggregator_common::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 
+const POP: u8 = 0;
+const SAMP: u8 = 1;
+
 #[derive(Serialize, Deserialize)]
-struct AggregateStddevPopState {
+struct AggregateStddevState {
     pub sum: f64,
     pub count: u64,
     pub variance: f64,
 }
 
-impl AggregateStddevPopState {
+impl AggregateStddevState {
     #[inline(always)]
     fn add(&mut self, value: f64) {
         self.sum += value;
@@ -82,13 +85,13 @@ impl AggregateStddevPopState {
 }
 
 #[derive(Clone)]
-pub struct AggregateStddevPopFunction<T> {
+pub struct AggregateStddevFunction<T, const TYPE: u8> {
     display_name: String,
     _arguments: Vec<DataType>,
     t: PhantomData<T>,
 }
 
-impl<T> AggregateFunction for AggregateStddevPopFunction<T>
+impl<T, const TYPE: u8> AggregateFunction for AggregateStddevFunction<T, TYPE>
 where T: Number + AsPrimitive<f64>
 {
     fn name(&self) -> &str {
@@ -100,7 +103,7 @@ where T: Number + AsPrimitive<f64>
     }
 
     fn init_state(&self, place: StateAddr) {
-        place.write(|| AggregateStddevPopState {
+        place.write(|| AggregateStddevState {
             sum: 0.0,
             count: 0,
             variance: 0.0,
@@ -108,7 +111,7 @@ where T: Number + AsPrimitive<f64>
     }
 
     fn state_layout(&self) -> Layout {
-        Layout::new::<AggregateStddevPopState>()
+        Layout::new::<AggregateStddevState>()
     }
 
     fn accumulate(
@@ -118,7 +121,7 @@ where T: Number + AsPrimitive<f64>
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
-        let state = place.get::<AggregateStddevPopState>();
+        let state = place.get::<AggregateStddevState>();
         let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
         match validity {
             Some(bitmap) => {
@@ -149,7 +152,7 @@ where T: Number + AsPrimitive<f64>
 
         column.iter().zip(places.iter()).for_each(|(value, place)| {
             let place = place.next(offset);
-            let state = place.get::<AggregateStddevPopState>();
+            let state = place.get::<AggregateStddevState>();
             let v: f64 = value.as_();
             state.add(v);
         });
@@ -159,48 +162,48 @@ where T: Number + AsPrimitive<f64>
     fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
         let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
 
-        let state = place.get::<AggregateStddevPopState>();
+        let state = place.get::<AggregateStddevState>();
         let v: f64 = column[row].as_();
         state.add(v);
         Ok(())
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<AggregateStddevPopState>();
+        let state = place.get::<AggregateStddevState>();
         serialize_into_buf(writer, state)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<AggregateStddevPopState>();
+        let state = place.get::<AggregateStddevState>();
         *state = deserialize_from_slice(reader)?;
 
         Ok(())
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let state = place.get::<AggregateStddevPopState>();
-        let rhs = rhs.get::<AggregateStddevPopState>();
+        let state = place.get::<AggregateStddevState>();
+        let rhs = rhs.get::<AggregateStddevState>();
         state.merge(rhs);
         Ok(())
     }
 
     #[allow(unused_mut)]
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
-        let state = place.get::<AggregateStddevPopState>();
+        let state = place.get::<AggregateStddevState>();
         let builder = NumberType::<F64>::try_downcast_builder(builder).unwrap();
-        let variance = state.variance / state.count as f64;
+        let variance = state.variance / (state.count - TYPE as u64) as f64;
         builder.push(variance.sqrt().into());
         Ok(())
     }
 }
 
-impl<T> fmt::Display for AggregateStddevPopFunction<T> {
+impl<T, const TYPE: u8> fmt::Display for AggregateStddevFunction<T, TYPE> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
     }
 }
 
-impl<T> AggregateStddevPopFunction<T>
+impl<T, const TYPE: u8> AggregateStddevFunction<T, TYPE>
 where T: Number + AsPrimitive<f64>
 {
     pub fn try_create(
@@ -215,7 +218,7 @@ where T: Number + AsPrimitive<f64>
     }
 }
 
-pub fn try_create_aggregate_stddev_pop_function(
+pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
     display_name: &str,
     _params: Vec<Scalar>,
     arguments: Vec<DataType>,
@@ -223,7 +226,7 @@ pub fn try_create_aggregate_stddev_pop_function(
     assert_unary_arguments(display_name, arguments.len())?;
     with_number_mapped_type!(|NUM_TYPE| match &arguments[0] {
         DataType::Number(NumberDataType::NUM_TYPE) => {
-            AggregateStddevPopFunction::<NUM_TYPE>::try_create(display_name, arguments)
+            AggregateStddevFunction::<NUM_TYPE, TYPE>::try_create(display_name, arguments)
         }
         _ => Err(ErrorCode::BadDataValueType(format!(
             "AggregateStddevPopFunction does not support type '{:?}'",
@@ -233,5 +236,11 @@ pub fn try_create_aggregate_stddev_pop_function(
 }
 
 pub fn aggregate_stddev_pop_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_stddev_pop_function))
+    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_stddev_pop_function::<POP>))
+}
+
+pub fn aggregate_stddev_samp_function_desc() -> AggregateFunctionDescription {
+    AggregateFunctionDescription::creator(Box::new(
+        try_create_aggregate_stddev_pop_function::<SAMP>,
+    ))
 }

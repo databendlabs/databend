@@ -202,10 +202,10 @@ impl ParquetReader {
         let mut readers: HashMap<usize, DataReader> =
             HashMap::with_capacity(self.columns_to_read.len());
 
+        let op = self.operator.blocking();
         for index in &self.columns_to_read {
-            let obj = self.operator.object(&part.location);
             let meta = &part.column_metas[index];
-            let reader = obj.blocking_range_reader(meta.offset..meta.offset + meta.length)?;
+            let reader = op.range_reader(&part.location, meta.offset..meta.offset + meta.length)?;
             readers.insert(
                 *index,
                 DataReader::new(Box::new(reader), meta.length as usize),
@@ -218,15 +218,17 @@ impl ParquetReader {
         let part = ParquetRowGroupPart::from_part(&part)?;
 
         let mut join_handlers = Vec::with_capacity(self.columns_to_read.len());
-        let obj = self.operator.object(&part.location);
+        let path = Arc::new(part.location.to_string());
 
         for index in self.columns_to_read.iter() {
+            let op = self.operator.clone();
+            let path = path.clone();
+
             let meta = &part.column_metas[index];
-            let obj = obj.clone();
             let (offset, length) = (meta.offset, meta.length);
 
             join_handlers.push(async move {
-                let data = obj.range_read(offset..offset + length).await?;
+                let data = op.range_read(&path, offset..offset + length).await?;
                 Ok::<_, ErrorCode>((
                     *index,
                     DataReader::new(Box::new(std::io::Cursor::new(data)), length as usize),

@@ -22,6 +22,8 @@ io-uring = [
     "common-meta-raft-store/io-uring",
 ]
 
+enable-histogram = ["common-metrics/enable-histogram"]
+
 [dependencies]
 # Workspace dependencies
 common-arrow = { path = "../../common/arrow" }
@@ -50,6 +52,7 @@ clap = { workspace = true }
 derive_more = { workspace = true }
 futures = "0.3.24"
 itertools = "0.10.5"
+maplit = "1.0.2"
 metrics = "0.20.1"
 once_cell = "1.15.0"
 poem = { version = "1", features = ["rustls"] }

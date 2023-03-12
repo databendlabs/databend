@@ -4,6 +4,7 @@ description: time travel
 slug: time-travel2
 date: 2022-10-10
 tags: [databend, time travel]
+cover_url: time-travel.png
 authors:
 - name: wubx
   url: https://github.com/wubx

@@ -30,6 +30,7 @@ use chrono::Utc;
 use common_meta_sled_store::sled::IVec;
 use common_meta_sled_store::SledBytesError;
 use common_meta_sled_store::SledOrderedSerde;
+use common_meta_sled_store::SledSerde;
 
 /// The identifier of the index for kv with expiration.
 #[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
@@ -47,6 +48,14 @@ pub struct ExpireKey {
 #[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ExpireValue {
     pub key: String,
+}
+
+impl SledSerde for ExpireValue {
+    fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, SledBytesError>
+    where Self: Sized {
+        let s = serde_json::from_slice(v.as_ref())?;
+        Ok(s)
+    }
 }
 
 impl SledOrderedSerde for ExpireKey {

@@ -247,6 +247,16 @@ impl TableContext for QueryContext {
         self.shared.result_progress.as_ref().get_values()
     }
 
+    fn get_status_info(&self) -> String {
+        let status = self.shared.status.read();
+        status.clone()
+    }
+
+    fn set_status_info(&self, info: &str) {
+        let mut status = self.shared.status.write();
+        *status = info.to_string();
+    }
+
     fn get_partition(&self) -> Option<PartInfoPtr> {
         self.partition_queue.write().pop_front()
     }
@@ -290,6 +300,14 @@ impl TableContext for QueryContext {
         // Sort to make sure the SHAs are stable for the same query.
         sha.sort();
         sha
+    }
+
+    fn get_cacheable(&self) -> bool {
+        self.shared.cacheable.load(Ordering::Acquire)
+    }
+
+    fn set_cacheable(&self, cacheable: bool) {
+        self.shared.cacheable.store(cacheable, Ordering::Release);
     }
 
     fn attach_query_str(&self, kind: String, query: &str) {

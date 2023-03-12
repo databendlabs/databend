@@ -129,7 +129,8 @@ impl Binder {
                 alias,
                 travel_point,
             } => {
-                let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
+                let (catalog, database, table_name) =
+                    self.normalize_object_identifier_triple(catalog, database, table);
                 let table_alias_name = if let Some(table_alias) = alias {
                     Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
                 } else {
@@ -139,17 +140,10 @@ impl Binder {
                 if let Some(cte_info) = bind_context.ctes_map.get(&table_name) {
                     return self.bind_cte(bind_context, &table_name, alias, &cte_info);
                 }
-                // Get catalog name
-                let catalog = catalog
-                    .as_ref()
-                    .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-                    .unwrap_or_else(|| self.ctx.get_current_catalog());
 
-                // Get database name
-                let database = database
-                    .as_ref()
-                    .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-                    .unwrap_or_else(|| self.ctx.get_current_database());
+                if database == "system" {
+                    self.ctx.set_cacheable(false);
+                }
 
                 let tenant = self.ctx.get_tenant();
 

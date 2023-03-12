@@ -82,6 +82,9 @@ pub struct QueryContextShared {
     pub(in crate::sessions) on_error_map: Arc<RwLock<Option<HashMap<String, ErrorCode>>>>,
     /// partitions_sha for each table in the query. Not empty only when enabling query result cache.
     pub(in crate::sessions) partitions_shas: Arc<RwLock<Vec<String>>>,
+    pub(in crate::sessions) cacheable: Arc<AtomicBool>,
+    // Status info.
+    pub(in crate::sessions) status: Arc<RwLock<String>>,
 }
 
 impl QueryContextShared {
@@ -113,6 +116,8 @@ impl QueryContextShared {
             created_time: SystemTime::now(),
             on_error_map: Arc::new(RwLock::new(None)),
             partitions_shas: Arc::new(RwLock::new(vec![])),
+            cacheable: Arc::new(AtomicBool::new(true)),
+            status: Arc::new(RwLock::new("null".to_string())),
         }))
     }
 

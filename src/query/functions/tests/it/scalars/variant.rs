@@ -29,12 +29,16 @@ fn test_variant() {
     test_try_parse_json(file);
     test_check_json(file);
     test_length(file);
-    test_object_keys(file);
+    test_json_object_keys(file);
     test_get(file);
     test_get_ignore_case(file);
     test_get_path(file);
     test_json_extract_path_text(file);
     test_as_type(file);
+    test_to_type(file);
+    test_try_to_type(file);
+    test_json_object(file);
+    test_json_object_keep_null(file);
 }
 
 fn test_parse_json(file: &mut impl Write) {
@@ -145,15 +149,15 @@ fn test_length(file: &mut impl Write) {
     )]);
 }
 
-fn test_object_keys(file: &mut impl Write) {
-    run_ast(file, "object_keys(parse_json('[1,2,3,4]'))", &[]);
+fn test_json_object_keys(file: &mut impl Write) {
+    run_ast(file, "json_object_keys(parse_json('[1,2,3,4]'))", &[]);
     run_ast(
         file,
-        "object_keys(parse_json('{\"k1\":\"v1\",\"k2\":\"v2\"}'))",
+        "json_object_keys(parse_json('{\"k1\":\"v1\",\"k2\":\"v2\"}'))",
         &[],
     );
 
-    run_ast(file, "object_keys(parse_json(s))", &[(
+    run_ast(file, "json_object_keys(parse_json(s))", &[(
         "s",
         StringType::from_data(vec![
             "[1,2,3,4]",
@@ -162,7 +166,7 @@ fn test_object_keys(file: &mut impl Write) {
         ]),
     )]);
 
-    run_ast(file, "object_keys(parse_json(s))", &[(
+    run_ast(file, "json_object_keys(parse_json(s))", &[(
         "s",
         StringType::from_data_with_validity(
             &[
@@ -384,4 +388,198 @@ fn test_as_type(file: &mut impl Write) {
     run_ast(file, "as_array(try_parse_json(s))", columns);
     run_ast(file, "as_object(parse_json(s))", columns);
     run_ast(file, "as_object(try_parse_json(s))", columns);
+}
+
+fn test_to_type(file: &mut impl Write) {
+    run_ast(file, "to_boolean(parse_json('true'))", &[]);
+    run_ast(file, "to_boolean(parse_json('123'))", &[]);
+    run_ast(file, "to_boolean(parse_json('\"abc\"'))", &[]);
+    run_ast(file, "to_uint64(parse_json('123'))", &[]);
+    run_ast(file, "to_uint64(parse_json('-123'))", &[]);
+    run_ast(file, "to_uint64(parse_json('\"abc\"'))", &[]);
+    run_ast(file, "to_int64(parse_json('123'))", &[]);
+    run_ast(file, "to_int64(parse_json('-123'))", &[]);
+    run_ast(file, "to_int64(parse_json('\"abc\"'))", &[]);
+    run_ast(file, "to_float64(parse_json('12.34'))", &[]);
+    run_ast(file, "to_float64(parse_json('\"abc\"'))", &[]);
+    run_ast(file, "to_date(parse_json('\"2023-01-01\"'))", &[]);
+    run_ast(file, "to_date(parse_json('\"abc\"'))", &[]);
+    run_ast(
+        file,
+        "to_timestamp(parse_json('\"2023-01-01 00:00:00\"'))",
+        &[],
+    );
+    run_ast(file, "to_timestamp(parse_json('\"abc\"'))", &[]);
+    run_ast(file, "to_string(parse_json('12.34'))", &[]);
+    run_ast(file, "to_string(parse_json('\"abc\"'))", &[]);
+
+    run_ast(file, "to_boolean(parse_json(s))", &[(
+        "s",
+        StringType::from_data_with_validity(&["true", "", "true"], vec![true, false, true]),
+    )]);
+    run_ast(file, "to_int64(parse_json(s))", &[(
+        "s",
+        StringType::from_data_with_validity(&["1", "", "-10"], vec![true, false, true]),
+    )]);
+    run_ast(file, "to_uint64(parse_json(s))", &[(
+        "s",
+        StringType::from_data_with_validity(&["1", "", "20"], vec![true, false, true]),
+    )]);
+    run_ast(file, "to_float64(parse_json(s))", &[(
+        "s",
+        StringType::from_data_with_validity(&["1.2", "", "100.2"], vec![true, false, true]),
+    )]);
+    run_ast(file, "to_date(parse_json(s))", &[(
+        "s",
+        StringType::from_data_with_validity(&["\"2020-01-01\"", "", "\"2023-10-01\""], vec![
+            true, false, true,
+        ]),
+    )]);
+    run_ast(file, "to_timestamp(parse_json(s))", &[(
+        "s",
+        StringType::from_data_with_validity(
+            &["\"2020-01-01 00:00:00\"", "", "\"2023-10-01 10:11:12\""],
+            vec![true, false, true],
+        ),
+    )]);
+    run_ast(file, "to_string(parse_json(s))", &[(
+        "s",
+        StringType::from_data_with_validity(&["\"abc\"", "", "123"], vec![true, false, true]),
+    )]);
+}
+
+fn test_try_to_type(file: &mut impl Write) {
+    run_ast(file, "try_to_boolean(parse_json('true'))", &[]);
+    run_ast(file, "try_to_boolean(parse_json('123'))", &[]);
+    run_ast(file, "try_to_boolean(parse_json('\"abc\"'))", &[]);
+    run_ast(file, "try_to_uint64(parse_json('123'))", &[]);
+    run_ast(file, "try_to_uint64(parse_json('-123'))", &[]);
+    run_ast(file, "try_to_uint64(parse_json('\"abc\"'))", &[]);
+    run_ast(file, "try_to_int64(parse_json('123'))", &[]);
+    run_ast(file, "try_to_int64(parse_json('-123'))", &[]);
+    run_ast(file, "try_to_int64(parse_json('\"abc\"'))", &[]);
+    run_ast(file, "try_to_float64(parse_json('12.34'))", &[]);
+    run_ast(file, "try_to_float64(parse_json('\"abc\"'))", &[]);
+    run_ast(file, "try_to_date(parse_json('\"2023-01-01\"'))", &[]);
+    run_ast(file, "try_to_date(parse_json('\"abc\"'))", &[]);
+    run_ast(
+        file,
+        "try_to_timestamp(parse_json('\"2023-01-01 00:00:00\"'))",
+        &[],
+    );
+    run_ast(file, "try_to_timestamp(parse_json('\"abc\"'))", &[]);
+    run_ast(file, "try_to_string(parse_json('12.34'))", &[]);
+    run_ast(file, "try_to_string(parse_json('\"abc\"'))", &[]);
+
+    let columns = &[(
+        "s",
+        StringType::from_data_with_validity(
+            &[
+                "true",
+                "123",
+                "-100",
+                "12.34",
+                "",
+                "\"2020-01-01\"",
+                "\"2021-01-01 20:00:00\"",
+                "\"abc\"",
+            ],
+            vec![true, true, true, true, false, true, true, true],
+        ),
+    )];
+    run_ast(file, "try_to_boolean(parse_json(s))", columns);
+    run_ast(file, "try_to_int64(parse_json(s))", columns);
+    run_ast(file, "try_to_uint64(parse_json(s))", columns);
+    run_ast(file, "try_to_float64(parse_json(s))", columns);
+    run_ast(file, "try_to_date(parse_json(s))", columns);
+    run_ast(file, "try_to_timestamp(parse_json(s))", columns);
+    run_ast(file, "try_to_string(parse_json(s))", columns);
+}
+
+fn test_json_object(file: &mut impl Write) {
+    run_ast(file, "json_object()", &[]);
+    run_ast(
+        file,
+        "json_object('a', true, 'b', 1, 'c', 'str', 'd', [1,2], 'e', {'k':'v'})",
+        &[],
+    );
+    run_ast(
+        file,
+        "json_object('k1', 1, 'k2', null, 'k3', 2, null, 3)",
+        &[],
+    );
+    run_ast(file, "json_object('k1', 1, 'k1')", &[]);
+    run_ast(file, "json_object('k1', 1, 'k1', 2)", &[]);
+    run_ast(file, "json_object(1, 'k1', 2, 'k2')", &[]);
+
+    run_ast(file, "json_object(k1, v1, k2, v2)", &[
+        (
+            "k1",
+            StringType::from_data_with_validity(&["a1", "b1", "", "d1"], vec![
+                true, true, false, true,
+            ]),
+        ),
+        (
+            "v1",
+            StringType::from_data_with_validity(&["j1", "k1", "l1", ""], vec![
+                true, true, true, false,
+            ]),
+        ),
+        (
+            "k2",
+            StringType::from_data_with_validity(&["a2", "", "c2", "d2"], vec![
+                true, false, true, true,
+            ]),
+        ),
+        (
+            "v2",
+            StringType::from_data_with_validity(&["j2", "k2", "l2", "m2"], vec![
+                true, true, true, true,
+            ]),
+        ),
+    ]);
+}
+
+fn test_json_object_keep_null(file: &mut impl Write) {
+    run_ast(file, "json_object_keep_null()", &[]);
+    run_ast(
+        file,
+        "json_object_keep_null('a', true, 'b', 1, 'c', 'str', 'd', [1,2], 'e', {'k':'v'})",
+        &[],
+    );
+    run_ast(
+        file,
+        "json_object_keep_null('k1', 1, 'k2', null, 'k3', 2, null, 3)",
+        &[],
+    );
+    run_ast(file, "json_object_keep_null('k1', 1, 'k1')", &[]);
+    run_ast(file, "json_object_keep_null('k1', 1, 'k1', 2)", &[]);
+    run_ast(file, "json_object_keep_null(1, 'k1', 2, 'k2')", &[]);
+
+    run_ast(file, "json_object_keep_null(k1, v1, k2, v2)", &[
+        (
+            "k1",
+            StringType::from_data_with_validity(&["a1", "b1", "", "d1"], vec![
+                true, true, false, true,
+            ]),
+        ),
+        (
+            "v1",
+            StringType::from_data_with_validity(&["j1", "k1", "l1", ""], vec![
+                true, true, true, false,
+            ]),
+        ),
+        (
+            "k2",
+            StringType::from_data_with_validity(&["a2", "", "c2", "d2"], vec![
+                true, false, true, true,
+            ]),
+        ),
+        (
+            "v2",
+            StringType::from_data_with_validity(&["j2", "k2", "l2", "m2"], vec![
+                true, true, true, true,
+            ]),
+        ),
+    ]);
 }

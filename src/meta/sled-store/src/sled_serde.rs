@@ -18,8 +18,7 @@ use std::ops::RangeBounds;
 
 use byteorder::BigEndian;
 use byteorder::ByteOrder;
-use common_meta_types::LogEntry;
-use openraft::raft::Entry;
+use common_meta_types::Entry;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use sled::IVec;
@@ -37,10 +36,7 @@ pub trait SledSerde: Serialize + DeserializeOwned {
 
     /// (de)serialize a value from `sled::IVec`.
     fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, SledBytesError>
-    where Self: Sized {
-        let s = serde_json::from_slice(v.as_ref())?;
-        Ok(s)
-    }
+    where Self: Sized;
 }
 
 /// Serialize/deserialize(ser/de) to/from sled values and keeps order after serializing.
@@ -103,12 +99,12 @@ fn bound_ser<SD: SledOrderedSerde>(v: Bound<&SD>) -> Result<Bound<sled::IVec>, S
 }
 
 /// Extract log index from log entry
-impl SledAsRef<u64, Entry<LogEntry>> for Entry<LogEntry> {
+impl SledAsRef<u64, Entry> for Entry {
     fn as_key(&self) -> &u64 {
         &self.log_id.index
     }
 
-    fn as_value(&self) -> &Entry<LogEntry> {
+    fn as_value(&self) -> &Entry {
         self
     }
 }
@@ -143,4 +139,4 @@ impl SledOrderedSerde for String {
     }
 }
 
-impl<T> SledSerde for T where T: Serialize + DeserializeOwned {}
+// impl<T> SledSerde for T where T: Serialize + DeserializeOwned {}

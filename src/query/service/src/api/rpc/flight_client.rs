@@ -14,6 +14,7 @@
 
 use std::convert::TryInto;
 use std::error::Error;
+use std::io::ErrorKind;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -214,14 +215,15 @@ impl FlightExchange {
                     }
                     other => {
                         if let Err(status) = &other {
-                            if let Some(error) = match_for_io_error(status) {
-                                {
-                                    let mut may_recv_error = state.may_recv_error.lock();
-                                    *may_recv_error = Some(std::io::Error::new(error.kind(), ""));
+                            let mut may_recv_error = state.may_recv_error.lock();
+                            *may_recv_error = Some(match match_for_io_error(status) {
+                                Some(error) => std::io::Error::new(error.kind(), ""),
+                                None => {
+                                    std::io::Error::new(ErrorKind::Other, format!("{:?}", status))
                                 }
+                            });
 
-                                break;
-                            }
+                            break;
                         }
 
                         // We need to continue consume stream for avoid stream die message blocking io buffer.

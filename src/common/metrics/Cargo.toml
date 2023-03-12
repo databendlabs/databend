@@ -10,6 +10,9 @@ edition = { workspace = true }
 doctest = false
 test = false
 
+[features]
+enable-histogram = ["metrics/enable-histogram"]
+
 [dependencies]
 # Workspace dependencies
 common-exception = { path = "../exception" }

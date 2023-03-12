@@ -19,7 +19,7 @@ use common_base::base::tokio;
 use common_base::base::tokio::time::sleep;
 use common_meta_kvapi::kvapi::KVApi;
 use common_meta_sled_store::openraft::LogIdOptionExt;
-use common_meta_sled_store::openraft::State;
+use common_meta_sled_store::openraft::ServerState;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::Cmd;
 use common_meta_types::Endpoint;
@@ -296,8 +296,8 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     tc2.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
     let meta_node = MetaNode::start(&tc0.config).await?;
-    // Initial log and add node-0 log.
-    let mut log_index = 2;
+    // Initial log, leader blank log, add node-0.
+    let mut log_index = 3;
 
     let res = meta_node
         .join_cluster(
@@ -434,8 +434,8 @@ async fn test_meta_node_leave() -> anyhow::Result<()> {
         };
 
         leader.handle_forwardable_request(req).await?;
-        // Remove node, no membership change
-        log_index += 1;
+        // Change membership, remove node
+        log_index += 2;
 
         leader
             .raft
@@ -537,7 +537,6 @@ async fn test_meta_node_leave_last_not_allowed() -> anyhow::Result<()> {
 
 #[async_entry::test(worker_threads = 5, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_meta_node_restart() -> anyhow::Result<()> {
-    // TODO check restarted follower.
     // - Start a leader and a non-voter;
     // - Restart them.
     // - Check old data an new written data.
@@ -545,8 +544,14 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     let (_nid0, tc0) = start_meta_node_leader().await?;
     let mn0 = tc0.meta_node();
 
+    // init, leader blank, add node, update membership;
+    let mut log_index = 3;
+
     let (_nid1, tc1) = start_meta_node_non_voter(mn0.clone(), 1).await?;
     let mn1 = tc1.meta_node();
+
+    // add node, update membership
+    log_index += 2;
 
     let sto0 = mn0.sto.clone();
     let sto1 = mn1.sto.clone();
@@ -554,6 +559,7 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     let meta_nodes = vec![mn0.clone(), mn1.clone()];
 
     assert_upsert_kv_synced(meta_nodes.clone(), "key1").await?;
+    log_index += 1;
 
     // stop
     info!("shutting down all");
@@ -582,16 +588,21 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
 
     mn0.raft
         .wait(timeout())
-        .state(State::Leader, "leader restart")
+        .state(ServerState::Leader, "leader restart")
         .await?;
     mn1.raft
         .wait(timeout())
-        .state(State::Learner, "learner restart")
+        .state(ServerState::Learner, "learner restart")
         .await?;
-    mn0.raft.add_learner(1, false).await?;
+
     mn1.raft
         .wait(timeout())
         .current_leader(0, "node-1 has leader")
+        .await?;
+
+    mn0.raft
+        .wait(timeout())
+        .log(Some(log_index), "node-0 recovered committed index")
         .await?;
 
     assert_upsert_kv_synced(meta_nodes.clone(), "key2").await?;
@@ -642,7 +653,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
             .await?;
         log_index += 1;
 
-        want_hs = leader.sto.raft_state.read_hard_state()?;
+        want_hs = leader.sto.raft_state.read_vote()?;
 
         leader.stop().await?;
     }
@@ -658,7 +669,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
     leader
         .raft
         .wait(timeout())
-        .state(State::Leader, "leader restart")
+        .state(ServerState::Leader, "leader restart")
         .await?;
     leader
         .raft
@@ -674,7 +685,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
 
     info!("--- check hard state");
     {
-        let hs = leader.sto.raft_state.read_hard_state()?;
+        let hs = leader.sto.raft_state.read_vote()?;
         assert_eq!(want_hs, hs);
     }
 

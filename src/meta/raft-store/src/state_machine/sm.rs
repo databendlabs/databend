@@ -21,8 +21,6 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use common_meta_sled_store::get_sled_db;
-use common_meta_sled_store::openraft;
-use common_meta_sled_store::openraft::EffectiveMembership;
 use common_meta_sled_store::openraft::MessageSummary;
 use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::SledKeySpace;
@@ -38,14 +36,16 @@ use common_meta_types::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
 use common_meta_types::ConditionResult;
+use common_meta_types::Entry;
+use common_meta_types::EntryPayload;
 use common_meta_types::KVMeta;
-use common_meta_types::LogEntry;
 use common_meta_types::LogId;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
+use common_meta_types::StoredMembership;
 use common_meta_types::TxnCondition;
 use common_meta_types::TxnDeleteByPrefixRequest;
 use common_meta_types::TxnDeleteByPrefixResponse;
@@ -62,8 +62,6 @@ use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKV;
 use common_meta_types::With;
 use num::FromPrimitive;
-use openraft::raft::Entry;
-use openraft::raft::EntryPayload;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::debug;
@@ -192,8 +190,17 @@ impl StateMachine {
     /// - and a snapshot id that uniquely identifies this snapshot.
     pub fn build_snapshot(
         &self,
-    ) -> Result<(SerializableSnapshot, Option<LogId>, MetaSnapshotId), MetaStorageError> {
+    ) -> Result<
+        (
+            SerializableSnapshot,
+            Option<LogId>,
+            StoredMembership,
+            MetaSnapshotId,
+        ),
+        MetaStorageError,
+    > {
         let last_applied = self.get_last_applied()?;
+        let last_membership = self.get_membership()?.unwrap_or_default();
 
         let snapshot_idx = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -211,12 +218,12 @@ impl StateMachine {
         }
         let snap = SerializableSnapshot { kvs };
 
-        Ok((snap, last_applied, snapshot_id))
+        Ok((snap, last_applied, last_membership, snapshot_id))
     }
 
     fn scan_prefix_if_needed(
         &self,
-        entry: &Entry<LogEntry>,
+        entry: &Entry,
     ) -> Result<Option<(DeleteByPrefixKeyMap, DeleteByPrefixKeyMap)>, MetaStorageError> {
         match entry.payload {
             EntryPayload::Normal(ref data) => match &data.cmd {
@@ -256,7 +263,7 @@ impl StateMachine {
     /// will be made and the previous resp is returned. In this way a client is able to re-send a
     /// command safely in case of network failure etc.
     #[tracing::instrument(level = "debug", skip(self, entry), fields(log_id=%entry.log_id))]
-    pub async fn apply(&self, entry: &Entry<LogEntry>) -> Result<AppliedState, MetaStorageError> {
+    pub async fn apply(&self, entry: &Entry) -> Result<AppliedState, MetaStorageError> {
         info!("apply: summary: {}", entry.summary(),);
         debug!("sled tx start: {:?}", entry);
 
@@ -316,10 +323,10 @@ impl StateMachine {
                     info!("apply: membership: {:?}", mem);
                     txn_sm_meta.insert(
                         &LastMembership,
-                        &StateMachineMetaValue::Membership(EffectiveMembership {
-                            log_id: *log_id,
-                            membership: mem.clone(),
-                        }),
+                        &StateMachineMetaValue::Membership(StoredMembership::new(
+                            Some(*log_id),
+                            mem.clone(),
+                        )),
                     )?;
                     return Ok((Some(AppliedState::None), txn_tree.changes));
                 }
@@ -351,7 +358,7 @@ impl StateMachine {
     ///
     /// Only `Normal` log has a time embedded.
     #[tracing::instrument(level = "debug", skip_all)]
-    fn get_log_time(entry: &Entry<LogEntry>) -> u64 {
+    fn get_log_time(entry: &Entry) -> u64 {
         match &entry.payload {
             EntryPayload::Normal(data) => match data.time_ms {
                 None => {
@@ -973,7 +980,7 @@ impl StateMachine {
         Ok(value.1)
     }
 
-    pub fn get_membership(&self) -> Result<Option<EffectiveMembership>, MetaStorageError> {
+    pub fn get_membership(&self) -> Result<Option<StoredMembership>, MetaStorageError> {
         let sm_meta = self.sm_meta();
         let mem = sm_meta
             .get(&StateMachineMetaKey::LastMembership)?

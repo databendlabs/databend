@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_base::base::tokio;
 use common_base::base::tokio::sync::Notify;
@@ -27,6 +28,7 @@ use common_exception::Result;
 use futures::future::select;
 use futures_util::future::Either;
 use parking_lot::Mutex;
+use tracing::info;
 
 use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_graph::RunningGraph;
@@ -215,6 +217,7 @@ impl PipelineExecutor {
         unsafe {
             // TODO: the on init callback cannot be killed.
             {
+                let instant = Instant::now();
                 let mut guard = self.on_init_callback.lock();
                 if let Some(callback) = guard.take() {
                     drop(guard);
@@ -222,6 +225,11 @@ impl PipelineExecutor {
                         return Err(cause.add_message_back("(while in query pipeline init)"));
                     }
                 }
+
+                info!(
+                    "Init pipeline successfully, elapsed: {:?}",
+                    instant.elapsed()
+                );
             }
 
             let mut init_schedule_queue = self.graph.init_schedule_queue(self.threads_num)?;

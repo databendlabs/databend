@@ -165,8 +165,8 @@ impl From<std::convert::Infallible> for ErrorCode {
 impl From<opendal::Error> for ErrorCode {
     fn from(error: opendal::Error) -> Self {
         match error.kind() {
-            opendal::ErrorKind::ObjectNotFound => ErrorCode::StorageNotFound(error.to_string()),
-            opendal::ErrorKind::ObjectPermissionDenied => {
+            opendal::ErrorKind::NotFound => ErrorCode::StorageNotFound(error.to_string()),
+            opendal::ErrorKind::PermissionDenied => {
                 ErrorCode::StoragePermissionDenied(error.to_string())
             }
             _ => ErrorCode::StorageOther(error.to_string()),

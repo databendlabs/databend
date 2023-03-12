@@ -175,10 +175,9 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                 AggregateMeta::Serialized(_) => unreachable!(),
                 AggregateMeta::Spilled(payload) => {
                     let instant = Instant::now();
-                    let object = self.operator.object(&payload.location);
-                    let data = object.read().await?;
+                    let data = self.operator.read(&payload.location).await?;
 
-                    if let Err(cause) = object.delete().await {
+                    if let Err(cause) = self.operator.delete(&payload.location).await {
                         error!(
                             "Cannot delete spill file {}, cause: {:?}",
                             &payload.location, cause
@@ -201,10 +200,9 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                             let operator = self.operator.clone();
                             read_data.push(common_base::base::tokio::spawn(async move {
                                 let instant = Instant::now();
-                                let object = operator.object(&location);
-                                let data = object.read().await?;
+                                let data = operator.read(&location).await?;
 
-                                if let Err(cause) = object.delete().await {
+                                if let Err(cause) = operator.delete(&location).await {
                                     error!(
                                         "Cannot delete spill file {}, cause: {:?}",
                                         location, cause

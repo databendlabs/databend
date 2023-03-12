@@ -68,20 +68,17 @@ impl IcebergTable {
         // detect the latest manifest file
         let latest_manifest = Self::version_detect(&op).await?;
         // get table metadata from metadata file
-        let meta_file_latest = op.object(&latest_manifest);
-        let meta_json = meta_file_latest.read().await.map_err(|e| {
+        let meta_json = op.read(&latest_manifest).await.map_err(|e| {
             ErrorCode::ReadTableDataError(format!(
                 "invalid metadata in {}: {:?}",
-                meta_file_latest.name(),
-                e
+                &latest_manifest, e
             ))
         })?;
         let metadata: TableMetadata =
             serde_json::de::from_slice(meta_json.as_slice()).map_err(|e| {
                 ErrorCode::ReadTableDataError(format!(
                     "invalid metadata in {}: {:?}",
-                    meta_file_latest.name(),
-                    e
+                    &latest_manifest, e
                 ))
             })?;
 
@@ -114,8 +111,7 @@ impl IcebergTable {
         // Dremio has an `version_hint.txt` file
         // recording the latest snapshot version number
         // and stores metadata
-        let hint = tbl_root.object(META_PTR);
-        if let Ok(version_hint) = hint.read().await {
+        if let Ok(version_hint) = tbl_root.read(META_PTR).await {
             if let Ok(version_str) = String::from_utf8(version_hint) {
                 if let Ok(version) = version_str.trim().parse::<u64>() {
                     return Ok(format!("metadata/v{version}.metadata.json"));
@@ -125,8 +121,7 @@ impl IcebergTable {
         // try Spark's way
         // Spark will arange all files with a sequential number
         // in such case, we just need to find the file with largest alphabetical name.
-        let meta_dir = tbl_root.object("metadata/");
-        let files = meta_dir.list().await.map_err(|e| {
+        let files = tbl_root.list("metadata/").await.map_err(|e| {
             ErrorCode::ReadTableDataError(format!("Cannot list metadata directory: {e:?}"))
         })?;
         files

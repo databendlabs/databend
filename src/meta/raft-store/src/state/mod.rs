@@ -14,7 +14,7 @@
 
 //! Raft state includes some enssential information about raft, such as term, voted_for
 mod raft_state;
-mod raft_state_kv;
+pub(crate) mod raft_state_kv;
 
 pub use raft_state::RaftState;
 pub use raft_state_kv::RaftStateKey;

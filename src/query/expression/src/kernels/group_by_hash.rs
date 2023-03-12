@@ -47,6 +47,7 @@ use crate::with_integer_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
 use crate::TypeDeserializer;
+use crate::TypeDeserializerImpl;
 
 #[derive(Debug)]
 pub enum KeysState {
@@ -337,7 +338,7 @@ where T: Clone
 
         for (_, data_type) in sorted_group_items.iter() {
             let non_null_type = data_type.remove_nullable();
-            let mut deserializer = non_null_type.create_deserializer(rows);
+            let mut deserializer = TypeDeserializerImpl::with_capacity(&non_null_type, rows);
             let reader = vec8.as_slice();
 
             let format = FormatSettings::default();
@@ -348,7 +349,8 @@ where T: Clone
                 }
 
                 true => {
-                    let mut bitmap_deserializer = DataType::Boolean.create_deserializer(rows);
+                    let mut bitmap_deserializer =
+                        TypeDeserializerImpl::with_capacity(&DataType::Boolean, rows);
                     bitmap_deserializer.de_fixed_binary_batch(
                         &reader[null_offsize..],
                         step,

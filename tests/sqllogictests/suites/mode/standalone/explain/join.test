@@ -50,7 +50,7 @@ explain select t.number from t, t1 where t.number = t1.number and t.number = t1.
 HashJoin
 ├── join type: INNER
 ├── build keys: [t.number (#0), t.number (#0)]
-├── probe keys: [t1.number (#1), plus(t1.number (#1), 1)]
+├── probe keys: [t1.number (#1), t1.number (#1) + 1]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── TableScan(Build)
@@ -110,7 +110,7 @@ query T
 explain select t.number from t, t1 where t.number + t1.number = 1
 ----
 Filter
-├── filters: [plus(t.number (#0), t1.number (#1)) = 1]
+├── filters: [t.number (#0) + t1.number (#1) = 1]
 ├── estimated rows: 3.33
 └── HashJoin
     ├── join type: CROSS
@@ -435,7 +435,7 @@ HashJoin
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 0.00
 └── Filter(Probe)
-    ├── filters: [plus(t1.a (#0), t1.b (#1)) > 10]
+    ├── filters: [t1.a (#0) + t1.b (#1) > 10]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
@@ -443,7 +443,7 @@ HashJoin
         ├── read bytes: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [plus(t1.a (#0), t1.b (#1)) > 10], limit: NONE]
+        ├── push downs: [filters: [t1.a (#0) + t1.b (#1) > 10], limit: NONE]
         └── estimated rows: 0.00
 
 query T
@@ -488,7 +488,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 0.00
 ├── Filter(Build)
-│   ├── filters: [plus(t2.a (#2), t2.b (#3)) > 10]
+│   ├── filters: [t2.a (#2) + t2.b (#3) > 10]
 │   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.default.t2
@@ -496,10 +496,10 @@ HashJoin
 │       ├── read bytes: 0
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
-│       ├── push downs: [filters: [plus(t2.a (#2), t2.b (#3)) > 10], limit: NONE]
+│       ├── push downs: [filters: [t2.a (#2) + t2.b (#3) > 10], limit: NONE]
 │       └── estimated rows: 0.00
 └── Filter(Probe)
-    ├── filters: [plus(t1.a (#0), t1.b (#1)) > 10]
+    ├── filters: [t1.a (#0) + t1.b (#1) > 10]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
@@ -507,7 +507,7 @@ HashJoin
         ├── read bytes: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [plus(t1.a (#0), t1.b (#1)) > 10], limit: NONE]
+        ├── push downs: [filters: [t1.a (#0) + t1.b (#1) > 10], limit: NONE]
         └── estimated rows: 0.00
 
 query T
@@ -520,7 +520,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 0.00
 ├── Filter(Build)
-│   ├── filters: [plus(t2.b (#3), t2.a (#2)) > 10]
+│   ├── filters: [t2.b (#3) + t2.a (#2) > 10]
 │   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.default.t2
@@ -528,10 +528,10 @@ HashJoin
 │       ├── read bytes: 0
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
-│       ├── push downs: [filters: [plus(t2.b (#3), t2.a (#2)) > 10], limit: NONE]
+│       ├── push downs: [filters: [t2.b (#3) + t2.a (#2) > 10], limit: NONE]
 │       └── estimated rows: 0.00
 └── Filter(Probe)
-    ├── filters: [plus(t1.b (#1), t1.a (#0)) > 10]
+    ├── filters: [t1.b (#1) + t1.a (#0) > 10]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
@@ -539,7 +539,7 @@ HashJoin
         ├── read bytes: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [plus(t1.b (#1), t1.a (#0)) > 10], limit: NONE]
+        ├── push downs: [filters: [t1.b (#1) + t1.a (#0) > 10], limit: NONE]
         └── estimated rows: 0.00
 
 statement ok

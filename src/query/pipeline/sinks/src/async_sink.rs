@@ -17,6 +17,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use async_trait::unboxed_simple;
+use common_base::runtime::GlobalIORuntime;
+use common_base::runtime::TrySpawn;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
@@ -40,7 +42,7 @@ pub trait AsyncSink: Send {
 }
 
 pub struct AsyncSinker<T: AsyncSink + 'static> {
-    inner: T,
+    inner: Option<T>,
     finished: bool,
     input: Arc<InputPort>,
     input_data: Option<DataBlock>,
@@ -51,13 +53,26 @@ pub struct AsyncSinker<T: AsyncSink + 'static> {
 impl<T: AsyncSink + 'static> AsyncSinker<T> {
     pub fn create(input: Arc<InputPort>, inner: T) -> Box<dyn Processor> {
         Box::new(AsyncSinker {
-            inner,
             input,
             finished: false,
             input_data: None,
+            inner: Some(inner),
             called_on_start: false,
             called_on_finish: false,
         })
+    }
+}
+
+impl<T: AsyncSink + 'static> Drop for AsyncSinker<T> {
+    fn drop(&mut self) {
+        if !self.called_on_finish {
+            self.called_on_finish = true;
+            if let Some(mut inner) = self.inner.take() {
+                GlobalIORuntime::instance().spawn(async move {
+                    let _ = inner.on_finish().await;
+                });
+            }
+        }
     }
 }
 
@@ -111,12 +126,12 @@ impl<T: AsyncSink + 'static> Processor for AsyncSinker<T> {
     async fn async_process(&mut self) -> Result<()> {
         if !self.called_on_start {
             self.called_on_start = true;
-            self.inner.on_start().await?;
+            self.inner.as_mut().unwrap().on_start().await?;
         } else if let Some(data_block) = self.input_data.take() {
-            self.finished = self.inner.consume(data_block).await?;
+            self.finished = self.inner.as_mut().unwrap().consume(data_block).await?;
         } else if !self.called_on_finish {
             self.called_on_finish = true;
-            self.inner.on_finish().await?;
+            self.inner.as_mut().unwrap().on_finish().await?;
         }
 
         Ok(())

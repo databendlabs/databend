@@ -97,13 +97,13 @@ impl PartitionPruner {
 
         let mut partitions = Vec::with_capacity(locations.len());
 
-        let is_blocking_io = operator.metadata().can_blocking();
+        let is_blocking_io = operator.info().can_blocking();
 
         // 1. Read parquet meta data. Distinguish between sync and async reading.
         let file_metas = if is_blocking_io {
             let mut file_metas = Vec::with_capacity(locations.len());
             for location in locations {
-                let mut reader = operator.object(location).blocking_reader()?;
+                let mut reader = operator.blocking().reader(location)?;
                 let file_meta = pread::read_metadata(&mut reader).map_err(|e| {
                     ErrorCode::Internal(format!(
                         "Read parquet file '{}''s meta error: {}",
@@ -120,7 +120,7 @@ impl PartitionPruner {
                 let operator = operator.clone();
                 file_metas.push(async move {
                     tokio::spawn(async move {
-                        let mut reader = operator.object(&location).reader().await?;
+                        let mut reader = operator.reader(&location).await?;
                         pread::read_metadata_async(&mut reader).await.map_err(|e| {
                             ErrorCode::Internal(format!(
                                 "Read parquet file '{}''s meta error: {}",
@@ -195,7 +195,7 @@ impl PartitionPruner {
                         c.column_chunk().column_index_offset.is_some()
                             && c.column_chunk().column_index_length.is_some()
                     }) {
-                    let mut reader = operator.object(&locations[file_id]).blocking_reader()?;
+                    let mut reader = operator.blocking().reader(&locations[file_id])?;
                     page_pruners
                         .as_ref()
                         .map(|pruners| filter_pages(&mut reader, schema, rg, pruners))
@@ -708,7 +708,6 @@ mod tests {
                     }),
                 ],
                 func_name: "gt".to_string(),
-                return_type: Box::new(DataType::Boolean),
             });
             let filter = filter.as_expr_with_col_name()?;
             let pruner =
@@ -737,7 +736,6 @@ mod tests {
                     }),
                 ],
                 func_name: "lt".to_string(),
-                return_type: Box::new(DataType::Boolean),
             });
             let filter = filter.as_expr_with_col_name()?;
             let pruner =
@@ -766,7 +764,6 @@ mod tests {
                     }),
                 ],
                 func_name: "lte".to_string(),
-                return_type: Box::new(DataType::Boolean),
             });
             let filter = filter.as_expr_with_col_name()?;
             let pruner =
@@ -805,7 +802,6 @@ mod tests {
                     }),
                 ],
                 func_name: "gt".to_string(),
-                return_type: Box::new(DataType::Boolean),
             });
             let filter = filter.as_expr_with_col_name()?;
             let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filter)?;
@@ -835,7 +831,6 @@ mod tests {
                     }),
                 ],
                 func_name: "lte".to_string(),
-                return_type: Box::new(DataType::Boolean),
             });
             let filter = filter.as_expr_with_col_name()?;
             let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filter)?;
@@ -865,7 +860,6 @@ mod tests {
                     }),
                 ],
                 func_name: "gt".to_string(),
-                return_type: Box::new(DataType::Boolean),
             });
             let filter = filter.as_expr_with_col_name()?;
             let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filter)?;
@@ -895,7 +889,6 @@ mod tests {
                     }),
                 ],
                 func_name: "lte".to_string(),
-                return_type: Box::new(DataType::Boolean),
             });
             let filter = filter.as_expr_with_col_name()?;
             let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filter)?;

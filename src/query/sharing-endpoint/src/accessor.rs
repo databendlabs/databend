@@ -95,7 +95,7 @@ impl SharingAccessor {
     ) -> Result<Option<SharedTableResponse>> {
         let sharing_accessor = Self::instance();
         let path = sharing_accessor.get_share_location();
-        let data = sharing_accessor.op.object(&path).read().await?;
+        let data = sharing_accessor.op.read(&path).await?;
         let share_specs: models::SharingConfig = serde_json::from_slice(data.as_slice())?;
         share_specs.get_tables(input)
     }
@@ -115,15 +115,11 @@ impl SharingAccessor {
         let obj_path = format!("{}/{}", loc_prefix, file_path);
         let op = self.op.clone();
         if input.method == "HEAD" {
-            let s = op
-                .object(obj_path.as_str())
-                .presign_stat(Duration::hours(1))?;
+            let s = op.presign_stat(obj_path.as_str(), Duration::hours(1))?;
             return Ok(PresignFileResponse::new(&s, input.file_name.clone()));
         }
 
-        let s = op
-            .object(obj_path.as_str())
-            .presign_read(Duration::hours(1))?;
+        let s = op.presign_read(obj_path.as_str(), Duration::hours(1))?;
         Ok(PresignFileResponse::new(&s, input.file_name.clone()))
     }
 
@@ -132,7 +128,7 @@ impl SharingAccessor {
     ) -> Result<Vec<PresignFileResponse>> {
         let accessor = Self::instance();
         let table = accessor.get_shared_table(input).await?;
-        return match table {
+        match table {
             Some(t) => {
                 let mut presigned_files = vec![];
                 for f in input.request_files.iter() {
@@ -142,6 +138,6 @@ impl SharingAccessor {
                 Ok(presigned_files)
             }
             None => Ok(vec![]),
-        };
+        }
     }
 }

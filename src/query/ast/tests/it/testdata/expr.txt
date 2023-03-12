@@ -94,6 +94,7 @@ FunctionCall {
         },
     ],
     params: [],
+    window: None,
 }
 
 
@@ -736,6 +737,7 @@ FunctionCall {
         },
     ],
     params: [],
+    window: None,
 }
 
 
@@ -1244,6 +1246,7 @@ FunctionCall {
         },
     ],
     params: [],
+    window: None,
 }
 
 
@@ -1268,6 +1271,7 @@ FunctionCall {
     },
     args: [],
     params: [],
+    window: None,
 }
 
 
@@ -1290,6 +1294,7 @@ FunctionCall {
     },
     args: [],
     params: [],
+    window: None,
 }
 
 
@@ -1341,6 +1346,7 @@ FunctionCall {
         },
     ],
     params: [],
+    window: None,
 }
 
 
@@ -2071,6 +2077,7 @@ BinaryOp {
                     },
                 ],
                 params: [],
+                window: None,
             },
         },
         not: true,
@@ -2173,6 +2180,7 @@ BinaryOp {
             },
         ],
         params: [],
+        window: None,
     },
     right: Case {
         span: Some(
@@ -2214,6 +2222,7 @@ BinaryOp {
                         },
                     ],
                     params: [],
+                    window: None,
                 },
                 right: Literal {
                     span: Some(
@@ -2265,6 +2274,7 @@ BinaryOp {
                     },
                 ],
                 params: [],
+                window: None,
             },
         ),
     },
@@ -2678,6 +2688,7 @@ FunctionCall {
         },
     ],
     params: [],
+    window: None,
 }
 
 
@@ -2729,6 +2740,7 @@ FunctionCall {
         },
     ],
     params: [],
+    window: None,
 }
 
 
@@ -2776,6 +2788,7 @@ FunctionCall {
         },
     ],
     params: [],
+    window: None,
 }
 
 
@@ -2841,6 +2854,7 @@ FunctionCall {
         },
     ],
     params: [],
+    window: None,
 }
 
 
@@ -2880,6 +2894,7 @@ FunctionCall {
         },
     ],
     params: [],
+    window: None,
 }
 
 
@@ -2931,6 +2946,7 @@ FunctionCall {
         },
     ],
     params: [],
+    window: None,
 }
 
 
@@ -3078,6 +3094,624 @@ Map {
             },
         ),
     ],
+}
+
+
+---------- Input ----------
+ROW_NUMBER() OVER (ORDER BY salary DESC)
+---------- Output ---------
+ROW_NUMBER() OVER (ORDER BY salary DESC)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..40,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "ROW_NUMBER",
+        quote: None,
+        span: Some(
+            0..10,
+        ),
+    },
+    args: [],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [],
+            order_by: [
+                OrderByExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            28..34,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "salary",
+                            quote: None,
+                            span: Some(
+                                28..34,
+                            ),
+                        },
+                    },
+                    asc: Some(
+                        false,
+                    ),
+                    nulls_first: None,
+                },
+            ],
+            window_frame: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
+SUM(salary) OVER ()
+---------- Output ---------
+SUM(salary) OVER ()
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..19,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "SUM",
+        quote: None,
+        span: Some(
+            0..3,
+        ),
+    },
+    args: [
+        ColumnRef {
+            span: Some(
+                4..10,
+            ),
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "salary",
+                quote: None,
+                span: Some(
+                    4..10,
+                ),
+            },
+        },
+    ],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [],
+            order_by: [],
+            window_frame: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
+AVG(salary) OVER (PARTITION BY department)
+---------- Output ---------
+AVG(salary) OVER (PARTITION BY department)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..42,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "AVG",
+        quote: None,
+        span: Some(
+            0..3,
+        ),
+    },
+    args: [
+        ColumnRef {
+            span: Some(
+                4..10,
+            ),
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "salary",
+                quote: None,
+                span: Some(
+                    4..10,
+                ),
+            },
+        },
+    ],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [
+                ColumnRef {
+                    span: Some(
+                        31..41,
+                    ),
+                    database: None,
+                    table: None,
+                    column: Identifier {
+                        name: "department",
+                        quote: None,
+                        span: Some(
+                            31..41,
+                        ),
+                    },
+                },
+            ],
+            order_by: [],
+            window_frame: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
+SUM(salary) OVER (PARTITION BY department ORDER BY salary DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+---------- Output ---------
+SUM(salary) OVER (PARTITION BY department ORDER BY salary DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..112,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "SUM",
+        quote: None,
+        span: Some(
+            0..3,
+        ),
+    },
+    args: [
+        ColumnRef {
+            span: Some(
+                4..10,
+            ),
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "salary",
+                quote: None,
+                span: Some(
+                    4..10,
+                ),
+            },
+        },
+    ],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [
+                ColumnRef {
+                    span: Some(
+                        31..41,
+                    ),
+                    database: None,
+                    table: None,
+                    column: Identifier {
+                        name: "department",
+                        quote: None,
+                        span: Some(
+                            31..41,
+                        ),
+                    },
+                },
+            ],
+            order_by: [
+                OrderByExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            51..57,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "salary",
+                            quote: None,
+                            span: Some(
+                                51..57,
+                            ),
+                        },
+                    },
+                    asc: Some(
+                        false,
+                    ),
+                    nulls_first: None,
+                },
+            ],
+            window_frame: Some(
+                WindowFrame {
+                    units: Rows,
+                    start_bound: Preceding(
+                        Some(
+                            ColumnRef {
+                                span: Some(
+                                    76..85,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "UNBOUNDED",
+                                    quote: None,
+                                    span: Some(
+                                        76..85,
+                                    ),
+                                },
+                            },
+                        ),
+                    ),
+                    end_bound: CurrentRow,
+                },
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) 
+---------- Output ---------
+AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..102,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "AVG",
+        quote: None,
+        span: Some(
+            0..3,
+        ),
+    },
+    args: [
+        ColumnRef {
+            span: Some(
+                4..10,
+            ),
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "salary",
+                quote: None,
+                span: Some(
+                    4..10,
+                ),
+            },
+        },
+    ],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [
+                ColumnRef {
+                    span: Some(
+                        31..41,
+                    ),
+                    database: None,
+                    table: None,
+                    column: Identifier {
+                        name: "department",
+                        quote: None,
+                        span: Some(
+                            31..41,
+                        ),
+                    },
+                },
+            ],
+            order_by: [
+                OrderByExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            51..60,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "hire_date",
+                            quote: None,
+                            span: Some(
+                                51..60,
+                            ),
+                        },
+                    },
+                    asc: None,
+                    nulls_first: None,
+                },
+            ],
+            window_frame: Some(
+                WindowFrame {
+                    units: Rows,
+                    start_bound: Preceding(
+                        Some(
+                            Literal {
+                                span: Some(
+                                    74..75,
+                                ),
+                                lit: UInt64(
+                                    2,
+                                ),
+                            },
+                        ),
+                    ),
+                    end_bound: CurrentRow,
+                },
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+COUNT() OVER (ORDER BY hire_date RANGE BETWEEN INTERVAL '7' DAY PRECEDING AND CURRENT ROW)
+---------- Output ---------
+COUNT() OVER (ORDER BY hire_date RANGE BETWEEN INTERVAL '7' DAY PRECEDING AND CURRENT ROW)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..90,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "COUNT",
+        quote: None,
+        span: Some(
+            0..5,
+        ),
+    },
+    args: [],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [],
+            order_by: [
+                OrderByExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            23..32,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "hire_date",
+                            quote: None,
+                            span: Some(
+                                23..32,
+                            ),
+                        },
+                    },
+                    asc: None,
+                    nulls_first: None,
+                },
+            ],
+            window_frame: Some(
+                WindowFrame {
+                    units: Range,
+                    start_bound: Preceding(
+                        Some(
+                            Interval {
+                                span: Some(
+                                    47..63,
+                                ),
+                                expr: Literal {
+                                    span: Some(
+                                        56..59,
+                                    ),
+                                    lit: String(
+                                        "7",
+                                    ),
+                                },
+                                unit: Day,
+                            },
+                        ),
+                    ),
+                    end_bound: CurrentRow,
+                },
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+COUNT() OVER (ORDER BY hire_date ROWS UNBOUNDED PRECEDING)
+---------- Output ---------
+COUNT() OVER (ORDER BY hire_date ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..58,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "COUNT",
+        quote: None,
+        span: Some(
+            0..5,
+        ),
+    },
+    args: [],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [],
+            order_by: [
+                OrderByExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            23..32,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "hire_date",
+                            quote: None,
+                            span: Some(
+                                23..32,
+                            ),
+                        },
+                    },
+                    asc: None,
+                    nulls_first: None,
+                },
+            ],
+            window_frame: Some(
+                WindowFrame {
+                    units: Rows,
+                    start_bound: Preceding(
+                        Some(
+                            ColumnRef {
+                                span: Some(
+                                    38..47,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "UNBOUNDED",
+                                    quote: None,
+                                    span: Some(
+                                        38..47,
+                                    ),
+                                },
+                            },
+                        ),
+                    ),
+                    end_bound: Following(
+                        None,
+                    ),
+                },
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+COUNT() OVER (ORDER BY hire_date ROWS CURRENT ROW)
+---------- Output ---------
+COUNT() OVER (ORDER BY hire_date ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..50,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "COUNT",
+        quote: None,
+        span: Some(
+            0..5,
+        ),
+    },
+    args: [],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [],
+            order_by: [
+                OrderByExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            23..32,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "hire_date",
+                            quote: None,
+                            span: Some(
+                                23..32,
+                            ),
+                        },
+                    },
+                    asc: None,
+                    nulls_first: None,
+                },
+            ],
+            window_frame: Some(
+                WindowFrame {
+                    units: Rows,
+                    start_bound: CurrentRow,
+                    end_bound: Following(
+                        None,
+                    ),
+                },
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+COUNT() OVER (ORDER BY hire_date ROWS 3 PRECEDING)
+---------- Output ---------
+COUNT() OVER (ORDER BY hire_date ROWS BETWEEN 3 PRECEDING AND UNBOUNDED FOLLOWING)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..50,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "COUNT",
+        quote: None,
+        span: Some(
+            0..5,
+        ),
+    },
+    args: [],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [],
+            order_by: [
+                OrderByExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            23..32,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "hire_date",
+                            quote: None,
+                            span: Some(
+                                23..32,
+                            ),
+                        },
+                    },
+                    asc: None,
+                    nulls_first: None,
+                },
+            ],
+            window_frame: Some(
+                WindowFrame {
+                    units: Rows,
+                    start_bound: Preceding(
+                        Some(
+                            Literal {
+                                span: Some(
+                                    38..39,
+                                ),
+                                lit: UInt64(
+                                    3,
+                                ),
+                            },
+                        ),
+                    ),
+                    end_bound: Following(
+                        None,
+                    ),
+                },
+            ),
+        },
+    ),
 }
 
 

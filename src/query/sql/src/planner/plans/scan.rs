@@ -20,7 +20,6 @@ use common_catalog::table::TableStatistics;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use itertools::Itertools;
-use roaring::RoaringBitmap;
 
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnSet;
@@ -122,14 +121,6 @@ impl Operator for Scan {
         RelOp::Scan
     }
 
-    fn transformation_candidate_rules(&self) -> roaring::RoaringBitmap {
-        RoaringBitmap::new()
-    }
-
-    fn exploration_candidate_rules(&self) -> roaring::RoaringBitmap {
-        RoaringBitmap::new()
-    }
-
     fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<RelationalProperty> {
         let mut used_columns = ColumnSet::new();
         if let Some(preds) = &self.push_down_predicates {
@@ -180,6 +171,17 @@ impl Operator for Scan {
                 }
             }
         }
+
+        // If prewhere is not none, we can't get precise cardinality
+        let precise_cardinality = if self.prewhere.is_none() {
+            self.statistics
+                .statistics
+                .as_ref()
+                .and_then(|stat| stat.num_rows)
+        } else {
+            None
+        };
+
         Ok(RelationalProperty {
             output_columns: self.columns.clone(),
             outer_columns: Default::default(),
@@ -190,11 +192,7 @@ impl Operator for Scan {
                 .as_ref()
                 .map_or(0.0, |stat| stat.num_rows.map_or(0.0, |num| num as f64)),
             statistics: OpStatistics {
-                precise_cardinality: self
-                    .statistics
-                    .statistics
-                    .as_ref()
-                    .and_then(|stat| stat.num_rows),
+                precise_cardinality,
                 column_stats,
                 is_accurate: self.statistics.is_accurate,
             },

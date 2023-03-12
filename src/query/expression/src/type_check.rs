@@ -31,8 +31,11 @@ use crate::types::number::NumberDataType;
 use crate::types::number::NumberScalar;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
+use crate::types::Number;
 use crate::AutoCastRules;
 use crate::ColumnIndex;
+use crate::ConstantFolder;
+use crate::FunctionContext;
 use crate::Scalar;
 
 pub fn check<Index: ColumnIndex>(
@@ -74,10 +77,21 @@ pub fn check<Index: ColumnIndex>(
             args,
             params,
         } => {
-            let args_expr: Vec<_> = args
+            let mut args_expr: Vec<_> = args
                 .iter()
                 .map(|arg| check(arg, fn_registry))
                 .try_collect()?;
+
+            if name == "if" || name == "multi_if" {
+                args_expr
+                    .iter_mut()
+                    .skip(1)
+                    .step_by(2)
+                    .for_each(|expr| *expr = expr.wrap_catch());
+                let last = args_expr.last_mut().unwrap();
+                *last = last.wrap_catch()
+            }
+
             check_function(*span, name, params, &args_expr, fn_registry)
         }
     }
@@ -225,6 +239,34 @@ fn wrap_nullable_for_try_cast(span: Span, ty: &DataType) -> Result<DataType> {
                 .collect::<Result<Vec<_>>>()?,
         )))),
         _ => Ok(DataType::Nullable(Box::new(ty.clone()))),
+    }
+}
+
+pub fn check_number<Index: ColumnIndex, T: Number>(
+    span: Span,
+    func_ctx: FunctionContext,
+    expr: &Expr<Index>,
+    fn_registry: &FunctionRegistry,
+) -> Result<T> {
+    let (expr, _) = ConstantFolder::fold(expr, func_ctx, fn_registry);
+    match expr {
+        Expr::Constant {
+            scalar: Scalar::Number(num),
+            ..
+        } => T::try_downcast_scalar(&num).ok_or_else(|| {
+            ErrorCode::InvalidArgument(format!(
+                "Expect {}, but got {}",
+                T::data_type(),
+                expr.data_type()
+            ))
+            .set_span(span)
+        }),
+        _ => Err(ErrorCode::InvalidArgument(format!(
+            "Expect {}, but got {}",
+            T::data_type(),
+            expr.data_type()
+        ))
+        .set_span(span)),
     }
 }
 
@@ -387,6 +429,7 @@ pub fn try_check_function<Index: ColumnIndex>(
         .collect::<Result<Vec<_>>>()?;
 
     let return_type = subst.apply(&sig.return_type)?;
+    assert!(!return_type.has_nested_nullable());
 
     let generics = subst
         .0

@@ -33,7 +33,7 @@ impl NullableDeserializer {
     pub fn with_capacity(capacity: usize, inner_ty: &DataType) -> Self {
         Self {
             validity: MutableBitmap::new(),
-            inner: Box::new(inner_ty.create_deserializer(capacity)),
+            inner: Box::new(TypeDeserializerImpl::with_capacity(inner_ty, capacity)),
         }
     }
 }

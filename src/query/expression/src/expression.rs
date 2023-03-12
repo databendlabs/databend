@@ -97,6 +97,11 @@ pub enum Expr<Index: ColumnIndex = usize> {
         expr: Box<Expr<Index>>,
         dest_type: DataType,
     },
+    Catch {
+        span: Span,
+        data_type: DataType,
+        expr: Box<Expr<Index>>,
+    },
     FunctionCall {
         span: Span,
         id: FunctionID,
@@ -132,6 +137,11 @@ pub enum RemoteExpr<Index: ColumnIndex = usize> {
         is_try: bool,
         expr: Box<RemoteExpr<Index>>,
         dest_type: DataType,
+    },
+    Catch {
+        span: Span,
+        expr: Box<RemoteExpr<Index>>,
+        data_type: DataType,
     },
     FunctionCall {
         span: Span,
@@ -284,6 +294,7 @@ impl<Index: ColumnIndex> Expr<Index> {
             Expr::Constant { data_type, .. } => data_type,
             Expr::ColumnRef { data_type, .. } => data_type,
             Expr::Cast { dest_type, .. } => dest_type,
+            Expr::Catch { data_type, .. } => data_type,
             Expr::FunctionCall { return_type, .. } => return_type,
         }
     }
@@ -295,6 +306,7 @@ impl<Index: ColumnIndex> Expr<Index> {
                     buf.insert(id.clone(), data_type.clone());
                 }
                 Expr::Cast { expr, .. } => walk(expr, buf),
+                Expr::Catch { expr, .. } => walk(expr, buf),
                 Expr::FunctionCall { args, .. } => args.iter().for_each(|expr| walk(expr, buf)),
                 Expr::Constant { .. } => (),
             }
@@ -357,6 +369,9 @@ impl<Index: ColumnIndex> Expr<Index> {
                         format!("CAST({} AS {dest_type})", expr.sql_display())
                     }
                 }
+                Expr::Catch { expr, .. } => {
+                    format!("CATCH({})", expr.sql_display())
+                }
                 Expr::FunctionCall { function, args, .. } => {
                     match (function.signature.name.as_str(), args.as_slice()) {
                         ("and", [ref lhs, ref rhs]) => {
@@ -383,6 +398,26 @@ impl<Index: ColumnIndex> Expr<Index> {
                         }
                         ("noteq", [ref lhs, ref rhs]) => {
                             write_binary_op("<>", lhs, rhs, 20, min_precedence)
+                        }
+                        ("plus", [ref expr]) => write_unary_op("+", expr, 50, min_precedence),
+                        ("minus", [ref expr]) => write_unary_op("-", expr, 50, min_precedence),
+                        ("plus", [ref lhs, ref rhs]) => {
+                            write_binary_op("+", lhs, rhs, 30, min_precedence)
+                        }
+                        ("minus", [ref lhs, ref rhs]) => {
+                            write_binary_op("-", lhs, rhs, 30, min_precedence)
+                        }
+                        ("multiply", [ref lhs, ref rhs]) => {
+                            write_binary_op("*", lhs, rhs, 40, min_precedence)
+                        }
+                        ("divide", [ref lhs, ref rhs]) => {
+                            write_binary_op("/", lhs, rhs, 40, min_precedence)
+                        }
+                        ("div", [ref lhs, ref rhs]) => {
+                            write_binary_op("DIV", lhs, rhs, 40, min_precedence)
+                        }
+                        ("modulo", [ref lhs, ref rhs]) => {
+                            write_binary_op("%", lhs, rhs, 40, min_precedence)
                         }
                         _ => {
                             let mut s = String::new();
@@ -441,6 +476,15 @@ impl<Index: ColumnIndex> Expr<Index> {
                 expr: Box::new(expr.project_column_ref(f)),
                 dest_type: dest_type.clone(),
             },
+            Expr::Catch {
+                span,
+                expr,
+                data_type,
+            } => Expr::Catch {
+                span: *span,
+                expr: Box::new(expr.project_column_ref(f)),
+                data_type: data_type.clone(),
+            },
             Expr::FunctionCall {
                 span,
                 id,
@@ -492,6 +536,15 @@ impl<Index: ColumnIndex> Expr<Index> {
                 expr: Box::new(expr.as_remote_expr()),
                 dest_type: dest_type.clone(),
             },
+            Expr::Catch {
+                span,
+                expr,
+                data_type,
+            } => RemoteExpr::Catch {
+                span: *span,
+                expr: Box::new(expr.as_remote_expr()),
+                data_type: data_type.clone(),
+            },
             Expr::FunctionCall {
                 span,
                 id,
@@ -514,10 +567,35 @@ impl<Index: ColumnIndex> Expr<Index> {
             Expr::Constant { .. } => true,
             Expr::ColumnRef { .. } => true,
             Expr::Cast { expr, .. } => expr.is_deterministic(),
+            Expr::Catch { expr, .. } => expr.is_deterministic(),
             Expr::FunctionCall { function, args, .. } => {
                 !function.signature.property.non_deterministic
                     && args.iter().all(|arg| arg.is_deterministic())
             }
+        }
+    }
+
+    fn span(&self) -> Span {
+        match self {
+            Expr::Constant { span, .. } => *span,
+            Expr::ColumnRef { span, .. } => *span,
+            Expr::Cast { span, .. } => *span,
+            Expr::Catch { span, .. } => *span,
+            Expr::FunctionCall { span, .. } => *span,
+        }
+    }
+
+    pub fn wrap_catch(&self) -> Self {
+        match self {
+            Expr::Catch { .. } => self.clone(),
+            expr => Expr::Catch {
+                span: expr.span(),
+                expr: Box::new(expr.clone()),
+                data_type: DataType::Tuple(vec![
+                    expr.data_type().clone(),
+                    DataType::Nullable(Box::new(DataType::String)),
+                ]),
+            },
         }
     }
 }
@@ -568,6 +646,15 @@ impl Expr<usize> {
                 is_try: *is_try,
                 expr: Box::new(expr.project_column_ref_with_unnest_offset(f, offset)),
                 dest_type: dest_type.clone(),
+            },
+            Expr::Catch {
+                span,
+                expr,
+                data_type,
+            } => Expr::Catch {
+                span: *span,
+                expr: Box::new(expr.project_column_ref_with_unnest_offset(f, offset)),
+                data_type: data_type.clone(),
             },
             Expr::FunctionCall {
                 span,
@@ -624,6 +711,15 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                 is_try: *is_try,
                 expr: Box::new(expr.as_expr(fn_registry)),
                 dest_type: dest_type.clone(),
+            },
+            RemoteExpr::Catch {
+                span,
+                expr,
+                data_type,
+            } => Expr::Catch {
+                span: *span,
+                expr: Box::new(expr.as_expr(fn_registry)),
+                data_type: data_type.clone(),
             },
             RemoteExpr::FunctionCall {
                 span,

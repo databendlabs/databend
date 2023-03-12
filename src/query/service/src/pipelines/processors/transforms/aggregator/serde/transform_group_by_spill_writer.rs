@@ -209,7 +209,6 @@ pub fn spilling_group_by_payload<Method: HashMethodBounds>(
         output_data_block,
         Box::pin(async move {
             let instant = Instant::now();
-            let object = operator.object(&location);
 
             // temp code: waiting https://github.com/datafuselabs/opendal/pull/1431
             let mut write_data = Vec::with_capacity(total_size);
@@ -218,7 +217,7 @@ pub fn spilling_group_by_payload<Method: HashMethodBounds>(
                 write_data.extend(data);
             }
 
-            object.write(write_data).await?;
+            operator.write(&location, write_data).await?;
 
             info!(
                 "Write aggregate spill {} successfully, elapsed: {:?}",

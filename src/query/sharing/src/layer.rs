@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::fmt::Debug;
 
 use async_trait::async_trait;
@@ -30,7 +31,7 @@ use opendal::raw::parse_etag;
 use opendal::raw::parse_last_modified;
 use opendal::raw::Accessor;
 use opendal::raw::AccessorCapability;
-use opendal::raw::AccessorMetadata;
+use opendal::raw::AccessorInfo;
 use opendal::raw::AsyncBody;
 use opendal::raw::ErrorResponse;
 use opendal::raw::HttpClient;
@@ -39,10 +40,11 @@ use opendal::raw::Operation;
 use opendal::raw::PresignedRequest;
 use opendal::raw::RpRead;
 use opendal::raw::RpStat;
+use opendal::Builder;
+use opendal::EntryMode;
 use opendal::Error;
 use opendal::ErrorKind;
-use opendal::ObjectMetadata;
-use opendal::ObjectMode;
+use opendal::Metadata;
 use opendal::Operator;
 use opendal::Result;
 use opendal::Scheme;
@@ -68,21 +70,47 @@ pub fn create_share_table_operator(
                 HttpClient::new()?,
             );
             let client = HttpClient::new()?;
-            Operator::new(SharedAccessor { signer, client })
-                // Add retry
-                .layer(RetryLayer::new().with_jitter())
-                // Add metrics
-                .layer(MetricsLayer)
-                // Add logging
-                .layer(LoggingLayer::default())
-                // Add tracing
-                .layer(TracingLayer)
-                .finish()
+            Operator::new(SharedBuilder {
+                signer: Some(signer),
+                client: Some(client),
+            })?
+            // Add retry
+            .layer(RetryLayer::new().with_jitter())
+            // Add metrics
+            .layer(MetricsLayer)
+            // Add logging
+            .layer(LoggingLayer::default())
+            // Add tracing
+            .layer(TracingLayer)
+            .finish()
         }
-        None => Operator::new(DummySharedAccessor {}).finish(),
+        None => Operator::new(())?.finish(),
     };
 
     Ok(op)
+}
+
+#[derive(Default)]
+struct SharedBuilder {
+    signer: Option<SharedSigner>,
+    client: Option<HttpClient>,
+}
+
+impl Builder for SharedBuilder {
+    const SCHEME: Scheme = Scheme::Custom("shared");
+
+    type Accessor = SharedAccessor;
+
+    fn from_map(_: HashMap<String, String>) -> Self {
+        unreachable!("shared accessor doesn't build from map")
+    }
+
+    fn build(&mut self) -> Result<Self::Accessor> {
+        Ok(SharedAccessor {
+            signer: self.signer.take().expect("must be valid"),
+            client: self.client.take().expect("must be valid"),
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -100,8 +128,8 @@ impl Accessor for SharedAccessor {
     type Pager = ();
     type BlockingPager = ();
 
-    fn metadata(&self) -> AccessorMetadata {
-        let mut meta = AccessorMetadata::default();
+    fn info(&self) -> AccessorInfo {
+        let mut meta = AccessorInfo::default();
         meta.set_scheme(Scheme::Custom("shared"))
             .set_capabilities(AccessorCapability::Read);
         meta
@@ -142,7 +170,7 @@ impl Accessor for SharedAccessor {
     async fn stat(&self, path: &str, _args: OpStat) -> Result<RpStat> {
         // Stat root always returns a DIR.
         if path == "/" {
-            return Ok(RpStat::new(ObjectMetadata::new(ObjectMode::DIR)));
+            return Ok(RpStat::new(Metadata::new(EntryMode::DIR)));
         }
         let req: PresignedRequest =
             self.signer
@@ -160,11 +188,11 @@ impl Accessor for SharedAccessor {
         match status {
             StatusCode::OK => {
                 let mode = if path.ends_with('/') {
-                    ObjectMode::DIR
+                    EntryMode::DIR
                 } else {
-                    ObjectMode::FILE
+                    EntryMode::FILE
                 };
-                let mut m = ObjectMetadata::new(mode);
+                let mut m = Metadata::new(mode);
                 if let Some(v) = parse_content_length(resp.headers())? {
                     m.set_content_length(v);
                 }
@@ -180,7 +208,7 @@ impl Accessor for SharedAccessor {
                 Ok(RpStat::new(m))
             }
             StatusCode::NOT_FOUND if path.ends_with('/') => {
-                Ok(RpStat::new(ObjectMetadata::new(ObjectMode::DIR)))
+                Ok(RpStat::new(Metadata::new(EntryMode::DIR)))
             }
             _ => {
                 let er = parse_error_response(resp).await?;
@@ -193,8 +221,8 @@ impl Accessor for SharedAccessor {
 
 pub fn parse_error(er: ErrorResponse) -> Error {
     let (kind, retryable) = match er.status_code() {
-        StatusCode::NOT_FOUND => (ErrorKind::ObjectNotFound, false),
-        StatusCode::FORBIDDEN => (ErrorKind::ObjectPermissionDenied, false),
+        StatusCode::NOT_FOUND => (ErrorKind::NotFound, false),
+        StatusCode::FORBIDDEN => (ErrorKind::PermissionDenied, false),
         StatusCode::INTERNAL_SERVER_ERROR
         | StatusCode::BAD_GATEWAY
         | StatusCode::SERVICE_UNAVAILABLE
@@ -209,24 +237,4 @@ pub fn parse_error(er: ErrorResponse) -> Error {
     }
 
     err
-}
-
-// A dummy Accessor which cannot do anything.
-#[derive(Debug)]
-struct DummySharedAccessor {}
-
-#[async_trait]
-impl Accessor for DummySharedAccessor {
-    type Reader = ();
-    type BlockingReader = ();
-    type Writer = ();
-    type BlockingWriter = ();
-    type Pager = ();
-    type BlockingPager = ();
-
-    fn metadata(&self) -> AccessorMetadata {
-        let mut meta = AccessorMetadata::default();
-        meta.set_scheme(Scheme::Custom("shared"));
-        meta
-    }
 }
