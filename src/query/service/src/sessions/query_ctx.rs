@@ -254,6 +254,16 @@ impl TableContext for QueryContext {
         self.shared.result_progress.as_ref().get_values()
     }
 
+    fn get_status_info(&self) -> String {
+        let status = self.shared.status.read();
+        status.clone()
+    }
+
+    fn set_status_info(&self, info: &str) {
+        let mut status = self.shared.status.write();
+        *status = info.to_string();
+    }
+
     fn get_partition(&self) -> Option<PartInfoPtr> {
         self.partition_queue.write().pop_front()
     }
