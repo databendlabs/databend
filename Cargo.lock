@@ -2061,7 +2061,6 @@ dependencies = [
  "common-meta-app",
  "futures",
  "opendal",
- "parking_lot 0.12.1",
  "regex",
  "serde",
 ]
