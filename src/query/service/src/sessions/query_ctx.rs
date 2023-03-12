@@ -353,7 +353,7 @@ impl TableContext for QueryContext {
     fn get_fuse_version(&self) -> String {
         let session = self.get_current_session();
         match session.get_type() {
-            SessionType::Clickhouse => self.clickhouse_version.clone(),
+            SessionType::ClickHouseHttpHandler => self.clickhouse_version.clone(),
             SessionType::MySQL => self.mysql_version.clone(),
             _ => self.version.clone(),
         }
