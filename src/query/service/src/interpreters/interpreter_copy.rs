@@ -49,7 +49,7 @@ use crate::sessions::TableContext;
 use crate::sql::plans::CopyPlan;
 use crate::sql::plans::Plan;
 
-const MAX_QUERY_COPIED_FILES_NUM: usize = 50;
+const MAX_QUERY_COPIED_FILES_NUM: usize = 1000;
 
 pub struct CopyInterpreter {
     ctx: Arc<QueryContext>,
@@ -217,7 +217,7 @@ impl CopyInterpreter {
         }
 
         // Colored.
-        let mut results = vec![];
+        let mut results = Vec::with_capacity(files.len());
         for mut file in files {
             if let Some(copied_file) = copied_files.get(&file.path) {
                 match &copied_file.etag {
@@ -280,10 +280,32 @@ impl CopyInterpreter {
         let start = Instant::now();
         let ctx = self.ctx.clone();
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
+
+        // Status.
+        {
+            let status = "begin to list files";
+            ctx.set_status_info(status);
+            info!(status);
+        }
+
         let mut stage_table_info = stage_table_info.clone();
         let mut all_source_file_infos = StageTable::list_files(&stage_table_info).await?;
 
+        // Status.
+        {
+            let status = format!("end to list files: {}", all_source_file_infos.len());
+            ctx.set_status_info(&status);
+            info!(status);
+        }
+
         if !force {
+            // Status.
+            {
+                let status = "begin to color copied files";
+                ctx.set_status_info(status);
+                info!(status);
+            }
+
             all_source_file_infos = CopyInterpreter::color_copied_files(
                 &table_ctx,
                 catalog_name,
@@ -293,7 +315,12 @@ impl CopyInterpreter {
             )
             .await?;
 
-            // Need copied file info.
+            // Status.
+            {
+                let status = format!("end to color copied files: {}", all_source_file_infos.len());
+                ctx.set_status_info(&status);
+                info!(status);
+            }
         }
 
         let mut need_copied_file_infos = vec![];
@@ -315,14 +342,27 @@ impl CopyInterpreter {
             return Ok(build_res);
         }
 
-        stage_table_info.files_to_copy = Some(need_copied_file_infos.clone());
+        // Status.
+        {
+            let status = "begin to read stage table plan";
+            ctx.set_status_info(status);
+            info!(status);
+        }
 
+        stage_table_info.files_to_copy = Some(need_copied_file_infos.clone());
         let stage_table = StageTable::try_create(stage_table_info.clone())?;
         let read_source_plan = {
             stage_table
                 .read_plan_with_catalog(ctx.clone(), catalog_name.to_string(), None)
                 .await?
         };
+
+        // Status.
+        {
+            let status = "begin to read stage table data";
+            ctx.set_status_info(status);
+            info!(status);
+        }
 
         let to_table = ctx
             .get_table(catalog_name, database_name, table_name)
@@ -389,40 +429,13 @@ impl CopyInterpreter {
                 }
 
                 return GlobalIORuntime::instance().block_on(async move {
-                    // 1. Commit data.
+                    // 1. Commit data to table.
                     let operations = ctx.consume_precommit_blocks();
-                    info!(
-                        "copy: try to commit operations:{}, elapsed:{}",
-                        operations.len(),
-                        start.elapsed().as_secs()
-                    );
                     to_table
                         .commit_insertion(ctx.clone(), operations, false)
                         .await?;
 
-                    // 2. Try to purge copied files if purge option is true, if error will skip.
-                    // If a file is already copied(status with AlreadyCopied) we will try to purge them.
-
-                    if stage_info.copy_options.purge {
-                        info!(
-                            "copy: try to purge files:{}, elapsed:{}",
-                            all_source_files.len(),
-                            start.elapsed().as_secs()
-                        );
-                        CopyInterpreter::try_purge_files(
-                            ctx.clone(),
-                            &stage_info,
-                            &all_source_files,
-                        )
-                        .await;
-                    }
-
-                    // 3. Upsert files(status with NeedCopy) info to meta.
-                    info!(
-                        "copy: try to upsert file infos:{} to meta, elapsed:{}",
-                        copied_files.len(),
-                        start.elapsed().as_secs()
-                    );
+                    // 2. Upsert files(status with NeedCopy) info to meta.
                     CopyInterpreter::upsert_copied_files_info_to_meta(
                         &ctx,
                         tenant,
@@ -433,7 +446,7 @@ impl CopyInterpreter {
                     )
                     .await?;
 
-                    // 4. log on_error mode errors.
+                    // 3. log on_error mode errors.
                     // todo(ariesdevil): persist errors with query_id
                     if let Some(error_map) = ctx.get_on_error_map() {
                         for (file_name, e) in error_map {
@@ -446,10 +459,36 @@ impl CopyInterpreter {
                         }
                     }
 
-                    info!(
-                        "copy: all copy finished, elapsed:{}",
-                        start.elapsed().as_secs()
-                    );
+                    // 4. Try to purge copied files if purge option is true, if error will skip.
+                    // If a file is already copied(status with AlreadyCopied) we will try to purge them.
+                    if stage_info.copy_options.purge {
+                        let purge_start = Instant::now();
+                        CopyInterpreter::try_purge_files(
+                            ctx.clone(),
+                            &stage_info,
+                            &all_source_files,
+                        )
+                        .await;
+
+                        // Status.
+                        {
+                            let status = format!(
+                                "try to purge files:{}, elapsed:{}",
+                                all_source_files.len(),
+                                purge_start.elapsed().as_secs()
+                            );
+                            ctx.set_status_info(&status);
+                            info!(status);
+                        }
+                    }
+
+                    // Status.
+                    {
+                        let status =
+                            format!("all copy finished, elapsed:{}", start.elapsed().as_secs());
+                        ctx.set_status_info(&status);
+                        info!(status);
+                    }
 
                     Ok(())
                 });

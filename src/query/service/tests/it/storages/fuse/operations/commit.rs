@@ -345,6 +345,12 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn get_status_info(&self) -> String {
+        "".to_string()
+    }
+
+    fn set_status_info(&self, _info: &str) {}
+
     fn get_partition(&self) -> Option<PartInfoPtr> {
         todo!()
     }
