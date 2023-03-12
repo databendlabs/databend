@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::number::NumberScalar;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::DataType;
-use common_expression::types::NumberColumnBuilder;
 use common_expression::types::NumberDataType;
+use common_expression::types::UInt64Type;
 use common_expression::BlockEntry;
-use common_expression::Column;
 use common_expression::ColumnId;
+use common_expression::FromData;
+use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::Value;
 
@@ -97,15 +97,14 @@ impl InternalColumn {
                 let block_id = meta.block_id as u64;
                 let seg_id = meta.segment_id as u64;
                 let high_32bit = (seg_id << 48) + (block_id << 32);
-                let mut builder =
-                    NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, num_rows);
+                let mut row_ids = Vec::with_capacity(num_rows);
                 for i in 0..num_rows {
                     let row_id = high_32bit + i as u64;
-                    builder.push(NumberScalar::UInt64(row_id));
+                    row_ids.push(row_id);
                 }
                 BlockEntry {
                     data_type: DataType::Number(NumberDataType::UInt64),
-                    value: Value::Column(Column::Number(builder.build())),
+                    value: Value::Column(UInt64Type::from_data(row_ids)),
                 }
             }
             InternalColumnType::BlockName => {
@@ -114,7 +113,7 @@ impl InternalColumn {
                 builder.commit_row();
                 BlockEntry {
                     data_type: DataType::String,
-                    value: Value::Column(Column::String(builder.build())),
+                    value: Value::Scalar(Scalar::String(builder.build_scalar())),
                 }
             }
             InternalColumnType::SegmentName => {
@@ -124,7 +123,7 @@ impl InternalColumn {
                 builder.commit_row();
                 BlockEntry {
                     data_type: DataType::String,
-                    value: Value::Column(Column::String(builder.build())),
+                    value: Value::Scalar(Scalar::String(builder.build_scalar())),
                 }
             }
             InternalColumnType::SnapshotName => {
@@ -134,7 +133,7 @@ impl InternalColumn {
                 builder.commit_row();
                 BlockEntry {
                     data_type: DataType::String,
-                    value: Value::Column(Column::String(builder.build())),
+                    value: Value::Scalar(Scalar::String(builder.build_scalar())),
                 }
             }
         }
