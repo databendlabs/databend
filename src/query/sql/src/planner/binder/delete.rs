@@ -41,15 +41,7 @@ impl<'a> Binder {
             ..
         } = table_reference
         {
-            (
-                catalog
-                    .as_ref()
-                    .map_or_else(|| self.ctx.get_current_catalog(), |i| i.name.clone()),
-                database
-                    .as_ref()
-                    .map_or_else(|| self.ctx.get_current_database(), |i| i.name.clone()),
-                table.name.clone(),
-            )
+            self.normalize_object_identifier_triple(catalog, database, table)
         } else {
             // we do not support USING clause yet
             return Err(ErrorCode::Internal(

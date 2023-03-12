@@ -16,12 +16,14 @@ use chrono::TimeZone;
 use chrono::Utc;
 use common_catalog::plan::StageFileInfo;
 use common_catalog::plan::StageFileStatus;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::TryStreamExt;
-use opendal::Object;
-use opendal::ObjectMetadata;
-use opendal::ObjectMetakey;
+use opendal::Entry;
+use opendal::Metadata;
+use opendal::Metakey;
 use opendal::Operator;
+use regex::Regex;
 use tracing::warn;
 
 /// List files from DAL in recursive way.
@@ -31,31 +33,31 @@ use tracing::warn;
 /// - If not exist, we will try to list `path/` too.
 ///
 /// TODO(@xuanwo): return a stream instead.
-pub async fn list_file(op: &Operator, path: &str) -> Result<Vec<StageFileInfo>> {
+pub async fn list_file(op: &Operator, path: &str, pattern: &str) -> Result<Vec<StageFileInfo>> {
     let mut files = Vec::new();
 
     // - If the path itself is a dir, return directly.
     // - Otherwise, return a path suffix by `/`
     // - If other errors happen, we will ignore them by returning None.
-    let dir_path = match op.object(path).stat().await {
+    let dir_path = match op.stat(path).await {
         Ok(meta) if meta.mode().is_dir() => Some(path.to_string()),
         Ok(meta) if !meta.mode().is_dir() => {
             files.push(format_stage_file_info(path.to_string(), &meta));
 
             None
         }
-        Err(e) if e.kind() == opendal::ErrorKind::ObjectNotFound => None,
+        Err(e) if e.kind() == opendal::ErrorKind::NotFound => None,
         Err(e) => return Err(e.into()),
         _ => None,
     };
 
     // Check the if this dir valid and list it recursively.
     if let Some(dir) = dir_path {
-        match op.object(&dir).stat().await {
+        match op.stat(&dir).await {
             Ok(_) => {
-                let mut ds = op.object(&dir).scan().await?;
+                let mut ds = op.scan(&dir).await?;
                 while let Some(de) = ds.try_next().await? {
-                    if let Some(fi) = stat_file(de).await? {
+                    if let Some(fi) = stat_file(op.clone(), de).await? {
                         files.push(fi)
                     }
                 }
@@ -63,6 +65,19 @@ pub async fn list_file(op: &Operator, path: &str) -> Result<Vec<StageFileInfo>> 
             Err(e) => warn!("ignore listing {path}/, because: {:?}", e),
         };
     }
+
+    let files = if pattern.is_empty() {
+        files
+    } else {
+        let regex = Regex::new(pattern).map_err(|e| {
+            ErrorCode::SyntaxException(format!(
+                "Pattern format invalid, got:{}, error:{:?}",
+                pattern, e
+            ))
+        })?;
+        files.retain(|v| regex.is_match(&v.path));
+        files
+    };
 
     Ok(files)
 }
@@ -73,14 +88,14 @@ pub async fn list_file(op: &Operator, path: &str) -> Result<Vec<StageFileInfo>> 
 /// - `Ok(Some(v))` if given object is a file and no error happened.
 /// - `Ok(None)` if given object is not a file.
 /// - `Err(err)` if there is an error happened.
-pub async fn stat_file(o: Object) -> Result<Option<StageFileInfo>> {
-    let meta = o
-        .metadata({
-            ObjectMetakey::Mode
-                | ObjectMetakey::ContentLength
-                | ObjectMetakey::ContentMd5
-                | ObjectMetakey::LastModified
-                | ObjectMetakey::Etag
+pub async fn stat_file(op: Operator, de: Entry) -> Result<Option<StageFileInfo>> {
+    let meta = op
+        .metadata(&de, {
+            Metakey::Mode
+                | Metakey::ContentLength
+                | Metakey::ContentMd5
+                | Metakey::LastModified
+                | Metakey::Etag
         })
         .await?;
 
@@ -88,10 +103,10 @@ pub async fn stat_file(o: Object) -> Result<Option<StageFileInfo>> {
         return Ok(None);
     }
 
-    Ok(Some(format_stage_file_info(o.path().to_string(), &meta)))
+    Ok(Some(format_stage_file_info(de.path().to_string(), &meta)))
 }
 
-pub fn format_stage_file_info(path: String, meta: &ObjectMetadata) -> StageFileInfo {
+pub fn format_stage_file_info(path: String, meta: &Metadata) -> StageFileInfo {
     StageFileInfo {
         path,
         size: meta.content_length(),

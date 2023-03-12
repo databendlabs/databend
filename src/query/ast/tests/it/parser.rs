@@ -357,6 +357,16 @@ fn test_statement() {
         r#"SET max_threads = 10*2;"#,
         r#"UNSET max_threads;"#,
         r#"UNSET (max_threads, sql_dialect);"#,
+        r#"SELECT t.c1 FROM @stage1/dir/file
+        ( file_format => 'PARQUET', FILES => ('file1', 'file2')) t;"#,
+        r#"select table0.c1, table1.c2 from
+            @stage1/dir/file ( FILE_FORMAT => 'parquet', FILES => ('file1', 'file2')) table0
+            left join table1;"#,
+        r#"SELECT c1 FROM 's3://test/bucket' (ENDPOINT_URL => 'xxx', PATTERN => '*.parquet') t;"#,
+        r#"CREATE FILE FORMAT my_csv
+            type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;"#,
+        r#"SHOW FILE FORMATS"#,
+        r#"DROP FILE FORMAT my_csv"#,
     ];
 
     for case in cases {
@@ -566,6 +576,16 @@ fn test_expr() {
         r#"a is distinct from b"#,
         r#"1 is not distinct from null"#,
         r#"{'k1':1,'k2':2}"#,
+        // window expr
+        r#"ROW_NUMBER() OVER (ORDER BY salary DESC)"#,
+        r#"SUM(salary) OVER ()"#,
+        r#"AVG(salary) OVER (PARTITION BY department)"#,
+        r#"SUM(salary) OVER (PARTITION BY department ORDER BY salary DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)"#,
+        r#"AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) "#,
+        r#"COUNT() OVER (ORDER BY hire_date RANGE BETWEEN INTERVAL '7' DAY PRECEDING AND CURRENT ROW)"#,
+        r#"COUNT() OVER (ORDER BY hire_date ROWS UNBOUNDED PRECEDING)"#,
+        r#"COUNT() OVER (ORDER BY hire_date ROWS CURRENT ROW)"#,
+        r#"COUNT() OVER (ORDER BY hire_date ROWS 3 PRECEDING)"#,
     ];
 
     for case in cases {

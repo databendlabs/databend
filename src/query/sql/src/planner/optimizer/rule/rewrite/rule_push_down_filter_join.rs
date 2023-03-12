@@ -169,8 +169,8 @@ pub fn try_push_down_filter_join(
             JoinPredicate::Other(_) => original_predicates.push(predicate),
 
             JoinPredicate::Both { left, right } => {
-                let left_type = left.data_type();
-                let right_type = right.data_type();
+                let left_type = left.data_type()?;
+                let right_type = right.data_type()?;
                 let join_key_type =
                     common_super_type(left_type, right_type, &BUILTIN_FUNCTIONS.default_cast_rules);
 
@@ -182,7 +182,7 @@ pub fn try_push_down_filter_join(
                         join.join_type = JoinType::Inner;
                     }
                     if join.join_type == JoinType::Inner {
-                        if left.data_type().ne(&right.data_type()) {
+                        if left.data_type()? != right.data_type()? {
                             let left = wrap_cast(left, &join_key_type);
                             let right = wrap_cast(right, &join_key_type);
                             join.left_conditions.push(left);

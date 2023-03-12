@@ -46,8 +46,8 @@ impl MapDeserializer {
                 let key_ty = &typs[0];
                 let value_ty = &typs[1];
                 Self {
-                    key: Box::new(key_ty.create_deserializer(capacity)),
-                    value: Box::new(value_ty.create_deserializer(capacity)),
+                    key: Box::new(TypeDeserializerImpl::with_capacity(key_ty, capacity)),
+                    value: Box::new(TypeDeserializerImpl::with_capacity(value_ty, capacity)),
                     inner_ty: inner_ty.clone(),
                     offsets,
                 }

@@ -19,7 +19,7 @@ use common_exception::Result;
 use opendal::Operator;
 
 pub async fn read_parquet_schema_async(operator: &Operator, path: &str) -> Result<ArrowSchema> {
-    let mut reader = operator.object(path).reader().await?;
+    let mut reader = operator.reader(path).await?;
     let meta = pread::read_metadata_async(&mut reader).await.map_err(|e| {
         ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
     })?;

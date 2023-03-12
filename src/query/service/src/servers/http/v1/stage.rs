@@ -95,8 +95,7 @@ pub async fn upload_to_stage(
             .trim_start_matches('/')
             .to_string();
         let _ = op
-            .object(&file_path)
-            .write(bytes)
+            .write(&file_path, bytes)
             .await
             .map_err(InternalServerError)?;
 

@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use roaring::RoaringBitmap;
 
 use super::Operator;
 use crate::optimizer::ColumnSet;
@@ -36,14 +35,6 @@ impl DummyTableScan {
 impl Operator for DummyTableScan {
     fn rel_op(&self) -> super::RelOp {
         super::RelOp::DummyTableScan
-    }
-
-    fn transformation_candidate_rules(&self) -> roaring::RoaringBitmap {
-        RoaringBitmap::new()
-    }
-
-    fn exploration_candidate_rules(&self) -> roaring::RoaringBitmap {
-        RoaringBitmap::new()
     }
 
     fn derive_relational_prop(

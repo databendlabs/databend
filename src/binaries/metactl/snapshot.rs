@@ -28,22 +28,24 @@ use anyhow::anyhow;
 use common_base::base::tokio;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::key_spaces::RaftStoreEntry;
+use common_meta_raft_store::key_spaces::RaftStoreEntryCompat;
 use common_meta_raft_store::log::RaftLog;
 use common_meta_raft_store::state::RaftState;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::init_sled_db;
+use common_meta_sled_store::openraft::compat::Upgrade;
 use common_meta_stoerr::MetaStorageError;
 use common_meta_types::anyerror::AnyError;
 use common_meta_types::Cmd;
 use common_meta_types::Endpoint;
+use common_meta_types::Entry;
+use common_meta_types::EntryPayload;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
+use common_meta_types::Membership;
 use common_meta_types::Node;
-use openraft::raft::Entry;
-use openraft::raft::EntryPayload;
-use openraft::Membership;
-use openraft::NodeId;
+use common_meta_types::NodeId;
 use tokio::net::TcpSocket;
 use url::Url;
 
@@ -91,7 +93,8 @@ fn import_lines<B: BufRead>(lines: Lines<B>) -> anyhow::Result<Option<LogId>> {
     let mut max_log_id: Option<LogId> = None;
     for line in lines {
         let l = line?;
-        let (tree_name, kv_entry): (String, RaftStoreEntry) = serde_json::from_str(&l)?;
+        let (tree_name, kv_entry): (String, RaftStoreEntryCompat) = serde_json::from_str(&l)?;
+        let kv_entry = kv_entry.upgrade();
 
         // eprintln!("line: {}", l);
 
@@ -236,8 +239,8 @@ async fn init_new_cluster(
     {
         // insert last membership log
         log_id.index += 1;
-        let membership = Membership::new_single(node_ids);
-        let entry: Entry<LogEntry> = Entry::<LogEntry> {
+        let membership = Membership::new(vec![node_ids], ());
+        let entry: Entry = Entry {
             log_id,
             payload: EntryPayload::Membership(membership),
         };
@@ -259,7 +262,7 @@ async fn init_new_cluster(
                 overriding: true,
             };
 
-            let entry: Entry<LogEntry> = Entry::<LogEntry> {
+            let entry: Entry = Entry {
                 log_id,
                 payload: EntryPayload::Normal(LogEntry {
                     txid: None,

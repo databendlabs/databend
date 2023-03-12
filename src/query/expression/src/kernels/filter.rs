@@ -19,8 +19,10 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
 
+use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::decimal::DecimalColumn;
+use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumn;
@@ -28,6 +30,7 @@ use crate::types::string::StringColumnBuilder;
 use crate::types::AnyType;
 use crate::types::ArrayType;
 use crate::types::BooleanType;
+use crate::types::MapType;
 use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::with_decimal_type;
@@ -37,6 +40,7 @@ use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::TypeDeserializer;
+use crate::TypeDeserializerImpl;
 use crate::Value;
 
 impl DataBlock {
@@ -132,18 +136,34 @@ impl Column {
                 let d = Self::filter_primitive_types(column, filter);
                 Column::Date(d)
             }
-            Column::Array(column) | Column::Map(column) => {
+            Column::Array(column) => {
                 let mut offsets = Vec::with_capacity(length + 1);
                 offsets.push(0);
                 let builder = ColumnBuilder::from_column(
-                    column
-                        .values
-                        .data_type()
-                        .create_deserializer(length)
+                    TypeDeserializerImpl::with_capacity(&column.values.data_type(), length)
                         .finish_to_column(),
                 );
                 let builder = ArrayColumnBuilder { builder, offsets };
                 Self::filter_scalar_types::<ArrayType<AnyType>>(column, builder, filter)
+            }
+            Column::Map(column) => {
+                let mut offsets = Vec::with_capacity(length + 1);
+                offsets.push(0);
+                let builder = ColumnBuilder::from_column(
+                    TypeDeserializerImpl::with_capacity(&column.values.data_type(), length)
+                        .finish_to_column(),
+                );
+                let (key_builder, val_builder) = match builder {
+                    ColumnBuilder::Tuple { fields, .. } => (fields[0].clone(), fields[1].clone()),
+                    _ => unreachable!(),
+                };
+                let builder = KvColumnBuilder {
+                    keys: key_builder,
+                    values: val_builder,
+                };
+                let builder = ArrayColumnBuilder { builder, offsets };
+                let column = ArrayColumn::try_downcast(column).unwrap();
+                Self::filter_scalar_types::<MapType<AnyType, AnyType>>(&column, builder, filter)
             }
             Column::Nullable(c) => {
                 let column = Self::filter(&c.column, filter);

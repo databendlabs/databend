@@ -41,7 +41,8 @@ async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
 
     info!("--- bring up leader");
     let (_id, tc0) = start_meta_node_leader().await?;
-    log_index += 2;
+    // initialization log, leader blank log, writing node log
+    log_index += 3;
 
     let leader = tc0.meta_node();
     leader
@@ -106,7 +107,8 @@ async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
 
     info!("--- add new learner to receive logs, rebuild state locally");
     let (_id, tc1) = start_meta_node_non_voter(leader.clone(), 1).await?;
-    log_index += 1;
+    // add node, change membership
+    log_index += 2;
 
     let learner = tc1.meta_node();
     learner

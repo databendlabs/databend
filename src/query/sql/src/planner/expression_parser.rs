@@ -191,15 +191,13 @@ pub fn field_default_value(ctx: Arc<dyn TableContext>, field: &TableField) -> Re
                     let value = unsafe { c.index_unchecked(0) };
                     Ok(value.to_owned())
                 }
-                _ => {
-                    return Err(ErrorCode::BadDataValueType(format!(
-                        "Invalid default value for column: {}, must be constant, actual: {}",
-                        field.name(),
-                        result
-                    )));
-                }
+                _ => Err(ErrorCode::BadDataValueType(format!(
+                    "Invalid default value for column: {}, must be constant, actual: {}",
+                    field.name(),
+                    result
+                ))),
             }
         }
-        None => Ok(data_type.default_value()),
+        None => Ok(Scalar::default_value(&data_type)),
     }
 }

@@ -31,7 +31,7 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 
-use crate::io::try_join_futures_with_vec;
+use crate::io::execute_futures_in_parallel;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::AbortOperation;
@@ -153,7 +153,7 @@ impl MutationTransform {
         for segment in segments {
             let op = self.dal.clone();
             handles.push(async move {
-                op.object(&segment.location).write(segment.data).await?;
+                op.write(&segment.location, segment.data).await?;
                 if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
                     segment_cache.put(segment.location.clone(), segment.segment.clone());
                 }
@@ -161,7 +161,7 @@ impl MutationTransform {
             });
         }
 
-        try_join_futures_with_vec(
+        execute_futures_in_parallel(
             self.ctx.clone(),
             handles,
             "mutation-write-segments-worker".to_owned(),

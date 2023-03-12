@@ -16,14 +16,12 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use roaring::RoaringBitmap;
 
 use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
-use crate::optimizer::RuleID;
 use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
@@ -37,11 +35,6 @@ pub struct Limit {
 impl Operator for Limit {
     fn rel_op(&self) -> RelOp {
         RelOp::Limit
-    }
-
-    fn transformation_candidate_rules(&self) -> roaring::RoaringBitmap {
-        (RuleID::PushDownLimitUnion as u32..(RuleID::PushDownLimitScan as u32) + 1)
-            .collect::<RoaringBitmap>()
     }
 
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {

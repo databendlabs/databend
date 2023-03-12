@@ -22,6 +22,7 @@ use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::TypeDeserializer;
+use common_expression::TypeDeserializerImpl;
 use common_expression::Value;
 use common_io::prelude::FormatSettings;
 use common_pipeline_core::processors::port::InputPort;
@@ -107,7 +108,7 @@ impl TransformMergeBlock {
 
         if left_data_type.remove_nullable() == right_data_type.remove_nullable() {
             let origin_column = block.get_by_offset(index).clone();
-            let mut builder = left_data_type.create_deserializer(block.num_rows());
+            let mut builder = TypeDeserializerImpl::with_capacity(left_data_type, block.num_rows());
             let settings = FormatSettings::default();
             let value = origin_column.value.as_ref();
             for idx in 0..block.num_rows() {

@@ -305,3 +305,23 @@ impl Drop for Dropper {
         }
     }
 }
+
+pub async fn match_join_handle<T>(handle: JoinHandle<Result<T>>) -> Result<T> {
+    match handle.await {
+        Ok(Ok(res)) => Ok(res),
+        Ok(Err(cause)) => Err(cause),
+        Err(join_error) => match join_error.is_cancelled() {
+            true => Err(ErrorCode::TokioError("Tokio error is cancelled.")),
+            false => {
+                let panic_error = join_error.into_panic();
+                match panic_error.downcast_ref::<&'static str>() {
+                    None => match panic_error.downcast_ref::<String>() {
+                        None => Err(ErrorCode::PanicError("Sorry, unknown panic message")),
+                        Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+                    },
+                    Some(message) => Err(ErrorCode::PanicError(message.to_string())),
+                }
+            }
+        },
+    }
+}

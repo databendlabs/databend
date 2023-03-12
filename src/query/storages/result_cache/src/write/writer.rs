@@ -71,9 +71,8 @@ impl ResultCacheWriter {
         )?;
 
         let file_location = format!("{}/{}.parquet", self.location, Uuid::new_v4().as_simple());
-        let object = self.operator.object(&file_location);
 
-        object.write(buf).await?;
+        self.operator.write(&file_location, buf).await?;
         Ok(file_location)
     }
 

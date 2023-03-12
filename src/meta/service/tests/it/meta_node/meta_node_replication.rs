@@ -15,7 +15,7 @@
 use common_base::base::tokio;
 use common_meta_kvapi::kvapi::KVApi;
 use common_meta_sled_store::openraft::LogIdOptionExt;
-use common_meta_sled_store::openraft::State;
+use common_meta_sled_store::openraft::ServerState;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
 use common_meta_types::SeqV;
@@ -50,7 +50,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
 
     mn.raft
         .wait(timeout())
-        .state(State::Leader, "leader started")
+        .state(ServerState::Leader, "leader started")
         .await?;
 
     mn.raft
@@ -59,7 +59,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
         .await?;
 
     // initial membership, leader blank log, add node.
-    let mut log_index = 2;
+    let mut log_index = 3;
 
     mn.raft
         .wait(timeout())
@@ -87,7 +87,10 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     mn.raft
         .wait(timeout())
         .metrics(
-            |x| x.snapshot.map(|x| x.term) == Some(1) && x.snapshot.next_index() >= snap_logs,
+            |x| {
+                x.snapshot.map(|x| x.leader_id.term) == Some(1)
+                    && x.snapshot.next_index() >= snap_logs
+            },
             "snapshot is created by leader",
         )
         .await?;
@@ -95,7 +98,8 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     info!("--- start a non_voter to receive snapshot replication");
 
     let (_, tc1) = start_meta_node_non_voter(mn.clone(), 1).await?;
-    log_index += 1;
+    // add node, change membership
+    log_index += 2;
 
     let mn1 = tc1.meta_node();
 
@@ -107,7 +111,10 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     mn1.raft
         .wait(timeout())
         .metrics(
-            |x| x.snapshot.map(|x| x.term) == Some(1) && x.snapshot.next_index() >= snap_logs,
+            |x| {
+                x.snapshot.map(|x| x.leader_id.term) == Some(1)
+                    && x.snapshot.next_index() >= snap_logs
+            },
             "snapshot is received by non-voter",
         )
         .await?;

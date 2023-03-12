@@ -242,7 +242,6 @@ impl TestFixture {
         (
             schema,
             (0..num_of_block)
-                .into_iter()
                 .map(|idx| {
                     let column0 = Int32Type::from_data(
                         std::iter::repeat_with(|| idx as i32 + start)
@@ -465,8 +464,7 @@ pub async fn check_data_dir(
                     .ctx
                     .get_data_operator()?
                     .operator()
-                    .object(entry_path)
-                    .read()
+                    .read(entry_path)
                     .await?;
                 last_snapshot_loc = str::from_utf8(&content)?.to_string();
             }

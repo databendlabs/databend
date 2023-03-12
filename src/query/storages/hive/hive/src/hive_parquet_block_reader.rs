@@ -33,7 +33,6 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
-use opendal::Object;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
 
@@ -202,13 +201,14 @@ impl HiveBlockReader {
     }
 
     async fn read_column(
-        o: Object,
+        op: Operator,
+        path: String,
         offset: u64,
         length: u64,
         semaphore: Arc<Semaphore>,
     ) -> Result<Vec<u8>> {
         let handler = common_base::base::tokio::spawn(async move {
-            let chunk = o.range_read(offset..offset + length).await?;
+            let chunk = op.range_read(&path, offset..offset + length).await?;
 
             let _semaphore_permit = semaphore.acquire().await.unwrap();
             Ok(chunk)
@@ -256,7 +256,8 @@ impl HiveBlockReader {
             let (start, len) = column_meta.byte_range();
 
             join_handlers.push(Self::read_column(
-                self.operator.object(&part.filename),
+                self.operator.clone(),
+                part.filename.to_string(),
                 start,
                 len,
                 semaphore.clone(),

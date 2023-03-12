@@ -22,6 +22,7 @@ use common_expression::types::StringType;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::FromData;
+use common_expression::Scalar;
 use common_sql::plans::DescribeTablePlan;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
@@ -97,7 +98,7 @@ impl Interpreter for DescribeTableInterpreter {
 
                 None => {
                     let data_type: DataType = field.data_type().into();
-                    let value = data_type.default_value();
+                    let value = Scalar::default_value(&data_type);
                     default_exprs.push(value.to_string().as_bytes().to_vec());
                 }
             }
