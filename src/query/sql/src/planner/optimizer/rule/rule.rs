@@ -39,66 +39,38 @@ pub trait Rule {
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum RuleID {
     // Rewrite rules
-    // // Filter
-    // NormalizeScalarFilter,
-    // NormalizeDisjunctiveFilter,
-    // PushDownFilterAggregate,
-    // PushDownFilterEvalScalar,
-    // PushDownFilterUnion,
-    // PushDownFilterJoin,
-    // PushDownFilterScan,
-    // PushDownFilterSort,
-    // EliminateFilter,
-    // MergeFilter,
-
-    // // EvalScalar
-    // EliminateEvalScalar,
-    // MergeEvalScalar,
-
-    // // Limit
-    // PushDownLimitUnion,
-    // PushDownLimitOuterJoin,
-    // RulePushDownLimitExpression,
-    // PushDownLimitSort,
-    // PushDownLimitAggregate,
-    // PushDownLimitScan,
-
-    // // Agg
-    // SplitAggregate,
-    // FoldCountAggregate,
-
-    // PushDownPrewhere,
-
-    // // Sort
-    // PushDownSortScan,
     // Filter
-    NormalizeDisjunctiveFilter,
     NormalizeScalarFilter,
-    EliminateFilter,
-    MergeFilter,
-    PushDownFilterUnion,
+    NormalizeDisjunctiveFilter,
     PushDownFilterAggregate,
-    PushDownFilterSort,
     PushDownFilterEvalScalar,
+    PushDownFilterUnion,
     PushDownFilterJoin,
     PushDownFilterScan,
+    PushDownFilterSort,
+    EliminateFilter,
+    MergeFilter,
+
     // EvalScalar
     EliminateEvalScalar,
     MergeEvalScalar,
+
     // Limit
     PushDownLimitUnion,
+    PushDownLimitOuterJoin,
     RulePushDownLimitExpression,
     PushDownLimitSort,
     PushDownLimitAggregate,
-    PushDownLimitOuterJoin,
     PushDownLimitScan,
-    // Agg
-    FoldCountAggregate,
-    SplitAggregate,
 
-    PushDownPrewhere, // PushDownPrwhere should be after all rules except PushDownFilterScan
+    // Agg
+    SplitAggregate,
+    FoldCountAggregate,
+
+    PushDownPrewhere,
+
     // Sort
-    PushDownSortScan, // PushDownFilterScan should be after PushDownPrewhere
+    PushDownSortScan,
 
     // Exploration rules
     CommuteJoin,
