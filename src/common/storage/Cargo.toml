@@ -22,7 +22,6 @@ async-trait = "0.1"
 bytes = "1"
 futures = "0.3"
 opendal = { workspace = true }
-parking_lot = "0.12.1"
 regex = "1.6.0"
 serde = { workspace = true }
 
