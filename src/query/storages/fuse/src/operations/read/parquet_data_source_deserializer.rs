@@ -167,7 +167,6 @@ impl Processor for DeserializeDataTransform {
                     Some(Box::new(part.block_meta_index().unwrap().to_owned()));
                 self.output_data = Some(data_block.add_meta(meta)?);
             } else {
-                println!("none meta");
                 self.output_data = Some(data_block);
             };
         }

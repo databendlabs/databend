@@ -23,10 +23,9 @@ use common_catalog::plan::ROW_ID;
 use common_catalog::plan::SEGMENT_NAME;
 use common_catalog::plan::SNAPSHOT_NAME;
 use common_exception::Result;
-use common_expression::types::DataType;
 
 pub struct InternalColumnFactory {
-    internal_columns: BTreeMap<String, InternalColumn>,
+    pub internal_columns: BTreeMap<String, InternalColumn>,
 }
 
 impl InternalColumnFactory {
@@ -61,23 +60,9 @@ impl InternalColumnFactory {
         GlobalInstance::get()
     }
 
-    pub fn get_data_type(&self, name: &str) -> Option<DataType> {
-        self.internal_columns
-            .get(name)
-            .map(|internal_column| internal_column.data_type())
-    }
-
     pub fn get_internal_column(&self, name: &str) -> Option<InternalColumn> {
         self.internal_columns
             .get(name)
             .map(|internal_column| internal_column.to_owned())
-    }
-
-    pub fn all_internal_columns(&self) -> Vec<InternalColumn> {
-        self.internal_columns.values().cloned().collect()
-    }
-
-    pub fn internal_columns(&self) -> &BTreeMap<String, InternalColumn> {
-        &self.internal_columns
     }
 }

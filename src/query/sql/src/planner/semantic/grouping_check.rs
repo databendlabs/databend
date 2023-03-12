@@ -59,7 +59,6 @@ impl<'a> GroupingChecker<'a> {
                     index: column.index,
                     data_type: Box::new(column.scalar.data_type()?),
                     visibility: Visibility::Visible,
-                    internal_column: None,
                 }
             };
             return Ok(BoundColumnRef {
@@ -74,6 +73,13 @@ impl<'a> GroupingChecker<'a> {
                 Err(ErrorCode::SemanticError(format!(
                     "column \"{}\" must appear in the GROUP BY clause or be used in an aggregate function",
                     &column.column.column_name
+                )).set_span(span))
+            }
+            ScalarExpr::BoundInternalColumnRef(column) => {
+                // If this is a group item, then it should have been replaced with `group_items_map`
+                Err(ErrorCode::SemanticError(format!(
+                    "column \"{}\" must appear in the GROUP BY clause or be used in an aggregate function",
+                    &column.column.internal_column.column_name()
                 )).set_span(span))
             }
             ScalarExpr::ConstantExpr(_) => Ok(scalar.clone()),
@@ -141,7 +147,6 @@ impl<'a> GroupingChecker<'a> {
                         index: agg_func.index,
                         data_type: Box::new(agg_func.scalar.data_type()?),
                         visibility: Visibility::Visible,
-                        internal_column: None,
                     };
                     return Ok(BoundColumnRef {
                         column: column_binding,

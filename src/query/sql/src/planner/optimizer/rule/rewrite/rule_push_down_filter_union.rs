@@ -142,13 +142,15 @@ fn replace_column_binding(
                     index: *index_pairs.get(&index).unwrap(),
                     data_type: column.column.data_type,
                     visibility: Visibility::Visible,
-                    internal_column: None,
                 };
                 return Ok(ScalarExpr::BoundColumnRef(BoundColumnRef {
                     column: new_column,
                 }));
             }
             Ok(ScalarExpr::BoundColumnRef(column))
+        }
+        ScalarExpr::BoundInternalColumnRef(_) => {
+            unreachable!()
         }
         constant_expr @ ScalarExpr::ConstantExpr(_) => Ok(constant_expr),
         ScalarExpr::AndExpr(expr) => Ok(ScalarExpr::AndExpr(AndExpr {

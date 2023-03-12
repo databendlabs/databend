@@ -492,7 +492,6 @@ impl Binder {
                         } else {
                             Visibility::Visible
                         },
-                        internal_column: None,
                     };
                     bind_context.add_column_binding(column_binding);
                     if path_indices.is_none() {

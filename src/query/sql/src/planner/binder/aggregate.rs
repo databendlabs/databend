@@ -92,6 +92,7 @@ impl<'a> AggregateRewriter<'a> {
     pub fn visit(&mut self, scalar: &ScalarExpr) -> Result<ScalarExpr> {
         match scalar {
             ScalarExpr::BoundColumnRef(_) => Ok(scalar.clone()),
+            ScalarExpr::BoundInternalColumnRef(_) => Ok(scalar.clone()),
             ScalarExpr::ConstantExpr(_) => Ok(scalar.clone()),
             ScalarExpr::AndExpr(scalar) => Ok(AndExpr {
                 left: Box::new(self.visit(&scalar.left)?),
@@ -176,7 +177,6 @@ impl<'a> AggregateRewriter<'a> {
                     index,
                     data_type: Box::new(arg.data_type()?),
                     visibility: Visibility::Visible,
-                    internal_column: None,
                 };
                 replaced_args.push(
                     BoundColumnRef {

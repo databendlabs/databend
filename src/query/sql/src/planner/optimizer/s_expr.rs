@@ -254,7 +254,9 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
 
 fn find_subquery_in_expr(expr: &ScalarExpr) -> bool {
     match expr {
-        ScalarExpr::BoundColumnRef(_) | ScalarExpr::ConstantExpr(_) => false,
+        ScalarExpr::BoundColumnRef(_)
+        | ScalarExpr::BoundInternalColumnRef(_)
+        | ScalarExpr::ConstantExpr(_) => false,
         ScalarExpr::AndExpr(expr) => {
             find_subquery_in_expr(&expr.left) || find_subquery_in_expr(&expr.right)
         }

@@ -21,6 +21,7 @@ use common_expression::types::DataType;
 use common_expression::Literal;
 
 use crate::binder::ColumnBinding;
+use crate::binder::InternalColumnBinding;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::IndexType;
@@ -28,6 +29,7 @@ use crate::IndexType;
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ScalarExpr {
     BoundColumnRef(BoundColumnRef),
+    BoundInternalColumnRef(BoundInternalColumnRef),
     ConstantExpr(ConstantExpr),
     AndExpr(AndExpr),
     OrExpr(OrExpr),
@@ -50,6 +52,7 @@ impl ScalarExpr {
     pub fn used_columns(&self) -> ColumnSet {
         match self {
             ScalarExpr::BoundColumnRef(scalar) => ColumnSet::from([scalar.column.index]),
+            ScalarExpr::BoundInternalColumnRef(scalar) => ColumnSet::from([scalar.column.index]),
             ScalarExpr::ConstantExpr(_) => ColumnSet::new(),
             ScalarExpr::AndExpr(scalar) => {
                 let left: ColumnSet = scalar.left.used_columns();
@@ -123,6 +126,12 @@ impl ScalarExpr {
 impl From<BoundColumnRef> for ScalarExpr {
     fn from(v: BoundColumnRef) -> Self {
         Self::BoundColumnRef(v)
+    }
+}
+
+impl From<BoundInternalColumnRef> for ScalarExpr {
+    fn from(v: BoundInternalColumnRef) -> Self {
+        Self::BoundInternalColumnRef(v)
     }
 }
 
@@ -322,6 +331,11 @@ impl TryFrom<ScalarExpr> for SubqueryExpr {
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct BoundColumnRef {
     pub column: ColumnBinding,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct BoundInternalColumnRef {
+    pub column: InternalColumnBinding,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]

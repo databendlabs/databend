@@ -63,8 +63,6 @@ pub struct ColumnBinding {
     pub data_type: Box<DataType>,
 
     pub visibility: Visibility,
-
-    pub internal_column: Option<InternalColumn>,
 }
 
 impl PartialEq for ColumnBinding {
@@ -81,9 +79,36 @@ impl Hash for ColumnBinding {
     }
 }
 
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct InternalColumnBinding {
+    /// Database name of this `InternalColumnBinding` in current context
+    pub database_name: Option<String>,
+    /// Table name of this `InternalColumnBinding` in current context
+    pub table_name: Option<String>,
+    /// Column index of InternalColumnBinding
+    pub index: IndexType,
+
+    pub internal_column: InternalColumn,
+}
+
+impl PartialEq for InternalColumnBinding {
+    fn eq(&self, other: &Self) -> bool {
+        self.index == other.index
+    }
+}
+
+impl Eq for InternalColumnBinding {}
+
+impl Hash for InternalColumnBinding {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.index.hash(state);
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum NameResolutionResult {
     Column(ColumnBinding),
+    InternalColumn(InternalColumnBinding),
     Alias { alias: String, scalar: ScalarExpr },
 }
 
@@ -237,16 +262,13 @@ impl BindContext {
             if let Some(internal_column) =
                 InternalColumnFactory::instance().get_internal_column(column)
             {
-                let column_binding = ColumnBinding {
+                let column_binding = InternalColumnBinding {
                     database_name: database.map(|n| n.to_owned()),
                     table_name: table.map(|n| n.to_owned()),
-                    column_name: internal_column.column_name().to_owned(),
                     index: bind_context.columns.len(),
-                    data_type: Box::new(internal_column.data_type()),
-                    visibility: Visibility::Visible,
-                    internal_column: Some(internal_column),
+                    internal_column,
                 };
-                result.push(NameResolutionResult::Column(column_binding));
+                result.push(NameResolutionResult::InternalColumn(column_binding));
                 break;
             }
 
@@ -332,7 +354,7 @@ impl BindContext {
     }
 
     fn get_internal_column_table_index(
-        column_binding: &ColumnBinding,
+        column_binding: &InternalColumnBinding,
         metadata: MetadataRef,
     ) -> (IndexType, Option<String>, Option<String>) {
         let metadata = metadata.read();
@@ -361,14 +383,14 @@ impl BindContext {
         )
     }
 
-    // add internal column binding into `BindContext`
+    // Add internal column binding into `BindContext`
+    // Convert `InternalColumnBinding` to `ColumnBinding`
     pub fn add_internal_column_binding(
         &mut self,
-        internal_column: &InternalColumn,
-        column_binding: &ColumnBinding,
+        column_binding: &InternalColumnBinding,
         metadata: MetadataRef,
     ) {
-        let column_id = internal_column.column_id();
+        let column_id = column_binding.internal_column.column_id();
         if let std::collections::btree_map::Entry::Vacant(e) =
             self.bound_internal_columns.entry(column_id)
         {
@@ -379,15 +401,14 @@ impl BindContext {
                 BindContext::get_internal_column_table_index(column_binding, metadata.clone());
 
             let mut metadata = metadata.write();
-            metadata.add_internal_column(table_index, internal_column.to_owned());
+            metadata.add_internal_column(table_index, column_binding.internal_column.clone());
             self.columns.push(ColumnBinding {
                 database_name,
                 table_name,
-                column_name: column_binding.column_name.clone(),
+                column_name: column_binding.internal_column.column_name().clone(),
                 index: column_binding.index,
-                data_type: column_binding.data_type.clone(),
+                data_type: Box::new(column_binding.internal_column.data_type()),
                 visibility: Visibility::Visible,
-                internal_column: None,
             });
 
             e.insert((table_index, column_binding.index));

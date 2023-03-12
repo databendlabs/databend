@@ -278,9 +278,12 @@ fn remove_column_nullable(
                     index: column.column.index,
                     data_type,
                     visibility: column.column.visibility.clone(),
-                    internal_column: column.column.internal_column.clone(),
                 },
             })
+        }
+        ScalarExpr::BoundInternalColumnRef(_) => {
+            // internal column will never be null
+            unreachable!()
         }
         ScalarExpr::AndExpr(expr) => {
             let left_expr = remove_column_nullable(

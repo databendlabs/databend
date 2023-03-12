@@ -271,14 +271,9 @@ impl Binder {
         );
         let (scalar, _) = scalar_binder.bind(expr).await?;
         // if `Expr` is internal column, then add this internal column into `BindContext`
-        if let ScalarExpr::BoundColumnRef(ref column) = scalar {
-            if let Some(ref internal_column) = column.column.internal_column {
-                bind_context.add_internal_column_binding(
-                    internal_column,
-                    &column.column,
-                    self.metadata.clone(),
-                );
-            }
+        if let ScalarExpr::BoundInternalColumnRef(ref internal_column) = scalar {
+            bind_context
+                .add_internal_column_binding(&internal_column.column, self.metadata.clone());
         };
 
         let filter_plan = Filter {
@@ -493,7 +488,6 @@ impl Binder {
                     index: new_column_index,
                     data_type: Box::new(coercion_types[idx].clone()),
                     visibility: Visibility::Visible,
-                    internal_column: None,
                 };
                 let left_coercion_expr = CastExpr {
                     is_try: false,

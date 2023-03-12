@@ -7,6 +7,12 @@ DROP TABLE IF EXISTS `05_0031_t`
 statement ok
 CREATE TABLE `05_0031_t`(a int)
 
+statement error 1110
+ALTER TABLE `05_0031_t` ADD COLUMN _row_id float
+
+statement error 1110
+CREATE TABLE `05_0031_t_1`(_row_id int)
+
 statement ok
 INSERT INTO TABLE `05_0031_t` values(1),(2)
 
