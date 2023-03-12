@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::number::UInt64Type;
 use common_expression::types::StringType;
@@ -25,7 +24,6 @@ use common_expression::FromOptData;
 use common_sql::plans::ListPlan;
 use common_storages_stage::list_file;
 use common_storages_stage::StageTable;
-use regex::Regex;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -57,20 +55,7 @@ impl Interpreter for ListInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
         let op = StageTable::get_op(&plan.stage)?;
-        let mut files = list_file(&op, &plan.path).await?;
-
-        let files = if plan.pattern.is_empty() {
-            files
-        } else {
-            let regex = Regex::new(&plan.pattern).map_err(|e| {
-                ErrorCode::SyntaxException(format!(
-                    "Pattern format invalid, got:{}, error:{:?}",
-                    &plan.pattern, e
-                ))
-            })?;
-            files.retain(|v| regex.is_match(&v.path));
-            files
-        };
+        let files = list_file(&op, &plan.path, &plan.pattern).await?;
 
         let names: Vec<Vec<u8>> = files
             .iter()

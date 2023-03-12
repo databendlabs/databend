@@ -596,6 +596,9 @@ impl<Index: ColumnIndex> Display for Expr<Index> {
                     write!(f, "CAST({expr} AS {dest_type})")
                 }
             }
+            Expr::Catch { expr, .. } => {
+                write!(f, "CATCH({expr})")
+            }
             Expr::FunctionCall {
                 function,
                 args,
