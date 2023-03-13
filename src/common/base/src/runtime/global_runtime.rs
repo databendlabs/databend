@@ -21,6 +21,15 @@ use crate::runtime::Runtime;
 
 pub struct GlobalIORuntime;
 
+pub struct GlobalHttpQueryRuntime(pub Runtime);
+
+impl GlobalHttpQueryRuntime {
+    #[inline(always)]
+    pub fn runtime<'a>(self: &'a Arc<Self>) -> &'a Runtime {
+        &self.0
+    }
+}
+
 impl GlobalIORuntime {
     pub fn init(num_cpus: usize) -> Result<()> {
         let thread_num = std::cmp::max(num_cpus, num_cpus::get() / 2);
@@ -34,6 +43,22 @@ impl GlobalIORuntime {
     }
 
     pub fn instance() -> Arc<Runtime> {
+        GlobalInstance::get()
+    }
+}
+
+impl GlobalHttpQueryRuntime {
+    pub fn init(num_cpus: usize) -> Result<()> {
+        let thread_num = std::cmp::max(num_cpus, num_cpus::get() / 2);
+        let thread_num = std::cmp::max(2, thread_num);
+
+        GlobalInstance::set(Arc::new(GlobalHttpQueryRuntime(
+            Runtime::with_worker_threads(thread_num, Some("http-query-ctx-worker".to_owned()))?,
+        )));
+        Ok(())
+    }
+
+    pub fn instance() -> Arc<GlobalHttpQueryRuntime> {
         GlobalInstance::get()
     }
 }

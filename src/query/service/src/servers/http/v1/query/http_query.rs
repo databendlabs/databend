@@ -20,6 +20,7 @@ use std::time::Instant;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::Mutex as TokioMutex;
 use common_base::base::tokio::sync::RwLock;
+use common_base::runtime::GlobalHttpQueryRuntime;
 use common_base::runtime::TrySpawn;
 use common_catalog::table_context::StageAttachment;
 use common_exception::ErrorCode;
@@ -188,7 +189,6 @@ pub struct HttpQuery {
     page_manager: Arc<TokioMutex<PageManager>>,
     config: HttpQueryConfig,
     expire_state: Arc<TokioMutex<ExpireState>>,
-    _runtime_reference: Arc<common_base::runtime::Runtime>,
 }
 
 impl HttpQuery {
@@ -279,29 +279,37 @@ impl HttpQuery {
         let query_id_clone = id.clone();
 
         let schema = ExecuteState::get_schema(&sql, ctx.clone()).await?;
-        let ctx_runtime = ctx.try_get_shared_context_runtime()?;
-        ctx_runtime.try_spawn(async move {
-            let state = state_clone.clone();
-            if let Err(e) =
-                ExecuteState::try_start_query(state, &sql, session, ctx_clone.clone(), block_sender)
-                    .await
-            {
-                InterpreterQueryLog::fail_to_start(ctx_clone.clone(), e.clone());
-                let state = ExecuteStopped {
-                    stats: Progresses::default(),
-                    reason: Err(e.clone()),
-                    stop_time: Instant::now(),
-                    affect: ctx_clone.get_affect(),
-                };
-                tracing::info!(
-                    "http query {}, change state to Stopped, fail to start {:?}",
-                    &query_id,
-                    e
-                );
-                Executor::start_to_stop(&state_clone, ExecuteState::Stopped(Box::new(state))).await;
-                block_sender_closer.close();
-            }
-        })?;
+        let http_query_runtime_instance = GlobalHttpQueryRuntime::instance();
+        http_query_runtime_instance
+            .runtime()
+            .try_spawn(async move {
+                let state = state_clone.clone();
+                if let Err(e) = ExecuteState::try_start_query(
+                    state,
+                    &sql,
+                    session,
+                    ctx_clone.clone(),
+                    block_sender,
+                )
+                .await
+                {
+                    InterpreterQueryLog::fail_to_start(ctx_clone.clone(), e.clone());
+                    let state = ExecuteStopped {
+                        stats: Progresses::default(),
+                        reason: Err(e.clone()),
+                        stop_time: Instant::now(),
+                        affect: ctx_clone.get_affect(),
+                    };
+                    tracing::info!(
+                        "http query {}, change state to Stopped, fail to start {:?}",
+                        &query_id,
+                        e
+                    );
+                    Executor::start_to_stop(&state_clone, ExecuteState::Stopped(Box::new(state)))
+                        .await;
+                    block_sender_closer.close();
+                }
+            })?;
 
         let format_settings = ctx.get_format_settings()?;
         let data = Arc::new(TokioMutex::new(PageManager::new(
@@ -320,7 +328,6 @@ impl HttpQuery {
             page_manager: data,
             config,
             expire_state: Arc::new(TokioMutex::new(ExpireState::Working)),
-            _runtime_reference: ctx_runtime,
         };
 
         Ok(Arc::new(query))
