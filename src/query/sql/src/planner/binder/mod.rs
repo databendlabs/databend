@@ -48,7 +48,7 @@ pub use bind_context::*;
 pub use binder::Binder;
 pub use builders::*;
 pub use copy::parse_stage_location;
-pub use internal_column_factory::InternalColumnFactory;
+pub use internal_column_factory::INTERNAL_COLUMN_FACTORY;
 pub use location::parse_uri_location;
 pub use scalar::ScalarBinder;
 pub use scalar_common::*;

@@ -57,3 +57,4 @@ serde = { workspace = true }
 time = "0.3.14"
 tracing = "0.1.36"
 url = { version = "2.3" }
+ctor = "0.1.26"

@@ -13,23 +13,24 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
 use common_catalog::plan::InternalColumn;
 use common_catalog::plan::InternalColumnType;
 use common_catalog::plan::BLOCK_NAME;
 use common_catalog::plan::ROW_ID;
 use common_catalog::plan::SEGMENT_NAME;
 use common_catalog::plan::SNAPSHOT_NAME;
-use common_exception::Result;
+use ctor::ctor;
+
+#[ctor]
+pub static INTERNAL_COLUMN_FACTORY: InternalColumnFactory = InternalColumnFactory::init();
 
 pub struct InternalColumnFactory {
-    pub internal_columns: BTreeMap<String, InternalColumn>,
+    internal_columns: BTreeMap<String, InternalColumn>,
 }
 
 impl InternalColumnFactory {
-    pub fn init() -> Result<()> {
+    pub fn init() -> InternalColumnFactory {
         let mut internal_columns = BTreeMap::new();
 
         internal_columns.insert(
@@ -52,17 +53,16 @@ impl InternalColumnFactory {
             InternalColumn::new(SNAPSHOT_NAME, InternalColumnType::SnapshotName),
         );
 
-        GlobalInstance::set(Arc::new(InternalColumnFactory { internal_columns }));
-        Ok(())
-    }
-
-    pub fn instance() -> Arc<InternalColumnFactory> {
-        GlobalInstance::get()
+        InternalColumnFactory { internal_columns }
     }
 
     pub fn get_internal_column(&self, name: &str) -> Option<InternalColumn> {
         self.internal_columns
             .get(name)
             .map(|internal_column| internal_column.to_owned())
+    }
+
+    pub fn exist(&self, name: &str) -> bool {
+        self.internal_columns.contains_key(name)
     }
 }

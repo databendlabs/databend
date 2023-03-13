@@ -19,7 +19,7 @@ use common_exception::Result;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
-use common_sql::binder::InternalColumnFactory;
+use common_sql::binder::INTERNAL_COLUMN_FACTORY;
 use common_sql::plans::AddTableColumnPlan;
 use common_storages_view::view_table::VIEW_ENGINE;
 
@@ -83,10 +83,7 @@ impl Interpreter for AddTableColumnInterpreter {
                         field
                     };
 
-                if InternalColumnFactory::instance()
-                    .internal_columns
-                    .contains_key(field.name())
-                {
+                if INTERNAL_COLUMN_FACTORY.exist(field.name()) {
                     return Err(ErrorCode::TableWithInternalColumnName(format!(
                         "Cannot alter table to add a column with the same name as internal column: {}",
                         field.name()

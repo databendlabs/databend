@@ -28,7 +28,7 @@ use common_expression::DataSchemaRefExt;
 use dashmap::DashMap;
 
 use super::AggregateInfo;
-use super::InternalColumnFactory;
+use super::INTERNAL_COLUMN_FACTORY;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::ScalarExpr;
@@ -259,9 +259,7 @@ impl BindContext {
             }
 
             // look up internal column
-            if let Some(internal_column) =
-                InternalColumnFactory::instance().get_internal_column(column)
-            {
+            if let Some(internal_column) = INTERNAL_COLUMN_FACTORY.get_internal_column(column) {
                 let column_binding = InternalColumnBinding {
                     database_name: database.map(|n| n.to_owned()),
                     table_name: table.map(|n| n.to_owned()),

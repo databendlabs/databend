@@ -359,7 +359,7 @@ pub enum ColumnEntry {
     /// Column synthesized from other columns, for example `SELECT t.a + t.b AS a FROM t`.
     DerivedColumn(DerivedColumn),
 
-    /// Virtual columns, such as `_row_id`, `_segment_name`, etc.
+    /// Internal columns, such as `_row_id`, `_segment_name`, etc.
     InternalColumn(TableInternalColumn),
 }
 
