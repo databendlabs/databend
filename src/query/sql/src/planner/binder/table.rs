@@ -138,7 +138,9 @@ impl Binder {
                 };
                 // Check and bind common table expression
                 if let Some(cte_info) = bind_context.ctes_map.get(&table_name) {
-                    return self.bind_cte(bind_context, &table_name, alias, &cte_info);
+                    return self
+                        .bind_cte(bind_context, &table_name, alias, &cte_info)
+                        .await;
                 }
 
                 if database == "system" {
@@ -417,15 +419,16 @@ impl Binder {
         }
     }
 
-    fn bind_cte(
+    async fn bind_cte(
         &mut self,
         bind_context: &BindContext,
         table_name: &str,
         alias: &Option<TableAlias>,
         cte_info: &CteInfo,
     ) -> Result<(SExpr, BindContext)> {
-        let mut new_bind_context = bind_context.clone();
-        new_bind_context.columns = cte_info.bind_context.columns.clone();
+        let new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+        let (s_expr, mut new_bind_context) =
+            self.bind_query(&new_bind_context, &cte_info.query).await?;
         let mut cols_alias = cte_info.columns_alias.clone();
         if let Some(alias) = alias {
             for (idx, col_alias) in alias.columns.iter().enumerate() {
@@ -455,7 +458,7 @@ impl Binder {
         for (index, column_name) in cols_alias.iter().enumerate() {
             new_bind_context.columns[index].column_name = column_name.clone();
         }
-        Ok((cte_info.s_expr.clone(), new_bind_context))
+        Ok((s_expr, new_bind_context))
     }
 
     async fn bind_base_table(
