@@ -1,0 +1,105 @@
+name: "Benchmark Cloud"
+description: "Run benchmark for S3 with cloud storage"
+inputs:
+  sha:
+    description: "commit sha"
+    required: true
+  run_id:
+    description: "benchmark run id"
+    required: true
+  dataset:
+    description: "hits/tpch"
+    required: true
+  source:
+    description: "pr/release"
+    required: true
+  source_id:
+    description: "pr_id/release_tag"
+    required: true
+  size:
+    description: "Small/Medium/Large"
+    required: true
+  image_tag:
+    description: "Databend image tag"
+    required: true
+  cloud_email:
+    description: "Benchmark cloud email"
+    required: true
+  cloud_password:
+    description: "Benchmark cloud password"
+    required: true
+  cloud_org:
+    description: "Benchmark cloud org"
+    required: true
+  cloud_endpoint:
+    description: "Benchmark cloud endpoint"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - uses: ./.github/actions/setup_bendsql
+
+    - name: Install script dependencies
+      shell: bash
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y jq bc
+
+    - name: Run Benchmark
+      working-directory: benchmark/clickbench
+      env:
+        BENCHMARK_ID: ${{ inputs.run_id }}
+        BENCHMARK_DATASET: ${{ inputs.dataset }}
+        BENCHMARK_SIZE: ${{ inputs.size }}
+        BENCHMARK_IMAGE_TAG: ${{ inputs.image_tag }}
+        CLOUD_EMAIL: ${{ inputs.cloud_email }}
+        CLOUD_PASSWORD: ${{ inputs.cloud_password }}
+        CLOUD_ORG: ${{ inputs.cloud_org }}
+        CLOUD_ENDPOINT: ${{ inputs.cloud_endpoint }}
+      shell: bash
+      run: |
+        ./benchmark_cloud.sh
+
+    - name: Prepare Metadata
+      working-directory: benchmark/clickbench
+      shell: bash
+      run: |
+        jq ".date = \"$(date -u +%Y-%m-%d)\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+        case ${{ inputs.source }} in
+          pr)
+            BENCHMARK_SYSTEM="Databend(PR#${{ inputs.source_id }})"
+            BENCHMARK_TYPE="PR"
+            ;;
+          release)
+            BENCHMARK_SYSTEM="Databend(Release@${{ inputs.source_id }})"
+            BENCHMARK_TYPE="Release"
+            ;;
+          *)
+            echo "Unspported benchmark source: ${{ inputs.source }}"
+            exit 1
+        esac
+        jq ".system = \"${BENCHMARK_SYSTEM}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+
+        case ${{ inputs.size }} in
+          Medium)
+            BENCHMARK_CLUSTER_SIZE=16
+            ;;
+          Large)
+            BENCHMARK_CLUSTER_SIZE=64
+            ;;
+          *)
+            echo "Unspported benchmark size: ${{ inputs.size }}"
+            exit 1
+        esac
+        jq ".cluster_size = \"${BENCHMARK_CLUSTER_SIZE}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+        jq ".machine = \"${{ inputs.size }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+        jq ".tags = [\"${BENCHMARK_TYPE}\", \"serverless\"]" <result.json >result.json.tmp && mv result.json.tmp result.json
+        jq ".comment = \"commit:${{ inputs.sha }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+        mv result.json result-${{ inputs.dataset }}-cloud.json
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: benchmark-${{ inputs.dataset }}-cloud-${{ inputs.size }}
+        path: benchmark/clickbench/result-${{ inputs.dataset }}-cloud-${{ inputs.size }}.json
