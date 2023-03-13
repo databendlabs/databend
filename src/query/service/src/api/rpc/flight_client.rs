@@ -27,6 +27,8 @@ use common_arrow::arrow_format::flight::data::Action;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::base::tokio::time::Duration;
+use common_base::runtime::GlobalIORuntime;
+use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures_util::future::BoxFuture;
@@ -180,7 +182,7 @@ impl FlightExchange {
         Self::start_push_worker(network_tx.clone(), response_rx);
 
         let f = Arc::new(f);
-        common_base::base::tokio::spawn({
+        GlobalIORuntime::instance().spawn({
             let response_tx = response_tx.clone();
             async move {
                 let mut send_closing_input = false;
@@ -303,7 +305,7 @@ impl FlightExchange {
         network_tx: Sender<ResponseT>,
         response_rx: Receiver<ResponseT>,
     ) {
-        common_base::base::tokio::spawn(async move {
+        GlobalIORuntime::instance().spawn(async move {
             while let Ok(response) = response_rx.recv().await {
                 if network_tx.send(response).await.is_err() {
                     break;
