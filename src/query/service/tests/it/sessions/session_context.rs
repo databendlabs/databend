@@ -60,8 +60,7 @@ async fn test_session_context() -> Result<()> {
 
     // io shutdown tx.
     {
-        let (tx, _) = futures::channel::oneshot::channel();
-        session_ctx.set_io_shutdown_tx(Some(tx));
+        session_ctx.set_io_shutdown_tx(|| {});
 
         let val = session_ctx.take_io_shutdown_tx();
         assert!(val.is_some());

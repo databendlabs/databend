@@ -1869,6 +1869,15 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         let mut retry = 0;
         let table_id = req.table_id;
 
+        let mut keys = Vec::with_capacity(req.file_info.len());
+        for file in req.file_info.iter() {
+            let key = TableCopiedFileNameIdent {
+                table_id,
+                file: file.0.clone(),
+            };
+            keys.push(key.to_string_key());
+        }
+
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;
 
@@ -1900,25 +1909,32 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             // So now, in case that `TableCopiedFileInfo` has expire time, remove `TableCopiedFileLockKey`
             // in each function. In this case there is chance that some `TableCopiedFileInfo` may not be
             // removed in `remove_table_copied_files`, but these data can be purged in case of expire time.
-            for (file, file_info) in req.file_info.iter() {
-                let key = TableCopiedFileNameIdent {
-                    table_id,
-                    file: file.to_owned(),
-                };
-                let (file_seq, _): (_, Option<TableCopiedFileInfo>) =
-                    get_pb_value(self, &key).await?;
 
-                condition.push(txn_cond_seq(&key, Eq, file_seq));
-                match &req.expire_at {
-                    Some(expire_at) => {
-                        if_then.push(txn_op_put_with_expire(
-                            &key,
-                            serialize_struct(file_info)?,
-                            *expire_at,
-                        ));
-                    }
-                    None => {
-                        if_then.push(txn_op_put(&key, serialize_struct(file_info)?));
+            let mut file_name_infos = req.file_info.clone().into_iter();
+
+            for c in keys.chunks(DEFAULT_MGET_SIZE) {
+                let seq_infos: Vec<(u64, Option<TableCopiedFileInfo>)> =
+                    mget_pb_values(self, c).await?;
+
+                for (file_seq, _file_info_opt) in seq_infos {
+                    let (f_name, file_info) = file_name_infos.next().unwrap();
+
+                    let key = TableCopiedFileNameIdent {
+                        table_id,
+                        file: f_name.to_owned(),
+                    };
+                    condition.push(txn_cond_seq(&key, Eq, file_seq));
+                    match &req.expire_at {
+                        Some(expire_at) => {
+                            if_then.push(txn_op_put_with_expire(
+                                &key,
+                                serialize_struct(&file_info)?,
+                                *expire_at,
+                            ));
+                        }
+                        None => {
+                            if_then.push(txn_op_put(&key, serialize_struct(&file_info)?));
+                        }
                     }
                 }
             }
