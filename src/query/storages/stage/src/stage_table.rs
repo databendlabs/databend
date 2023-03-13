@@ -25,7 +25,6 @@ use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::StageFileInfo;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
@@ -40,10 +39,10 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_sources::input_formats::InputContext;
 use common_pipeline_sources::input_formats::SplitInfo;
 use common_storage::init_stage_operator;
+use common_storage::StageFileInfo;
 use opendal::Operator;
 use parking_lot::Mutex;
 
-use crate::format_stage_file_info;
 use crate::stage_table_sink::StageTableSink;
 
 /// TODO: we need to track the data metrics in stage table.
@@ -79,10 +78,8 @@ impl StageTable {
             .list(&op, false)
             .await?
             .into_iter()
-            .map(|file_with_meta| {
-                format_stage_file_info(file_with_meta.path, &file_with_meta.metadata)
-            })
-            .collect();
+            .map(|file_with_meta| StageFileInfo::new(file_with_meta.path, &file_with_meta.metadata))
+            .collect::<Vec<_>>();
         Ok(infos)
     }
 

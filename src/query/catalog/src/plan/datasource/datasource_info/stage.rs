@@ -19,9 +19,8 @@ use std::sync::Arc;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_meta_app::principal::StageInfo;
+use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
-
-use crate::plan::StageFileInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct StageTableInfo {
