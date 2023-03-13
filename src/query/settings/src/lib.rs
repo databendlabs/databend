@@ -323,7 +323,7 @@ impl Settings {
                     UserSettingValue::UInt64(0),
                 ),
                 level: ScopeLevel::Session,
-                desc: "If enable runtime filter optimization for join, default value: 0.",
+                desc: "Enables runtime filter optimization for JOIN.",
                 possible_values: None,
             },
             // max_execute_time
