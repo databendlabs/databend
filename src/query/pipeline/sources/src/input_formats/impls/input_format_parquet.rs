@@ -31,10 +31,10 @@ use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::arrow::io::parquet::read::to_deserializer;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_arrow::parquet::metadata::ColumnChunkMetaData;
+use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::read_metadata;
 use common_arrow::read_columns_async;
-use common_base::runtime::execute_futures_in_parallel;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -44,6 +44,7 @@ use common_expression::TableSchemaRef;
 use common_meta_app::principal::StageInfo;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
+use common_storage::read_parquet_metas_in_parallel;
 use common_storage::StageFileInfo;
 use futures::AsyncRead;
 use futures::AsyncSeek;
@@ -65,18 +66,15 @@ use crate::input_formats::SplitInfo;
 pub struct InputFormatParquet;
 
 impl InputFormatParquet {
-    async fn get_split_batch(
+    fn make_splits(
         file_infos: Vec<StageFileInfo>,
-        op: Operator,
+        metas: Vec<FileMetaData>,
     ) -> Result<Vec<Arc<SplitInfo>>> {
         let mut infos = vec![];
         let mut schema = None;
-        for info in file_infos {
+        for (info, mut file_meta) in file_infos.into_iter().zip(metas.into_iter()) {
             let size = info.size as usize;
             let path = info.path.clone();
-
-            let mut reader = op.reader(&path).await?;
-            let mut file_meta = read_metadata_async(&mut reader).await?;
             let row_groups = mem::take(&mut file_meta.row_groups);
             if schema.is_none() {
                 schema = Some(infer_schema(&file_meta)?);
@@ -135,37 +133,12 @@ impl InputFormat for InputFormatParquet {
         op: &Operator,
         _settings: &Arc<Settings>,
     ) -> Result<Vec<Arc<SplitInfo>>> {
-        let batch_size = 1000;
-
-        if file_infos.len() <= batch_size {
-            Self::get_split_batch(file_infos, op.clone()).await
-        } else {
-            let mut chunks = file_infos.chunks(batch_size);
-
-            let tasks = std::iter::from_fn(move || {
-                chunks
-                    .next()
-                    .map(|location| Self::get_split_batch(location.to_vec(), op.clone()))
-            });
-
-            // TODO: Get from ctx.
-            let thread_nums = 16;
-            let permit_nums = 64;
-            let result = execute_futures_in_parallel(
-                tasks,
-                thread_nums,
-                permit_nums,
-                "get-parquet-splits-worker".to_owned(),
-            )
-            .await?
-            .into_iter()
-            .collect::<Result<Vec<Vec<_>>>>()?
-            .into_iter()
-            .flatten()
-            .collect();
-
-            Ok(result)
-        }
+        let files = file_infos
+            .iter()
+            .map(|f| (f.path.clone(), f.size))
+            .collect::<Vec<_>>();
+        let metas = read_parquet_metas_in_parallel(op.clone(), files, 16, 64).await?;
+        Self::make_splits(file_infos, metas)
     }
 
     async fn infer_schema(&self, path: &str, op: &Operator) -> Result<TableSchemaRef> {
