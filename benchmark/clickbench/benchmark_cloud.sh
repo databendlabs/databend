@@ -43,7 +43,7 @@ bendsql cloud warehouse create "${CLOUD_WAREHOUSE}" --size "${BENCHMARK_SIZE}" -
 bendsql cloud warehouse ls
 bendsql cloud warehouse resume "${CLOUD_WAREHOUSE}" --wait
 
-bendsql cloud use "${CLOUD_WAREHOUSE}"
+bendsql cloud warehouse use "${CLOUD_WAREHOUSE}"
 
 # Data loaded before the benchmark starts
 # bendsql query <"${BENCHMARK_DATASET}/create.sql"
