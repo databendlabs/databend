@@ -291,12 +291,7 @@ impl CopyInterpreter {
         let mut stage_table_info = stage_table_info.clone();
         let mut all_source_file_infos = StageTable::list_files(&stage_table_info).await?;
 
-        // Status.
-        {
-            let status = format!("end to list files: {}", all_source_file_infos.len());
-            ctx.set_status_info(&status);
-            info!(status);
-        }
+        info!("end to list files: {}", all_source_file_infos.len());
 
         if !force {
             // Status.
@@ -315,12 +310,7 @@ impl CopyInterpreter {
             )
             .await?;
 
-            // Status.
-            {
-                let status = format!("end to color copied files: {}", all_source_file_infos.len());
-                ctx.set_status_info(&status);
-                info!(status);
-            }
+            info!("end to color copied files: {}", all_source_file_infos.len());
         }
 
         let mut need_copied_file_infos = vec![];
@@ -344,7 +334,7 @@ impl CopyInterpreter {
 
         // Status.
         {
-            let status = "begin to read stage table plan";
+            let status = "begin to read stage source plan";
             ctx.set_status_info(status);
             info!(status);
         }
@@ -359,8 +349,11 @@ impl CopyInterpreter {
 
         // Status.
         {
-            let status = "begin to read stage table data";
-            ctx.set_status_info(status);
+            let status = format!(
+                "begin to read stage table data, parts:{}",
+                read_source_plan.parts.len()
+            );
+            ctx.set_status_info(&status);
             info!(status);
         }
 
@@ -436,6 +429,13 @@ impl CopyInterpreter {
                         .await?;
 
                     // 2. Upsert files(status with NeedCopy) info to meta.
+                    // Status.
+                    {
+                        let status = format!("begin to upsert copied files:{}", copied_files.len());
+                        ctx.set_status_info(&status);
+                        info!(status);
+                    }
+
                     CopyInterpreter::upsert_copied_files_info_to_meta(
                         &ctx,
                         tenant,
@@ -445,6 +445,8 @@ impl CopyInterpreter {
                         copied_files,
                     )
                     .await?;
+
+                    info!("end to upsert copied files");
 
                     // 3. log on_error mode errors.
                     // todo(ariesdevil): persist errors with query_id
@@ -466,8 +468,7 @@ impl CopyInterpreter {
 
                         // Status.
                         {
-                            let status =
-                                format!("begin to purge files:{}", all_source_files.len(),);
+                            let status = format!("begin to purge files:{}", all_source_files.len());
                             ctx.set_status_info(&status);
                             info!(status);
                         }
@@ -479,25 +480,14 @@ impl CopyInterpreter {
                         )
                         .await;
 
-                        // Status.
-                        {
-                            let status = format!(
-                                "end to purge files:{}, elapsed:{}",
-                                all_source_files.len(),
-                                purge_start.elapsed().as_secs()
-                            );
-                            ctx.set_status_info(&status);
-                            info!(status);
-                        }
+                        info!(
+                            "end to purge files:{}, elapsed:{}",
+                            all_source_files.len(),
+                            purge_start.elapsed().as_secs()
+                        );
                     }
 
-                    // Status.
-                    {
-                        let status =
-                            format!("all copy finished, elapsed:{}", start.elapsed().as_secs());
-                        ctx.set_status_info(&status);
-                        info!(status);
-                    }
+                    info!("all copy finished, elapsed:{}", start.elapsed().as_secs());
 
                     Ok(())
                 });
