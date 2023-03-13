@@ -43,6 +43,7 @@ anyhow = { workspace = true }
 async-recursion = "1.0.0"
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }
+ctor = "0.1.26"
 dashmap = "5.4"
 globiter = "0.1"
 itertools = "0.10.5"
@@ -59,4 +60,3 @@ serde = { workspace = true }
 time = "0.3.14"
 tracing = "0.1.36"
 url = { version = "2.3" }
-ctor = "0.1.26"
