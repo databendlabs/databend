@@ -233,6 +233,7 @@ impl QueryContextShared {
         }
     }
 
+    // TODO to_cache?
     async fn get_table_to_cache(
         &self,
         catalog: &str,
@@ -338,6 +339,11 @@ impl QueryContextShared {
 
     pub fn get_created_time(&self) -> SystemTime {
         self.created_time
+    }
+
+    pub fn get_status_info(&self) -> String {
+        let status = self.status.read();
+        status.clone()
     }
 }
 
