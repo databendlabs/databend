@@ -148,6 +148,7 @@ impl InputFormat for InputFormatParquet {
                     .map(|location| Self::get_split_batch(location.to_vec(), op.clone()))
             });
 
+            // TODO: Get from ctx.
             let thread_nums = 16;
             let permit_nums = 64;
             let result = execute_futures_in_parallel(

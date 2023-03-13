@@ -14,11 +14,10 @@
 
 use std::sync::Arc;
 
+use common_base::runtime::execute_futures_in_parallel;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use opendal::Operator;
-
-use crate::io::execute_futures_in_parallel;
 
 // File related operations.
 pub struct Files {
@@ -52,9 +51,12 @@ impl Files {
                     .map(|location| Self::delete_files(self.operator.clone(), location.to_vec()))
             });
 
+            let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
+            let permit_nums = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
             execute_futures_in_parallel(
-                self.ctx.clone(),
                 tasks,
+                threads_nums,
+                permit_nums,
                 "batch-remove-files-worker".to_owned(),
             )
             .await?;
