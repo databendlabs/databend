@@ -24,7 +24,7 @@ SELECT {'k1': 1, 'k2': 2}, map([1, 2], ['v1', 'v2']);
 
 ## Examples
 
-The following example creates a table that includes a Map column, then querys Map data from the table.
+The following example creates a table that includes a Map column, then queries Map data from the table.
 
 ```sql
 -- Create a table
@@ -49,7 +49,7 @@ SELECT * FROM map_table;
 +---------------------+
 
 -- Query Values in Map by Keys
--- NULL will be retured if Key is not found in a row.
+-- NULL will be returned if Key is not found in a row.
 
 SELECT m[1], m[3] FROM map_table;
 +------+------+
