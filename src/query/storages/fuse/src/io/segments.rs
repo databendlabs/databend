@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::runtime::execute_futures_in_parallel;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
@@ -23,7 +24,6 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use tracing::Instrument;
 
-use crate::io::execute_futures_in_parallel;
 use crate::io::MetaReaders;
 
 // Read segment related operations.
@@ -88,9 +88,12 @@ impl SegmentsIO {
             }
         });
 
+        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
+        let permit_nums = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
         execute_futures_in_parallel(
-            self.ctx.clone(),
             tasks,
+            threads_nums,
+            permit_nums,
             "fuse-req-segments-worker".to_owned(),
         )
         .await
@@ -143,9 +146,12 @@ impl SegmentsIO {
             })
         });
 
+        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
+        let permit_nums = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
         execute_futures_in_parallel(
-            self.ctx.clone(),
             tasks,
+            threads_nums,
+            permit_nums,
             "fuse-req-segments-worker".to_owned(),
         )
         .await
