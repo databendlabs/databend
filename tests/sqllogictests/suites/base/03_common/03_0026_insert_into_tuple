@@ -47,7 +47,7 @@ statement ok
 CREATE TABLE IF NOT EXISTS t3(id Int, t Tuple(a Tuple(m Int64, n Int64), b Tuple(x Int64, y Int64))) Engine = Fuse
 
 statement ok
-INSERT INTO t3 (id, t) VALUES(1, ((10, 11), (20, 21))), (2, ((30, 31), (40, 41)))
+INSERT INTO t3 (id, t) VALUES(1, ((10, 11), (20, 21))), (2, (('30', '31'), (40, 41)))
 
 query IT
 select * from t3

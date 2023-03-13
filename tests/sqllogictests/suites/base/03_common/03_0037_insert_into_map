@@ -11,26 +11,26 @@ statement ok
 CREATE TABLE IF NOT EXISTS t1(id Int, m Map(Int64, String)) Engine = Fuse
 
 statement ok
-INSERT INTO t1 (id, m) VALUES(1, {100:'abc',200:'def'}),(2, {300:'mn'}),(3, {});
+INSERT INTO t1 (id, m) VALUES(1, {100:'abc',200:'def'}),(2, {'300':123}),(3, {});
 
 query IT
 select * from t1
 ----
 1 {100:'abc',200:'def'}
-2 {300:'mn'}
+2 {300:'123'}
 3 {}
 
 query TTTT
 select m[100], m[200], m[300], m[400] from t1
 ----
 abc def NULL NULL
-NULL NULL mn NULL
+NULL NULL 123 NULL
 NULL NULL NULL NULL
 
 query IT
-select * from t1 where m[300] = 'mn'
+select * from t1 where m[300] = '123'
 ----
-2 {300:'mn'}
+2 {300:'123'}
 
 statement error 1001
 INSERT INTO t1 (id, m) VALUES(1, {100:'k1',100:'k2'})
