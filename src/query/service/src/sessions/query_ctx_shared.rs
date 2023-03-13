@@ -233,7 +233,6 @@ impl QueryContextShared {
         }
     }
 
-    // TODO to_cache?
     async fn get_table_to_cache(
         &self,
         catalog: &str,
