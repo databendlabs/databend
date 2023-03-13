@@ -198,13 +198,6 @@ impl MySQLFederated {
     fn federated_mixed_check(&self, query: &str) -> Option<(TableSchemaRef, DataBlock)> {
         #[ctor]
         static MIXED_RULES: Vec<(Regex, Option<(TableSchemaRef, DataBlock)>)> = vec![
-            (
-                Regex::new(r"(?i)^(SELECT VERSION\(\s*\))").unwrap(),
-                MySQLFederated::select_function_block(
-                    "version()",
-                    format!("{}-{}", MYSQL_VERSION, DATABEND_COMMIT_VERSION.clone()).as_str(),
-                ),
-            ),
             // Txn.
             (Regex::new("(?i)^(ROLLBACK(.*))").unwrap(), None),
             (Regex::new("(?i)^(COMMIT(.*))").unwrap(), None),

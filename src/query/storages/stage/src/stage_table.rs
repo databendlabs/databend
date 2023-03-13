@@ -134,13 +134,12 @@ impl Table for StageTable {
         } else {
             StageTable::list_files(stage_info).await?
         };
-        let files = files.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
         let format =
             InputContext::get_input_format(&stage_info.stage_info.file_format_options.format)?;
         let operator = StageTable::get_op(&stage_info.stage_info)?;
         let splits = format
             .get_splits(
-                &files,
+                files,
                 &stage_info.stage_info,
                 &operator,
                 &ctx.get_settings(),

@@ -1,48 +1,51 @@
 ---
-title: Monitoring with Sentry
+title: Sentry
 ---
 
-With automated error reporting, you can not only get alerted when something breaks, but also access the details you need to reproduce the issue.
+[Sentry](https://sentry.io/welcome/) is a developer-first error tracking and performance monitoring platform that helps developers see what actually matters, solve quicker, and learn continuously about their applications.
 
-## Sentry
+Databend provides integration with both Cloud and self-hosted Sentry solutions. The following tutorial walks you through the integration process.
 
-Databend provides integration with [Sentry](https://github.com/getsentry/sentry), a developer-first error tracking and performance monitoring platform.
+## Tutorial: Monitor Databend with Sentry
 
-### Deploy Sentry
+### Step 1. Deploy Sentry
 
-You can use Sentry as a cloud service by signing up at [sentry.io](https://sentry.io), or you can host it yourself by following the instructions at [Self-Hosted Sentry](https://develop.sentry.dev/self-hosted/).
+To deploy an on-premises Sentry, follow the instructions: https://develop.sentry.dev/self-hosted/
 
-<img src="/img/tracing/sentry-hosted.png"/>
+This tutorial uses the Sentry service on the cloud. To sign up an account for Cloud Sentry, go to https://sentry.io
 
-### Create a Project
+### Step 2. Create a Sentry Project
 
-To use Sentry with Databend, you need to create a project in Sentry and get its DSN (Data Source Name). The DSN is a unique identifier for your project that tells Sentry where to send your data. In this example, the DSN is `http://0c44e65426cb4f87ba059464c0740502@127.0.0.1:9000/5` 。
+Once you're logged into Sentry, create a Sentry project for the `Rust` platform to start. For how to create a project on Sentry, see https://docs.sentry.io/product/sentry-basics/integrate-frontend/create-new-project/
 
-<img src="/img/tracing/sentry-get-dsn.png"/>
+![Alt text](../../public/img/tracing/sentry-rust.png)
 
-### Start Databend
+### Step 3. Set Environment Variables
 
-You can start Databend with Sentry in two ways:
+1. Get the DSN (Data Source Name) of your project. For what DSN is and where to find it, see https://docs.sentry.io/product/sentry-basics/dsn-explainer/
 
-- **Enable Error Tracking Only**
+2. Set environment variables.
 
-  This option will only use the `sentry-log` feature, which will send error logs to Sentry.
+  - To enable the error-tracking feature, run the following commands:
 
-  ```bash
-  export DATABEND_SENTRY_DSN="<your-sentry-dsn>"
-  ```
+```bash
+export DATABEND_SENTRY_DSN="<your-DSN>"
+```
 
-  <img src="/img/tracing/sentry-error.png"/>
+  - To enable the performance monitoring feature, run the following commands:
 
-- **Also Enable Performance Monitoring**
+```bash
+export DATABEND_SENTRY_DSN="<your-DSN>"
+export SENTRY_TRACES_SAMPLE_RATE=1.0 LOG_LEVEL=DEBUG
+```
+:::tip
+Set `SENTRY_TRACES_SAMPLE_RATE` to a small value in production.
+:::
 
-  Setting `SENTRY_TRACES_SAMPLE_RATE` greater than `0.0` will allow sentry to perform trace sampling, which will help set up performance monitoring.
+### Step 4. Deploy Databend
 
-  ```bash
-  export DATABEND_SENTRY_DSN="<your-sentry-dsn>"
-  export SENTRY_TRACES_SAMPLE_RATE=1.0 LOG_LEVEL=DEBUG
-  ```
+Follow the [Deployment Guide](https://databend.rs/doc/deploy) to deploy Databend.
 
-  **Note:** Set `SENTRY_TRACES_SAMPLE_RATE` a to lower value in production.
+You're all set now. Check the pages on Sentry for alerts and performce information.
 
-  <img src="/img/tracing/sentry-performance.png"/>
+![Alt text](../../public/img/tracing/sentry-done.png)
