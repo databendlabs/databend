@@ -56,9 +56,7 @@ impl RulePushDownPrewhere {
     fn collect_columns_impl(expr: &ScalarExpr, columns: &mut ColumnSet) -> Option<()> {
         match expr {
             ScalarExpr::BoundColumnRef(column) => {
-                if column.column.table_name.is_none() {
-                    return None;
-                }
+                column.column.table_name.as_ref()?;
                 columns.insert(column.column.index);
                 Some(())
             }
