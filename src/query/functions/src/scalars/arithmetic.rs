@@ -292,7 +292,6 @@ macro_rules! register_bitwise_and {
     ( $lt:ty, $rt:ty, $registry:expr) => {
         type L = $lt;
         type R = $rt;
-        type T = <(L, R) as ResultTypeOfBinary>::AddMul;
         $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _, _>(
             "bit_and",
             FunctionProperty::default(),
@@ -306,7 +305,6 @@ macro_rules! register_bitwise_or {
     ( $lt:ty, $rt:ty, $registry:expr) => {
         type L = $lt;
         type R = $rt;
-        type T = <(L, R) as ResultTypeOfBinary>::AddMul;
         $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _, _>(
             "bit_or",
             FunctionProperty::default(),
@@ -320,7 +318,6 @@ macro_rules! register_bitwise_xor {
     ( $lt:ty, $rt:ty, $registry:expr) => {
         type L = $lt;
         type R = $rt;
-        type T = <(L, R) as ResultTypeOfBinary>::AddMul;
         $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _, _>(
             "bit_xor",
             FunctionProperty::default(),

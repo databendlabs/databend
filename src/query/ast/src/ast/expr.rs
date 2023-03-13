@@ -577,7 +577,7 @@ impl UnaryOperator {
     pub fn to_func_name(&self) -> String {
         match self {
             UnaryOperator::SquareRoot => "sqrt".to_string(),
-            UnaryOperator::CubeRoot => "cube".to_string(),
+            UnaryOperator::CubeRoot => "cbrt".to_string(),
             UnaryOperator::BitwiseNot => "bit_not".to_string(),
             _ => {
                 let name = format!("{:?}", self);
