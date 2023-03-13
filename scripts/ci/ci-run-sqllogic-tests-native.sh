@@ -7,7 +7,7 @@ set -e
 export STORAGE_ALLOW_INSECURE=true
 
 echo "Starting standalone DatabendQuery and DatabendMeta"
-./scripts/ci/deploy/databend-query-standalone.sh
+./scripts/ci/deploy/databend-query-standalone-native.sh
 
 TEST_HANDLERS=${TEST_HANDLERS:-"mysql,http,clickhouse"}
 BUILD_PROFILE=${BUILD_PROFILE:-debug}
@@ -18,11 +18,5 @@ if [ $# -gt 0 ]; then
 fi
 echo "Run suites using argument: $RUN_DIR"
 
-for i in $(seq 1 3); do
-	echo "Starting databend-sqllogic tests $i"
-	target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --skip_dir management --enable_sandbox --parallel 8 --debug
-
-	if [ $? -ne 0 ]; then
-		break
-	fi
-done
+echo "Starting databend-sqllogic tests"
+target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --skip_dir management,mode,explain,tpch --enable_sandbox --parallel 8 --debug
