@@ -19,15 +19,14 @@ use std::sync::Arc;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_meta_app::principal::StageInfo;
+use common_storage::StageFilesInfo;
 
 use crate::plan::StageFileInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct StageTableInfo {
     pub schema: TableSchemaRef,
-    pub path: String,
-    pub files: Vec<String>,
-    pub pattern: String,
+    pub files_info: StageFilesInfo,
     pub stage_info: StageInfo,
     pub files_to_copy: Option<Vec<StageFileInfo>>,
 }

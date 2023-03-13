@@ -35,6 +35,7 @@ use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use common_storage::StageFilesInfo;
 use common_storages_fuse::io::Files;
 use common_storages_stage::StageTable;
 use tracing::error;
@@ -106,9 +107,11 @@ impl CopyInterpreter {
         let stage_table_info = StageTableInfo {
             schema: table_schema,
             stage_info: stage.clone(),
-            path: path.to_string(),
-            files: vec![],
-            pattern: "".to_string(),
+            files_info: StageFilesInfo {
+                path: path.to_string(),
+                files: None,
+                pattern: None,
+            },
             files_to_copy: None,
         };
 

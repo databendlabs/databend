@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::ops::Deref;
-use std::path::Path;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
@@ -45,7 +44,6 @@ use opendal::Operator;
 use parking_lot::Mutex;
 
 use crate::format_stage_file_info;
-use crate::list_file;
 use crate::stage_table_sink::StageTableSink;
 
 /// TODO: we need to track the data metrics in stage table.
@@ -75,26 +73,17 @@ impl StageTable {
     }
 
     pub async fn list_files(stage_info: &StageTableInfo) -> Result<Vec<StageFileInfo>> {
-        let path = &stage_info.path;
-        let files = &stage_info.files;
         let op = Self::get_op(&stage_info.stage_info)?;
-        let all_files = if !files.is_empty() {
-            let mut res = vec![];
-            for file in files {
-                // Here we add the path to the file: /path/to/path/file1.
-                let new_path = Path::new(path).join(file).to_string_lossy().to_string();
-
-                if !new_path.ends_with('/') {
-                    let meta = op.stat(&new_path).await?;
-                    res.push(format_stage_file_info(new_path, &meta))
-                }
-            }
-            res
-        } else {
-            list_file(&op, path, &stage_info.pattern).await?
-        };
-
-        Ok(all_files)
+        let infos = stage_info
+            .files_info
+            .list(&op, false)
+            .await?
+            .into_iter()
+            .map(|file_with_meta| {
+                format_stage_file_info(file_with_meta.path, &file_with_meta.metadata)
+            })
+            .collect();
+        Ok(infos)
     }
 
     fn get_block_compact_thresholds_with_default(&self) -> BlockThresholds {

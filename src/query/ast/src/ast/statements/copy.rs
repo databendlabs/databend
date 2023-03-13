@@ -38,8 +38,8 @@ use crate::ast::Query;
 pub struct CopyStmt {
     pub src: CopyUnit,
     pub dst: CopyUnit,
-    pub files: Vec<String>,
-    pub pattern: String,
+    pub files: Option<Vec<String>>,
+    pub pattern: Option<String>,
     pub file_format: BTreeMap<String, String>,
     /// TODO(xuanwo): parse into validation_mode directly.
     pub validation_mode: String,
@@ -55,8 +55,8 @@ pub struct CopyStmt {
 impl CopyStmt {
     pub fn apply_option(&mut self, opt: CopyOption) {
         match opt {
-            CopyOption::Files(v) => self.files = v,
-            CopyOption::Pattern(v) => self.pattern = v,
+            CopyOption::Files(v) => self.files = Some(v),
+            CopyOption::Pattern(v) => self.pattern = Some(v),
             CopyOption::FileFormat(v) => self.file_format = v,
             CopyOption::ValidationMode(v) => self.validation_mode = v,
             CopyOption::SizeLimit(v) => self.size_limit = v,
@@ -76,14 +76,14 @@ impl Display for CopyStmt {
         write!(f, " INTO {}", self.dst)?;
         write!(f, " FROM {}", self.src)?;
 
-        if !self.files.is_empty() {
+        if let Some(files) = &self.files {
             write!(f, " FILES = (")?;
-            write_quoted_comma_separated_list(f, &self.files)?;
+            write_quoted_comma_separated_list(f, files)?;
             write!(f, " )")?;
         }
 
-        if !self.pattern.is_empty() {
-            write!(f, " PATTERN = '{}'", self.pattern)?;
+        if let Some(pattern) = &self.pattern {
+            write!(f, " PATTERN = '{}'", pattern)?;
         }
 
         if !self.file_format.is_empty() {
