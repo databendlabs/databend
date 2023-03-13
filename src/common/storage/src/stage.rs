@@ -223,7 +223,8 @@ impl StageFilesInfo {
         let mut files = Vec::new();
         let mut list = operator.scan(path).await?;
         while let Some(obj) = list.try_next().await? {
-            let meta = operator.metadata(&obj, Metakey::Mode).await?;
+            // todo(youngsofun): not always need Metakey::Complete
+            let meta = operator.metadata(&obj, Metakey::Complete).await?;
             if check_file(obj.path(), meta.mode(), &pattern) {
                 files.push(FileWithMeta::new(obj.path(), meta));
                 if first_only {
@@ -275,7 +276,7 @@ fn blocking_list_files_with_pattern(
     let list = operator.list(path)?;
     for obj in list {
         let obj = obj?;
-        let meta = operator.metadata(&obj, Metakey::Mode)?;
+        let meta = operator.metadata(&obj, Metakey::Complete)?;
         if check_file(obj.path(), meta.mode(), &pattern) {
             files.push(FileWithMeta::new(obj.path(), meta));
             if first_only {
