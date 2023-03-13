@@ -20,6 +20,7 @@ use common_meta_app::principal::StageInfo;
 use common_meta_app::principal::StageType;
 use futures::TryStreamExt;
 use opendal::EntryMode;
+use opendal::Metadata;
 use opendal::Metakey;
 use opendal::Operator;
 use regex::Regex;
@@ -29,12 +30,14 @@ use crate::DataOperator;
 
 pub struct FileWithMeta {
     pub path: String,
+    pub metadata: Metadata,
 }
 
 impl FileWithMeta {
-    fn new(path: &str) -> Self {
+    fn new(path: &str, meta: Metadata) -> Self {
         Self {
             path: path.to_string(),
+            metadata: meta,
         }
     }
 }
@@ -84,7 +87,7 @@ impl StageFilesInfo {
                     .to_string();
                 let meta = operator.stat(&full_path).await?;
                 if meta.mode().is_file() {
-                    res.push(FileWithMeta::new(&full_path))
+                    res.push(FileWithMeta::new(&full_path, meta))
                 } else {
                     return Err(ErrorCode::BadArguments(format!(
                         "{full_path} is not a file"
@@ -131,7 +134,7 @@ impl StageFilesInfo {
                     .to_string();
                 let meta = operator.blocking().stat(&full_path)?;
                 if meta.mode().is_file() {
-                    res.push(FileWithMeta::new(&full_path))
+                    res.push(FileWithMeta::new(&full_path, meta))
                 } else {
                     return Err(ErrorCode::BadArguments(format!(
                         "{full_path} is not a file"
@@ -158,7 +161,7 @@ async fn list_files_with_pattern(
     let root_meta = operator.stat(path).await;
     match root_meta {
         Ok(meta) => match meta.mode() {
-            EntryMode::FILE => return Ok(vec![FileWithMeta::new(path)]),
+            EntryMode::FILE => return Ok(vec![FileWithMeta::new(path, meta)]),
             EntryMode::DIR => {}
             EntryMode::Unknown => return Err(ErrorCode::BadArguments("object mode is unknown")),
         },
@@ -177,7 +180,7 @@ async fn list_files_with_pattern(
     while let Some(obj) = list.try_next().await? {
         let meta = operator.metadata(&obj, Metakey::Mode).await?;
         if check_file(obj.path(), meta.mode(), &pattern) {
-            files.push(FileWithMeta::new(obj.path()));
+            files.push(FileWithMeta::new(obj.path(), meta));
             if first_only {
                 return Ok(files);
             }
@@ -208,7 +211,7 @@ fn blocking_list_files_with_pattern(
     let root_meta = operator.stat(path);
     match root_meta {
         Ok(meta) => match meta.mode() {
-            EntryMode::FILE => return Ok(vec![FileWithMeta::new(path)]),
+            EntryMode::FILE => return Ok(vec![FileWithMeta::new(path, meta)]),
             EntryMode::DIR => {}
             EntryMode::Unknown => return Err(ErrorCode::BadArguments("object mode is unknown")),
         },
@@ -228,7 +231,7 @@ fn blocking_list_files_with_pattern(
         let obj = obj?;
         let meta = operator.metadata(&obj, Metakey::Mode)?;
         if check_file(obj.path(), meta.mode(), &pattern) {
-            files.push(FileWithMeta::new(obj.path()));
+            files.push(FileWithMeta::new(obj.path(), meta));
             if first_only {
                 return Ok(files);
             }
