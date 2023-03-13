@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_ast::ast::Expr;
+use common_ast::ast::GroupBy;
 use common_ast::ast::Identifier;
 use common_ast::ast::Query;
 use common_ast::ast::SelectStmt;
@@ -34,7 +35,7 @@ impl VisitorMut for DistinctToGroupBy {
             ..
         } = stmt;
 
-        if group_by.is_empty() && select_list.len() == 1 && from.len() == 1 {
+        if group_by.is_none() && select_list.len() == 1 && from.len() == 1 {
             if let common_ast::ast::SelectTarget::AliasedExpr {
                 expr:
                     box Expr::FunctionCall {
@@ -60,7 +61,7 @@ impl VisitorMut for DistinctToGroupBy {
                             select_list: vec![],
                             from: from.clone(),
                             selection: selection.clone(),
-                            group_by: args.clone(),
+                            group_by: Some(GroupBy::Normal(args.clone())),
                             having: None,
                         })),
                         order_by: vec![],
@@ -93,7 +94,7 @@ impl VisitorMut for DistinctToGroupBy {
                             alias: None,
                         }],
                         selection: None,
-                        group_by: vec![],
+                        group_by: None,
                         having: having.clone(),
                     };
 

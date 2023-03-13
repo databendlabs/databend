@@ -420,6 +420,7 @@ impl SubqueryRewriter {
                     from_distinct: false,
                     mode: AggregateMode::Initial,
                     limit: None,
+                    grouping_sets: vec![],
                 };
 
                 let compare = ComparisonExpr {

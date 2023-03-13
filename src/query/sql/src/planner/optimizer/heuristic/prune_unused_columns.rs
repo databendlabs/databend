@@ -150,6 +150,7 @@ impl UnusedColumnPruner {
                         from_distinct: p.from_distinct,
                         mode: p.mode,
                         limit: p.limit,
+                        grouping_sets: p.grouping_sets.clone(),
                     }),
                     Self::keep_required_columns(expr.child(0)?, required)?,
                 ))

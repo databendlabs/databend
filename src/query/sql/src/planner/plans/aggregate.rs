@@ -48,6 +48,8 @@ pub struct Aggregate {
     // True if the plan is generated from distinct, else the plan is a normal aggregate;
     pub from_distinct: bool,
     pub limit: Option<usize>,
+    /// The grouping sets, each grouping set is a list of `group_items` indices.
+    pub grouping_sets: Vec<Vec<usize>>,
 }
 
 impl Aggregate {
