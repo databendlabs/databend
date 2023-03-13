@@ -56,6 +56,7 @@ use common_storages_result_cache::ResultCacheReader;
 use common_storages_result_cache::ResultScan;
 use common_storages_view::view_table::QUERY;
 use common_users::UserApiProvider;
+use dashmap::DashMap;
 
 use crate::binder::copy::parse_stage_location_v2;
 use crate::binder::location::parse_uri_location;
@@ -155,7 +156,7 @@ impl Binder {
                 };
 
                 // Resolve table with catalog
-                let table_meta: Arc<dyn Table> = self
+                let table_meta = match self
                     .resolve_data_source(
                         tenant.as_str(),
                         catalog.as_str(),
@@ -163,7 +164,28 @@ impl Binder {
                         table_name.as_str(),
                         &navigation_point,
                     )
-                    .await?;
+                    .await
+                {
+                    Ok(table) => table,
+                    Err(_) => {
+                        let mut parent = bind_context.parent.as_ref();
+                        loop {
+                            if parent.is_none() {
+                                break;
+                            }
+                            if let Some(cte_info) = parent.unwrap().ctes_map.get(&table_name) {
+                                return self
+                                    .bind_cte(bind_context, &table_name, alias, &cte_info)
+                                    .await;
+                            }
+                            parent = parent.unwrap().parent.as_ref();
+                        }
+                        return Err(ErrorCode::UnknownTable(format!(
+                            "Unknown table '{table_name}'"
+                        )));
+                    }
+                };
+
                 match table_meta.engine() {
                     "VIEW" => {
                         let query = table_meta
@@ -426,7 +448,14 @@ impl Binder {
         alias: &Option<TableAlias>,
         cte_info: &CteInfo,
     ) -> Result<(SExpr, BindContext)> {
-        let new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+        let new_bind_context = BindContext {
+            parent: Some(Box::new(bind_context.clone())),
+            columns: vec![],
+            aggregate_info: Default::default(),
+            in_grouping: false,
+            ctes_map: Box::new(DashMap::new()),
+            is_view: false,
+        };
         let (s_expr, mut new_bind_context) =
             self.bind_query(&new_bind_context, &cte_info.query).await?;
         let mut cols_alias = cte_info.columns_alias.clone();
