@@ -41,7 +41,7 @@ impl Files {
         let batch_size = 1000;
         let locations = Vec::from_iter(file_locations.into_iter().map(|v| v.as_ref().to_string()));
 
-        if locations.len() < batch_size {
+        if locations.len() <= batch_size {
             Self::delete_files(self.operator.clone(), locations).await?;
         } else {
             let mut chunks = locations.chunks(batch_size);
