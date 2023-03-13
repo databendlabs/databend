@@ -673,6 +673,8 @@ impl ValueSource {
                 for col in columns.iter_mut().take(pop_count) {
                     col.pop();
                 }
+                // rollback to start position of the row
+                reader.rollback(start_pos_of_row + 1);
                 skip_to_next_row(reader, 1)?;
                 let end_pos_of_row = reader.position();
 
