@@ -23,12 +23,8 @@ common-pipeline-sources = { path = "../../pipeline/sources" }
 common-storage = { path = "../../../common/storage" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
-chrono = { workspace = true }
-futures = "0.3.24"
 opendal = { workspace = true }
 parking_lot = "0.12.1"
-regex = "1.6.0"
-tracing = "0.1.36"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
 
 [build-dependencies]
