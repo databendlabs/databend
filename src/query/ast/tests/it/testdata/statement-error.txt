@@ -352,3 +352,25 @@ error:
   | while parsing `PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`
 
 
+---------- Input ----------
+SELECT * FROM t GROUP BY GROUPING SETS a, b
+---------- Output ---------
+error: 
+  --> SQL:1:35
+  |
+1 | SELECT * FROM t GROUP BY GROUPING SETS a, b
+  |                                   ^^^^ expected `,`, `HAVING`, `(`, `UNION`, `EXCEPT`, `INTERSECT`, or 7 more ...
+
+
+---------- Input ----------
+SELECT * FROM t GROUP BY GROUPING SETS ()
+---------- Output ---------
+error: 
+  --> SQL:1:41
+  |
+1 | SELECT * FROM t GROUP BY GROUPING SETS ()
+  | ------                                  ^ expected `(`, `IS`, `IN`, `EXISTS`, `BETWEEN`, `+`, or 58 more ...
+  | |                                        
+  | while parsing `SELECT ...`
+
+

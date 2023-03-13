@@ -875,6 +875,10 @@ pub enum TokenKind {
     LAST,
     #[token("IGNORE_RESULT", ignore(ascii_case))]
     IGNORE_RESULT,
+    #[token("GROUPING", ignore(ascii_case))]
+    GROUPING,
+    #[token("SETS", ignore(ascii_case))]
+    SETS,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html

@@ -574,8 +574,20 @@ pub trait VisitorMut: Sized {
             walk_expr_mut(self, selection);
         }
 
-        for expr in group_by.iter_mut() {
-            walk_expr_mut(self, expr);
+        match group_by {
+            Some(GroupBy::Normal(exprs)) => {
+                for expr in exprs {
+                    walk_expr_mut(self, expr);
+                }
+            }
+            Some(GroupBy::GroupingSets(sets)) => {
+                for set in sets {
+                    for expr in set {
+                        walk_expr_mut(self, expr);
+                    }
+                }
+            }
+            _ => {}
         }
 
         if let Some(having) = having {
