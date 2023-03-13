@@ -19,21 +19,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Download artifact
-      uses: ./.github/actions/artifact_download
-      with:
-        profile: release
-        sha: ${{ inputs.sha }}
-        target: x86_64-unknown-linux-gnu
-
-    - name: Setup Databend Binary
-      shell: bash
-      run: |
-        sudo cp ./target/release/databend-query /usr/local/bin/databend-query
-        sudo cp ./target/release/databend-meta /usr/local/bin/databend-meta
-        databend-query --version
-        databend-meta --version
-
     - uses: ./.github/actions/setup_bendsql
 
     - name: Install script dependencies

@@ -39,7 +39,7 @@ bendsql cloud login \
     --org "${CLOUD_ORG}"
 
 bendsql cloud warehouse ls
-bendsql cloud warehouse create "${CLOUD_WAREHOUSE}" --size 1 --tag "${BENCHMARK_IMAGE_TAG}"
+bendsql cloud warehouse create "${CLOUD_WAREHOUSE}" --size "${BENCHMARK_SIZE}" --tag "${BENCHMARK_IMAGE_TAG}"
 bendsql cloud warehouse ls
 bendsql cloud warehouse resume "${CLOUD_WAREHOUSE}" --wait
 
@@ -104,4 +104,4 @@ while read -r query; do
 done <"${BENCHMARK_DATASET}/queries.sql"
 
 echo "Cleaning up..."
-bendsql cloud warehouse delete: "${CLOUD_WAREHOUSE}"
+bendsql cloud warehouse delete "${CLOUD_WAREHOUSE}"
