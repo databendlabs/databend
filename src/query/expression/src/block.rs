@@ -452,9 +452,8 @@ impl DataBlock {
             let column = if !block_column_ids.contains(&column_id) {
                 let default_val = &default_vals[i];
                 let table_data_type = field.data_type();
-                let data_type: DataType = table_data_type.into();
                 BlockEntry {
-                    data_type,
+                    data_type: table_data_type.into(),
                     value: Value::Scalar(default_val.to_owned()),
                 }
             } else {

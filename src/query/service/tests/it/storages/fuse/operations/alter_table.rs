@@ -188,10 +188,7 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
         let column0 = Int32Type::from_data(vec![1, 2]);
         let column3 = UInt64Type::from_data(vec![3, 4]);
         let column4 = Float64Type::from_data(vec![13.0, 14.0]);
-        let tuple_column = Column::Tuple {
-            fields: vec![column3, column4],
-            len: 2,
-        };
+        let tuple_column = Column::Tuple(vec![column3, column4]);
 
         DataBlock::new_from_columns(vec![column0, tuple_column])
     };

@@ -365,7 +365,7 @@ fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value
                     _ => unreachable!(),
                 })
                 .collect(),
-            ValueRef::Column(Column::Tuple { fields, .. }) => fields
+            ValueRef::Column(Column::Tuple(fields)) => fields
                 .iter()
                 .cloned()
                 .map(|c| ValueRef::Column(Float64Type::try_downcast_column(&c).unwrap()))

@@ -36,8 +36,6 @@ use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
-use crate::TypeDeserializer;
-use crate::TypeDeserializerImpl;
 use crate::Value;
 
 impl DataBlock {
@@ -108,10 +106,7 @@ impl Column {
             Column::Array(column) => {
                 let mut offsets = Vec::with_capacity(length + 1);
                 offsets.push(0);
-                let builder = ColumnBuilder::from_column(
-                    TypeDeserializerImpl::with_capacity(&column.values.data_type(), self.len())
-                        .finish_to_column(),
-                );
+                let builder = ColumnBuilder::with_capacity(&column.values.data_type(), self.len());
                 let builder = ArrayColumnBuilder { builder, offsets };
                 Self::take_value_types::<ArrayType<AnyType>, _>(column, builder, indices)
             }
@@ -119,11 +114,10 @@ impl Column {
                 let mut offsets = Vec::with_capacity(length + 1);
                 offsets.push(0);
                 let builder = ColumnBuilder::from_column(
-                    TypeDeserializerImpl::with_capacity(&column.values.data_type(), self.len())
-                        .finish_to_column(),
+                    ColumnBuilder::with_capacity(&column.values.data_type(), self.len()).build(),
                 );
                 let (key_builder, val_builder) = match builder {
-                    ColumnBuilder::Tuple { fields, .. } => (fields[0].clone(), fields[1].clone()),
+                    ColumnBuilder::Tuple(fields) => (fields[0].clone(), fields[1].clone()),
                     _ => unreachable!(),
                 };
                 let builder = KvColumnBuilder {
@@ -142,12 +136,9 @@ impl Column {
                     validity: BooleanType::try_downcast_column(&validity).unwrap(),
                 }))
             }
-            Column::Tuple { fields, .. } => {
+            Column::Tuple(fields) => {
                 let fields = fields.iter().map(|c| c.take(indices)).collect();
-                Column::Tuple {
-                    fields,
-                    len: indices.len(),
-                }
+                Column::Tuple(fields)
             }
             Column::Variant(column) => Self::take_arg_types::<VariantType, _>(column, indices),
         }

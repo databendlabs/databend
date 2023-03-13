@@ -18,8 +18,6 @@ use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_exception::ErrorCode;
-use common_exception::Result;
 use common_exception::Span;
 use itertools::Itertools;
 use serde::Deserialize;
@@ -36,6 +34,7 @@ use crate::values::Value;
 use crate::values::ValueRef;
 use crate::Column;
 use crate::ColumnIndex;
+use crate::EvalResult;
 use crate::Expr;
 use crate::FunctionDomain;
 use crate::Scalar;
@@ -66,6 +65,8 @@ pub struct EvalContext<'a> {
     /// default value in nullable's inner column.
     pub validity: Option<Bitmap>,
     pub errors: Option<(MutableBitmap, String)>,
+    /// Some error is already rendered, so we don't need to render it again.
+    pub already_rendered: bool,
 }
 
 impl<'a> EvalContext<'a> {
@@ -93,29 +94,41 @@ impl<'a> EvalContext<'a> {
         }
     }
 
-    pub fn render_error(&self, span: Span, args: &[Value<AnyType>], func_name: &str) -> Result<()> {
+    #[inline]
+    pub fn set_already_rendered(&mut self) {
+        self.already_rendered = true;
+    }
+
+    pub fn render_error(
+        &self,
+        span: Span,
+        args: &[Value<AnyType>],
+        result: &Value<AnyType>,
+        func_name: &str,
+    ) -> EvalResult<()> {
         match &self.errors {
             Some((valids, error)) => {
-                let first_error_row = valids
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, valid)| !valid)
-                    .take(1)
-                    .next()
-                    .unwrap()
-                    .0;
-                let args = args
-                    .iter()
-                    .map(|arg| {
-                        let arg_ref = arg.as_ref();
-                        arg_ref.index(first_error_row).unwrap().to_string()
-                    })
-                    .join(", ");
-
-                Err(ErrorCode::Internal(format!(
-                    "{error} while evaluating function `{func_name}({args})`"
-                ))
-                .set_span(span))
+                let msg = if self.already_rendered {
+                    error.clone()
+                } else {
+                    let first_error_row = valids
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, valid)| !valid)
+                        .take(1)
+                        .next()
+                        .unwrap()
+                        .0;
+                    let args = args
+                        .iter()
+                        .map(|arg| {
+                            let arg_ref = arg.as_ref();
+                            arg_ref.index(first_error_row).unwrap().to_string()
+                        })
+                        .join(", ");
+                    format!("{error} while evaluating function `{func_name}({args})`")
+                };
+                Err((span, result.clone(), valids.clone().into(), msg))
             }
             None => Ok(()),
         }

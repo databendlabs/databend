@@ -38,6 +38,9 @@ fn test_multi_if(file: &mut impl Write) {
     run_ast(file, "multi_if(true, 1, true, NULL, 2)", &[]);
     run_ast(file, "multi_if(true, 1, NULL)", &[]);
     run_ast(file, "multi_if(false, 1, NULL)", &[]);
+    run_ast(file, "multi_if(true, 1, 1 / 0)", &[]);
+    run_ast(file, "multi_if(false, 1 / 0, 1)", &[]);
+    run_ast(file, "multi_if(false, 1, 1 / 0)", &[]);
     run_ast(file, "multi_if(cond_a, expr_true, expr_else)", &[
         (
             "cond_a",
@@ -101,6 +104,22 @@ fn test_multi_if(file: &mut impl Write) {
             ("expr_else", Int64Type::from_data(vec![9i64, 10, 11, 12])),
         ],
     );
+    run_ast(file, "multi_if(cond_a, 1 / expr_a, expr_else)", &[
+        (
+            "cond_a",
+            BooleanType::from_data(vec![true, true, false, false]),
+        ),
+        ("expr_a", Int64Type::from_data(vec![1i64, 2, 0, 4])),
+        ("expr_else", Int64Type::from_data(vec![9i64, 10, 11, 12])),
+    ]);
+    run_ast(file, "multi_if(cond_a, 1 / expr_a, expr_else)", &[
+        (
+            "cond_a",
+            BooleanType::from_data(vec![true, true, true, false]),
+        ),
+        ("expr_a", Int64Type::from_data(vec![1i64, 2, 0, 4])),
+        ("expr_else", Int64Type::from_data(vec![9i64, 10, 11, 12])),
+    ]);
 }
 
 fn test_is_not_null(file: &mut impl Write) {
