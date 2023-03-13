@@ -463,6 +463,15 @@ impl CopyInterpreter {
                     // If a file is already copied(status with AlreadyCopied) we will try to purge them.
                     if stage_info.copy_options.purge {
                         let purge_start = Instant::now();
+
+                        // Status.
+                        {
+                            let status =
+                                format!("begin to purge files:{}", all_source_files.len(),);
+                            ctx.set_status_info(&status);
+                            info!(status);
+                        }
+
                         CopyInterpreter::try_purge_files(
                             ctx.clone(),
                             &stage_info,
@@ -473,7 +482,7 @@ impl CopyInterpreter {
                         // Status.
                         {
                             let status = format!(
-                                "try to purge files:{}, elapsed:{}",
+                                "end to purge files:{}, elapsed:{}",
                                 all_source_files.len(),
                                 purge_start.elapsed().as_secs()
                             );
