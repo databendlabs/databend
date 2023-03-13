@@ -92,6 +92,8 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | "engine"                        | "information_schema" | "tables"              | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "engine"                        | "system"             | "tables"              | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "engine"                        | "system"             | "tables_with_history" | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
+| "engine_full"                   | "system"             | "tables"              | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
+| "engine_full"                   | "system"             | "tables_with_history" | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "entry"                         | "system"             | "tracing"             | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "event_date"                    | "system"             | "query_log"           | "Date"             | "DATE"              | ""       | ""       | "NO"     | ""       |
 | "event_time"                    | "system"             | "query_log"           | "Timestamp"        | "TIMESTAMP"         | ""       | ""       | "NO"     | ""       |
