@@ -2033,6 +2033,8 @@ dependencies = [
  "dashmap",
  "globiter",
  "itertools",
+ "num-derive",
+ "num-traits",
  "once_cell",
  "opendal",
  "ordered-float 3.4.0",
@@ -2062,7 +2064,6 @@ dependencies = [
  "common-meta-app",
  "futures",
  "opendal",
- "parking_lot 0.12.1",
  "regex",
  "serde",
 ]

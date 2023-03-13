@@ -76,10 +76,10 @@ pub async fn get_u64_value<T: kvapi::Key>(
     }
 }
 
-/// Get a struct value.
+/// Get value that are encoded with FromToProto.
 ///
 /// It returns seq number and the data.
-pub async fn get_struct_value<K, T>(
+pub async fn get_pb_value<K, T>(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     k: &K,
 ) -> Result<(u64, Option<T>), KVAppError>
@@ -95,6 +95,30 @@ where
     } else {
         Ok((0, None))
     }
+}
+
+/// Batch get values that are encoded with FromToProto.
+pub async fn mget_pb_values<T>(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    keys: &[String],
+) -> Result<Vec<(u64, Option<T>)>, MetaError>
+where
+    T: FromToProto,
+    T::PB: common_protos::prost::Message + Default,
+{
+    let seq_bytes = kv_api.mget_kv(keys).await?;
+    let mut seq_values = Vec::with_capacity(keys.len());
+    for seq_v in seq_bytes {
+        if let Some(seq_v) = seq_v {
+            let seq = seq_v.seq;
+            let v = deserialize_struct(&seq_v.data)?;
+            seq_values.push((seq, Some(v)))
+        } else {
+            seq_values.push((0, None));
+        }
+    }
+
+    Ok(seq_values)
 }
 
 /// It returns a vec of structured key(such as DatabaseNameIdent), such as:
@@ -340,7 +364,7 @@ pub async fn get_share_meta_by_id_or_err(
 ) -> Result<(u64, ShareMeta), KVAppError> {
     let id_key = ShareId { share_id };
 
-    let (share_meta_seq, share_meta) = get_struct_value(kv_api, &id_key).await?;
+    let (share_meta_seq, share_meta) = get_pb_value(kv_api, &id_key).await?;
     share_meta_has_to_exist(share_meta_seq, share_id, msg)?;
 
     Ok((share_meta_seq, share_meta.unwrap()))
@@ -387,7 +411,7 @@ pub async fn get_share_account_meta_or_err(
     msg: impl Display,
 ) -> Result<(u64, ShareAccountMeta), KVAppError> {
     let (share_account_meta_seq, share_account_meta): (u64, Option<ShareAccountMeta>) =
-        get_struct_value(kv_api, name_key).await?;
+        get_pb_value(kv_api, name_key).await?;
     share_account_meta_has_to_exist(share_account_meta_seq, name_key, msg)?;
 
     Ok((
@@ -428,7 +452,7 @@ pub async fn get_share_id_to_name_or_err(
 ) -> Result<(u64, ShareNameIdent), KVAppError> {
     let id_key = ShareIdToName { share_id };
 
-    let (share_name_seq, share_name) = get_struct_value(kv_api, &id_key).await?;
+    let (share_name_seq, share_name) = get_pb_value(kv_api, &id_key).await?;
     if share_name_seq == 0 {
         debug!(share_name_seq, ?share_id, "share meta does not exist");
 
@@ -464,7 +488,7 @@ pub async fn is_all_db_data_removed(
 ) -> Result<bool, KVAppError> {
     let dbid = DatabaseId { db_id };
 
-    let (db_meta_seq, db_meta): (_, Option<DatabaseMeta>) = get_struct_value(kv_api, &dbid).await?;
+    let (db_meta_seq, db_meta): (_, Option<DatabaseMeta>) = get_pb_value(kv_api, &dbid).await?;
     debug_assert_eq!((db_meta_seq == 0), db_meta.is_none());
     if db_meta_seq != 0 {
         return Ok(false);
@@ -472,7 +496,7 @@ pub async fn is_all_db_data_removed(
 
     let id_to_name = DatabaseIdToName { db_id };
     let (name_ident_seq, name_ident): (_, Option<DatabaseNameIdent>) =
-        get_struct_value(kv_api, &id_to_name).await?;
+        get_pb_value(kv_api, &id_to_name).await?;
     debug_assert_eq!((name_ident_seq == 0), name_ident.is_none());
     if name_ident_seq != 0 {
         return Ok(false);
@@ -498,14 +522,14 @@ where
 {
     let dbid = DatabaseId { db_id };
 
-    let (db_meta_seq, db_meta): (_, Option<DatabaseMeta>) = get_struct_value(kv_api, &dbid).await?;
+    let (db_meta_seq, db_meta): (_, Option<DatabaseMeta>) = get_pb_value(kv_api, &dbid).await?;
     if db_meta_seq == 0 {
         return Ok((false, None));
     }
 
     let id_to_name = DatabaseIdToName { db_id };
     let (name_ident_seq, _name_ident): (_, Option<DatabaseNameIdent>) =
-        get_struct_value(kv_api, &id_to_name).await?;
+        get_pb_value(kv_api, &id_to_name).await?;
     if name_ident_seq == 0 {
         return Ok((false, None));
     }
@@ -528,7 +552,7 @@ pub async fn get_object_shared_by_share_ids(
     object: &ShareGrantObject,
 ) -> Result<(u64, ObjectSharedByShareIds), KVAppError> {
     let (seq, share_ids): (u64, Option<ObjectSharedByShareIds>) =
-        get_struct_value(kv_api, object).await?;
+        get_pb_value(kv_api, object).await?;
 
     match share_ids {
         Some(share_ids) => Ok((seq, share_ids)),

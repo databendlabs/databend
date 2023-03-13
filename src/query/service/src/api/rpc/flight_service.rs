@@ -123,6 +123,7 @@ impl FlightService for DatabendQueryFlightService {
 
                 DataExchangeManager::instance()
                     .handle_exchange_fragment(query_id, source, fragment, exchange)?;
+
                 Ok(RawResponse::new(Box::pin(rx)))
             }
             exchange_type => Err(Status::unimplemented(format!(

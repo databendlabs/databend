@@ -20,6 +20,7 @@ use std::time::Instant;
 
 use chrono::DateTime;
 use chrono::Utc;
+use common_base::runtime::execute_futures_in_parallel;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -37,7 +38,6 @@ use tracing::info;
 use tracing::warn;
 use tracing::Instrument;
 
-use crate::io::try_join_futures;
 use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
 use crate::io::TableMetaLocationGenerator;
@@ -168,9 +168,12 @@ impl SnapshotsIO {
             })
         });
 
-        try_join_futures(
-            self.ctx.clone(),
+        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
+        let permit_nums = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+        execute_futures_in_parallel(
             tasks,
+            threads_nums,
+            permit_nums,
             "fuse-req-snapshots-worker".to_owned(),
         )
         .await
