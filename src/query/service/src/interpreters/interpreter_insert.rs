@@ -28,7 +28,6 @@ use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_base::runtime::GlobalIORuntime;
-use common_catalog::plan::StageFileInfo;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_catalog::table_context::StageAttachment;
@@ -72,6 +71,8 @@ use common_sql::Metadata;
 use common_sql::MetadataRef;
 use common_sql::NameResolutionContext;
 use common_sql::ScalarBinder;
+use common_storage::StageFileInfo;
+use common_storage::StageFilesInfo;
 use common_storages_factory::Table;
 use common_storages_fuse::io::Files;
 use common_storages_stage::StageTable;
@@ -230,9 +231,11 @@ impl InsertInterpreter {
         let mut stage_table_info = StageTableInfo {
             schema: attachment_table_schema,
             stage_info,
-            path: path.to_string(),
-            files: vec![],
-            pattern: "".to_string(),
+            files_info: StageFilesInfo {
+                path: path.to_string(),
+                files: None,
+                pattern: None,
+            },
             files_to_copy: None,
         };
 

@@ -113,7 +113,7 @@ impl ParquetTable {
             self.files_info.list(&self.operator, false).await
         }?
         .into_iter()
-        .map(|f| f.path)
+        .map(|f| (f.path, f.metadata.content_length()))
         .collect::<Vec<_>>();
 
         let pruner = PartitionPruner {
