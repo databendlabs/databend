@@ -1897,47 +1897,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 "upsert_table_copied_file_info"
             );
 
-            let mut condition = vec![txn_cond_seq(&tbid, Eq, tb_meta_seq)];
-            let mut if_then = vec![];
-            // `remove_table_copied_files` and `upsert_table_copied_file_info`
-            // all modify `TableCopiedFileInfo`,
-            // so there used to has `TableCopiedFileLockKey` in these two functions
-            // to protect TableCopiedFileInfo modification.
-            // In issue: https://github.com/datafuselabs/databend/issues/8897,
-            // there is chance that if copy files concurrently, `upsert_table_copied_file_info`
-            // may return `TxnRetryMaxTimes`.
-            // So now, in case that `TableCopiedFileInfo` has expire time, remove `TableCopiedFileLockKey`
-            // in each function. In this case there is chance that some `TableCopiedFileInfo` may not be
-            // removed in `remove_table_copied_files`, but these data can be purged in case of expire time.
-
-            let mut file_name_infos = req.file_info.clone().into_iter();
-
-            for c in keys.chunks(DEFAULT_MGET_SIZE) {
-                let seq_infos: Vec<(u64, Option<TableCopiedFileInfo>)> =
-                    mget_pb_values(self, c).await?;
-
-                for (file_seq, _file_info_opt) in seq_infos {
-                    let (f_name, file_info) = file_name_infos.next().unwrap();
-
-                    let key = TableCopiedFileNameIdent {
-                        table_id,
-                        file: f_name.to_owned(),
-                    };
-                    condition.push(txn_cond_seq(&key, Eq, file_seq));
-                    match &req.expire_at {
-                        Some(expire_at) => {
-                            if_then.push(txn_op_put_with_expire(
-                                &key,
-                                serialize_struct(&file_info)?,
-                                *expire_at,
-                            ));
-                        }
-                        None => {
-                            if_then.push(txn_op_put(&key, serialize_struct(&file_info)?));
-                        }
-                    }
-                }
-            }
+            let (condition, if_then) =
+                build_upsert_table_copied_file_info_conditions(self, &req, &keys, tb_meta_seq)
+                    .await?;
 
             let txn_req = TxnRequest {
                 condition,
@@ -2107,6 +2069,21 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         };
         let req_seq = req.seq;
 
+        let upsert_file_name_keys =
+            if let Some(upsert_table_copied_file_req) = &req.upsert_source_table {
+                let mut keys = Vec::with_capacity(upsert_table_copied_file_req.file_info.len());
+                for file in upsert_table_copied_file_req.file_info.iter() {
+                    let key = TableCopiedFileNameIdent {
+                        table_id: req.table_id,
+                        file: file.0.clone(),
+                    };
+                    keys.push(key.to_string_key());
+                }
+                keys
+            } else {
+                vec![]
+            };
+
         loop {
             let (tb_meta_seq, table_meta): (_, Option<TableMeta>) =
                 get_pb_value(self, &tbid).await?;
@@ -2142,7 +2119,13 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
 
             if let Some(req) = &req.upsert_source_table {
                 let (conditions, match_operations) =
-                    build_upsert_table_copied_file_info_conditions(self, req, tb_meta_seq).await?;
+                    build_upsert_table_copied_file_info_conditions(
+                        self,
+                        req,
+                        &upsert_file_name_keys,
+                        tb_meta_seq,
+                    )
+                    .await?;
                 txn_req.condition.extend(conditions);
                 txn_req.if_then.extend(match_operations)
             }
@@ -2827,6 +2810,7 @@ async fn list_tables_from_share_db(
 async fn build_upsert_table_copied_file_info_conditions<T>(
     this: &T,
     req: &UpsertTableCopiedFileReq,
+    file_name_keys: &[String],
     tb_meta_seq: u64,
 ) -> Result<(Vec<TxnCondition>, Vec<TxnOp>), KVAppError>
 where
@@ -2835,8 +2819,18 @@ where
     let table_id = req.table_id;
     let tbid = TableId { table_id };
 
+    // let mut keys = Vec::with_capacity(req.file_info.len());
+    // for file in req.file_info.iter() {
+    //     let key = TableCopiedFileNameIdent {
+    //         table_id,
+    //         file: file.0.clone(),
+    //     };
+    //     keys.push(key.to_string_key());
+    // }
+
     let mut condition = vec![txn_cond_seq(&tbid, Eq, tb_meta_seq)];
     let mut if_then = vec![];
+
     // `remove_table_copied_files` and `upsert_table_copied_file_info`
     // all modify `TableCopiedFileInfo`,
     // so there used to has `TableCopiedFileLockKey` in these two functions
@@ -2847,27 +2841,33 @@ where
     // So now, in case that `TableCopiedFileInfo` has expire time, remove `TableCopiedFileLockKey`
     // in each function. In this case there is chance that some `TableCopiedFileInfo` may not be
     // removed in `remove_table_copied_files`, but these data can be purged in case of expire time.
-    for (file, file_info) in req.file_info.iter() {
-        let key = TableCopiedFileNameIdent {
-            table_id,
-            file: file.to_owned(),
-        };
-        let (file_seq, _): (_, Option<TableCopiedFileInfo>) = get_pb_value(this, &key).await?;
 
-        condition.push(txn_cond_seq(&key, Eq, file_seq));
-        match &req.expire_at {
-            Some(expire_at) => {
-                if_then.push(txn_op_put_with_expire(
-                    &key,
-                    serialize_struct(file_info)?,
-                    *expire_at,
-                ));
-            }
-            None => {
-                if_then.push(txn_op_put(&key, serialize_struct(file_info)?));
+    let mut file_name_infos = req.file_info.clone().into_iter();
+
+    for c in file_name_keys.chunks(DEFAULT_MGET_SIZE) {
+        let seq_infos: Vec<(u64, Option<TableCopiedFileInfo>)> = mget_pb_values(this, c).await?;
+
+        for (file_seq, _file_info_opt) in seq_infos {
+            let (f_name, file_info) = file_name_infos.next().unwrap();
+
+            let key = TableCopiedFileNameIdent {
+                table_id,
+                file: f_name.to_owned(),
+            };
+            condition.push(txn_cond_seq(&key, Eq, file_seq));
+            match &req.expire_at {
+                Some(expire_at) => {
+                    if_then.push(txn_op_put_with_expire(
+                        &key,
+                        serialize_struct(&file_info)?,
+                        *expire_at,
+                    ));
+                }
+                None => {
+                    if_then.push(txn_op_put(&key, serialize_struct(&file_info)?));
+                }
             }
         }
     }
-
     Ok((condition, if_then))
 }
