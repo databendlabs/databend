@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_base::runtime::execute_futures_in_parallel;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
@@ -31,7 +32,6 @@ use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use tracing::Instrument;
 
-use crate::io::execute_futures_in_parallel;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::compact::CompactSourceMeta;
 use crate::operations::mutation::AbortOperation;
@@ -87,7 +87,7 @@ impl CompactAggregator {
         Ok(())
     }
 
-    async fn write_segments(&self, segments: &[SerializedSegment]) -> Result<()> {
+    async fn write_segments(&self, segments: Vec<SerializedSegment>) -> Result<()> {
         let mut iter = segments.iter();
         let tasks = std::iter::from_fn(move || {
             iter.next().map(|segment| {
@@ -96,9 +96,12 @@ impl CompactAggregator {
             })
         });
 
+        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
+        let permit_nums = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
         execute_futures_in_parallel(
-            self.ctx.clone(),
             tasks,
+            threads_nums,
+            permit_nums,
             "compact-write-segments-worker".to_owned(),
         )
         .await?
@@ -148,10 +151,7 @@ impl AsyncAccumulatingTransform for CompactAggregator {
             });
         }
 
-        let max_io_requests = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
-        for segments in serialized_segments.chunks(max_io_requests) {
-            self.write_segments(segments).await?;
-        }
+        self.write_segments(serialized_segments).await?;
 
         let merged_segments = std::mem::take(&mut self.merged_segments)
             .into_values()
