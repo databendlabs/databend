@@ -34,7 +34,8 @@ Databend supports SQL data types in several categories:
 
 ## Semi-structured Data Types
 
-| Name        | Aliases | Build From Values                         | Description                                                                                                 |
-|-------------|---------|-------------------------------------------|-------------------------------------------------------------------------------------------------------------|
-| **VARIANT** | JSON    | [1,{"a":1,"b":{"c":2}}]                   | Collection of elements of different data types., including ARRAY and OBJECT.                                |
+| Name    | Aliases | Build From Values       | Description                                                                 |
+|---------|---------|-------------------------|-----------------------------------------------------------------------------|
+| VARIANT | JSON    | [1,{"a":1,"b":{"c":2}}] | Collection of elements of different data types, including ARRAY and OBJECT. |
+| Map     | N/A     | {"a":1, "b":2, "c":3}   | A set of key-value pairs where each key is unique and maps to a value.      |                             |
 
