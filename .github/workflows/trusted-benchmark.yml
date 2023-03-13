@@ -17,13 +17,14 @@ env:
 jobs:
   metadata:
     if: github.event.workflow_run.conclusion == 'success'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, X64, Linux, dev]
     outputs:
       sha: ${{ steps.metadata.outputs.sha }}
       run_id: ${{ steps.metadata.outputs.run_id }}
       source: ${{ steps.metadata.outputs.source }}
       source_id: ${{ steps.metadata.outputs.source_id }}
     steps:
+      - uses: actions/checkout@v3
       - name: Download benchmark metadata
         id: metadata
         env:
@@ -233,7 +234,6 @@ jobs:
       - name: Generate report
         working-directory: benchmark/clickbench
         run: |
-          # aws s3 sync "${{ env.BENCHMARK_S3_PREFIX }}/release/${{ matrix.dataset }}/$(date -u +%Y)/$(date -u +%m)/" ./results/${{ matrix.dataset }}/
           ./update-results.sh ${{ matrix.dataset }}
       - name: Upload PR clickbench report to repo.databend.rs
         working-directory: benchmark/clickbench
