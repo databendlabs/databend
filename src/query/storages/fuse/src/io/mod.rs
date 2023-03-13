@@ -14,7 +14,6 @@
 
 mod files;
 mod locations;
-mod parallel;
 mod read;
 mod segments;
 mod snapshots;
@@ -22,7 +21,6 @@ mod write;
 
 pub use files::Files;
 pub use locations::TableMetaLocationGenerator;
-pub use parallel::execute_futures_in_parallel;
 pub use read::BlockReader;
 pub use read::BloomBlockFilterReader;
 pub use read::MergeIOReadResult;
