@@ -14,7 +14,6 @@ on:
 
 permissions:
   id-token: write
-  pull-requests: write
   contents: read
 
 env:
