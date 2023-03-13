@@ -23,6 +23,7 @@ use common_arrow::parquet::write::Version;
 use common_arrow::write_parquet_file;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::serialize::col_encoding;
 use common_expression::DataBlock;
 use common_expression::TableSchema;
 use storages_common_table_meta::table::TableCompression;
@@ -78,9 +79,4 @@ pub fn blocks_to_parquet(
             cause,
         ))),
     }
-}
-
-// fallback to plain encoding due to performance issue
-fn col_encoding(_data_type: &ArrowDataType) -> Encoding {
-    Encoding::Plain
 }

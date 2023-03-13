@@ -188,10 +188,7 @@ impl<'a> Evaluator<'a> {
                     }
                     Value::Column(col) => {
                         let len = col.len();
-                        Value::Column(Column::Tuple {
-                            fields: vec![col, Column::Null { len }],
-                            len,
-                        })
+                        Value::Column(Column::Tuple(vec![col, Column::Null { len }]))
                     }
                 },
                 Err((_, value, bitmap, err)) => {
@@ -210,10 +207,7 @@ impl<'a> Evaluator<'a> {
                         column: err_col,
                         validity: bitmap,
                     }));
-                    Value::Column(Column::Tuple {
-                        fields: vec![value_col, err_col],
-                        len: num_rows,
-                    })
+                    Value::Column(Column::Tuple(vec![value_col, err_col]))
                 }
             }),
         };
@@ -426,7 +420,7 @@ impl<'a> Evaluator<'a> {
                             .collect::<EvalResult<Vec<_>>>()?;
                         Ok(Value::Scalar(Scalar::Tuple(new_fields)))
                     }
-                    Value::Column(Column::Tuple { fields, len }) => {
+                    Value::Column(Column::Tuple(fields)) => {
                         let new_fields = fields
                             .into_iter()
                             .zip(fields_src_ty.iter())
@@ -436,10 +430,7 @@ impl<'a> Evaluator<'a> {
                                     .map(|val| val.into_column().unwrap())
                             })
                             .collect::<EvalResult<_>>()?;
-                        Ok(Value::Column(Column::Tuple {
-                            fields: new_fields,
-                            len,
-                        }))
+                        Ok(Value::Column(Column::Tuple(new_fields)))
                     }
                     other => unreachable!("source: {}", other),
                 }
@@ -613,7 +604,7 @@ impl<'a> Evaluator<'a> {
                             .collect::<EvalResult<_>>()?;
                         Ok(Value::Scalar(Scalar::Tuple(new_fields)))
                     }
-                    Value::Column(Column::Tuple { fields, len }) => {
+                    Value::Column(Column::Tuple(fields)) => {
                         let new_fields = fields
                             .into_iter()
                             .zip(fields_src_ty.iter())
@@ -625,10 +616,7 @@ impl<'a> Evaluator<'a> {
                                     .unwrap())
                             })
                             .collect::<EvalResult<_>>()?;
-                        let new_col = Column::Tuple {
-                            fields: new_fields,
-                            len,
-                        };
+                        let new_col = Column::Tuple(new_fields);
                         Ok(Value::Column(new_col))
                     }
                     other => unreachable!("source: {}", other),

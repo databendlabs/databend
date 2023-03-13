@@ -355,3 +355,20 @@ impl<T: ArgType> ArrayColumnBuilder<T> {
         }
     }
 }
+
+impl ArrayColumnBuilder<AnyType> {
+    pub fn pop(&mut self) -> Option<Column> {
+        if self.len() > 0 {
+            let pop_count = self.offsets[self.offsets.len() - 1] as usize
+                - self.offsets[self.offsets.len() - 2] as usize;
+            self.offsets.pop();
+            let mut builder = ColumnBuilder::with_capacity(&self.builder.data_type(), pop_count);
+            for _ in 0..pop_count {
+                builder.push(self.builder.pop().unwrap().as_ref());
+            }
+            Some(builder.build())
+        } else {
+            None
+        }
+    }
+}

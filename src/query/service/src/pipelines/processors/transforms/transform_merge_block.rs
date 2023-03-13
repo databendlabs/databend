@@ -19,12 +19,10 @@ use async_channel::Receiver;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockEntry;
+use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
-use common_expression::TypeDeserializer;
-use common_expression::TypeDeserializerImpl;
 use common_expression::Value;
-use common_io::prelude::FormatSettings;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -108,14 +106,13 @@ impl TransformMergeBlock {
 
         if left_data_type.remove_nullable() == right_data_type.remove_nullable() {
             let origin_column = block.get_by_offset(index).clone();
-            let mut builder = TypeDeserializerImpl::with_capacity(left_data_type, block.num_rows());
-            let settings = FormatSettings::default();
+            let mut builder = ColumnBuilder::with_capacity(left_data_type, block.num_rows());
             let value = origin_column.value.as_ref();
             for idx in 0..block.num_rows() {
                 let scalar = value.index(idx).unwrap();
-                builder.append_data_value(scalar.to_owned(), &settings)?;
+                builder.push(scalar);
             }
-            let col = builder.finish_to_column();
+            let col = builder.build();
             Ok(BlockEntry {
                 data_type: left_data_type.clone(),
                 value: Value::Column(col),
