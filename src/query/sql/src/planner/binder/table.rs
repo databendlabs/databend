@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::default::Default;
 use std::sync::Arc;
 
+use async_recursion::async_recursion;
 use chrono::TimeZone;
 use chrono::Utc;
 use common_ast::ast::Indirection;
@@ -113,6 +114,7 @@ impl Binder {
             .await
     }
 
+    #[async_recursion]
     async fn bind_single_table(
         &mut self,
         bind_context: &BindContext,
@@ -382,7 +384,11 @@ impl Binder {
                 self.bind_stage_table(bind_context, stage_info, files_info, alias, None)
                     .await
             }
-            TableReference::Join { .. } => unreachable!(),
+            TableReference::Join { .. } => {
+                // Cover some specif case, such as select * from t0, t1 inner join t2 on t1.a = t2.a
+                // Such case will be right associate
+                self.bind_table_reference(bind_context, table_ref).await
+            }
         }
     }
 
