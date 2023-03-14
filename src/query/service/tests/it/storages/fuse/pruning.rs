@@ -173,7 +173,6 @@ async fn test_block_pruner() -> Result<()> {
         filter: Some(parse_to_remote_string_expr(
             ctx.clone(),
             table.clone(),
-            false,
             "a > 3",
         )?),
         ..Default::default()
@@ -186,7 +185,6 @@ async fn test_block_pruner() -> Result<()> {
     e2.filter = Some(parse_to_remote_string_expr(
         ctx.clone(),
         table.clone(),
-        false,
         "a > 0 and b > 6",
     )?);
     let b2 = num_blocks - max_val_of_b as usize - 1;

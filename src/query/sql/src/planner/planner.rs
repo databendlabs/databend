@@ -22,7 +22,6 @@ use common_ast::parser::token::Token;
 use common_ast::parser::token::TokenKind;
 use common_ast::parser::token::Tokenizer;
 use common_ast::walk_statement_mut;
-use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
@@ -82,8 +81,7 @@ impl Planner {
         loop {
             let res = async {
                 // Step 2: Parse the SQL.
-                let backtrace = Backtrace::new();
-                let (mut stmt, format) = parse_sql(&tokens, sql_dialect, &backtrace)?;
+                let (mut stmt, format) = parse_sql(&tokens, sql_dialect)?;
                 self.replace_stmt(&mut stmt, sql_dialect);
 
                 // Step 3: Bind AST with catalog, and generate a pure logical SExpr

@@ -20,7 +20,6 @@ use common_ast::ast::MapAccessor;
 use common_ast::ast::UnaryOperator;
 use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
-use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_expression::types::decimal::DecimalDataType;
 use common_expression::types::decimal::DecimalSize;
@@ -31,9 +30,8 @@ use common_expression::RawExpr;
 use ordered_float::OrderedFloat;
 
 pub fn parse_raw_expr(text: &str, columns: &[(&str, DataType)]) -> RawExpr {
-    let backtrace = Backtrace::new();
     let tokens = tokenize_sql(text).unwrap();
-    let expr = parse_expr(&tokens, Dialect::PostgreSQL, &backtrace).unwrap();
+    let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
     transform_expr(expr, columns)
 }
 
