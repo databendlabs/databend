@@ -24,6 +24,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use itertools::Itertools;
 
 use super::prune_by_children;
 use crate::binder::scalar::ScalarBinder;
@@ -371,7 +372,8 @@ impl Binder {
                 set.sort();
                 set
             })
-            .collect();
+            .collect::<Vec<_>>();
+        let grouping_sets = grouping_sets.into_iter().unique().collect();
         bind_context.aggregate_info.grouping_sets = grouping_sets;
         // Add a virtual column `_grouping_id` to group items.
         let grouping_id_column = self.create_column_binding(

@@ -66,6 +66,7 @@ use common_sql::IndexType;
 use common_storage::DataOperator;
 
 use super::processors::ProfileWrapper;
+use super::processors::TransformExpandGroupingSets;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
 use crate::pipelines::processors::transforms::build_partition_bucket;
@@ -424,8 +425,63 @@ impl PipelineBuilder {
         })
     }
 
-    fn build_aggregate_expand(&mut self, _aggregate: &AggregateExpand) -> Result<()> {
-        todo!()
+    fn build_aggregate_expand(&mut self, expand: &AggregateExpand) -> Result<()> {
+        self.build_pipeline(&expand.input)?;
+        let input_schema = expand.input.output_schema()?;
+        let group_bys = expand
+            .group_bys
+            .iter()
+            .filter_map(|i| {
+                // Do not collect virtual column "_grouping_id".
+                if *i != expand.grouping_id_index {
+                    match input_schema.index_of(&i.to_string()) {
+                        Ok(index) => {
+                            let ty = input_schema.field(index).data_type().clone();
+                            Some(Ok((index, ty)))
+                        }
+                        Err(e) => Some(Err(e)),
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let grouping_sets = expand
+            .grouping_sets
+            .iter()
+            .map(|sets| {
+                sets.iter()
+                    .map(|i| {
+                        let i = input_schema.index_of(&i.to_string())?;
+                        let offset = group_bys.iter().position(|(j, _)| *j == i).unwrap();
+                        Ok(offset)
+                    })
+                    .collect::<Result<Vec<_>>>()
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let mut grouping_ids = Vec::with_capacity(grouping_sets.len());
+        for set in grouping_sets {
+            let mut id = 0;
+            for i in set {
+                id |= 1 << i;
+            }
+            // For element in `group_bys`,
+            // if it is in current grouping set: set 0, else: set 1. (1 represents it will be NULL in grouping)
+            // Example: GROUP BY GROUPING SETS ((a, b), (a), (b), ())
+            // group_bys: [a, b]
+            // grouping_sets: [[0, 1], [0], [1], []]
+            // grouping_ids: 00, 01, 10, 11
+            grouping_ids.push(!id);
+        }
+
+        self.main_pipeline.add_transform(|input, output| {
+            Ok(TransformExpandGroupingSets::create(
+                input,
+                output,
+                group_bys.clone(),
+                grouping_ids.clone(),
+            ))
+        })
     }
 
     fn build_aggregate_partial(&mut self, aggregate: &AggregatePartial) -> Result<()> {

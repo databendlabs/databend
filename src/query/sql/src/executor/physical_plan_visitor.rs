@@ -100,6 +100,7 @@ pub trait PhysicalPlanReplacer {
         Ok(PhysicalPlan::AggregateExpand(AggregateExpand {
             plan_id: plan.plan_id,
             input: Box::new(input),
+            group_bys: plan.group_bys.clone(),
             grouping_id_index: plan.grouping_id_index,
             grouping_sets: plan.grouping_sets.clone(),
             stat_info: plan.stat_info.clone(),

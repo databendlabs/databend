@@ -478,6 +478,7 @@ impl PhysicalPlanBuilder {
                                     let expand = AggregateExpand {
                                         plan_id: self.next_plan_id(),
                                         input,
+                                        group_bys: group_items.clone(),
                                         grouping_id_index: agg.grouping_id_index,
                                         grouping_sets: agg.grouping_sets.clone(),
                                         stat_info: Some(stat_info.clone()),
@@ -528,6 +529,7 @@ impl PhysicalPlanBuilder {
                                     let expand = AggregateExpand {
                                         plan_id: self.next_plan_id(),
                                         input: Box::new(input),
+                                        group_bys: group_items.clone(),
                                         grouping_id_index: agg.grouping_id_index,
                                         grouping_sets: agg.grouping_sets.clone(),
                                         stat_info: Some(stat_info.clone()),

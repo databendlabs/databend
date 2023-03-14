@@ -170,6 +170,7 @@ pub struct AggregateExpand {
     pub plan_id: u32,
 
     pub input: Box<PhysicalPlan>,
+    pub group_bys: Vec<usize>,
     pub grouping_id_index: IndexType,
     pub grouping_sets: Vec<Vec<usize>>,
     /// Only used for explain
