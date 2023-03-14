@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
@@ -53,6 +54,7 @@ use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -71,6 +73,7 @@ use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
 use common_settings::Settings;
 use common_storage::DataOperator;
+use common_storage::StageFileInfo;
 use common_storages_fuse::operations::AppendOperationLogEntry;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
@@ -506,6 +509,26 @@ impl TableContext for CtxDelegation {
         _database: &str,
         _table: &str,
     ) -> Result<Arc<dyn Table>> {
+        todo!()
+    }
+
+    async fn color_copied_files(
+        &self,
+        _catalog_name: &str,
+        _database_name: &str,
+        _table_name: &str,
+        _files: Vec<StageFileInfo>,
+    ) -> Result<Vec<StageFileInfo>> {
+        todo!()
+    }
+
+    async fn upsert_copied_files(
+        &self,
+        _catalog_name: &str,
+        _database_name: &str,
+        _table_name: &str,
+        _copy_stage_files: BTreeMap<String, TableCopiedFileInfo>,
+    ) -> Result<()> {
         todo!()
     }
 }

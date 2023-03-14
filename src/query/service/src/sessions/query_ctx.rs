@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
@@ -25,6 +26,7 @@ use std::sync::Arc;
 use std::sync::Weak;
 use std::time::SystemTime;
 
+use chrono::Utc;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
@@ -47,9 +49,14 @@ use common_meta_app::principal::FileFormatOptions;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserInfo;
+use common_meta_app::schema::GetTableCopiedFileReq;
+use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_settings::Settings;
 use common_storage::DataOperator;
+use common_storage::StageFileInfo;
+use common_storage::StageFileStatus;
 use common_storage::StorageMetrics;
 use common_storages_fuse::TableContext;
 use common_storages_parquet::ParquetTable;
@@ -73,6 +80,7 @@ use crate::sessions::SessionType;
 use crate::storages::Table;
 const MYSQL_VERSION: &str = "8.0.26";
 const CLICKHOUSE_VERSION: &str = "8.12.14";
+const MAX_QUERY_COPIED_FILES_NUM: usize = 1000;
 
 #[derive(Clone)]
 pub struct QueryContext {
@@ -486,6 +494,109 @@ impl TableContext for QueryContext {
     ) -> Result<Arc<dyn Table>> {
         self.shared.get_table(catalog, database, table).await
     }
+
+    async fn color_copied_files(
+        &self,
+        catalog_name: &str,
+        database_name: &str,
+        table_name: &str,
+        files: Vec<StageFileInfo>,
+    ) -> Result<Vec<StageFileInfo>> {
+        let tenant = self.get_tenant();
+        let catalog = self.get_catalog(catalog_name)?;
+        let table = catalog
+            .get_table(&tenant, database_name, table_name)
+            .await?;
+        let table_id = table.get_id();
+
+        let mut copied_files = BTreeMap::new();
+        for chunk in files.chunks(MAX_QUERY_COPIED_FILES_NUM) {
+            let files = chunk.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
+            let req = GetTableCopiedFileReq { table_id, files };
+            let resp = catalog
+                .get_table_copied_file_info(&tenant, database_name, req)
+                .await?;
+            copied_files.extend(resp.file_info);
+        }
+
+        // Colored.
+        let mut results = Vec::with_capacity(files.len());
+        for mut file in files {
+            if let Some(copied_file) = copied_files.get(&file.path) {
+                match &copied_file.etag {
+                    Some(copied_etag) => {
+                        if let Some(file_etag) = &file.etag {
+                            // Check the 7 bytes etag prefix.
+                            if file_etag.starts_with(copied_etag) {
+                                file.status = StageFileStatus::AlreadyCopied;
+                            }
+                        }
+                    }
+                    None => {
+                        // etag is none, compare with content_length and last_modified.
+                        if copied_file.content_length == file.size
+                            && copied_file.last_modified == Some(file.last_modified)
+                        {
+                            file.status = StageFileStatus::AlreadyCopied;
+                        }
+                    }
+                }
+            }
+            results.push(file);
+        }
+        Ok(results)
+    }
+
+    async fn upsert_copied_files(
+        &self,
+        catalog_name: &str,
+        database_name: &str,
+        table_name: &str,
+        copy_stage_files: BTreeMap<String, TableCopiedFileInfo>,
+    ) -> Result<()> {
+        let tenant = self.get_tenant();
+        let catalog = self.get_catalog(catalog_name)?;
+        let table = catalog
+            .get_table(&tenant, database_name, table_name)
+            .await?;
+        let table_id = table.get_id();
+        debug!("upsert_copied_files_info: {:?}", copy_stage_files);
+
+        if copy_stage_files.is_empty() {
+            return Ok(());
+        }
+
+        let expire_hours = self.get_settings().get_load_file_metadata_expire_hours()?;
+        let expire_at = expire_hours * 60 + Utc::now().timestamp() as u64;
+        let mut do_copy_stage_files = BTreeMap::new();
+        for (file_name, file_info) in copy_stage_files {
+            do_copy_stage_files.insert(file_name.clone(), file_info);
+            if do_copy_stage_files.len() > MAX_QUERY_COPIED_FILES_NUM {
+                do_upsert_copied_files_info_to_meta(
+                    &catalog,
+                    Some(expire_at),
+                    &tenant,
+                    database_name,
+                    table_id,
+                    &mut do_copy_stage_files,
+                )
+                .await?;
+            }
+        }
+        if !do_copy_stage_files.is_empty() {
+            do_upsert_copied_files_info_to_meta(
+                &catalog,
+                Some(expire_at),
+                &tenant,
+                database_name,
+                table_id,
+                &mut do_copy_stage_files,
+            )
+            .await?;
+        }
+
+        Ok(())
+    }
 }
 
 impl TrySpawn for QueryContext {
@@ -504,4 +615,24 @@ impl std::fmt::Debug for QueryContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.get_current_user())
     }
+}
+
+async fn do_upsert_copied_files_info_to_meta(
+    catalog: &Arc<dyn Catalog>,
+    expire_at: Option<u64>,
+    tenant: &str,
+    database_name: &str,
+    table_id: u64,
+    copy_stage_files: &mut BTreeMap<String, TableCopiedFileInfo>,
+) -> Result<()> {
+    let req = UpsertTableCopiedFileReq {
+        table_id,
+        file_info: copy_stage_files.clone(),
+        expire_at,
+    };
+    catalog
+        .upsert_table_copied_file_info(tenant, database_name, req)
+        .await?;
+    copy_stage_files.clear();
+    Ok(())
 }

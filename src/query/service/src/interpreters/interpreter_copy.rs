@@ -15,9 +15,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use chrono::Utc;
 use common_base::runtime::GlobalIORuntime;
-use common_catalog::catalog::Catalog;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
@@ -28,9 +26,7 @@ use common_expression::infer_table_schema;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_meta_app::principal::StageInfo;
-use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableCopiedFileInfo;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_storage::StageFileInfo;
@@ -50,8 +46,6 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::CopyPlan;
 use crate::sql::plans::Plan;
-
-const MAX_QUERY_COPIED_FILES_NUM: usize = 1000;
 
 pub struct CopyInterpreter {
     ctx: Arc<QueryContext>,
@@ -130,124 +124,6 @@ impl CopyInterpreter {
         Ok(build_res)
     }
 
-    async fn do_upsert_copied_files_info_to_meta(
-        expire_at: Option<u64>,
-        tenant: &str,
-        database_name: &str,
-        table_id: u64,
-        catalog: Arc<dyn Catalog>,
-        copy_stage_files: &mut BTreeMap<String, TableCopiedFileInfo>,
-    ) -> Result<()> {
-        let req = UpsertTableCopiedFileReq {
-            table_id,
-            file_info: copy_stage_files.clone(),
-            expire_at,
-        };
-        catalog
-            .upsert_table_copied_file_info(tenant, database_name, req)
-            .await?;
-        copy_stage_files.clear();
-        Ok(())
-    }
-
-    async fn upsert_copied_files_info_to_meta(
-        ctx: &Arc<QueryContext>,
-        tenant: &str,
-        database_name: &str,
-        table_id: u64,
-        catalog: Arc<dyn Catalog>,
-        copy_stage_files: BTreeMap<String, TableCopiedFileInfo>,
-    ) -> Result<()> {
-        tracing::debug!("upsert_copied_files_info: {:?}", copy_stage_files);
-
-        if copy_stage_files.is_empty() {
-            return Ok(());
-        }
-
-        let expire_hours = ctx.get_settings().get_load_file_metadata_expire_hours()?;
-        let expire_at = expire_hours * 60 + Utc::now().timestamp() as u64;
-        let mut do_copy_stage_files = BTreeMap::new();
-        for (file_name, file_info) in copy_stage_files {
-            do_copy_stage_files.insert(file_name.clone(), file_info);
-            if do_copy_stage_files.len() > MAX_QUERY_COPIED_FILES_NUM {
-                CopyInterpreter::do_upsert_copied_files_info_to_meta(
-                    Some(expire_at),
-                    tenant,
-                    database_name,
-                    table_id,
-                    catalog.clone(),
-                    &mut do_copy_stage_files,
-                )
-                .await?;
-            }
-        }
-        if !do_copy_stage_files.is_empty() {
-            CopyInterpreter::do_upsert_copied_files_info_to_meta(
-                Some(expire_at),
-                tenant,
-                database_name,
-                table_id,
-                catalog.clone(),
-                &mut do_copy_stage_files,
-            )
-            .await?;
-        }
-
-        Ok(())
-    }
-
-    pub async fn color_copied_files(
-        ctx: &Arc<dyn TableContext>,
-        catalog_name: &str,
-        database_name: &str,
-        table_name: &str,
-        files: Vec<StageFileInfo>,
-    ) -> Result<Vec<StageFileInfo>> {
-        let tenant = ctx.get_tenant();
-        let catalog = ctx.get_catalog(catalog_name)?;
-        let table = catalog
-            .get_table(&tenant, database_name, table_name)
-            .await?;
-        let table_id = table.get_id();
-
-        let mut copied_files = BTreeMap::new();
-        for chunk in files.chunks(MAX_QUERY_COPIED_FILES_NUM) {
-            let files = chunk.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
-            let req = GetTableCopiedFileReq { table_id, files };
-            let resp = catalog
-                .get_table_copied_file_info(&tenant, database_name, req)
-                .await?;
-            copied_files.extend(resp.file_info);
-        }
-
-        // Colored.
-        let mut results = Vec::with_capacity(files.len());
-        for mut file in files {
-            if let Some(copied_file) = copied_files.get(&file.path) {
-                match &copied_file.etag {
-                    Some(copied_etag) => {
-                        if let Some(file_etag) = &file.etag {
-                            // Check the 7 bytes etag prefix.
-                            if file_etag.starts_with(copied_etag) {
-                                file.status = StageFileStatus::AlreadyCopied;
-                            }
-                        }
-                    }
-                    None => {
-                        // etag is none, compare with content_length and last_modified.
-                        if copied_file.content_length == file.size
-                            && copied_file.last_modified == Some(file.last_modified)
-                        {
-                            file.status = StageFileStatus::AlreadyCopied;
-                        }
-                    }
-                }
-            }
-            results.push(file);
-        }
-        Ok(results)
-    }
-
     async fn try_purge_files(
         ctx: Arc<QueryContext>,
         stage_info: &StageInfo,
@@ -305,14 +181,14 @@ impl CopyInterpreter {
                 info!(status);
             }
 
-            all_source_file_infos = CopyInterpreter::color_copied_files(
-                &table_ctx,
-                catalog_name,
-                database_name,
-                table_name,
-                all_source_file_infos,
-            )
-            .await?;
+            all_source_file_infos = table_ctx
+                .color_copied_files(
+                    catalog_name,
+                    database_name,
+                    table_name,
+                    all_source_file_infos,
+                )
+                .await?;
 
             info!("end to color copied files: {}", all_source_file_infos.len());
         }
@@ -394,7 +270,7 @@ impl CopyInterpreter {
         let stage_table_info_clone = stage_table_info.clone();
         let database_name = database_name.to_string();
         let catalog_name = catalog_name.to_string();
-        let table_id = to_table.get_id();
+        let table_name = table_name.to_string();
         build_res.main_pipeline.set_on_finished(move |may_error| {
             if may_error.is_none() {
                 CopyInterpreter::commit_copy_into_table(
@@ -405,7 +281,7 @@ impl CopyInterpreter {
                     need_copy_file_infos,
                     catalog_name,
                     database_name,
-                    table_id,
+                    table_name,
                 )?;
                 // Status.
                 {
@@ -434,10 +310,8 @@ impl CopyInterpreter {
         need_copy_files: Vec<StageFileInfo>,
         catalog_name: String,
         database_name: String,
-        table_id: u64,
+        table_name: String,
     ) -> Result<()> {
-        let catalog = ctx.get_catalog(&catalog_name)?;
-        let tenant = ctx.get_tenant();
         let mut copied_files = BTreeMap::new();
         for file in need_copy_files {
             // Short the etag to 7 bytes for less space in metasrv.
@@ -467,15 +341,8 @@ impl CopyInterpreter {
                 info!(status);
             }
 
-            CopyInterpreter::upsert_copied_files_info_to_meta(
-                &ctx,
-                &tenant,
-                &database_name,
-                table_id,
-                catalog,
-                copied_files,
-            )
-            .await?;
+            ctx.upsert_copied_files(&catalog_name, &database_name, &table_name, copied_files)
+                .await?;
 
             info!("end to upsert copied files");
 
