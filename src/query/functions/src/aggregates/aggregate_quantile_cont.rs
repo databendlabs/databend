@@ -290,9 +290,9 @@ pub fn try_create_aggregate_quantile_function<const TYPE: u8>(
         match param {
             Scalar::Decimal(d) => {
                 let f = d.to_float64();
-                if f <= 0.01 || f >= 0.99 {
+                if f <= 0f64 || f >= 1f64 {
                     return Err(ErrorCode::BadDataValueType(format!(
-                        "level range between 0.01 to 0.99, got: {:?}",
+                        "level range between 0 to 1, got: {:?}",
                         f
                     )));
                 }
