@@ -46,6 +46,7 @@ use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
 use common_storage::DataOperator;
+use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
 use common_storages_parquet::ParquetTable;
 use common_storages_result_cache::ResultCacheMetaManager;
@@ -380,7 +381,7 @@ impl Binder {
                     pattern: options.pattern.clone(),
                     files: options.files.clone(),
                 };
-                self.bind_stage_table(bind_context, stage_info, files_info, alias)
+                self.bind_stage_table(bind_context, stage_info, files_info, alias, None)
                     .await
             }
         }
@@ -392,6 +393,7 @@ impl Binder {
         stage_info: StageInfo,
         files_info: StageFilesInfo,
         alias: &Option<TableAlias>,
+        files_to_copy: Option<Vec<StageFileInfo>>,
     ) -> Result<(SExpr, BindContext)> {
         if matches!(
             stage_info.file_format_options.format,
@@ -399,7 +401,9 @@ impl Binder {
         ) {
             let read_options = ParquetReadOptions::default();
 
-            let table = ParquetTable::create(stage_info.clone(), files_info, read_options).await?;
+            let table =
+                ParquetTable::create(stage_info.clone(), files_info, read_options, files_to_copy)
+                    .await?;
 
             let table_alias_name = if let Some(table_alias) = alias {
                 Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
