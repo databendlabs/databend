@@ -44,6 +44,7 @@ use common_expression::ConstantFolder;
 use common_expression::Scalar;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageFileFormatType;
+use common_meta_app::principal::StageInfo;
 use common_storage::DataOperator;
 use common_storage::StageFilesInfo;
 use common_storages_parquet::ParquetTable;
@@ -369,52 +370,62 @@ impl Binder {
                 options,
                 alias,
             } => {
-                let (stage_info, path) =
+                let (mut stage_info, path) =
                     parse_file_location(&self.ctx, location, options.connection.clone()).await?;
-                let file_format_options = match &options.file_format {
-                    Some(f) => self.ctx.get_file_format(f).await?,
-                    None => stage_info.file_format_options.clone(),
-                };
-                if matches!(file_format_options.format, StageFileFormatType::Parquet) {
-                    let files_info = StageFilesInfo {
-                        path,
-                        pattern: options.pattern.clone(),
-                        files: options.files.clone(),
-                    };
-                    let read_options = ParquetReadOptions::default();
-
-                    let table =
-                        ParquetTable::create(stage_info.clone(), files_info, read_options).await?;
-
-                    let table_alias_name = if let Some(table_alias) = alias {
-                        Some(
-                            normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name,
-                        )
-                    } else {
-                        None
-                    };
-
-                    let table_index = self.metadata.write().add_table(
-                        CATALOG_DEFAULT.to_string(),
-                        "system".to_string(),
-                        table.clone(),
-                        table_alias_name,
-                        false,
-                    );
-
-                    let (s_expr, mut bind_context) = self
-                        .bind_base_table(bind_context, "system", table_index)
-                        .await?;
-                    if let Some(alias) = alias {
-                        bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
-                    }
-                    Ok((s_expr, bind_context))
-                } else {
-                    Err(ErrorCode::Unimplemented(
-                        "only support parquet format for 'select from stage' for now.",
-                    ))
+                if let Some(f) = &options.file_format {
+                    stage_info.file_format_options = self.ctx.get_file_format(f).await?;
                 }
+                let files_info = StageFilesInfo {
+                    path,
+                    pattern: options.pattern.clone(),
+                    files: options.files.clone(),
+                };
+                self.bind_stage_table(bind_context, stage_info, files_info, alias)
+                    .await
             }
+        }
+    }
+
+    pub(crate) async fn bind_stage_table(
+        &mut self,
+        bind_context: &BindContext,
+        stage_info: StageInfo,
+        files_info: StageFilesInfo,
+        alias: &Option<TableAlias>,
+    ) -> Result<(SExpr, BindContext)> {
+        if matches!(
+            stage_info.file_format_options.format,
+            StageFileFormatType::Parquet
+        ) {
+            let read_options = ParquetReadOptions::default();
+
+            let table = ParquetTable::create(stage_info.clone(), files_info, read_options).await?;
+
+            let table_alias_name = if let Some(table_alias) = alias {
+                Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
+            } else {
+                None
+            };
+
+            let table_index = self.metadata.write().add_table(
+                CATALOG_DEFAULT.to_string(),
+                "system".to_string(),
+                table.clone(),
+                table_alias_name,
+                false,
+            );
+
+            let (s_expr, mut bind_context) = self
+                .bind_base_table(bind_context, "system", table_index)
+                .await?;
+            if let Some(alias) = alias {
+                bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+            }
+            Ok((s_expr, bind_context))
+        } else {
+            Err(ErrorCode::Unimplemented(
+                "only support parquet format for 'select from stage' for now.",
+            ))
         }
     }
 
