@@ -37,6 +37,8 @@ use crate::operations::mutation::CompactPartInfo;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::Processor;
+use crate::statistics::gen_col_stats_lite;
+use crate::statistics::reduce_block_statistics;
 
 pub struct CompactSource {
     ctx: Arc<dyn TableContext>,
@@ -121,12 +123,15 @@ impl Processor for CompactSource {
                 // block read tasks.
                 let mut task_futures = Vec::new();
                 let part = CompactPartInfo::from_part(&part)?;
+                let mut stats = Vec::with_capacity(part.blocks.len());
                 for block in &part.blocks {
                     let progress_values = ProgressValues {
                         rows: block.row_count as usize,
                         bytes: block.block_size as usize,
                     };
                     self.scan_progress.incr(&progress_values);
+
+                    stats.push(block.col_stats.clone());
 
                     let settings = ReadSettings::from_ctx(&self.ctx)?;
                     let storage_format = block_builder.write_settings.storage_format;
@@ -154,7 +159,16 @@ impl Processor for CompactSource {
 
                 // concat blocks.
                 let new_block = DataBlock::concat(&blocks)?;
-                let serialized = tokio_rayon::spawn(move || block_builder.build(new_block)).await?;
+                let col_stats_lites = gen_col_stats_lite(
+                    &new_block,
+                    self.block_reader.schema().fields(),
+                    &self.block_reader.default_vals,
+                )?;
+                // generate block statistics.
+                let col_stats = reduce_block_statistics(&stats, Some(&col_stats_lites))?;
+                let serialized =
+                    tokio_rayon::spawn(move || block_builder.build(new_block, Some(col_stats)))
+                        .await?;
 
                 let start = Instant::now();
 
