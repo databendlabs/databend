@@ -462,7 +462,7 @@ fn register_tuple_cmp(registry: &mut FunctionRegistry) {
                         ValueRef::Scalar(ScalarRef::Tuple(fields)) => {
                             fields.iter().cloned().map(ValueRef::Scalar).collect()
                         }
-                        ValueRef::Column(Column::Tuple { fields, .. }) => {
+                        ValueRef::Column(Column::Tuple(fields)) => {
                             fields.iter().cloned().map(ValueRef::Column).collect()
                         }
                         _ => unreachable!(),
@@ -471,7 +471,7 @@ fn register_tuple_cmp(registry: &mut FunctionRegistry) {
                         ValueRef::Scalar(ScalarRef::Tuple(fields)) => {
                             fields.iter().cloned().map(ValueRef::Scalar).collect()
                         }
-                        ValueRef::Column(Column::Tuple { fields, .. }) => {
+                        ValueRef::Column(Column::Tuple(fields)) => {
                             fields.iter().cloned().map(ValueRef::Column).collect()
                         }
                         _ => unreachable!(),

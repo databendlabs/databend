@@ -6168,6 +6168,32 @@ CreateTable(
 
 
 ---------- Input ----------
+GRANT CREATE, CREATE USER ON * TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT CREATE, CREATE USER ON * TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Create,
+                CreateUser,
+            ],
+            level: Database(
+                None,
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
 GRANT SELECT, CREATE ON * TO 'test-grant'@'localhost';
 ---------- Output ---------
 GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost'
@@ -6769,8 +6795,8 @@ Copy(
                 ),
             },
         },
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
@@ -6828,8 +6854,8 @@ Copy(
                 ),
             },
         },
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
@@ -6892,8 +6918,8 @@ Copy(
                 ),
             },
         },
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
@@ -6956,8 +6982,8 @@ Copy(
                 ),
             },
         },
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
@@ -7007,8 +7033,8 @@ Copy(
                 ),
             },
         },
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {},
         validation_mode: "",
         size_limit: 0,
@@ -7053,8 +7079,8 @@ Copy(
                 ),
             },
         },
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {},
         validation_mode: "",
         size_limit: 0,
@@ -7101,8 +7127,8 @@ Copy(
                 ),
             },
         },
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
@@ -7160,8 +7186,8 @@ Copy(
                 },
             },
         ),
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
@@ -7213,8 +7239,8 @@ Copy(
                 path: "/",
             },
         ),
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
@@ -7279,8 +7305,8 @@ Copy(
                 ),
             },
         },
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
@@ -7332,8 +7358,8 @@ Copy(
                 ),
             },
         },
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
@@ -7385,8 +7411,8 @@ Copy(
                 ),
             },
         },
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
@@ -7438,8 +7464,8 @@ Copy(
                 ),
             },
         },
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
@@ -7497,8 +7523,8 @@ Copy(
                 ),
             },
         },
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",

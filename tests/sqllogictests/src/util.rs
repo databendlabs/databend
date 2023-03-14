@@ -105,7 +105,8 @@ pub fn get_files(suit: PathBuf) -> Result<Vec<walkdir::Result<DirEntry>>> {
             .into_iter()
             .filter_entry(|e| {
                 if let Some(skipped_dir) = &args.skipped_dir {
-                    if e.file_name().to_str().unwrap() == skipped_dir {
+                    let dirs = skipped_dir.split(',').collect::<Vec<&str>>();
+                    if dirs.contains(&e.file_name().to_str().unwrap()) {
                         return false;
                     }
                 }

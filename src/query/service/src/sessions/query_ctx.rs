@@ -69,11 +69,16 @@ use crate::sessions::ProcessInfo;
 use crate::sessions::QueryContextShared;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
+use crate::sessions::SessionType;
 use crate::storages::Table;
+const MYSQL_VERSION: &str = "8.0.26";
+const CLICKHOUSE_VERSION: &str = "8.12.14";
 
 #[derive(Clone)]
 pub struct QueryContext {
     version: String,
+    mysql_version: String,
+    clickhouse_version: String,
     partition_queue: Arc<RwLock<VecDeque<PartInfoPtr>>>,
     shared: Arc<QueryContextShared>,
     fragment_id: Arc<AtomicUsize>,
@@ -90,6 +95,8 @@ impl QueryContext {
         Arc::new(QueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             version: format!("DatabendQuery {}", *DATABEND_COMMIT_VERSION),
+            mysql_version: format!("{}-{}", MYSQL_VERSION, *DATABEND_COMMIT_VERSION),
+            clickhouse_version: CLICKHOUSE_VERSION.to_string(),
             shared,
             fragment_id: Arc::new(AtomicUsize::new(0)),
         })
@@ -247,6 +254,16 @@ impl TableContext for QueryContext {
         self.shared.result_progress.as_ref().get_values()
     }
 
+    fn get_status_info(&self) -> String {
+        let status = self.shared.status.read();
+        status.clone()
+    }
+
+    fn set_status_info(&self, info: &str) {
+        let mut status = self.shared.status.write();
+        *status = info.to_string();
+    }
+
     fn get_partition(&self) -> Option<PartInfoPtr> {
         self.partition_queue.write().pop_front()
     }
@@ -344,7 +361,12 @@ impl TableContext for QueryContext {
     }
 
     fn get_fuse_version(&self) -> String {
-        self.version.clone()
+        let session = self.get_current_session();
+        match session.get_type() {
+            SessionType::ClickHouseHttpHandler => self.clickhouse_version.clone(),
+            SessionType::MySQL => self.mysql_version.clone(),
+            _ => self.version.clone(),
+        }
     }
 
     fn get_format_settings(&self) -> Result<FormatSettings> {

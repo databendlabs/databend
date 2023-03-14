@@ -20,9 +20,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ColumnBuilder;
 use common_expression::TableSchemaRef;
-use common_expression::TypeDeserializer;
-use common_expression::TypeDeserializerImpl;
 use common_formats::FieldDecoder;
 use common_formats::FieldDecoderCSV;
 use common_formats::FieldDecoderRowBased;
@@ -54,19 +53,19 @@ impl InputFormatCSV {
     fn read_row(
         field_decoder: &FieldDecoderCSV,
         buf: &[u8],
-        deserializers: &mut [TypeDeserializerImpl],
+        columns: &mut [ColumnBuilder],
         schema: &TableSchemaRef,
         field_ends: &[usize],
     ) -> Result<()> {
         let mut field_start = 0;
-        for (c, deserializer) in deserializers.iter_mut().enumerate() {
+        for (c, column) in columns.iter_mut().enumerate() {
             let field_end = field_ends[c];
             let col_data = &buf[field_start..field_end];
             let mut reader = Cursor::new(col_data);
             if reader.eof() {
-                deserializer.de_default();
+                column.push_default();
             } else {
-                if let Err(e) = field_decoder.read_field(deserializer, &mut reader, true) {
+                if let Err(e) = field_decoder.read_field(column, &mut reader, true) {
                     let err_msg = format_column_error(schema, c, col_data, &e.message());
                     return Err(ErrorCode::BadBytes(err_msg));
                 };

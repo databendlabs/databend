@@ -1353,7 +1353,10 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         rule! { ( INT64 | SIGNED | BIGINT ) ~ ( "(" ~ #literal_u64 ~ ")" )? },
     );
     let ty_float32 = value(TypeName::Float32, rule! { FLOAT32 | FLOAT });
-    let ty_float64 = value(TypeName::Float64, rule! { FLOAT64 | DOUBLE });
+    let ty_float64 = value(
+        TypeName::Float64,
+        rule! { (FLOAT64 | DOUBLE)  ~ ( PRECISION )? },
+    );
     let ty_decimal = map_res(
         rule! { DECIMAL ~ "(" ~ #literal_u64 ~ "," ~ #literal_u64 ~ ")" },
         |(_, _, precision, _, scale, _)| {

@@ -172,25 +172,20 @@ pub(crate) fn pretty_copy(copy_stmt: CopyStmt) -> RcDoc<'static> {
         .append(pretty_copy_unit(copy_stmt.dst))
         .append(RcDoc::line().append(RcDoc::text("FROM ")))
         .append(pretty_copy_unit(copy_stmt.src))
-        .append(if !copy_stmt.files.is_empty() {
+        .append(if let Some(files) = &copy_stmt.files {
             RcDoc::line()
                 .append(RcDoc::text("FILES = "))
                 .append(parenthenized(
-                    interweave_comma(
-                        copy_stmt
-                            .files
-                            .into_iter()
-                            .map(|file| RcDoc::text(format!("{:?}", file))),
-                    )
-                    .group(),
+                    interweave_comma(files.iter().map(|file| RcDoc::text(format!("{:?}", file))))
+                        .group(),
                 ))
         } else {
             RcDoc::nil()
         })
-        .append(if !copy_stmt.pattern.is_empty() {
+        .append(if let Some(pattern) = &copy_stmt.pattern {
             RcDoc::line()
                 .append(RcDoc::text("PATTERN = "))
-                .append(RcDoc::text(format!("{:?}", copy_stmt.pattern)))
+                .append(RcDoc::text(format!("{:?}", pattern)))
         } else {
             RcDoc::nil()
         })

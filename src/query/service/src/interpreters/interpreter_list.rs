@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::number::UInt64Type;
 use common_expression::types::StringType;
@@ -23,9 +22,9 @@ use common_expression::DataSchemaRef;
 use common_expression::FromData;
 use common_expression::FromOptData;
 use common_sql::plans::ListPlan;
-use common_storages_stage::list_file;
+use common_storage::StageFileInfo;
+use common_storage::StageFilesInfo;
 use common_storages_stage::StageTable;
-use regex::Regex;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -56,21 +55,25 @@ impl Interpreter for ListInterpreter {
     #[tracing::instrument(level = "debug", name = "list_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
-        let op = StageTable::get_op(&plan.stage)?;
-        let mut files = list_file(&op, &plan.path).await?;
 
-        let files = if plan.pattern.is_empty() {
-            files
+        let op = StageTable::get_op(&plan.stage)?;
+
+        let pattern = if plan.pattern.is_empty() {
+            None
         } else {
-            let regex = Regex::new(&plan.pattern).map_err(|e| {
-                ErrorCode::SyntaxException(format!(
-                    "Pattern format invalid, got:{}, error:{:?}",
-                    &plan.pattern, e
-                ))
-            })?;
-            files.retain(|v| regex.is_match(&v.path));
-            files
+            Some(plan.pattern.clone())
         };
+        let files_info = StageFilesInfo {
+            path: plan.path.clone(),
+            files: None,
+            pattern,
+        };
+        let files: Vec<StageFileInfo> = files_info
+            .list(&op, false)
+            .await?
+            .into_iter()
+            .map(|file_with_meta| file_with_meta.into())
+            .collect::<Vec<_>>();
 
         let names: Vec<Vec<u8>> = files
             .iter()

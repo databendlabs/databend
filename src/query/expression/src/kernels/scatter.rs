@@ -41,8 +41,6 @@ use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::Scalar;
-use crate::TypeDeserializer;
-use crate::TypeDeserializerImpl;
 use crate::Value;
 
 impl DataBlock {
@@ -197,10 +195,7 @@ impl Column {
             Column::Array(column) => {
                 let mut offsets = Vec::with_capacity(length + 1);
                 offsets.push(0);
-                let builder = ColumnBuilder::from_column(
-                    TypeDeserializerImpl::with_capacity(&column.values.data_type(), length)
-                        .finish_to_column(),
-                );
+                let builder = ColumnBuilder::with_capacity(&column.values.data_type(), length);
                 let builder = ArrayColumnBuilder { builder, offsets };
                 Self::scatter_scalars::<ArrayType<AnyType>, _>(
                     column,
@@ -213,11 +208,10 @@ impl Column {
                 let mut offsets = Vec::with_capacity(length + 1);
                 offsets.push(0);
                 let builder = ColumnBuilder::from_column(
-                    TypeDeserializerImpl::with_capacity(&column.values.data_type(), length)
-                        .finish_to_column(),
+                    ColumnBuilder::with_capacity(&column.values.data_type(), length).build(),
                 );
                 let (key_builder, val_builder) = match builder {
-                    ColumnBuilder::Tuple { fields, .. } => (fields[0].clone(), fields[1].clone()),
+                    ColumnBuilder::Tuple(fields) => (fields[0].clone(), fields[1].clone()),
                     _ => unreachable!(),
                 };
                 let builder = KvColumnBuilder {
@@ -252,7 +246,7 @@ impl Column {
                     })
                     .collect()
             }
-            Column::Tuple { fields, .. } => {
+            Column::Tuple(fields) => {
                 let fields_vs: Vec<Vec<Column>> = fields
                     .iter()
                     .map(|c| c.scatter(data_type, indices, scatter_size))
@@ -265,10 +259,7 @@ impl Column {
                     for col in &fields_vs {
                         fields.push(col[s].clone());
                     }
-                    res.push(Column::Tuple {
-                        len: fields.first().map_or(0, |f| f.len()),
-                        fields,
-                    });
+                    res.push(Column::Tuple(fields));
                 }
                 res
             }

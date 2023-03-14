@@ -24,6 +24,7 @@ pub use catch_unwind::catch_unwind;
 pub use catch_unwind::CatchUnwindFuture;
 pub use global_runtime::GlobalHttpQueryRuntime;
 pub use global_runtime::GlobalIORuntime;
+pub use runtime::execute_futures_in_parallel;
 pub use runtime::match_join_handle;
 pub use runtime::Dropper;
 pub use runtime::Runtime;

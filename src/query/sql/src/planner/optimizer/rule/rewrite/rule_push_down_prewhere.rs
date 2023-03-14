@@ -52,47 +52,49 @@ impl RulePushDownPrewhere {
         }
     }
 
-    fn collect_columns_impl(expr: &ScalarExpr, columns: &mut ColumnSet) {
+    /// will throw error if the bound column ref is not in the table, such as subquery
+    fn collect_columns_impl(expr: &ScalarExpr, columns: &mut ColumnSet) -> Option<()> {
         match expr {
             ScalarExpr::BoundColumnRef(column) => {
+                column.column.table_name.as_ref()?;
                 columns.insert(column.column.index);
+                Some(())
             }
             ScalarExpr::AndExpr(and) => {
-                Self::collect_columns_impl(and.left.as_ref(), columns);
-                Self::collect_columns_impl(and.right.as_ref(), columns);
+                Self::collect_columns_impl(and.left.as_ref(), columns)?;
+                Self::collect_columns_impl(and.right.as_ref(), columns)
             }
             ScalarExpr::OrExpr(or) => {
-                Self::collect_columns_impl(or.left.as_ref(), columns);
-                Self::collect_columns_impl(or.right.as_ref(), columns);
+                Self::collect_columns_impl(or.left.as_ref(), columns)?;
+                Self::collect_columns_impl(or.right.as_ref(), columns)
             }
-            ScalarExpr::NotExpr(not) => {
-                Self::collect_columns_impl(not.argument.as_ref(), columns);
-            }
+            ScalarExpr::NotExpr(not) => Self::collect_columns_impl(not.argument.as_ref(), columns),
             ScalarExpr::ComparisonExpr(cmp) => {
-                Self::collect_columns_impl(cmp.left.as_ref(), columns);
-                Self::collect_columns_impl(cmp.right.as_ref(), columns);
+                Self::collect_columns_impl(cmp.left.as_ref(), columns)?;
+                Self::collect_columns_impl(cmp.right.as_ref(), columns)
             }
             ScalarExpr::FunctionCall(func) => {
                 for arg in func.arguments.iter() {
-                    Self::collect_columns_impl(arg, columns);
+                    Self::collect_columns_impl(arg, columns)?;
                 }
+                Some(())
             }
             ScalarExpr::CastExpr(cast) => {
-                Self::collect_columns_impl(cast.argument.as_ref(), columns);
+                Self::collect_columns_impl(cast.argument.as_ref(), columns)
             }
             // 1. ConstantExpr is not collected.
             // 2. SubqueryExpr and AggregateFunction will not appear in Filter-LogicalGet
-            _ => {}
+            _ => None,
         }
     }
 
     // analyze if the expression can be moved to prewhere
-    fn collect_columns(expr: &ScalarExpr) -> ColumnSet {
+    fn collect_columns(expr: &ScalarExpr) -> Option<ColumnSet> {
         let mut columns = ColumnSet::new();
         // columns in subqueries are not considered
-        Self::collect_columns_impl(expr, &mut columns);
+        Self::collect_columns_impl(expr, &mut columns)?;
 
-        columns
+        Some(columns)
     }
 
     pub fn prewhere_optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
@@ -111,21 +113,27 @@ impl RulePushDownPrewhere {
 
         // filter.predicates are already splited by AND
         for pred in filter.predicates.iter() {
-            let columns = Self::collect_columns(pred);
-            prewhere_pred.push(pred.clone());
-            prewhere_columns.extend(&columns);
+            match Self::collect_columns(pred) {
+                Some(columns) => {
+                    prewhere_pred.push(pred.clone());
+                    prewhere_columns.extend(&columns);
+                }
+                None => return Ok(s_expr.clone()),
+            }
         }
 
-        get.prewhere = if prewhere_pred.is_empty() {
-            None
-        } else {
-            Some(Prewhere {
+        if !prewhere_pred.is_empty() {
+            if let Some(prewhere) = get.prewhere.as_ref() {
+                prewhere_pred.extend(prewhere.predicates.clone());
+                prewhere_columns.extend(&prewhere.prewhere_columns);
+            }
+
+            get.prewhere = Some(Prewhere {
                 output_columns: get.columns.clone(),
                 prewhere_columns,
                 predicates: prewhere_pred,
-            })
-        };
-
+            });
+        }
         Ok(SExpr::create_leaf(get.into()))
     }
 }
