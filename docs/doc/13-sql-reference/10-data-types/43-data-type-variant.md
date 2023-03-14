@@ -1,18 +1,10 @@
 ---
-title: Semi-structured
-description: Semi-structured Types can hold any other data types.
+title: Variant
 ---
-
-## Semi-structured Data Types
-| Name    |  Aliases  | Build From Values        | Description
-|---------|-----------|--------------------------|----------------
-| VARIANT | JSON      | [1,{"a":1,"b":{"c":2}}]  | Collection of elements of different data types, including NULL, BOOLEAN, NUMBER, STRING, ARRAY, and OBJECT.
-
-## Variant Data Types
 
 A VARIANT can store a value of any other type, including NULL, BOOLEAN, NUMBER, STRING, ARRAY, and OBJECT, and the internal value can be any level of nested structure, which is very flexible to store various data. VARIANT can also be called JSON, for more information, please refer to [JSON website](https://www.json.org/json-en.html)
 
-### Example
+Here's an example of inserting and querying Variant data in Databend:
 
 Create a table:
 ```sql
@@ -232,4 +224,4 @@ SELECT sum(arr[0]::INT) FROM array_table GROUP BY arr[0]::INT;
 
 ## Functions
 
-See [Semi-structured Functions](/doc/reference/functions/semi-structured-functions).
+See [Variant Functions](/doc/reference/functions/variant-functions).
