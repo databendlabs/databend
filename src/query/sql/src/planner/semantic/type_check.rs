@@ -30,7 +30,6 @@ use common_ast::ast::TypeName;
 use common_ast::ast::UnaryOperator;
 use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
-use common_ast::Backtrace;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -1943,9 +1942,8 @@ impl<'a> TypeChecker<'a> {
             }
             let settings = self.ctx.get_settings();
             let sql_dialect = settings.get_sql_dialect()?;
-            let backtrace = Backtrace::new();
             let sql_tokens = tokenize_sql(udf.definition.as_str())?;
-            let expr = parse_expr(&sql_tokens, sql_dialect, &backtrace)?;
+            let expr = parse_expr(&sql_tokens, sql_dialect)?;
             let mut args_map = HashMap::new();
             arguments.iter().enumerate().for_each(|(idx, argument)| {
                 if let Some(parameter) = parameters.get(idx) {
