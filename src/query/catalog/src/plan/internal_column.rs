@@ -23,10 +23,15 @@ use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::Value;
 
+// Segment and Block id Bits when generate internal column `_row_id`
+// Since `DEFAULT_BLOCK_PER_SEGMENT` is 1000, so `block_id` 10 bits is enough.
+const NUM_BLOCK_ID_BITS: usize = 10;
+const NUM_SEGMENT_ID_BITS: usize = 22;
+
 pub const ROW_ID: &str = "_row_id";
-pub const BLOCK_NAME: &str = "_block_name";
-pub const SEGMENT_NAME: &str = "_segment_name";
 pub const SNAPSHOT_NAME: &str = "_snapshot_name";
+pub const SEGMENT_NAME: &str = "_segment_name";
+pub const BLOCK_NAME: &str = "_block_name";
 
 // meta data for generate internal columns
 #[derive(Debug)]
@@ -96,7 +101,7 @@ impl InternalColumn {
             InternalColumnType::RowId => {
                 let block_id = meta.block_id as u64;
                 let seg_id = meta.segment_id as u64;
-                let high_32bit = (seg_id << 48) + (block_id << 32);
+                let high_32bit = (seg_id << NUM_SEGMENT_ID_BITS) + (block_id << NUM_BLOCK_ID_BITS);
                 let mut row_ids = Vec::with_capacity(num_rows);
                 for i in 0..num_rows {
                     let row_id = high_32bit + i as u64;
