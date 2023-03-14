@@ -78,8 +78,8 @@ use crate::optimizer::optimize;
 use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
 use crate::planner::semantic::normalize_identifier;
+use crate::planner::semantic::resolve_type_name;
 use crate::planner::semantic::IdentifierNormalizer;
-use crate::planner::semantic::TypeChecker;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
@@ -869,7 +869,7 @@ impl Binder {
         let mut fields_comments = Vec::with_capacity(columns.len());
         for column in columns.iter() {
             let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
-            let schema_data_type = TypeChecker::resolve_type_name(&column.data_type)?;
+            let schema_data_type = resolve_type_name(&column.data_type)?;
 
             fields.push(TableField::new(&name, schema_data_type.clone()));
             fields_default_expr.push({

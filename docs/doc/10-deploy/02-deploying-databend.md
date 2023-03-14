@@ -21,33 +21,6 @@ import TabItem from '@theme/TabItem';
 
 <Tabs groupId="operating-systems">
 
-<TabItem value="MinIO" label="MinIO">
-
-a. Follow the [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quickstart-guide.html) to download and install the MinIO package to your local machine.
-
-b. Open a terminal window and navigate to the folder where MinIO is stored.
-
-c. Run the command `vim server.sh` to create a file with the following content:
-
-```shell
-~/minio$ cat server.sh
-export MINIO_ROOT_USER=minioadmin
-export MINIO_ROOT_PASSWORD=minioadmin
-./minio server --address :9900 ./data
-```
-
-d. Run the following commands to start the MinIO server:
-
-```shell
-chmod +x server.sh
-./server.sh
-```
-
-e. In your browser, go to <http://127.0.0.1:9900> and enter the credentials (`minioadmin` / `minioadmin`) to log in to the MinIO Console.
-
-f. In the MinIO Console, create a bucket named `databend`.
-
-</TabItem>
 
 <TabItem value="Amazon S3" label="Amazon S3">
 
@@ -75,6 +48,21 @@ For information about how to manage buckets and OAuth2 credentials in Google Clo
 
 - <https://cloud.google.com/storage/docs/creating-buckets>
 - <https://cloud.google.com/storage/docs/authentication#apiauth>
+
+</TabItem>
+
+<TabItem value="Azure Blob" label="Azure Blob">
+
+Before deploying Databend, make sure you have successfully set up your object storage environment in the cloud, and the following tasks have been completed:
+
+- Create a bucket or container named `databend`.
+- Get the endpoint URL for connecting to the bucket or container you created.
+- Get the Access Key ID and Secret Access Key for your account.
+
+For information about how to manage buckets and Access Keys for your cloud object storage, refer to the user manual from the solution provider. Here are some useful links you may need:
+
+- <https://docs.microsoft.com/en-us/azure/storage/blobs/storage-quickstart-blobs-portal#create-a-container>
+- <https://docs.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage?tabs=azure-portal#view-account-access-keys>
 
 </TabItem>
 
@@ -108,20 +96,6 @@ For information about how to manage buckets and Access Keys for your cloud objec
 
 </TabItem>
 
-<TabItem value="Wasabi" label="Wasabi">
-
-Before deploying Databend, make sure you have successfully set up your object storage environment in the cloud, and the following tasks have been completed:
-
-- Create a bucket or container named `databend`.
-- Get the endpoint URL for connecting to the bucket or container you created.
-- Get the Access Key ID and Secret Access Key for your account.
-
-For information about how to manage buckets and Access Keys for your cloud object storage, refer to the user manual from the solution provider. Here are some useful links you may need:
-
-- <https://wasabi.com/wp-content/themes/wasabi/docs/Getting_Started/index.html#t=topics%2FGS-Buckets.htm%23TOC_Creating_a_Bucketbc-1&rhtocid=_5_0>
-- <https://wasabi.com/wp-content/themes/wasabi/docs/Getting_Started/index.html#t=topics%2FAssigning_an_Access_Key.htm>
-
-</TabItem>
 
 <TabItem value="QingCloud QingStor" label="QingCloud QingStor">
 
@@ -138,22 +112,8 @@ For information about how to manage buckets and Access Keys for your cloud objec
 
 </TabItem>
 
-<TabItem value="Azure Blob Storage" label="Azure Blob Storage">
 
-Before deploying Databend, make sure you have successfully set up your object storage environment in the cloud, and the following tasks have been completed:
-
-- Create a bucket or container named `databend`.
-- Get the endpoint URL for connecting to the bucket or container you created.
-- Get the Access Key ID and Secret Access Key for your account.
-
-For information about how to manage buckets and Access Keys for your cloud object storage, refer to the user manual from the solution provider. Here are some useful links you may need:
-
-- <https://docs.microsoft.com/en-us/azure/storage/blobs/storage-quickstart-blobs-portal#create-a-container>
-- <https://docs.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage?tabs=azure-portal#view-account-access-keys>
-
-</TabItem>
-
-<TabItem value="Huawei Cloud OBS" label="Huawei Cloud OBS">
+<TabItem value="Huawei OBS" label="Huawei OBS">
 
 Before deploying Databend, make sure you have successfully set up your object storage environment in the cloud, and the following tasks have been completed:
 
@@ -167,6 +127,50 @@ For information about how to manage buckets and Access Keys for your cloud objec
 - <https://support.huaweicloud.com/intl/en-us/api-obs/obs_04_0116.html>
 
 </TabItem>
+
+<TabItem value="Wasabi" label="Wasabi">
+
+Before deploying Databend, make sure you have successfully set up your object storage environment in the cloud, and the following tasks have been completed:
+
+- Create a bucket or container named `databend`.
+- Get the endpoint URL for connecting to the bucket or container you created.
+- Get the Access Key ID and Secret Access Key for your account.
+
+For information about how to manage buckets and Access Keys for your cloud object storage, refer to the user manual from the solution provider. Here are some useful links you may need:
+
+- <https://docs.wasabi.com/docs/creating-a-bucket>
+- <https://docs.wasabi.com/docs/access-keys-1>
+
+</TabItem>
+
+<TabItem value="MinIO" label="MinIO">
+
+a. Follow the [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quickstart-guide.html) to download and install the MinIO package to your local machine.
+
+b. Open a terminal window and navigate to the folder where MinIO is stored.
+
+c. Run the command `vim server.sh` to create a file with the following content:
+
+```shell
+~/minio$ cat server.sh
+export MINIO_ROOT_USER=minioadmin
+export MINIO_ROOT_PASSWORD=minioadmin
+./minio server --address :9900 ./data
+```
+
+d. Run the following commands to start the MinIO server:
+
+```shell
+chmod +x server.sh
+./server.sh
+```
+
+e. In your browser, go to <http://127.0.0.1:9900> and enter the credentials (`minioadmin` / `minioadmin`) to log in to the MinIO Console.
+
+f. In the MinIO Console, create a bucket named `databend`.
+
+</TabItem>
+
 <TabItem value="WebHDFS" label="WebHDFS">
 
 Before deploying Databend, make sure you have successfully set up your Hadoop environment, and the following tasks have been completed:
@@ -326,21 +330,7 @@ secret_access_key = "<your-account-key>"
 d. Set your values in the `[storage.s3]`, `[storage.azblob]`, `[storage.gcs]`, `[storage.obs]` or `[storage.webhdfs]` block. Please note that the field `endpoint_url` refers to the service URL of your storage region and varies depending on the object storage solution you use:
 
 <Tabs groupId="operating-systems">
-<TabItem value="MinIO" label="MinIO">
 
-```toml
-[storage]
-# s3
-type = "s3"
-
-[storage.s3]
-bucket = "databend"
-endpoint_url = "http://127.0.0.1:9900"
-access_key_id = "minioadmin"
-secret_access_key = "minioadmin"
-```
-
-</TabItem>
 
 <TabItem value="Amazon S3" label="Amazon S3">
 
@@ -391,6 +381,27 @@ credential = "<your-credential>"
 ```
 
 </TabItem>
+
+<TabItem value="Azure Blob" label="Azure Blob">
+
+```toml
+[storage]
+# azblob
+type = "azblob"
+
+[storage.azblob]
+endpoint_url = "https://<your-storage-account-name>.blob.core.windows.net"
+
+# https://docs.microsoft.com/en-us/azure/storage/blobs/storage-quickstart-blobs-portal#create-a-container
+container = "<your-azure-storage-container-name>"
+account_name = "<your-storage-account-name>"
+
+# https://docs.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage?tabs=azure-portal#view-account-access-keys
+account_key = "<your-account-key>"
+```
+
+</TabItem>
+
 
 <TabItem value="Tencent COS" label="Tencent COS">
 
@@ -458,6 +469,65 @@ In this example OSS region id is `oss-cn-beijing-internal`.
 
 </TabItem>
 
+
+<TabItem value="QingCloud QingStor" label="QingCloud QingStor">
+
+```toml
+[storage]
+# s3
+type = "s3"
+
+[storage.s3]
+bucket = "databend"
+
+# You can get the URL from the bucket detail page.
+# https://docsv3.qingcloud.com/storage/object-storage/intro/object-storage/#zone
+endpoint_url = "https://s3.pek3b.qingstor.com"
+
+# How to get access_key_id and secret_access_key:
+# https://docs.qingcloud.com/product/api/common/overview.html
+access_key_id = "<your-key-id>"
+secret_access_key = "<your-access-key>"
+```
+
+:::tip
+In this example QingStor region is `pek3b`.
+:::
+
+</TabItem>
+
+
+<TabItem value="Huawei OBS" label="Huawei OBS">
+
+```toml
+[storage]
+# obs
+type = "obs"
+
+[storage.obs]
+# How to create a bucket:
+# https://support.huaweicloud.com/intl/en-us/usermanual-obs/en-us_topic_0045853662.html
+// highlight-next-line
+bucket = "databend"
+
+# You can get the URL from the bucket detail page.
+// highlight-next-line
+endpoint_url = "https://obs.cn-north-4.myhuaweicloud.com"
+
+# How to get access_key_id and secret_access_key:
+# https://support.huaweicloud.com/intl/en-us/api-obs/obs_04_0116.html
+// highlight-next-line
+access_key_id = "<your-key-id>"
+// highlight-next-line
+secret_access_key = "<your-access-key>"
+```
+
+:::tip
+In this example OBS region is `cn-north-4`.
+:::
+
+</TabItem>
+
 <TabItem value="Wasabi" label="Wasabi">
 
 ```toml
@@ -488,7 +558,8 @@ In this example Wasabi region is `us-east-2`.
 
 </TabItem>
 
-<TabItem value="QingCloud QingStor" label="QingCloud QingStor">
+
+<TabItem value="MinIO" label="MinIO">
 
 ```toml
 [storage]
@@ -497,73 +568,14 @@ type = "s3"
 
 [storage.s3]
 bucket = "databend"
-
-# You can get the URL from the bucket detail page.
-# https://docsv3.qingcloud.com/storage/object-storage/intro/object-storage/#zone
-endpoint_url = "https://s3.pek3b.qingstor.com"
-
-# How to get access_key_id and secret_access_key:
-# https://docs.qingcloud.com/product/api/common/overview.html
-access_key_id = "<your-key-id>"
-secret_access_key = "<your-access-key>"
-```
-
-:::tip
-In this example QingStor region is `pek3b`.
-:::
-
-</TabItem>
-
-<TabItem value="Azure Blob Storage" label="Azure Blob Storage">
-
-```toml
-[storage]
-# azblob
-type = "azblob"
-
-[storage.azblob]
-endpoint_url = "https://<your-storage-account-name>.blob.core.windows.net"
-
-# https://docs.microsoft.com/en-us/azure/storage/blobs/storage-quickstart-blobs-portal#create-a-container
-container = "<your-azure-storage-container-name>"
-account_name = "<your-storage-account-name>"
-
-# https://docs.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage?tabs=azure-portal#view-account-access-keys
-account_key = "<your-account-key>"
+endpoint_url = "http://127.0.0.1:9900"
+access_key_id = "minioadmin"
+secret_access_key = "minioadmin"
 ```
 
 </TabItem>
 
-<TabItem value="Huawei Cloud OBS" label="Huawei Cloud OBS">
 
-```toml
-[storage]
-# obs
-type = "obs"
-
-[storage.obs]
-# How to create a bucket:
-# https://support.huaweicloud.com/intl/en-us/usermanual-obs/en-us_topic_0045853662.html
-// highlight-next-line
-bucket = "databend"
-
-# You can get the URL from the bucket detail page.
-// highlight-next-line
-endpoint_url = "https://obs.cn-north-4.myhuaweicloud.com"
-
-# How to get access_key_id and secret_access_key:
-# https://support.huaweicloud.com/intl/en-us/api-obs/obs_04_0116.html
-// highlight-next-line
-access_key_id = "<your-key-id>"
-// highlight-next-line
-secret_access_key = "<your-access-key>"
-```
-
-:::tip
-In this example OBS region is `cn-north-4`.
-:::
-
-</TabItem>
 <TabItem value="WebHDFS" label="WebHDFS">
 
 ```toml
