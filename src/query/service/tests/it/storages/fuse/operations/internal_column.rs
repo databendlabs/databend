@@ -42,7 +42,7 @@ fn expected_data_block(
 ) -> Result<Vec<DataBlock>> {
     let mut data_blocks = Vec::new();
     for part in &parts.partitions {
-        let fuse_part = FusePartInfo::from_part(&part)?;
+        let fuse_part = FusePartInfo::from_part(part)?;
         let num_rows = fuse_part.nums_rows;
         let block_meta = fuse_part.block_meta_index.as_ref().unwrap();
         let mut columns = Vec::new();
@@ -123,7 +123,7 @@ async fn check_partitions(parts: &Partitions, fixture: &TestFixture) -> Result<(
     }
 
     for part in &parts.partitions {
-        let fuse_part = FusePartInfo::from_part(&part)?;
+        let fuse_part = FusePartInfo::from_part(part)?;
         let block_meta = fuse_part.block_meta_index.as_ref().unwrap();
         assert_eq!(
             block_meta.snapshot_location.clone().unwrap(),
@@ -144,27 +144,20 @@ async fn test_internal_column() -> Result<()> {
     let ctx = fixture.ctx();
     fixture.create_default_table().await?;
 
-    let mut internal_columns = Vec::new();
-    internal_columns.push(
+    let internal_columns = vec![
         INTERNAL_COLUMN_FACTORY
             .get_internal_column("_row_id")
             .unwrap(),
-    );
-    internal_columns.push(
         INTERNAL_COLUMN_FACTORY
             .get_internal_column("_snapshot_name")
             .unwrap(),
-    );
-    internal_columns.push(
         INTERNAL_COLUMN_FACTORY
             .get_internal_column("_segment_name")
             .unwrap(),
-    );
-    internal_columns.push(
         INTERNAL_COLUMN_FACTORY
             .get_internal_column("_block_name")
             .unwrap(),
-    );
+    ];
 
     // insert 5 times
     let n = 5;
@@ -193,15 +186,12 @@ async fn test_internal_column() -> Result<()> {
     check_data_block(expected, blocks)?;
 
     // do compact
-    {
-        let query = format!("optimize table {db}.{tbl} compact");
-
-        let mut planner = Planner::new(ctx.clone());
-        let (plan, _, _) = planner.plan_sql(&query).await?;
-        let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
-        let data_stream = interpreter.execute(ctx.clone()).await?;
-        let _ = data_stream.try_collect::<Vec<_>>().await;
-    }
+    let query = format!("optimize table {db}.{tbl} compact");
+    let mut planner = Planner::new(ctx.clone());
+    let (plan, _, _) = planner.plan_sql(&query).await?;
+    let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
+    let data_stream = interpreter.execute(ctx.clone()).await?;
+    let _ = data_stream.try_collect::<Vec<_>>().await;
 
     let query = format!(
         "select _row_id,_snapshot_name,_segment_name,_block_name from {}.{} order by _row_id",
