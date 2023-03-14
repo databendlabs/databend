@@ -2150,6 +2150,7 @@ dependencies = [
  "common-meta-types",
  "common-pipeline-core",
  "common-pipeline-sources",
+ "common-sql",
  "common-storage",
  "databend-thrift",
  "futures",

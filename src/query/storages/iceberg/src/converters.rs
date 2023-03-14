@@ -16,6 +16,8 @@
 //! to databend
 
 use chrono::Utc;
+use common_expression::types::decimal::DecimalSize;
+use common_expression::types::DecimalDataType;
 use common_expression::types::NumberDataType;
 use common_expression::TableDataType;
 use common_expression::TableField;
@@ -93,9 +95,14 @@ fn primitive_iceberg_to_databend(prim: &AllType) -> TableDataType {
             iceberg_rs::model::schema::PrimitiveType::Double => {
                 TableDataType::Number(NumberDataType::Float64)
             }
-            iceberg_rs::model::schema::PrimitiveType::Decimal { .. } => {
-                // not supported
-                unimplemented!()
+            iceberg_rs::model::schema::PrimitiveType::Decimal { precision, scale } => {
+                TableDataType::Decimal(
+                    DecimalDataType::from_size(DecimalSize {
+                        precision: *precision as u8,
+                        scale: *scale,
+                    })
+                    .unwrap(),
+                )
             }
             iceberg_rs::model::schema::PrimitiveType::Date => {
                 // 4 bytes date type
@@ -105,10 +112,7 @@ fn primitive_iceberg_to_databend(prim: &AllType) -> TableDataType {
                 // not supported, time without date
                 unimplemented!()
             }
-            iceberg_rs::model::schema::PrimitiveType::Timestamp => {
-                // not supported, timestamp without timezone
-                unimplemented!()
-            }
+            iceberg_rs::model::schema::PrimitiveType::Timestamp => TableDataType::Timestamp,
             iceberg_rs::model::schema::PrimitiveType::Timestampz => TableDataType::Timestamp,
             iceberg_rs::model::schema::PrimitiveType::String => TableDataType::String,
             iceberg_rs::model::schema::PrimitiveType::Uuid => TableDataType::String,
