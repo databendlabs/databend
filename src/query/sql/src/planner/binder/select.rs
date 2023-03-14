@@ -96,6 +96,8 @@ impl Binder {
             s_expr = self.bind_where(&mut from_context, expr, s_expr).await?;
         }
 
+        let window_order_by_expr = self.fetch_window_order_by_expr(&stmt.select_list).await;
+
         // Generate a analyzed select list with from context
         let mut select_list = self
             .normalize_select_list(&mut from_context, &stmt.select_list)
@@ -121,6 +123,16 @@ impl Binder {
             None
         };
 
+        let window_order_items = self
+            .fetch_window_order_items(
+                &from_context,
+                &mut scalar_items,
+                &projections,
+                &window_order_by_expr,
+                stmt.distinct,
+            )
+            .await?;
+
         let order_items = self
             .analyze_order_items(
                 &from_context,
@@ -141,6 +153,23 @@ impl Binder {
             s_expr = self
                 .bind_having(&from_context, having, span, s_expr)
                 .await?;
+        }
+
+        // Window run after the HAVING clause but before the ORDER BY clause.
+        if !window_order_by_expr.is_empty() {
+            s_expr = self
+                .bind_window_order_by(
+                    &from_context,
+                    window_order_items,
+                    &select_list,
+                    &mut scalar_items,
+                    s_expr,
+                )
+                .await?;
+        }
+
+        if from_context.aggregate_info.window_info.is_some() {
+            s_expr = self.bind_window_function(&mut from_context, s_expr).await?;
         }
 
         if stmt.distinct {

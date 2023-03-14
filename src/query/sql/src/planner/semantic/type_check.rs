@@ -28,6 +28,9 @@ use common_ast::ast::SubqueryModifier;
 use common_ast::ast::TrimWhere;
 use common_ast::ast::TypeName;
 use common_ast::ast::UnaryOperator;
+use common_ast::ast::WindowFrame;
+use common_ast::ast::WindowFrameBound;
+use common_ast::ast::WindowFrameUnits;
 use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
 use common_catalog::catalog::CatalogManager;
@@ -77,6 +80,10 @@ use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::plans::Unnest;
+use crate::plans::WindowFunc;
+use crate::plans::WindowFuncFrame;
+use crate::plans::WindowFuncFrameBound;
+use crate::plans::WindowFuncFrameUnits;
 use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnBinding;
@@ -639,7 +646,7 @@ impl<'a> TypeChecker<'a> {
                 name,
                 args,
                 params,
-                ..
+                window,
             } => {
                 let func_name = name.name.to_lowercase();
                 let func_name = func_name.as_str();
@@ -710,18 +717,35 @@ impl<'a> TypeChecker<'a> {
                         arguments
                     };
 
-                    Box::new((
-                        AggregateFunction {
-                            display_name: format!("{:#}", expr),
-                            func_name,
-                            distinct: false,
-                            params,
-                            args,
-                            return_type: Box::new(agg_func.return_type()?),
+                    let new_agg_func = AggregateFunction {
+                        display_name: format!("{:#}", expr),
+                        func_name,
+                        distinct: false,
+                        params,
+                        args,
+                        return_type: Box::new(agg_func.return_type()?),
+                    };
+
+                    let data_type = agg_func.return_type()?;
+
+                    if let Some(window) = window {
+                        // window function
+                        let mut partitions = vec![];
+                        for p in window.partition_by.iter() {
+                            let box (part, part_type) = self.resolve(p, None).await?;
+                            partitions.push(part);
                         }
-                        .into(),
-                        agg_func.return_type()?,
-                    ))
+                        self.resolve_window(
+                            *span,
+                            new_agg_func.clone(),
+                            partitions,
+                            window.window_frame.clone(),
+                            data_type.clone(),
+                        )
+                        .await?
+                    } else {
+                        Box::new((new_agg_func.into(), data_type))
+                    }
                 } else {
                     // Scalar function
                     let params = params
@@ -945,6 +969,69 @@ impl<'a> TypeChecker<'a> {
                 .into();
             }
         }
+    }
+
+    #[async_recursion::async_recursion]
+    pub async fn resolve_window(
+        &mut self,
+        _span: Span,
+        agg_func: AggregateFunction,
+        partitions: Vec<ScalarExpr>,
+        window_frame: Option<WindowFrame>,
+        return_type: DataType,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let frame = window_frame.unwrap();
+        let units = match frame.units.clone() {
+            WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
+            WindowFrameUnits::Range => WindowFuncFrameUnits::Range,
+        };
+        let start = match frame.start_bound {
+            WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
+            WindowFrameBound::Preceding(f) => {
+                if let Some(box expr) = f {
+                    let box (result_expr, _) = self.resolve(&expr, None).await?;
+                    WindowFuncFrameBound::Preceding(Some(Box::new(result_expr)))
+                } else {
+                    WindowFuncFrameBound::Preceding(None)
+                }
+            }
+            WindowFrameBound::Following(f) => {
+                if let Some(box expr) = f {
+                    let box (result_expr, _) = self.resolve(&expr, None).await?;
+                    WindowFuncFrameBound::Following(Some(Box::new(result_expr)))
+                } else {
+                    WindowFuncFrameBound::Following(None)
+                }
+            }
+        };
+
+        let end = match frame.end_bound {
+            WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
+            WindowFrameBound::Preceding(f) => {
+                if let Some(box expr) = f {
+                    let box (result_expr, _) = self.resolve(&expr, None).await?;
+                    WindowFuncFrameBound::Preceding(Some(Box::new(result_expr)))
+                } else {
+                    WindowFuncFrameBound::Preceding(None)
+                }
+            }
+            WindowFrameBound::Following(f) => {
+                if let Some(box expr) = f {
+                    let box (result_expr, _) = self.resolve(&expr, None).await?;
+                    WindowFuncFrameBound::Following(Some(Box::new(result_expr)))
+                } else {
+                    WindowFuncFrameBound::Following(None)
+                }
+            }
+        };
+
+        let window_func = WindowFunc {
+            agg_func,
+            partition_by: partitions,
+            frame: WindowFuncFrame { units, start, end },
+        };
+
+        Ok(Box::new((window_func.into(), return_type)))
     }
 
     /// Resolve function call.

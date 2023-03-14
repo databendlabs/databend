@@ -47,6 +47,8 @@ use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Unnest;
+use crate::plans::WindowFunc;
+use crate::plans::WindowFuncFrame;
 use crate::BindContext;
 use crate::IndexType;
 use crate::MetadataRef;
@@ -58,6 +60,9 @@ pub struct AggregateInfo {
 
     /// Arguments of aggregation functions
     pub aggregate_arguments: Vec<ScalarItem>,
+
+    /// infos for window with aggregate function
+    pub window_info: Option<WindowInfo>,
 
     /// Group items of aggregation
     pub group_items: Vec<ScalarItem>,
@@ -83,6 +88,12 @@ pub struct AggregateInfo {
     pub grouping_id_column: Option<ColumnBinding>,
     /// Each grouping set is a list of column indices in `group_items`.
     pub grouping_sets: Vec<Vec<IndexType>>,
+}
+
+#[derive(Default, Clone, PartialEq, Eq, Debug)]
+pub struct WindowInfo {
+    pub partition_by_items: Vec<ScalarItem>,
+    pub frame: Option<WindowFuncFrame>,
 }
 
 pub(super) struct AggregateRewriter<'a> {
@@ -155,7 +166,126 @@ impl<'a> AggregateRewriter<'a> {
             ScalarExpr::SubqueryExpr(_) => Ok(scalar.clone()),
 
             ScalarExpr::AggregateFunction(agg_func) => self.replace_aggregate_function(agg_func),
+
+            ScalarExpr::WindowFunction(window_func) => self.replace_window_function(window_func),
         }
+    }
+
+    fn replace_window_function(&mut self, window: &WindowFunc) -> Result<ScalarExpr> {
+        let agg_info = &mut self.bind_context.aggregate_info;
+        let mut replaced_args: Vec<ScalarExpr> = Vec::with_capacity(window.agg_func.args.len());
+        let mut replaced_partition_items: Vec<ScalarExpr> =
+            Vec::with_capacity(window.partition_by.len());
+
+        let mut window_info = WindowInfo::default();
+        window_info.frame = Some(window.frame.clone());
+        for (i, arg) in window.agg_func.args.iter().enumerate() {
+            let name = format!("{}_arg_{}", &window.agg_func.func_name, i);
+            if let ScalarExpr::BoundColumnRef(column_ref) = arg {
+                replaced_args.push(column_ref.clone().into());
+                agg_info.aggregate_arguments.push(ScalarItem {
+                    index: column_ref.column.index,
+                    scalar: arg.clone(),
+                });
+            } else {
+                let index = self
+                    .metadata
+                    .write()
+                    .add_derived_column(name.clone(), arg.data_type()?);
+
+                // Generate a ColumnBinding for each argument of aggregates
+                let column_binding = ColumnBinding {
+                    database_name: None,
+                    table_name: None,
+
+                    // TODO(leiysky): use a more reasonable name, since aggregate arguments
+                    // can not be referenced, the name is only for debug
+                    column_name: name,
+                    index,
+                    data_type: Box::new(arg.data_type()?),
+                    visibility: Visibility::Visible,
+                };
+                replaced_args.push(
+                    BoundColumnRef {
+                        column: column_binding.clone(),
+                    }
+                    .into(),
+                );
+                agg_info.aggregate_arguments.push(ScalarItem {
+                    index,
+                    scalar: arg.clone(),
+                });
+            }
+        }
+
+        for (i, part) in window.partition_by.iter().enumerate() {
+            let name = format!("{}_part_{}", &window.agg_func.func_name, i);
+            if let ScalarExpr::BoundColumnRef(column_ref) = part {
+                replaced_partition_items.push(column_ref.clone().into());
+                window_info.partition_by_items.push(ScalarItem {
+                    index: column_ref.column.index,
+                    scalar: part.clone(),
+                });
+            } else {
+                let index = self
+                    .metadata
+                    .write()
+                    .add_derived_column(name.clone(), part.data_type()?);
+
+                // Generate a ColumnBinding for each argument of aggregates
+                let column_binding = ColumnBinding {
+                    database_name: None,
+                    table_name: None,
+                    column_name: name,
+                    index,
+                    data_type: Box::new(part.data_type()?),
+                    visibility: Visibility::Visible,
+                };
+                replaced_partition_items.push(
+                    BoundColumnRef {
+                        column: column_binding.clone(),
+                    }
+                    .into(),
+                );
+                window_info.partition_by_items.push(ScalarItem {
+                    index,
+                    scalar: part.clone(),
+                });
+            }
+        }
+
+        let index = self
+            .metadata
+            .write()
+            .add_derived_column(window.display_name(), *window.agg_func.return_type.clone());
+
+        let replaced_agg = AggregateFunction {
+            display_name: window.agg_func.display_name.clone(),
+            func_name: window.agg_func.func_name.clone(),
+            distinct: window.agg_func.distinct,
+            params: window.agg_func.params.clone(),
+            args: replaced_args,
+            return_type: window.agg_func.return_type.clone(),
+        };
+
+        agg_info.aggregate_functions.push(ScalarItem {
+            scalar: replaced_agg.clone().into(),
+            index,
+        });
+        agg_info.aggregate_functions_map.insert(
+            replaced_agg.display_name.clone(),
+            agg_info.aggregate_functions.len() - 1,
+        );
+
+        agg_info.window_info = Some(window_info);
+
+        let replaced_window = WindowFunc {
+            agg_func: replaced_agg,
+            partition_by: replaced_partition_items,
+            frame: window.frame.clone(),
+        };
+
+        Ok(replaced_window.into())
     }
 
     /// Replace the arguments of aggregate function with a BoundColumnRef, and
