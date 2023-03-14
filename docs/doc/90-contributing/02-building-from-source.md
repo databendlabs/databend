@@ -54,14 +54,6 @@ make build-release
 
 ## Start Databend for Debugging
 
-To debug databend-query only, run the following command to start databend-query:
-
-```shell
-nohup target/debug/databend-query -c scripts/ci/deploy/config/databend-query-embedded-meta.toml &
-```
-
-To debug both databend-meta and databend-query, run the following commands to start them:
-
 ```shell
 # 1. Start databend-meta first:
 nohup target/debug/databend-meta --single --log-level=ERROR & 
