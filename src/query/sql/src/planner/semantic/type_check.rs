@@ -1173,11 +1173,6 @@ impl<'a> TypeChecker<'a> {
                 self.resolve(child, required_type).await
             }
 
-            UnaryOperator::Minus => {
-                self.resolve_function(span, "minus", vec![], &[child], required_type)
-                    .await
-            }
-
             UnaryOperator::Not => {
                 let (argument, _) = *self.resolve(child, None).await?;
 
@@ -1198,6 +1193,12 @@ impl<'a> TypeChecker<'a> {
                     .into(),
                     data_type,
                 )))
+            }
+
+            other => {
+                let name = other.to_func_name();
+                self.resolve_function(span, name.as_str(), vec![], &[child], required_type)
+                    .await
             }
         }
     }
