@@ -495,7 +495,7 @@ impl<'a> Binder {
         })))
     }
 
-    /// Bind COPY INFO <table> FROM <query>
+    /// Bind COPY INTO <table> FROM <query>
     async fn bind_copy_from_query_into_table(
         &mut self,
         bind_context: &BindContext,
