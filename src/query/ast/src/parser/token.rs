@@ -663,6 +663,8 @@ pub enum TokenKind {
     ROLE,
     #[token("PRECEDING", ignore(ascii_case))]
     PRECEDING,
+    #[token("PRECISION", ignore(ascii_case))]
+    PRECISION,
     #[token("PRESIGN", ignore(ascii_case))]
     PRESIGN,
     #[token("PRIVILEGES", ignore(ascii_case))]
