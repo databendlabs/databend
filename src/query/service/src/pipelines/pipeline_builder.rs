@@ -42,6 +42,7 @@ use common_pipeline_transforms::processors::transforms::try_create_transform_sor
 use common_profile::ProfSpanSetRef;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
+use common_sql::executor::AggregateExpand;
 use common_sql::executor::AggregateFinal;
 use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::AggregatePartial;
@@ -160,6 +161,7 @@ impl PipelineBuilder {
             PhysicalPlan::Filter(filter) => self.build_filter(filter),
             PhysicalPlan::Project(project) => self.build_project(project),
             PhysicalPlan::EvalScalar(eval_scalar) => self.build_eval_scalar(eval_scalar),
+            PhysicalPlan::AggregateExpand(aggregate) => self.build_aggregate_expand(aggregate),
             PhysicalPlan::AggregatePartial(aggregate) => self.build_aggregate_partial(aggregate),
             PhysicalPlan::AggregateFinal(aggregate) => self.build_aggregate_final(aggregate),
             PhysicalPlan::Sort(sort) => self.build_sort(sort),
@@ -420,6 +422,10 @@ impl PipelineBuilder {
                 Ok(ProcessorPtr::create(transform))
             }
         })
+    }
+
+    fn build_aggregate_expand(&mut self, _aggregate: &AggregateExpand) -> Result<()> {
+        todo!()
     }
 
     fn build_aggregate_partial(&mut self, aggregate: &AggregatePartial) -> Result<()> {

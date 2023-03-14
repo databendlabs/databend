@@ -329,6 +329,7 @@ impl Binder {
             aggregate_functions: bind_context.aggregate_info.aggregate_functions.clone(),
             from_distinct: false,
             limit: None,
+            grouping_id_index: agg_info.grouping_id_index,
             grouping_sets: agg_info.grouping_sets.clone(),
         };
         new_expr = SExpr::create_unary(aggregate_plan.into(), new_expr);
@@ -380,6 +381,7 @@ impl Binder {
             DataType::Number(NumberDataType::UInt32),
         );
         let index = grouping_id_column.index;
+        bind_context.aggregate_info.grouping_id_index = index;
         bind_context.aggregate_info.group_items.push(ScalarItem {
             index,
             scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {

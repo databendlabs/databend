@@ -19,6 +19,7 @@ use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_profile::ProfSpanSetRef;
 use itertools::Itertools;
 
+use super::AggregateExpand;
 use super::AggregateFinal;
 use super::AggregateFunctionDesc;
 use super::AggregatePartial;
@@ -65,6 +66,9 @@ fn to_format_tree(
         PhysicalPlan::Filter(plan) => filter_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::Project(plan) => project_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::EvalScalar(plan) => eval_scalar_to_format_tree(plan, metadata, prof_span_set),
+        PhysicalPlan::AggregateExpand(plan) => {
+            aggregate_expand_to_format_tree(plan, metadata, prof_span_set)
+        }
         PhysicalPlan::AggregatePartial(plan) => {
             aggregate_partial_to_format_tree(plan, metadata, prof_span_set)
         }
@@ -279,6 +283,54 @@ pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata
             .collect::<Vec<_>>()
             .join(", ")
     )
+}
+
+fn aggregate_expand_to_format_tree(
+    plan: &AggregateExpand,
+    metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
+) -> Result<FormatTreeNode<String>> {
+    let sets = plan
+        .grouping_sets
+        .iter()
+        .map(|set| {
+            set.iter()
+                .map(|column| {
+                    let column = metadata.read().column(*column).clone();
+                    match column {
+                        ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => {
+                            column_name
+                        }
+                        ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .map(|s| format!("({})", s))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let mut children = vec![FormatTreeNode::new(format!("grouping sets: [{sets}]"))];
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
+    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
+        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
+        children.push(FormatTreeNode::new(format!(
+            "total process time: {process_time}ms"
+        )));
+    }
+
+    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
+
+    Ok(FormatTreeNode::with_children(
+        "AggregateExpand".to_string(),
+        children,
+    ))
 }
 
 fn aggregate_partial_to_format_tree(

@@ -624,6 +624,7 @@ impl SubqueryRewriter {
                         aggregate_functions: agg_items,
                         from_distinct: aggregate.from_distinct,
                         limit: aggregate.limit,
+                        grouping_id_index: aggregate.grouping_id_index,
                         grouping_sets: aggregate.grouping_sets.clone(),
                     }
                     .into(),

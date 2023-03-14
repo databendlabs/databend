@@ -420,6 +420,7 @@ impl SubqueryRewriter {
                     from_distinct: false,
                     mode: AggregateMode::Initial,
                     limit: None,
+                    grouping_id_index: 0,
                     grouping_sets: vec![],
                 };
 
