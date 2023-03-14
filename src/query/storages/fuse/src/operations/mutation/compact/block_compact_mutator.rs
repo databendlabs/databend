@@ -82,9 +82,9 @@ impl BlockCompactMutator {
         let number_segments = segment_locations.len();
         let limit = self.compact_params.limit.unwrap_or(number_segments);
 
-        let mut end = 1;
         let mut segment_idx = 0;
         let mut compacted_segment_cnt = 0;
+        let mut checked_segment_cnt = 0;
 
         // Read all segments information in parallel.
         let segments_io = SegmentsIO::create(
@@ -116,7 +116,7 @@ impl BlockCompactMutator {
                     }
                     segment_idx += 1;
                 }
-                end += 1;
+                checked_segment_cnt += 1;
                 if compacted_segment_cnt + checker.segments.len() >= limit {
                     break;
                 }
@@ -128,15 +128,17 @@ impl BlockCompactMutator {
             if SegmentCompactChecker::check_for_compact(&segments) {
                 self.build_compact_tasks(segments, segment_idx);
             } else {
-                self.unchanged_segments_map
-                    .insert(segment_idx, segment_locations[end - 1].clone());
+                self.unchanged_segments_map.insert(
+                    segment_idx,
+                    segment_locations[checked_segment_cnt - 1].clone(),
+                );
                 merge_statistics_mut(&mut self.unchanged_segment_statistics, &segments[0].summary)?;
             }
             segment_idx += 1;
         }
 
-        if end < number_segments {
-            for chunk in segment_locations[end..].chunks(max_io_requests) {
+        if checked_segment_cnt < number_segments {
+            for chunk in segment_locations[checked_segment_cnt..].chunks(max_io_requests) {
                 let segment_infos = segments_io
                     .read_segments(chunk)
                     .await?

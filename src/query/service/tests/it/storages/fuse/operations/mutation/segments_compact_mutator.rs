@@ -31,6 +31,7 @@ use common_storage::DataOperator;
 use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::io::SegmentInfoReader;
 use common_storages_fuse::io::SegmentWriter;
+use common_storages_fuse::io::SegmentsIO;
 use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::operations::CompactOptions;
 use common_storages_fuse::operations::SegmentCompactMutator;
@@ -617,6 +618,7 @@ async fn test_segment_compactor() -> Result<()> {
 
 struct CompactSegmentTestFixture {
     threshold: u64,
+    ctx: Arc<dyn TableContext>,
     data_accessor: DataOperator,
     location_gen: TableMetaLocationGenerator,
     input_segments: Vec<Arc<SegmentInfo>>,
@@ -630,6 +632,7 @@ impl CompactSegmentTestFixture {
         let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
         let data_accessor = ctx.get_data_operator()?;
         Ok(Self {
+            ctx: ctx.clone(),
             threshold: block_per_seg,
             data_accessor,
             location_gen,
@@ -649,8 +652,13 @@ impl CompactSegmentTestFixture {
         let location_gen = &self.location_gen;
         let block_writer = BlockWriter::new(data_accessor, location_gen);
 
+        let schema = TestFixture::default_table_schema();
+        let fuse_segment_io =
+            SegmentsIO::create(self.ctx.clone(), data_accessor.clone(), schema);
+        let max_io_requests = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+
         let segment_writer = SegmentWriter::new(data_accessor, location_gen);
-        let seg_acc = SegmentCompactor::new(block_per_seg, segment_writer.clone());
+        let seg_acc = SegmentCompactor::new(block_per_seg, max_io_requests, &fuse_segment_io,segment_writer.clone());
 
         let (segments, locations, blocks) =
             Self::gen_segments(&block_writer, &segment_writer, num_block_of_segments).await?;
@@ -659,7 +667,7 @@ impl CompactSegmentTestFixture {
         self.input_blocks = blocks;
         let limit = limit.unwrap_or(usize::MAX);
         seg_acc
-            .compact(&self.input_segments, &self.input_segment_locations, limit)
+            .compact(self.input_segment_locations.clone(), limit)
             .await
     }
 
