@@ -288,7 +288,7 @@ where
             0.5f64
         };
 
-        if level < 0.0 || level > 1.0 {
+        if !(0.0..=1.0).contains(&level) {
             return Err(ErrorCode::BadDataValueType(format!(
                 "level range between [0, 1], got: {:?}",
                 level
