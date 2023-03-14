@@ -159,6 +159,15 @@ jobs:
     needs: [metadata, docker]
     timeout-minutes: 60
     runs-on: [self-hosted, X64, Linux, dev]
+    strategy:
+      matrix:
+        dataset:
+          - hits
+          - tpch
+        size:
+          - Medium
+      fail-fast: true
+      max-parallel: 1
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup_bendsql
@@ -166,23 +175,10 @@ jobs:
         with:
           sha: ${{ needs.metadata.outputs.sha }}
           run_id: ${{ needs.metadata.outputs.run_id }}
-          dataset: hits
+          dataset: ${{ matrix.dataset }}
           source: ${{ needs.metadata.outputs.source }}
           source_id: ${{ needs.metadata.outputs.source_id }}
-          size: Medium
-          image_tag: ${{ needs.docker.outputs.tag }}
-          cloud_email: ${{ secrets.BENCHMARK_CLOUD_EMAIL }}
-          cloud_password: ${{ secrets.BENCHMARK_CLOUD_PASSWORD }}
-          cloud_org: ${{ secrets.BENCHMARK_CLOUD_ORG }}
-          cloud_endpoint: ${{ secrets.BENCHMARK_CLOUD_ENDPOINT }}
-      - uses: ./.github/actions/benchmark_cloud
-        with:
-          sha: ${{ needs.metadata.outputs.sha }}
-          run_id: ${{ needs.metadata.outputs.run_id }}
-          dataset: tpch
-          source: ${{ needs.metadata.outputs.source }}
-          source_id: ${{ needs.metadata.outputs.source_id }}
-          size: Medium
+          size: ${{ matrix.size }}
           image_tag: ${{ needs.docker.outputs.tag }}
           cloud_email: ${{ secrets.BENCHMARK_CLOUD_EMAIL }}
           cloud_password: ${{ secrets.BENCHMARK_CLOUD_PASSWORD }}
@@ -196,7 +192,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v2
         with:
           role-to-assume: ${{ secrets.REPO_ROLE_ARN }}
           role-duration-seconds: 900
@@ -267,7 +263,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v2
         with:
           role-to-assume: ${{ secrets.REPO_ROLE_ARN }}
           role-duration-seconds: 900
