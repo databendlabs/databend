@@ -48,6 +48,14 @@ fn test_arithmetic() {
     test_modulo(file, columns);
     test_to_string(file, columns);
     test_carte(file, columns);
+    test_square(file, columns);
+    test_cube(file, columns);
+    test_bitwise_xor(file, columns);
+    test_bitwise_and(file, columns);
+    test_bitwise_or(file, columns);
+    test_bitwise_not(file, columns);
+    test_bitwise_shift_left(file, columns);
+    test_bitwise_shift_right(file, columns);
 }
 
 fn test_add(file: &mut impl Write, columns: &[(&str, Column)]) {
