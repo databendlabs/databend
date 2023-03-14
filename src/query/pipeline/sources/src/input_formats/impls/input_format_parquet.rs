@@ -31,6 +31,7 @@ use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::arrow::io::parquet::read::to_deserializer;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_arrow::parquet::metadata::ColumnChunkMetaData;
+use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::read_metadata;
 use common_arrow::read_columns_async;
@@ -43,6 +44,8 @@ use common_expression::TableSchemaRef;
 use common_meta_app::principal::StageInfo;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
+use common_storage::read_parquet_metas_in_parallel;
+use common_storage::StageFileInfo;
 use futures::AsyncRead;
 use futures::AsyncSeek;
 use opendal::Operator;
@@ -62,31 +65,25 @@ use crate::input_formats::SplitInfo;
 
 pub struct InputFormatParquet;
 
-fn col_offset(meta: &ColumnChunkMetaData) -> i64 {
-    meta.data_page_offset()
-}
-
-#[async_trait::async_trait]
-impl InputFormat for InputFormatParquet {
-    async fn get_splits(
-        &self,
-        files: &[String],
-        _stage_info: &StageInfo,
-        op: &Operator,
-        _settings: &Arc<Settings>,
+impl InputFormatParquet {
+    fn make_splits(
+        file_infos: Vec<StageFileInfo>,
+        metas: Vec<FileMetaData>,
     ) -> Result<Vec<Arc<SplitInfo>>> {
         let mut infos = vec![];
-        for path in files {
-            let size = op.stat(path).await?.content_length() as usize;
-            let mut reader = op.reader(path).await?;
-            let mut file_meta = read_metadata_async(&mut reader).await?;
+        let mut schema = None;
+        for (info, mut file_meta) in file_infos.into_iter().zip(metas.into_iter()) {
+            let size = info.size as usize;
+            let path = info.path.clone();
             let row_groups = mem::take(&mut file_meta.row_groups);
-            let infer_schema = infer_schema(&file_meta)?;
-            let fields = Arc::new(infer_schema.fields);
+            if schema.is_none() {
+                schema = Some(infer_schema(&file_meta)?);
+            }
+            let fields = Arc::new(schema.clone().unwrap().fields);
             let read_file_meta = Arc::new(FileMeta { fields });
 
             let file_info = Arc::new(FileInfo {
-                path: path.clone(),
+                path,
                 size,
                 num_splits: row_groups.len(),
                 compress_alg: None,
@@ -118,7 +115,30 @@ impl InputFormat for InputFormatParquet {
                 }
             }
         }
+
         Ok(infos)
+    }
+}
+
+fn col_offset(meta: &ColumnChunkMetaData) -> i64 {
+    meta.data_page_offset()
+}
+
+#[async_trait::async_trait]
+impl InputFormat for InputFormatParquet {
+    async fn get_splits(
+        &self,
+        file_infos: Vec<StageFileInfo>,
+        _stage_info: &StageInfo,
+        op: &Operator,
+        _settings: &Arc<Settings>,
+    ) -> Result<Vec<Arc<SplitInfo>>> {
+        let files = file_infos
+            .iter()
+            .map(|f| (f.path.clone(), f.size))
+            .collect::<Vec<_>>();
+        let metas = read_parquet_metas_in_parallel(op.clone(), files, 16, 64).await?;
+        Self::make_splits(file_infos, metas)
     }
 
     async fn infer_schema(&self, path: &str, op: &Operator) -> Result<TableSchemaRef> {

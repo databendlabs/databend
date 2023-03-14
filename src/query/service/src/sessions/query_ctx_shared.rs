@@ -339,6 +339,11 @@ impl QueryContextShared {
     pub fn get_created_time(&self) -> SystemTime {
         self.created_time
     }
+
+    pub fn get_status_info(&self) -> String {
+        let status = self.status.read();
+        status.clone()
+    }
 }
 
 impl Drop for QueryContextShared {

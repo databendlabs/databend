@@ -705,9 +705,9 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         children.push(self.children.pop().unwrap());
         self.visit_copy_unit(&copy.dst);
         children.push(self.children.pop().unwrap());
-        if !copy.files.is_empty() {
-            let mut files_children = Vec::with_capacity(copy.files.len());
-            for file in copy.files.iter() {
+        if let Some(files) = &copy.files {
+            let mut files_children = Vec::with_capacity(files.len());
+            for file in files.iter() {
                 let file_name = format!("File {}", file);
                 let file_format_ctx = AstFormatContext::new(file_name);
                 let file_node = FormatTreeNode::new(file_format_ctx);
@@ -719,8 +719,8 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             let files_node = FormatTreeNode::with_children(files_format_ctx, files_children);
             children.push(files_node);
         }
-        if !copy.pattern.is_empty() {
-            let pattern_name = format!("Pattern {}", copy.pattern);
+        if let Some(pattern) = &copy.pattern {
+            let pattern_name = format!("Pattern {}", pattern);
             let pattern_format_ctx = AstFormatContext::new(pattern_name);
             let pattern_node = FormatTreeNode::new(pattern_format_ctx);
             children.push(pattern_node);

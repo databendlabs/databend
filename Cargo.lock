@@ -165,7 +165,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.16.0"
-source = "git+https://github.com/jorgecarleitao/arrow2?rev=9749aee#9749aee117165a5543a6fcbf647aa4a9ab732429"
+source = "git+https://github.com/jorgecarleitao/arrow2?rev=db87f71#db87f71f3f673b240de80d5a7592d45c0beae805"
 dependencies = [
  "ahash 0.8.2",
  "arrow-format",
@@ -1440,7 +1440,6 @@ dependencies = [
  "dashmap",
  "educe",
  "enum-as-inner",
- "enum_dispatch",
  "ethnum",
  "futures",
  "goldenfile",
@@ -1476,6 +1475,7 @@ dependencies = [
  "common-settings",
  "jsonb",
  "lexical-core",
+ "match-template",
  "micromarshal",
  "num",
  "ordered-float 3.4.0",
@@ -1904,6 +1904,7 @@ dependencies = [
  "common-meta-app",
  "common-pipeline-core",
  "common-settings",
+ "common-storage",
  "crossbeam-channel",
  "csv-core",
  "dashmap",
@@ -2053,6 +2054,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bytes",
+ "chrono",
  "common-arrow",
  "common-auth",
  "common-base",
@@ -2313,7 +2315,6 @@ name = "common-storages-stage"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
- "chrono",
  "common-base",
  "common-building",
  "common-catalog",
@@ -2324,11 +2325,8 @@ dependencies = [
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-storage",
- "futures",
  "opendal",
  "parking_lot 0.12.1",
- "regex",
- "tracing",
  "uuid",
 ]
 
@@ -8363,7 +8361,7 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 [[package]]
 name = "strawboat"
 version = "0.2.0"
-source = "git+https://github.com/sundy-li/strawboat?rev=3a9f75c#3a9f75ce7bd59085be29647310466eb22ff6ee34"
+source = "git+https://github.com/sundy-li/strawboat?rev=81e616e#81e616eca51a9609feb5783e0778adafdf83c4f4"
 dependencies = [
  "arrow2",
  "bytemuck",

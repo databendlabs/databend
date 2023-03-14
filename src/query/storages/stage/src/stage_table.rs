@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::ops::Deref;
-use std::path::Path;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
@@ -26,7 +25,6 @@ use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::StageFileInfo;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
@@ -41,11 +39,10 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_sources::input_formats::InputContext;
 use common_pipeline_sources::input_formats::SplitInfo;
 use common_storage::init_stage_operator;
+use common_storage::StageFileInfo;
 use opendal::Operator;
 use parking_lot::Mutex;
 
-use crate::format_stage_file_info;
-use crate::list_file;
 use crate::stage_table_sink::StageTableSink;
 
 /// TODO: we need to track the data metrics in stage table.
@@ -75,26 +72,15 @@ impl StageTable {
     }
 
     pub async fn list_files(stage_info: &StageTableInfo) -> Result<Vec<StageFileInfo>> {
-        let path = &stage_info.path;
-        let files = &stage_info.files;
         let op = Self::get_op(&stage_info.stage_info)?;
-        let all_files = if !files.is_empty() {
-            let mut res = vec![];
-            for file in files {
-                // Here we add the path to the file: /path/to/path/file1.
-                let new_path = Path::new(path).join(file).to_string_lossy().to_string();
-
-                if !new_path.ends_with('/') {
-                    let meta = op.stat(&new_path).await?;
-                    res.push(format_stage_file_info(new_path, &meta))
-                }
-            }
-            res
-        } else {
-            list_file(&op, path, &stage_info.pattern).await?
-        };
-
-        Ok(all_files)
+        let infos = stage_info
+            .files_info
+            .list(&op, false)
+            .await?
+            .into_iter()
+            .map(|file_with_meta| StageFileInfo::new(file_with_meta.path, &file_with_meta.metadata))
+            .collect::<Vec<_>>();
+        Ok(infos)
     }
 
     fn get_block_compact_thresholds_with_default(&self) -> BlockThresholds {
@@ -133,13 +119,12 @@ impl Table for StageTable {
         } else {
             StageTable::list_files(stage_info).await?
         };
-        let files = files.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
         let format =
             InputContext::get_input_format(&stage_info.stage_info.file_format_options.format)?;
         let operator = StageTable::get_op(&stage_info.stage_info)?;
         let splits = format
             .get_splits(
-                &files,
+                files,
                 &stage_info.stage_info,
                 &operator,
                 &ctx.get_settings(),

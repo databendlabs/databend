@@ -17,9 +17,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ColumnBuilder;
 use common_expression::TableSchemaRef;
-use common_expression::TypeDeserializer;
-use common_expression::TypeDeserializerImpl;
 use common_formats::FieldDecoder;
 use common_formats::FieldDecoderRowBased;
 use common_formats::FieldDecoderXML;
@@ -47,7 +46,7 @@ impl InputFormatXML {
     fn read_row(
         field_decoder: &FieldDecoderXML,
         row_data: &mut HashMap<String, Vec<u8>>,
-        deserializers: &mut [TypeDeserializerImpl],
+        columns: &mut [ColumnBuilder],
         schema: &TableSchemaRef,
         path: &str,
         row_index: usize,
@@ -61,7 +60,7 @@ impl InputFormatXML {
             row_data.clone()
         };
 
-        for (field, deserializer) in schema.fields().iter().zip(deserializers.iter_mut()) {
+        for (field, column) in schema.fields().iter().zip(columns.iter_mut()) {
             let value = if field_decoder.ident_case_sensitive {
                 raw_data.get(field.name())
             } else {
@@ -70,9 +69,9 @@ impl InputFormatXML {
             if let Some(value) = value {
                 let mut reader = Cursor::new(&**value);
                 if reader.eof() {
-                    deserializer.de_default();
+                    column.push_default();
                 } else {
-                    if let Err(e) = field_decoder.read_field(deserializer, &mut reader, true) {
+                    if let Err(e) = field_decoder.read_field(column, &mut reader, true) {
                         let value_str = format!("{:?}", value);
                         let err_msg = format!("{}. column={} value={}", e, field.name(), value_str);
                         return Err(xml_error(&err_msg, path, row_index));
@@ -85,7 +84,7 @@ impl InputFormatXML {
                     }
                 }
             } else {
-                deserializer.de_default();
+                column.push_default();
             }
         }
         Ok(())

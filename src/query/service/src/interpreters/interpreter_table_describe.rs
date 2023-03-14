@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_table_schema;
-use common_expression::types::DataType;
 use common_expression::types::StringType;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
@@ -97,8 +96,7 @@ impl Interpreter for DescribeTableInterpreter {
                 }
 
                 None => {
-                    let data_type: DataType = field.data_type().into();
-                    let value = Scalar::default_value(&data_type);
+                    let value = Scalar::default_value(&field.data_type().into());
                     default_exprs.push(value.to_string().as_bytes().to_vec());
                 }
             }

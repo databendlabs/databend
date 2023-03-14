@@ -15,6 +15,7 @@
 
 use std::sync::Arc;
 
+use common_base::runtime::execute_futures_in_parallel;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -30,7 +31,6 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use tracing::debug;
 
-use crate::io::execute_futures_in_parallel;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::merge_into::mutation_meta::mutation_log::CommitMeta;
@@ -148,10 +148,10 @@ impl TableMutationAggregator {
 
     // TODO use batch_meta_writer
     async fn write_segments(&self, segments: Vec<SerializedSegment>) -> Result<()> {
-        let mut handles = Vec::with_capacity(segments.len());
+        let mut tasks = Vec::with_capacity(segments.len());
         for segment in segments {
             let op = self.dal.clone();
-            handles.push(async move {
+            tasks.push(async move {
                 op.write(&segment.path, segment.raw_data).await?;
                 if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
                     segment_cache.put(segment.path.clone(), segment.segment.clone());
@@ -160,9 +160,12 @@ impl TableMutationAggregator {
             });
         }
 
+        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
+        let permit_nums = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
         execute_futures_in_parallel(
-            self.ctx.clone(),
-            handles,
+            tasks,
+            threads_nums,
+            permit_nums,
             "mutation-write-segments-worker".to_owned(),
         )
         .await?

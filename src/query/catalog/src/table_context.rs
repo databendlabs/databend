@@ -57,6 +57,7 @@ pub struct ProcessInfo {
     pub scan_progress_value: Option<ProgressValues>,
     pub mysql_connection_id: Option<u32>,
     pub created_time: SystemTime,
+    pub status_info: Option<String>,
 }
 
 #[derive(Debug, Clone)]
