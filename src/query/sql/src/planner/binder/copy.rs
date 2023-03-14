@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_ast::ast::CopyStmt;
 use common_ast::ast::CopyUnit;
@@ -40,9 +41,13 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageInfo;
+use common_storage::init_stage_operator;
+use common_storage::StageFileInfo;
+use common_storage::StageFileStatus;
 use common_storage::StageFilesInfo;
 use common_users::UserApiProvider;
 use tracing::debug;
+use tracing::info;
 
 use crate::binder::location::parse_uri_location;
 use crate::binder::Binder;
@@ -180,6 +185,26 @@ impl<'a> Binder {
 
                 self.bind_copy_from_query_into_uri(bind_context, stmt, query, &mut ul)
                     .await
+            }
+            (
+                CopyUnit::Query(query),
+                CopyUnit::Table {
+                    catalog,
+                    database,
+                    table,
+                },
+            ) => {
+                let (catalog_name, database_name, table_name) =
+                    self.normalize_object_identifier_triple(catalog, database, table);
+                self.bind_copy_from_query_into_table(
+                    bind_context,
+                    stmt,
+                    query,
+                    &catalog_name,
+                    &database_name,
+                    &table_name,
+                )
+                .await
             }
             (src, dst) => Err(ErrorCode::SyntaxException(format!(
                 "COPY INTO <{}> FROM <{}> is invalid",
@@ -467,6 +492,148 @@ impl<'a> Binder {
             path,
             validation_mode,
             from: Box::new(query),
+        })))
+    }
+
+    /// Bind COPY INFO <table> FROM <query>
+    async fn bind_copy_from_query_into_table(
+        &mut self,
+        bind_context: &BindContext,
+        stmt: &CopyStmt,
+        src_query: &Query,
+        dst_catalog_name: &str,
+        dst_database_name: &str,
+        dst_table_name: &str,
+    ) -> Result<Plan> {
+        // Validation mode.
+        let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
+            .map_err(ErrorCode::SyntaxException)?;
+
+        // dst
+        let dst_table = self
+            .ctx
+            .get_table(dst_catalog_name, dst_database_name, dst_table_name)
+            .await?;
+
+        // src
+        let (select_list, location, alias) = check_transform_query(src_query)?;
+        if matches!(location, FileLocation::Uri(_)) {
+            // todo!(youngsofun): need to refactor parser
+            return Err(ErrorCode::SyntaxException(
+                "copy into table from uri with transform not supported yet",
+            ));
+        }
+
+        let (mut stage_info, path) =
+            parse_file_location(&self.ctx, location, BTreeMap::new()).await?;
+        self.apply_stage_options(stmt, &mut stage_info).await?;
+        let files_info = StageFilesInfo {
+            path,
+            pattern: stmt.pattern.clone(),
+            files: stmt.files.clone(),
+        };
+
+        let start = Instant::now();
+        {
+            let status = "begin to list files";
+            self.ctx.set_status_info(status);
+            info!(status);
+        }
+
+        let operator = init_stage_operator(&stage_info)?;
+        let files = if operator.info().can_blocking() {
+            files_info.blocking_list(&operator, false)
+        } else {
+            files_info.list(&operator, false).await
+        }?;
+
+        let mut all_source_file_infos = files
+            .into_iter()
+            .map(|file_with_meta| StageFileInfo::new(file_with_meta.path, &file_with_meta.metadata))
+            .collect::<Vec<_>>();
+
+        info!("end to list files: {}", all_source_file_infos.len());
+
+        if !stmt.force {
+            // Status.
+            {
+                let status = "begin to color copied files";
+                self.ctx.set_status_info(status);
+                info!(status);
+            }
+
+            all_source_file_infos = self
+                .ctx
+                .color_copied_files(
+                    dst_catalog_name,
+                    dst_database_name,
+                    dst_table_name,
+                    all_source_file_infos,
+                )
+                .await?;
+
+            info!("end to color copied files: {}", all_source_file_infos.len());
+        }
+
+        let mut need_copy_file_infos = vec![];
+        for file in &all_source_file_infos {
+            if file.status == StageFileStatus::NeedCopy {
+                need_copy_file_infos.push(file.clone());
+            }
+        }
+
+        info!(
+            "copy: read all files finished, all:{}, need copy:{}, elapsed:{}",
+            all_source_file_infos.len(),
+            need_copy_file_infos.len(),
+            start.elapsed().as_secs()
+        );
+
+        if need_copy_file_infos.is_empty() {
+            return Err(ErrorCode::EmptyData("no file need to copy"));
+        }
+
+        let (s_expr, mut from_context) = self
+            .bind_stage_table(
+                bind_context,
+                stage_info.clone(),
+                files_info,
+                alias,
+                Some(need_copy_file_infos.clone()),
+            )
+            .await?;
+
+        // Generate a analyzed select list with from context
+        let select_list = self
+            .normalize_select_list(&from_context, select_list)
+            .await?;
+        let (scalar_items, projections) = self.analyze_projection(&select_list)?;
+        let s_expr =
+            self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
+        let mut output_context = BindContext::new();
+        output_context.parent = from_context.parent;
+        output_context.columns = from_context.columns;
+
+        let query_plan = Plan::Query {
+            s_expr: Box::new(s_expr),
+            metadata: self.metadata.clone(),
+            bind_context: Box::new(output_context),
+            rewrite_kind: None,
+            ignore_result: false,
+            formatted_ast: None,
+        };
+
+        Ok(Plan::Copy(Box::new(CopyPlan::IntoTableWithTransform {
+            catalog_name: dst_catalog_name.to_string(),
+            database_name: dst_database_name.to_string(),
+            table_name: dst_table_name.to_string(),
+            table_id: dst_table.get_id(),
+            schema: dst_table.schema(),
+            from: Box::new(query_plan),
+            stage_info: Box::new(stage_info),
+            all_source_file_infos,
+            need_copy_file_infos,
+            validation_mode,
         })))
     }
 

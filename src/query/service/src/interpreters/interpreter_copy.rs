@@ -41,6 +41,7 @@ use tracing::info;
 use crate::interpreters::common::append2table;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
+use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -150,6 +151,76 @@ impl CopyInterpreter {
                 error!("Failed to get stage table op, error: {}", e);
             }
         }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn build_copy_into_table_with_transform_pipeline(
+        &self,
+        catalog_name: &str,
+        database_name: &str,
+        table_name: &str,
+        query: &Plan,
+        stage_info: StageInfo,
+        all_source_file_infos: Vec<StageFileInfo>,
+        need_copy_file_infos: Vec<StageFileInfo>,
+    ) -> Result<PipelineBuildResult> {
+        let start = Instant::now();
+        let ctx = self.ctx.clone();
+        let (mut build_res, source_schema) = self.build_query(query).await?;
+        let to_table = ctx
+            .get_table(catalog_name, database_name, table_name)
+            .await?;
+
+        let dst_schema = Arc::new(to_table.schema().into());
+        if source_schema != dst_schema {
+            let func_ctx = ctx.get_function_context()?;
+            build_res.main_pipeline.add_transform(
+                |transform_input_port, transform_output_port| {
+                    TransformCastSchema::try_create(
+                        transform_input_port,
+                        transform_output_port,
+                        source_schema.clone(),
+                        dst_schema.clone(),
+                        func_ctx,
+                    )
+                },
+            )?;
+        }
+
+        // Build append data pipeline.
+        to_table.append_data(
+            ctx.clone(),
+            &mut build_res.main_pipeline,
+            AppendMode::Copy,
+            false,
+        )?;
+
+        let database_name = database_name.to_string();
+        let catalog_name = catalog_name.to_string();
+        let table_name = table_name.to_string();
+        build_res.main_pipeline.set_on_finished(move |may_error| {
+            if may_error.is_none() {
+                CopyInterpreter::commit_copy_into_table(
+                    ctx.clone(),
+                    to_table,
+                    stage_info,
+                    all_source_file_infos,
+                    need_copy_file_infos,
+                    catalog_name,
+                    database_name,
+                    table_name,
+                )?;
+                // Status.
+                {
+                    info!("all copy finished, elapsed:{}", start.elapsed().as_secs());
+                }
+                Ok(())
+            } else {
+                Err(may_error.as_ref().unwrap().clone())
+            }
+        });
+
+        Ok(build_res)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -422,6 +493,27 @@ impl Interpreter for CopyInterpreter {
                     other
                 ))),
             },
+            CopyPlan::IntoTableWithTransform {
+                catalog_name,
+                database_name,
+                table_name,
+                stage_info,
+                from,
+                all_source_file_infos,
+                need_copy_file_infos,
+                ..
+            } => {
+                self.build_copy_into_table_with_transform_pipeline(
+                    catalog_name,
+                    database_name,
+                    table_name,
+                    from,
+                    *stage_info.clone(),
+                    all_source_file_infos.clone(),
+                    need_copy_file_infos.clone(),
+                )
+                .await
+            }
             CopyPlan::IntoStage {
                 stage, from, path, ..
             } => self.build_copy_into_stage_pipeline(stage, path, from).await,
