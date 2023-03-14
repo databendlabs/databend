@@ -22,6 +22,36 @@ SELECT {'k1': 1, 'k2': 2}, map([1, 2], ['v1', 'v2']);
 +-----------------+---------------------------+
 ```
 
+## Map and Bloom Filter Index
+
+In Databend Map, a bloom filter index is created for the value with certain data types: `Numeric`, `String`, `Timestamp`, and `Date`.
+
+This makes it easier and faster to search for values in the MAP data structure.
+
+The implementation of the bloom filter index in Databend Map is in [PR#10457](https://github.com/datafuselabs/databend/pull/10457).
+
+The bloom filter is particularly effective in reducing query time when the queried value does not exist. 
+
+For example:
+```sql
+select * from nginx_log where log['ip'] = '205.91.162.148';
++----+----------------------------------------+
+| id | log                                    |
++----+----------------------------------------+
+| 1  | {'ip':'205.91.162.148','url':'test-1'} |
++----+----------------------------------------+
+1 row in set
+Time: 1.733s
+    
+select * from nginx_log where log['ip'] = '205.91.162.141';
++----+-----+
+| id | log |
++----+-----+
++----+-----+
+0 rows in set
+Time: 0.129s
+```
+
 ## Examples
 
 The following example creates a table that includes a Map column, then queries Map data from the table.
