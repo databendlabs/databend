@@ -40,6 +40,7 @@ use crate::executor::ExchangeSink;
 use crate::executor::ExchangeSource;
 use crate::executor::FragmentKind;
 use crate::executor::RuntimeFilterSource;
+use crate::executor::Window;
 use crate::planner::MetadataRef;
 use crate::planner::DUMMY_TABLE_INDEX;
 use crate::BaseTableColumn;
@@ -129,6 +130,7 @@ fn to_format_tree(
         PhysicalPlan::AggregateFinal(plan) => {
             aggregate_final_to_format_tree(plan, metadata, prof_span_set)
         }
+        PhysicalPlan::Window(plan) => window_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::Sort(plan) => sort_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::Limit(plan) => limit_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::HashJoin(plan) => hash_join_to_format_tree(plan, metadata, prof_span_set),
@@ -507,6 +509,14 @@ fn aggregate_final_to_format_tree(
         "AggregateFinal".to_string(),
         children,
     ))
+}
+
+fn window_to_format_tree(
+    plan: &Window,
+    metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
+) -> Result<FormatTreeNode<String>> {
+    Ok(FormatTreeNode::new("Window".to_string()))
 }
 
 fn sort_to_format_tree(

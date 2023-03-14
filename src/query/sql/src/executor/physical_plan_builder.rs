@@ -56,6 +56,7 @@ use crate::executor::PhysicalPlan;
 use crate::executor::RuntimeFilterSource;
 use crate::executor::SortDesc;
 use crate::executor::UnionAll;
+use crate::executor::Window;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
@@ -677,7 +678,13 @@ impl PhysicalPlanBuilder {
 
                 Ok(result)
             }
-
+            RelOperator::Window(w) => {
+                println!("window sexpr: {:?}", s_expr.child(0));
+                Ok(PhysicalPlan::Window(Window {
+                    plan_id: self.next_plan_id,
+                    input: Box::new(self.build(s_expr.child(0)?).await?),
+                }))
+            }
             RelOperator::Sort(sort) => Ok(PhysicalPlan::Sort(Sort {
                 plan_id: self.next_plan_id(),
                 input: Box::new(self.build(s_expr.child(0)?).await?),

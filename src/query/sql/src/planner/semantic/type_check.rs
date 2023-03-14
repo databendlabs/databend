@@ -719,6 +719,7 @@ impl<'a> TypeChecker<'a> {
                         // window function
                         let mut partitions = vec![];
                         for p in window.partition_by.iter() {
+                            println!("window partition: {:?}", p);
                             let box (part, _part_type) = self.resolve(p).await?;
                             partitions.push(part);
                         }
@@ -947,49 +948,56 @@ impl<'a> TypeChecker<'a> {
         window_frame: Option<WindowFrame>,
         return_type: DataType,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let frame = window_frame.unwrap();
-        let units = match frame.units.clone() {
-            WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
-            WindowFrameUnits::Range => WindowFuncFrameUnits::Range,
-        };
-        let start = match frame.start_bound {
-            WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
-            WindowFrameBound::Preceding(f) => {
-                if let Some(box expr) = f {
-                    let box (result_expr, _) = self.resolve(&expr).await?;
-                    WindowFuncFrameBound::Preceding(Some(Box::new(result_expr)))
-                } else {
-                    WindowFuncFrameBound::Preceding(None)
+        let (units, start, end) = if let Some(frame) = window_frame {
+            let units = match frame.units.clone() {
+                WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
+                WindowFrameUnits::Range => WindowFuncFrameUnits::Range,
+            };
+            let start = match frame.start_bound {
+                WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
+                WindowFrameBound::Preceding(f) => {
+                    if let Some(box expr) = f {
+                        let box (result_expr, _) = self.resolve(&expr).await?;
+                        WindowFuncFrameBound::Preceding(Some(Box::new(result_expr)))
+                    } else {
+                        WindowFuncFrameBound::Preceding(None)
+                    }
                 }
-            }
-            WindowFrameBound::Following(f) => {
-                if let Some(box expr) = f {
-                    let box (result_expr, _) = self.resolve(&expr).await?;
-                    WindowFuncFrameBound::Following(Some(Box::new(result_expr)))
-                } else {
-                    WindowFuncFrameBound::Following(None)
+                WindowFrameBound::Following(f) => {
+                    if let Some(box expr) = f {
+                        let box (result_expr, _) = self.resolve(&expr).await?;
+                        WindowFuncFrameBound::Following(Some(Box::new(result_expr)))
+                    } else {
+                        WindowFuncFrameBound::Following(None)
+                    }
                 }
-            }
-        };
+            };
 
-        let end = match frame.end_bound {
-            WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
-            WindowFrameBound::Preceding(f) => {
-                if let Some(box expr) = f {
-                    let box (result_expr, _) = self.resolve(&expr).await?;
-                    WindowFuncFrameBound::Preceding(Some(Box::new(result_expr)))
-                } else {
-                    WindowFuncFrameBound::Preceding(None)
+            let end = match frame.end_bound {
+                WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
+                WindowFrameBound::Preceding(f) => {
+                    if let Some(box expr) = f {
+                        let box (result_expr, _) = self.resolve(&expr).await?;
+                        WindowFuncFrameBound::Preceding(Some(Box::new(result_expr)))
+                    } else {
+                        WindowFuncFrameBound::Preceding(None)
+                    }
                 }
-            }
-            WindowFrameBound::Following(f) => {
-                if let Some(box expr) = f {
-                    let box (result_expr, _) = self.resolve(&expr).await?;
-                    WindowFuncFrameBound::Following(Some(Box::new(result_expr)))
-                } else {
-                    WindowFuncFrameBound::Following(None)
+                WindowFrameBound::Following(f) => {
+                    if let Some(box expr) = f {
+                        let box (result_expr, _) = self.resolve(&expr).await?;
+                        WindowFuncFrameBound::Following(Some(Box::new(result_expr)))
+                    } else {
+                        WindowFuncFrameBound::Following(None)
+                    }
                 }
-            }
+            };
+            (units, start, end)
+        } else {
+            let units = WindowFuncFrameUnits::Rows;
+            let start = WindowFuncFrameBound::Preceding(None);
+            let end = WindowFuncFrameBound::CurrentRow;
+            (units, start, end)
         };
 
         let window_func = WindowFunc {

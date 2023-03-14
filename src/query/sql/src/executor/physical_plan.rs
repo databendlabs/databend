@@ -283,6 +283,18 @@ impl AggregateFinal {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Window {
+    pub plan_id: u32,
+    pub input: Box<PhysicalPlan>,
+}
+
+impl Window {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        self.input.output_schema()
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Sort {
     /// A unique id of operator in a `PhysicalPlan` tree.
     /// Only used for display.
@@ -559,6 +571,7 @@ pub enum PhysicalPlan {
     AggregateExpand(AggregateExpand),
     AggregatePartial(AggregatePartial),
     AggregateFinal(AggregateFinal),
+    Window(Window),
     Sort(Sort),
     Limit(Limit),
     HashJoin(HashJoin),
@@ -592,6 +605,7 @@ impl PhysicalPlan {
             PhysicalPlan::AggregateExpand(plan) => plan.output_schema(),
             PhysicalPlan::AggregatePartial(plan) => plan.output_schema(),
             PhysicalPlan::AggregateFinal(plan) => plan.output_schema(),
+            PhysicalPlan::Window(plan) => plan.output_schema(),
             PhysicalPlan::Sort(plan) => plan.output_schema(),
             PhysicalPlan::Limit(plan) => plan.output_schema(),
             PhysicalPlan::HashJoin(plan) => plan.output_schema(),
@@ -614,6 +628,7 @@ impl PhysicalPlan {
             PhysicalPlan::AggregateExpand(_) => "AggregateExpand".to_string(),
             PhysicalPlan::AggregatePartial(_) => "AggregatePartial".to_string(),
             PhysicalPlan::AggregateFinal(_) => "AggregateFinal".to_string(),
+            PhysicalPlan::Window(_) => "Window".to_string(),
             PhysicalPlan::Sort(_) => "Sort".to_string(),
             PhysicalPlan::Limit(_) => "Limit".to_string(),
             PhysicalPlan::HashJoin(_) => "HashJoin".to_string(),
@@ -636,6 +651,7 @@ impl PhysicalPlan {
             PhysicalPlan::AggregateExpand(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AggregatePartial(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AggregateFinal(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::Window(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Sort(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Limit(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::HashJoin(plan) => Box::new(

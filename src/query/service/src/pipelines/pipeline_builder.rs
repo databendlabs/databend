@@ -59,6 +59,7 @@ use common_sql::executor::RuntimeFilterSource;
 use common_sql::executor::Sort;
 use common_sql::executor::TableScan;
 use common_sql::executor::UnionAll;
+use common_sql::executor::Window;
 use common_sql::plans::JoinType;
 use common_sql::ColumnBinding;
 use common_sql::IndexType;
@@ -85,6 +86,7 @@ use crate::pipelines::processors::transforms::TransformPartialAggregate;
 use crate::pipelines::processors::transforms::TransformPartialGroupBy;
 use crate::pipelines::processors::transforms::TransformRightJoin;
 use crate::pipelines::processors::transforms::TransformRightSemiAntiJoin;
+use crate::pipelines::processors::transforms::TransformWindow;
 use crate::pipelines::processors::AggregatorParams;
 use crate::pipelines::processors::JoinHashTable;
 use crate::pipelines::processors::LeftJoinCompactor;
@@ -165,6 +167,7 @@ impl PipelineBuilder {
             PhysicalPlan::AggregateExpand(aggregate) => self.build_aggregate_expand(aggregate),
             PhysicalPlan::AggregatePartial(aggregate) => self.build_aggregate_partial(aggregate),
             PhysicalPlan::AggregateFinal(aggregate) => self.build_aggregate_final(aggregate),
+            PhysicalPlan::Window(window) => self.build_window(window),
             PhysicalPlan::Sort(sort) => self.build_sort(sort),
             PhysicalPlan::Limit(limit) => self.build_limit(limit),
             PhysicalPlan::HashJoin(join) => self.build_join(join),
@@ -706,6 +709,18 @@ impl PipelineBuilder {
         )?;
 
         Ok(params)
+    }
+
+    fn build_window(&mut self, window: &Window) -> Result<()> {
+        self.build_pipeline(&window.input)?;
+
+        // let input_schema = window.input.output_schema()?;
+
+        // Window
+        self.main_pipeline.add_transform(|input, output| {
+            let transform = TransformWindow::create();
+            Ok(ProcessorPtr::create(transform))
+        })
     }
 
     fn build_sort(&mut self, sort: &Sort) -> Result<()> {
