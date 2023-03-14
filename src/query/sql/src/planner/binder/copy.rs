@@ -20,7 +20,11 @@ use common_ast::ast::CopyStmt;
 use common_ast::ast::CopyUnit;
 use common_ast::ast::FileLocation;
 use common_ast::ast::Query;
+use common_ast::ast::SelectTarget;
+use common_ast::ast::SetExpr;
 use common_ast::ast::Statement;
+use common_ast::ast::TableAlias;
+use common_ast::ast::TableReference;
 use common_ast::ast::UriLocation;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
@@ -493,6 +497,46 @@ impl<'a> Binder {
 
         Ok(())
     }
+}
+
+// we can avoid this by specializing the parser.
+// make parse a little more complex, now it is COPY ~ INTO ~ #copy_unit ~ FROM ~ #copy_unit
+// also check_query here may give a more friendly error msg.
+fn check_transform_query(
+    query: &Query,
+) -> Result<(&Vec<SelectTarget>, &FileLocation, &Option<TableAlias>)> {
+    if query.offset.is_none()
+        && query.limit.is_empty()
+        && query.order_by.is_empty()
+        && query.with.is_none()
+    {
+        if let SetExpr::Select(select) = &query.body {
+            if select.group_by.is_empty()
+                && !select.distinct
+                && select.having.is_none()
+                && select.from.len() == 1
+            {
+                if let TableReference::Stage {
+                    span: _,
+                    location,
+                    options,
+                    alias,
+                } = &select.from[0]
+                {
+                    if options.is_empty() {
+                        return Ok((&select.select_list, location, alias));
+                    } else {
+                        return Err(ErrorCode::SyntaxException(
+                            "stage table function inside copy not allow options, apply them in the outer copy stmt instead.",
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    Err(ErrorCode::SyntaxException(
+        "query as source of copy only allow projection on one stage table",
+    ))
 }
 
 /// Named stage(start with `@`):
