@@ -41,7 +41,7 @@ externalStage ::= @<external_stage_name>[/<path>]
 
 ### externalLocation (for Amazon S3)
 
-```
+```sql
 externalLocation (for Amazon S3) ::=
   's3://<bucket>[/<path>]'
   [ { CONNECTION = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' } } ) } ]
@@ -59,7 +59,7 @@ externalLocation (for Amazon S3) ::=
 See [Input & Output File Formats](../../13-sql-reference/50-file-format-options.md).
 
 ### copyOptions
-```
+```sql
 copyOptions ::=
   [ SINGLE = TRUE | FALSE ]
   [ MAX_FILE_SIZE = <num> ]

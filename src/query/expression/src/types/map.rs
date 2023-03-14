@@ -66,7 +66,7 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
 
     fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column> {
         match col {
-            Column::Tuple { fields, .. } => Some(KvColumn {
+            Column::Tuple(fields) => Some(KvColumn {
                 keys: K::try_downcast_column(&fields[0])?,
                 values: V::try_downcast_column(&fields[1])?,
             }),
@@ -92,10 +92,10 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
     }
 
     fn upcast_column(col: Self::Column) -> Column {
-        Column::Tuple {
-            len: col.len(),
-            fields: vec![K::upcast_column(col.keys), V::upcast_column(col.values)],
-        }
+        Column::Tuple(vec![
+            K::upcast_column(col.keys),
+            V::upcast_column(col.values),
+        ])
     }
 
     fn upcast_domain((): Self::Domain) -> Domain {

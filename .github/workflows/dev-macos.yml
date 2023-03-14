@@ -65,5 +65,5 @@ jobs:
   #   runs-on: macos-11
   #   needs: build_macos
   #   steps:
-  #     - uses: actions/checkout@v2
+  #     - uses: actions/checkout@v3
   #     - uses: ./.github/actions/test_sqllogic_standalone_macos

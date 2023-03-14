@@ -165,7 +165,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.16.0"
-source = "git+https://github.com/jorgecarleitao/arrow2?rev=9749aee#9749aee117165a5543a6fcbf647aa4a9ab732429"
+source = "git+https://github.com/jorgecarleitao/arrow2?rev=db87f71#db87f71f3f673b240de80d5a7592d45c0beae805"
 dependencies = [
  "ahash 0.8.2",
  "arrow-format",
@@ -1440,7 +1440,6 @@ dependencies = [
  "dashmap",
  "educe",
  "enum-as-inner",
- "enum_dispatch",
  "ethnum",
  "futures",
  "goldenfile",
@@ -1476,6 +1475,7 @@ dependencies = [
  "common-settings",
  "jsonb",
  "lexical-core",
+ "match-template",
  "micromarshal",
  "num",
  "ordered-float 3.4.0",
@@ -1904,6 +1904,7 @@ dependencies = [
  "common-meta-app",
  "common-pipeline-core",
  "common-settings",
+ "common-storage",
  "crossbeam-channel",
  "csv-core",
  "dashmap",
@@ -2032,6 +2033,8 @@ dependencies = [
  "dashmap",
  "globiter",
  "itertools",
+ "num-derive",
+ "num-traits",
  "once_cell",
  "opendal",
  "ordered-float 3.4.0",
@@ -2053,6 +2056,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bytes",
+ "chrono",
  "common-arrow",
  "common-auth",
  "common-base",
@@ -2061,7 +2065,6 @@ dependencies = [
  "common-meta-app",
  "futures",
  "opendal",
- "parking_lot 0.12.1",
  "regex",
  "serde",
 ]
@@ -2314,7 +2317,6 @@ name = "common-storages-stage"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
- "chrono",
  "common-base",
  "common-building",
  "common-catalog",
@@ -2325,11 +2327,8 @@ dependencies = [
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-storage",
- "futures",
  "opendal",
  "parking_lot 0.12.1",
- "regex",
- "tracing",
  "uuid",
 ]
 
@@ -6049,9 +6048,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.29.0"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce052ae3c6441f6e80a37dd4b7d892e24e917f86bde26b902082e843b53ad7e7"
+checksum = "a679b89de2d5ef671d9256c37c8b6f66c9f2f2768acf59a9b0e825c25e5a6967"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -6113,7 +6112,7 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.8.3"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.3-alpha.1#fc8cf0a20dcc9f53977fa55a037f16cf23cb7c26"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.3-alpha.2#ae28352a303d14dddbb20cd351d2c93d0b8db3a4"
 dependencies = [
  "anyerror",
  "anyhow",
@@ -8314,6 +8313,7 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "cbordata",
+ "common-arrow",
  "common-exception",
  "common-expression",
  "common-functions",
@@ -8363,7 +8363,7 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 [[package]]
 name = "strawboat"
 version = "0.2.0"
-source = "git+https://github.com/sundy-li/strawboat?rev=3a9f75c#3a9f75ce7bd59085be29647310466eb22ff6ee34"
+source = "git+https://github.com/sundy-li/strawboat?rev=81e616e#81e616eca51a9609feb5783e0778adafdf83c4f4"
 dependencies = [
  "arrow2",
  "bytemuck",

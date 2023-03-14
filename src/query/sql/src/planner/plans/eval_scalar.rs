@@ -16,14 +16,12 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use roaring::RoaringBitmap;
 
 use crate::optimizer::ColumnSet;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
-use crate::optimizer::RuleID;
 use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
@@ -56,13 +54,6 @@ impl EvalScalar {
 impl Operator for EvalScalar {
     fn rel_op(&self) -> RelOp {
         RelOp::EvalScalar
-    }
-
-    fn transformation_candidate_rules(&self) -> roaring::RoaringBitmap {
-        let mut ret = RoaringBitmap::new();
-        ret.push(RuleID::EliminateEvalScalar as u32);
-        ret.push(RuleID::MergeEvalScalar as u32);
-        ret
     }
 
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {

@@ -259,10 +259,7 @@ impl TestFixture {
                             .collect::<Vec<i32>>(),
                     );
                     let tuple_inner_columns = vec![column1, column2];
-                    let tuple_column = Column::Tuple {
-                        fields: tuple_inner_columns,
-                        len: rows_per_block,
-                    };
+                    let tuple_column = Column::Tuple(tuple_inner_columns);
 
                     let columns = vec![column0, tuple_column];
 
@@ -464,8 +461,7 @@ pub async fn check_data_dir(
                     .ctx
                     .get_data_operator()?
                     .operator()
-                    .object(entry_path)
-                    .read()
+                    .read(entry_path)
                     .await?;
                 last_snapshot_loc = str::from_utf8(&content)?.to_string();
             }

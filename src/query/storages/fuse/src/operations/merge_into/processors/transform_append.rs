@@ -128,7 +128,7 @@ impl AppendTransform {
         let segment = Arc::new(segment_info);
 
         // write down segments (TODO use meta writer, cache & retry)
-        self.data_accessor.object(&location).write(data).await?;
+        self.data_accessor.write(&location, data).await?;
 
         if let Some(segment_cache) = SegmentInfo::cache() {
             segment_cache.put(location.clone(), segment.clone());

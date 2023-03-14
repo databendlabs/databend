@@ -16,8 +16,10 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
 use itertools::Itertools;
 
+use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::decimal::DecimalColumn;
+use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumnBuilder;
@@ -26,6 +28,7 @@ use crate::types::ArrayType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
+use crate::types::MapType;
 use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::TimestampType;
@@ -38,8 +41,6 @@ use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::Scalar;
-use crate::TypeDeserializer;
-use crate::TypeDeserializerImpl;
 use crate::Value;
 
 impl DataBlock {
@@ -191,16 +192,36 @@ impl Column {
                 indices,
                 scatter_size,
             ),
-            Column::Array(column) | Column::Map(column) => {
+            Column::Array(column) => {
                 let mut offsets = Vec::with_capacity(length + 1);
                 offsets.push(0);
-                let builder = ColumnBuilder::from_column(
-                    TypeDeserializerImpl::with_capacity(&column.values.data_type(), length)
-                        .finish_to_column(),
-                );
+                let builder = ColumnBuilder::with_capacity(&column.values.data_type(), length);
                 let builder = ArrayColumnBuilder { builder, offsets };
                 Self::scatter_scalars::<ArrayType<AnyType>, _>(
                     column,
+                    builder,
+                    indices,
+                    scatter_size,
+                )
+            }
+            Column::Map(column) => {
+                let mut offsets = Vec::with_capacity(length + 1);
+                offsets.push(0);
+                let builder = ColumnBuilder::from_column(
+                    ColumnBuilder::with_capacity(&column.values.data_type(), length).build(),
+                );
+                let (key_builder, val_builder) = match builder {
+                    ColumnBuilder::Tuple(fields) => (fields[0].clone(), fields[1].clone()),
+                    _ => unreachable!(),
+                };
+                let builder = KvColumnBuilder {
+                    keys: key_builder,
+                    values: val_builder,
+                };
+                let builder = ArrayColumnBuilder { builder, offsets };
+                let column = ArrayColumn::try_downcast(column).unwrap();
+                Self::scatter_scalars::<MapType<AnyType, AnyType>, _>(
+                    &column,
                     builder,
                     indices,
                     scatter_size,
@@ -225,7 +246,7 @@ impl Column {
                     })
                     .collect()
             }
-            Column::Tuple { fields, .. } => {
+            Column::Tuple(fields) => {
                 let fields_vs: Vec<Vec<Column>> = fields
                     .iter()
                     .map(|c| c.scatter(data_type, indices, scatter_size))
@@ -238,10 +259,7 @@ impl Column {
                     for col in &fields_vs {
                         fields.push(col[s].clone());
                     }
-                    res.push(Column::Tuple {
-                        len: fields.first().map_or(0, |f| f.len()),
-                        fields,
-                    });
+                    res.push(Column::Tuple(fields));
                 }
                 res
             }

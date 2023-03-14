@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_expression::read_decimal;
-use common_expression::read_decimal_with_size;
+use common_expression::serialize::read_decimal;
+use common_expression::serialize::read_decimal_with_size;
 use common_expression::types::decimal::DecimalSize;
 
 #[test]

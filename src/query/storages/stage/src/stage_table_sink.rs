@@ -122,10 +122,12 @@ impl StageTableSink {
             "{:?}",
             self.table_info.stage_info.file_format_options.format
         );
-        if self.table_info.path.ends_with("data_") {
+
+        // assert_eq!("00000110", format!("{:0>8}", "110"))
+        if self.table_info.files_info.path.ends_with("data_") {
             format!(
-                "{}{}_{}_{}.{}",
-                self.table_info.path,
+                "{}{}_{:0>4}_{:0>8}.{}",
+                self.table_info.files_info.path,
                 self.uuid,
                 self.group_id,
                 self.batch_id,
@@ -133,8 +135,8 @@ impl StageTableSink {
             )
         } else {
             format!(
-                "{}/data_{}_{}_{}.{}",
-                self.table_info.path,
+                "{}/data_{}_{:0>4}_{:0>8}.{}",
+                self.table_info.files_info.path,
                 self.uuid,
                 self.group_id,
                 self.batch_id,
@@ -258,7 +260,7 @@ impl Processor for StageTableSink {
             State::NeedWrite(bytes, remainng_block) => {
                 let path = self.unload_path();
 
-                self.data_accessor.object(&path).write(bytes).await?;
+                self.data_accessor.write(&path, bytes).await?;
 
                 match remainng_block {
                     Some(block) => self.state = State::NeedSerialize(block),

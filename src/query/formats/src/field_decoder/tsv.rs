@@ -18,11 +18,10 @@ use std::io::Cursor;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::ArrayDeserializer;
-use common_expression::MapDeserializer;
-use common_expression::StringDeserializer;
-use common_expression::StructDeserializer;
-use common_expression::TypeDeserializer;
+use common_expression::types::array::ArrayColumnBuilder;
+use common_expression::types::string::StringColumnBuilder;
+use common_expression::types::AnyType;
+use common_expression::ColumnBuilder;
 use common_io::constants::FALSE_BYTES_NUM;
 use common_io::constants::INF_BYTES_LOWER;
 use common_io::constants::NAN_BYTES_LOWER;
@@ -30,7 +29,6 @@ use common_io::constants::NULL_BYTES_ESCAPE;
 use common_io::constants::TRUE_BYTES_NUM;
 use common_io::cursor_ext::BufferReadStringExt;
 use common_io::cursor_ext::ReadBytesExt;
-use common_io::prelude::FormatSettings;
 
 use crate::field_decoder::row_based::FieldDecoderRowBased;
 use crate::CommonSettings;
@@ -41,7 +39,6 @@ use crate::FileFormatOptionsExt;
 pub struct FieldDecoderTSV {
     pub common_settings: CommonSettings,
     pub quote_char: u8,
-    format: FormatSettings,
 }
 
 impl FieldDecoderTSV {
@@ -56,9 +53,6 @@ impl FieldDecoderTSV {
                 timezone: options.timezone,
             },
             quote_char: options.get_quote_char(),
-            format: FormatSettings {
-                timezone: options.timezone,
-            },
         }
     }
 }
@@ -94,7 +88,7 @@ impl FieldDecoderRowBased for FieldDecoderTSV {
 
     fn read_string<R: AsRef<[u8]>>(
         &self,
-        column: &mut StringDeserializer,
+        column: &mut StringColumnBuilder,
         reader: &mut Cursor<R>,
         raw: bool,
     ) -> Result<()> {
@@ -105,13 +99,12 @@ impl FieldDecoderRowBased for FieldDecoderTSV {
 
     fn read_array<R: AsRef<[u8]>>(
         &self,
-        column: &mut ArrayDeserializer,
+        column: &mut ArrayColumnBuilder<AnyType>,
         reader: &mut Cursor<R>,
         _raw: bool,
     ) -> Result<()> {
         reader.must_ignore_byte(b'[')?;
-        let mut idx = 0;
-        loop {
+        for idx in 0.. {
             let _ = reader.ignore_white_spaces();
             if reader.ignore_byte(b']') {
                 break;
@@ -120,23 +113,24 @@ impl FieldDecoderRowBased for FieldDecoderTSV {
                 reader.must_ignore_byte(b',')?;
             }
             let _ = reader.ignore_white_spaces();
-            self.read_field(column.inner.as_mut(), reader, false)?;
-            idx += 1;
+            self.read_field(&mut column.builder, reader, false)?;
         }
-        column.add_offset(idx);
+        column.commit_row();
         Ok(())
     }
 
     fn read_map<R: AsRef<[u8]>>(
         &self,
-        column: &mut MapDeserializer,
+        column: &mut ArrayColumnBuilder<AnyType>,
         reader: &mut Cursor<R>,
         _raw: bool,
     ) -> Result<()> {
+        const KEY: usize = 0;
+        const VALUE: usize = 1;
         reader.must_ignore_byte(b'{')?;
-        let mut idx = 0;
         let mut set = HashSet::new();
-        loop {
+        let map_builder = column.builder.as_tuple_mut().unwrap();
+        for idx in 0.. {
             let _ = reader.ignore_white_spaces();
             if reader.ignore_byte(b'}') {
                 break;
@@ -145,41 +139,39 @@ impl FieldDecoderRowBased for FieldDecoderTSV {
                 reader.must_ignore_byte(b',')?;
             }
             let _ = reader.ignore_white_spaces();
-            self.read_field(column.key.as_mut(), reader, false)?;
+            self.read_field(&mut map_builder[KEY], reader, false)?;
             // check duplicate map keys
-            let key = column.key.pop_data_value().unwrap();
+            let key = map_builder[KEY].pop().unwrap();
             if set.contains(&key) {
-                column.add_offset(idx);
                 return Err(ErrorCode::BadBytes(
                     "map keys have to be unique".to_string(),
                 ));
             }
-            set.insert(key.clone());
-            column.key.append_data_value(key, &self.format)?;
+            map_builder[KEY].push(key.as_ref());
+            set.insert(key);
             let _ = reader.ignore_white_spaces();
             reader.must_ignore_byte(b':')?;
             let _ = reader.ignore_white_spaces();
-            self.read_field(column.value.as_mut(), reader, false)?;
-            idx += 1;
+            self.read_field(&mut map_builder[VALUE], reader, false)?;
         }
-        column.add_offset(idx);
+        column.commit_row();
         Ok(())
     }
 
-    fn read_struct<R: AsRef<[u8]>>(
+    fn read_tuple<R: AsRef<[u8]>>(
         &self,
-        column: &mut StructDeserializer,
+        fields: &mut Vec<ColumnBuilder>,
         reader: &mut Cursor<R>,
         _raw: bool,
     ) -> Result<()> {
         reader.must_ignore_byte(b'(')?;
-        for (idx, inner) in column.inners.iter_mut().enumerate() {
+        for (idx, field) in fields.iter_mut().enumerate() {
             let _ = reader.ignore_white_spaces();
             if idx != 0 {
                 reader.must_ignore_byte(b',')?;
             }
             let _ = reader.ignore_white_spaces();
-            self.read_field(inner, reader, false)?;
+            self.read_field(field, reader, false)?;
         }
         reader.must_ignore_byte(b')')?;
         Ok(())

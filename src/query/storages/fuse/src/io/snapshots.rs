@@ -20,13 +20,14 @@ use std::time::Instant;
 
 use chrono::DateTime;
 use chrono::Utc;
+use common_base::runtime::execute_futures_in_parallel;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::stream::StreamExt;
 use futures_util::TryStreamExt;
-use opendal::ObjectMetakey;
-use opendal::ObjectMode;
+use opendal::EntryMode;
+use opendal::Metakey;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::Location;
@@ -37,7 +38,6 @@ use tracing::info;
 use tracing::warn;
 use tracing::Instrument;
 
-use crate::io::try_join_futures;
 use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
 use crate::io::TableMetaLocationGenerator;
@@ -168,9 +168,12 @@ impl SnapshotsIO {
             })
         });
 
-        try_join_futures(
-            self.ctx.clone(),
+        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
+        let permit_nums = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+        execute_futures_in_parallel(
             tasks,
+            threads_nums,
+            permit_nums,
             "fuse-req-snapshots-worker".to_owned(),
         )
         .await
@@ -322,16 +325,16 @@ impl SnapshotsIO {
         limit: Option<usize>,
         exclude_file: Option<&str>,
     ) -> Result<Vec<String>> {
-        let data_accessor = self.operator.clone();
+        let op = self.operator.clone();
 
         let mut file_list = vec![];
-        let mut ds = data_accessor.object(prefix).list().await?;
+        let mut ds = op.list(prefix).await?;
         while let Some(de) = ds.try_next().await? {
-            let meta = de
-                .metadata(ObjectMetakey::Mode | ObjectMetakey::LastModified)
+            let meta = op
+                .metadata(&de, Metakey::Mode | Metakey::LastModified)
                 .await?;
             match meta.mode() {
-                ObjectMode::FILE => match exclude_file {
+                EntryMode::FILE => match exclude_file {
                     Some(path) if de.path() == path => continue,
                     _ => {
                         let location = de.path().to_string();

@@ -32,6 +32,7 @@ xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features 
 ], tag = "databend-alpha.4" }
 
 [dev-dependencies]
+common-arrow = { path = "../../../../common/arrow" }
 criterion = "0.4"
 rand = "0.8.5"
 

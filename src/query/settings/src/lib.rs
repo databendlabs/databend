@@ -136,7 +136,11 @@ impl Settings {
             default_max_memory_usage = conf.query.max_server_memory_usage;
         }
 
-        let default_max_storage_io_requests = if conf.storage.params.is_fs() { 48 } else { 64 };
+        let default_max_storage_io_requests = if conf.storage.params.is_fs() {
+            48
+        } else {
+            std::cmp::min(num_cpus, 64)
+        };
 
         let values = vec![
             // max_block_size
