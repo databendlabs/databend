@@ -273,7 +273,7 @@ impl QueryContextShared {
     pub fn attach_query_str(&self, kind: String, query: String) {
         {
             let mut running_query = self.running_query.write();
-            *running_query = Some(query);
+            *running_query = Some(short_sql(query));
         }
 
         {
@@ -354,5 +354,25 @@ impl Drop for QueryContextShared {
         self.session
             .session_ctx
             .update_query_ids_results(self.init_query_id.read().clone(), None)
+    }
+}
+
+pub fn short_sql(sql: String) -> String {
+    use unicode_segmentation::UnicodeSegmentation;
+    let query = sql.trim_start();
+    if query.len() >= 64 && query[..6].eq_ignore_ascii_case("INSERT") {
+        // keep first 64 graphemes
+        String::from_utf8(
+            query
+                .graphemes(true)
+                .take(64)
+                .flat_map(|g| g.as_bytes().iter())
+                .copied() // copied converts &u8 into u8
+                .chain(b"...".iter().copied())
+                .collect::<Vec<u8>>(),
+        )
+        .unwrap() // by construction, this cannot panic as we extracted unicode grapheme
+    } else {
+        sql
     }
 }
