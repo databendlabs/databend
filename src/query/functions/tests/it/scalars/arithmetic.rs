@@ -121,3 +121,83 @@ fn test_carte(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "c ^ 0", columns);
     run_ast(file, "c ^ d", columns);
 }
+
+fn test_square(file: &mut impl Write, columns: &[(&str, Column)]) {
+    run_ast(file, "|/a", columns);
+    run_ast(file, "|/a2", columns);
+    run_ast(file, "|/b", columns);
+    run_ast(file, "|/c", columns);
+    run_ast(file, "|/d", columns);
+    run_ast(file, "|/d2", columns);
+}
+
+fn test_cube(file: &mut impl Write, columns: &[(&str, Column)]) {
+    run_ast(file, "||/a", columns);
+    run_ast(file, "||/a2", columns);
+    run_ast(file, "||/b", columns);
+    run_ast(file, "||/c", columns);
+    run_ast(file, "||/d", columns);
+    run_ast(file, "||/d2", columns);
+}
+
+fn test_factorial(file: &mut impl Write, columns: &[(&str, Column)]) {
+    run_ast(file, "a!", columns);
+    run_ast(file, "b!", columns);
+    run_ast(file, "12!", columns);
+}
+
+fn test_abs(file: &mut impl Write, columns: &[(&str, Column)]) {
+    run_ast(file, "@ a", columns);
+    run_ast(file, "@ a2", columns);
+    run_ast(file, "@ b", columns);
+    run_ast(file, "@ c", columns);
+    run_ast(file, "@ d", columns);
+    run_ast(file, "@ d2", columns);
+}
+
+fn test_bitwise_and(file: &mut impl Write, columns: &[(&str, Column)]) {
+    run_ast(file, "a & b", columns);
+    run_ast(file, "a2 & 10", columns);
+    run_ast(file, "a2 & c", columns);
+    run_ast(file, "c & b", columns);
+    run_ast(file, "c & d", columns);
+}
+
+fn test_bitwise_or(file: &mut impl Write, columns: &[(&str, Column)]) {
+    run_ast(file, "a | b", columns);
+    run_ast(file, "a2 | 10", columns);
+    run_ast(file, "a2 | c", columns);
+    run_ast(file, "c | b", columns);
+    run_ast(file, "c | d", columns);
+}
+
+fn test_bitwise_xor(file: &mut impl Write, columns: &[(&str, Column)]) {
+    run_ast(file, "a # b", columns);
+    run_ast(file, "a2 # 10", columns);
+    run_ast(file, "a2 # c", columns);
+    run_ast(file, "c # b", columns);
+    run_ast(file, "c # d", columns);
+}
+
+fn test_bitwise_not(file: &mut impl Write, columns: &[(&str, Column)]) {
+    run_ast(file, "~a", columns);
+    run_ast(file, "~a2", columns);
+    run_ast(file, "~b", columns);
+    run_ast(file, "~c", columns);
+    run_ast(file, "~d", columns);
+    run_ast(file, "~d2", columns);
+}
+
+fn test_bitwise_shift_left(file: &mut impl Write, columns: &[(&str, Column)]) {
+    run_ast(file, "a << 4", columns);
+    run_ast(file, "a2 << 2", columns);
+    run_ast(file, "a2 << 4", columns);
+    run_ast(file, "c << 2", columns);
+}
+
+fn test_bitwise_shift_right(file: &mut impl Write, columns: &[(&str, Column)]) {
+    run_ast(file, "a >> 1", columns);
+    run_ast(file, "a2 >> 1", columns);
+    run_ast(file, "a2 >> 2", columns);
+    run_ast(file, "c >> 2", columns);
+}

@@ -32,6 +32,7 @@ fn test_math() {
     test_exp(file);
     test_round(file);
     test_sqrt(file);
+    test_cbrt(file);
     test_truncate(file);
     test_log_function(file);
 }
@@ -108,6 +109,22 @@ fn test_sqrt(file: &mut impl Write) {
     run_ast(file, "sqrt(a)", &[(
         "a",
         Int64Type::from_data(vec![22i64, 1024, 10]),
+    )]);
+}
+
+fn test_cbrt(file: &mut impl Write) {
+    run_ast(file, "cbrt(8)", &[]);
+    run_ast(file, "cbrt(a)", &[(
+        "a",
+        Int64Type::from_data(vec![22i64, 1024, 10]),
+    )]);
+}
+
+fn test_factorial(file: &mut impl Write) {
+    run_ast(file, "factorial(5)", &[]);
+    run_ast(file, "factorial(a)", &[(
+        "a",
+        Int64Type::from_data(vec![3, 12, 16]),
     )]);
 }
 
