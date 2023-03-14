@@ -31,6 +31,7 @@ use dashmap::DashMap;
 use super::AggregateInfo;
 use super::INTERNAL_COLUMN_FACTORY;
 use crate::normalize_identifier;
+use crate::optimizer::SExpr;
 use crate::plans::ScalarExpr;
 use crate::ColumnSet;
 use crate::IndexType;

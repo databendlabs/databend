@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::default::Default;
 use std::sync::Arc;
@@ -451,6 +452,7 @@ impl Binder {
     ) -> Result<(SExpr, BindContext)> {
         let new_bind_context = BindContext {
             parent: Some(Box::new(bind_context.clone())),
+            bound_internal_columns: BTreeMap::new(),
             columns: vec![],
             aggregate_info: Default::default(),
             in_grouping: false,
