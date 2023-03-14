@@ -19,6 +19,7 @@ use std::sync::Arc;
 use chrono::TimeZone;
 use chrono::Utc;
 use common_ast::ast::Indirection;
+use common_ast::ast::Join;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::Statement;
@@ -112,7 +113,7 @@ impl Binder {
             .await
     }
 
-    pub(super) async fn bind_table_reference(
+    async fn bind_single_table(
         &mut self,
         bind_context: &BindContext,
         table_ref: &TableReference,
@@ -348,7 +349,6 @@ impl Binder {
                 }
                 Ok((s_expr, bind_context))
             }
-            TableReference::Join { span: _, join } => self.bind_join(bind_context, join).await,
             TableReference::Subquery {
                 span: _,
                 subquery,
@@ -382,6 +382,7 @@ impl Binder {
                 self.bind_stage_table(bind_context, stage_info, files_info, alias, None)
                     .await
             }
+            TableReference::Join { .. } => unreachable!(),
         }
     }
 
@@ -431,7 +432,40 @@ impl Binder {
         }
     }
 
-    async fn bind_cte(
+    pub(super) async fn bind_table_reference(
+        &mut self,
+        bind_context: &BindContext,
+        table_ref: &TableReference,
+    ) -> Result<(SExpr, BindContext)> {
+        let mut current_ref = table_ref;
+        let current_ctx = bind_context;
+
+        // Stack to keep track of the joins
+        let mut join_stack: Vec<&Join> = Vec::new();
+
+        // Traverse the table reference hierarchy to get to the innermost table
+        while let TableReference::Join { join, .. } = current_ref {
+            join_stack.push(join);
+            current_ref = &join.left;
+        }
+
+        // Bind the innermost table
+        let (mut left_expr, mut left_ctx) =
+            self.bind_single_table(current_ctx, current_ref).await?;
+
+        for join in join_stack.iter() {
+            let (right_expr, right_ctx) = self.bind_single_table(&left_ctx, &join.right).await?;
+            let (join_expr, ctx) = self
+                .bind_join(left_ctx, right_ctx, left_expr, right_expr, join)
+                .await?;
+            left_expr = join_expr;
+            left_ctx = ctx;
+        }
+
+        Ok((left_expr, left_ctx))
+    }
+
+    asycn fn bind_cte(
         &mut self,
         bind_context: &BindContext,
         table_name: &str,

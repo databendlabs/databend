@@ -55,17 +55,15 @@ impl Binder {
     #[async_recursion]
     pub(super) async fn bind_join(
         &mut self,
-        bind_context: &BindContext,
+        left_context: BindContext,
+        right_context: BindContext,
+        left_child: SExpr,
+        right_child: SExpr,
         join: &common_ast::ast::Join,
     ) -> Result<(SExpr, BindContext)> {
-        let (left_child, left_context) =
-            self.bind_table_reference(bind_context, &join.left).await?;
-        let (right_child, right_context) =
-            self.bind_table_reference(bind_context, &join.right).await?;
-
         check_duplicate_join_tables(&left_context, &right_context)?;
 
-        let mut bind_context = bind_context.replace();
+        let mut bind_context = BindContext::new();
 
         match &join.op {
             JoinOperator::LeftOuter | JoinOperator::RightOuter | JoinOperator::FullOuter
