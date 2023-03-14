@@ -79,6 +79,8 @@ impl ExchangeSink {
                     Ok(ProcessorPtr::create(ExchangeWriterSink::create(
                         input,
                         flight_exchange.clone(),
+                        params.query_id.to_string(),
+                        params.fragment_id,
                     )))
                 })
             }
@@ -87,7 +89,11 @@ impl ExchangeSink {
 
                 // exchange writer sink
                 let len = pipeline.output_len();
-                let items = create_writer_items(flight_exchanges);
+                let items = create_writer_items(
+                    flight_exchanges,
+                    params.query_id.clone(),
+                    params.fragment_id,
+                );
                 pipeline.add_pipe(Pipe::create(len, 0, items));
                 Ok(())
             }

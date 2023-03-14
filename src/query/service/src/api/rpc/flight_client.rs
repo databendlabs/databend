@@ -39,6 +39,7 @@ use tonic::transport::channel::Channel;
 use tonic::Request;
 use tonic::Status;
 use tonic::Streaming;
+use tracing::info;
 
 use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::rpc::packets::DataPacket;
@@ -65,6 +66,8 @@ impl FlightClient {
     pub async fn request_server_exchange(&mut self, query_id: &str) -> Result<FlightExchange> {
         let (tx, rx) = async_channel::bounded(8);
         Ok(FlightExchange::from_client(
+            None,
+            None,
             tx,
             self.exchange_streaming(
                 RequestBuilder::create(Box::pin(rx))
@@ -84,6 +87,8 @@ impl FlightClient {
     ) -> Result<FlightExchange> {
         let (tx, rx) = async_channel::bounded(8);
         Ok(FlightExchange::from_client(
+            Some(query_id.to_string()),
+            Some(fragment_id),
             tx,
             self.exchange_streaming(
                 RequestBuilder::create(Box::pin(rx))
@@ -138,13 +143,22 @@ pub enum FlightExchange {
 
 impl FlightExchange {
     pub fn from_server(
+        query_id: Option<String>,
+        fragment: Option<usize>,
         streaming: Request<Streaming<FlightData>>,
         response_tx: Sender<Result<FlightData, Status>>,
     ) -> FlightExchange {
         let streaming = streaming.into_inner();
         let state = Arc::new(ChannelState::create());
         let f = |x| Ok(FlightData::from(x));
-        let (tx, rx) = Self::listen_request(state.clone(), response_tx.clone(), streaming, f);
+        let (tx, rx) = Self::listen_request(
+            query_id,
+            fragment,
+            state.clone(),
+            response_tx.clone(),
+            streaming,
+            f,
+        );
 
         FlightExchange::Server(ServerFlightExchange {
             state,
@@ -155,12 +169,21 @@ impl FlightExchange {
     }
 
     pub fn from_client(
+        query_id: Option<String>,
+        fragment: Option<usize>,
         response_tx: Sender<FlightData>,
         streaming: Streaming<FlightData>,
     ) -> FlightExchange {
         let state = Arc::new(ChannelState::create());
         let f = FlightData::from;
-        let (tx, rx) = Self::listen_request(state.clone(), response_tx.clone(), streaming, f);
+        let (tx, rx) = Self::listen_request(
+            query_id,
+            fragment,
+            state.clone(),
+            response_tx.clone(),
+            streaming,
+            f,
+        );
 
         FlightExchange::Client(ClientFlightExchange {
             state,
@@ -171,6 +194,8 @@ impl FlightExchange {
     }
 
     fn listen_request<ResponseT: Send + 'static>(
+        query_id: Option<String>,
+        fragment: Option<usize>,
         state: Arc<ChannelState>,
         network_tx: Sender<ResponseT>,
         mut streaming: Streaming<FlightData>,
@@ -179,7 +204,7 @@ impl FlightExchange {
         let (tx, rx) = async_channel::bounded(1);
         let (response_tx, response_rx) = async_channel::bounded(1);
 
-        Self::start_push_worker(network_tx.clone(), response_rx);
+        Self::start_push_worker(query_id.clone(), fragment, network_tx.clone(), response_rx);
 
         let f = Arc::new(f);
         GlobalIORuntime::instance().spawn({
@@ -278,6 +303,14 @@ impl FlightExchange {
                     })));
                 }
 
+                if let Some(query_id) = &query_id {
+                    info!(
+                        "Break flight listener query: {:?}, fragment:{}",
+                        query_id,
+                        fragment.unwrap()
+                    );
+                }
+
                 let recv_all = StreamExt::count(streaming);
                 let send_all = futures::future::join_all(futures);
 
@@ -287,12 +320,27 @@ impl FlightExchange {
                         response_tx.close();
                         drop(network_tx);
                         let _ = recv_all.await;
+
+                        if let Some(query_id) = query_id {
+                            info!(
+                                "Shutdown flight listener query: {:?}, fragment:{}",
+                                query_id,
+                                fragment.unwrap()
+                            );
+                        }
                     }
                     Either::Right((_, send_all)) => {
                         let _ = send_all.await;
                         tx.close();
                         response_tx.close();
                         drop(network_tx);
+                        if let Some(query_id) = query_id {
+                            info!(
+                                "Shutdown flight listener query: {:?}, fragment:{}",
+                                query_id,
+                                fragment.unwrap()
+                            );
+                        }
                     }
                 };
             }
@@ -302,6 +350,8 @@ impl FlightExchange {
     }
 
     fn start_push_worker<ResponseT: Send + 'static>(
+        query_id: Option<String>,
+        fragment: Option<usize>,
         network_tx: Sender<ResponseT>,
         response_rx: Receiver<ResponseT>,
     ) {
@@ -314,6 +364,13 @@ impl FlightExchange {
 
             response_rx.close();
             drop(network_tx);
+            if let Some(query_id) = query_id {
+                info!(
+                    "Shutdown flight push worker query: {}, fragment: {}",
+                    query_id,
+                    fragment.unwrap()
+                );
+            }
         });
     }
 }
@@ -371,17 +428,17 @@ impl FlightExchange {
         }
     }
 
-    pub async fn close_input(&self) {
+    pub async fn close_input(&self) -> bool {
         match self {
-            FlightExchange::Dummy => { /* do nothing*/ }
+            FlightExchange::Dummy => true,
             FlightExchange::Client(exchange) => exchange.close_input().await,
             FlightExchange::Server(exchange) => exchange.close_input().await,
         }
     }
 
-    pub async fn close_output(&self) {
+    pub async fn close_output(&self) -> bool {
         match self {
-            FlightExchange::Dummy => { /* do nothing*/ }
+            FlightExchange::Dummy => true,
             FlightExchange::Client(exchange) => exchange.close_output().await,
             FlightExchange::Server(exchange) => exchange.close_output().await,
         }
@@ -432,24 +489,28 @@ impl FlightExchangeRef {
         self.inner.recv().await
     }
 
-    pub async fn close_input(&self) {
+    pub async fn close_input(&self) -> bool {
         if self.is_closed_request.fetch_or(true, Ordering::SeqCst) {
-            return;
+            return false;
         }
 
         if self.state.request_count.fetch_sub(1, Ordering::SeqCst) == 1 {
-            self.inner.close_input().await;
+            return self.inner.close_input().await;
         }
+
+        false
     }
 
-    pub async fn close_output(&self) {
+    pub async fn close_output(&self) -> bool {
         if self.is_closed_response.fetch_or(true, Ordering::SeqCst) {
-            return;
+            return false;
         }
 
         if self.state.response_count.fetch_sub(1, Ordering::SeqCst) == 1 {
-            self.inner.close_output().await;
+            return self.inner.close_output().await;
         }
+
+        false
     }
 }
 
@@ -518,7 +579,7 @@ impl ClientFlightExchange {
         }
     }
 
-    pub async fn close_input(&self) {
+    pub async fn close_input(&self) -> bool {
         // Close local channel first.
         // NOTE: this is very important. When we open the local channel while pushing closing input, it may cause distributed deadlock.
         self.request_rx.close();
@@ -527,14 +588,16 @@ impl ClientFlightExchange {
         // We send it directly to the network channel avoid response channel is closed
         if let Some(network_tx) = self.network_tx.upgrade() {
             let packet = FlightData::from(DataPacket::ClosingInput);
-            let _ = network_tx.send(packet).await;
+            return network_tx.send(packet).await.is_ok();
         }
+
+        false
     }
 
-    pub async fn close_output(&self) {
+    pub async fn close_output(&self) -> bool {
         // Notify remote that no message will be sent.
         let packet = FlightData::from(DataPacket::ClosingOutput);
-        let _ = self.response_tx.send(packet).await;
+        self.response_tx.send(packet).await.is_ok()
     }
 }
 
@@ -587,7 +650,7 @@ impl ServerFlightExchange {
         }
     }
 
-    pub async fn close_input(&self) {
+    pub async fn close_input(&self) -> bool {
         // Close local channel first.
         // NOTE: this is very important. When we open the local channel while pushing closing input, it may cause distributed deadlock.
         self.request_rx.close();
@@ -596,14 +659,16 @@ impl ServerFlightExchange {
         // We send it directly to the network channel avoid response channel is closed
         if let Some(network_tx) = self.network_tx.upgrade() {
             let packet = FlightData::from(DataPacket::ClosingInput);
-            let _ = network_tx.send(Ok(packet)).await;
+            return network_tx.send(Ok(packet)).await.is_ok();
         }
+
+        false
     }
 
-    pub async fn close_output(&self) {
+    pub async fn close_output(&self) -> bool {
         // Notify remote that no message will be sent.
         let packet = FlightData::from(DataPacket::ClosingOutput);
-        let _ = self.response_tx.send(Ok(packet)).await;
+        self.response_tx.send(Ok(packet)).await.is_ok()
     }
 }
 
