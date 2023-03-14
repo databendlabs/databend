@@ -596,11 +596,18 @@ pub fn common_super_type(
             let ty = DecimalDataType::binary_result_type(&a, &b, false, false, true).ok();
             ty.map(DataType::Decimal)
         }
-        (DataType::Number(num_ty), decimal_ty @ DataType::Decimal(_))
-        | (decimal_ty @ DataType::Decimal(_), DataType::Number(num_ty))
+        (DataType::Number(num_ty), DataType::Decimal(decimal_ty))
+        | (DataType::Decimal(decimal_ty), DataType::Number(num_ty))
             if !num_ty.is_float() =>
         {
-            Some(decimal_ty)
+            let max_precision = decimal_ty.max_precision();
+            let scale = decimal_ty.scale();
+            DecimalDataType::from_size(DecimalSize {
+                precision: max_precision,
+                scale,
+            })
+            .ok()
+            .map(DataType::Decimal)
         }
         (DataType::Number(num_ty), DataType::Decimal(_))
         | (DataType::Decimal(_), DataType::Number(num_ty))
