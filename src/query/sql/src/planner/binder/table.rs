@@ -452,11 +452,17 @@ impl Binder {
         // Bind the innermost table
         let (mut left_expr, mut left_ctx) =
             self.bind_single_table(current_ctx, current_ref).await?;
-
-        for join in join_stack.iter() {
-            let (right_expr, right_ctx) = self.bind_single_table(&left_ctx, &join.right).await?;
+        for join in join_stack.iter().rev() {
+            let (right_expr, right_ctx) = self.bind_single_table(current_ctx, &join.right).await?;
             let (join_expr, ctx) = self
-                .bind_join(left_ctx, right_ctx, left_expr, right_expr, join)
+                .bind_join(
+                    current_ctx,
+                    left_ctx,
+                    right_ctx,
+                    left_expr,
+                    right_expr,
+                    join,
+                )
                 .await?;
             left_expr = join_expr;
             left_ctx = ctx;
