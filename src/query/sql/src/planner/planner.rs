@@ -84,7 +84,6 @@ impl Planner {
                 // Step 2: Parse the SQL.
                 let backtrace = Backtrace::new();
                 let (mut stmt, format) = parse_sql(&tokens, sql_dialect, &backtrace)?;
-                println!("stmt: {:?}", stmt);
                 self.replace_stmt(&mut stmt, sql_dialect);
 
                 // Step 3: Bind AST with catalog, and generate a pure logical SExpr

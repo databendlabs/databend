@@ -263,9 +263,9 @@ SELECT cbrt(0)
 0.0
 
 query F
-SELECT cbrt(-27)
+SELECT cbrt(-64)
 ----
--3.0
+-4.0
 
 statement error 1001
 SELECT sqrt('a')

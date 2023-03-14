@@ -464,7 +464,8 @@ fn register_binary_arithmetic(registry: &mut FunctionRegistry) {
 
 macro_rules! register_bitwise_not {
     ( $n:ty, $registry:expr) => {
-        $registry.register_1_arg::<NumberType<i64>, NumberType<i64>, _, _>(
+        type N = $n;
+        $registry.register_1_arg::<NumberType<N>, NumberType<i64>, _, _>(
             "bit_not",
             FunctionProperty::default(),
             |_| FunctionDomain::Full,

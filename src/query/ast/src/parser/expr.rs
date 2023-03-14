@@ -624,8 +624,6 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
     }
 
     fn prefix(&mut self, elem: WithSpan<'a, ExprElement>, rhs: Expr) -> Result<Expr, &'static str> {
-        println!("postfix: {:?}", elem);
-        println!("rhs: {:?}", rhs);
         let expr = match elem.elem {
             ExprElement::UnaryOp { op } => Expr::UnaryOp {
                 span: transform_span(elem.span.0),
@@ -642,8 +640,6 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
         lhs: Expr,
         elem: WithSpan<'a, ExprElement>,
     ) -> Result<Expr, &'static str> {
-        println!("postfix: {:?}", elem);
-        println!("lhs: {:?}", lhs);
         let expr = match elem.elem {
             ExprElement::MapAccess { accessor } => Expr::MapAccess {
                 span: transform_span(elem.span.0),
