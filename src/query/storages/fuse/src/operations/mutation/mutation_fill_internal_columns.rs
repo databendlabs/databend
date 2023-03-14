@@ -102,14 +102,15 @@ impl Processor for FillInternalColumnProcessor {
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some((block_meta, data_block)) = self.data_blocks.front_mut() {
+        if let Some((block_meta, data_block)) = self.data_blocks.pop_front() {
+            let mut data_block = data_block;
             let num_rows = data_block.num_rows();
             let internal_column_meta = InternalColumnMeta {
                 segment_id: block_meta.segment_id,
                 block_id: block_meta.block_id,
                 block_location: block_meta.block_location.clone(),
                 segment_location: block_meta.segment_location.clone(),
-                snapshot_location: block_meta.snapshot_location.clone().unwrap(),
+                snapshot_location: block_meta.snapshot_location.unwrap(),
             };
             for internal_column in self.internal_columns.values() {
                 let column =
@@ -121,8 +122,6 @@ impl Processor for FillInternalColumnProcessor {
                 data_block.columns().to_vec(),
                 data_block.num_rows(),
             ));
-
-            self.data_blocks.pop_front();
         }
         Ok(())
     }

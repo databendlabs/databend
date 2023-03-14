@@ -20,11 +20,11 @@ statement ok
 INSERT INTO TABLE `05_0031_t` values(3)
 
 query II
-SELECT a,_row_id FROM `05_0031_t` order by _row_id
+SELECT _row_id,a FROM `05_0031_t` order by _row_id
 ----
-1 0
-2 1
-3 4194304
+0 1
+1 2
+4194304 3
 
 query II
 SELECT a,_row_id FROM `05_0031_t` where _row_id = 0 
