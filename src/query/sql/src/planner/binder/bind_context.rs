@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::hash::Hash;
 
+use common_ast::ast::Query;
 use common_ast::ast::TableAlias;
 use common_catalog::plan::InternalColumn;
 use common_exception::ErrorCode;
@@ -30,7 +31,6 @@ use dashmap::DashMap;
 use super::AggregateInfo;
 use super::INTERNAL_COLUMN_FACTORY;
 use crate::normalize_identifier;
-use crate::optimizer::SExpr;
 use crate::plans::ScalarExpr;
 use crate::ColumnSet;
 use crate::IndexType;
@@ -137,8 +137,7 @@ pub struct BindContext {
 #[derive(Clone, Debug)]
 pub struct CteInfo {
     pub columns_alias: Vec<String>,
-    pub s_expr: SExpr,
-    pub bind_context: BindContext,
+    pub query: Query,
 }
 
 impl BindContext {
