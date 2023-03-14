@@ -179,7 +179,7 @@ impl Operator for Aggregate {
             None
         };
 
-        // Derive used columns
+        // Derive the used columns
         let mut used_columns = self.used_columns()?;
         used_columns.extend(input_prop.used_columns);
         let column_stats = input_prop.statistics.column_stats;
