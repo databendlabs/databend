@@ -5,7 +5,7 @@ statement ok
 DROP TABLE IF EXISTS `05_0031_t`
 
 statement ok
-CREATE TABLE `05_0031_t`(a int) storage_format = 'parquet'
+CREATE TABLE `05_0031_t`(a int)
 
 statement error 1110
 ALTER TABLE `05_0031_t` ADD COLUMN _row_id float

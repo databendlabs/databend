@@ -121,6 +121,8 @@ impl Processor for FillInternalColumnProcessor {
                 data_block.columns().to_vec(),
                 data_block.num_rows(),
             ));
+
+            self.data_blocks.pop_front();
         }
         Ok(())
     }
