@@ -2139,6 +2139,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "common-arrow",
+ "common-ast",
  "common-base",
  "common-catalog",
  "common-exception",

@@ -17,6 +17,8 @@ use std::sync::Arc;
 use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::decimal::DecimalSize;
+use common_expression::types::DecimalDataType;
 use common_expression::types::NumberDataType;
 use common_expression::TableDataType;
 use common_expression::TableField;
@@ -141,24 +143,32 @@ fn try_from_filed_type_name(type_name: impl AsRef<str>) -> Result<TableDataType>
         Ok(TableDataType::Array(Box::new(sub_type.wrap_nullable())))
     } else {
         let number = match name.as_str() {
-            "TINYINT" => Ok(NumberDataType::Int8),
-            "SMALLINT" => Ok(NumberDataType::Int16),
-            "INT" => Ok(NumberDataType::Int32),
-            "BIGINT" => Ok(NumberDataType::Int64),
-            //"DECIMAL", "NUMERIC" type not supported
-            "FLOAT" => Ok(NumberDataType::Float32),
-            "DOUBLE" | "DOUBLE PRECISION" => Ok(NumberDataType::Float64),
-
-            "BINARY" | "STRING" => return Ok(TableDataType::String),
-            // boolean
-            "BOOLEAN" => return Ok(TableDataType::Boolean),
-            // timestamp
-            "TIMESTAMP" => return Ok(TableDataType::Timestamp),
-            "DATE" => return Ok(TableDataType::Date),
-            _ => Err(ErrorCode::IllegalDataType(format!(
-                "Unsupported data type: {}",
-                name
-            ))),
+            "DOUBLE PRECISION" => Ok(NumberDataType::Float64),
+            "DECIMAL" | "NUMERIC" => {
+                return Ok(TableDataType::Decimal(DecimalDataType::Decimal128(
+                    DecimalSize {
+                        precision: 10,
+                        scale: 0,
+                    },
+                )));
+            }
+            _ => {
+                let sql_tokens = common_ast::parser::tokenize_sql(name.as_str())?;
+                let backtrace = common_ast::parser::Backtrace::new();
+                match common_ast::parser::expr::type_name(common_ast::Input(
+                    &sql_tokens,
+                    common_ast::Dialect::default(),
+                    backtrace,
+                )) {
+                    Ok((_, typename)) => TableDataType::from_type_name(&typename),
+                    Err(err) => {
+                        return Err(ErrorCode::SyntaxException(format!(
+                            "Unsupported type name: {}, error: {}",
+                            name, err
+                        )));
+                    }
+                }
+            }
         }?;
         Ok(TableDataType::Number(number))
     }

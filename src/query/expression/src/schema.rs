@@ -24,6 +24,7 @@ use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::datatypes::TimeUnit;
+use common_ast::ast::TypeName;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use ethnum::i256;
@@ -1194,6 +1195,79 @@ impl TableDataType {
                 }
             }
         }
+    }
+
+    pub fn from_type_name(type_name: &TypeName) -> Result<TableDataType> {
+        let data_type = match type_name {
+            TypeName::Boolean => TableDataType::Boolean,
+            TypeName::UInt8 => TableDataType::Number(NumberDataType::UInt8),
+            TypeName::UInt16 => TableDataType::Number(NumberDataType::UInt16),
+            TypeName::UInt32 => TableDataType::Number(NumberDataType::UInt32),
+            TypeName::UInt64 => TableDataType::Number(NumberDataType::UInt64),
+            TypeName::Int8 => TableDataType::Number(NumberDataType::Int8),
+            TypeName::Int16 => TableDataType::Number(NumberDataType::Int16),
+            TypeName::Int32 => TableDataType::Number(NumberDataType::Int32),
+            TypeName::Int64 => TableDataType::Number(NumberDataType::Int64),
+            TypeName::Float32 => TableDataType::Number(NumberDataType::Float32),
+            TypeName::Float64 => TableDataType::Number(NumberDataType::Float64),
+            TypeName::Decimal { precision, scale } => {
+                TableDataType::Decimal(DecimalDataType::from_size(DecimalSize {
+                    precision: *precision,
+                    scale: *scale,
+                })?)
+            }
+            TypeName::String => TableDataType::String,
+            TypeName::Timestamp => TableDataType::Timestamp,
+            TypeName::Date => TableDataType::Date,
+            TypeName::Array(item_type) => {
+                TableDataType::Array(Box::new(Self::from_type_name(item_type)?))
+            }
+            TypeName::Map { key_type, val_type } => {
+                let key_type = Self::from_type_name(key_type)?;
+                match key_type {
+                    TableDataType::Boolean
+                    | TableDataType::String
+                    | TableDataType::Number(_)
+                    | TableDataType::Decimal(_)
+                    | TableDataType::Timestamp
+                    | TableDataType::Date => {
+                        let val_type = Self::from_type_name(val_type)?;
+                        let inner_type = TableDataType::Tuple {
+                            fields_name: vec!["key".to_string(), "value".to_string()],
+                            fields_type: vec![key_type, val_type],
+                        };
+                        TableDataType::Map(Box::new(inner_type))
+                    }
+                    _ => {
+                        return Err(ErrorCode::Internal(format!(
+                            "Invalid Map key type \'{:?}\'",
+                            key_type
+                        )));
+                    }
+                }
+            }
+            TypeName::Tuple {
+                fields_type,
+                fields_name,
+            } => TableDataType::Tuple {
+                fields_name: match fields_name {
+                    None => (0..fields_type.len())
+                        .map(|i| (i + 1).to_string())
+                        .collect(),
+                    Some(names) => names.clone(),
+                },
+                fields_type: fields_type
+                    .iter()
+                    .map(Self::from_type_name)
+                    .collect::<Result<Vec<_>>>()?,
+            },
+            TypeName::Nullable(inner_type) => {
+                TableDataType::Nullable(Box::new(Self::from_type_name(inner_type)?))
+            }
+            TypeName::Variant => TableDataType::Variant,
+        };
+
+        Ok(data_type)
     }
 }
 
