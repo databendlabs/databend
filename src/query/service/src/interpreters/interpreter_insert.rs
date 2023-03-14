@@ -28,7 +28,6 @@ use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_base::runtime::GlobalIORuntime;
-use common_catalog::plan::StageFileInfo;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_catalog::table_context::StageAttachment;
@@ -39,14 +38,13 @@ use common_expression::types::number::NumberScalar;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::BlockEntry;
+use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::Expr;
-use common_expression::Scalar as DataScalar;
-use common_expression::TypeDeserializer;
-use common_expression::TypeDeserializerImpl;
+use common_expression::Scalar;
 use common_expression::Value;
 use common_formats::FastFieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
@@ -73,6 +71,8 @@ use common_sql::Metadata;
 use common_sql::MetadataRef;
 use common_sql::NameResolutionContext;
 use common_sql::ScalarBinder;
+use common_storage::StageFileInfo;
+use common_storage::StageFilesInfo;
 use common_storages_factory::Table;
 use common_storages_fuse::io::Files;
 use common_storages_stage::StageTable;
@@ -154,7 +154,7 @@ impl InsertInterpreter {
         }
     }
 
-    async fn prepared_values(&self, values_str: &str) -> Result<(DataSchemaRef, Vec<DataScalar>)> {
+    async fn prepared_values(&self, values_str: &str) -> Result<(DataSchemaRef, Vec<Scalar>)> {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
         let tokens = tokenize_sql(values_str)?;
@@ -231,9 +231,11 @@ impl InsertInterpreter {
         let mut stage_table_info = StageTableInfo {
             schema: attachment_table_schema,
             stage_info,
-            path: path.to_string(),
-            files: vec![],
-            pattern: "".to_string(),
+            files_info: StageFilesInfo {
+                path: path.to_string(),
+                files: None,
+                pattern: None,
+            },
             files_to_copy: None,
         };
 
@@ -582,48 +584,41 @@ impl ValueSource {
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<DataBlock> {
-        let mut desers = self
+        let mut columns = self
             .schema
             .fields()
             .iter()
-            .map(|f| TypeDeserializerImpl::with_capacity(f.data_type(), estimated_rows))
+            .map(|f| ColumnBuilder::with_capacity(f.data_type(), estimated_rows))
             .collect::<Vec<_>>();
 
-        let mut rows = 0;
         let format = self.ctx.get_format_settings()?;
         let field_decoder = FastFieldDecoderValues::create_for_insert(format);
 
-        loop {
+        for row in 0.. {
             let _ = reader.ignore_white_spaces();
             if reader.eof() {
                 break;
             }
             // Not the first row
-            if rows != 0 {
+            if row != 0 {
                 reader.must_ignore_byte(b',')?;
             }
 
             self.parse_next_row(
                 &field_decoder,
                 reader,
-                &mut desers,
+                &mut columns,
                 positions,
                 &self.bind_context,
                 self.metadata.clone(),
             )
             .await?;
-            rows += 1;
         }
 
-        if rows == 0 {
-            return Ok(DataBlock::empty_with_schema(self.schema.clone()));
-        }
-
-        let columns = desers
-            .iter_mut()
-            .map(|deser| deser.finish_to_column())
+        let columns = columns
+            .into_iter()
+            .map(|col| col.build())
             .collect::<Vec<_>>();
-
         Ok(DataBlock::new_from_columns(columns))
     }
 
@@ -632,13 +627,13 @@ impl ValueSource {
         &self,
         field_decoder: &FastFieldDecoderValues,
         reader: &mut Cursor<R>,
-        desers: &mut [TypeDeserializerImpl],
+        columns: &mut [ColumnBuilder],
         positions: &mut VecDeque<usize>,
         bind_context: &BindContext,
         metadata: MetadataRef,
     ) -> Result<()> {
         let _ = reader.ignore_white_spaces();
-        let col_size = desers.len();
+        let col_size = columns.len();
         let start_pos_of_row = reader.checkpoint();
 
         // Start of the row --- '('
@@ -660,12 +655,12 @@ impl ValueSource {
             let _ = reader.ignore_white_spaces();
             let col_end = if col_idx + 1 == col_size { b')' } else { b',' };
 
-            let deser = desers
+            let col = columns
                 .get_mut(col_idx)
-                .ok_or_else(|| ErrorCode::Internal("Deserializer is None"))?;
+                .ok_or_else(|| ErrorCode::Internal("ColumnBuilder is None"))?;
 
             let (need_fallback, pop_count) = field_decoder
-                .read_field(deser, reader, positions)
+                .read_field(col, reader, positions)
                 .map(|_| {
                     let _ = reader.ignore_white_spaces();
                     let need_fallback = reader.ignore_byte(col_end).not();
@@ -673,11 +668,13 @@ impl ValueSource {
                 })
                 .unwrap_or((true, col_idx));
 
-            // Deserializer and expr-parser both will eat the end ')' of the row.
+            // ColumnBuilder and expr-parser both will eat the end ')' of the row.
             if need_fallback {
-                for deser in desers.iter_mut().take(pop_count) {
-                    deser.pop_data_value()?;
+                for col in columns.iter_mut().take(pop_count) {
+                    col.pop();
                 }
+                // rollback to start position of the row
+                reader.rollback(start_pos_of_row + 1);
                 skip_to_next_row(reader, 1)?;
                 let end_pos_of_row = reader.position();
 
@@ -704,9 +701,8 @@ impl ValueSource {
                 )
                 .await?;
 
-                let format = self.ctx.get_format_settings()?;
-                for (append_idx, deser) in desers.iter_mut().enumerate().take(col_size) {
-                    deser.append_data_value(values[append_idx].clone(), &format)?;
+                for (col, scalar) in columns.iter_mut().zip(values) {
+                    col.push(scalar.as_ref());
                 }
                 reader.set_position(end_pos_of_row);
                 return Ok(());
@@ -801,13 +797,13 @@ async fn fill_default_value(
         if field.data_type().is_nullable() {
             let expr = Expr::Constant {
                 span: None,
-                scalar: DataScalar::Null,
+                scalar: Scalar::Null,
                 data_type: field.data_type().clone(),
             };
             map_exprs.push(expr);
         } else {
             let data_type = field.data_type().clone();
-            let default_value = DataScalar::default_value(&data_type);
+            let default_value = Scalar::default_value(&data_type);
             let expr = Expr::Constant {
                 span: None,
                 scalar: default_value,
@@ -826,7 +822,7 @@ async fn exprs_to_scalar(
     name_resolution_ctx: &NameResolutionContext,
     bind_context: &BindContext,
     metadata: MetadataRef,
-) -> Result<Vec<DataScalar>> {
+) -> Result<Vec<Scalar>> {
     let schema_fields_len = schema.fields().len();
     if exprs.len() != schema_fields_len {
         return Err(ErrorCode::TableSchemaMismatch(format!(
@@ -873,7 +869,7 @@ async fn exprs_to_scalar(
     let one_row_chunk = DataBlock::new(
         vec![BlockEntry {
             data_type: DataType::Number(NumberDataType::UInt8),
-            value: Value::Scalar(DataScalar::Number(NumberScalar::UInt8(1))),
+            value: Value::Scalar(Scalar::Number(NumberScalar::UInt8(1))),
         }],
         1,
     );
@@ -883,13 +879,13 @@ async fn exprs_to_scalar(
         ctx: func_ctx,
     };
     let res = expression_transform.transform(one_row_chunk)?;
-    let data_scalars: Vec<DataScalar> = res
+    let scalars: Vec<Scalar> = res
         .columns()
         .iter()
         .skip(1)
         .map(|col| unsafe { col.value.as_ref().index_unchecked(0).to_owned() })
         .collect();
-    Ok(data_scalars)
+    Ok(scalars)
 }
 
 // TODO:(everpcpc) tmp copy from src/query/sql/src/planner/binder/copy.rs

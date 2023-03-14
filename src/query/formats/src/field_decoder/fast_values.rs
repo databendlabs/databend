@@ -19,28 +19,25 @@ use std::io::BufRead;
 use std::io::Cursor;
 
 use bstr::ByteSlice;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::read_decimal_with_size;
+use common_expression::serialize::read_decimal_with_size;
+use common_expression::serialize::uniform_date;
+use common_expression::types::array::ArrayColumnBuilder;
 use common_expression::types::date::check_date;
 use common_expression::types::decimal::Decimal;
+use common_expression::types::decimal::DecimalColumnBuilder;
+use common_expression::types::decimal::DecimalSize;
+use common_expression::types::nullable::NullableColumnBuilder;
 use common_expression::types::number::Number;
+use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::timestamp::check_timestamp;
-use common_expression::uniform_date;
-use common_expression::ArrayDeserializer;
-use common_expression::BooleanDeserializer;
-use common_expression::DateDeserializer;
-use common_expression::DecimalDeserializer;
-use common_expression::MapDeserializer;
-use common_expression::NullDeserializer;
-use common_expression::NullableDeserializer;
-use common_expression::NumberDeserializer;
-use common_expression::StringDeserializer;
-use common_expression::StructDeserializer;
-use common_expression::TimestampDeserializer;
-use common_expression::TypeDeserializer;
-use common_expression::TypeDeserializerImpl;
-use common_expression::VariantDeserializer;
+use common_expression::types::AnyType;
+use common_expression::types::NumberColumnBuilder;
+use common_expression::with_decimal_type;
+use common_expression::with_number_mapped_type;
+use common_expression::ColumnBuilder;
 use common_io::constants::FALSE_BYTES_LOWER;
 use common_io::constants::INF_BYTES_LOWER;
 use common_io::constants::NAN_BYTES_LOWER;
@@ -52,9 +49,7 @@ use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
 use common_io::cursor_ext::ReadNumberExt;
 use common_io::prelude::FormatSettings;
-use common_io::prelude::StatBuffer;
 use lexical_core::FromLexical;
-use micromarshal::Unmarshal;
 use num::cast::AsPrimitive;
 
 use crate::CommonSettings;
@@ -63,7 +58,6 @@ use crate::FieldDecoder;
 #[derive(Clone)]
 pub struct FastFieldDecoderValues {
     pub common_settings: CommonSettings,
-    format: FormatSettings,
 }
 
 impl FieldDecoder for FastFieldDecoderValues {
@@ -83,7 +77,6 @@ impl FastFieldDecoderValues {
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: format.timezone,
             },
-            format,
         }
     }
 
@@ -106,41 +99,48 @@ impl FastFieldDecoderValues {
         }
     }
 
+    fn pop_inner_values(&self, column: &mut ColumnBuilder, size: usize) {
+        for _ in 0..size {
+            let _ = column.pop();
+        }
+    }
+
     pub fn read_field<R: AsRef<[u8]>>(
         &self,
-        column: &mut TypeDeserializerImpl,
+        column: &mut ColumnBuilder,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
         match column {
-            TypeDeserializerImpl::Null(c) => self.read_null(c, reader),
-            TypeDeserializerImpl::Nullable(c) => self.read_nullable(c, reader, positions),
-            TypeDeserializerImpl::Boolean(c) => self.read_bool(c, reader),
-            TypeDeserializerImpl::Int8(c) => self.read_int(c, reader),
-            TypeDeserializerImpl::Int16(c) => self.read_int(c, reader),
-            TypeDeserializerImpl::Int32(c) => self.read_int(c, reader),
-            TypeDeserializerImpl::Int64(c) => self.read_int(c, reader),
-            TypeDeserializerImpl::UInt8(c) => self.read_int(c, reader),
-            TypeDeserializerImpl::UInt16(c) => self.read_int(c, reader),
-            TypeDeserializerImpl::UInt32(c) => self.read_int(c, reader),
-            TypeDeserializerImpl::UInt64(c) => self.read_int(c, reader),
-            TypeDeserializerImpl::Float32(c) => self.read_float(c, reader),
-            TypeDeserializerImpl::Float64(c) => self.read_float(c, reader),
-            TypeDeserializerImpl::Decimal128(c) => self.read_decimal(c, reader),
-            TypeDeserializerImpl::Decimal256(c) => self.read_decimal(c, reader),
-            TypeDeserializerImpl::Date(c) => self.read_date(c, reader, positions),
-            TypeDeserializerImpl::Timestamp(c) => self.read_timestamp(c, reader, positions),
-            TypeDeserializerImpl::String(c) => self.read_string(c, reader, positions),
-            TypeDeserializerImpl::Array(c) => self.read_array(c, reader, positions),
-            TypeDeserializerImpl::Map(c) => self.read_map(c, reader, positions),
-            TypeDeserializerImpl::Struct(c) => self.read_struct(c, reader, positions),
-            TypeDeserializerImpl::Variant(c) => self.read_variant(c, reader, positions),
+            ColumnBuilder::Null { len } => self.read_null(len, reader),
+            ColumnBuilder::Nullable(c) => self.read_nullable(c, reader, positions),
+            ColumnBuilder::Boolean(c) => self.read_bool(c, reader),
+            ColumnBuilder::Number(c) => with_number_mapped_type!(|NUM_TYPE| match c {
+                NumberColumnBuilder::NUM_TYPE(c) => {
+                    if NUM_TYPE::FLOATING {
+                        self.read_float(c, reader)
+                    } else {
+                        self.read_int(c, reader)
+                    }
+                }
+            }),
+            ColumnBuilder::Decimal(c) => with_decimal_type!(|DECIMAL_TYPE| match c {
+                DecimalColumnBuilder::DECIMAL_TYPE(c, size) => self.read_decimal(c, *size, reader),
+            }),
+            ColumnBuilder::Date(c) => self.read_date(c, reader, positions),
+            ColumnBuilder::Timestamp(c) => self.read_timestamp(c, reader, positions),
+            ColumnBuilder::String(c) => self.read_string(c, reader, positions),
+            ColumnBuilder::Array(c) => self.read_array(c, reader, positions),
+            ColumnBuilder::Map(c) => self.read_map(c, reader, positions),
+            ColumnBuilder::Tuple(fields) => self.read_tuple(fields, reader, positions),
+            ColumnBuilder::Variant(c) => self.read_variant(c, reader, positions),
+            _ => unimplemented!(),
         }
     }
 
     fn read_bool<R: AsRef<[u8]>>(
         &self,
-        column: &mut BooleanDeserializer,
+        column: &mut MutableBitmap,
         reader: &mut Cursor<R>,
     ) -> Result<()> {
         if self.match_bytes(reader, &self.common_settings().true_bytes) {
@@ -159,69 +159,59 @@ impl FastFieldDecoderValues {
         }
     }
 
-    fn read_null<R: AsRef<[u8]>>(
-        &self,
-        column: &mut NullDeserializer,
-        _reader: &mut Cursor<R>,
-    ) -> Result<()> {
-        column.de_default();
+    fn read_null<R: AsRef<[u8]>>(&self, len: &mut usize, _reader: &mut Cursor<R>) -> Result<()> {
+        *len += 1;
         Ok(())
     }
 
     fn read_nullable<R: AsRef<[u8]>>(
         &self,
-        column: &mut NullableDeserializer,
+        column: &mut NullableColumnBuilder<AnyType>,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
-        if reader.eof() {
-            column.de_default();
-        } else if reader.ignore_bytes(b"NULL") || reader.ignore_bytes(b"null") {
-            column.de_default();
-            return Ok(());
+        if reader.eof() || reader.ignore_bytes(b"NULL") || reader.ignore_bytes(b"null") {
+            column.push_null();
         } else {
-            self.read_field(column.inner.as_mut(), reader, positions)?;
+            self.read_field(&mut column.builder, reader, positions)?;
             column.validity.push(true);
         }
         Ok(())
     }
 
-    fn read_int<T, P, R: AsRef<[u8]>>(
-        &self,
-        column: &mut NumberDeserializer<T, P>,
-        reader: &mut Cursor<R>,
-    ) -> Result<()>
+    fn read_int<T, R: AsRef<[u8]>>(&self, column: &mut Vec<T>, reader: &mut Cursor<R>) -> Result<()>
     where
-        T: Number + Unmarshal<T> + StatBuffer + From<P>,
-        P: Unmarshal<P> + StatBuffer + FromLexical,
+        T: Number + From<T::Native>,
+        T::Native: FromLexical,
     {
-        let v: P = reader.read_int_text()?;
-        column.builder.push(v.into());
+        let v: T::Native = reader.read_int_text()?;
+        column.push(v.into());
         Ok(())
     }
 
-    fn read_float<T, P, R: AsRef<[u8]>>(
+    fn read_float<T, R: AsRef<[u8]>>(
         &self,
-        column: &mut NumberDeserializer<T, P>,
+        column: &mut Vec<T>,
         reader: &mut Cursor<R>,
     ) -> Result<()>
     where
-        T: Number + Unmarshal<T> + StatBuffer + From<P>,
-        P: Unmarshal<P> + StatBuffer + FromLexical,
+        T: Number + From<T::Native>,
+        T::Native: FromLexical,
     {
-        let v: P = reader.read_float_text()?;
-        column.builder.push(v.into());
+        let v: T::Native = reader.read_float_text()?;
+        column.push(v.into());
         Ok(())
     }
 
     fn read_decimal<R: AsRef<[u8]>, D: Decimal>(
         &self,
-        column: &mut DecimalDeserializer<D>,
+        column: &mut Vec<D>,
+        size: DecimalSize,
         reader: &mut Cursor<R>,
     ) -> Result<()> {
         let buf = reader.remaining_slice();
-        let (n, n_read) = read_decimal_with_size(buf, column.size, false)?;
-        column.values.push(n);
+        let (n, n_read) = read_decimal_with_size(buf, size, false)?;
+        column.push(n);
         reader.consume(n_read);
         Ok(())
     }
@@ -238,7 +228,7 @@ impl FastFieldDecoderValues {
 
     fn read_string<R: AsRef<[u8]>>(
         &self,
-        column: &mut StringDeserializer,
+        column: &mut StringColumnBuilder,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
@@ -249,32 +239,32 @@ impl FastFieldDecoderValues {
 
     fn read_date<R: AsRef<[u8]>>(
         &self,
-        column: &mut DateDeserializer,
+        column: &mut Vec<i32>,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
-        column.buffer.clear();
-        self.read_string_inner(reader, &mut column.buffer, positions)?;
-        let mut buffer_readr = Cursor::new(&column.buffer);
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf, positions)?;
+        let mut buffer_readr = Cursor::new(&buf);
         let date = buffer_readr.read_date_text(&self.common_settings().timezone)?;
         let days = uniform_date(date);
         check_date(days as i64)?;
-        column.builder.push(days);
+        column.push(days);
         Ok(())
     }
 
     fn read_timestamp<R: AsRef<[u8]>>(
         &self,
-        column: &mut TimestampDeserializer,
+        column: &mut Vec<i64>,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
-        column.buffer.clear();
-        self.read_string_inner(reader, &mut column.buffer, positions)?;
-        let mut buffer_readr = Cursor::new(&column.buffer);
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf, positions)?;
+        let mut buffer_readr = Cursor::new(&buf);
         let ts = buffer_readr.read_timestamp_text(&self.common_settings().timezone)?;
         if !buffer_readr.eof() {
-            let data = column.buffer.to_str().unwrap_or("not utf8");
+            let data = buf.to_str().unwrap_or("not utf8");
             let msg = format!(
                 "fail to deserialize timestamp, unexpected end at pos {} of {}",
                 buffer_readr.position(),
@@ -284,102 +274,137 @@ impl FastFieldDecoderValues {
         }
         let micros = ts.timestamp_micros();
         check_timestamp(micros)?;
-        column.builder.push(micros.as_());
+        column.push(micros.as_());
         Ok(())
     }
 
     fn read_array<R: AsRef<[u8]>>(
         &self,
-        column: &mut ArrayDeserializer,
+        column: &mut ArrayColumnBuilder<AnyType>,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
         reader.must_ignore_byte(b'[')?;
-        let mut idx = 0;
-        loop {
+        for idx in 0.. {
             let _ = reader.ignore_white_spaces();
             if reader.ignore_byte(b']') {
                 break;
             }
             if idx != 0 {
-                reader.must_ignore_byte(b',')?;
+                if let Err(err) = reader.must_ignore_byte(b',') {
+                    self.pop_inner_values(&mut column.builder, idx);
+                    return Err(err.into());
+                }
             }
             let _ = reader.ignore_white_spaces();
-            self.read_field(column.inner.as_mut(), reader, positions)?;
-            idx += 1;
+            if let Err(err) = self.read_field(&mut column.builder, reader, positions) {
+                self.pop_inner_values(&mut column.builder, idx);
+                return Err(err);
+            }
         }
-
-        column.add_offset(idx);
+        column.commit_row();
         Ok(())
     }
 
     fn read_map<R: AsRef<[u8]>>(
         &self,
-        column: &mut MapDeserializer,
+        column: &mut ArrayColumnBuilder<AnyType>,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
+        const KEY: usize = 0;
+        const VALUE: usize = 1;
         reader.must_ignore_byte(b'{')?;
-        let mut idx = 0;
         let mut set = HashSet::new();
-        loop {
+        let map_builder = column.builder.as_tuple_mut().unwrap();
+        for idx in 0.. {
             let _ = reader.ignore_white_spaces();
             if reader.ignore_byte(b'}') {
                 break;
             }
             if idx != 0 {
-                reader.must_ignore_byte(b',')?;
+                if let Err(err) = reader.must_ignore_byte(b',') {
+                    self.pop_inner_values(&mut map_builder[KEY], idx);
+                    self.pop_inner_values(&mut map_builder[VALUE], idx);
+                    return Err(err.into());
+                }
             }
             let _ = reader.ignore_white_spaces();
-            self.read_field(column.key.as_mut(), reader, positions)?;
+            if let Err(err) = self.read_field(&mut map_builder[KEY], reader, positions) {
+                self.pop_inner_values(&mut map_builder[KEY], idx);
+                self.pop_inner_values(&mut map_builder[VALUE], idx);
+                return Err(err);
+            }
             // check duplicate map keys
-            let key = column.key.pop_data_value().unwrap();
+            let key = map_builder[KEY].pop().unwrap();
             if set.contains(&key) {
-                column.add_offset(idx);
+                self.pop_inner_values(&mut map_builder[KEY], idx);
+                self.pop_inner_values(&mut map_builder[VALUE], idx);
                 return Err(ErrorCode::BadBytes(
                     "map keys have to be unique".to_string(),
                 ));
             }
             set.insert(key.clone());
-            column.key.append_data_value(key, &self.format)?;
+            map_builder[KEY].push(key.as_ref());
             let _ = reader.ignore_white_spaces();
-            reader.must_ignore_byte(b':')?;
+            if let Err(err) = reader.must_ignore_byte(b':') {
+                self.pop_inner_values(&mut map_builder[KEY], idx + 1);
+                self.pop_inner_values(&mut map_builder[VALUE], idx);
+                return Err(err.into());
+            }
             let _ = reader.ignore_white_spaces();
-            self.read_field(column.value.as_mut(), reader, positions)?;
-            idx += 1;
+            if let Err(err) = self.read_field(&mut map_builder[VALUE], reader, positions) {
+                self.pop_inner_values(&mut map_builder[KEY], idx + 1);
+                self.pop_inner_values(&mut map_builder[VALUE], idx);
+                return Err(err);
+            }
         }
-
-        column.add_offset(idx);
+        column.commit_row();
         Ok(())
     }
 
-    fn read_struct<R: AsRef<[u8]>>(
+    fn read_tuple<R: AsRef<[u8]>>(
         &self,
-        column: &mut StructDeserializer,
+        fields: &mut [ColumnBuilder],
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
         reader.must_ignore_byte(b'(')?;
-        for (idx, inner) in column.inners.iter_mut().enumerate() {
+        for idx in 0..fields.len() {
             let _ = reader.ignore_white_spaces();
             if idx != 0 {
-                reader.must_ignore_byte(b',')?;
+                if let Err(err) = reader.must_ignore_byte(b',') {
+                    for field in fields.iter_mut().take(idx) {
+                        self.pop_inner_values(field, 1);
+                    }
+                    return Err(err.into());
+                }
             }
             let _ = reader.ignore_white_spaces();
-            self.read_field(inner, reader, positions)?;
+            if let Err(err) = self.read_field(&mut fields[idx], reader, positions) {
+                for field in fields.iter_mut().take(idx) {
+                    self.pop_inner_values(field, 1);
+                }
+                return Err(err);
+            }
         }
-        reader.must_ignore_byte(b')')?;
+        if let Err(err) = reader.must_ignore_byte(b')') {
+            for field in fields.iter_mut() {
+                self.pop_inner_values(field, 1);
+            }
+            return Err(err.into());
+        }
         Ok(())
     }
 
     fn read_variant<R: AsRef<[u8]>>(
         &self,
-        column: &mut VariantDeserializer,
+        column: &mut StringColumnBuilder,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
-        self.read_string_inner(reader, &mut column.builder.data, positions)?;
-        column.builder.commit_row();
+        self.read_string_inner(reader, &mut column.data, positions)?;
+        column.commit_row();
         Ok(())
     }
 }

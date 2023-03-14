@@ -19,7 +19,6 @@ mod partition_statistics;
 mod projection;
 mod pruning_statistics;
 mod pushdown;
-mod stage_file_info;
 
 pub use datasource::*;
 pub use internal_column::*;
@@ -28,5 +27,3 @@ pub use partition_statistics::PartStatistics;
 pub use projection::Projection;
 pub use pruning_statistics::PruningStatistics;
 pub use pushdown::*;
-pub use stage_file_info::StageFileInfo;
-pub use stage_file_info::StageFileStatus;

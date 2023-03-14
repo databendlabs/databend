@@ -18,10 +18,8 @@ use common_exception::Result;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::DataType;
 use common_expression::Column;
+use common_expression::ColumnBuilder;
 use common_expression::HashMethodFixedKeys;
-use common_expression::TypeDeserializer;
-use common_expression::TypeDeserializerImpl;
-use common_io::prelude::FormatSettings;
 
 use crate::pipelines::processors::AggregatorParams;
 
@@ -115,23 +113,22 @@ impl<'a> GroupColumnsBuilder for SerializedKeysGroupColumnsBuilder<'a> {
     }
 
     fn finish(mut self) -> Result<Vec<Column>> {
-        if let Some(mut builder) = self.single_builder.take() {
-            let col = builder.finish_to_column();
-            return Ok(vec![col]);
+        if let Some(builder) = self.single_builder.take() {
+            let col = builder.build();
+            return Ok(vec![Column::String(col)]);
         }
 
         let rows = self.data.len();
         let keys = self.data.as_mut_slice();
 
         let mut res = Vec::with_capacity(self.group_data_types.len());
-        let format = FormatSettings::default();
         for data_type in self.group_data_types.iter() {
-            let mut deserializer = TypeDeserializerImpl::with_capacity(data_type, rows);
+            let mut column = ColumnBuilder::with_capacity(data_type, rows);
 
             for (_, key) in keys.iter_mut().enumerate() {
-                deserializer.de_binary(key, &format)?;
+                column.push_binary(key)?;
             }
-            res.push(deserializer.finish_to_column());
+            res.push(column.build());
         }
 
         Ok(res)

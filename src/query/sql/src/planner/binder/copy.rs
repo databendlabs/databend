@@ -34,6 +34,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageInfo;
+use common_storage::StageFilesInfo;
 use common_users::UserApiProvider;
 use tracing::debug;
 
@@ -205,15 +206,18 @@ impl<'a> Binder {
         let (mut stage_info, path) =
             parse_stage_location_v2(&self.ctx, src_stage, src_path).await?;
         self.apply_stage_options(stmt, &mut stage_info).await?;
+        let files_info = StageFilesInfo {
+            path,
+            files: stmt.files.clone(),
+            pattern: stmt.pattern.clone(),
+        };
 
         let from = DataSourcePlan {
             catalog: dst_catalog_name.to_string(),
             source_info: DataSourceInfo::StageSource(StageTableInfo {
                 schema: table.schema(),
                 stage_info,
-                path,
-                files: stmt.files.clone(),
-                pattern: stmt.pattern.clone(),
+                files_info,
                 files_to_copy: None,
             }),
             output_schema: table.schema(),
@@ -265,14 +269,19 @@ impl<'a> Binder {
 
         let mut stage_info = StageInfo::new_external_stage(storage_params, &path);
         self.apply_stage_options(stmt, &mut stage_info).await?;
+
+        let files_info = StageFilesInfo {
+            path,
+            files: stmt.files.clone(),
+            pattern: stmt.pattern.clone(),
+        };
+
         let from = DataSourcePlan {
             catalog: dst_catalog_name.to_string(),
             source_info: DataSourceInfo::StageSource(StageTableInfo {
                 schema: table.schema(),
                 stage_info,
-                path,
-                files: stmt.files.clone(),
-                pattern: stmt.pattern.clone(),
+                files_info,
                 files_to_copy: None,
             }),
             output_schema: table.schema(),

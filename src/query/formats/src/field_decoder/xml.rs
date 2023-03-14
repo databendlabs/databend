@@ -17,11 +17,10 @@ use std::io::BufRead;
 use std::io::Cursor;
 
 use common_exception::Result;
-use common_expression::ArrayDeserializer;
-use common_expression::MapDeserializer;
-use common_expression::StringDeserializer;
-use common_expression::StructDeserializer;
-use common_expression::VariantDeserializer;
+use common_expression::types::array::ArrayColumnBuilder;
+use common_expression::types::string::StringColumnBuilder;
+use common_expression::types::AnyType;
+use common_expression::ColumnBuilder;
 use common_io::constants::FALSE_BYTES_LOWER;
 use common_io::constants::INF_BYTES_LOWER;
 use common_io::constants::NAN_BYTES_LOWER;
@@ -88,7 +87,7 @@ impl FieldDecoderRowBased for FieldDecoderXML {
 
     fn read_string<R: AsRef<[u8]>>(
         &self,
-        column: &mut StringDeserializer,
+        column: &mut StringColumnBuilder,
         reader: &mut Cursor<R>,
         _raw: bool,
     ) -> Result<()> {
@@ -101,23 +100,21 @@ impl FieldDecoderRowBased for FieldDecoderXML {
 
     fn read_variant<R: AsRef<[u8]>>(
         &self,
-        column: &mut VariantDeserializer,
+        column: &mut StringColumnBuilder,
         reader: &mut Cursor<R>,
         _raw: bool,
     ) -> Result<()> {
         let buf = reader.remaining_slice();
+        column.put_slice(buf);
+        column.commit_row();
 
-        column.builder.put_slice(buf);
-        column.builder.commit_row();
-
-        let len = buf.len();
-        reader.consume(len);
+        reader.consume(buf.len());
         Ok(())
     }
 
     fn read_array<R: AsRef<[u8]>>(
         &self,
-        column: &mut ArrayDeserializer,
+        column: &mut ArrayColumnBuilder<AnyType>,
         reader: &mut Cursor<R>,
         _raw: bool,
     ) -> Result<()> {
@@ -127,7 +124,7 @@ impl FieldDecoderRowBased for FieldDecoderXML {
 
     fn read_map<R: AsRef<[u8]>>(
         &self,
-        column: &mut MapDeserializer,
+        column: &mut ArrayColumnBuilder<AnyType>,
         reader: &mut Cursor<R>,
         _raw: bool,
     ) -> Result<()> {
@@ -135,13 +132,13 @@ impl FieldDecoderRowBased for FieldDecoderXML {
         Ok(())
     }
 
-    fn read_struct<R: AsRef<[u8]>>(
+    fn read_tuple<R: AsRef<[u8]>>(
         &self,
-        column: &mut StructDeserializer,
+        fields: &mut Vec<ColumnBuilder>,
         reader: &mut Cursor<R>,
         _raw: bool,
     ) -> Result<()> {
-        self.nested.read_struct(column, reader, false)?;
+        self.nested.read_tuple(fields, reader, false)?;
         Ok(())
     }
 }

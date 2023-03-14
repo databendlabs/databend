@@ -1,0 +1,74 @@
+name: "Benchmark Local"
+description: "Run benchmark for local filesystem"
+inputs:
+  sha:
+    description: "commit sha"
+    required: true
+  run_id:
+    description: "benchmark run id"
+    required: true
+  dataset:
+    description: "hits/tpch"
+    required: true
+  source:
+    description: "pr/release"
+    required: true
+  source_id:
+    description: "pr_id/release_tag"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Install script dependencies
+      shell: bash
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y jq netcat bc
+
+    - name: Run Benchmark
+      working-directory: benchmark/clickbench
+      env:
+        BENCHMARK_ID: ${{ inputs.run_id }}
+        BENCHMARK_DATASET: ${{ inputs.dataset }}
+      shell: bash
+      run: |
+        ./benchmark_local.sh
+
+    - name: Prepare Metadata
+      working-directory: benchmark/clickbench
+      shell: bash
+      run: |
+        case ${{ inputs.source }} in
+          pr)
+            BENCHMARK_SYSTEM="Databend(PR#${{ inputs.source_id }})"
+            BENCHMARK_TYPE="PR"
+            ;;
+          release)
+            BENCHMARK_SYSTEM="Databend(Release@${{ inputs.source_id }})"
+            BENCHMARK_TYPE="Release"
+            ;;
+          *)
+            echo "Unspported benchmark source: ${{ inputs.source }}"
+            exit 1
+        esac
+        jq ".system = \"${BENCHMARK_SYSTEM}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+        jq ".date = \"$(date -u +%Y-%m-%d)\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+        jq ".machine = \"c5.4xlarge,gp3\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+        jq ".cluster_size = 1" <result.json >result.json.tmp && mv result.json.tmp result.json
+        jq ".comment = \"commit:${{ inputs.sha }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+        jq ".tags = [\"${BENCHMARK_TYPE}\", \"gp3\"]" <result.json >result.json.tmp && mv result.json.tmp result.json
+        jq ".extra.${{ inputs.source }} = \"${{ inputs.source_id }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+        mv result.json result-${{ inputs.dataset }}-local.json
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: benchmark-${{ inputs.dataset }}-local
+        path: benchmark/clickbench/result-${{ inputs.dataset }}-local.json
+
+    - name: Clean test data
+      working-directory: benchmark/clickbench
+      if: always()
+      shell: bash
+      run: |
+        bendsql query <"${{ inputs.dataset }}/clear.sql"

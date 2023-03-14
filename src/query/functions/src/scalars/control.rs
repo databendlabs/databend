@@ -49,7 +49,7 @@ fn unwrap_error<'a>(
             (ValueRef::Scalar(value), ValueRef::Scalar(error))
         }
         ValueRef::Column(col) => {
-            let (inner_col, _) = col.as_tuple().unwrap();
+            let inner_col = col.as_tuple().unwrap();
             let value = ValueRef::Column(inner_col.first().unwrap().clone());
             let error = ValueRef::Column(inner_col.last().unwrap().clone());
             (value, error)

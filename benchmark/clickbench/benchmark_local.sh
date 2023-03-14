@@ -3,8 +3,10 @@
 set -e
 
 BENCHMARK_ID=${BENCHMARK_ID:-$(date +%s)}
-BENCHMARK_STORAGE=${BENCHMARK_STORAGE:-fs}
 BENCHMARK_DATASET=${BENCHMARK_DATASET:-hits}
+
+echo "###############################################"
+echo "Running benchmark for databend local storage..."
 
 echo "Checking script dependencies..."
 # OpenBSD netcat do not have a version arg
@@ -54,32 +56,13 @@ echo "Waiting on databend-meta 10 seconds..."
 wait_for_port 9191 10
 echo 'Start databend-query...'
 
-case $BENCHMARK_STORAGE in
-fs)
-    nohup databend-query \
-        --meta-endpoints "127.0.0.1:9191" \
-        --storage-type fs \
-        --storage-fs-data-path "benchmark/data/${BENCHMARK_ID}/${BENCHMARK_DATASET}/" \
-        --tenant-id benchmark \
-        --cluster-id "${BENCHMARK_ID}" \
-        --storage-allow-insecure &
-    ;;
-s3)
-    nohup databend-query \
-        --meta-endpoints "127.0.0.1:9191" \
-        --storage-type s3 \
-        --storage-s3-region us-east-2 \
-        --storage-s3-bucket databend-ci \
-        --storage-s3-root "benchmark/data/${BENCHMARK_ID}/${BENCHMARK_DATASET}/" \
-        --tenant-id benchmark \
-        --cluster-id "${BENCHMARK_ID}" \
-        --storage-allow-insecure &
-    ;;
-*)
-    echo "Unknown storage type: $BENCHMARK_STORAGE"
-    exit 1
-    ;;
-esac
+nohup databend-query \
+    --meta-endpoints "127.0.0.1:9191" \
+    --storage-type fs \
+    --storage-fs-data-path "benchmark/data/${BENCHMARK_ID}/${BENCHMARK_DATASET}/" \
+    --tenant-id benchmark \
+    --cluster-id "${BENCHMARK_ID}" \
+    --storage-allow-insecure &
 
 echo "Waiting on databend-query 10 seconds..."
 wait_for_port 8000 10
@@ -89,20 +72,8 @@ bendsql connect --database "${BENCHMARK_DATASET}"
 echo "CREATE DATABASE ${BENCHMARK_DATASET};" | bendsql query
 
 # Load the data
-case $BENCHMARK_STORAGE in
-fs)
-    echo "Creating table for benchmark with native storage format..."
-    bendsql query <"${BENCHMARK_DATASET}/create_local.sql"
-    ;;
-s3)
-    echo "Creating tables for benchmark..."
-    bendsql query <"${BENCHMARK_DATASET}/create.sql"
-    ;;
-*)
-    echo "Unknown storage type: $BENCHMARK_STORAGE"
-    exit 1
-    ;;
-esac
+echo "Creating table for benchmark with native storage format..."
+bendsql query <"${BENCHMARK_DATASET}/create_local.sql"
 
 echo "Loading data..."
 load_start=$(date +%s)

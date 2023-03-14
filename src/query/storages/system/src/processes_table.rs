@@ -106,7 +106,13 @@ impl SyncSystemTable for ProcessesTable {
             }
 
             // Status info.
-            processes_status.push(ctx.get_status_info().clone().into_bytes());
+            processes_status.push(
+                process_info
+                    .status_info
+                    .clone()
+                    .unwrap_or("".to_owned())
+                    .into_bytes(),
+            );
         }
 
         Ok(DataBlock::new_from_columns(vec![

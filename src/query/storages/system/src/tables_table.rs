@@ -136,6 +136,7 @@ where TablesTable<T>: HistoryAware
             .iter()
             .map(|v| v.engine().as_bytes().to_vec())
             .collect();
+        let engines_full: Vec<Vec<u8>> = engines.clone();
         let created_owns: Vec<String> = database_tables
             .iter()
             .map(|v| {
@@ -177,6 +178,7 @@ where TablesTable<T>: HistoryAware
             StringType::from_data(databases),
             StringType::from_data(names),
             StringType::from_data(engines),
+            StringType::from_data(engines_full),
             StringType::from_data(cluster_bys),
             StringType::from_data(created_owns),
             StringType::from_data(dropped_owns),
@@ -197,6 +199,7 @@ where TablesTable<T>: HistoryAware
             TableField::new("database", TableDataType::String),
             TableField::new("name", TableDataType::String),
             TableField::new("engine", TableDataType::String),
+            TableField::new("engine_full", TableDataType::String),
             TableField::new("cluster_by", TableDataType::String),
             TableField::new("created_on", TableDataType::String),
             TableField::new("dropped_on", TableDataType::String),

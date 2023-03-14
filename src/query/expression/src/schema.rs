@@ -62,7 +62,6 @@ use crate::BlockEntry;
 use crate::Column;
 use crate::FromData;
 use crate::Scalar;
-use crate::TypeDeserializerImpl;
 use crate::Value;
 use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use crate::ARROW_EXT_TYPE_EMPTY_MAP;
@@ -253,17 +252,6 @@ impl DataSchema {
         let fields = self.fields().iter().map(|f| f.into()).collect::<Vec<_>>();
 
         ArrowSchema::from(fields).with_metadata(self.metadata.clone())
-    }
-
-    pub fn create_deserializers(&self, capacity: usize) -> Vec<TypeDeserializerImpl> {
-        let mut deserializers = Vec::with_capacity(self.num_fields());
-        for field in self.fields() {
-            deserializers.push(TypeDeserializerImpl::with_capacity(
-                &field.data_type,
-                capacity,
-            ));
-        }
-        deserializers
     }
 }
 
@@ -741,15 +729,6 @@ impl TableSchema {
 
         ArrowSchema::from(fields).with_metadata(self.metadata.clone())
     }
-
-    pub fn create_deserializers(&self, capacity: usize) -> Vec<TypeDeserializerImpl> {
-        let mut deserializers = Vec::with_capacity(self.num_fields());
-        for field in self.fields() {
-            let data_type: DataType = field.data_type().into();
-            deserializers.push(TypeDeserializerImpl::with_capacity(&data_type, capacity));
-        }
-        deserializers
-    }
 }
 
 impl DataField {
@@ -1177,7 +1156,7 @@ impl TableDataType {
                 }
                 BlockEntry {
                     data_type: DataType::Tuple(types),
-                    value: Value::Column(Column::Tuple { fields, len }),
+                    value: Value::Column(Column::Tuple(fields)),
                 }
             }
             TableDataType::Variant => {
