@@ -79,42 +79,47 @@ impl BlockCompactMutator {
     pub async fn target_select(&mut self) -> Result<()> {
         let snapshot = self.compact_params.base_snapshot.clone();
         let segment_locations = &snapshot.segments;
-
-        let schema = Arc::new(self.compact_params.base_snapshot.schema.clone());
-        // Read all segments information in parallel.
-        let segments_io = SegmentsIO::create(self.ctx.clone(), self.operator.clone(), schema);
-        let segment_infos = segments_io
-            .read_segments(segment_locations)
-            .await?
-            .into_iter()
-            .collect::<Result<Vec<_>>>()?;
-
-        let number_segments = segment_infos.len();
+        let number_segments = segment_locations.len();
         let limit = self.compact_params.limit.unwrap_or(number_segments);
-        let mut end = 0;
+
+        let mut end = 1;
         let mut segment_idx = 0;
         let mut compacted_segment_cnt = 0;
 
+        // Read all segments information in parallel.
+        let segments_io = SegmentsIO::create(
+            self.ctx.clone(),
+            self.operator.clone(),
+            Arc::new(self.compact_params.base_snapshot.schema.clone()),
+        );
         let mut checker = SegmentCompactChecker::new(self.compact_params.block_per_seg as u64);
-        for (idx, segment) in segment_infos.iter().enumerate() {
-            let segments_vec = checker.add(segment.clone());
-            for segments in segments_vec {
-                if SegmentCompactChecker::check_for_compact(&segments) {
-                    compacted_segment_cnt += segments.len();
-                    self.build_compact_tasks(segments, segment_idx);
-                } else {
-                    self.unchanged_segments_map
-                        .insert(segment_idx, segment_locations[idx].clone());
-                    merge_statistics_mut(
-                        &mut self.unchanged_segment_statistics,
-                        &segment_infos[idx].summary,
-                    )?;
+        let max_io_requests = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+        for chunk in segment_locations.chunks(max_io_requests) {
+            let segment_infos = segments_io
+                .read_segments(chunk)
+                .await?
+                .into_iter()
+                .collect::<Result<Vec<_>>>()?;
+            for (idx, segment) in segment_infos.iter().enumerate() {
+                let segments_vec = checker.add(segment.clone());
+                for segments in segments_vec {
+                    if SegmentCompactChecker::check_for_compact(&segments) {
+                        compacted_segment_cnt += segments.len();
+                        self.build_compact_tasks(segments, segment_idx);
+                    } else {
+                        self.unchanged_segments_map
+                            .insert(segment_idx, chunk[idx].clone());
+                        merge_statistics_mut(
+                            &mut self.unchanged_segment_statistics,
+                            &segment.summary,
+                        )?;
+                    }
+                    segment_idx += 1;
                 }
-                segment_idx += 1;
-            }
-            end = idx + 1;
-            if compacted_segment_cnt + checker.segments.len() >= limit {
-                break;
+                end += 1;
+                if compacted_segment_cnt + checker.segments.len() >= limit {
+                    break;
+                }
             }
         }
 
@@ -125,23 +130,25 @@ impl BlockCompactMutator {
             } else {
                 self.unchanged_segments_map
                     .insert(segment_idx, segment_locations[end - 1].clone());
-                merge_statistics_mut(
-                    &mut self.unchanged_segment_statistics,
-                    &segment_infos[end - 1].summary,
-                )?;
+                merge_statistics_mut(&mut self.unchanged_segment_statistics, &segments[0].summary)?;
             }
             segment_idx += 1;
         }
 
         if end < number_segments {
-            for i in end..number_segments {
-                self.unchanged_segments_map
-                    .insert(segment_idx, segment_locations[i].clone());
-                merge_statistics_mut(
-                    &mut self.unchanged_segment_statistics,
-                    &segment_infos[i].summary,
-                )?;
-                segment_idx += 1;
+            for chunk in segment_locations[end..].chunks(max_io_requests) {
+                let segment_infos = segments_io
+                    .read_segments(chunk)
+                    .await?
+                    .into_iter()
+                    .collect::<Result<Vec<_>>>()?;
+
+                for (segment, location) in segment_infos.into_iter().zip(chunk.iter()) {
+                    self.unchanged_segments_map
+                        .insert(segment_idx, location.clone());
+                    merge_statistics_mut(&mut self.unchanged_segment_statistics, &segment.summary)?;
+                    segment_idx += 1;
+                }
             }
         }
         Ok(())
