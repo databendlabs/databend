@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
 use common_ast::ast::CopyStmt;
 use common_ast::ast::CopyUnit;
+use common_ast::ast::FileLocation;
 use common_ast::ast::Query;
 use common_ast::ast::Statement;
 use common_ast::ast::UriLocation;
@@ -564,4 +566,28 @@ pub async fn parse_stage_location_v2(
 
     debug!("parsed stage: {stage:?}, path: {relative_path}");
     Ok((stage, relative_path))
+}
+
+pub async fn parse_file_location(
+    ctx: &Arc<dyn TableContext>,
+    location: &FileLocation,
+    connection: BTreeMap<String, String>,
+) -> Result<(StageInfo, String)> {
+    match location.clone() {
+        FileLocation::Stage(location) => {
+            parse_stage_location_v2(ctx, &location.name, &location.path).await
+        }
+        FileLocation::Uri(uri) => {
+            let mut location = UriLocation::from_uri(uri, "".to_string(), connection)?;
+            let (storage_params, path) = parse_uri_location(&mut location)?;
+            if !storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
+                Err(ErrorCode::StorageInsecure(
+                    "copy from insecure storage is not allowed",
+                ))
+            } else {
+                let stage_info = StageInfo::new_external_stage(storage_params, &path);
+                Ok((stage_info, path))
+            }
+        }
+    }
 }

@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use chrono::TimeZone;
 use chrono::Utc;
-use common_ast::ast::FileLocation;
 use common_ast::ast::Indirection;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
@@ -26,7 +25,6 @@ use common_ast::ast::Statement;
 use common_ast::ast::TableAlias;
 use common_ast::ast::TableReference;
 use common_ast::ast::TimeTravelPoint;
-use common_ast::ast::UriLocation;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
@@ -38,7 +36,6 @@ use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
-use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -47,7 +44,6 @@ use common_expression::ConstantFolder;
 use common_expression::Scalar;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageFileFormatType;
-use common_meta_app::principal::StageInfo;
 use common_storage::DataOperator;
 use common_storage::StageFilesInfo;
 use common_storages_parquet::ParquetTable;
@@ -58,8 +54,7 @@ use common_storages_view::view_table::QUERY;
 use common_users::UserApiProvider;
 use dashmap::DashMap;
 
-use crate::binder::copy::parse_stage_location_v2;
-use crate::binder::location::parse_uri_location;
+use crate::binder::copy::parse_file_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::table_args::bind_table_args;
 use crate::binder::Binder;
@@ -374,26 +369,8 @@ impl Binder {
                 options,
                 alias,
             } => {
-                let (stage_info, path) = match location.clone() {
-                    FileLocation::Stage(location) => {
-                        parse_stage_location_v2(&self.ctx, &location.name, &location.path).await?
-                    }
-                    FileLocation::Uri(uri) => {
-                        let mut location =
-                            UriLocation::from_uri(uri, "".to_string(), options.connection.clone())?;
-                        let (storage_params, path) = parse_uri_location(&mut location)?;
-                        if !storage_params.is_secure()
-                            && !GlobalConfig::instance().storage.allow_insecure
-                        {
-                            return Err(ErrorCode::StorageInsecure(
-                                "copy from insecure storage is not allowed",
-                            ));
-                        }
-                        let stage_info = StageInfo::new_external_stage(storage_params, &path);
-                        (stage_info, path)
-                    }
-                };
-
+                let (stage_info, path) =
+                    parse_file_location(&self.ctx, location, options.connection.clone()).await?;
                 let file_format_options = match &options.file_format {
                     Some(f) => self.ctx.get_file_format(f).await?,
                     None => stage_info.file_format_options.clone(),
