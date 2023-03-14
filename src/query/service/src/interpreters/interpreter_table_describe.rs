@@ -63,7 +63,7 @@ impl Interpreter for DescribeTableInterpreter {
         let schema = if tbl_info.engine() == VIEW_ENGINE {
             if let Some(query) = tbl_info.options().get(QUERY) {
                 let mut planner = Planner::new(self.ctx.clone());
-                let (plan, _, _) = planner.plan_sql(query).await?;
+                let (plan, _) = planner.plan_sql(query).await?;
                 infer_table_schema(&plan.schema())
             } else {
                 return Err(ErrorCode::Internal(

@@ -47,12 +47,19 @@ pub struct Planner {
     ctx: Arc<dyn TableContext>,
 }
 
+#[derive(Debug, Clone)]
+pub struct PlanExtras {
+    pub metadata: MetadataRef,
+    pub format: Option<String>,
+    pub stament: Statement,
+}
+
 impl Planner {
     pub fn new(ctx: Arc<dyn TableContext>) -> Self {
         Planner { ctx }
     }
 
-    pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, MetadataRef, Option<String>)> {
+    pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, PlanExtras)> {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
 
@@ -103,7 +110,11 @@ impl Planner {
                 }));
 
                 let optimized_plan = optimize(self.ctx.clone(), opt_ctx, plan)?;
-                Ok((optimized_plan, metadata.clone(), format))
+                Ok((optimized_plan, PlanExtras {
+                    metadata,
+                    format,
+                    stament: stmt,
+                }))
             }
             .await;
 
