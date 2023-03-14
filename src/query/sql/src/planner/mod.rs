@@ -36,6 +36,7 @@ pub use metadata::*;
 pub use planner::Planner;
 pub use plans::ScalarExpr;
 pub use semantic::normalize_identifier;
+pub use semantic::resolve_type_name_by_str;
 pub use semantic::validate_function_arg;
 pub use semantic::IdentifierNormalizer;
 pub use semantic::NameResolutionContext;

@@ -41,7 +41,7 @@ runs:
         reprepro includedeb stable databend_${deb_version}_arm64.deb
 
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v1
+      uses: aws-actions/configure-aws-credentials@v2
       with:
         role-duration-seconds: 900
         role-to-assume: ${{ inputs.repo_role_arn }}

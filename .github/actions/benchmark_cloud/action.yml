@@ -38,8 +38,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - uses: ./.github/actions/setup_bendsql
-
     - name: Install script dependencies
       shell: bash
       run: |
@@ -96,7 +94,7 @@ runs:
         jq ".machine = \"${{ inputs.size }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
         jq ".tags = [\"${BENCHMARK_TYPE}\", \"serverless\"]" <result.json >result.json.tmp && mv result.json.tmp result.json
         jq ".comment = \"commit:${{ inputs.sha }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
-        mv result.json result-${{ inputs.dataset }}-cloud.json
+        mv result.json result-${{ inputs.dataset }}-cloud-${{ inputs.size }}.json
 
     - name: Upload artifact
       uses: actions/upload-artifact@v3

@@ -16,6 +16,7 @@ on:
 
 permissions:
   id-token: write
+  pull-requests: write
   contents: write
 
 jobs:
@@ -484,7 +485,7 @@ jobs:
     name: upload-sha256sums
     steps:
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Get Pre-release
         uses: cardinalby/git-get-release-action@v1
         id: latest_pre_release

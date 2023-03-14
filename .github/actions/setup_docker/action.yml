@@ -29,7 +29,7 @@ runs:
 
     - name: Configure AWS Credentials
       if: inputs.ecr_role_arn
-      uses: aws-actions/configure-aws-credentials@v1
+      uses: aws-actions/configure-aws-credentials@v2
       with:
         role-to-assume: ${{ inputs.ecr_role_arn }}
         role-duration-seconds: 900

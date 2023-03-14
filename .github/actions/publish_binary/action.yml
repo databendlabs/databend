@@ -37,7 +37,7 @@ runs:
         GH_TOKEN: ${{ inputs.github_token }}
 
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v1
+      uses: aws-actions/configure-aws-credentials@v2
       with:
         role-duration-seconds: 900
         role-to-assume: ${{ inputs.repo_role_arn }}

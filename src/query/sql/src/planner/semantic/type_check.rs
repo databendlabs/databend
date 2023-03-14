@@ -518,7 +518,7 @@ impl<'a> TypeChecker<'a> {
                     span: None,
                     is_try: false,
                     expr: Box::new(scalar.as_raw_expr_with_col_name()),
-                    dest_type: DataType::from(&Self::resolve_type_name(target_type)?),
+                    dest_type: DataType::from(&resolve_type_name(target_type)?),
                 };
                 let registry = &BUILTIN_FUNCTIONS;
                 let expr = type_check::check(&raw_expr, registry)?;
@@ -541,7 +541,7 @@ impl<'a> TypeChecker<'a> {
                     span: None,
                     is_try: true,
                     expr: Box::new(scalar.as_raw_expr_with_col_name()),
-                    dest_type: DataType::from(&Self::resolve_type_name(target_type)?),
+                    dest_type: DataType::from(&resolve_type_name(target_type)?),
                 };
                 let registry = &BUILTIN_FUNCTIONS;
                 let expr = type_check::check(&raw_expr, registry)?;
@@ -2457,79 +2457,93 @@ impl<'a> TypeChecker<'a> {
             && names.contains(&name);
         Ok(result)
     }
+}
 
-    pub fn resolve_type_name(type_name: &TypeName) -> Result<TableDataType> {
-        let data_type = match type_name {
-            TypeName::Boolean => TableDataType::Boolean,
-            TypeName::UInt8 => TableDataType::Number(NumberDataType::UInt8),
-            TypeName::UInt16 => TableDataType::Number(NumberDataType::UInt16),
-            TypeName::UInt32 => TableDataType::Number(NumberDataType::UInt32),
-            TypeName::UInt64 => TableDataType::Number(NumberDataType::UInt64),
-            TypeName::Int8 => TableDataType::Number(NumberDataType::Int8),
-            TypeName::Int16 => TableDataType::Number(NumberDataType::Int16),
-            TypeName::Int32 => TableDataType::Number(NumberDataType::Int32),
-            TypeName::Int64 => TableDataType::Number(NumberDataType::Int64),
-            TypeName::Float32 => TableDataType::Number(NumberDataType::Float32),
-            TypeName::Float64 => TableDataType::Number(NumberDataType::Float64),
-            TypeName::Decimal { precision, scale } => {
-                TableDataType::Decimal(DecimalDataType::from_size(DecimalSize {
-                    precision: *precision,
-                    scale: *scale,
-                })?)
-            }
-            TypeName::String => TableDataType::String,
-            TypeName::Timestamp => TableDataType::Timestamp,
-            TypeName::Date => TableDataType::Date,
-            TypeName::Array(item_type) => {
-                TableDataType::Array(Box::new(Self::resolve_type_name(item_type)?))
-            }
-            TypeName::Map { key_type, val_type } => {
-                let key_type = Self::resolve_type_name(key_type)?;
-                match key_type {
-                    TableDataType::Boolean
-                    | TableDataType::String
-                    | TableDataType::Number(_)
-                    | TableDataType::Decimal(_)
-                    | TableDataType::Timestamp
-                    | TableDataType::Date => {
-                        let val_type = Self::resolve_type_name(val_type)?;
-                        let inner_type = TableDataType::Tuple {
-                            fields_name: vec!["key".to_string(), "value".to_string()],
-                            fields_type: vec![key_type, val_type],
-                        };
-                        TableDataType::Map(Box::new(inner_type))
-                    }
-                    _ => {
-                        return Err(ErrorCode::Internal(format!(
-                            "Invalid Map key type \'{:?}\'",
-                            key_type
-                        )));
-                    }
+pub fn resolve_type_name_by_str(name: &str) -> Result<TableDataType> {
+    let sql_tokens = common_ast::parser::tokenize_sql(name)?;
+    let backtrace = common_ast::Backtrace::new();
+    match common_ast::parser::expr::type_name(common_ast::Input(
+        &sql_tokens,
+        common_ast::Dialect::default(),
+        &backtrace,
+    )) {
+        Ok((_, typename)) => resolve_type_name(&typename),
+        Err(err) => Err(ErrorCode::SyntaxException(format!(
+            "Unsupported type name: {}, error: {}",
+            name, err
+        ))),
+    }
+}
+
+pub fn resolve_type_name(type_name: &TypeName) -> Result<TableDataType> {
+    let data_type = match type_name {
+        TypeName::Boolean => TableDataType::Boolean,
+        TypeName::UInt8 => TableDataType::Number(NumberDataType::UInt8),
+        TypeName::UInt16 => TableDataType::Number(NumberDataType::UInt16),
+        TypeName::UInt32 => TableDataType::Number(NumberDataType::UInt32),
+        TypeName::UInt64 => TableDataType::Number(NumberDataType::UInt64),
+        TypeName::Int8 => TableDataType::Number(NumberDataType::Int8),
+        TypeName::Int16 => TableDataType::Number(NumberDataType::Int16),
+        TypeName::Int32 => TableDataType::Number(NumberDataType::Int32),
+        TypeName::Int64 => TableDataType::Number(NumberDataType::Int64),
+        TypeName::Float32 => TableDataType::Number(NumberDataType::Float32),
+        TypeName::Float64 => TableDataType::Number(NumberDataType::Float64),
+        TypeName::Decimal { precision, scale } => {
+            TableDataType::Decimal(DecimalDataType::from_size(DecimalSize {
+                precision: *precision,
+                scale: *scale,
+            })?)
+        }
+        TypeName::String => TableDataType::String,
+        TypeName::Timestamp => TableDataType::Timestamp,
+        TypeName::Date => TableDataType::Date,
+        TypeName::Array(item_type) => TableDataType::Array(Box::new(resolve_type_name(item_type)?)),
+        TypeName::Map { key_type, val_type } => {
+            let key_type = resolve_type_name(key_type)?;
+            match key_type {
+                TableDataType::Boolean
+                | TableDataType::String
+                | TableDataType::Number(_)
+                | TableDataType::Decimal(_)
+                | TableDataType::Timestamp
+                | TableDataType::Date => {
+                    let val_type = resolve_type_name(val_type)?;
+                    let inner_type = TableDataType::Tuple {
+                        fields_name: vec!["key".to_string(), "value".to_string()],
+                        fields_type: vec![key_type, val_type],
+                    };
+                    TableDataType::Map(Box::new(inner_type))
+                }
+                _ => {
+                    return Err(ErrorCode::Internal(format!(
+                        "Invalid Map key type \'{:?}\'",
+                        key_type
+                    )));
                 }
             }
-            TypeName::Tuple {
-                fields_type,
-                fields_name,
-            } => TableDataType::Tuple {
-                fields_name: match fields_name {
-                    None => (0..fields_type.len())
-                        .map(|i| (i + 1).to_string())
-                        .collect(),
-                    Some(names) => names.clone(),
-                },
-                fields_type: fields_type
-                    .iter()
-                    .map(Self::resolve_type_name)
-                    .collect::<Result<Vec<_>>>()?,
+        }
+        TypeName::Tuple {
+            fields_type,
+            fields_name,
+        } => TableDataType::Tuple {
+            fields_name: match fields_name {
+                None => (0..fields_type.len())
+                    .map(|i| (i + 1).to_string())
+                    .collect(),
+                Some(names) => names.clone(),
             },
-            TypeName::Nullable(inner_type) => {
-                TableDataType::Nullable(Box::new(Self::resolve_type_name(inner_type)?))
-            }
-            TypeName::Variant => TableDataType::Variant,
-        };
+            fields_type: fields_type
+                .iter()
+                .map(resolve_type_name)
+                .collect::<Result<Vec<_>>>()?,
+        },
+        TypeName::Nullable(inner_type) => {
+            TableDataType::Nullable(Box::new(resolve_type_name(inner_type)?))
+        }
+        TypeName::Variant => TableDataType::Variant,
+    };
 
-        Ok(data_type)
-    }
+    Ok(data_type)
 }
 
 pub fn validate_function_arg(
