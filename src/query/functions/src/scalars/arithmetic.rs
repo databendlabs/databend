@@ -17,7 +17,6 @@
 use std::ops::BitAnd;
 use std::ops::BitOr;
 use std::ops::BitXor;
-use std::ops::Not;
 use std::sync::Arc;
 
 use common_expression::types::decimal::Decimal;
@@ -80,8 +79,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("minus", &["subtract", "neg", "negate"]);
     registry.register_aliases("div", &["intdiv"]);
     registry.register_aliases("modulo", &["mod"]);
-    registry.register_aliases("caret", &["exponentiation"]);
-    registry.register_aliases("caret", &["exponentiation"]);
 
     register_unary_minus(registry);
     register_string_to_number(registry);
@@ -467,12 +464,11 @@ fn register_binary_arithmetic(registry: &mut FunctionRegistry) {
 
 macro_rules! register_bitwise_not {
     ( $n:ty, $registry:expr) => {
-        type N = $n;
-        $registry.register_1_arg::<NumberType<N>, NumberType<N>, _, _>(
+        $registry.register_1_arg::<NumberType<i64>, NumberType<i64>, _, _>(
             "bit_not",
             FunctionProperty::default(),
             |_| FunctionDomain::Full,
-            |a, _| (a.as_(): N).not(),
+            |a, _| !(a.as_(): i64),
         );
     };
 }

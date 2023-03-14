@@ -156,7 +156,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
         },
         AExpr::UnaryOp { span, op, expr } => RawExpr::FunctionCall {
             span,
-            name: format!("{op:?}").to_lowercase(),
+            name: op.to_func_name(),
             params: vec![],
             args: vec![transform_expr(*expr, columns)],
         },
@@ -185,7 +185,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 }
                 (_, _) => RawExpr::FunctionCall {
                     span,
-                    name: format!("{op:?}").to_lowercase(),
+                    name: op.to_func_name(),
                     params: vec![],
                     args: vec![
                         transform_expr(*left, columns),

@@ -35,6 +35,7 @@ fn test_math() {
     test_cbrt(file);
     test_truncate(file);
     test_log_function(file);
+    test_factorial(file);
 }
 
 fn test_abs(file: &mut impl Write) {
