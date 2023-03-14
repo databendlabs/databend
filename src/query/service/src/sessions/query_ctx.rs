@@ -317,7 +317,7 @@ impl TableContext for QueryContext {
         self.shared.cacheable.store(cacheable, Ordering::Release);
     }
 
-    fn attach_query_str(&self, kind: String, query: &str) {
+    fn attach_query_str(&self, kind: String, query: String) {
         self.shared.attach_query_str(kind, query);
     }
 
