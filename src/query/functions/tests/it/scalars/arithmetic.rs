@@ -50,8 +50,8 @@ fn test_arithmetic() {
     test_carte(file, columns);
     test_square(file, columns);
     test_cube(file, columns);
-    test_abs(file,columns);
-    test_factorial(file,columns);
+    test_abs(file, columns);
+    test_factorial(file, columns);
     test_bitwise_xor(file, columns);
     test_bitwise_and(file, columns);
     test_bitwise_or(file, columns);
