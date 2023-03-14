@@ -224,4 +224,4 @@ SELECT sum(arr[0]::INT) FROM array_table GROUP BY arr[0]::INT;
 
 ## Functions
 
-See [Variant Functions](/doc/reference/functions/semi-structured-functions).
+See **SQL Functions** > **Variant Data Functions** on this documentation site.
