@@ -4,6 +4,8 @@ date: 2023-03-13
 slug: 2023-03-13-webhdfs-storage-for-backend
 tags: [databend, hadoop, hdfs, webhdfs]
 description: "Get to how to configure webhdfs storage backend!"
+cover_url: databend-on-webhdfs.png
+image: databend-on-webhdfs.png
 authors:
   - name: PsiACE
     url: https://github.com/psiace
