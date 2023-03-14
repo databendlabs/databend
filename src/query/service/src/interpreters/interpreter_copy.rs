@@ -24,6 +24,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_table_schema;
 use common_expression::DataField;
+use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableCopiedFileInfo;
@@ -58,12 +59,7 @@ impl CopyInterpreter {
         Ok(CopyInterpreter { ctx, plan })
     }
 
-    async fn build_copy_into_stage_pipeline(
-        &self,
-        stage: &StageInfo,
-        path: &str,
-        query: &Plan,
-    ) -> Result<PipelineBuildResult> {
+    async fn build_query(&self, query: &Plan) -> Result<(PipelineBuildResult, DataSchemaRef)> {
         let (s_expr, metadata, bind_context, formatted_ast) = match query {
             Plan::Query {
                 s_expr,
@@ -97,6 +93,17 @@ impl CopyInterpreter {
             })
             .collect();
         let data_schema = DataSchemaRefExt::create(fields);
+        let build_res = select_interpreter.build_pipeline().await?;
+        Ok((build_res, data_schema))
+    }
+
+    async fn build_copy_into_stage_pipeline(
+        &self,
+        stage: &StageInfo,
+        path: &str,
+        query: &Plan,
+    ) -> Result<PipelineBuildResult> {
+        let (mut build_res, data_schema) = self.build_query(query).await?;
         let table_schema = infer_table_schema(&data_schema)?;
         let stage_table_info = StageTableInfo {
             schema: table_schema,
@@ -108,14 +115,11 @@ impl CopyInterpreter {
             },
             files_to_copy: None,
         };
-
-        let mut build_res = select_interpreter.execute2().await?;
         let table = StageTable::try_create(stage_table_info)?;
-
         append2table(
             self.ctx.clone(),
-            table.clone(),
-            data_schema.clone(),
+            table,
+            data_schema,
             &mut build_res,
             false,
             true,
