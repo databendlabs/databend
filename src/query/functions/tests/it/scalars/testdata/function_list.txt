@@ -275,20 +275,20 @@ Functions overloads:
 127 bit_and(Int64 NULL, Int64 NULL) :: Int64 NULL
 0 bit_length(String) :: UInt64
 1 bit_length(String NULL) :: UInt64 NULL
-0 bit_not(Int64) :: Int64
-1 bit_not(Int64 NULL) :: Int64 NULL
-2 bit_not(Int64) :: Int64
-3 bit_not(Int64 NULL) :: Int64 NULL
-4 bit_not(Int64) :: Int64
-5 bit_not(Int64 NULL) :: Int64 NULL
-6 bit_not(Int64) :: Int64
-7 bit_not(Int64 NULL) :: Int64 NULL
-8 bit_not(Int64) :: Int64
-9 bit_not(Int64 NULL) :: Int64 NULL
-10 bit_not(Int64) :: Int64
-11 bit_not(Int64 NULL) :: Int64 NULL
-12 bit_not(Int64) :: Int64
-13 bit_not(Int64 NULL) :: Int64 NULL
+0 bit_not(UInt8) :: Int64
+1 bit_not(UInt8 NULL) :: Int64 NULL
+2 bit_not(UInt16) :: Int64
+3 bit_not(UInt16 NULL) :: Int64 NULL
+4 bit_not(UInt32) :: Int64
+5 bit_not(UInt32 NULL) :: Int64 NULL
+6 bit_not(UInt64) :: Int64
+7 bit_not(UInt64 NULL) :: Int64 NULL
+8 bit_not(Int8) :: Int64
+9 bit_not(Int8 NULL) :: Int64 NULL
+10 bit_not(Int16) :: Int64
+11 bit_not(Int16 NULL) :: Int64 NULL
+12 bit_not(Int32) :: Int64
+13 bit_not(Int32 NULL) :: Int64 NULL
 14 bit_not(Int64) :: Int64
 15 bit_not(Int64 NULL) :: Int64 NULL
 0 bit_or(UInt8, UInt8) :: Int64

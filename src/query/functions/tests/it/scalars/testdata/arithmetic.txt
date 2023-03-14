@@ -1777,7 +1777,7 @@ evaluation (internal):
 
 ast            : ~a
 raw expr       : bit_not(a::Int8)
-checked expr   : bit_not<Int64>(to_int64<Int8>(a))
+checked expr   : bit_not<Int8>(a)
 evaluation:
 +--------+---------+----------------------------------------------+
 |        | a       | Output                                       |
@@ -1799,7 +1799,7 @@ evaluation (internal):
 
 ast            : ~a2
 raw expr       : bit_not(a2::UInt8 NULL)
-checked expr   : bit_not<Int64 NULL>(CAST(a2 AS Int64 NULL))
+checked expr   : bit_not<UInt8 NULL>(a2)
 evaluation:
 +--------+------------------+-------------------------------------------------------+
 |        | a2               | Output                                                |
@@ -1821,7 +1821,7 @@ evaluation (internal):
 
 ast            : ~b
 raw expr       : bit_not(b::Int16)
-checked expr   : bit_not<Int64>(to_int64<Int16>(b))
+checked expr   : bit_not<Int16>(b)
 evaluation:
 +--------+---------+----------------------------------------------+
 |        | b       | Output                                       |
@@ -1843,7 +1843,7 @@ evaluation (internal):
 
 ast            : ~c
 raw expr       : bit_not(c::UInt32)
-checked expr   : bit_not<Int64>(to_int64<UInt32>(c))
+checked expr   : bit_not<UInt32>(c)
 evaluation:
 +--------+-----------+----------------------------------------------+
 |        | c         | Output                                       |
