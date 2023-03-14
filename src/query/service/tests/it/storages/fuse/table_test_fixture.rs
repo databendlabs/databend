@@ -369,7 +369,7 @@ pub async fn expects_ok(
 
 pub async fn execute_query(ctx: Arc<QueryContext>, query: &str) -> Result<SendableDataBlockStream> {
     let mut planner = Planner::new(ctx.clone());
-    let (plan, _, _) = planner.plan_sql(query).await?;
+    let (plan, _) = planner.plan_sql(query).await?;
     let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
     executor.execute(ctx.clone()).await
 }

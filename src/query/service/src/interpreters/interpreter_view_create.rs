@@ -76,7 +76,7 @@ impl CreateViewInterpreter {
             self.plan.subquery.clone()
         } else {
             let mut planner = Planner::new(self.ctx.clone());
-            let (plan, _, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;
+            let (plan, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;
             if plan.schema().fields().len() != self.plan.column_names.len() {
                 return Err(ErrorCode::BadDataArrayLength(format!(
                     "column name length mismatch, expect {}, got {}",

@@ -56,7 +56,7 @@ impl OneBlockProcedure for SearchTablesProcedure {
             args[0]
         );
         let mut planner = Planner::new(ctx.clone());
-        let (plan, _, _) = planner.plan_sql(&query).await?;
+        let (plan, _) = planner.plan_sql(&query).await?;
 
         let stream = if let Plan::Query {
             s_expr,

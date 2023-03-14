@@ -212,6 +212,38 @@ pub struct StatementMsg {
     pub(crate) format: Option<String>,
 }
 
+impl Statement {
+    pub fn to_mask_sql(&self) -> String {
+        match self {
+            Statement::Copy(copy) => {
+                let mut copy_clone = copy.clone();
+                match &mut copy_clone.src {
+                    CopyUnit::UriLocation(location) => {
+                        location.connection = location.connection.mask()
+                    }
+                    _ => {}
+                }
+
+                match &mut copy_clone.dst {
+                    CopyUnit::UriLocation(location) => {
+                        location.connection = location.connection.mask()
+                    }
+                    _ => {}
+                }
+                format!("{}", Statement::Copy(copy_clone))
+            }
+            Statement::CreateStage(stage) => {
+                let mut stage_clone = stage.clone();
+                if let Some(location) = &mut stage_clone.location {
+                    location.connection = location.connection.mask()
+                }
+                format!("{}", Statement::CreateStage(stage_clone))
+            }
+            _ => format!("{}", self),
+        }
+    }
+}
+
 impl Display for Statement {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {

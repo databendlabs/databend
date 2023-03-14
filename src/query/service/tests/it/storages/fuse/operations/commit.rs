@@ -379,7 +379,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn attach_query_str(&self, _kind: String, _query: &str) {
+    fn attach_query_str(&self, _kind: String, _query: String) {
         todo!()
     }
 
