@@ -2468,12 +2468,10 @@ pub fn resolve_type_name_by_str(name: &str) -> Result<TableDataType> {
         &backtrace,
     )) {
         Ok((_, typename)) => resolve_type_name(&typename),
-        Err(err) => {
-            return Err(ErrorCode::SyntaxException(format!(
-                "Unsupported type name: {}, error: {}",
-                name, err
-            )));
-        }
+        Err(err) => Err(ErrorCode::SyntaxException(format!(
+            "Unsupported type name: {}, error: {}",
+            name, err
+        ))),
     }
 }
 
