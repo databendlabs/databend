@@ -51,6 +51,7 @@ runs:
         BENCHMARK_DATASET: ${{ inputs.dataset }}
         BENCHMARK_SIZE: ${{ inputs.size }}
         BENCHMARK_IMAGE_TAG: ${{ inputs.image_tag }}
+        BENCHMARK_DATABASE: clickbench
         CLOUD_EMAIL: ${{ inputs.cloud_email }}
         CLOUD_PASSWORD: ${{ inputs.cloud_password }}
         CLOUD_ORG: ${{ inputs.cloud_org }}
