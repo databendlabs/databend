@@ -75,7 +75,7 @@ async fn check_segment_column_ids(
         location: snapshot_loc.clone(),
         len_hint: None,
         ver: TableSnapshot::VERSION,
-        put_cache: true,
+        put_cache: false,
     };
 
     let snapshot = snapshot_reader.read(&params).await?;
@@ -100,7 +100,7 @@ async fn check_segment_column_ids(
                 location: seg_loc.clone(),
                 len_hint: None,
                 ver: SegmentInfo::VERSION,
-                put_cache: true,
+                put_cache: false,
             };
             let segment_info = segment_reader.read(&params).await?;
 

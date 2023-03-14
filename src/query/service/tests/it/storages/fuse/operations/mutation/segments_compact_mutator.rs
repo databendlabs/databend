@@ -621,8 +621,6 @@ struct CompactSegmentTestFixture {
     ctx: Arc<dyn TableContext>,
     data_accessor: DataOperator,
     location_gen: TableMetaLocationGenerator,
-    input_segments: Vec<Arc<SegmentInfo>>,
-    input_segment_locations: Vec<Location>,
     // blocks of input_segments, order by segment
     input_blocks: Vec<BlockMeta>,
 }
@@ -636,8 +634,6 @@ impl CompactSegmentTestFixture {
             threshold: block_per_seg,
             data_accessor,
             location_gen,
-            input_segments: vec![],
-            input_segment_locations: vec![],
             input_blocks: vec![],
         })
     }
@@ -653,33 +649,32 @@ impl CompactSegmentTestFixture {
         let block_writer = BlockWriter::new(data_accessor, location_gen);
 
         let schema = TestFixture::default_table_schema();
-        let fuse_segment_io =
-            SegmentsIO::create(self.ctx.clone(), data_accessor.clone(), schema);
+        let fuse_segment_io = SegmentsIO::create(self.ctx.clone(), data_accessor.clone(), schema);
         let max_io_requests = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
 
         let segment_writer = SegmentWriter::new(data_accessor, location_gen);
-        let seg_acc = SegmentCompactor::new(block_per_seg, max_io_requests, &fuse_segment_io,segment_writer.clone());
+        let seg_acc = SegmentCompactor::new(
+            block_per_seg,
+            max_io_requests,
+            &fuse_segment_io,
+            segment_writer.clone(),
+        );
 
-        let (segments, locations, blocks) =
+        let (locations, blocks) =
             Self::gen_segments(&block_writer, &segment_writer, num_block_of_segments).await?;
-        self.input_segments = segments;
-        self.input_segment_locations = locations;
         self.input_blocks = blocks;
         let limit = limit.unwrap_or(usize::MAX);
-        seg_acc
-            .compact(self.input_segment_locations.clone(), limit)
-            .await
+        seg_acc.compact(locations, limit).await
     }
 
     async fn gen_segments(
         block_writer: &BlockWriter<'_>,
         segment_writer: &SegmentWriter<'_>,
         block_num_of_segments: &[usize],
-    ) -> Result<(Vec<Arc<SegmentInfo>>, Vec<Location>, Vec<BlockMeta>)> {
-        let mut segments = vec![];
+    ) -> Result<(Vec<Location>, Vec<BlockMeta>)> {
         let mut locations = vec![];
         let mut collected_blocks = vec![];
-        for num_blocks in block_num_of_segments {
+        for num_blocks in block_num_of_segments.iter().rev() {
             let (schema, blocks) = TestFixture::gen_sample_blocks_ex(*num_blocks, 1, 1);
             let mut stats_acc = StatisticsAccumulator::default();
             for block in blocks {
@@ -704,11 +699,10 @@ impl CompactSegmentTestFixture {
                 col_stats,
             });
             let location = segment_writer.write_segment_no_cache(&segment_info).await?;
-            segments.push(Arc::new(segment_info));
             locations.push(location);
         }
 
-        Ok((segments, locations, collected_blocks))
+        Ok((locations, collected_blocks))
     }
 
     // verify that newly generated segments contain the proper number of blocks
@@ -724,7 +718,7 @@ impl CompactSegmentTestFixture {
                 location: x.to_string(),
                 len_hint: None,
                 ver: SegmentInfo::VERSION,
-                put_cache: true,
+                put_cache: false,
             };
 
             let seg = segment_reader.read(&load_params).await?;
@@ -799,13 +793,12 @@ impl CompactCase {
         let mut block_num_of_output_segments = vec![];
 
         // 4. input blocks should be there and in the original order
-        // for location in r.segments_locations.iter().rev() {
-        for location in r.segments_locations.iter() {
+        for location in r.segments_locations.iter().rev() {
             let load_params = LoadParams {
                 location: location.0.clone(),
                 len_hint: None,
                 ver: location.1,
-                put_cache: true,
+                put_cache: false,
             };
 
             let segment = segment_reader.read(&load_params).await?;
@@ -823,6 +816,7 @@ impl CompactCase {
                 idx += 1;
             }
         }
+        block_num_of_output_segments.reverse();
 
         // 5. statistics should be the same
         assert_eq!(
