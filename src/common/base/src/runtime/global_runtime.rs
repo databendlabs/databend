@@ -52,9 +52,9 @@ impl GlobalHttpQueryRuntime {
         let thread_num = std::cmp::max(num_cpus, num_cpus::get() / 2);
         let thread_num = std::cmp::max(2, thread_num);
 
-        GlobalInstance::set(Arc::new(GlobalHttpQueryRuntime(
-            Runtime::with_worker_threads(thread_num, Some("http-query-ctx-worker".to_owned()))?,
-        )));
+        let rt =
+            Runtime::with_worker_threads(thread_num, Some("http-query-ctx-worker".to_owned()))?;
+        GlobalInstance::set(Arc::new(GlobalHttpQueryRuntime(rt)));
         Ok(())
     }
 

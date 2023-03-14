@@ -267,6 +267,11 @@ impl QueryContextShared {
         }
     }
 
+    pub fn get_runtime(&self) -> Option<Arc<Runtime>> {
+        let query_runtime = self.runtime.read();
+        (*query_runtime).clone()
+    }
+
     pub fn attach_query_str(&self, kind: String, query: &str) {
         {
             let mut running_query = self.running_query.write();
