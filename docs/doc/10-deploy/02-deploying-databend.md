@@ -118,8 +118,8 @@ Before deploying Databend, make sure you have successfully set up your object st
 
 For information about how to manage buckets and Access Keys for your cloud object storage, refer to the user manual from the solution provider. Here are some useful links you may need:
 
-- <https://wasabi.com/wp-content/themes/wasabi/docs/Getting_Started/index.html#t=topics%2FGS-Buckets.htm%23TOC_Creating_a_Bucketbc-1&rhtocid=_5_0>
-- <https://wasabi.com/wp-content/themes/wasabi/docs/Getting_Started/index.html#t=topics%2FAssigning_an_Access_Key.htm>
+- <https://docs.wasabi.com/docs/creating-a-bucket>
+- <https://docs.wasabi.com/docs/access-keys-1>
 
 </TabItem>
 
