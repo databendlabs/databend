@@ -19,8 +19,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - uses: ./.github/actions/setup_bendsql
-
     - name: Install script dependencies
       shell: bash
       run: |

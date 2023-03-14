@@ -14,6 +14,7 @@ on:
 
 permissions:
   id-token: write
+  pull-requests: write
   contents: read
 
 env:
@@ -21,7 +22,7 @@ env:
 
 jobs:
   metadata:
-    if: github.event.workflow_run.conclusion == 'success'
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_call'
     runs-on: [self-hosted, X64, Linux, dev]
     outputs:
       sha: ${{ steps.metadata.outputs.sha }}
@@ -67,6 +68,7 @@ jobs:
           - tpch
     steps:
       - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup_bendsql
       - name: Download artifact
         run: |
           mkdir -p ./target/release
@@ -78,7 +80,7 @@ jobs:
             release)
               version=${{ needs.metadata.outputs.source_id }}
               target=x86_64-unknown-linux-gnu
-              wget -P distro -qc https://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz
+              aws s3 cp s3://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz distro/
               tar x -C ./target/release -f ./distro/databend-${version}-${target}.tar.gz --strip-components 1 bin/
               ;;
             *)
@@ -159,6 +161,7 @@ jobs:
     runs-on: [self-hosted, X64, Linux, dev]
     steps:
       - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup_bendsql
       - uses: ./.github/actions/benchmark_cloud
         with:
           sha: ${{ needs.metadata.outputs.sha }}
