@@ -162,14 +162,14 @@ impl PageIndex {
             {
                 let f = &self.cluster_key_fields[idx];
 
-                let stats = ColumnStatistics {
+                let stat = ColumnStatistics {
                     min: min.clone(),
                     max: max.clone(),
                     null_count: 1,
                     in_memory_size: 0,
                     distinct_of_values: None,
                 };
-                let domain = statistics_to_domain(Some(&stats), f.data_type());
+                let domain = statistics_to_domain(vec![&stat], f.data_type());
                 input_domains.insert(f.name().clone(), domain);
             }
 
