@@ -217,18 +217,13 @@ impl Statement {
         match self {
             Statement::Copy(copy) => {
                 let mut copy_clone = copy.clone();
-                match &mut copy_clone.src {
-                    CopyUnit::UriLocation(location) => {
-                        location.connection = location.connection.mask()
-                    }
-                    _ => {}
+
+                if let CopyUnit::UriLocation(location) = &mut copy_clone.src {
+                    location.connection = location.connection.mask()
                 }
 
-                match &mut copy_clone.dst {
-                    CopyUnit::UriLocation(location) => {
-                        location.connection = location.connection.mask()
-                    }
-                    _ => {}
+                if let CopyUnit::UriLocation(location) = &mut copy_clone.dst {
+                    location.connection = location.connection.mask()
                 }
                 format!("{}", Statement::Copy(copy_clone))
             }
