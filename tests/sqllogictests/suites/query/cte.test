@@ -365,3 +365,9 @@ query II
 select * from  (WITH source AS (select 1 as e) SELECT * FROM source) A,   (WITH source AS (select 2 as e) SELECT * FROM source) B
 ----
 1 2
+
+query II
+with v as (select * from numbers(2)) select * from v t1, (select * from v where number = 0) t2 where t1.number = 1 and t2.number = 1
+----
+
+

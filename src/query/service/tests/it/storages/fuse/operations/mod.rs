@@ -18,6 +18,7 @@ mod analyze;
 mod clustering;
 mod commit;
 mod gc;
+mod internal_column;
 mod mutation;
 mod navigate;
 mod optimize;

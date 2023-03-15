@@ -147,6 +147,7 @@ impl SubqueryRewriter {
     ) -> Result<(ScalarExpr, SExpr)> {
         match scalar {
             ScalarExpr::BoundColumnRef(_) => Ok((scalar.clone(), s_expr.clone())),
+            ScalarExpr::BoundInternalColumnRef(_) => Ok((scalar.clone(), s_expr.clone())),
 
             ScalarExpr::ConstantExpr(_) => Ok((scalar.clone(), s_expr.clone())),
 
@@ -420,6 +421,8 @@ impl SubqueryRewriter {
                     from_distinct: false,
                     mode: AggregateMode::Initial,
                     limit: None,
+                    grouping_id_index: 0,
+                    grouping_sets: vec![],
                 };
 
                 let compare = ComparisonExpr {

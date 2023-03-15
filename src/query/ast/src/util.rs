@@ -89,7 +89,7 @@ pub fn stage_name(i: Input) -> IResult<Identifier> {
     alt((
         map(
             alt((
-                rule! { (Ident | Tilde) },
+                rule! { (Ident | BitWiseNot) },
                 non_reserved_keyword(|token| token.is_reserved_ident(false)),
             )),
             |token| Identifier {

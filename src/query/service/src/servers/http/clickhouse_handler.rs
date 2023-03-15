@@ -429,7 +429,7 @@ pub fn clickhouse_router() -> impl Endpoint {
         )
         .at("/ping", get(clickhouse_ping_handler))
         .at("/replicas_status", get(clickhouse_ping_handler))
-        .with(poem::middleware::Compression)
+        .with(poem::middleware::Compression::default())
 }
 
 // default codec is always lz4

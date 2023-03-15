@@ -348,8 +348,8 @@ pub(crate) fn test_webhdfs_stage_info() -> mt::principal::StageInfo {
 
 pub(crate) fn test_stage_file() -> mt::principal::StageFile {
     let dt = NaiveDateTime::new(
-        NaiveDate::from_ymd(2022, 9, 16),
-        NaiveTime::from_hms(0, 1, 2),
+        NaiveDate::from_ymd_opt(2022, 9, 16).unwrap(),
+        NaiveTime::from_hms_opt(0, 1, 2).unwrap(),
     );
     let user_id = mt::principal::UserIdentity::new("datafuselabs", "datafuselabs.rs");
     mt::principal::StageFile {
@@ -718,8 +718,8 @@ fn test_old_stage_file() -> anyhow::Result<()> {
         let got = mt::principal::StageFile::from_pb(p).map_err(print_err)?;
 
         let dt = NaiveDateTime::new(
-            NaiveDate::from_ymd(2022, 9, 16),
-            NaiveTime::from_hms(0, 1, 2),
+            NaiveDate::from_ymd_opt(2022, 9, 16).unwrap(),
+            NaiveTime::from_hms_opt(0, 1, 2).unwrap(),
         );
         let user_id = mt::principal::UserIdentity::new("datafuselabs", "datafuselabs.rs");
         let want = mt::principal::StageFile {

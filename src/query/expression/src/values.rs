@@ -17,6 +17,8 @@ use std::hash::Hash;
 use std::io::Read;
 use std::ops::Range;
 
+use base64::engine::general_purpose;
+use base64::prelude::*;
 use common_arrow::arrow::bitmap::and;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
@@ -237,6 +239,13 @@ impl Value<AnyType> {
 
     pub fn try_downcast<T: ValueType>(&self) -> Option<Value<T>> {
         Some(self.as_ref().try_downcast::<T>()?.to_owned())
+    }
+
+    pub fn wrap_nullable(self) -> Self {
+        match self {
+            Value::Column(c) => Value::Column(c.wrap_nullable()),
+            scalar => scalar,
+        }
     }
 }
 
@@ -1481,12 +1490,12 @@ impl Column {
 
     pub fn wrap_nullable(self) -> Self {
         match self {
-            col @ Column::Nullable(_) => col,
-            col => {
-                let mut validity = MutableBitmap::with_capacity(col.len());
-                validity.extend_constant(col.len(), true);
+            column @ Column::Nullable(_) => column,
+            column => {
+                let mut validity = MutableBitmap::with_capacity(column.len());
+                validity.extend_constant(column.len(), true);
                 Column::Nullable(Box::new(NullableColumn {
-                    column: col,
+                    column,
                     validity: validity.into(),
                 }))
             }
@@ -1544,7 +1553,7 @@ impl Serialize for Column {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
         let bytes = serialize_column(self);
-        let base64_str = base64::encode(bytes);
+        let base64_str = general_purpose::STANDARD.encode(bytes);
         serializer.serialize_str(&base64_str)
     }
 }
@@ -1563,7 +1572,7 @@ impl<'de> Deserialize<'de> for Column {
 
             fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
             where E: serde::de::Error {
-                let bytes = base64::decode(v).unwrap();
+                let bytes = general_purpose::STANDARD.decode(v).unwrap();
                 let column = deserialize_column(&bytes)
                     .expect("expecting an arrow chunk with exactly one column");
                 Ok(column)

@@ -39,9 +39,9 @@ pub fn tokenize_sql(sql: &str) -> Result<Vec<Token>> {
 pub fn parse_sql<'a>(
     sql_tokens: &'a [Token<'a>],
     dialect: Dialect,
-    backtrace: &'a Backtrace,
 ) -> Result<(Statement, Option<String>)> {
-    match statement(Input(sql_tokens, dialect, backtrace)) {
+    let backtrace = Backtrace::new();
+    match statement(Input(sql_tokens, dialect, &backtrace)) {
         Ok((rest, stmts)) if rest[0].kind == TokenKind::EOI => Ok((stmts.stmt, stmts.format)),
         Ok((rest, _)) => Err(ErrorCode::SyntaxException(
             "unable to parse rest of the sql".to_string(),
@@ -58,12 +58,9 @@ pub fn parse_sql<'a>(
 }
 
 /// Parse udf function into Expr
-pub fn parse_expr<'a>(
-    sql_tokens: &'a [Token<'a>],
-    dialect: Dialect,
-    backtrace: &'a Backtrace,
-) -> Result<Expr> {
-    match expr::expr(Input(sql_tokens, dialect, backtrace)) {
+pub fn parse_expr<'a>(sql_tokens: &'a [Token<'a>], dialect: Dialect) -> Result<Expr> {
+    let backtrace = Backtrace::new();
+    match expr::expr(Input(sql_tokens, dialect, &backtrace)) {
         Ok((rest, expr)) if rest[0].kind == TokenKind::EOI => Ok(expr),
         Ok((rest, _)) => Err(ErrorCode::SyntaxException(
             "unable to parse rest of the sql".to_string(),
@@ -82,10 +79,10 @@ pub fn parse_expr<'a>(
 pub fn parse_comma_separated_exprs<'a>(
     sql_tokens: &'a [Token<'a>],
     dialect: Dialect,
-    backtrace: &'a Backtrace,
 ) -> Result<Vec<Expr>> {
+    let backtrace = Backtrace::new();
     let mut comma_separated_exprs_parser = comma_separated_list0(subexpr(0));
-    match comma_separated_exprs_parser(Input(sql_tokens, dialect, backtrace)) {
+    match comma_separated_exprs_parser(Input(sql_tokens, dialect, &backtrace)) {
         Ok((_rest, exprs)) => Ok(exprs),
         Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
             let source = sql_tokens[0].source;
@@ -100,9 +97,9 @@ pub fn parse_comma_separated_exprs<'a>(
 pub fn parser_values_with_placeholder<'a>(
     sql_tokens: &'a [Token<'a>],
     dialect: Dialect,
-    backtrace: &'a Backtrace,
 ) -> Result<Vec<Option<Expr>>> {
-    match values_with_placeholder(Input(sql_tokens, dialect, backtrace)) {
+    let backtrace = Backtrace::new();
+    match values_with_placeholder(Input(sql_tokens, dialect, &backtrace)) {
         Ok((rest, exprs)) if rest[0].kind == TokenKind::EOI => Ok(exprs),
         Ok((rest, _)) => Err(ErrorCode::SyntaxException(
             "unable to parse rest of the sql".to_string(),

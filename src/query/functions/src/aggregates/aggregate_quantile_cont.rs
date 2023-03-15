@@ -21,12 +21,15 @@ use std::sync::Arc;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check::check_number;
 use common_expression::types::decimal::*;
 use common_expression::types::number::*;
 use common_expression::types::*;
 use common_expression::with_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
+use common_expression::Expr;
+use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_io::prelude::deserialize_from_slice;
 use common_io::prelude::serialize_into_buf;
@@ -36,11 +39,13 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
+use crate::aggregates::assert_params;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::assert_unary_params;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::StateAddr;
+use crate::scalars::BUILTIN_FUNCTIONS;
 use crate::with_simple_no_number_mapped_type;
 
 const MEDIAN: u8 = 0;
@@ -259,9 +264,37 @@ where
     fn try_create(
         display_name: &str,
         return_type: DataType,
-        level: f64,
+        params: Vec<Scalar>,
         arguments: Vec<DataType>,
     ) -> Result<Arc<dyn AggregateFunction>> {
+        let level = if params.len() == 1 {
+            let level: F64 = check_number(
+                None,
+                FunctionContext::default(),
+                &Expr::<usize>::Cast {
+                    span: None,
+                    is_try: false,
+                    expr: Box::new(Expr::Constant {
+                        span: None,
+                        scalar: params[0].clone(),
+                        data_type: params[0].as_ref().infer_data_type(),
+                    }),
+                    dest_type: DataType::Number(NumberDataType::Float64),
+                },
+                &BUILTIN_FUNCTIONS,
+            )?;
+            level.0
+        } else {
+            0.5f64
+        };
+
+        if !(0.0..=1.0).contains(&level) {
+            return Err(ErrorCode::BadDataValueType(format!(
+                "level range between [0, 1], got: {:?}",
+                level
+            )));
+        }
+
         let func = AggregateQuantileContFunction::<T, State> {
             display_name: display_name.to_string(),
             return_type,
@@ -280,44 +313,13 @@ pub fn try_create_aggregate_quantile_function<const TYPE: u8>(
     params: Vec<Scalar>,
     arguments: Vec<DataType>,
 ) -> Result<AggregateFunctionRef> {
-    assert_unary_arguments(display_name, arguments.len())?;
-
-    let level = if TYPE == MEDIAN {
-        0.5f64
-    } else {
+    if TYPE == QUANTILE {
         assert_unary_params(display_name, params.len())?;
-        let param = params[0].clone();
-        match param {
-            Scalar::Decimal(d) => {
-                let f = d.to_float64();
-                if f <= 0.01 || f >= 0.99 {
-                    return Err(ErrorCode::BadDataValueType(format!(
-                        "level range between 0.01 to 0.99, got: {:?}",
-                        f
-                    )));
-                }
-                f
-            }
-            Scalar::Number(NumberScalar::UInt64(i)) => {
-                if i == 0 {
-                    0.01f64
-                } else if i == 1 {
-                    0.99f64
-                } else {
-                    return Err(ErrorCode::BadDataValueType(format!(
-                        "level range between 0.01 to 0.99, got: {:?}",
-                        i
-                    )));
-                }
-            }
-            _ => {
-                return Err(ErrorCode::BadDataValueType(format!(
-                    "level param just support float type, got: {:?}",
-                    param
-                )));
-            }
-        }
-    };
+    } else {
+        assert_params(display_name, params.len(), 0)?;
+    }
+
+    assert_unary_arguments(display_name, arguments.len())?;
 
     let data_type = arguments[0].clone();
     with_simple_no_number_mapped_type!(|T| match data_type {
@@ -328,7 +330,7 @@ pub fn try_create_aggregate_quantile_function<const TYPE: u8>(
                     AggregateQuantileContFunction::<NumberType<NUM>, State>::try_create(
                         display_name,
                         data_type,
-                        level,
+                        params,
                         arguments,
                     )
                 }
@@ -343,7 +345,7 @@ pub fn try_create_aggregate_quantile_function<const TYPE: u8>(
             AggregateQuantileContFunction::<DecimalType<i128>, State>::try_create(
                 display_name,
                 DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
-                level,
+                params,
                 arguments,
             )
         }
@@ -356,7 +358,7 @@ pub fn try_create_aggregate_quantile_function<const TYPE: u8>(
             AggregateQuantileContFunction::<DecimalType<i256>, State>::try_create(
                 display_name,
                 DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
-                level,
+                params,
                 arguments,
             )
         }

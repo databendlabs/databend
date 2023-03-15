@@ -43,6 +43,21 @@ impl ScalarExpr {
                     column_ref.column.index
                 ),
             },
+            ScalarExpr::BoundInternalColumnRef(column_ref) => RawExpr::ColumnRef {
+                span: None,
+                id: column_ref.column.internal_column.column_name().clone(),
+                data_type: column_ref.column.internal_column.data_type(),
+                display_name: format!(
+                    "{}{} (#{})",
+                    column_ref
+                        .column
+                        .table_name
+                        .as_ref()
+                        .map_or("".to_string(), |t| t.to_string() + "."),
+                    column_ref.column.internal_column.column_name().clone(),
+                    column_ref.column.index
+                ),
+            },
             ScalarExpr::ConstantExpr(constant) => RawExpr::Literal {
                 span: None,
                 lit: constant.value.clone(),
@@ -138,6 +153,21 @@ impl ScalarExpr {
                         .as_ref()
                         .map_or("".to_string(), |t| t.to_string() + "."),
                     column_ref.column.column_name.clone(),
+                    column_ref.column.index
+                ),
+            },
+            ScalarExpr::BoundInternalColumnRef(column_ref) => RawExpr::ColumnRef {
+                span: None,
+                id: column_ref.column.index,
+                data_type: column_ref.column.internal_column.data_type(),
+                display_name: format!(
+                    "{}{} (#{})",
+                    column_ref
+                        .column
+                        .table_name
+                        .as_ref()
+                        .map_or("".to_string(), |t| t.to_string() + "."),
+                    column_ref.column.internal_column.column_name().clone(),
                     column_ref.column.index
                 ),
             },

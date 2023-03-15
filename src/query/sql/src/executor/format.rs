@@ -19,6 +19,7 @@ use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_profile::ProfSpanSetRef;
 use itertools::Itertools;
 
+use super::AggregateExpand;
 use super::AggregateFinal;
 use super::AggregateFunctionDesc;
 use super::AggregatePartial;
@@ -44,6 +45,7 @@ use crate::planner::DUMMY_TABLE_INDEX;
 use crate::BaseTableColumn;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
+use crate::TableInternalColumn;
 
 impl PhysicalPlan {
     pub fn format(
@@ -65,6 +67,9 @@ fn to_format_tree(
         PhysicalPlan::Filter(plan) => filter_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::Project(plan) => project_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::EvalScalar(plan) => eval_scalar_to_format_tree(plan, metadata, prof_span_set),
+        PhysicalPlan::AggregateExpand(plan) => {
+            aggregate_expand_to_format_tree(plan, metadata, prof_span_set)
+        }
         PhysicalPlan::AggregatePartial(plan) => {
             aggregate_partial_to_format_tree(plan, metadata, prof_span_set)
         }
@@ -200,6 +205,9 @@ fn project_to_format_tree(
                     ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) =>
                         column_name,
                     ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
+                    ColumnEntry::InternalColumn(TableInternalColumn {
+                        internal_column, ..
+                    }) => internal_column.column_name(),
                 },
                 column
             )
@@ -274,11 +282,66 @@ pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata
                         column_name
                     }
                     ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
+                    ColumnEntry::InternalColumn(TableInternalColumn {
+                        internal_column, ..
+                    }) => internal_column.column_name().to_string(),
                 }
             })
             .collect::<Vec<_>>()
             .join(", ")
     )
+}
+
+fn aggregate_expand_to_format_tree(
+    plan: &AggregateExpand,
+    metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
+) -> Result<FormatTreeNode<String>> {
+    let sets = plan
+        .grouping_sets
+        .iter()
+        .map(|set| {
+            set.iter()
+                .map(|column| {
+                    let column = metadata.read().column(*column).clone();
+                    match column {
+                        ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => {
+                            column_name
+                        }
+                        ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
+                        ColumnEntry::InternalColumn(TableInternalColumn {
+                            internal_column,
+                            ..
+                        }) => internal_column.column_name().to_string(),
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .map(|s| format!("({})", s))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let mut children = vec![FormatTreeNode::new(format!("grouping sets: [{sets}]"))];
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
+    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
+        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
+        children.push(FormatTreeNode::new(format!(
+            "total process time: {process_time}ms"
+        )));
+    }
+
+    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
+
+    Ok(FormatTreeNode::with_children(
+        "AggregateExpand".to_string(),
+        children,
+    ))
 }
 
 fn aggregate_partial_to_format_tree(
@@ -294,6 +357,9 @@ fn aggregate_partial_to_format_tree(
             let name = match column {
                 ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => column_name,
                 ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
+                ColumnEntry::InternalColumn(TableInternalColumn {
+                    internal_column, ..
+                }) => internal_column.column_name().to_string(),
             };
             Ok(name)
         })
@@ -344,6 +410,9 @@ fn aggregate_final_to_format_tree(
             let name = match column {
                 ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => column_name,
                 ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
+                ColumnEntry::InternalColumn(TableInternalColumn {
+                    internal_column, ..
+                }) => internal_column.column_name().to_string(),
             };
             Ok(name)
         })
@@ -404,6 +473,11 @@ fn sort_to_format_tree(
                     ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) =>
                         column_name,
                     ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
+                    ColumnEntry::InternalColumn(TableInternalColumn {
+                        internal_column, ..
+                    }) => {
+                        internal_column.column_name().to_string()
+                    }
                 },
                 if sort_key.asc { "ASC" } else { "DESC" },
                 if sort_key.nulls_first {

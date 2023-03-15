@@ -20,7 +20,6 @@ use common_ast::ast::Identifier;
 use common_ast::ast::Statement;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
-use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
@@ -395,8 +394,7 @@ impl<'a> Binder {
         rewrite_kind_r: RewriteKind,
     ) -> Result<Plan> {
         let tokens = tokenize_sql(query)?;
-        let backtrace = Backtrace::new();
-        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
         let mut plan = self.bind_statement(bind_context, &stmt).await?;
 
         if let Plan::Query { rewrite_kind, .. } = &mut plan {

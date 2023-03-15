@@ -175,7 +175,14 @@ impl InputFormatPipe for ParquetFormatPipe {
         let op = ctx.source.get_operator()?;
         let mut reader = op.reader(&split_info.file.path).await?;
         let input_fields = Arc::new(get_used_fields(&meta.file.fields, &ctx.schema)?);
-        RowGroupInMemory::read_async(&mut reader, meta.meta.clone(), input_fields).await
+
+        RowGroupInMemory::read_async(
+            split_info.to_string(),
+            &mut reader,
+            meta.meta.clone(),
+            input_fields,
+        )
+        .await
     }
 }
 
@@ -217,6 +224,7 @@ impl DynData for SplitMeta {
 }
 
 pub struct RowGroupInMemory {
+    pub split_info: String,
     pub meta: RowGroupMetaData,
     // for input, they are in the order of schema.
     // for select, they are the fields used in query.
@@ -238,6 +246,7 @@ impl RowBatchTrait for RowGroupInMemory {
 
 impl RowGroupInMemory {
     fn read<R: Read + Seek>(
+        split_info: String,
         reader: &mut R,
         meta: RowGroupMetaData,
         fields: Arc<Vec<Field>>,
@@ -251,6 +260,7 @@ impl RowGroupInMemory {
             filed_arrays.push(data)
         }
         Ok(Self {
+            split_info,
             meta,
             field_meta_indexes,
             field_arrays: filed_arrays,
@@ -259,6 +269,7 @@ impl RowGroupInMemory {
     }
 
     async fn read_async<R: AsyncRead + AsyncSeek + Send + Unpin>(
+        split_info: String,
         reader: &mut R,
         meta: RowGroupMetaData,
         fields: Arc<Vec<Field>>,
@@ -272,6 +283,7 @@ impl RowGroupInMemory {
             filed_arrays.push(data)
         }
         Ok(Self {
+            split_info,
             meta,
             field_meta_indexes,
             field_arrays: filed_arrays,
@@ -298,9 +310,10 @@ impl RowGroupInMemory {
         }
 
         match RowGroupDeserializer::new(column_chunks, self.meta.num_rows(), None).next() {
-            None => Err(ErrorCode::Internal(
-                "deserialize from raw group: fail to get a chunk",
-            )),
+            None => Err(ErrorCode::Internal(format!(
+                "no chunk when deserialize row group {}",
+                self.split_info
+            ))),
             Some(Ok(chunk)) => Ok(chunk),
             Some(Err(e)) => Err(e.into()),
         }
@@ -389,6 +402,7 @@ impl AligningStateTrait for AligningState {
     }
 
     fn align(&mut self, read_batch: Option<ReadBatch>) -> Result<Vec<RowGroupInMemory>> {
+        let split_info = self.split_info.to_string();
         if let Some(rb) = read_batch {
             if let ReadBatch::Buffer(b) = rb {
                 self.buffers.push(b)
@@ -413,6 +427,7 @@ impl AligningStateTrait for AligningState {
             let mut row_batches = Vec::with_capacity(file_meta.row_groups.len());
             for row_group in file_meta.row_groups.into_iter() {
                 row_batches.push(RowGroupInMemory::read(
+                    split_info.clone(),
                     &mut cursor,
                     row_group,
                     fields.clone(),

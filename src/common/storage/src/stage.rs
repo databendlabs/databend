@@ -72,7 +72,8 @@ impl StageFileInfo {
             md5: meta.content_md5().map(str::to_string),
             last_modified: meta
                 .last_modified()
-                .map_or(Utc::now(), |t| Utc.timestamp(t.unix_timestamp(), 0)),
+                .map(|v| Utc.timestamp_nanos(v.unix_timestamp_nanos() as i64))
+                .unwrap_or_default(),
             etag: meta.etag().map(str::to_string),
             status: StageFileStatus::NeedCopy,
             creator: None,

@@ -1,6 +1,6 @@
 ---
-title: Tutorial - Load from an Internal Stage
-sidebar_label: Tutorial - Load from an Internal Stage
+title: Load from an Internal Stage
+sidebar_label: Load from an Internal Stage
 description:
   Load data from Databend stages.
 ---

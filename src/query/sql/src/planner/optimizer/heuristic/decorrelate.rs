@@ -60,6 +60,7 @@ use crate::ColumnEntry;
 use crate::DerivedColumn;
 use crate::IndexType;
 use crate::MetadataRef;
+use crate::TableInternalColumn;
 
 /// Decorrelate subqueries inside `s_expr`.
 ///
@@ -400,6 +401,9 @@ impl SubqueryRewriter {
                     ColumnEntry::DerivedColumn(DerivedColumn {
                         alias, data_type, ..
                     }) => (alias, data_type.clone()),
+                    ColumnEntry::InternalColumn(TableInternalColumn {
+                        internal_column, ..
+                    }) => (internal_column.column_name(), internal_column.data_type()),
                 };
                 self.derived_columns.insert(
                     *correlated_column,
@@ -469,6 +473,10 @@ impl SubqueryRewriter {
                         ColumnEntry::DerivedColumn(DerivedColumn { data_type, .. }) => {
                             data_type.clone()
                         }
+                        ColumnEntry::InternalColumn(TableInternalColumn {
+                            internal_column,
+                            ..
+                        }) => internal_column.data_type(),
                     };
                     let column_binding = ColumnBinding {
                         database_name: None,
@@ -584,6 +592,10 @@ impl SubqueryRewriter {
                             ColumnEntry::DerivedColumn(DerivedColumn { data_type, .. }) => {
                                 data_type.clone()
                             }
+                            ColumnEntry::InternalColumn(TableInternalColumn {
+                                internal_column,
+                                ..
+                            }) => internal_column.data_type(),
                         };
                         ColumnBinding {
                             database_name: None,
@@ -624,6 +636,8 @@ impl SubqueryRewriter {
                         aggregate_functions: agg_items,
                         from_distinct: aggregate.from_distinct,
                         limit: aggregate.limit,
+                        grouping_id_index: aggregate.grouping_id_index,
+                        grouping_sets: aggregate.grouping_sets.clone(),
                     }
                     .into(),
                     flatten_plan,
@@ -792,6 +806,9 @@ impl SubqueryRewriter {
                     DataType::from(data_type)
                 }
                 ColumnEntry::DerivedColumn(DerivedColumn { data_type, .. }) => data_type.clone(),
+                ColumnEntry::InternalColumn(TableInternalColumn {
+                    internal_column, ..
+                }) => internal_column.data_type(),
             };
             let right_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
                 column: ColumnBinding {

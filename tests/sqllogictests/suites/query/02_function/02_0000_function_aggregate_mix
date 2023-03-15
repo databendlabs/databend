@@ -212,6 +212,20 @@ SELECT quantile(0.6)(number) from numbers_mt(10000)
 ----
 5999
 
+query I
+SELECT quantile(0)(number) from numbers_mt(10000)
+----
+0
+
+query I
+SELECT quantile(1)(number) from numbers_mt(10000)
+----
+9999
+
+statement error 1010
+SELECT quantile(5)(number) from numbers_mt(10000)
+
+
 statement ok
 DROP DATABASE db1
 
