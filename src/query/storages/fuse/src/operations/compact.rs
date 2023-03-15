@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use storages_common_table_meta::meta::TableSnapshot;
+use tracing::info;
 
 use crate::operations::mutation::BlockCompactMutator;
 use crate::operations::mutation::CompactAggregator;
@@ -121,21 +122,24 @@ impl FuseTable {
 
         let thresholds = self.get_block_compact_thresholds();
         let schema = self.schema();
-        let column_ids = schema.to_leaf_column_id_set();
         let write_settings = self.get_write_settings();
 
-        let mut mutator = BlockCompactMutator::new(
-            ctx.clone(),
-            thresholds,
-            options,
-            column_ids,
-            self.operator.clone(),
-        );
+        let mut mutator =
+            BlockCompactMutator::new(ctx.clone(), thresholds, options, self.operator.clone());
         mutator.target_select().await?;
         if mutator.compact_tasks.is_empty() {
             return Ok(false);
         }
 
+        // Status.
+        {
+            let status = format!(
+                "begin to compact blocks, need to be compacted:{}",
+                mutator.compact_tasks.len()
+            );
+            ctx.set_status_info(&status);
+            info!(status);
+        }
         ctx.set_partitions(mutator.compact_tasks.clone())?;
 
         let all_column_indices = self.all_column_indices();

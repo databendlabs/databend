@@ -27,7 +27,6 @@ use opendal::Operator;
 use storages_common_blocks::blocks_to_parquet;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnMeta;
-use storages_common_table_meta::meta::ColumnStatistics;
 
 use crate::fuse_table::FuseStorageFormat;
 use crate::io::write::WriteSettings;
@@ -103,11 +102,7 @@ pub struct BlockBuilder {
 }
 
 impl BlockBuilder {
-    pub fn build(
-        &self,
-        data_block: DataBlock,
-        block_column_statistics: Option<HashMap<ColumnId, ColumnStatistics>>,
-    ) -> Result<BlockSerialization> {
+    pub fn build(&self, data_block: DataBlock) -> Result<BlockSerialization> {
         // TODO cluster stats
         // let (cluster_stats, block) = self.cluster_stats_gen.gen_stats_for_append(data_block)?;
 
@@ -129,11 +124,8 @@ impl BlockBuilder {
 
         let row_count = data_block.num_rows() as u64;
         let block_size = data_block.memory_size() as u64;
-        let col_stats = if let Some(col_stats) = block_column_statistics {
-            col_stats
-        } else {
-            gen_columns_statistics(&data_block, column_distinct_count, &self.source_schema)?
-        };
+        let col_stats =
+            gen_columns_statistics(&data_block, column_distinct_count, &self.source_schema)?;
 
         let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
         let (file_size, col_metas) = serialize_block(

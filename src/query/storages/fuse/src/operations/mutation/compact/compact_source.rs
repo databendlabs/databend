@@ -37,8 +37,6 @@ use crate::operations::mutation::CompactPartInfo;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::Processor;
-use crate::statistics::gen_col_stats_lite;
-use crate::statistics::reduce_block_statistics;
 
 pub struct CompactSource {
     ctx: Arc<dyn TableContext>,
@@ -159,17 +157,8 @@ impl Processor for CompactSource {
 
                 // concat blocks.
                 let new_block = DataBlock::concat(&blocks)?;
-                // generate block statistics.
-                let col_stats_lites = gen_col_stats_lite(
-                    &new_block,
-                    self.block_reader.schema().fields(),
-                    &self.block_reader.default_vals,
-                )?;
-                let col_stats = reduce_block_statistics(&stats, Some(&col_stats_lites))?;
                 // build block serialization.
-                let serialized =
-                    tokio_rayon::spawn(move || block_builder.build(new_block, Some(col_stats)))
-                        .await?;
+                let serialized = tokio_rayon::spawn(move || block_builder.build(new_block)).await?;
 
                 let start = Instant::now();
 

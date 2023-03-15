@@ -266,7 +266,7 @@ impl MergeIntoOperationAggregator {
         // serialization and compression is cpu intensive, send them to dedicated thread pool
         // and wait (asyncly, which will NOT block the executor thread)
         let block_builder = self.block_builder.clone();
-        let serialized = tokio_rayon::spawn(move || block_builder.build(new_block, None)).await?;
+        let serialized = tokio_rayon::spawn(move || block_builder.build(new_block)).await?;
 
         // persistent data
         let new_block_meta = serialized.block_meta;

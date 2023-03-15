@@ -162,7 +162,7 @@ impl AsyncAccumulatingTransform for AppendTransform {
         // 1. serialize block and index
         let block_builder = self.block_builder.clone();
         let serialized_block_state =
-            tokio_rayon::spawn(move || block_builder.build(data_block, None)).await?;
+            tokio_rayon::spawn(move || block_builder.build(data_block)).await?;
 
         let start = Instant::now();
 

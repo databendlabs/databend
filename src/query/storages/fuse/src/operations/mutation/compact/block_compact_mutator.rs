@@ -60,9 +60,9 @@ impl BlockCompactMutator {
         ctx: Arc<dyn TableContext>,
         thresholds: BlockThresholds,
         compact_params: CompactOptions,
-        column_ids: HashSet<ColumnId>,
         operator: Operator,
     ) -> Self {
+        let column_ids = compact_params.base_snapshot.schema.to_leaf_column_id_set();
         Self {
             ctx,
             operator,
