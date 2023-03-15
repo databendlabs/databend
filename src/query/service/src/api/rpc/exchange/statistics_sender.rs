@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use async_channel::Receiver;
 use async_channel::Sender;
+use common_base::runtime::GlobalQueryRuntime;
 use common_base::runtime::TrySpawn;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -63,8 +64,8 @@ impl StatisticsSender {
         let shutdown_flag = self.shutdown_flag.clone();
         let shutdown_flag_receiver = self.shutdown_flag_receiver.clone();
 
-        let spawner = ctx.clone();
-        spawner.spawn(async move {
+        let spawner = GlobalQueryRuntime::instance();
+        spawner.runtime().spawn(async move {
             let mut recv = Box::pin(flight_exchange.recv());
             let mut notified = Box::pin(shutdown_flag_receiver.recv());
 
