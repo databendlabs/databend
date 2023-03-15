@@ -15,6 +15,7 @@ on:
 permissions:
   id-token: write
   pull-requests: write
+  statuses: write
   contents: read
 
 env:
@@ -80,7 +81,7 @@ jobs:
             release)
               version=${{ needs.metadata.outputs.source_id }}
               target=x86_64-unknown-linux-gnu
-              aws s3 cp s3://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz distro/
+              aws s3 cp s3://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz distro/ --no-progress
               tar x -C ./target/release -f ./distro/databend-${version}-${target}.tar.gz --strip-components 1 bin/
               ;;
             *)
@@ -95,6 +96,15 @@ jobs:
           sudo cp ./target/release/databend-* /usr/local/bin/
           databend-query --version
           databend-meta --version
+      - name: Set github check status to pending
+        uses: Sibz/github-status-action@v1
+        with:
+          authToken: ${{ secrets.GITHUB_TOKEN }}
+          context: 'Benchmark Local / ${{ matrix.dataset }}'
+          description: 'Running'
+          state: 'pending'
+          sha: ${{ needs.metadata.outputs.sha }}
+          target_url: https://github.com/datafuselabs/databend/actions/runs/${{ github.run_id }}/jobs/${{ github.job_id }}
       - uses: ./.github/actions/benchmark_local
         with:
           sha: ${{ needs.metadata.outputs.sha }}
@@ -102,6 +112,16 @@ jobs:
           dataset: ${{ matrix.dataset }}
           source: ${{ needs.metadata.outputs.source }}
           source_id: ${{ needs.metadata.outputs.source_id }}
+      - name: Set github check status to completed
+        if: always()
+        uses: Sibz/github-status-action@v1
+        with:
+          authToken: ${{ secrets.GITHUB_TOKEN }}
+          context: 'Benchmark Local / ${{ matrix.dataset }}'
+          description: 'Completed'
+          state: ${{ job.status }}
+          sha: ${{ needs.metadata.outputs.sha }}
+          target_url: https://github.com/datafuselabs/databend/actions/runs/${{ github.run_id }}/jobs/${{ github.job_id }}
 
   docker:
     needs: metadata
@@ -166,12 +186,23 @@ jobs:
           - tpch
         size:
           - Medium
+          - Large
       fail-fast: true
       max-parallel: 1
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup_bendsql
+      - name: Set github check status to pending
+        uses: Sibz/github-status-action@v1
+        with:
+          authToken: ${{ secrets.GITHUB_TOKEN }}
+          context: 'Benchmark Cloud / ${{ matrix.dataset }}(${{ matrix.size }})'
+          description: 'Running'
+          state: 'pending'
+          sha: ${{ needs.metadata.outputs.sha }}
+          target_url: https://github.com/datafuselabs/databend/actions/runs/${{ github.run_id }}/jobs/${{ github.job_id }}
       - uses: ./.github/actions/benchmark_cloud
+        id: benchmark
         with:
           sha: ${{ needs.metadata.outputs.sha }}
           run_id: ${{ needs.metadata.outputs.run_id }}
@@ -184,6 +215,16 @@ jobs:
           cloud_password: ${{ secrets.BENCHMARK_CLOUD_PASSWORD }}
           cloud_org: ${{ secrets.BENCHMARK_CLOUD_ORG }}
           cloud_endpoint: ${{ secrets.BENCHMARK_CLOUD_ENDPOINT }}
+      - name: Set github check status to completed
+        if: always()
+        uses: Sibz/github-status-action@v1
+        with:
+          authToken: ${{ secrets.GITHUB_TOKEN }}
+          context: 'Benchmark Cloud / ${{ matrix.dataset }}(${{ matrix.size }})'
+          description: 'Completed'
+          state: ${{ job.status }}
+          sha: ${{ needs.metadata.outputs.sha }}
+          target_url: https://github.com/datafuselabs/databend/actions/runs/${{ github.run_id }}/jobs/${{ github.job_id }}
 
   comment_on_pr:
     runs-on: [self-hosted, X64, Linux, dev]
@@ -207,7 +248,7 @@ jobs:
           path: benchmark/clickbench/results/hits
       - uses: actions/download-artifact@v3
         with:
-          name: benchmark-hits-local
+          name: benchmark-tpch-local
           path: benchmark/clickbench/results/tpch
       - uses: actions/download-artifact@v3
         with:
@@ -270,20 +311,12 @@ jobs:
           aws-region: us-east-2
       - uses: actions/download-artifact@v3
         with:
-          name: benchmark-hits-local
-          path: benchmark/clickbench/results/hits
+          name: benchmark-${{ matrix.dataset }}-local
+          path: benchmark/clickbench/results/${{ matrix.dataset }}
       - uses: actions/download-artifact@v3
         with:
-          name: benchmark-hits-cloud-Medium
-          path: benchmark/clickbench/results/hits
-      - uses: actions/download-artifact@v3
-        with:
-          name: benchmark-hits-local
-          path: benchmark/clickbench/results/tpch
-      - uses: actions/download-artifact@v3
-        with:
-          name: benchmark-tpch-cloud-Medium
-          path: benchmark/clickbench/results/tpch
+          name: benchmark-${{ matrix.dataset }}-cloud-Medium
+          path: benchmark/clickbench/results/${{ matrix.dataset }}
       - name: Upload nightly results to repo.databend.rs
         working-directory: benchmark/clickbench
         run: |
