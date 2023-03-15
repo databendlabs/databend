@@ -207,7 +207,7 @@ jobs:
           path: benchmark/clickbench/results/hits
       - uses: actions/download-artifact@v3
         with:
-          name: benchmark-hits-local
+          name: benchmark-tpch-local
           path: benchmark/clickbench/results/tpch
       - uses: actions/download-artifact@v3
         with:
@@ -270,20 +270,12 @@ jobs:
           aws-region: us-east-2
       - uses: actions/download-artifact@v3
         with:
-          name: benchmark-hits-local
-          path: benchmark/clickbench/results/hits
+          name: benchmark-${{ matrix.dataset }}-local
+          path: benchmark/clickbench/results/${{ matrix.dataset }}
       - uses: actions/download-artifact@v3
         with:
-          name: benchmark-hits-cloud-Medium
-          path: benchmark/clickbench/results/hits
-      - uses: actions/download-artifact@v3
-        with:
-          name: benchmark-hits-local
-          path: benchmark/clickbench/results/tpch
-      - uses: actions/download-artifact@v3
-        with:
-          name: benchmark-tpch-cloud-Medium
-          path: benchmark/clickbench/results/tpch
+          name: benchmark-${{ matrix.dataset }}-cloud-Medium
+          path: benchmark/clickbench/results/${{ matrix.dataset }}
       - name: Upload nightly results to repo.databend.rs
         working-directory: benchmark/clickbench
         run: |
