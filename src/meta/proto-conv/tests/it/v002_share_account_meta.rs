@@ -39,8 +39,8 @@ fn test_decode_v2_share_account_meta() -> anyhow::Result<()> {
     let want = || share::ShareAccountMeta {
         account: "account".into(),
         share_id: 4,
-        share_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
-        accept_on: Some(Utc.ymd(2014, 11, 29).and_hms(12, 0, 9)),
+        share_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
+        accept_on: Some(Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap()),
     };
 
     common::test_pb_from_to(func_name!(), want())?;

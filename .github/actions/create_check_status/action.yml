@@ -16,6 +16,9 @@ inputs:
   conclusion:
     description: "check conclusion, Can be one of: action_required, cancelled, failure, neutral, success, skipped, stale, timed_out"
     required: false
+  run_id:
+    description: "external id to associate with the check run"
+    required: false
   title:
     description: "check title"
     required: true
@@ -35,6 +38,7 @@ runs:
         param_name: ${{ inputs.name }}
         param_status: ${{ inputs.status }}
         param_conclusion: ${{ inputs.conclusion }}
+        param_run_id: ${{ inputs.run_id }}
         param_title: ${{ inputs.title }}
         param_summary: ${{ inputs.summary }}
         param_url: https://github.com/datafuselabs/databend/actions/runs/${{ github.run_id }}
@@ -57,5 +61,8 @@ runs:
           };
           if (process.env.param_status === 'completed') {
             data.conclusion = process.env.param_conclusion;
+          }
+          if (process.env.param_run_id) {
+            data.external_id = process.env.param_run_id;
           }
           await github.rest.checks.create(data);

@@ -41,9 +41,10 @@ jobs:
       - name: Generate benchmark metadata
         run: |
           echo '{}' > metadata.json
-          jq ".sha = \"${{ github.event.pull_request.head.sha }}\"" <metadata.json >metadata.json.tmp && mv metadata.json.tmp metadata.json
+          jq ".sha = \"${{ github.sha }}\"" <metadata.json >metadata.json.tmp && mv metadata.json.tmp metadata.json
           jq ".run_id = \"${{ github.run_id }}\"" <metadata.json >metadata.json.tmp && mv metadata.json.tmp metadata.json
           jq ".pr_id = \"${{ github.event.pull_request.number }}\"" <metadata.json >metadata.json.tmp && mv metadata.json.tmp metadata.json
+          jq ".head_sha = \"${{ github.event.pull_request.head.sha }}\"" <metadata.json >metadata.json.tmp && mv metadata.json.tmp metadata.json
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:

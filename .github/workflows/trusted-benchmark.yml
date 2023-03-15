@@ -27,6 +27,7 @@ jobs:
     runs-on: [self-hosted, X64, Linux, dev]
     outputs:
       sha: ${{ steps.metadata.outputs.sha }}
+      head_sha: ${{ steps.metadata.outputs.head_sha }}
       run_id: ${{ steps.metadata.outputs.run_id }}
       source: ${{ steps.metadata.outputs.source }}
       source_id: ${{ steps.metadata.outputs.source_id }}
@@ -42,12 +43,14 @@ jobs:
             workflow_run)
               gh run download ${{ github.event.workflow_run.id }} --name benchmark-metadata
               echo "sha=$(jq -r '.sha' metadata.json)" >> $GITHUB_OUTPUT
+              echo "head_sha=$(jq -r '.head_sha' metadata.json)" >> $GITHUB_OUTPUT
               echo "run_id=$(jq -r '.run_id' metadata.json)" >> $GITHUB_OUTPUT
               echo "source=pr" >> $GITHUB_OUTPUT
               echo "source_id=$(jq -r '.pr_id' metadata.json)" >> $GITHUB_OUTPUT
               ;;
             workflow_call)
               echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
+              echo "head_sha=${{ github.sha }}" >> $GITHUB_OUTPUT
               echo "run_id=${{ github.run_id }}" >> $GITHUB_OUTPUT
               echo "source=release" >> $GITHUB_OUTPUT
               echo "source_id=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
@@ -58,49 +61,61 @@ jobs:
               ;;
           esac
       - uses: ./.github/actions/create_check_status
+        if: steps.metadata.outputs.source == 'pr'
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          sha: ${{ steps.metadata.outputs.sha }}
+          sha: ${{ steps.metadata.outputs.head_sha }}
+          run_id: ${{ steps.metadata.outputs.run_id }}
           name: 'Benchmark Local / hits'
           status: queued
           title: "Benchmark Local for hits"
           summary: "status: **queued**"
       - uses: ./.github/actions/create_check_status
+        if: steps.metadata.outputs.source == 'pr'
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          sha: ${{ steps.metadata.outputs.sha }}
+          sha: ${{ steps.metadata.outputs.head_sha }}
+          run_id: ${{ steps.metadata.outputs.run_id }}
           name: 'Benchmark Local / tpch'
           status: queued
           title: "Benchmark Local for tpch"
           summary: "status: **queued**"
       - uses: ./.github/actions/create_check_status
+        if: steps.metadata.outputs.source == 'pr'
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          sha: ${{ steps.metadata.outputs.sha }}
+          sha: ${{ steps.metadata.outputs.head_sha }}
+          run_id: ${{ steps.metadata.outputs.run_id }}
           name: 'Benchmark Cloud / hits(Medium)'
           status: queued
           title: "Benchmark Cloud for hits with Medium warehouse"
           summary: "status: **queued**"
       - uses: ./.github/actions/create_check_status
+        if: steps.metadata.outputs.source == 'pr'
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          sha: ${{ steps.metadata.outputs.sha }}
+          sha: ${{ steps.metadata.outputs.head_sha }}
+          run_id: ${{ steps.metadata.outputs.run_id }}
           name: 'Benchmark Cloud / tpch(Medium)'
           status: queued
           title: "Benchmark Cloud for tpch with Medium warehouse"
           summary: "status: **queued**"
       - uses: ./.github/actions/create_check_status
+        if: steps.metadata.outputs.source == 'pr'
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          sha: ${{ steps.metadata.outputs.sha }}
+          sha: ${{ steps.metadata.outputs.head_sha }}
+          run_id: ${{ steps.metadata.outputs.run_id }}
           name: 'Benchmark Cloud / hits(Large)'
           status: queued
           title: "Benchmark Cloud for hits with Large warehouse"
           summary: "status: **queued**"
       - uses: ./.github/actions/create_check_status
+        if: steps.metadata.outputs.source == 'pr'
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          sha: ${{ steps.metadata.outputs.sha }}
+          sha: ${{ steps.metadata.outputs.head_sha }}
+          run_id: ${{ steps.metadata.outputs.run_id }}
           name: 'Benchmark Cloud / tpch(Large)'
           status: queued
           title: "Benchmark Cloud for tpch with Large warehouse"
@@ -145,10 +160,12 @@ jobs:
           databend-query --version
           databend-meta --version
       - name: Set github check status to pending
+        if: steps.metadata.outputs.source == 'pr'
         uses: ./.github/actions/create_check_status
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          sha: ${{ needs.metadata.outputs.sha }}
+          sha: ${{ needs.metadata.outputs.head_sha }}
+          run_id: ${{ steps.metadata.outputs.run_id }}
           name: 'Benchmark Local / ${{ matrix.dataset }}'
           status: in_progress
           title: "Benchmark Local for ${{ matrix.dataset }}"
@@ -162,10 +179,12 @@ jobs:
           source: ${{ needs.metadata.outputs.source }}
           source_id: ${{ needs.metadata.outputs.source_id }}
       - name: Set github check status to completed
+        if: steps.metadata.outputs.source == 'pr'
         uses: ./.github/actions/create_check_status
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          sha: ${{ needs.metadata.outputs.sha }}
+          sha: ${{ needs.metadata.outputs.head_sha }}
+          run_id: ${{ steps.metadata.outputs.run_id }}
           name: 'Benchmark Local / ${{ matrix.dataset }}'
           status: completed
           conclusion: ${{ job.status }}
@@ -242,10 +261,12 @@ jobs:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup_bendsql
       - name: Set github check status to pending
+        if: steps.metadata.outputs.source == 'pr'
         uses: ./.github/actions/create_check_status
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          sha: ${{ needs.metadata.outputs.sha }}
+          sha: ${{ needs.metadata.outputs.head_sha }}
+          run_id: ${{ steps.metadata.outputs.run_id }}
           name: 'Benchmark Cloud / ${{ matrix.dataset }}(${{ matrix.size }})'
           status: in_progress
           title: "Benchmark Cloud for ${{ matrix.dataset }} with ${{ matrix.size }} warehouse"
@@ -265,10 +286,12 @@ jobs:
           cloud_org: ${{ secrets.BENCHMARK_CLOUD_ORG }}
           cloud_endpoint: ${{ secrets.BENCHMARK_CLOUD_ENDPOINT }}
       - name: Set github check status to pending
+        if: steps.metadata.outputs.source == 'pr'
         uses: ./.github/actions/create_check_status
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          sha: ${{ needs.metadata.outputs.sha }}
+          sha: ${{ needs.metadata.outputs.head_sha }}
+          run_id: ${{ steps.metadata.outputs.run_id }}
           name: 'Benchmark Cloud / ${{ matrix.dataset }}(${{ matrix.size }})'
           status: completed
           conclusion: ${{ job.status }}
