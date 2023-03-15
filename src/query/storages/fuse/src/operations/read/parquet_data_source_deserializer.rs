@@ -22,6 +22,7 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
+use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
@@ -159,7 +160,15 @@ impl Processor for DeserializeDataTransform {
             };
             self.scan_progress.incr(&progress_values);
 
-            self.output_data = Some(data_block);
+            // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
+            // `FillInternalColumnProcessor` will generate internal columns using `BlockMetaIndex` in next pipeline.
+            if self.block_reader.query_internal_columns() {
+                let meta: Option<BlockMetaInfoPtr> =
+                    Some(Box::new(part.block_meta_index().unwrap().to_owned()));
+                self.output_data = Some(data_block.add_meta(meta)?);
+            } else {
+                self.output_data = Some(data_block);
+            };
         }
 
         Ok(())

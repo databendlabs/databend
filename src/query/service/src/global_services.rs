@@ -14,6 +14,7 @@
 
 use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
+use common_base::runtime::GlobalQueryRuntime;
 use common_catalog::catalog::CatalogManager;
 use common_config::GlobalConfig;
 use common_config::InnerConfig;
@@ -47,6 +48,7 @@ impl GlobalServices {
 
         QueryLogger::init(app_name_shuffle, &config.log)?;
         GlobalIORuntime::init(config.storage.num_cpus as usize)?;
+        GlobalQueryRuntime::init(config.storage.num_cpus as usize)?;
 
         // Cluster discovery.
         ClusterDiscovery::init(config.clone()).await?;

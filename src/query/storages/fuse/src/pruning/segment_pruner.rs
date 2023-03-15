@@ -22,8 +22,8 @@ use futures_util::future;
 use storages_common_cache::LoadParams;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::Location;
 
+use super::SegmentLocation;
 use crate::io::MetaReaders;
 use crate::metrics::*;
 use crate::pruning::BlockPruner;
@@ -48,7 +48,7 @@ impl SegmentPruner {
 
     pub async fn pruning(
         &self,
-        segment_locs: Vec<Location>,
+        segment_locs: Vec<SegmentLocation>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         if segment_locs.is_empty() {
             return Ok(vec![]);
@@ -105,14 +105,14 @@ impl SegmentPruner {
         permit: OwnedSemaphorePermit,
         table_schema: TableSchemaRef,
         segment_idx: usize,
-        segment_location: Location,
+        segment_location: SegmentLocation,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let dal = pruning_ctx.dal.clone();
         let pruning_stats = pruning_ctx.pruning_stats.clone();
 
         // Keep in mind that segment_info_read must need a schema
         let segment_reader = MetaReaders::segment_info_reader(dal, table_schema.clone());
-        let (location, ver) = segment_location;
+        let (location, ver) = segment_location.location.clone();
         let segment_info = segment_reader
             .read(&LoadParams {
                 location,
@@ -148,7 +148,9 @@ impl SegmentPruner {
 
             // Block pruner.
             let block_pruner = BlockPruner::create(pruning_ctx)?;
-            block_pruner.pruning(segment_idx, &segment_info).await?
+            block_pruner
+                .pruning(segment_idx, segment_location, &segment_info)
+                .await?
         } else {
             vec![]
         };

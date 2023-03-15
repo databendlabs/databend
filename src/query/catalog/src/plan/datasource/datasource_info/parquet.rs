@@ -18,6 +18,7 @@ use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_expression::TableSchema;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableInfo;
+use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
 
 use crate::plan::datasource::datasource_info::parquet_read_options::ParquetReadOptions;
@@ -30,6 +31,7 @@ pub struct ParquetTableInfo {
 
     pub table_info: TableInfo,
     pub arrow_schema: ArrowSchema,
+    pub files_to_read: Option<Vec<StageFileInfo>>,
 }
 
 impl ParquetTableInfo {

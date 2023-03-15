@@ -568,8 +568,20 @@ pub trait Visitor<'ast>: Sized {
             walk_expr(self, selection);
         }
 
-        for expr in group_by.iter() {
-            walk_expr(self, expr);
+        match group_by {
+            Some(GroupBy::Normal(exprs)) => {
+                for expr in exprs {
+                    walk_expr(self, expr);
+                }
+            }
+            Some(GroupBy::GroupingSets(sets)) => {
+                for set in sets {
+                    for expr in set {
+                        walk_expr(self, expr);
+                    }
+                }
+            }
+            _ => {}
         }
 
         if let Some(having) = having {

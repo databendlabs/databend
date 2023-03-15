@@ -14,6 +14,8 @@ on:
 
 permissions:
   id-token: write
+  pull-requests: write
+  checks: write
   contents: read
 
 env:
@@ -21,7 +23,7 @@ env:
 
 jobs:
   metadata:
-    if: github.event.workflow_run.conclusion == 'success'
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_call'
     runs-on: [self-hosted, X64, Linux, dev]
     outputs:
       sha: ${{ steps.metadata.outputs.sha }}
@@ -55,6 +57,54 @@ jobs:
               exit 1
               ;;
           esac
+      - uses: ./.github/actions/create_check_status
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          sha: ${{ steps.metadata.outputs.sha }}
+          name: 'Benchmark Local / hits'
+          status: queued
+          title: "Benchmark Local for hits"
+          summary: "status: **queued**"
+      - uses: ./.github/actions/create_check_status
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          sha: ${{ steps.metadata.outputs.sha }}
+          name: 'Benchmark Local / tpch'
+          status: queued
+          title: "Benchmark Local for tpch"
+          summary: "status: **queued**"
+      - uses: ./.github/actions/create_check_status
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          sha: ${{ steps.metadata.outputs.sha }}
+          name: 'Benchmark Cloud / hits(Medium)'
+          status: queued
+          title: "Benchmark Cloud for hits with Medium warehouse"
+          summary: "status: **queued**"
+      - uses: ./.github/actions/create_check_status
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          sha: ${{ steps.metadata.outputs.sha }}
+          name: 'Benchmark Cloud / tpch(Medium)'
+          status: queued
+          title: "Benchmark Cloud for tpch with Medium warehouse"
+          summary: "status: **queued**"
+      - uses: ./.github/actions/create_check_status
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          sha: ${{ steps.metadata.outputs.sha }}
+          name: 'Benchmark Cloud / hits(Large)'
+          status: queued
+          title: "Benchmark Cloud for hits with Large warehouse"
+          summary: "status: **queued**"
+      - uses: ./.github/actions/create_check_status
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          sha: ${{ steps.metadata.outputs.sha }}
+          name: 'Benchmark Cloud / tpch(Large)'
+          status: queued
+          title: "Benchmark Cloud for tpch with Large warehouse"
+          summary: "status: **queued**"
 
   local:
     needs: metadata
@@ -67,6 +117,7 @@ jobs:
           - tpch
     steps:
       - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup_bendsql
       - name: Download artifact
         run: |
           mkdir -p ./target/release
@@ -78,7 +129,7 @@ jobs:
             release)
               version=${{ needs.metadata.outputs.source_id }}
               target=x86_64-unknown-linux-gnu
-              wget -P distro -qc https://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz
+              aws s3 cp s3://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz distro/ --no-progress
               tar x -C ./target/release -f ./distro/databend-${version}-${target}.tar.gz --strip-components 1 bin/
               ;;
             *)
@@ -93,13 +144,33 @@ jobs:
           sudo cp ./target/release/databend-* /usr/local/bin/
           databend-query --version
           databend-meta --version
+      - name: Set github check status to pending
+        uses: ./.github/actions/create_check_status
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          sha: ${{ needs.metadata.outputs.sha }}
+          name: 'Benchmark Local / ${{ matrix.dataset }}'
+          status: in_progress
+          title: "Benchmark Local for ${{ matrix.dataset }}"
+          summary: "status: **running**"
       - uses: ./.github/actions/benchmark_local
+        id: benchmark
         with:
           sha: ${{ needs.metadata.outputs.sha }}
           run_id: ${{ needs.metadata.outputs.run_id }}
           dataset: ${{ matrix.dataset }}
           source: ${{ needs.metadata.outputs.source }}
           source_id: ${{ needs.metadata.outputs.source_id }}
+      - name: Set github check status to completed
+        uses: ./.github/actions/create_check_status
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          sha: ${{ needs.metadata.outputs.sha }}
+          name: 'Benchmark Local / ${{ matrix.dataset }}'
+          status: completed
+          conclusion: ${{ job.status }}
+          title: "Benchmark Local for ${{ matrix.dataset }}"
+          summary: "status: **${{ job.status }}**"
 
   docker:
     needs: metadata
@@ -157,34 +228,52 @@ jobs:
     needs: [metadata, docker]
     timeout-minutes: 60
     runs-on: [self-hosted, X64, Linux, dev]
+    strategy:
+      matrix:
+        dataset:
+          - hits
+          - tpch
+        size:
+          - Medium
+          - Large
+      fail-fast: true
+      max-parallel: 1
     steps:
       - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup_bendsql
+      - name: Set github check status to pending
+        uses: ./.github/actions/create_check_status
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          sha: ${{ needs.metadata.outputs.sha }}
+          name: 'Benchmark Cloud / ${{ matrix.dataset }}(${{ matrix.size }})'
+          status: in_progress
+          title: "Benchmark Cloud for ${{ matrix.dataset }} with ${{ matrix.size }} warehouse"
+          summary: "status: **running**"
       - uses: ./.github/actions/benchmark_cloud
+        id: benchmark
         with:
           sha: ${{ needs.metadata.outputs.sha }}
           run_id: ${{ needs.metadata.outputs.run_id }}
-          dataset: hits
+          dataset: ${{ matrix.dataset }}
           source: ${{ needs.metadata.outputs.source }}
           source_id: ${{ needs.metadata.outputs.source_id }}
-          size: Medium
+          size: ${{ matrix.size }}
           image_tag: ${{ needs.docker.outputs.tag }}
           cloud_email: ${{ secrets.BENCHMARK_CLOUD_EMAIL }}
           cloud_password: ${{ secrets.BENCHMARK_CLOUD_PASSWORD }}
           cloud_org: ${{ secrets.BENCHMARK_CLOUD_ORG }}
           cloud_endpoint: ${{ secrets.BENCHMARK_CLOUD_ENDPOINT }}
-      - uses: ./.github/actions/benchmark_cloud
+      - name: Set github check status to pending
+        uses: ./.github/actions/create_check_status
         with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ needs.metadata.outputs.sha }}
-          run_id: ${{ needs.metadata.outputs.run_id }}
-          dataset: tpch
-          source: ${{ needs.metadata.outputs.source }}
-          source_id: ${{ needs.metadata.outputs.source_id }}
-          size: Medium
-          image_tag: ${{ needs.docker.outputs.tag }}
-          cloud_email: ${{ secrets.BENCHMARK_CLOUD_EMAIL }}
-          cloud_password: ${{ secrets.BENCHMARK_CLOUD_PASSWORD }}
-          cloud_org: ${{ secrets.BENCHMARK_CLOUD_ORG }}
-          cloud_endpoint: ${{ secrets.BENCHMARK_CLOUD_ENDPOINT }}
+          name: 'Benchmark Cloud / ${{ matrix.dataset }}(${{ matrix.size }})'
+          status: completed
+          conclusion: ${{ job.status }}
+          title: "Benchmark Cloud for ${{ matrix.dataset }} with ${{ matrix.size }} warehouse"
+          summary: "status: **running**"
 
   comment_on_pr:
     runs-on: [self-hosted, X64, Linux, dev]
@@ -193,7 +282,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v2
         with:
           role-to-assume: ${{ secrets.REPO_ROLE_ARN }}
           role-duration-seconds: 900
@@ -208,11 +297,19 @@ jobs:
           path: benchmark/clickbench/results/hits
       - uses: actions/download-artifact@v3
         with:
-          name: benchmark-hits-local
+          name: benchmark-hits-cloud-Large
+          path: benchmark/clickbench/results/hits
+      - uses: actions/download-artifact@v3
+        with:
+          name: benchmark-tpch-local
           path: benchmark/clickbench/results/tpch
       - uses: actions/download-artifact@v3
         with:
           name: benchmark-tpch-cloud-Medium
+          path: benchmark/clickbench/results/tpch
+      - uses: actions/download-artifact@v3
+        with:
+          name: benchmark-tpch-cloud-Large
           path: benchmark/clickbench/results/tpch
       - name: Get Report Prefix
         run: |
@@ -223,8 +320,10 @@ jobs:
         run: |
           aws s3 cp ./results/hits/result-hits-local.json ${{ env.REPORT_S3_PREFIX }}/hits-local.json
           aws s3 cp ./results/hits/result-hits-cloud-Medium.json ${{ env.REPORT_S3_PREFIX }}/hits-cloud-Medium.json
+          aws s3 cp ./results/hits/result-hits-cloud-Large.json ${{ env.REPORT_S3_PREFIX }}/hits-cloud-Large.json
           aws s3 cp ./results/tpch/result-tpch-local.json ${{ env.REPORT_S3_PREFIX }}/tpch-local.json
           aws s3 cp ./results/tpch/result-tpch-cloud-Medium.json ${{ env.REPORT_S3_PREFIX }}/tpch-cloud-Medium.json
+          aws s3 cp ./results/tpch/result-tpch-cloud-Large.json ${{ env.REPORT_S3_PREFIX }}/tpch-cloud-Large.json
       - name: Get latest release clickbench result
         working-directory: benchmark/clickbench
         run: |
@@ -247,7 +346,8 @@ jobs:
           token: ${{ github.token }}
           body: |
             ![local](https://img.shields.io/static/v1?label=AWS%20EC2&message=c5.4xlarge&color=orange&logo=amazonec2)
-            ![cloud](https://img.shields.io/static/v1?label=DatabendCloud&message=Medium&color=blue&logo=icloud)
+            ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Medium&color=blue&logo=icloud)
+            ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Large&color=blue&logo=icloud)
             ## ClickBench Report
             * **hits**: ${{ env.REPORT_URL_PREFIX }}/hits.html
             * **tpch**: ${{ env.REPORT_URL_PREFIX }}/tpch.html
@@ -264,27 +364,19 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v2
         with:
           role-to-assume: ${{ secrets.REPO_ROLE_ARN }}
           role-duration-seconds: 900
           aws-region: us-east-2
       - uses: actions/download-artifact@v3
         with:
-          name: benchmark-hits-local
-          path: benchmark/clickbench/results/hits
+          name: benchmark-${{ matrix.dataset }}-local
+          path: benchmark/clickbench/results/${{ matrix.dataset }}
       - uses: actions/download-artifact@v3
         with:
-          name: benchmark-hits-cloud-Medium
-          path: benchmark/clickbench/results/hits
-      - uses: actions/download-artifact@v3
-        with:
-          name: benchmark-hits-local
-          path: benchmark/clickbench/results/tpch
-      - uses: actions/download-artifact@v3
-        with:
-          name: benchmark-tpch-cloud-Medium
-          path: benchmark/clickbench/results/tpch
+          name: benchmark-${{ matrix.dataset }}-cloud-Medium
+          path: benchmark/clickbench/results/${{ matrix.dataset }}
       - name: Upload nightly results to repo.databend.rs
         working-directory: benchmark/clickbench
         run: |

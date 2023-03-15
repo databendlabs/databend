@@ -35,6 +35,9 @@ impl ColumnsTable {
             NULL AS column_default,
             NULL AS column_comment,
             NULL AS column_key,
+            case when is_nullable='NO' then 0
+            when is_nullable='YES' then 1
+            end as nullable,
             is_nullable AS is_nullable,
             data_type AS data_type,
             data_type AS column_type,

@@ -153,7 +153,7 @@ jobs:
           - "base"
           - "ydb"
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: ./.github/actions/test_sqllogic_standalone_macos
         with:
           profile: release
@@ -177,7 +177,7 @@ jobs:
           - "http"
           - "clickhouse"
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: ./.github/actions/test_sqllogic_standalone_linux
         with:
           profile: release

@@ -226,7 +226,7 @@ impl InterpreterFactory {
                 *alter_user.clone(),
             )?)),
 
-            Plan::Insert(insert) => InsertInterpreter::try_create(ctx, *insert.clone(), false),
+            Plan::Insert(insert) => InsertInterpreter::try_create(ctx, *insert.clone()),
 
             Plan::Replace(replace) => ReplaceInterpreter::try_create(ctx, *replace.clone()),
 

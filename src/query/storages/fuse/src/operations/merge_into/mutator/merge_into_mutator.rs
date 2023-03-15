@@ -84,8 +84,13 @@ impl MergeIntoOperationAggregator {
             MetaReaders::segment_info_reader(data_accessor.clone(), table_schema.clone());
         let indices = (0..table_schema.fields().len()).collect::<Vec<usize>>();
         let projection = Projection::Columns(indices);
-        let block_reader =
-            BlockReader::create(data_accessor.clone(), table_schema, projection, ctx.clone())?;
+        let block_reader = BlockReader::create(
+            data_accessor.clone(),
+            table_schema,
+            projection,
+            ctx.clone(),
+            false,
+        )?;
 
         Ok(Self {
             segment_locations: HashMap::from_iter(segment_locations.into_iter()),

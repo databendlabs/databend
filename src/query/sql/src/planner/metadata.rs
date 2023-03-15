@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
+use common_catalog::plan::InternalColumn;
 use common_catalog::table::Table;
 use common_expression::types::DataType;
 use common_expression::TableDataType;
@@ -34,12 +35,6 @@ pub type IndexType = usize;
 /// Use IndexType::MAX to represent dummy table.
 pub static DUMMY_TABLE_INDEX: IndexType = IndexType::MAX;
 pub static DUMMY_COLUMN_INDEX: IndexType = IndexType::MAX;
-
-/// A special index value to represent the internal column `_group_by_key`, which is
-/// used to store the group by key in the final aggregation stage.
-///
-/// TODO(leiysky): remove this after we have a better way to represent the internal column.
-pub static GROUP_BY_KEY_COLUMN_INDEX: IndexType = IndexType::MAX - 1;
 
 /// ColumnSet represents a set of columns identified by its IndexType.
 pub type ColumnSet = HashSet<IndexType>;
@@ -78,6 +73,20 @@ impl Metadata {
         })
     }
 
+    pub fn get_table_index(
+        &self,
+        database_name: Option<&str>,
+        table_name: &str,
+    ) -> Option<IndexType> {
+        self.tables
+            .iter()
+            .find(|table| match database_name {
+                Some(database_name) => table.database == database_name && table.name == table_name,
+                None => table.name == table_name,
+            })
+            .map(|table| table.index)
+    }
+
     pub fn column(&self, index: IndexType) -> &ColumnEntry {
         self.columns
             .get(index)
@@ -91,7 +100,15 @@ impl Metadata {
     pub fn columns_by_table_index(&self, index: IndexType) -> Vec<ColumnEntry> {
         self.columns
             .iter()
-            .filter(|v| matches!(v, ColumnEntry::BaseTableColumn(BaseTableColumn { table_index, .. }) if index == *table_index))
+            .filter(|column| match column {
+                ColumnEntry::BaseTableColumn(BaseTableColumn { table_index, .. }) => {
+                    index == *table_index
+                }
+                ColumnEntry::InternalColumn(TableInternalColumn { table_index, .. }) => {
+                    index == *table_index
+                }
+                _ => false,
+            })
             .cloned()
             .collect()
     }
@@ -128,6 +145,21 @@ impl Metadata {
         column_index
     }
 
+    pub fn add_internal_column(
+        &mut self,
+        table_index: IndexType,
+        internal_column: InternalColumn,
+    ) -> IndexType {
+        let column_index = self.columns.len();
+        self.columns
+            .push(ColumnEntry::InternalColumn(TableInternalColumn {
+                table_index,
+                column_index,
+                internal_column,
+            }));
+        column_index
+    }
+
     pub fn add_table(
         &mut self,
         catalog: String,
@@ -137,6 +169,7 @@ impl Metadata {
         source_of_view: bool,
     ) -> IndexType {
         let table_name = table_meta.name().to_string();
+
         let table_index = self.tables.len();
         // If exists table alias name, use it instead of origin name
         let table_entry = TableEntry {
@@ -200,6 +233,7 @@ impl Metadata {
                 leaf_index += 1;
             }
         }
+
         table_index
     }
 }
@@ -305,12 +339,22 @@ pub struct DerivedColumn {
 }
 
 #[derive(Clone, Debug)]
+pub struct TableInternalColumn {
+    pub table_index: IndexType,
+    pub column_index: IndexType,
+    pub internal_column: InternalColumn,
+}
+
+#[derive(Clone, Debug)]
 pub enum ColumnEntry {
     /// Column from base table, for example `SELECT t.a, t.b FROM t`.
     BaseTableColumn(BaseTableColumn),
 
     /// Column synthesized from other columns, for example `SELECT t.a + t.b AS a FROM t`.
     DerivedColumn(DerivedColumn),
+
+    /// Internal columns, such as `_row_id`, `_segment_name`, etc.
+    InternalColumn(TableInternalColumn),
 }
 
 impl ColumnEntry {
@@ -318,6 +362,7 @@ impl ColumnEntry {
         match self {
             ColumnEntry::BaseTableColumn(base) => base.column_index,
             ColumnEntry::DerivedColumn(derived) => derived.column_index,
+            ColumnEntry::InternalColumn(internal_column) => internal_column.column_index,
         }
     }
 }

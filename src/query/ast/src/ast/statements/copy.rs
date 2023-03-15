@@ -202,6 +202,17 @@ impl Connection {
         }
     }
 
+    pub fn mask(&self) -> Self {
+        let mut conns = BTreeMap::new();
+        for k in self.conns.keys() {
+            conns.insert(k.to_string(), "********".to_string());
+        }
+        Self {
+            visited_keys: self.visited_keys.clone(),
+            conns,
+        }
+    }
+
     pub fn get(&mut self, key: &str) -> Option<&String> {
         self.visited_keys.insert(key.to_string());
         self.conns.get(key)

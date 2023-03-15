@@ -33,6 +33,7 @@ pub use transforms::TransformBlockCompact;
 pub use transforms::TransformCastSchema;
 pub use transforms::TransformCompact;
 pub use transforms::TransformCreateSets;
+pub use transforms::TransformExpandGroupingSets;
 pub use transforms::TransformHashJoinProbe;
 pub use transforms::TransformLimit;
 pub use transforms::TransformResortAddOn;

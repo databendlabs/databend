@@ -370,6 +370,17 @@ impl TableSchema {
         Ok(())
     }
 
+    // Every internal column has constant column id, no need to generate column id of internal columns.
+    pub fn add_internal_column(
+        &mut self,
+        name: &str,
+        data_type: TableDataType,
+        column_id: ColumnId,
+    ) {
+        let field = TableField::new_from_column_id(name, data_type, column_id);
+        self.fields.push(field);
+    }
+
     pub fn drop_column(&mut self, column: &str) -> Result<()> {
         if self.fields.len() == 1 {
             return Err(ErrorCode::DropColumnEmptyError(

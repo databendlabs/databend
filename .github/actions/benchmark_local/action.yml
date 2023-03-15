@@ -19,8 +19,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - uses: ./.github/actions/setup_bendsql
-
     - name: Install script dependencies
       shell: bash
       run: |
@@ -55,7 +53,7 @@ runs:
         esac
         jq ".system = \"${BENCHMARK_SYSTEM}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
         jq ".date = \"$(date -u +%Y-%m-%d)\"" <result.json >result.json.tmp && mv result.json.tmp result.json
-        jq ".machine = \"c5.4xlarge,gp3\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+        jq ".machine = \"c5.4xlarge\"" <result.json >result.json.tmp && mv result.json.tmp result.json
         jq ".cluster_size = 1" <result.json >result.json.tmp && mv result.json.tmp result.json
         jq ".comment = \"commit:${{ inputs.sha }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
         jq ".tags = [\"${BENCHMARK_TYPE}\", \"gp3\"]" <result.json >result.json.tmp && mv result.json.tmp result.json
@@ -71,6 +69,7 @@ runs:
     - name: Clean test data
       working-directory: benchmark/clickbench
       if: always()
+      continue-on-error: true
       shell: bash
       run: |
         bendsql query <"${{ inputs.dataset }}/clear.sql"

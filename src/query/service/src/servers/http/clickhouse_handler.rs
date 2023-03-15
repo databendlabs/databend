@@ -239,14 +239,14 @@ pub async fn clickhouse_handler_get(
     let default_format = get_default_format(&params, headers).map_err(BadRequest)?;
     let sql = params.query();
     let mut planner = Planner::new(context.clone());
-    let (plan, _, fmt) = planner
+    let (plan, extras) = planner
         .plan_sql(&sql)
         .await
         .map_err(|err| err.display_with_sql(&sql))
         .map_err(BadRequest)?;
-    let format = get_format_with_default(fmt, default_format)?;
+    let format = get_format_with_default(extras.format, default_format)?;
 
-    context.attach_query_str(plan.to_string(), &sql);
+    context.attach_query_str(plan.to_string(), extras.stament.to_mask_sql());
     let interpreter = InterpreterFactory::get(context.clone(), &plan)
         .await
         .map_err(|err| err.display_with_sql(&sql))
@@ -298,13 +298,13 @@ pub async fn clickhouse_handler_post(
     info!("receive clickhouse http post, (query + body) = {}", &msg);
 
     let mut planner = Planner::new(ctx.clone());
-    let (mut plan, _, fmt) = planner
+    let (mut plan, extras) = planner
         .plan_sql(&sql)
         .await
         .map_err(|err| err.display_with_sql(&sql))
         .map_err(BadRequest)?;
     let schema = plan.schema();
-    ctx.attach_query_str(plan.to_string(), &sql);
+    ctx.attach_query_str(plan.to_string(), extras.stament.to_mask_sql());
     let mut handle = None;
     if let Plan::Insert(insert) = &mut plan {
         if let InsertInputSource::StreamingWithFormat(format, start, input_context_ref) =
@@ -404,7 +404,7 @@ pub async fn clickhouse_handler_post(
         }
     };
 
-    let format = get_format_with_default(fmt, default_format)?;
+    let format = get_format_with_default(extras.format, default_format)?;
     let interpreter = InterpreterFactory::get(ctx.clone(), &plan)
         .await
         .map_err(|err| err.display_with_sql(&sql))

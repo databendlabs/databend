@@ -34,7 +34,7 @@ impl Session {
 
         let shared_query_context = &session_ctx.get_query_context_shared();
         if let Some(shared) = shared_query_context {
-            if let Ok(runtime) = shared.try_get_runtime() {
+            if let Some(runtime) = shared.get_runtime() {
                 let mem_stat = runtime.get_tracker();
                 memory_usage = mem_stat.get_memory_usage();
             }

@@ -30,7 +30,8 @@ These tutorials are intended to help you get started with Databend:
 * [How to Load Data from Amazon S3](../12-load-data/01-s3.md)
 * [How to Load Data from Local File System](../12-load-data/02-local.md)
 * [How to Load Data from Remote Files](../12-load-data/04-http.md)
-
+* [Querying Data in Staged Files](../12-load-data/05-querying-stage.md)
+* [Transforming Data During a Load](../12-load-data/06-data-load-transform.md)
 
 ## Unloading Data from Databend
 

@@ -42,6 +42,7 @@ pub use aggregator::TransformAggregateDeserializer;
 pub use aggregator::TransformAggregateSerializer;
 pub use aggregator::TransformAggregateSpillReader;
 pub use aggregator::TransformAggregateSpillWriter;
+pub use aggregator::TransformExpandGroupingSets;
 pub use aggregator::TransformFinalAggregate;
 pub use aggregator::TransformGroupByDeserializer;
 pub use aggregator::TransformGroupBySerializer;

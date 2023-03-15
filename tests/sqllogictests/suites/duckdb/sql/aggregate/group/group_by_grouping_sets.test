@@ -1,0 +1,21 @@
+statement ok
+drop table if exists t;
+
+statement ok
+create table t (a string, b string, c int);
+
+statement ok
+insert into t values ('a','A',1),('a','A',2),('a','B',1),('a','B',3),('b','A',1),('b','A',4),('b','B',1),('b','B',5);
+
+query TTI
+select a, b, sum(c) as sc from t group by grouping sets ((a,b),(),(b),(a)) order by sc;
+----
+a A 3
+a B 4
+b A 5
+b B 6
+a NULL 7
+NULL A 8
+NULL B 10
+b NULL 11
+NULL NULL 18

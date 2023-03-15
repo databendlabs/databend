@@ -14,6 +14,7 @@
 
 use common_exception::Result;
 
+use super::AggregateExpand;
 use super::AggregateFinal;
 use super::AggregatePartial;
 use super::DistributedInsertSelect;
@@ -39,6 +40,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::Filter(plan) => self.replace_filter(plan),
             PhysicalPlan::Project(plan) => self.replace_project(plan),
             PhysicalPlan::EvalScalar(plan) => self.replace_eval_scalar(plan),
+            PhysicalPlan::AggregateExpand(plan) => self.replace_aggregate_expand(plan),
             PhysicalPlan::AggregatePartial(plan) => self.replace_aggregate_partial(plan),
             PhysicalPlan::AggregateFinal(plan) => self.replace_aggregate_final(plan),
             PhysicalPlan::Sort(plan) => self.replace_sort(plan),
@@ -88,6 +90,19 @@ pub trait PhysicalPlanReplacer {
             plan_id: plan.plan_id,
             input: Box::new(input),
             exprs: plan.exprs.clone(),
+            stat_info: plan.stat_info.clone(),
+        }))
+    }
+
+    fn replace_aggregate_expand(&mut self, plan: &AggregateExpand) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+
+        Ok(PhysicalPlan::AggregateExpand(AggregateExpand {
+            plan_id: plan.plan_id,
+            input: Box::new(input),
+            group_bys: plan.group_bys.clone(),
+            grouping_id_index: plan.grouping_id_index,
+            grouping_sets: plan.grouping_sets.clone(),
             stat_info: plan.stat_info.clone(),
         }))
     }
@@ -262,6 +277,9 @@ impl PhysicalPlan {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::EvalScalar(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::AggregateExpand(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::AggregatePartial(plan) => {

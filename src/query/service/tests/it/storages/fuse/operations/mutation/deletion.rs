@@ -53,7 +53,7 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
     // delete
     let query = format!("delete from {}.{} where id=1", db_name, tbl_name);
     let mut planner = Planner::new(ctx.clone());
-    let (plan, _, _) = planner.plan_sql(&query).await?;
+    let (plan, _) = planner.plan_sql(&query).await?;
     if let Plan::Delete(delete) = plan {
         do_deletion(ctx.clone(), table.clone(), *delete).await?;
     }
