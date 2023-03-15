@@ -17,6 +17,8 @@ use std::hash::Hash;
 use std::io::Read;
 use std::ops::Range;
 
+use base64::engine::general_purpose;
+use base64::prelude::*;
 use common_arrow::arrow::bitmap::and;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
@@ -1551,7 +1553,7 @@ impl Serialize for Column {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
         let bytes = serialize_column(self);
-        let base64_str = base64::encode(bytes);
+        let base64_str = general_purpose::STANDARD.encode(bytes);
         serializer.serialize_str(&base64_str)
     }
 }
@@ -1570,7 +1572,7 @@ impl<'de> Deserialize<'de> for Column {
 
             fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
             where E: serde::de::Error {
-                let bytes = base64::decode(v).unwrap();
+                let bytes = general_purpose::STANDARD.decode(v).unwrap();
                 let column = deserialize_column(&bytes)
                     .expect("expecting an arrow chunk with exactly one column");
                 Ok(column)

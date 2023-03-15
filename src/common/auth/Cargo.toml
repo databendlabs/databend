@@ -11,7 +11,7 @@ doctest = false
 test = false
 
 [dependencies]
-base64 = "0.13.0"
+base64 = "0.21.0"
 chrono = { workspace = true }
 common-base = { path = "../../common/base" }
 http = "0.2"

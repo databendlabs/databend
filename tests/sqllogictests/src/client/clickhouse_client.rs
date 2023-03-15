@@ -16,8 +16,8 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use reqwest::Client;
-use sqllogictest::ColumnType;
 use sqllogictest::DBOutput;
+use sqllogictest::DefaultColumnType;
 
 use crate::error::Result;
 use crate::util::SET_SQL_RE;
@@ -45,7 +45,7 @@ impl ClickhouseHttpClient {
         })
     }
 
-    pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
+    pub async fn query(&mut self, sql: &str) -> Result<DBOutput<DefaultColumnType>> {
         // Client will save the following info: use database, settings (session level info)
         // Then send them to server, so even though the session changes, database and settings context is correct
         if let Some(captures) = USE_SQL_RE.captures(sql) {
@@ -124,7 +124,7 @@ impl ClickhouseHttpClient {
         // Todo: add types to compare
         let mut types = vec![];
         if !rows.is_empty() {
-            types = vec![ColumnType::Any; rows[0].len()];
+            types = vec![DefaultColumnType::Any; rows[0].len()];
         }
         Ok(DBOutput::Rows { types, rows })
     }
