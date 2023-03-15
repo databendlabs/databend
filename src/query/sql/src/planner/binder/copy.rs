@@ -675,7 +675,7 @@ fn check_transform_query(
         && query.with.is_none()
     {
         if let SetExpr::Select(select) = &query.body {
-            if select.group_by.is_empty()
+            if select.group_by.is_none()
                 && !select.distinct
                 && select.having.is_none()
                 && select.from.len() == 1
