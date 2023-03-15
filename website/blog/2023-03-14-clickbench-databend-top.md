@@ -1,7 +1,7 @@
 ---
 title: "Databend Excels on ClickBench: A Performance Benchmarking"
 date: 2023-03-14
-slug: clickbench-23mar03
+slug: clickbench-databend-top
 tags: [benchmark, ClickBench]
 description: "Benchmarking Databend with ClickBench"
 cover_url: clickbench.png
