@@ -166,6 +166,7 @@ jobs:
           - tpch
         size:
           - Medium
+          - Large
       fail-fast: true
       max-parallel: 1
     steps:
