@@ -133,11 +133,8 @@ impl FuseTable {
 
         // Status.
         {
-            let status = format!(
-                "compact: begin to run compact tasks, will generate new blocks:{}",
-                mutator.compact_tasks.len()
-            );
-            ctx.set_status_info(&status);
+            let status = "compact: begin to run compact tasks";
+            ctx.set_status_info(status);
             info!(status);
         }
         ctx.set_partitions(mutator.compact_tasks.clone())?;

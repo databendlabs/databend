@@ -25,6 +25,7 @@ use opendal::Operator;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
+use tracing::info;
 
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;

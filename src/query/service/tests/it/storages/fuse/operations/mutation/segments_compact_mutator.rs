@@ -664,7 +664,11 @@ impl CompactSegmentTestFixture {
             Self::gen_segments(&block_writer, &segment_writer, num_block_of_segments).await?;
         self.input_blocks = blocks;
         let limit = limit.unwrap_or(usize::MAX);
-        seg_acc.compact(locations, limit).await
+        seg_acc
+            .compact(locations, limit, |status| {
+                self.ctx.set_status_info(&status);
+            })
+            .await
     }
 
     async fn gen_segments(

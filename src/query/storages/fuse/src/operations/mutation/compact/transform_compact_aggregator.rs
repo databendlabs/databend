@@ -31,6 +31,7 @@ use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
+use tracing::info;
 use tracing::Instrument;
 
 use crate::io::TableMetaLocationGenerator;

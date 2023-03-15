@@ -87,7 +87,7 @@ impl BlockCompactMutator {
 
         let mut segment_idx = 0;
         let mut compacted_segment_cnt = 0;
-        let mut checked_segment_cnt = 0;
+        let mut checked_end_at = 0;
 
         // Status.
         {
@@ -130,10 +130,22 @@ impl BlockCompactMutator {
                     }
                     segment_idx += 1;
                 }
-                checked_segment_cnt += 1;
+                checked_end_at += 1;
                 if compacted_segment_cnt + checker.segments.len() >= limit {
                     break;
                 }
+            }
+
+            // Status.
+            {
+                let status = format!(
+                    "compact: read segment files:{}/{}, cost:{} sec",
+                    checked_end_at,
+                    number_segments,
+                    start.elapsed().as_secs()
+                );
+                self.ctx.set_status_info(&status);
+                info!(status);
             }
         }
 
@@ -144,18 +156,16 @@ impl BlockCompactMutator {
                 compacted_segment_cnt += segments.len();
                 self.build_compact_tasks(segments, segment_idx);
             } else {
-                self.unchanged_segments_map.insert(
-                    segment_idx,
-                    segment_locations[checked_segment_cnt - 1].clone(),
-                );
+                self.unchanged_segments_map
+                    .insert(segment_idx, segment_locations[checked_end_at - 1].clone());
                 merge_statistics_mut(&mut self.unchanged_segment_statistics, &segments[0].summary)?;
             }
             segment_idx += 1;
         }
 
         // combine with the unprocessed segments (which are outside of the limit).
-        if checked_segment_cnt < number_segments {
-            for chunk in segment_locations[checked_segment_cnt..].chunks(max_io_requests) {
+        if checked_end_at < number_segments {
+            for chunk in segment_locations[checked_end_at..].chunks(max_io_requests) {
                 let segment_infos = segments_io
                     .read_segments(chunk)
                     .await?
@@ -168,6 +178,19 @@ impl BlockCompactMutator {
                     merge_statistics_mut(&mut self.unchanged_segment_statistics, &segment.summary)?;
                     segment_idx += 1;
                 }
+
+                checked_end_at += chunk.len();
+                // Status.
+                {
+                    let status = format!(
+                        "compact: read segment files:{}/{}, cost:{} sec",
+                        checked_end_at,
+                        number_segments,
+                        start.elapsed().as_secs()
+                    );
+                    self.ctx.set_status_info(&status);
+                    info!(status);
+                }
             }
         }
 
@@ -176,7 +199,7 @@ impl BlockCompactMutator {
             let status = format!(
                 "compact: end to build compact tasks:{}, segments to be compacted:{}, cost:{} sec",
                 self.compact_tasks.len(),
-                checked_segment_cnt,
+                compacted_segment_cnt,
                 start.elapsed().as_secs()
             );
             self.ctx.set_status_info(&status);

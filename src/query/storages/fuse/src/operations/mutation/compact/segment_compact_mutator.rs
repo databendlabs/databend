@@ -22,6 +22,7 @@ use opendal::Operator;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
+use tracing::info;
 
 use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;
@@ -106,7 +107,11 @@ impl TableMutator for SegmentCompactMutator {
             segment_writer,
         );
 
-        self.compaction = compactor.compact(base_segment_locations, limit).await?;
+        self.compaction = compactor
+            .compact(base_segment_locations, limit, |status| {
+                self.ctx.set_status_info(&status);
+            })
+            .await?;
 
         gauge!(
             "fuse_compact_segments_select_duration_second",
@@ -184,15 +189,21 @@ impl<'a> SegmentCompactor<'a> {
         }
     }
 
-    pub async fn compact(
+    pub async fn compact<T>(
         mut self,
         reverse_locations: Vec<Location>,
         limit: usize,
-    ) -> Result<SegmentCompactionState> {
+        status_callback: T,
+    ) -> Result<SegmentCompactionState>
+    where
+        T: Fn(String),
+    {
+        let start = Instant::now();
+        let number_segments = reverse_locations.len();
         // 1. feed segments into accumulator, taking limit into account
         let segments_io = self.segment_reader;
         let chunk_size = self.chunk_size;
-        let mut checked_segment_cnt = 0;
+        let mut checked_end_at = 0;
         for chunk in reverse_locations.chunks(chunk_size) {
             let segment_infos = segments_io
                 .read_segments(chunk)
@@ -203,13 +214,25 @@ impl<'a> SegmentCompactor<'a> {
             for (segment, location) in segment_infos.into_iter().zip(chunk.iter()) {
                 self.add(segment, location.clone()).await?;
                 let compacted = self.num_fragments_compacted();
-                checked_segment_cnt += 1;
+                checked_end_at += 1;
                 if compacted >= limit {
                     // break if number of compacted segments reach the limit
                     // note that during the finalization of compaction, there might be some extra
                     // fragmented segments also need to be compacted, we just let it go
                     break;
                 }
+            }
+
+            // Status.
+            {
+                let status = format!(
+                    "compact segment: read segment files:{}/{}, cost:{} sec",
+                    checked_end_at,
+                    number_segments,
+                    start.elapsed().as_secs()
+                );
+                info!(status);
+                (status_callback)(status);
             }
         }
         let mut compaction = self.finalize().await?;
@@ -219,7 +242,7 @@ impl<'a> SegmentCompactor<'a> {
         if fragments_compacted {
             // if some compaction occurred, the reminders
             // which are outside of the limit should also be collected
-            for chunk in reverse_locations[checked_segment_cnt..].chunks(chunk_size) {
+            for chunk in reverse_locations[checked_end_at..].chunks(chunk_size) {
                 let segment_infos = segments_io
                     .read_segments(chunk)
                     .await?
@@ -229,6 +252,19 @@ impl<'a> SegmentCompactor<'a> {
                 for (segment, location) in segment_infos.into_iter().zip(chunk.iter()) {
                     compaction.segments_locations.push(location.clone());
                     merge_statistics_mut(&mut compaction.statistics, &segment.summary)?;
+                }
+
+                checked_end_at += chunk.len();
+                // Status.
+                {
+                    let status = format!(
+                        "compact segment: read segment files:{}/{}, cost:{} sec",
+                        checked_end_at,
+                        number_segments,
+                        start.elapsed().as_secs()
+                    );
+                    info!(status);
+                    (status_callback)(status);
                 }
             }
         }
