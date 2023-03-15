@@ -1448,26 +1448,6 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     )(i)
 }
 
-pub fn tuple_types(i: Input) -> IResult<(Option<Identifier>, TypeName)> {
-    let tuple_types = map(
-        rule! {
-           #type_name
-        },
-        |type_name| (None, type_name),
-    );
-    let named_tuple_types = map(
-        rule! {
-           #ident ~ #type_name
-        },
-        |(name, type_name)| (Some(name), type_name),
-    );
-
-    rule!(
-        #tuple_types
-        | #named_tuple_types
-    )(i)
-}
-
 pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
     alt((
         value(IntervalKind::Year, rule! { YEAR }),
