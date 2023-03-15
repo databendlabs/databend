@@ -346,6 +346,17 @@ pub fn register(registry: &mut FunctionRegistry) {
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
                 registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
+                    "cbrt",
+                    FunctionProperty::default(),
+                    |_| FunctionDomain::Full,
+                    |val, _| (val.as_(): F64).cbrt(),
+                );
+            }
+        });
+
+        with_number_mapped_type!(|NUM_TYPE| match ty {
+            NumberDataType::NUM_TYPE => {
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
                     "ln",
                     FunctionProperty::default(),
                     |_| FunctionDomain::Full,
@@ -398,6 +409,19 @@ pub fn register(registry: &mut FunctionRegistry) {
                     );
             }
         });
+    }
+
+    for ty in ALL_INTEGER_TYPES {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
+            NumberDataType::NUM_TYPE => {
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<i64>, _, _>(
+                    "factorial",
+                    FunctionProperty::default(),
+                    |_| FunctionDomain::Full,
+                    |val, _| factorial(val.as_(): i64),
+                );
+            }
+        })
     }
 }
 
@@ -457,3 +481,7 @@ type LnFunction = GenericLogFunction<EBase>;
 type LogFunction = GenericLogFunction<EBase>;
 type Log10Function = GenericLogFunction<TenBase>;
 type Log2Function = GenericLogFunction<TwoBase>;
+
+fn factorial(n: i64) -> i64 {
+    if n <= 0 { 1 } else { n * factorial(n - 1) }
+}

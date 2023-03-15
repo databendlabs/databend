@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use chrono::TimeZone;
 use chrono::Utc;
-use common_ast::ast::FileLocation;
 use common_ast::ast::Indirection;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
@@ -27,10 +26,8 @@ use common_ast::ast::Statement;
 use common_ast::ast::TableAlias;
 use common_ast::ast::TableReference;
 use common_ast::ast::TimeTravelPoint;
-use common_ast::ast::UriLocation;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
-use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::ParquetReadOptions;
@@ -39,7 +36,6 @@ use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
-use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -50,6 +46,7 @@ use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
 use common_storage::DataOperator;
+use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
 use common_storages_parquet::ParquetTable;
 use common_storages_result_cache::ResultCacheMetaManager;
@@ -59,8 +56,7 @@ use common_storages_view::view_table::QUERY;
 use common_users::UserApiProvider;
 use dashmap::DashMap;
 
-use crate::binder::copy::parse_stage_location_v2;
-use crate::binder::location::parse_uri_location;
+use crate::binder::copy::parse_file_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::table_args::bind_table_args;
 use crate::binder::Binder;
@@ -195,8 +191,7 @@ impl Binder {
                             .get(QUERY)
                             .ok_or_else(|| ErrorCode::Internal("Invalid VIEW object"))?;
                         let tokens = tokenize_sql(query.as_str())?;
-                        let backtrace = Backtrace::new();
-                        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
+                        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
                         // For view, we need use a new context to bind it.
                         let mut new_bind_context =
                             BindContext::with_parent(Box::new(bind_context.clone()));
@@ -376,70 +371,65 @@ impl Binder {
                 options,
                 alias,
             } => {
-                let (stage_info, path) = match location.clone() {
-                    FileLocation::Stage(location) => {
-                        parse_stage_location_v2(&self.ctx, &location.name, &location.path).await?
-                    }
-                    FileLocation::Uri(uri) => {
-                        let mut location =
-                            UriLocation::from_uri(uri, "".to_string(), options.connection.clone())?;
-                        let (storage_params, path) = parse_uri_location(&mut location)?;
-                        if !storage_params.is_secure()
-                            && !GlobalConfig::instance().storage.allow_insecure
-                        {
-                            return Err(ErrorCode::StorageInsecure(
-                                "copy from insecure storage is not allowed",
-                            ));
-                        }
-                        let stage_info = StageInfo::new_external_stage(storage_params, &path);
-                        (stage_info, path)
-                    }
-                };
-
-                let file_format_options = match &options.file_format {
-                    Some(f) => self.ctx.get_file_format(f).await?,
-                    None => stage_info.file_format_options.clone(),
-                };
-                if matches!(file_format_options.format, StageFileFormatType::Parquet) {
-                    let files_info = StageFilesInfo {
-                        path,
-                        pattern: options.pattern.clone(),
-                        files: options.files.clone(),
-                    };
-                    let read_options = ParquetReadOptions::default();
-
-                    let table =
-                        ParquetTable::create(stage_info.clone(), files_info, read_options).await?;
-
-                    let table_alias_name = if let Some(table_alias) = alias {
-                        Some(
-                            normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name,
-                        )
-                    } else {
-                        None
-                    };
-
-                    let table_index = self.metadata.write().add_table(
-                        CATALOG_DEFAULT.to_string(),
-                        "system".to_string(),
-                        table.clone(),
-                        table_alias_name,
-                        false,
-                    );
-
-                    let (s_expr, mut bind_context) = self
-                        .bind_base_table(bind_context, "system", table_index)
-                        .await?;
-                    if let Some(alias) = alias {
-                        bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
-                    }
-                    Ok((s_expr, bind_context))
-                } else {
-                    Err(ErrorCode::Unimplemented(
-                        "only support parquet format for 'select from stage' for now.",
-                    ))
+                let (mut stage_info, path) =
+                    parse_file_location(&self.ctx, location, options.connection.clone()).await?;
+                if let Some(f) = &options.file_format {
+                    stage_info.file_format_options = self.ctx.get_file_format(f).await?;
                 }
+                let files_info = StageFilesInfo {
+                    path,
+                    pattern: options.pattern.clone(),
+                    files: options.files.clone(),
+                };
+                self.bind_stage_table(bind_context, stage_info, files_info, alias, None)
+                    .await
             }
+        }
+    }
+
+    pub(crate) async fn bind_stage_table(
+        &mut self,
+        bind_context: &BindContext,
+        stage_info: StageInfo,
+        files_info: StageFilesInfo,
+        alias: &Option<TableAlias>,
+        files_to_copy: Option<Vec<StageFileInfo>>,
+    ) -> Result<(SExpr, BindContext)> {
+        if matches!(
+            stage_info.file_format_options.format,
+            StageFileFormatType::Parquet
+        ) {
+            let read_options = ParquetReadOptions::default();
+
+            let table =
+                ParquetTable::create(stage_info.clone(), files_info, read_options, files_to_copy)
+                    .await?;
+
+            let table_alias_name = if let Some(table_alias) = alias {
+                Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
+            } else {
+                None
+            };
+
+            let table_index = self.metadata.write().add_table(
+                CATALOG_DEFAULT.to_string(),
+                "system".to_string(),
+                table.clone(),
+                table_alias_name,
+                false,
+            );
+
+            let (s_expr, mut bind_context) = self
+                .bind_base_table(bind_context, "system", table_index)
+                .await?;
+            if let Some(alias) = alias {
+                bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+            }
+            Ok((s_expr, bind_context))
+        } else {
+            Err(ErrorCode::Unimplemented(
+                "stage table function only support parquet format for now",
+            ))
         }
     }
 
