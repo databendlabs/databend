@@ -53,7 +53,7 @@ runs:
         esac
         jq ".system = \"${BENCHMARK_SYSTEM}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
         jq ".date = \"$(date -u +%Y-%m-%d)\"" <result.json >result.json.tmp && mv result.json.tmp result.json
-        jq ".machine = \"c5.4xlarge,gp3\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+        jq ".machine = \"c5.4xlarge\"" <result.json >result.json.tmp && mv result.json.tmp result.json
         jq ".cluster_size = 1" <result.json >result.json.tmp && mv result.json.tmp result.json
         jq ".comment = \"commit:${{ inputs.sha }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
         jq ".tags = [\"${BENCHMARK_TYPE}\", \"gp3\"]" <result.json >result.json.tmp && mv result.json.tmp result.json
