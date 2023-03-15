@@ -48,7 +48,10 @@ Data type reference:
 * [Numeric Data Types](../../../13-sql-reference/10-data-types/10-data-type-numeric-types.md)
 * [Date & Time Data Types](../../../13-sql-reference/10-data-types/20-data-type-time-date-types.md)
 * [String Data Types](../../../13-sql-reference/10-data-types/30-data-type-string-types.md)
-* [Semi-structured Data Types](../../../13-sql-reference/10-data-types/42-data-type-semi-structured-types.md)
+* [Array Data Types](../../../13-sql-reference/10-data-types/40-data-type-array-types.md)
+* [Tuple Data Types](../../../13-sql-reference/10-data-types/41-data-type-tuple-types.md)
+* [Map Data Types](../../../13-sql-reference/10-data-types/42-data-type-map.md)
+* [Semi-structured Data Types](../../../13-sql-reference/10-data-types/43-data-type-variant.md)
 :::
 
 For detailed information about the CLUSTER BY clause, see [SET CLUSTER KEY](../70-clusterkey/dml-set-cluster-key.md).

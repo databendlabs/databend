@@ -25,10 +25,8 @@ use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::parse_expr;
 use common_ast::parser::parser_values_with_placeholder;
 use common_ast::parser::tokenize_sql;
-use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_base::runtime::GlobalIORuntime;
-use common_catalog::plan::StageFileInfo;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_catalog::table_context::StageAttachment;
@@ -72,6 +70,8 @@ use common_sql::Metadata;
 use common_sql::MetadataRef;
 use common_sql::NameResolutionContext;
 use common_sql::ScalarBinder;
+use common_storage::StageFileInfo;
+use common_storage::StageFilesInfo;
 use common_storages_factory::Table;
 use common_storages_fuse::io::Files;
 use common_storages_stage::StageTable;
@@ -157,9 +157,7 @@ impl InsertInterpreter {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
         let tokens = tokenize_sql(values_str)?;
-        let backtrace = Backtrace::new();
-        let expr_or_placeholders =
-            parser_values_with_placeholder(&tokens, sql_dialect, &backtrace)?;
+        let expr_or_placeholders = parser_values_with_placeholder(&tokens, sql_dialect)?;
         let source_schema = self.plan.schema();
 
         if source_schema.num_fields() != expr_or_placeholders.len() {
@@ -230,9 +228,11 @@ impl InsertInterpreter {
         let mut stage_table_info = StageTableInfo {
             schema: attachment_table_schema,
             stage_info,
-            path: path.to_string(),
-            files: vec![],
-            pattern: "".to_string(),
+            files_info: StageFilesInfo {
+                path: path.to_string(),
+                files: None,
+                pattern: None,
+            },
             files_to_copy: None,
         };
 
@@ -670,6 +670,8 @@ impl ValueSource {
                 for col in columns.iter_mut().take(pop_count) {
                     col.pop();
                 }
+                // rollback to start position of the row
+                reader.rollback(start_pos_of_row + 1);
                 skip_to_next_row(reader, 1)?;
                 let end_pos_of_row = reader.position();
 
@@ -682,9 +684,7 @@ impl ValueSource {
                 let settings = self.ctx.get_settings();
                 let sql_dialect = settings.get_sql_dialect()?;
                 let tokens = tokenize_sql(sql)?;
-                let backtrace = Backtrace::new();
-                let exprs =
-                    parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect, &backtrace)?;
+                let exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect)?;
 
                 let values = exprs_to_scalar(
                     exprs,
@@ -774,8 +774,7 @@ async fn fill_default_value(
 ) -> Result<()> {
     if let Some(default_expr) = field.default_expr() {
         let tokens = tokenize_sql(default_expr)?;
-        let backtrace = Backtrace::new();
-        let ast = parse_expr(&tokens, Dialect::PostgreSQL, &backtrace)?;
+        let ast = parse_expr(&tokens, Dialect::PostgreSQL)?;
         let (mut scalar, _) = binder.bind(&ast).await?;
         scalar = ScalarExpr::CastExpr(CastExpr {
             is_try: false,

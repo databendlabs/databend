@@ -32,14 +32,14 @@ with NativeClient(name="client1>") as client1:
 
     mycursor = mydb.cursor()
     mycursor.execute(
-        "SELECT mysql_connection_id FROM system.processes WHERE extra_info LIKE '%SELECT max(number), sum(number) FROM numbers_mt(100000000000) GROUP BY number % 3, number % 4, number % 5 LIMIT 10%' AND extra_info NOT LIKE '%system.processes%';"
+        "SELECT mysql_connection_id FROM system.processes WHERE extra_info LIKE '%SELECT max(number)%' AND extra_info NOT LIKE '%system.processes%';"
     )
     res = mycursor.fetchone()
     kill_query = "kill query " + str(res[0]) + ";"
     mycursor.execute(kill_query)
     time.sleep(0.1)
     mycursor.execute(
-        "SELECT * FROM system.processes WHERE extra_info LIKE '%SELECT max(number), sum(number) FROM numbers_mt(100000000000) GROUP BY number % 3, number % 4, number % 5 LIMIT 10%' AND extra_info NOT LIKE '%system.processes%';"
+        "SELECT * FROM system.processes WHERE extra_info LIKE '%SELECT max(number)%' AND extra_info NOT LIKE '%system.processes%';"
     )
     res = mycursor.fetchone()
 

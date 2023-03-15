@@ -220,15 +220,43 @@ impl FlightExchange {
                             if !send_closing_output {
                                 send_closing_output = true;
 
+                                if let Some(query_id) = &query_id {
+                                    info!(
+                                        "First recv closing input query: {:?}, fragment:{}",
+                                        query_id,
+                                        fragment.unwrap()
+                                    );
+                                }
+
                                 // create new future send packet to remote for avoid blocking recv data
                                 futures.push(Box::pin(common_base::base::tokio::spawn({
                                     let f = f.clone();
                                     let response_tx = response_tx.clone();
+                                    let query_id = query_id.clone();
+                                    let fragment = fragment.clone();
+
                                     async move {
+                                        if let Some(query_id) = &query_id {
+                                            info!(
+                                                "Prepare send closing output query: {:?}. fragment: {}",
+                                                query_id,
+                                                fragment.unwrap(),
+                                            );
+                                        }
+
                                         let response_t = f(DataPacket::ClosingOutput);
-                                        let _ = response_tx.send(response_t).await;
+                                        let res = response_tx.send(response_t).await.is_ok();
 
                                         response_tx.close();
+
+                                        if let Some(query_id) = &query_id {
+                                            info!(
+                                                "Send closing output query: {:?}. fragment: {}, {}",
+                                                query_id,
+                                                fragment.unwrap(),
+                                                res
+                                            );
+                                        }
                                     }
                                 })));
                             }
@@ -240,14 +268,41 @@ impl FlightExchange {
 
                             if !send_closing_input {
                                 send_closing_input = true;
+
+                                if let Some(query_id) = &query_id {
+                                    info!(
+                                        "First recv closing output query: {:?}, fragment:{}",
+                                        query_id,
+                                        fragment.unwrap()
+                                    );
+                                }
+
                                 // create new future send packet to remote for avoid blocking recv data
                                 futures.push(Box::pin(common_base::base::tokio::spawn({
                                     let f = f.clone();
                                     let network_tx = network_tx.clone();
+                                    let query_id = query_id.clone();
+                                    let fragment = fragment.clone();
 
                                     async move {
+                                        if let Some(query_id) = &query_id {
+                                            info!(
+                                                "Prepare send closing input query: {:?}. fragment: {}",
+                                                query_id,
+                                                fragment.unwrap(),
+                                            );
+                                        }
+
                                         let response_t = f(DataPacket::ClosingInput);
-                                        let _ = network_tx.send(response_t).await;
+                                        let res = network_tx.send(response_t).await.is_ok();
+                                        if let Some(query_id) = &query_id {
+                                            info!(
+                                                "Send closing input query: {:?}. fragment: {}, {}",
+                                                query_id,
+                                                fragment.unwrap(),
+                                                res
+                                            );
+                                        }
                                     }
                                 })));
                             }
@@ -305,9 +360,11 @@ impl FlightExchange {
 
                 if let Some(query_id) = &query_id {
                     info!(
-                        "Break flight listener query: {:?}, fragment:{}",
+                        "Break flight listener query: {:?}, fragment:{}, {}, {}",
                         query_id,
-                        fragment.unwrap()
+                        fragment.unwrap(),
+                        send_closing_input,
+                        send_closing_output,
                     );
                 }
 

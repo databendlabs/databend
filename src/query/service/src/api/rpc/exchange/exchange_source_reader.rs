@@ -54,8 +54,8 @@ impl ExchangeSourceReader {
             finished: false,
             output_data: None,
             initialized: false,
+            fragment,
             query_id,
-            fragment: fragment,
         }))
     }
 }

@@ -155,6 +155,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | "name"                          | "system"             | "tables_with_history" | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "name"                          | "system"             | "users"               | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "non_unique"                    | "information_schema" | "statistics"          | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
+| "nullable"                      | "information_schema" | "columns"             | "Nullable(UInt8)"  | "TINYINT UNSIGNED"  | ""       | ""       | "YES"    | ""       |
 | "nullable"                      | "information_schema" | "statistics"          | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
 | "num_rows"                      | "system"             | "query_cache"         | "UInt64"           | "BIGINT UNSIGNED"   | ""       | ""       | "NO"     | ""       |
 | "num_rows"                      | "system"             | "tables"              | "Nullable(UInt64)" | "BIGINT UNSIGNED"   | ""       | ""       | "YES"    | ""       |

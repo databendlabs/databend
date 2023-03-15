@@ -18,6 +18,7 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_sql::parse_exprs;
 
@@ -40,7 +41,12 @@ pub fn get_cluster_keys(
 ) -> Result<(Vec<RemoteExpr<String>>, Option<String>)> {
     let (cluster_keys, plain_keys) = if !definition.is_empty() {
         let table_meta = Arc::new(table.clone());
-        let cluster_keys = parse_exprs(ctx, table_meta.clone(), true, definition)?;
+        let cluster_keys = parse_exprs(ctx, table_meta.clone(), definition)?;
+        let cluster_keys = if cluster_keys.len() == 1 {
+            unwrap_tuple(&cluster_keys[0]).unwrap_or(cluster_keys)
+        } else {
+            cluster_keys
+        };
         (
             cluster_keys
                 .iter()
@@ -67,4 +73,13 @@ pub fn get_cluster_keys(
         )));
     }
     Ok((cluster_keys, plain_keys))
+}
+
+pub fn unwrap_tuple(expr: &Expr) -> Option<Vec<Expr>> {
+    match expr {
+        Expr::FunctionCall { function, args, .. } if function.signature.name == "tuple" => {
+            Some(args.clone())
+        }
+        _ => None,
+    }
 }

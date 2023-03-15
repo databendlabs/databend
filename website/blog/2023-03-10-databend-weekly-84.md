@@ -66,7 +66,7 @@ If you want to learn more details about `REPLACE INTO` statement, please read th
 - [Docs | DML Commands - REPLACE](https://databend.rs/doc/sql-commands/dml/dml-replace)
 - [PR | feat: replace into statement](https://github.com/datafuselabs/databend/pull/10191)
 
-### RFC: Transform with Copy Into
+### RFC: Add Incremental Update for Copy Into
 
 Databend is currently capable of transforming and inserting data from a stage into a table. For example, you can run a SQL statement like this:
 

@@ -206,7 +206,7 @@ impl Executor {
 impl ExecuteState {
     pub(crate) async fn get_schema(sql: &str, ctx: Arc<QueryContext>) -> Result<DataSchemaRef> {
         let mut planner = Planner::new(ctx.clone());
-        let (plan, _, _) = planner.plan_sql(sql).await?;
+        let (plan, _) = planner.plan_sql(sql).await?;
         Ok(InterpreterFactory::get_schema(ctx, &plan))
     }
 
@@ -218,8 +218,8 @@ impl ExecuteState {
         block_sender: SizedChannelSender<DataBlock>,
     ) -> Result<()> {
         let mut planner = Planner::new(ctx.clone());
-        let (plan, _, _) = planner.plan_sql(sql).await?;
-        ctx.attach_query_str(plan.to_string(), sql);
+        let (plan, extras) = planner.plan_sql(sql).await?;
+        ctx.attach_query_str(plan.to_string(), extras.stament.to_mask_sql());
 
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let running_state = ExecuteRunning {

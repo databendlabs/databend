@@ -38,8 +38,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - uses: ./.github/actions/setup_bendsql
-
     - name: Install script dependencies
       shell: bash
       run: |
@@ -53,10 +51,12 @@ runs:
         BENCHMARK_DATASET: ${{ inputs.dataset }}
         BENCHMARK_SIZE: ${{ inputs.size }}
         BENCHMARK_IMAGE_TAG: ${{ inputs.image_tag }}
+        BENCHMARK_DATABASE: clickbench
         CLOUD_EMAIL: ${{ inputs.cloud_email }}
         CLOUD_PASSWORD: ${{ inputs.cloud_password }}
         CLOUD_ORG: ${{ inputs.cloud_org }}
         CLOUD_ENDPOINT: ${{ inputs.cloud_endpoint }}
+        CLOUD_WAREHOUSE: benchmark-${{ inputs.run_id }}
       shell: bash
       run: |
         ./benchmark_cloud.sh
@@ -96,10 +96,17 @@ runs:
         jq ".machine = \"${{ inputs.size }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
         jq ".tags = [\"${BENCHMARK_TYPE}\", \"serverless\"]" <result.json >result.json.tmp && mv result.json.tmp result.json
         jq ".comment = \"commit:${{ inputs.sha }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
-        mv result.json result-${{ inputs.dataset }}-cloud.json
+        mv result.json result-${{ inputs.dataset }}-cloud-${{ inputs.size }}.json
 
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
         name: benchmark-${{ inputs.dataset }}-cloud-${{ inputs.size }}
         path: benchmark/clickbench/result-${{ inputs.dataset }}-cloud-${{ inputs.size }}.json
+
+    - name: Remove warehouse
+      if: always()
+      shell: bash
+      continue-on-error: true
+      run: |
+        bendsql cloud warehouse delete benchmark-${{ inputs.run_id }}

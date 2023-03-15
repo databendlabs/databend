@@ -18,7 +18,6 @@ extern crate criterion;
 use common_ast::parser::parse_expr;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
-use common_ast::Backtrace;
 use common_ast::Dialect;
 use criterion::black_box;
 use criterion::Criterion;
@@ -31,8 +30,7 @@ fn bench(c: &mut Criterion) {
         b.iter(|| {
             let case = r#"explain SELECT SUM(count) FROM (SELECT ((((((((((((true)and(true)))or((('614')like('998831')))))or(false)))and((true IN (true, true, (-1014651046 NOT BETWEEN -1098711288 AND -1158262473))))))or((('780820706')=('')))) IS NOT NULL AND ((((((((((true)AND(true)))or((('614')like('998831')))))or(false)))and((true IN (true, true, (-1014651046 NOT BETWEEN -1098711288 AND -1158262473))))))OR((('780820706')=(''))))) ::INT64)as count FROM t0) as res;"#;
             let tokens = tokenize_sql(case).unwrap();
-            let backtrace = Backtrace::new();
-            let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace).unwrap();
+            let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
             black_box(stmt);
         })
     });
@@ -40,8 +38,7 @@ fn bench(c: &mut Criterion) {
         b.iter(|| {
             let case = r#"SELECT SUM(count) FROM (SELECT ((((((((((((true)and(true)))or((('614')like('998831')))))or(false)))and((true IN (true, true, (-1014651046 NOT BETWEEN -1098711288 AND -1158262473))))))or((('780820706')=('')))) IS NOT NULL AND ((((((((((true)AND(true)))or((('614')like('998831')))))or(false)))and((true IN (true, true, (-1014651046 NOT BETWEEN -1098711288 AND -1158262473))))))OR((('780820706')=(''))))) ::INT64)as count FROM t0) as res;"#;
             let tokens = tokenize_sql(case).unwrap();
-            let backtrace = Backtrace::new();
-            let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace).unwrap();
+            let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
             black_box(stmt);
         })
     });
@@ -49,8 +46,7 @@ fn bench(c: &mut Criterion) {
         b.iter(|| {
             let case = r#"a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a AND a"#;
             let tokens = tokenize_sql(case).unwrap();
-            let backtrace = Backtrace::new();
-            let expr = parse_expr(&tokens, Dialect::PostgreSQL, &backtrace).unwrap();
+            let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
             black_box(expr);
         })
     });
@@ -58,8 +54,7 @@ fn bench(c: &mut Criterion) {
         b.iter(|| {
             let case = r#"((((((((((((((((((((((((((((((1))))))))))))))))))))))))))))))"#;
             let tokens = tokenize_sql(case).unwrap();
-            let backtrace = Backtrace::new();
-            let expr = parse_expr(&tokens, Dialect::PostgreSQL, &backtrace).unwrap();
+            let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
             black_box(expr);
         })
     });

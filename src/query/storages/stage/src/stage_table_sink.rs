@@ -124,10 +124,10 @@ impl StageTableSink {
         );
 
         // assert_eq!("00000110", format!("{:0>8}", "110"))
-        if self.table_info.path.ends_with("data_") {
+        if self.table_info.files_info.path.ends_with("data_") {
             format!(
                 "{}{}_{:0>4}_{:0>8}.{}",
-                self.table_info.path,
+                self.table_info.files_info.path,
                 self.uuid,
                 self.group_id,
                 self.batch_id,
@@ -136,7 +136,7 @@ impl StageTableSink {
         } else {
             format!(
                 "{}/data_{}_{:0>4}_{:0>8}.{}",
-                self.table_info.path,
+                self.table_info.files_info.path,
                 self.uuid,
                 self.group_id,
                 self.batch_id,
