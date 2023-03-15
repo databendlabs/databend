@@ -602,17 +602,8 @@ impl<'a> TypeChecker<'a> {
                 }
                 let args_ref: Vec<&Expr> = arguments.iter().collect();
 
-                match args_ref.len() {
-                    // faster path
-                    3 => {
-                        self.resolve_function(*span, "if", vec![], &args_ref, required_type)
-                            .await?
-                    }
-                    _ => {
-                        self.resolve_function(*span, "multi_if", vec![], &args_ref, required_type)
-                            .await?
-                    }
-                }
+                self.resolve_function(*span, "multi_if", vec![], &args_ref, required_type)
+                    .await?
             }
 
             Expr::Substring {
@@ -1534,11 +1525,11 @@ impl<'a> TypeChecker<'a> {
                 )
             }
             ("nullif", &[arg_x, arg_y]) => {
-                // Rewrite nullif(x, y) to if(x = y, null, x)
+                // Rewrite nullif(x, y) to multi_if(x = y, null, x)
                 Some(
                     self.resolve_function(
                         span,
-                        "if",
+                        "multi_if",
                         vec![],
                         &[
                             &Expr::BinaryOp {
@@ -1559,11 +1550,11 @@ impl<'a> TypeChecker<'a> {
                 )
             }
             ("ifnull", &[arg_x, arg_y]) => {
-                // Rewrite ifnull(x, y) to if(is_null(x), y, x)
+                // Rewrite ifnull(x, y) to multi_if(is_null(x), y, x)
                 Some(
                     self.resolve_function(
                         span,
-                        "if",
+                        "multi_if",
                         vec![],
                         &[
                             &Expr::IsNull {

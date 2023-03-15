@@ -77,21 +77,10 @@ pub fn check<Index: ColumnIndex>(
             args,
             params,
         } => {
-            let mut args_expr: Vec<_> = args
+            let args_expr: Vec<_> = args
                 .iter()
                 .map(|arg| check(arg, fn_registry))
                 .try_collect()?;
-
-            if name == "if" || name == "multi_if" {
-                args_expr
-                    .iter_mut()
-                    .skip(1)
-                    .step_by(2)
-                    .for_each(|expr| *expr = expr.wrap_catch());
-                let last = args_expr.last_mut().unwrap();
-                *last = last.wrap_catch()
-            }
-
             check_function(*span, name, params, &args_expr, fn_registry)
         }
     }

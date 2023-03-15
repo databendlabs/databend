@@ -192,7 +192,6 @@ impl<'a, T: ValueType> ValueRef<'a, T> {
         }
     }
 
-    /// # Safety
     pub unsafe fn index_unchecked(&'a self, index: usize) -> T::ScalarRef<'a> {
         match self {
             ValueRef::Scalar(scalar) => scalar.clone(),
@@ -213,6 +212,20 @@ impl<'a, T: ValueType> Value<T> {
         match self {
             Value::Scalar(scalar) => ValueRef::Scalar(T::to_scalar_ref(scalar)),
             Value::Column(col) => ValueRef::Column(col.clone()),
+        }
+    }
+
+    pub fn index(&'a self, index: usize) -> Option<T::ScalarRef<'a>> {
+        match self {
+            Value::Scalar(scalar) => Some(T::to_scalar_ref(scalar)),
+            Value::Column(col) => T::index_column(col, index),
+        }
+    }
+
+    pub unsafe fn index_unchecked(&'a self, index: usize) -> T::ScalarRef<'a> {
+        match self {
+            Value::Scalar(scalar) => T::to_scalar_ref(scalar),
+            Value::Column(c) => T::index_column_unchecked(c, index),
         }
     }
 }

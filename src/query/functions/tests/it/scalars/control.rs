@@ -109,7 +109,10 @@ fn test_multi_if(file: &mut impl Write) {
             "cond_a",
             BooleanType::from_data(vec![true, true, false, false]),
         ),
-        ("expr_a", Int64Type::from_data(vec![1i64, 2, 0, 4])),
+        (
+            "expr_a",
+            Int64Type::from_data_with_validity(vec![1i64, 0, 0, 4], vec![true, false, true, true]),
+        ),
         ("expr_else", Int64Type::from_data(vec![9i64, 10, 11, 12])),
     ]);
     run_ast(file, "multi_if(cond_a, 1 / expr_a, expr_else)", &[

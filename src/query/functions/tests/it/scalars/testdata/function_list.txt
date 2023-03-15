@@ -6,6 +6,7 @@ array_length -> length
 array_slice -> slice
 ceiling -> ceil
 character_length -> char_length
+if -> multi_if
 intdiv -> div
 ipv4_num_to_string -> inet_ntoa
 ipv4_string_to_num -> inet_aton
@@ -1690,7 +1691,6 @@ Functions overloads:
 1 humanize_number(Float64 NULL) :: String NULL
 0 humanize_size(Float64) :: String
 1 humanize_size(Float64 NULL) :: String NULL
-0 if FACTORY
 0 ignore FACTORY
 0 inet_aton(String) :: UInt32
 1 inet_aton(String NULL) :: UInt32 NULL

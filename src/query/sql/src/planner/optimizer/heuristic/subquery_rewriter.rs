@@ -346,7 +346,7 @@ impl SubqueryRewriter {
                         argument: Box::new(ScalarExpr::FunctionCall(FunctionCall {
                             params: vec![],
                             arguments: vec![is_not_null, cast_column_ref_to_uint64, zero],
-                            func_name: "if".to_string(),
+                            func_name: "multi_if".to_string(),
                         })),
                         target_type: Box::new(
                             DataType::Number(NumberDataType::UInt64).wrap_nullable(),
