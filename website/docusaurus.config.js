@@ -132,7 +132,7 @@ const config = {
                         items: [
                             {
                                 label: 'Performance',
-                                to: '/doc/performance'
+                                to: 'https://databend.rs/blog/clickbench-databend-top'
                             },
                             {
                                 label: 'Deployment',
