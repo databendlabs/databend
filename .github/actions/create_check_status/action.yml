@@ -41,6 +41,8 @@ runs:
       with:
         github-token: ${{ inputs.github_token }}
         script: |
+          let summary = `${process.env.param_summary}
+          [View Details](https://github.com/datafuselabs/databend/actions/runs/${context.runId})`;
           let data = {
             owner: context.repo.owner,
             repo: context.repo.repo,
@@ -50,10 +52,10 @@ runs:
             details_url: process.env.param_url,
             output: {
               title: process.env.param_title,
-              summary: process.env.param_summart,
+              summary: summary,
             },
           };
-          if (process.env.param_status === 'completed'') {
+          if (process.env.param_status === 'completed') {
             data.conclusion = process.env.param_conclusion;
           }
           await github.rest.checks.create(data);
