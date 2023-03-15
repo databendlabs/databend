@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use base64::encode_config;
-use base64::URL_SAFE_NO_PAD;
+use base64::engine::general_purpose;
+use base64::prelude::*;
 use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_app::principal::AuthInfo;
@@ -41,8 +41,9 @@ struct NonCustomClaims {
 fn get_jwks_file_rs256(kid: &str) -> (RS256KeyPair, String) {
     let key_pair = RS256KeyPair::generate(2048).unwrap().with_key_id(kid);
     let rsa_components = key_pair.public_key().to_components();
-    let e = encode_config(rsa_components.e, URL_SAFE_NO_PAD);
-    let n = encode_config(rsa_components.n, URL_SAFE_NO_PAD);
+
+    let e = general_purpose::URL_SAFE_NO_PAD.encode(rsa_components.e);
+    let n = general_purpose::URL_SAFE_NO_PAD.encode(rsa_components.n);
     let j =
         serde_json::json!({"keys": [ {"kty": "RSA", "kid": kid, "e": e, "n": n, } ] }).to_string();
     (key_pair, j)
@@ -193,8 +194,8 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
     let kid = "test_kid";
     let key_pair = RS256KeyPair::generate(2048)?.with_key_id(kid);
     let rsa_components = key_pair.public_key().to_components();
-    let e = encode_config(rsa_components.e, URL_SAFE_NO_PAD);
-    let n = encode_config(rsa_components.n, URL_SAFE_NO_PAD);
+    let e = general_purpose::URL_SAFE_NO_PAD.encode(rsa_components.e);
+    let n = general_purpose::URL_SAFE_NO_PAD.encode(rsa_components.n);
     let j =
         serde_json::json!({"keys": [ {"kty": "RSA", "kid": kid, "e": e, "n": n, } ] }).to_string();
 
@@ -424,8 +425,8 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
     let encoded_point =
         EncodedPoint::from_bytes(key_pair.public_key().public_key().to_bytes_uncompressed())
             .expect("must be valid encode point");
-    let x = encode_config(encoded_point.x().unwrap(), URL_SAFE_NO_PAD);
-    let y = encode_config(encoded_point.y().unwrap(), URL_SAFE_NO_PAD);
+    let x = general_purpose::URL_SAFE_NO_PAD.encode(encoded_point.x().unwrap());
+    let y = general_purpose::URL_SAFE_NO_PAD.encode(encoded_point.y().unwrap());
     let j =
         serde_json::json!({"keys": [ {"kty": "EC", "kid": kid, "x": x, "y": y, } ] }).to_string();
 
@@ -651,8 +652,8 @@ async fn test_jwt_auth_mgr_with_management() -> Result<()> {
     let user_name = "test";
     let key_pair = RS256KeyPair::generate(2048)?.with_key_id(kid);
     let rsa_components = key_pair.public_key().to_components();
-    let e = encode_config(rsa_components.e, URL_SAFE_NO_PAD);
-    let n = encode_config(rsa_components.n, URL_SAFE_NO_PAD);
+    let e = general_purpose::URL_SAFE_NO_PAD.encode(rsa_components.e);
+    let n = general_purpose::URL_SAFE_NO_PAD.encode(rsa_components.n);
     let j =
         serde_json::json!({"keys": [ {"kty": "RSA", "kid": kid, "e": e, "n": n, } ] }).to_string();
 
