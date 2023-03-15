@@ -97,7 +97,7 @@ externalLocation ::=
 
 </TabItem>
 
-<TabItem value="Huawei Object Storage" label="Huawei Object">
+<TabItem value="Huawei Object Storage" label="Huawei OBS">
 
 ```sql
 externalLocation ::=
