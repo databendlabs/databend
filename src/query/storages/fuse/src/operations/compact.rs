@@ -134,7 +134,7 @@ impl FuseTable {
         // Status.
         {
             let status = format!(
-                "begin to compact blocks, need to be compacted:{}",
+                "compact: begin to run compact tasks, will generate new blocks:{}",
                 mutator.compact_tasks.len()
             );
             ctx.set_status_info(&status);

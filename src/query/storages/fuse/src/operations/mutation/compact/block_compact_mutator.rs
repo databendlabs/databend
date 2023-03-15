@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::time::Instant;
 use std::vec;
 
 use common_catalog::plan::Partitions;
@@ -29,6 +30,7 @@ use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
+use tracing::info;
 
 use crate::io::SegmentsIO;
 use crate::operations::merge_into::mutation_meta::mutation_log::BlockMetaIndex;
@@ -77,6 +79,7 @@ impl BlockCompactMutator {
     }
 
     pub async fn target_select(&mut self) -> Result<()> {
+        let start = Instant::now();
         let snapshot = self.compact_params.base_snapshot.clone();
         let segment_locations = &snapshot.segments;
         let number_segments = segment_locations.len();
@@ -85,6 +88,13 @@ impl BlockCompactMutator {
         let mut segment_idx = 0;
         let mut compacted_segment_cnt = 0;
         let mut checked_segment_cnt = 0;
+
+        // Status.
+        {
+            let status = "compact: begin to build compact tasks";
+            self.ctx.set_status_info(status);
+            info!(status);
+        }
 
         let segments_io = SegmentsIO::create(
             self.ctx.clone(),
@@ -131,6 +141,7 @@ impl BlockCompactMutator {
         if !checker.segments.is_empty() {
             let segments = std::mem::take(&mut checker.segments);
             if SegmentCompactChecker::check_for_compact(&segments) {
+                compacted_segment_cnt += segments.len();
                 self.build_compact_tasks(segments, segment_idx);
             } else {
                 self.unchanged_segments_map.insert(
@@ -158,6 +169,18 @@ impl BlockCompactMutator {
                     segment_idx += 1;
                 }
             }
+        }
+
+        // Status.
+        {
+            let status = format!(
+                "compact: end to build compact tasks:{}, segments to be compacted:{}, cost:{} sec",
+                self.compact_tasks.len(),
+                checked_segment_cnt,
+                start.elapsed().as_secs()
+            );
+            self.ctx.set_status_info(&status);
+            info!(status);
         }
         Ok(())
     }

@@ -153,6 +153,13 @@ impl Processor for MutationSink {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::ReadMeta(input_meta) => {
+                // Status
+                {
+                    let status = "mutation: begin try to commit";
+                    self.ctx.set_status_info(status);
+                    info!(status);
+                }
+
                 let meta = MutationSinkMeta::from_meta(&input_meta)?;
 
                 self.merged_segments = meta.segments.clone();

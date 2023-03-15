@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_base::runtime::execute_futures_in_parallel;
 use common_catalog::table_context::TableContext;
@@ -59,6 +60,9 @@ pub struct CompactAggregator {
     merge_blocks: HashMap<usize, BTreeMap<usize, Arc<BlockMeta>>>,
     thresholds: BlockThresholds,
     abort_operation: AbortOperation,
+
+    start_time: Instant,
+    total_tasks: usize,
 }
 
 impl CompactAggregator {
@@ -76,6 +80,8 @@ impl CompactAggregator {
             merge_blocks: mutator.unchanged_blocks_map,
             thresholds: mutator.thresholds,
             abort_operation: AbortOperation::default(),
+            start_time: Instant::now(),
+            total_tasks: mutator.compact_tasks.len(),
         }
     }
 
@@ -129,6 +135,18 @@ impl AsyncAccumulatingTransform for CompactAggregator {
                     v.insert(meta.index.block_idx, meta.block.clone());
                 })
                 .or_insert(BTreeMap::from([(meta.index.block_idx, meta.block.clone())]));
+
+            // Refresh status
+            {
+                let status = format!(
+                    "compact: run compact tasks:{}/{}, cost:{} sec",
+                    self.abort_operation.blocks.len(),
+                    self.total_tasks,
+                    self.start_time.elapsed().as_secs()
+                );
+                self.ctx.set_status_info(&status);
+                info!(status);
+            }
         }
         // no partial output
         Ok(None)
@@ -154,9 +172,28 @@ impl AsyncAccumulatingTransform for CompactAggregator {
             });
         }
 
+        let start = Instant::now();
+        // Refresh status
+        {
+            let status = format!(
+                "compact: begin to write new segments:{}",
+                serialized_segments.len()
+            );
+            self.ctx.set_status_info(&status);
+            info!(status);
+        }
         // write segments.
         self.write_segments(serialized_segments).await?;
 
+        // Refresh status
+        {
+            let status = format!(
+                "compact: end to write new segments, cost:{} sec",
+                start.elapsed().as_secs()
+            );
+            self.ctx.set_status_info(&status);
+            info!(status);
+        }
         // gather the all segments.
         let merged_segments = std::mem::take(&mut self.merged_segments)
             .into_values()
