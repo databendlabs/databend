@@ -21,6 +21,7 @@ use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::StageInfo;
+use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
 use opendal::Operator;
 
@@ -33,9 +34,14 @@ impl ParquetTable {
         read_options: ParquetReadOptions,
         stage_info: StageInfo,
         files_info: StageFilesInfo,
+        files_to_read: Option<Vec<StageFileInfo>>,
     ) -> Result<Arc<dyn Table>> {
-        let first_file = files_info.blocking_first_file(&operator)?;
-        let arrow_schema = Self::blocking_prepare_metas(&first_file.path, operator.clone())?;
+        let first_file = match &files_to_read {
+            Some(files) => files[0].path.clone(),
+            None => files_info.blocking_first_file(&operator)?.path,
+        };
+
+        let arrow_schema = Self::blocking_prepare_metas(&first_file, operator.clone())?;
 
         let table_info = create_parquet_table_info(arrow_schema.clone());
 
@@ -46,6 +52,7 @@ impl ParquetTable {
             read_options,
             stage_info,
             files_info,
+            files_to_read,
         }))
     }
 

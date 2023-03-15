@@ -30,8 +30,10 @@ use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatOptions;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
+use common_meta_app::schema::TableCopiedFileInfo;
 use common_settings::Settings;
 use common_storage::DataOperator;
+use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
 
 use crate::catalog::Catalog;
@@ -133,4 +135,20 @@ pub trait TableContext: Send + Sync {
 
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;
+
+    async fn color_copied_files(
+        &self,
+        catalog_name: &str,
+        database_name: &str,
+        table_name: &str,
+        files: Vec<StageFileInfo>,
+    ) -> Result<Vec<StageFileInfo>>;
+
+    async fn upsert_copied_files(
+        &self,
+        catalog_name: &str,
+        database_name: &str,
+        table_name: &str,
+        copy_stage_files: BTreeMap<String, TableCopiedFileInfo>,
+    ) -> Result<()>;
 }
