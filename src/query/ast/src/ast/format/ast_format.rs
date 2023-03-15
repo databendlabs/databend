@@ -2074,19 +2074,47 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 FormatTreeNode::with_children(selection_format_ctx, vec![selection_child]);
             children.push(selection_node);
         }
-        if !stmt.group_by.is_empty() {
-            let mut group_by_list_children = Vec::with_capacity(stmt.group_by.len());
-            for group_by in stmt.group_by.iter() {
-                self.visit_expr(group_by);
-                group_by_list_children.push(self.children.pop().unwrap());
+        match &stmt.group_by {
+            Some(GroupBy::Normal(exprs)) => {
+                let mut group_by_list_children = Vec::with_capacity(exprs.len());
+                for group_by in exprs.iter() {
+                    self.visit_expr(group_by);
+                    group_by_list_children.push(self.children.pop().unwrap());
+                }
+                let group_by_list_name = "GroupByList".to_string();
+                let group_by_list_format_ctx = AstFormatContext::with_children(
+                    group_by_list_name,
+                    group_by_list_children.len(),
+                );
+                let group_by_list_node =
+                    FormatTreeNode::with_children(group_by_list_format_ctx, group_by_list_children);
+                children.push(group_by_list_node);
             }
-            let group_by_list_name = "GroupByList".to_string();
-            let group_by_list_format_ctx =
-                AstFormatContext::with_children(group_by_list_name, group_by_list_children.len());
-            let group_by_list_node =
-                FormatTreeNode::with_children(group_by_list_format_ctx, group_by_list_children);
-            children.push(group_by_list_node);
+            Some(GroupBy::GroupingSets(sets)) => {
+                let mut grouping_sets = Vec::with_capacity(sets.len());
+                for set in sets.iter() {
+                    let mut grouping_set = Vec::with_capacity(set.len());
+                    for expr in set.iter() {
+                        self.visit_expr(expr);
+                        grouping_set.push(self.children.pop().unwrap());
+                    }
+                    let name = "GroupingSet".to_string();
+                    let grouping_set_format_ctx =
+                        AstFormatContext::with_children(name, grouping_set.len());
+                    let grouping_set_node =
+                        FormatTreeNode::with_children(grouping_set_format_ctx, grouping_set);
+                    grouping_sets.push(grouping_set_node);
+                }
+                let group_by_list_name = "GroupByList".to_string();
+                let group_by_list_format_ctx =
+                    AstFormatContext::with_children(group_by_list_name, grouping_sets.len());
+                let group_by_list_node =
+                    FormatTreeNode::with_children(group_by_list_format_ctx, grouping_sets);
+                children.push(group_by_list_node);
+            }
+            _ => {}
         }
+
         if let Some(having) = &stmt.having {
             self.visit_expr(having);
             let having_child = self.children.pop().unwrap();

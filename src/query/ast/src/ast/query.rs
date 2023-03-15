@@ -82,9 +82,20 @@ pub struct SelectStmt {
     // `WHERE` clause
     pub selection: Option<Expr>,
     // `GROUP BY` clause
-    pub group_by: Vec<Expr>,
+    pub group_by: Option<GroupBy>,
     // `HAVING` clause
     pub having: Option<Expr>,
+}
+
+/// Group by Clause.
+#[derive(Debug, Clone, PartialEq)]
+pub enum GroupBy {
+    /// GROUP BY expr [, expr]*
+    Normal(Vec<Expr>),
+    /// GROUP BY GROUPING SETS ( GroupSet [, GroupSet]* )
+    ///
+    /// GroupSet := (expr [, expr]*) | expr
+    GroupingSets(Vec<Vec<Expr>>),
 }
 
 /// A relational set expression, like `SELECT ... FROM ... {UNION|EXCEPT|INTERSECT} SELECT ... FROM ...`
@@ -442,9 +453,25 @@ impl Display for SelectStmt {
         }
 
         // GROUP BY clause
-        if !self.group_by.is_empty() {
+        if self.group_by.is_some() {
             write!(f, " GROUP BY ")?;
-            write_comma_separated_list(f, &self.group_by)?;
+            match self.group_by.as_ref().unwrap() {
+                GroupBy::Normal(exprs) => {
+                    write_comma_separated_list(f, exprs)?;
+                }
+                GroupBy::GroupingSets(sets) => {
+                    write!(f, "GROUPING SETS (")?;
+                    for (i, set) in sets.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "(")?;
+                        write_comma_separated_list(f, set)?;
+                        write!(f, ")")?;
+                    }
+                    write!(f, ")")?;
+                }
+            }
         }
 
         // HAVING clause

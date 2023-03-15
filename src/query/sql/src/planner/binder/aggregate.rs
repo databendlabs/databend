@@ -17,11 +17,14 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use common_ast::ast::Expr;
+use common_ast::ast::GroupBy;
 use common_ast::ast::Literal;
 use common_ast::ast::SelectTarget;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use itertools::Itertools;
 
 use super::prune_by_children;
 use crate::binder::scalar::ScalarBinder;
@@ -45,6 +48,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Unnest;
 use crate::BindContext;
+use crate::IndexType;
 use crate::MetadataRef;
 
 #[derive(Default, Clone, PartialEq, Eq, Debug)]
@@ -74,6 +78,11 @@ pub struct AggregateInfo {
     /// TODO(leiysky): so far we are using `Debug` string of `Scalar` as identifier,
     /// maybe a more reasonable way is needed
     pub group_items_map: HashMap<String, usize>,
+
+    /// Index for virtual column `grouping_id`. It's valid only if `grouping_sets` is not empty.
+    pub grouping_id_index: IndexType,
+    /// Each grouping set is a list of column indices in `group_items`.
+    pub grouping_sets: Vec<Vec<IndexType>>,
 }
 
 pub(super) struct AggregateRewriter<'a> {
@@ -247,7 +256,7 @@ impl Binder {
         &mut self,
         bind_context: &mut BindContext,
         select_list: &SelectList<'a>,
-        group_by: &[Expr],
+        group_by: &GroupBy,
     ) -> Result<()> {
         let mut available_aliases = vec![];
 
@@ -270,8 +279,23 @@ impl Binder {
             }
         }
 
-        self.resolve_group_items(bind_context, select_list, group_by, &available_aliases)
-            .await
+        match group_by {
+            GroupBy::Normal(exprs) => {
+                self.resolve_group_items(
+                    bind_context,
+                    select_list,
+                    exprs,
+                    &available_aliases,
+                    false,
+                    &mut vec![],
+                )
+                .await
+            }
+            GroupBy::GroupingSets(sets) => {
+                self.resolve_grouping_sets(bind_context, select_list, sets, &available_aliases)
+                    .await
+            }
+        }
     }
 
     pub(super) async fn bind_aggregate(
@@ -307,10 +331,67 @@ impl Binder {
             aggregate_functions: bind_context.aggregate_info.aggregate_functions.clone(),
             from_distinct: false,
             limit: None,
+            grouping_id_index: agg_info.grouping_id_index,
+            grouping_sets: agg_info.grouping_sets.clone(),
         };
         new_expr = SExpr::create_unary(aggregate_plan.into(), new_expr);
 
         Ok(new_expr)
+    }
+
+    async fn resolve_grouping_sets(
+        &mut self,
+        bind_context: &mut BindContext,
+        select_list: &SelectList<'_>,
+        sets: &[Vec<Expr>],
+        available_aliases: &[(ColumnBinding, ScalarExpr)],
+    ) -> Result<()> {
+        let mut grouping_sets = Vec::with_capacity(sets.len());
+        for set in sets {
+            self.resolve_group_items(
+                bind_context,
+                select_list,
+                set,
+                available_aliases,
+                true,
+                &mut grouping_sets,
+            )
+            .await?;
+        }
+        // `grouping_sets` stores formatted `ScalarExpr` for each grouping set.
+        let grouping_sets = grouping_sets
+            .into_iter()
+            .map(|set| {
+                let mut set = set
+                    .into_iter()
+                    .map(|s| {
+                        let offset = *bind_context.aggregate_info.group_items_map.get(&s).unwrap();
+                        bind_context.aggregate_info.group_items[offset].index
+                    })
+                    .collect::<Vec<_>>();
+                // Grouping sets with the same items should be treated as the same.
+                set.sort();
+                set
+            })
+            .collect::<Vec<_>>();
+        let grouping_sets = grouping_sets.into_iter().unique().collect();
+        bind_context.aggregate_info.grouping_sets = grouping_sets;
+        // Add a virtual column `_grouping_id` to group items.
+        let grouping_id_column = self.create_column_binding(
+            None,
+            None,
+            "_grouping_id".to_string(),
+            DataType::Number(NumberDataType::UInt32),
+        );
+        let index = grouping_id_column.index;
+        bind_context.aggregate_info.grouping_id_index = index;
+        bind_context.aggregate_info.group_items.push(ScalarItem {
+            index,
+            scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                column: grouping_id_column,
+            }),
+        });
+        Ok(())
     }
 
     async fn resolve_group_items(
@@ -319,7 +400,12 @@ impl Binder {
         select_list: &SelectList<'_>,
         group_by: &[Expr],
         available_aliases: &[(ColumnBinding, ScalarExpr)],
+        collect_grouping_sets: bool,
+        grouping_sets: &mut Vec<Vec<String>>,
     ) -> Result<()> {
+        if collect_grouping_sets {
+            grouping_sets.push(Vec::with_capacity(group_by.len()));
+        }
         // Resolve group items with `FROM` context. Since the alias item can not be resolved
         // from the context, we can detect the failure and fallback to resolving with `available_aliases`.
         for expr in group_by.iter() {
@@ -362,10 +448,15 @@ impl Binder {
                 .await
                 .or_else(|e| Self::resolve_alias_item(bind_context, expr, available_aliases, e))?;
 
+            let scalar_str = format!("{:?}", scalar_expr);
+            if collect_grouping_sets && !grouping_sets.last().unwrap().contains(&scalar_str) {
+                grouping_sets.last_mut().unwrap().push(scalar_str.clone());
+            }
+
             if bind_context
                 .aggregate_info
                 .group_items_map
-                .get(&format!("{:?}", &scalar_expr))
+                .get(&scalar_str)
                 .is_some()
             {
                 // The group key is duplicated
@@ -389,7 +480,7 @@ impl Binder {
                 index,
             });
             bind_context.aggregate_info.group_items_map.insert(
-                format!("{:?}", &scalar_expr),
+                scalar_str,
                 bind_context.aggregate_info.group_items.len() - 1,
             );
         }

@@ -35,6 +35,7 @@ use common_expression::TableSchema;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 
 use super::cast_expr_to_non_null_boolean;
+use super::AggregateExpand;
 use super::AggregateFinal;
 use super::AggregateFunctionDesc;
 use super::AggregateFunctionSignature;
@@ -521,12 +522,30 @@ impl PhysicalPlanBuilder {
 
                         match input {
                             PhysicalPlan::Exchange(PhysicalExchange { input, kind, .. }) => {
-                                let aggregate_partial = AggregatePartial {
-                                    plan_id: self.next_plan_id(),
-                                    input,
-                                    agg_funcs,
-                                    group_by: group_items,
-                                    stat_info: Some(stat_info),
+                                let aggregate_partial = if !agg.grouping_sets.is_empty() {
+                                    let expand = AggregateExpand {
+                                        plan_id: self.next_plan_id(),
+                                        input,
+                                        group_bys: group_items.clone(),
+                                        grouping_id_index: agg.grouping_id_index,
+                                        grouping_sets: agg.grouping_sets.clone(),
+                                        stat_info: Some(stat_info.clone()),
+                                    };
+                                    AggregatePartial {
+                                        plan_id: self.next_plan_id(),
+                                        input: Box::new(PhysicalPlan::AggregateExpand(expand)),
+                                        agg_funcs,
+                                        group_by: group_items,
+                                        stat_info: Some(stat_info),
+                                    }
+                                } else {
+                                    AggregatePartial {
+                                        plan_id: self.next_plan_id(),
+                                        input,
+                                        agg_funcs,
+                                        group_by: group_items,
+                                        stat_info: Some(stat_info),
+                                    }
                                 };
 
                                 let group_by_key_index =
@@ -553,14 +572,33 @@ impl PhysicalPlanBuilder {
                                     }],
                                 })
                             }
-                            _ => PhysicalPlan::AggregatePartial(AggregatePartial {
-                                plan_id: self.next_plan_id(),
-                                agg_funcs,
-                                group_by: group_items,
-                                input: Box::new(input),
-
-                                stat_info: Some(stat_info),
-                            }),
+                            _ => {
+                                if !agg.grouping_sets.is_empty() {
+                                    let expand = AggregateExpand {
+                                        plan_id: self.next_plan_id(),
+                                        input: Box::new(input),
+                                        group_bys: group_items.clone(),
+                                        grouping_id_index: agg.grouping_id_index,
+                                        grouping_sets: agg.grouping_sets.clone(),
+                                        stat_info: Some(stat_info.clone()),
+                                    };
+                                    PhysicalPlan::AggregatePartial(AggregatePartial {
+                                        plan_id: self.next_plan_id(),
+                                        agg_funcs,
+                                        group_by: group_items,
+                                        input: Box::new(PhysicalPlan::AggregateExpand(expand)),
+                                        stat_info: Some(stat_info),
+                                    })
+                                } else {
+                                    PhysicalPlan::AggregatePartial(AggregatePartial {
+                                        plan_id: self.next_plan_id(),
+                                        agg_funcs,
+                                        group_by: group_items,
+                                        input: Box::new(input),
+                                        stat_info: Some(stat_info),
+                                    })
+                                }
+                            }
                         }
                     }
 

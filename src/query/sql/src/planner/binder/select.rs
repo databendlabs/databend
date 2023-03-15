@@ -104,8 +104,10 @@ impl Binder {
         let (mut scalar_items, projections) = self.analyze_projection(&select_list)?;
 
         // This will potentially add some alias group items to `from_context` if find some.
-        self.analyze_group_items(&mut from_context, &select_list, &stmt.group_by)
-            .await?;
+        if let Some(group_by) = stmt.group_by.as_ref() {
+            self.analyze_group_items(&mut from_context, &select_list, group_by)
+                .await?;
+        }
 
         self.analyze_aggregate_select(&mut from_context, &mut select_list)?;
 
