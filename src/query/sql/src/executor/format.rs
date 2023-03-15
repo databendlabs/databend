@@ -309,6 +309,10 @@ fn aggregate_expand_to_format_tree(
                             column_name
                         }
                         ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
+                        ColumnEntry::InternalColumn(TableInternalColumn {
+                            internal_column,
+                            ..
+                        }) => internal_column.column_name().to_string(),
                     }
                 })
                 .collect::<Vec<_>>()
