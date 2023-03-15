@@ -97,15 +97,14 @@ jobs:
           status: queued
           title: "Benchmark Cloud for hits with Large warehouse"
           summary: "status: **queued**"
-      - uses: ./.github/actions/create_check_status
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          sha: ${{ steps.metadata.outputs.sha }}
-          name: 'Benchmark Cloud / tpch(Large)'
-          status: queued
-          title: "Benchmark Cloud for tpch with Large warehouse"
-          summary: "status: **queued**"
-
+      # - uses: ./.github/actions/create_check_status
+      #   with:
+      #     github_token: ${{ secrets.GITHUB_TOKEN }}
+      #     sha: ${{ steps.metadata.outputs.sha }}
+      #     name: 'Benchmark Cloud / tpch(Large)'
+      #     status: queued
+      #     title: "Benchmark Cloud for tpch with Large warehouse"
+      #     summary: "status: **queued**"
 
   local:
     needs: metadata
@@ -237,6 +236,10 @@ jobs:
         size:
           - Medium
           - Large
+        # TODO: add back after optimization
+        exclude:
+          - dataset: tpch
+            size: Large
       fail-fast: true
       max-parallel: 1
     steps:
