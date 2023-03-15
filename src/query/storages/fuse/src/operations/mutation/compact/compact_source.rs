@@ -98,6 +98,9 @@ impl Processor for CompactSource {
         }
 
         if self.output.is_finished() {
+            if !self.finished {
+                return Ok(Event::Async);
+            }
             return Ok(Event::Finished);
         }
 
