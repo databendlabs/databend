@@ -61,9 +61,6 @@ pub struct AggregateInfo {
     /// Arguments of aggregation functions
     pub aggregate_arguments: Vec<ScalarItem>,
 
-    /// infos for window with aggregate function
-    pub window_info: Option<WindowInfo>,
-
     /// Group items of aggregation
     pub group_items: Vec<ScalarItem>,
 
