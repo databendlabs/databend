@@ -66,6 +66,23 @@ error:
 
 
 ---------- Input ----------
+create table a (b tuple(c int, uint64));
+---------- Output ---------
+error: 
+  --> SQL:1:38
+  |
+1 | create table a (b tuple(c int, uint64));
+  | ------          - -----              ^
+  | |               | |                  |
+  | |               | |                  expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, or 30 more ...
+  | |               | |                  while parsing type name
+  | |               | while parsing TUPLE(<name> <type>, ...)
+  | |               | while parsing type name
+  | |               while parsing `<column name> <type> [DEFAULT <default value>] [COMMENT '<comment>']`
+  | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
+
+
+---------- Input ----------
 drop table if a.b
 ---------- Output ---------
 error: 

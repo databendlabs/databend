@@ -1386,26 +1386,20 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         |(_, item_type)| TypeName::Nullable(Box::new(item_type.1)),
     );
     let ty_tuple = map(
-        rule! { TUPLE ~ "(" ~ #comma_separated_list1(tuple_types) ~ ")" },
-        |(_, _, tuple_types, _)| {
-            let mut fields_name = Vec::with_capacity(tuple_types.len());
-            let mut fields_type = Vec::with_capacity(tuple_types.len());
-            for tuple_type in tuple_types {
-                if let Some(field_name) = tuple_type.0 {
-                    fields_name.push(field_name.name);
-                }
-                fields_type.push(tuple_type.1);
-            }
-            if fields_name.is_empty() {
-                TypeName::Tuple {
-                    fields_name: None,
-                    fields_type,
-                }
-            } else {
-                TypeName::Tuple {
-                    fields_name: Some(fields_name),
-                    fields_type,
-                }
+        rule! { TUPLE ~ "(" ~ #comma_separated_list1(type_name) ~ ")" },
+        |(_, _, fields_type, _)| TypeName::Tuple {
+            fields_name: None,
+            fields_type,
+        },
+    );
+    let ty_named_tuple = map(
+        rule! { TUPLE ~ "(" ~ #comma_separated_list1(rule! { #ident ~ #type_name }) ~ ")" },
+        |(_, _, fields, _)| {
+            let (fields_name, fields_type) =
+                fields.into_iter().map(|(name, ty)| (name.name, ty)).unzip();
+            TypeName::Tuple {
+                fields_name: Some(fields_name),
+                fields_type,
             }
         },
     );
@@ -1435,7 +1429,8 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_decimal
             | #ty_array
             | #ty_map
-            | #ty_tuple
+            | #ty_tuple : "TUPLE(<type>, ...)"
+            | #ty_named_tuple : "TUPLE(<name> <type>, ...)"
             | #ty_date
             | #ty_datetime
             | #ty_string
