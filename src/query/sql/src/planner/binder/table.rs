@@ -27,7 +27,6 @@ use common_ast::ast::TableReference;
 use common_ast::ast::TimeTravelPoint;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
-use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::ParquetReadOptions;
@@ -190,8 +189,7 @@ impl Binder {
                             .get(QUERY)
                             .ok_or_else(|| ErrorCode::Internal("Invalid VIEW object"))?;
                         let tokens = tokenize_sql(query.as_str())?;
-                        let backtrace = Backtrace::new();
-                        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
+                        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
                         // For view, we need use a new context to bind it.
                         let mut new_bind_context =
                             BindContext::with_parent(Box::new(bind_context.clone()));

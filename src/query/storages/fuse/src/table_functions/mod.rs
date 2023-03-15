@@ -21,6 +21,7 @@ mod infer_schema;
 mod table_args;
 
 pub use clustering_information::get_cluster_keys;
+pub use clustering_information::unwrap_tuple;
 pub use clustering_information::ClusteringInformation;
 pub use clustering_information::ClusteringInformationTable;
 use common_catalog::table_args::TableArgs;
