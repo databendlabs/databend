@@ -384,11 +384,7 @@ impl Binder {
                 self.bind_stage_table(bind_context, stage_info, files_info, alias, None)
                     .await
             }
-            TableReference::Join { .. } => {
-                // Cover some specif case, such as select * from t0, t1 inner join t2 on t1.a = t2.a
-                // Such case will be right associate
-                self.bind_table_reference(bind_context, table_ref).await
-            }
+            TableReference::Join { .. } => unreachable!(),
         }
     }
 
@@ -452,32 +448,66 @@ impl Binder {
         // Traverse the table reference hierarchy to get to the innermost table
         while let TableReference::Join { join, .. } = current_ref {
             join_stack.push(join);
-            current_ref = &join.left;
+
+            // Check whether the right-hand side is a Join or a TableReference
+            match &*join.right {
+                TableReference::Join { .. } => {
+                    // Traverse the right-hand side if the right-hand side is a Join
+                    current_ref = &join.right;
+                }
+                _ => {
+                    // Traverse the left-hand side if the right-hand side is a TableReference
+                    current_ref = &join.left;
+                }
+            }
         }
 
         // Bind the innermost table
-        let (mut left_expr, mut left_ctx) =
+        // current_ref must be left table in its join
+        let (mut result_expr, mut result_ctx) =
             self.bind_single_table(current_ctx, current_ref).await?;
+
         for join in join_stack.iter().rev() {
-            let (right_expr, right_ctx) = self.bind_single_table(current_ctx, &join.right).await?;
-            let (join_expr, ctx) = self
-                .bind_join(
-                    current_ctx,
-                    left_ctx,
-                    right_ctx,
-                    left_expr,
-                    right_expr,
-                    join,
-                )
-                .await?;
-            left_expr = join_expr;
-            left_ctx = ctx;
+            match &*join.right {
+                TableReference::Join { .. } => {
+                    let (left_expr, left_ctx) =
+                        self.bind_single_table(current_ctx, &join.left).await?;
+                    let (join_expr, ctx) = self
+                        .bind_join(
+                            current_ctx,
+                            left_ctx,
+                            result_ctx,
+                            left_expr,
+                            result_expr,
+                            join,
+                        )
+                        .await?;
+                    result_expr = join_expr;
+                    result_ctx = ctx;
+                }
+                _ => {
+                    let (right_expr, right_ctx) =
+                        self.bind_single_table(current_ctx, &join.right).await?;
+                    let (join_expr, ctx) = self
+                        .bind_join(
+                            current_ctx,
+                            result_ctx,
+                            right_ctx,
+                            result_expr,
+                            right_expr,
+                            join,
+                        )
+                        .await?;
+                    result_expr = join_expr;
+                    result_ctx = ctx;
+                }
+            }
         }
 
-        Ok((left_expr, left_ctx))
+        Ok((result_expr, result_ctx))
     }
 
-    asycn fn bind_cte(
+    async fn bind_cte(
         &mut self,
         bind_context: &BindContext,
         table_name: &str,

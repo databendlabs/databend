@@ -512,3 +512,5 @@ query I
 select count(*) from numbers(10000) as t1 inner join numbers(10000) as t2 on t1.number = t2.number
 ----
 10000
+
+# https://github.com/datafuselabs/databend/issues/10523
