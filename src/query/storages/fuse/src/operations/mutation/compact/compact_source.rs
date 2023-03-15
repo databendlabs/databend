@@ -159,13 +159,14 @@ impl Processor for CompactSource {
 
                 // concat blocks.
                 let new_block = DataBlock::concat(&blocks)?;
+                // generate block statistics.
                 let col_stats_lites = gen_col_stats_lite(
                     &new_block,
                     self.block_reader.schema().fields(),
                     &self.block_reader.default_vals,
                 )?;
-                // generate block statistics.
                 let col_stats = reduce_block_statistics(&stats, Some(&col_stats_lites))?;
+                // build block serialization.
                 let serialized =
                     tokio_rayon::spawn(move || block_builder.build(new_block, Some(col_stats)))
                         .await?;

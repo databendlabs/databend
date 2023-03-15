@@ -86,7 +86,6 @@ impl BlockCompactMutator {
         let mut compacted_segment_cnt = 0;
         let mut checked_segment_cnt = 0;
 
-        // Read all segments information in parallel.
         let segments_io = SegmentsIO::create(
             self.ctx.clone(),
             self.operator.clone(),
@@ -95,16 +94,21 @@ impl BlockCompactMutator {
         let mut checker = SegmentCompactChecker::new(self.compact_params.block_per_seg as u64);
         let max_io_requests = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
         for chunk in segment_locations.chunks(max_io_requests) {
+            // Read the segments information in parallel.
             let segment_infos = segments_io
                 .read_segments(chunk)
                 .await?
                 .into_iter()
                 .collect::<Result<Vec<_>>>()?;
+
+            // Check the segment to be compacted.
+            // Size of compacted segment should be in range R == [threshold, 2 * threshold)
             for (idx, segment) in segment_infos.iter().enumerate() {
                 let segments_vec = checker.add(segment.clone());
                 for segments in segments_vec {
                     if SegmentCompactChecker::check_for_compact(&segments) {
                         compacted_segment_cnt += segments.len();
+                        // build the compact tasks.
                         self.build_compact_tasks(segments, segment_idx);
                     } else {
                         self.unchanged_segments_map
@@ -123,6 +127,7 @@ impl BlockCompactMutator {
             }
         }
 
+        // finalize the compaction.
         if !checker.segments.is_empty() {
             let segments = std::mem::take(&mut checker.segments);
             if SegmentCompactChecker::check_for_compact(&segments) {
@@ -137,6 +142,7 @@ impl BlockCompactMutator {
             segment_idx += 1;
         }
 
+        // combine with the unprocessed segments (which are outside of the limit).
         if checked_segment_cnt < number_segments {
             for chunk in segment_locations[checked_segment_cnt..].chunks(max_io_requests) {
                 let segment_infos = segments_io

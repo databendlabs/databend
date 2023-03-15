@@ -55,6 +55,7 @@ pub struct CompactAggregator {
     merged_segments: BTreeMap<usize, Location>,
     // summarised statistics of all the merged segments
     merged_statistics: Statistics,
+    // locations all the merged blocks.
     merge_blocks: HashMap<usize, BTreeMap<usize, Arc<BlockMeta>>>,
     thresholds: BlockThresholds,
     abort_operation: AbortOperation,
@@ -116,6 +117,7 @@ impl AsyncAccumulatingTransform for CompactAggregator {
     const NAME: &'static str = "CompactAggregator";
 
     async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
+        // gather the input data.
         if let Some(meta) = data
             .get_meta()
             .and_then(CompactSourceMeta::downcast_ref_from)
@@ -135,6 +137,7 @@ impl AsyncAccumulatingTransform for CompactAggregator {
     async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
         let mut serialized_segments = Vec::with_capacity(self.merge_blocks.len());
         for (segment_idx, block_map) in std::mem::take(&mut self.merge_blocks) {
+            // generate the new segment.
             let blocks: Vec<_> = block_map.into_values().collect();
             let new_summary = reduce_block_metas(&blocks, self.thresholds)?;
             merge_statistics_mut(&mut self.merged_statistics, &new_summary)?;
@@ -151,8 +154,10 @@ impl AsyncAccumulatingTransform for CompactAggregator {
             });
         }
 
+        // write segments.
         self.write_segments(serialized_segments).await?;
 
+        // gather the all segments.
         let merged_segments = std::mem::take(&mut self.merged_segments)
             .into_values()
             .collect();
