@@ -22,11 +22,8 @@ use crate::Config;
 // The following code should be removed from the release after the next release.
 // Just give user errors without any detail explanation and migration suggestions.
 impl Config {
-    pub const fn obsoleted_option_keys() -> &'static [&'static str; 14] {
+    pub const fn obsoleted_option_keys() -> &'static [&'static str; 11] {
         &[
-            "async_insert_max_data_size",
-            "async_insert_busy_timeout",
-            "async_insert_stale_timeout",
             "table_disk_cache_mb_size",
             "table_meta_cache_enabled",
             "table_cache_block_meta_count",

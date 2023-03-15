@@ -1242,18 +1242,6 @@ pub struct QueryConfig {
 
     // ----- the following options/args are all deprecated               ----
     // ----- and turned into Option<T>, to help user migrate the configs ----
-    /// OBSOLETED: The maximum memory size of the buffered data collected per insert before being inserted.
-    #[clap(long)]
-    pub async_insert_max_data_size: Option<u64>,
-
-    /// OBSOLETED: The maximum timeout in milliseconds since the first insert before inserting collected data.
-    #[clap(long)]
-    pub async_insert_busy_timeout: Option<u64>,
-
-    /// OBSOLETED: The maximum timeout in milliseconds since the last insert before inserting collected data.
-    #[clap(long)]
-    pub async_insert_stale_timeout: Option<u64>,
-
     /// OBSOLETED: Table disk cache size (mb).
     #[clap(long)]
     pub table_disk_cache_mb_size: Option<u64>,
@@ -1416,9 +1404,6 @@ impl From<InnerQueryConfig> for QueryConfig {
             internal_enable_sandbox_tenant: inner.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: false,
             // obsoleted config entries
-            async_insert_max_data_size: None,
-            async_insert_busy_timeout: None,
-            async_insert_stale_timeout: None,
             table_disk_cache_mb_size: None,
             table_meta_cache_enabled: None,
             table_cache_block_meta_count: None,
