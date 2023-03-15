@@ -2029,6 +2029,7 @@ dependencies = [
  "common-storages-result-cache",
  "common-storages-view",
  "common-users",
+ "ctor",
  "dashmap",
  "globiter",
  "itertools",
@@ -8878,6 +8879,7 @@ dependencies = [
  "storages-common-index",
  "storages-common-table-meta",
  "tracing",
+ "typetag",
 ]
 
 [[package]]

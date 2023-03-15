@@ -15,12 +15,14 @@
 use std::collections::BTreeMap;
 
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::InternalColumn;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
+use common_expression::FieldIndex;
 use common_expression::Literal;
 use common_expression::RemoteExpr;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
@@ -47,6 +49,8 @@ pub struct TableScan {
     /// Only used for display
     pub table_index: IndexType,
     pub stat_info: Option<PlanStatsInfo>,
+
+    pub internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
 }
 
 impl TableScan {

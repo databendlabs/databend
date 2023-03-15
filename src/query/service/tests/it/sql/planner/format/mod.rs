@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::base::GlobalInstance;
 use common_expression::types::DataType;
 use common_expression::Literal;
 use common_expression::TableDataType;
@@ -69,6 +70,13 @@ impl Table for DummyTable {
 
 #[test]
 fn test_format() {
+    let thread_name = match std::thread::current().name() {
+        None => panic!("thread name is none"),
+        Some(thread_name) => thread_name.to_string(),
+    };
+
+    GlobalInstance::init_testing(&thread_name);
+
     let mut metadata = Metadata::default();
     let tab1 = metadata.add_table(
         "catalog".to_string(),

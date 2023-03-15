@@ -248,7 +248,7 @@ impl InsertInterpreter {
         let stage_table = StageTable::try_create(stage_table_info.clone())?;
         let read_source_plan = {
             stage_table
-                .read_plan_with_catalog(ctx.clone(), catalog_name, None)
+                .read_plan_with_catalog(ctx.clone(), catalog_name, None, None)
                 .await?
         };
 

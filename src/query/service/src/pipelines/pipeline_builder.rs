@@ -22,7 +22,6 @@ use common_expression::type_check::check_function;
 use common_expression::with_hash_method;
 use common_expression::with_mappedhash_method;
 use common_expression::DataBlock;
-use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::FunctionContext;
 use common_expression::HashMethodKind;
@@ -63,6 +62,7 @@ use common_sql::plans::JoinType;
 use common_sql::ColumnBinding;
 use common_sql::IndexType;
 use common_storage::DataOperator;
+use common_storages_fuse::operations::FillInternalColumnProcessor;
 
 use super::processors::ProfileWrapper;
 use crate::api::DefaultExchangeInjector;
@@ -255,17 +255,10 @@ impl PipelineBuilder {
         }
 
         let mut projections = Vec::with_capacity(result_columns.len());
-        let mut result_fields = Vec::with_capacity(result_columns.len());
 
         for column_binding in result_columns {
             let index = column_binding.index;
-            let name = column_binding.column_name.clone();
-            let data_type = input_schema
-                .field_with_name(index.to_string().as_str())?
-                .data_type()
-                .clone();
             projections.push(input_schema.index_of(index.to_string().as_str())?);
-            result_fields.push(DataField::new(name.as_str(), data_type.clone()));
         }
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(CompoundBlockOperator::create(
@@ -285,6 +278,15 @@ impl PipelineBuilder {
         let table = self.ctx.build_table_from_source_plan(&scan.source)?;
         self.ctx.set_partitions(scan.source.parts.clone())?;
         table.read_data(self.ctx.clone(), &scan.source, &mut self.main_pipeline)?;
+
+        // Fill internal columns if needed.
+        if let Some(internal_columns) = &scan.internal_column {
+            self.main_pipeline.add_transform(|input, output| {
+                Ok(ProcessorPtr::create(Box::new(
+                    FillInternalColumnProcessor::create(internal_columns.clone(), input, output),
+                )))
+            })?;
+        }
 
         let schema = scan.source.schema();
         let projection = scan
@@ -306,6 +308,7 @@ impl PipelineBuilder {
                 )))
             })?;
         }
+
         Ok(())
     }
 
