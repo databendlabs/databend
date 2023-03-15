@@ -178,10 +178,6 @@ pub enum TokenKind {
     LBracket,
     #[token("]")]
     RBracket,
-    #[token("&")]
-    Ampersand,
-    #[token("|")]
-    Pipe,
     #[token("^")]
     Caret,
     #[token("{")]
@@ -192,10 +188,6 @@ pub enum TokenKind {
     RArrow,
     #[token("=>")]
     FatRArrow,
-    #[token("#")]
-    Sharp,
-    #[token("~")]
-    Tilde,
     /// A case insensitive match regular expression operator in PostgreSQL
     #[token("~*")]
     TildeAsterisk,
@@ -205,6 +197,18 @@ pub enum TokenKind {
     /// A case insensitive not match regular expression operator in PostgreSQL
     #[token("!~*")]
     ExclamationMarkTildeAsterisk,
+    /// A bitwise and operator in PostgreSQL
+    #[token("&")]
+    BitWiseAnd,
+    /// A bitwise or operator in PostgreSQL
+    #[token("|")]
+    BitWiseOr,
+    /// A bitwise xor operator in PostgreSQL
+    #[token("#")]
+    BitWiseXor,
+    /// A bitwise not operator in PostgreSQL
+    #[token("~")]
+    BitWiseNot,
     /// A bitwise shift left operator in PostgreSQL
     #[token("<<")]
     ShiftLeft,
@@ -213,19 +217,19 @@ pub enum TokenKind {
     ShiftRight,
     /// Exclamation Mark `!` used for PostgreSQL factorial operator
     #[token("!")]
-    ExclamationMark,
+    Factorial,
     /// Double Exclamation Mark `!!` used for PostgreSQL prefix factorial operator
     #[token("!!")]
     DoubleExclamationMark,
     /// AtSign `@` used for PostgreSQL abs operator
     #[token("@")]
-    AtSign,
+    Abs,
     /// A square root math operator in PostgreSQL
     #[token("|/")]
-    PGSquareRoot,
+    SquareRoot,
     /// A cube root math operator in PostgreSQL
     #[token("||/")]
-    PGCubeRoot,
+    CubeRoot,
     /// Placeholder used in prepared stmt
     #[token("?")]
     Placeholder,
@@ -908,25 +912,25 @@ impl TokenKind {
                 | Backslash
                 | LBracket
                 | RBracket
-                | Ampersand
-                | Pipe
+                | BitWiseAnd
+                | BitWiseOr
                 | Caret
+                | Factorial
                 | LBrace
                 | RBrace
                 | RArrow
                 | FatRArrow
-                | Sharp
-                | Tilde
+                | BitWiseXor
+                | BitWiseNot
                 | TildeAsterisk
                 | ExclamationMarkTilde
                 | ExclamationMarkTildeAsterisk
                 | ShiftLeft
                 | ShiftRight
-                | ExclamationMark
                 | DoubleExclamationMark
-                | AtSign
-                | PGSquareRoot
-                | PGCubeRoot
+                | Abs
+                | SquareRoot
+                | CubeRoot
                 | EOI
         )
     }

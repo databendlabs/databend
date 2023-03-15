@@ -203,11 +203,9 @@ impl Binder {
                         "duplicate cte {table_name}"
                     )));
                 }
-                let (s_expr, cte_bind_context) = self.bind_query(bind_context, &cte.query).await?;
                 let cte_info = CteInfo {
                     columns_alias: cte.alias.columns.iter().map(|c| c.name.clone()).collect(),
-                    s_expr,
-                    bind_context: cte_bind_context.clone(),
+                    query: cte.query.clone(),
                 };
                 bind_context.ctes_map.insert(table_name, cte_info);
             }

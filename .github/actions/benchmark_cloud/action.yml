@@ -51,10 +51,12 @@ runs:
         BENCHMARK_DATASET: ${{ inputs.dataset }}
         BENCHMARK_SIZE: ${{ inputs.size }}
         BENCHMARK_IMAGE_TAG: ${{ inputs.image_tag }}
+        BENCHMARK_DATABASE: clickbench
         CLOUD_EMAIL: ${{ inputs.cloud_email }}
         CLOUD_PASSWORD: ${{ inputs.cloud_password }}
         CLOUD_ORG: ${{ inputs.cloud_org }}
         CLOUD_ENDPOINT: ${{ inputs.cloud_endpoint }}
+        CLOUD_WAREHOUSE: benchmark-${{ inputs.run_id }}
       shell: bash
       run: |
         ./benchmark_cloud.sh
@@ -101,3 +103,10 @@ runs:
       with:
         name: benchmark-${{ inputs.dataset }}-cloud-${{ inputs.size }}
         path: benchmark/clickbench/result-${{ inputs.dataset }}-cloud-${{ inputs.size }}.json
+
+    - name: Remove warehouse
+      if: always()
+      shell: bash
+      continue-on-error: true
+      run: |
+        bendsql cloud warehouse delete benchmark-${{ inputs.run_id }}

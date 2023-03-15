@@ -369,6 +369,11 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
 
                 UnaryOperator::Plus => Affix::Prefix(Precedence(50)),
                 UnaryOperator::Minus => Affix::Prefix(Precedence(50)),
+                UnaryOperator::BitwiseNot => Affix::Prefix(Precedence(50)),
+                UnaryOperator::SquareRoot => Affix::Prefix(Precedence(60)),
+                UnaryOperator::CubeRoot => Affix::Prefix(Precedence(60)),
+                UnaryOperator::Abs => Affix::Prefix(Precedence(60)),
+                UnaryOperator::Factorial => Affix::Postfix(Precedence(60)),
             },
             ExprElement::BinaryOp { op } => match op {
                 BinaryOperator::Or => Affix::Infix(Precedence(5), Associativity::Left),
@@ -391,6 +396,13 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 BinaryOperator::BitwiseOr => Affix::Infix(Precedence(22), Associativity::Left),
                 BinaryOperator::BitwiseAnd => Affix::Infix(Precedence(22), Associativity::Left),
                 BinaryOperator::BitwiseXor => Affix::Infix(Precedence(22), Associativity::Left),
+
+                BinaryOperator::BitwiseShiftLeft => {
+                    Affix::Infix(Precedence(23), Associativity::Left)
+                }
+                BinaryOperator::BitwiseShiftRight => {
+                    Affix::Infix(Precedence(23), Associativity::Left)
+                }
 
                 BinaryOperator::Xor => Affix::Infix(Precedence(24), Associativity::Left),
 
@@ -663,6 +675,11 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 expr: Box::new(lhs),
                 target_type,
                 pg_style: true,
+            },
+            ExprElement::UnaryOp { op } => Expr::UnaryOp {
+                span: transform_span(elem.span.0),
+                op,
+                expr: Box::new(lhs),
             },
             _ => unreachable!(),
         };
@@ -1130,7 +1147,14 @@ pub fn window_frame_bound(i: Input) -> IResult<WindowFrameBound> {
 
 pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
     // Plus and Minus are parsed as binary op at first.
-    value(UnaryOperator::Not, rule! { NOT })(i)
+    alt((
+        value(UnaryOperator::Not, rule! { NOT }),
+        value(UnaryOperator::Factorial, rule! { Factorial}),
+        value(UnaryOperator::SquareRoot, rule! { SquareRoot}),
+        value(UnaryOperator::BitwiseNot, rule! {BitWiseNot}),
+        value(UnaryOperator::CubeRoot, rule! { CubeRoot}),
+        value(UnaryOperator::Abs, rule! { Abs}),
+    ))(i)
 }
 
 pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
@@ -1161,9 +1185,11 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
             value(BinaryOperator::NotRegexp, rule! { NOT ~ REGEXP }),
             value(BinaryOperator::RLike, rule! { RLIKE }),
             value(BinaryOperator::NotRLike, rule! { NOT ~ RLIKE }),
-            value(BinaryOperator::BitwiseOr, rule! { "|" }),
-            value(BinaryOperator::BitwiseAnd, rule! { "&" }),
-            value(BinaryOperator::BitwiseXor, rule! { "#" }),
+            value(BinaryOperator::BitwiseOr, rule! { BitWiseOr }),
+            value(BinaryOperator::BitwiseAnd, rule! { BitWiseAnd }),
+            value(BinaryOperator::BitwiseXor, rule! { BitWiseXor }),
+            value(BinaryOperator::BitwiseShiftLeft, rule! { ShiftLeft }),
+            value(BinaryOperator::BitwiseShiftRight, rule! { ShiftRight }),
         )),
     ))(i)
 }

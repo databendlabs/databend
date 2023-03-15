@@ -4,7 +4,7 @@ inputs:
   version:
     description: "bendsql version"
     required: false
-    default: v0.3.7
+    default: v0.3.8
 runs:
   using: "composite"
   steps:
