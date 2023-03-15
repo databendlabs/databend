@@ -335,7 +335,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_string_to_string(
             |col| col.data.len() * 4 / 3 + col.len() * 4,
             |val, output, ctx| {
-                if let Err(err) = general_purpose::STANDARD.decode_slice(val, &mut output.data) {
+                if let Err(err) = general_purpose::STANDARD.decode_vec(val, &mut output.data) {
                     ctx.set_error(output.len(), err.to_string());
                 }
                 output.commit_row();
