@@ -758,7 +758,7 @@ impl<'a> Evaluator<'a> {
                 .all_equal()
         );
 
-        // Pick the results from the true and false branches depending on the condition.
+        // Pick the results from the result branches depending on the condition.
         let len = args_iter.clone().find_map(|arg| match arg {
             Value::Column(col) => Some(col.len()),
             _ => None,
