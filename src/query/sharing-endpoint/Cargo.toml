@@ -25,4 +25,4 @@ opendal = { workspace = true }
 poem = { version = "1", features = ["rustls", "multipart", "compression"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
-serfig = "0.0.3"
+serfig = "0.1.0"

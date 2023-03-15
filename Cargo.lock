@@ -8461,9 +8461,9 @@ dependencies = [
 
 [[package]]
 name = "serfig"
-version = "0.0.3"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e56ca578e3bed3843488231c20a76f4dc227a713942f1a74b23a499879e887fc"
+checksum = "f40f8bc5badc980cedcab554e3a630a5657ee53a94b274e4c937394e19186af8"
 dependencies = [
  "anyhow",
  "indexmap",
@@ -8471,7 +8471,7 @@ dependencies = [
  "serde",
  "serde-bridge",
  "serde-env",
- "toml 0.5.11",
+ "toml 0.7.3",
 ]
 
 [[package]]
@@ -9349,6 +9349,7 @@ dependencies = [
  "serde",
  "serde_spanned",
  "toml_datetime",
+ "toml_edit",
 ]
 
 [[package]]
@@ -9367,6 +9368,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc18466501acd8ac6a3f615dd29a3438f8ca6bb3b19537138b3106e575621274"
 dependencies = [
  "indexmap",
+ "serde",
+ "serde_spanned",
  "toml_datetime",
  "winnow",
 ]
