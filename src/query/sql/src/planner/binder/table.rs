@@ -428,7 +428,7 @@ impl Binder {
             Ok((s_expr, bind_context))
         } else {
             Err(ErrorCode::Unimplemented(
-                "only support parquet format for 'select from stage' for now.",
+                "stage table function only support parquet format for now",
             ))
         }
     }
