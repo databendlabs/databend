@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::default::Default;
 use std::sync::Arc;
@@ -72,6 +73,7 @@ use crate::BindContext;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
 use crate::IndexType;
+use crate::TableInternalColumn;
 
 impl Binder {
     pub(super) async fn bind_one_table(
@@ -440,6 +442,7 @@ impl Binder {
     ) -> Result<(SExpr, BindContext)> {
         let new_bind_context = BindContext {
             parent: Some(Box::new(bind_context.clone())),
+            bound_internal_columns: BTreeMap::new(),
             columns: vec![],
             aggregate_info: Default::default(),
             in_grouping: false,
@@ -544,6 +547,10 @@ impl Binder {
                             ColumnEntry::DerivedColumn(DerivedColumn { column_index, .. }) => {
                                 column_index
                             }
+                            ColumnEntry::InternalColumn(TableInternalColumn {
+                                column_index,
+                                ..
+                            }) => column_index,
                         })
                         .collect(),
                     push_down_predicates: None,

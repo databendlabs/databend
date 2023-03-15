@@ -84,7 +84,6 @@ pub fn parse_exprs(
                     Visibility::Visible
                 },
             },
-
             _ => {
                 return Err(ErrorCode::Internal("Invalid column entry"));
             }

@@ -37,6 +37,7 @@ use crate::BaseTableColumn;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
 use crate::MetadataRef;
+use crate::TableInternalColumn;
 
 #[derive(Clone)]
 pub enum FormatContext {
@@ -96,6 +97,22 @@ pub fn format_scalar(_metadata: &MetadataRef, scalar: &ScalarExpr) -> String {
                 format!(
                     "{} (#{})",
                     column_ref.column.column_name, column_ref.column.index
+                )
+            }
+        }
+        ScalarExpr::BoundInternalColumnRef(column_ref) => {
+            if let Some(table_name) = &column_ref.column.table_name {
+                format!(
+                    "{}.{} (#{})",
+                    table_name,
+                    column_ref.column.internal_column.column_name(),
+                    column_ref.column.index
+                )
+            } else {
+                format!(
+                    "{} (#{})",
+                    column_ref.column.internal_column.column_name(),
+                    column_ref.column.index
                 )
             }
         }
@@ -265,6 +282,10 @@ fn scan_to_format_tree(
                                     }) => column_name,
                                     ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) =>
                                         alias,
+                                    ColumnEntry::InternalColumn(TableInternalColumn {
+                                        internal_column,
+                                        ..
+                                    }) => internal_column.column_name(),
                                 },
                                 item.index,
                                 if item.asc { "ASC" } else { "DESC" }
@@ -330,6 +351,10 @@ fn logical_get_to_format_tree(
                                     }) => column_name,
                                     ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) =>
                                         alias,
+                                    ColumnEntry::InternalColumn(TableInternalColumn {
+                                        internal_column,
+                                        ..
+                                    }) => internal_column.column_name(),
                                 },
                                 item.index,
                                 if item.asc { "ASC" } else { "DESC" }
@@ -559,6 +584,9 @@ fn sort_to_format_tree(
             let name = match metadata.column(item.index) {
                 ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => column_name,
                 ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
+                ColumnEntry::InternalColumn(TableInternalColumn {
+                    internal_column, ..
+                }) => internal_column.column_name(),
             };
             format!(
                 "{} (#{}) {}",
