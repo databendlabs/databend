@@ -36,6 +36,16 @@ pub fn assert_unary_params<D: Display>(name: D, actual: usize) -> Result<()> {
     Ok(())
 }
 
+pub fn assert_params<D: Display>(name: D, actual: usize, expected: usize) -> Result<()> {
+    if actual != expected {
+        return Err(ErrorCode::NumberArgumentsNotMatch(format!(
+            "{} expect to have {} params, but got {}",
+            name, expected, actual
+        )));
+    }
+    Ok(())
+}
+
 pub fn assert_unary_arguments<D: Display>(name: D, actual: usize) -> Result<()> {
     if actual != 1 {
         return Err(ErrorCode::NumberArgumentsNotMatch(format!(
