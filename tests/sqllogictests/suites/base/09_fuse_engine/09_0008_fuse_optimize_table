@@ -291,7 +291,7 @@ select * from t4 order by a
 4 4
 
 query II
-select segment_count, block_count from fuse_snapshot('default', 't4') limit 1
+select segment_count, block_count from fuse_snapshot('db_09_0008', 't4') limit 1
 ----
 1 3
 
