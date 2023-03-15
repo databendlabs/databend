@@ -145,7 +145,7 @@ impl CreateTableInterpreter {
             source: InsertInputSource::SelectPlan(select_plan),
         };
 
-        InsertInterpreter::try_create(self.ctx.clone(), insert_plan, false)?
+        InsertInterpreter::try_create(self.ctx.clone(), insert_plan)?
             .execute2()
             .await
     }
