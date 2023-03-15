@@ -20,7 +20,7 @@ use std::time::Instant;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::Mutex as TokioMutex;
 use common_base::base::tokio::sync::RwLock;
-use common_base::runtime::GlobalHttpQueryRuntime;
+use common_base::runtime::GlobalQueryRuntime;
 use common_base::runtime::TrySpawn;
 use common_catalog::table_context::StageAttachment;
 use common_exception::ErrorCode;
@@ -279,7 +279,7 @@ impl HttpQuery {
         let query_id_clone = id.clone();
 
         let schema = ExecuteState::get_schema(&sql, ctx.clone()).await?;
-        let http_query_runtime_instance = GlobalHttpQueryRuntime::instance();
+        let http_query_runtime_instance = GlobalQueryRuntime::instance();
         http_query_runtime_instance
             .runtime()
             .try_spawn(async move {
