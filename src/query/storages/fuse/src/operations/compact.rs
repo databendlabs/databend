@@ -139,9 +139,17 @@ impl FuseTable {
         }
         ctx.set_partitions(mutator.compact_tasks.clone())?;
 
+        // Status.
+        {
+            let status = "compact: begin to run compact tasks";
+            ctx.set_status_info(status);
+            info!(status);
+        }
+        ctx.set_partitions(mutator.compact_tasks.clone())?;
+
         let all_column_indices = self.all_column_indices();
         let projection = Projection::Columns(all_column_indices);
-        let block_reader = self.create_block_reader(projection, ctx.clone())?;
+        let block_reader = self.create_block_reader(projection, false, ctx.clone())?;
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         // Add source pipe.
         pipeline.add_source(

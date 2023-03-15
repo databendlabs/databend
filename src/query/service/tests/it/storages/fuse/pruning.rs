@@ -60,7 +60,7 @@ async fn apply_block_pruning(
     let ctx: Arc<dyn TableContext> = ctx;
     let segment_locs = table_snapshot.segments.clone();
     FusePruner::create(&ctx, op, schema, push_down)?
-        .pruning(segment_locs)
+        .pruning(segment_locs, None, None)
         .await
         .map(|v| v.into_iter().map(|(_, v)| v).collect())
 }

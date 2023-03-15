@@ -15,6 +15,7 @@
 pub mod abort_operation;
 pub mod base_mutator;
 mod compact;
+pub mod mutation_fill_internal_columns;
 pub mod mutation_meta;
 mod mutation_part;
 pub mod mutation_sink;
@@ -32,6 +33,7 @@ pub use compact::CompactSource;
 pub use compact::SegmentCompactMutator;
 pub use compact::SegmentCompactionState;
 pub use compact::SegmentCompactor;
+pub use mutation_fill_internal_columns::FillInternalColumnProcessor;
 pub use mutation_meta::Mutation;
 pub use mutation_meta::MutationSinkMeta;
 pub use mutation_meta::MutationTransformMeta;

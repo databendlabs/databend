@@ -84,15 +84,13 @@ impl HeuristicOptimizer {
 
         // always pruner the unused columns before and after optimization
         let pruner = UnusedColumnPruner::new(self.metadata.clone());
-        let require_columns: ColumnSet =
-            self.bind_context.columns.iter().map(|c| c.index).collect();
+        let require_columns: ColumnSet = self.bind_context.column_set();
         pruner.remove_unused_columns(&s_expr, require_columns)
     }
 
     fn post_optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
         let pruner = UnusedColumnPruner::new(self.metadata.clone());
-        let require_columns: ColumnSet =
-            self.bind_context.columns.iter().map(|c| c.index).collect();
+        let require_columns: ColumnSet = self.bind_context.column_set();
         pruner.remove_unused_columns(&s_expr, require_columns)
     }
 

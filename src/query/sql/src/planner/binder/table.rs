@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::default::Default;
 use std::sync::Arc;
 
+use async_recursion::async_recursion;
 use chrono::TimeZone;
 use chrono::Utc;
 use common_ast::ast::Indirection;
+use common_ast::ast::Join;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::Statement;
@@ -72,6 +75,7 @@ use crate::BindContext;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
 use crate::IndexType;
+use crate::TableInternalColumn;
 
 impl Binder {
     pub(super) async fn bind_one_table(
@@ -112,7 +116,8 @@ impl Binder {
             .await
     }
 
-    pub(super) async fn bind_table_reference(
+    #[async_recursion]
+    async fn bind_single_table(
         &mut self,
         bind_context: &BindContext,
         table_ref: &TableReference,
@@ -348,7 +353,6 @@ impl Binder {
                 }
                 Ok((s_expr, bind_context))
             }
-            TableReference::Join { span: _, join } => self.bind_join(bind_context, join).await,
             TableReference::Subquery {
                 span: _,
                 subquery,
@@ -382,6 +386,7 @@ impl Binder {
                 self.bind_stage_table(bind_context, stage_info, files_info, alias, None)
                     .await
             }
+            TableReference::Join { .. } => unreachable!(),
         }
     }
 
@@ -431,6 +436,79 @@ impl Binder {
         }
     }
 
+    pub(super) async fn bind_table_reference(
+        &mut self,
+        bind_context: &BindContext,
+        table_ref: &TableReference,
+    ) -> Result<(SExpr, BindContext)> {
+        let mut current_ref = table_ref;
+        let current_ctx = bind_context;
+
+        // Stack to keep track of the joins
+        let mut join_stack: Vec<&Join> = Vec::new();
+
+        // Traverse the table reference hierarchy to get to the innermost table
+        while let TableReference::Join { join, .. } = current_ref {
+            join_stack.push(join);
+
+            // Check whether the right-hand side is a Join or a TableReference
+            match &*join.right {
+                TableReference::Join { .. } => {
+                    // Traverse the right-hand side if the right-hand side is a Join
+                    current_ref = &join.right;
+                }
+                _ => {
+                    // Traverse the left-hand side if the right-hand side is a TableReference
+                    current_ref = &join.left;
+                }
+            }
+        }
+
+        // Bind the innermost table
+        // current_ref must be left table in its join
+        let (mut result_expr, mut result_ctx) =
+            self.bind_single_table(current_ctx, current_ref).await?;
+
+        for join in join_stack.iter().rev() {
+            match &*join.right {
+                TableReference::Join { .. } => {
+                    let (left_expr, left_ctx) =
+                        self.bind_single_table(current_ctx, &join.left).await?;
+                    let (join_expr, ctx) = self
+                        .bind_join(
+                            current_ctx,
+                            left_ctx,
+                            result_ctx,
+                            left_expr,
+                            result_expr,
+                            join,
+                        )
+                        .await?;
+                    result_expr = join_expr;
+                    result_ctx = ctx;
+                }
+                _ => {
+                    let (right_expr, right_ctx) =
+                        self.bind_single_table(current_ctx, &join.right).await?;
+                    let (join_expr, ctx) = self
+                        .bind_join(
+                            current_ctx,
+                            result_ctx,
+                            right_ctx,
+                            result_expr,
+                            right_expr,
+                            join,
+                        )
+                        .await?;
+                    result_expr = join_expr;
+                    result_ctx = ctx;
+                }
+            }
+        }
+
+        Ok((result_expr, result_ctx))
+    }
+
     async fn bind_cte(
         &mut self,
         bind_context: &BindContext,
@@ -440,6 +518,7 @@ impl Binder {
     ) -> Result<(SExpr, BindContext)> {
         let new_bind_context = BindContext {
             parent: Some(Box::new(bind_context.clone())),
+            bound_internal_columns: BTreeMap::new(),
             columns: vec![],
             aggregate_info: Default::default(),
             in_grouping: false,
@@ -544,6 +623,10 @@ impl Binder {
                             ColumnEntry::DerivedColumn(DerivedColumn { column_index, .. }) => {
                                 column_index
                             }
+                            ColumnEntry::InternalColumn(TableInternalColumn {
+                                column_index,
+                                ..
+                            }) => column_index,
                         })
                         .collect(),
                     push_down_predicates: None,

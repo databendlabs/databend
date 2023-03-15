@@ -15,12 +15,15 @@
 use std::collections::BTreeMap;
 
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::InternalColumn;
 use common_exception::Result;
 use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
+use common_expression::FieldIndex;
 use common_expression::Literal;
 use common_expression::RemoteExpr;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
@@ -47,6 +50,8 @@ pub struct TableScan {
     /// Only used for display
     pub table_index: IndexType,
     pub stat_info: Option<PlanStatsInfo>,
+
+    pub internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
 }
 
 impl TableScan {
@@ -159,6 +164,39 @@ impl Unnest {
             *f = DataField::new(f.name(), inner_type.unnest().wrap_nullable());
         }
         Ok(DataSchemaRefExt::create(fields))
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct AggregateExpand {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+
+    pub input: Box<PhysicalPlan>,
+    pub group_bys: Vec<usize>,
+    pub grouping_id_index: IndexType,
+    pub grouping_sets: Vec<Vec<usize>>,
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
+}
+
+impl AggregateExpand {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        let input_schema = self.input.output_schema()?;
+        let input_fields = input_schema.fields();
+        let mut output_fields = Vec::with_capacity(input_fields.len() + 1);
+        for field in input_fields {
+            output_fields.push(DataField::new(
+                field.name(),
+                field.data_type().wrap_nullable(),
+            ));
+        }
+        output_fields.push(DataField::new(
+            &self.grouping_id_index.to_string(),
+            DataType::Number(NumberDataType::UInt32),
+        ));
+        Ok(DataSchemaRefExt::create(output_fields))
     }
 }
 
@@ -513,6 +551,7 @@ pub enum PhysicalPlan {
     Project(Project),
     EvalScalar(EvalScalar),
     Unnest(Unnest),
+    AggregateExpand(AggregateExpand),
     AggregatePartial(AggregatePartial),
     AggregateFinal(AggregateFinal),
     Sort(Sort),
@@ -545,6 +584,7 @@ impl PhysicalPlan {
             PhysicalPlan::Filter(plan) => plan.output_schema(),
             PhysicalPlan::Project(plan) => plan.output_schema(),
             PhysicalPlan::EvalScalar(plan) => plan.output_schema(),
+            PhysicalPlan::AggregateExpand(plan) => plan.output_schema(),
             PhysicalPlan::AggregatePartial(plan) => plan.output_schema(),
             PhysicalPlan::AggregateFinal(plan) => plan.output_schema(),
             PhysicalPlan::Sort(plan) => plan.output_schema(),
@@ -566,6 +606,7 @@ impl PhysicalPlan {
             PhysicalPlan::Filter(_) => "Filter".to_string(),
             PhysicalPlan::Project(_) => "Project".to_string(),
             PhysicalPlan::EvalScalar(_) => "EvalScalar".to_string(),
+            PhysicalPlan::AggregateExpand(_) => "AggregateExpand".to_string(),
             PhysicalPlan::AggregatePartial(_) => "AggregatePartial".to_string(),
             PhysicalPlan::AggregateFinal(_) => "AggregateFinal".to_string(),
             PhysicalPlan::Sort(_) => "Sort".to_string(),
@@ -587,6 +628,7 @@ impl PhysicalPlan {
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Project(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::EvalScalar(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::AggregateExpand(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AggregatePartial(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AggregateFinal(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Sort(plan) => Box::new(std::iter::once(plan.input.as_ref())),

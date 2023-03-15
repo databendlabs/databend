@@ -123,7 +123,7 @@ impl ColumnMeta {
         }
     }
 
-    pub fn read_rows(&self, range: &Option<Range<usize>>) -> u64 {
+    pub fn read_rows(&self, range: Option<&Range<usize>>) -> u64 {
         match self {
             ColumnMeta::Parquet(v) => v.num_values,
             ColumnMeta::Native(v) => match range {

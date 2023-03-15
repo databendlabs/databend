@@ -12,22 +12,63 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::any::Any;
 use std::ops::Range;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoDowncast;
+use common_expression::BlockMetaInfoPtr;
 use common_expression::RemoteExpr;
 use common_expression::TableDataType;
 use common_expression::TableSchemaRef;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnStatistics;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct BlockMetaIndex {
+    // {segment|block}_id is used in `InternalColumnMeta` to generate internal column data,
+    // where older data has smaller id, but {segment|block}_idx is opposite,
+    // so {segment|block}_id = {segment|block}_count - {segment|block}_idx - 1
     pub segment_idx: usize,
     pub block_idx: usize,
     pub range: Option<Range<usize>>,
+    pub block_id: usize,
+    pub block_location: String,
+    pub segment_id: usize,
+    pub segment_location: String,
+    pub snapshot_location: Option<String>,
+}
+
+#[typetag::serde(name = "block_meta_index")]
+impl BlockMetaInfo for BlockMetaIndex {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        match BlockMetaIndex::downcast_ref_from(info) {
+            None => false,
+            Some(other) => self == other,
+        }
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
+    }
+}
+
+impl BlockMetaIndex {
+    pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&BlockMetaIndex> {
+        match BlockMetaIndex::downcast_ref_from(info) {
+            Some(part_ref) => Ok(part_ref),
+            None => Err(ErrorCode::Internal(
+                "Cannot downcast from BlockMetaInfo to BlockMetaIndex.",
+            )),
+        }
+    }
 }
 
 /// TopN prunner.

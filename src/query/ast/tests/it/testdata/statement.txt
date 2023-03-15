@@ -263,7 +263,7 @@ Explain {
                         },
                     ],
                     selection: None,
-                    group_by: [],
+                    group_by: None,
                     having: None,
                 },
             ),
@@ -549,7 +549,7 @@ CreateTable(
                             },
                         ],
                         selection: None,
-                        group_by: [],
+                        group_by: None,
                         having: None,
                     },
                 ),
@@ -1337,7 +1337,7 @@ CreateView(
                         },
                     ],
                     selection: None,
-                    group_by: [],
+                    group_by: None,
                     having: None,
                 },
             ),
@@ -1446,7 +1446,7 @@ AlterView(
                         },
                     ],
                     selection: None,
-                    group_by: [],
+                    group_by: None,
                     having: None,
                 },
             ),
@@ -1585,7 +1585,7 @@ CreateView(
                         },
                     ],
                     selection: None,
-                    group_by: [],
+                    group_by: None,
                     having: None,
                 },
             ),
@@ -1702,7 +1702,7 @@ AlterView(
                         },
                     ],
                     selection: None,
-                    group_by: [],
+                    group_by: None,
                     having: None,
                 },
             ),
@@ -2324,22 +2324,26 @@ Query(
                         },
                     },
                 ),
-                group_by: [
-                    ColumnRef {
-                        span: Some(
-                            70..71,
-                        ),
-                        database: None,
-                        table: None,
-                        column: Identifier {
-                            name: "a",
-                            quote: None,
-                            span: Some(
-                                70..71,
-                            ),
-                        },
-                    },
-                ],
+                group_by: Some(
+                    Normal(
+                        [
+                            ColumnRef {
+                                span: Some(
+                                    70..71,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Some(
+                                        70..71,
+                                    ),
+                                },
+                            },
+                        ],
+                    ),
+                ),
                 having: Some(
                     BinaryOp {
                         span: Some(
@@ -2424,7 +2428,7 @@ Query(
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -2488,7 +2492,7 @@ Query(
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -2576,7 +2580,7 @@ Query(
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -2664,7 +2668,7 @@ Query(
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -2837,7 +2841,7 @@ Query(
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -2969,7 +2973,7 @@ Query(
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -3101,7 +3105,7 @@ Query(
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -3233,7 +3237,7 @@ Query(
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -3365,7 +3369,7 @@ Query(
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -3497,7 +3501,7 @@ Query(
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -3629,7 +3633,7 @@ Query(
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -3761,7 +3765,7 @@ Query(
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -3893,7 +3897,7 @@ Query(
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -4025,7 +4029,7 @@ Query(
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -4157,7 +4161,7 @@ Query(
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -4248,7 +4252,7 @@ Query(
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -4339,7 +4343,7 @@ Query(
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -4430,7 +4434,7 @@ Query(
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -4521,7 +4525,7 @@ Query(
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -4668,7 +4672,7 @@ Query(
                                             },
                                         ],
                                         selection: None,
-                                        group_by: [],
+                                        group_by: None,
                                         having: None,
                                     },
                                 ),
@@ -4680,7 +4684,7 @@ Query(
                         },
                     },
                 ),
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -4827,7 +4831,7 @@ Query(
                                             },
                                         ],
                                         selection: None,
-                                        group_by: [],
+                                        group_by: None,
                                         having: None,
                                     },
                                 ),
@@ -4839,7 +4843,7 @@ Query(
                         },
                     },
                 ),
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -4986,7 +4990,7 @@ Query(
                                             },
                                         ],
                                         selection: None,
-                                        group_by: [],
+                                        group_by: None,
                                         having: None,
                                     },
                                 ),
@@ -4998,7 +5002,7 @@ Query(
                         },
                     },
                 ),
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -5143,7 +5147,7 @@ Query(
                                             },
                                         ],
                                         selection: None,
-                                        group_by: [],
+                                        group_by: None,
                                         having: None,
                                     },
                                 ),
@@ -5155,7 +5159,7 @@ Query(
                         },
                     },
                 ),
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -5261,7 +5265,7 @@ Query(
                         },
                     },
                 ),
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -5364,7 +5368,7 @@ Query(
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -5499,7 +5503,7 @@ Insert(
                             },
                         ],
                         selection: None,
-                        group_by: [],
+                        group_by: None,
                         having: None,
                     },
                 ),
@@ -5592,7 +5596,7 @@ Query(
                 ],
                 from: [],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -8412,7 +8416,7 @@ Query(
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -8559,7 +8563,7 @@ Query(
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -8640,7 +8644,7 @@ Query(
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -8693,5 +8697,512 @@ DropFileFormat {
     if_exists: false,
     name: "my_csv",
 }
+
+
+---------- Input ----------
+SELECT * FROM t GROUP BY GROUPING SETS (a, b, c, d)
+---------- Output ---------
+SELECT * FROM t GROUP BY GROUPING SETS ((a), (b), (c), (d))
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..51,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..51,
+                ),
+                distinct: false,
+                select_list: [
+                    QualifiedName {
+                        qualified: [
+                            Star,
+                        ],
+                        exclude: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "t",
+                            quote: None,
+                            span: Some(
+                                14..15,
+                            ),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                ],
+                selection: None,
+                group_by: Some(
+                    GroupingSets(
+                        [
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        40..41,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                        span: Some(
+                                            40..41,
+                                        ),
+                                    },
+                                },
+                            ],
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        43..44,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "b",
+                                        quote: None,
+                                        span: Some(
+                                            43..44,
+                                        ),
+                                    },
+                                },
+                            ],
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        46..47,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "c",
+                                        quote: None,
+                                        span: Some(
+                                            46..47,
+                                        ),
+                                    },
+                                },
+                            ],
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        49..50,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "d",
+                                        quote: None,
+                                        span: Some(
+                                            49..50,
+                                        ),
+                                    },
+                                },
+                            ],
+                        ],
+                    ),
+                ),
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+SELECT * FROM t GROUP BY GROUPING SETS (a, b, (c, d))
+---------- Output ---------
+SELECT * FROM t GROUP BY GROUPING SETS ((a), (b), (c, d))
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..53,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..53,
+                ),
+                distinct: false,
+                select_list: [
+                    QualifiedName {
+                        qualified: [
+                            Star,
+                        ],
+                        exclude: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "t",
+                            quote: None,
+                            span: Some(
+                                14..15,
+                            ),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                ],
+                selection: None,
+                group_by: Some(
+                    GroupingSets(
+                        [
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        40..41,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                        span: Some(
+                                            40..41,
+                                        ),
+                                    },
+                                },
+                            ],
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        43..44,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "b",
+                                        quote: None,
+                                        span: Some(
+                                            43..44,
+                                        ),
+                                    },
+                                },
+                            ],
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        47..48,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "c",
+                                        quote: None,
+                                        span: Some(
+                                            47..48,
+                                        ),
+                                    },
+                                },
+                                ColumnRef {
+                                    span: Some(
+                                        50..51,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "d",
+                                        quote: None,
+                                        span: Some(
+                                            50..51,
+                                        ),
+                                    },
+                                },
+                            ],
+                        ],
+                    ),
+                ),
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (c), (d, e))
+---------- Output ---------
+SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (c), (d, e))
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..60,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..60,
+                ),
+                distinct: false,
+                select_list: [
+                    QualifiedName {
+                        qualified: [
+                            Star,
+                        ],
+                        exclude: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "t",
+                            quote: None,
+                            span: Some(
+                                14..15,
+                            ),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                ],
+                selection: None,
+                group_by: Some(
+                    GroupingSets(
+                        [
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        41..42,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                        span: Some(
+                                            41..42,
+                                        ),
+                                    },
+                                },
+                                ColumnRef {
+                                    span: Some(
+                                        44..45,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "b",
+                                        quote: None,
+                                        span: Some(
+                                            44..45,
+                                        ),
+                                    },
+                                },
+                            ],
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        49..50,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "c",
+                                        quote: None,
+                                        span: Some(
+                                            49..50,
+                                        ),
+                                    },
+                                },
+                            ],
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        54..55,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "d",
+                                        quote: None,
+                                        span: Some(
+                                            54..55,
+                                        ),
+                                    },
+                                },
+                                ColumnRef {
+                                    span: Some(
+                                        57..58,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "e",
+                                        quote: None,
+                                        span: Some(
+                                            57..58,
+                                        ),
+                                    },
+                                },
+                            ],
+                        ],
+                    ),
+                ),
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (), (d, e))
+---------- Output ---------
+SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (), (d, e))
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..59,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..59,
+                ),
+                distinct: false,
+                select_list: [
+                    QualifiedName {
+                        qualified: [
+                            Star,
+                        ],
+                        exclude: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "t",
+                            quote: None,
+                            span: Some(
+                                14..15,
+                            ),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                ],
+                selection: None,
+                group_by: Some(
+                    GroupingSets(
+                        [
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        41..42,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                        span: Some(
+                                            41..42,
+                                        ),
+                                    },
+                                },
+                                ColumnRef {
+                                    span: Some(
+                                        44..45,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "b",
+                                        quote: None,
+                                        span: Some(
+                                            44..45,
+                                        ),
+                                    },
+                                },
+                            ],
+                            [],
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        53..54,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "d",
+                                        quote: None,
+                                        span: Some(
+                                            53..54,
+                                        ),
+                                    },
+                                },
+                                ColumnRef {
+                                    span: Some(
+                                        56..57,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "e",
+                                        quote: None,
+                                        span: Some(
+                                            56..57,
+                                        ),
+                                    },
+                                },
+                            ],
+                        ],
+                    ),
+                ),
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
 
 
