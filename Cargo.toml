@@ -122,7 +122,7 @@ serde = { version = "1.0.145", features = ["derive", "rc"] }
 serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order"] }
 
 # chrono
-chrono = { version = "0.4.22", features = ["serde"] }
+chrono = { version = "0.4.24", features = ["serde"] }
 chrono-tz = "0.6.3"
 
 # memory

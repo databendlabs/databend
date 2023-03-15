@@ -42,8 +42,8 @@ fn new_db_meta_share() -> mt::DatabaseMeta {
         engine: "44".to_string(),
         engine_options: btreemap! {s("abc") => s("def")},
         options: btreemap! {s("xyz") => s("foo")},
-        created_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
-        updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 9),
+        created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
+        updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
         comment: "foo bar".to_string(),
         drop_on: None,
         shared_by: BTreeSet::new(),
@@ -59,8 +59,8 @@ fn new_db_meta() -> mt::DatabaseMeta {
         engine: "44".to_string(),
         engine_options: btreemap! {s("abc") => s("def")},
         options: btreemap! {s("xyz") => s("foo")},
-        created_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
-        updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 9),
+        created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
+        updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
         comment: "foo bar".to_string(),
         drop_on: None,
         shared_by: BTreeSet::from_iter(vec![1].into_iter()),
@@ -69,7 +69,7 @@ fn new_db_meta() -> mt::DatabaseMeta {
 }
 
 fn new_share_meta_share_from_db_ids() -> share::ShareMeta {
-    let now = Utc.ymd(2014, 11, 28).and_hms(12, 0, 9);
+    let now = Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap();
 
     let db_entry = share::ShareGrantEntry::new(
         share::ShareGrantObject::Database(1),
@@ -91,13 +91,13 @@ fn new_share_meta_share_from_db_ids() -> share::ShareMeta {
         accounts: BTreeSet::from_iter(vec![s("a"), s("b")].into_iter()),
         share_from_db_ids: BTreeSet::from_iter(vec![1, 2].into_iter()),
         comment: Some(s("comment")),
-        share_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
-        update_on: Some(Utc.ymd(2014, 11, 29).and_hms(12, 0, 9)),
+        share_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
+        update_on: Some(Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap()),
     }
 }
 
 fn new_share_meta() -> share::ShareMeta {
-    let now = Utc.ymd(2014, 11, 28).and_hms(12, 0, 9);
+    let now = Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap();
 
     let db_entry = share::ShareGrantEntry::new(
         share::ShareGrantObject::Database(1),
@@ -119,8 +119,8 @@ fn new_share_meta() -> share::ShareMeta {
         accounts: BTreeSet::from_iter(vec![s("a"), s("b")].into_iter()),
         share_from_db_ids: BTreeSet::new(),
         comment: Some(s("comment")),
-        share_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
-        update_on: Some(Utc.ymd(2014, 11, 29).and_hms(12, 0, 9)),
+        share_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
+        update_on: Some(Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap()),
     }
 }
 
@@ -128,8 +128,8 @@ fn new_share_account_meta() -> share::ShareAccountMeta {
     share::ShareAccountMeta {
         account: s("account"),
         share_id: 4,
-        share_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
-        accept_on: Some(Utc.ymd(2014, 11, 29).and_hms(12, 0, 9)),
+        share_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
+        accept_on: Some(Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap()),
     }
 }
 
@@ -189,8 +189,8 @@ fn new_table_meta() -> mt::TableMeta {
         default_cluster_key: Some("(a + 2, b)".to_string()),
         cluster_keys: vec!["(a + 2, b)".to_string()],
         default_cluster_key_id: Some(0),
-        created_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
-        updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 10),
+        created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
+        updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 10).unwrap(),
         comment: s("table_comment"),
         field_comments: vec!["c".to_string(); 21],
         drop_on: None,
@@ -234,7 +234,7 @@ pub(crate) fn new_table_copied_file_info_v6() -> mt::TableCopiedFileInfo {
     mt::TableCopiedFileInfo {
         etag: Some("etag".to_string()),
         content_length: 1024,
-        last_modified: Some(Utc.ymd(2014, 11, 29).and_hms(12, 0, 9)),
+        last_modified: Some(Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap()),
     }
 }
 
