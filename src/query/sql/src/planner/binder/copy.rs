@@ -22,7 +22,6 @@ use common_ast::ast::Statement;
 use common_ast::ast::UriLocation;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
-use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
@@ -318,8 +317,7 @@ impl<'a> Binder {
         let subquery =
             format!("SELECT * FROM {src_catalog_name}.{src_database_name}.{src_table_name}");
         let tokens = tokenize_sql(&subquery)?;
-        let backtrace = Backtrace::new();
-        let sub_stmt_msg = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
+        let sub_stmt_msg = parse_sql(&tokens, Dialect::PostgreSQL)?;
         let sub_stmt = sub_stmt_msg.0;
         let query = match &sub_stmt {
             Statement::Query(query) => {
@@ -363,8 +361,7 @@ impl<'a> Binder {
         let subquery =
             format!("SELECT * FROM {src_catalog_name}.{src_database_name}.{src_table_name}");
         let tokens = tokenize_sql(&subquery)?;
-        let backtrace = Backtrace::new();
-        let sub_stmt_msg = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
+        let sub_stmt_msg = parse_sql(&tokens, Dialect::PostgreSQL)?;
         let sub_stmt = sub_stmt_msg.0;
         let query = match &sub_stmt {
             Statement::Query(query) => {

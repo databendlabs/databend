@@ -29,7 +29,6 @@ use common_ast::ast::TimeTravelPoint;
 use common_ast::ast::UriLocation;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
-use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::ParquetReadOptions;
@@ -56,6 +55,7 @@ use common_storages_result_cache::ResultCacheReader;
 use common_storages_result_cache::ResultScan;
 use common_storages_view::view_table::QUERY;
 use common_users::UserApiProvider;
+use dashmap::DashMap;
 
 use crate::binder::copy::parse_stage_location_v2;
 use crate::binder::location::parse_uri_location;
@@ -138,7 +138,9 @@ impl Binder {
                 };
                 // Check and bind common table expression
                 if let Some(cte_info) = bind_context.ctes_map.get(&table_name) {
-                    return self.bind_cte(bind_context, &table_name, alias, &cte_info);
+                    return self
+                        .bind_cte(bind_context, &table_name, alias, &cte_info)
+                        .await;
                 }
 
                 if database == "system" {
@@ -153,7 +155,7 @@ impl Binder {
                 };
 
                 // Resolve table with catalog
-                let table_meta: Arc<dyn Table> = self
+                let table_meta = match self
                     .resolve_data_source(
                         tenant.as_str(),
                         catalog.as_str(),
@@ -161,7 +163,28 @@ impl Binder {
                         table_name.as_str(),
                         &navigation_point,
                     )
-                    .await?;
+                    .await
+                {
+                    Ok(table) => table,
+                    Err(_) => {
+                        let mut parent = bind_context.parent.as_ref();
+                        loop {
+                            if parent.is_none() {
+                                break;
+                            }
+                            if let Some(cte_info) = parent.unwrap().ctes_map.get(&table_name) {
+                                return self
+                                    .bind_cte(bind_context, &table_name, alias, &cte_info)
+                                    .await;
+                            }
+                            parent = parent.unwrap().parent.as_ref();
+                        }
+                        return Err(ErrorCode::UnknownTable(format!(
+                            "Unknown table '{table_name}'"
+                        )));
+                    }
+                };
+
                 match table_meta.engine() {
                     "VIEW" => {
                         let query = table_meta
@@ -169,8 +192,7 @@ impl Binder {
                             .get(QUERY)
                             .ok_or_else(|| ErrorCode::Internal("Invalid VIEW object"))?;
                         let tokens = tokenize_sql(query.as_str())?;
-                        let backtrace = Backtrace::new();
-                        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
+                        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
                         // For view, we need use a new context to bind it.
                         let mut new_bind_context =
                             BindContext::with_parent(Box::new(bind_context.clone()));
@@ -417,15 +439,23 @@ impl Binder {
         }
     }
 
-    fn bind_cte(
+    async fn bind_cte(
         &mut self,
         bind_context: &BindContext,
         table_name: &str,
         alias: &Option<TableAlias>,
         cte_info: &CteInfo,
     ) -> Result<(SExpr, BindContext)> {
-        let mut new_bind_context = bind_context.clone();
-        new_bind_context.columns = cte_info.bind_context.columns.clone();
+        let new_bind_context = BindContext {
+            parent: Some(Box::new(bind_context.clone())),
+            columns: vec![],
+            aggregate_info: Default::default(),
+            in_grouping: false,
+            ctes_map: Box::new(DashMap::new()),
+            is_view: false,
+        };
+        let (s_expr, mut new_bind_context) =
+            self.bind_query(&new_bind_context, &cte_info.query).await?;
         let mut cols_alias = cte_info.columns_alias.clone();
         if let Some(alias) = alias {
             for (idx, col_alias) in alias.columns.iter().enumerate() {
@@ -455,7 +485,7 @@ impl Binder {
         for (index, column_name) in cols_alias.iter().enumerate() {
             new_bind_context.columns[index].column_name = column_name.clone();
         }
-        Ok((cte_info.s_expr.clone(), new_bind_context))
+        Ok((s_expr, new_bind_context))
     }
 
     async fn bind_base_table(

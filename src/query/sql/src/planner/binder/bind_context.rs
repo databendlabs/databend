@@ -14,6 +14,7 @@
 
 use std::hash::Hash;
 
+use common_ast::ast::Query;
 use common_ast::ast::TableAlias;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -26,7 +27,6 @@ use dashmap::DashMap;
 
 use super::AggregateInfo;
 use crate::normalize_identifier;
-use crate::optimizer::SExpr;
 use crate::plans::ScalarExpr;
 use crate::IndexType;
 use crate::NameResolutionContext;
@@ -101,8 +101,7 @@ pub struct BindContext {
 #[derive(Clone, Debug)]
 pub struct CteInfo {
     pub columns_alias: Vec<String>,
-    pub s_expr: SExpr,
-    pub bind_context: BindContext,
+    pub query: Query,
 }
 
 impl BindContext {

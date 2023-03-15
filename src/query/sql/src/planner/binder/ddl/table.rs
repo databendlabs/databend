@@ -45,7 +45,6 @@ use common_ast::ast::UriLocation;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::walk_expr_mut;
-use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
@@ -274,8 +273,7 @@ impl Binder {
             ),
         };
         let tokens = tokenize_sql(query.as_str())?;
-        let backtrace = Backtrace::new();
-        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
         self.bind_statement(bind_context, &stmt).await
     }
 
@@ -925,7 +923,7 @@ impl Binder {
                 if table.engine() == VIEW_ENGINE {
                     let query = table.get_table_info().options().get(QUERY).unwrap();
                     let mut planner = Planner::new(self.ctx.clone());
-                    let (plan, _, _) = planner.plan_sql(query).await?;
+                    let (plan, _) = planner.plan_sql(query).await?;
                     Ok((infer_table_schema(&plan.schema())?, vec![], vec![]))
                 } else {
                     Ok((table.schema(), vec![], table.field_comments().clone()))
