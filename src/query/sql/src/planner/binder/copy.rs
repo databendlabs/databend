@@ -604,7 +604,7 @@ impl<'a> Binder {
 
         // Generate a analyzed select list with from context
         let select_list = self
-            .normalize_select_list(&from_context, select_list)
+            .normalize_select_list(&mut from_context, select_list)
             .await?;
         let (scalar_items, projections) = self.analyze_projection(&select_list)?;
         let s_expr =
