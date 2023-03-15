@@ -20,7 +20,7 @@ use common_exception::Result;
 
 use crate::aggregates::AggregateFunctionRef;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct StateAddr {
     addr: usize,
 }
