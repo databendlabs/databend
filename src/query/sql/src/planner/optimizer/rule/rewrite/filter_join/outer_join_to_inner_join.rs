@@ -249,6 +249,8 @@ fn remove_column_nullable(
                         need_remove = false;
                     }
                 }
+                // None of internal columns will be nullable, so just ignore internal column type entry
+                ColumnEntry::InternalColumn(..) => {}
             }
             match join_type {
                 JoinType::Left => {
@@ -278,6 +280,10 @@ fn remove_column_nullable(
                     visibility: column.column.visibility.clone(),
                 },
             })
+        }
+        ScalarExpr::BoundInternalColumnRef(_) => {
+            // internal column will never be null
+            unreachable!()
         }
         ScalarExpr::AndExpr(expr) => {
             let left_expr = remove_column_nullable(

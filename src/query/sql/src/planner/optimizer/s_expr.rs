@@ -179,6 +179,45 @@ impl SExpr {
         }
         true
     }
+
+    // Add (table_index, column_index) into `Scan` node recursively.
+    pub fn add_internal_column_index(
+        expr: &SExpr,
+        table_index: IndexType,
+        column_index: IndexType,
+    ) -> SExpr {
+        fn add_internal_column_index_into_child(
+            s_expr: &SExpr,
+            column_index: IndexType,
+            table_index: IndexType,
+        ) -> SExpr {
+            let mut s_expr = s_expr.clone();
+            if let RelOperator::Scan(p) = &mut s_expr.plan {
+                if p.table_index == table_index {
+                    p.columns.insert(column_index);
+                }
+            }
+
+            if s_expr.children.is_empty() {
+                s_expr
+            } else {
+                let mut children = Vec::with_capacity(s_expr.children.len());
+                for child in s_expr.children.as_ref() {
+                    children.push(add_internal_column_index_into_child(
+                        child,
+                        column_index,
+                        table_index,
+                    ));
+                }
+
+                s_expr.children = Arc::new(children);
+
+                s_expr
+            }
+        }
+
+        add_internal_column_index_into_child(expr, column_index, table_index)
+    }
 }
 
 fn find_subquery(rel_op: &RelOperator) -> bool {
@@ -215,7 +254,9 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
 
 fn find_subquery_in_expr(expr: &ScalarExpr) -> bool {
     match expr {
-        ScalarExpr::BoundColumnRef(_) | ScalarExpr::ConstantExpr(_) => false,
+        ScalarExpr::BoundColumnRef(_)
+        | ScalarExpr::BoundInternalColumnRef(_)
+        | ScalarExpr::ConstantExpr(_) => false,
         ScalarExpr::AndExpr(expr) => {
             find_subquery_in_expr(&expr.left) || find_subquery_in_expr(&expr.right)
         }

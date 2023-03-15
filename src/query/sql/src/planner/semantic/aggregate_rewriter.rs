@@ -16,7 +16,6 @@ use common_ast::ast::BinaryOperator;
 use common_ast::ast::Expr;
 use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
-use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_ast::VisitorMut;
 
@@ -43,21 +42,19 @@ impl VisitorMut for AggregateRewriter {
                     } if matches!(op, BinaryOperator::Minus | BinaryOperator::Plus) => {
                         match (left.as_ref(), right.as_ref()) {
                             (l @ Expr::Literal { .. }, other) => {
-                                let backtrace = Backtrace::new();
                                 let text = format!("{} * count() {op} sum({})", l, other);
 
-                                if let Ok(new_expr) = tokenize_sql(&text).and_then(|tokens| {
-                                    parse_expr(&tokens, self.sql_dialect, &backtrace)
-                                }) {
+                                if let Ok(new_expr) = tokenize_sql(&text)
+                                    .and_then(|tokens| parse_expr(&tokens, self.sql_dialect))
+                                {
                                     *expr = new_expr;
                                 }
                             }
                             (other, l @ Expr::Literal { .. }) => {
-                                let backtrace = Backtrace::new();
                                 let text = format!("sum({}) {op}{} * count() ", other, l);
-                                if let Ok(new_expr) = tokenize_sql(&text).and_then(|tokens| {
-                                    parse_expr(&tokens, self.sql_dialect, &backtrace)
-                                }) {
+                                if let Ok(new_expr) = tokenize_sql(&text)
+                                    .and_then(|tokens| parse_expr(&tokens, self.sql_dialect))
+                                {
                                     *expr = new_expr;
                                 }
                             }

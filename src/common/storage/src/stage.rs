@@ -14,12 +14,18 @@
 
 use std::path::Path;
 
+use chrono::DateTime;
+use chrono::TimeZone;
+use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::principal::StageType;
+use common_meta_app::principal::UserIdentity;
 use futures::TryStreamExt;
+use opendal::Entry;
 use opendal::EntryMode;
+use opendal::Metadata;
 use opendal::Metakey;
 use opendal::Operator;
 use regex::Regex;
@@ -29,13 +35,55 @@ use crate::DataOperator;
 
 pub struct FileWithMeta {
     pub path: String,
+    pub metadata: Metadata,
 }
 
 impl FileWithMeta {
-    fn new(path: &str) -> Self {
+    fn new(path: &str, meta: Metadata) -> Self {
         Self {
             path: path.to_string(),
+            metadata: meta,
         }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum StageFileStatus {
+    NeedCopy,
+    AlreadyCopied,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct StageFileInfo {
+    pub path: String,
+    pub size: u64,
+    pub md5: Option<String>,
+    pub last_modified: DateTime<Utc>,
+    pub etag: Option<String>,
+    pub status: StageFileStatus,
+    pub creator: Option<UserIdentity>,
+}
+
+impl StageFileInfo {
+    pub fn new(path: String, meta: &Metadata) -> StageFileInfo {
+        StageFileInfo {
+            path,
+            size: meta.content_length(),
+            md5: meta.content_md5().map(str::to_string),
+            last_modified: meta
+                .last_modified()
+                .map(|v| Utc.timestamp_nanos(v.unix_timestamp_nanos() as i64))
+                .unwrap_or_default(),
+            etag: meta.etag().map(str::to_string),
+            status: StageFileStatus::NeedCopy,
+            creator: None,
+        }
+    }
+}
+
+impl From<FileWithMeta> for StageFileInfo {
+    fn from(value: FileWithMeta) -> Self {
+        StageFileInfo::new(value.path, &value.metadata)
     }
 }
 
@@ -84,7 +132,7 @@ impl StageFilesInfo {
                     .to_string();
                 let meta = operator.stat(&full_path).await?;
                 if meta.mode().is_file() {
-                    res.push(FileWithMeta::new(&full_path))
+                    res.push(FileWithMeta::new(&full_path, meta))
                 } else {
                     return Err(ErrorCode::BadArguments(format!(
                         "{full_path} is not a file"
@@ -97,7 +145,7 @@ impl StageFilesInfo {
             Ok(res)
         } else {
             let pattern = self.get_pattern()?;
-            list_files_with_pattern(operator, &self.path, pattern, first_only).await
+            StageFilesInfo::list_files_with_pattern(operator, &self.path, pattern, first_only).await
         }
     }
 
@@ -131,7 +179,7 @@ impl StageFilesInfo {
                     .to_string();
                 let meta = operator.blocking().stat(&full_path)?;
                 if meta.mode().is_file() {
-                    res.push(FileWithMeta::new(&full_path))
+                    res.push(FileWithMeta::new(&full_path, meta))
                 } else {
                     return Err(ErrorCode::BadArguments(format!(
                         "{full_path} is not a file"
@@ -147,43 +195,46 @@ impl StageFilesInfo {
             blocking_list_files_with_pattern(operator, &self.path, pattern, first_only)
         }
     }
-}
 
-async fn list_files_with_pattern(
-    operator: &Operator,
-    path: &str,
-    pattern: Option<Regex>,
-    first_only: bool,
-) -> Result<Vec<FileWithMeta>> {
-    let root_meta = operator.stat(path).await;
-    match root_meta {
-        Ok(meta) => match meta.mode() {
-            EntryMode::FILE => return Ok(vec![FileWithMeta::new(path)]),
-            EntryMode::DIR => {}
-            EntryMode::Unknown => return Err(ErrorCode::BadArguments("object mode is unknown")),
-        },
-        Err(e) => {
-            if e.kind() == opendal::ErrorKind::NotFound {
-                return Ok(vec![]);
-            } else {
-                return Err(e.into());
+    pub async fn list_files_with_pattern(
+        operator: &Operator,
+        path: &str,
+        pattern: Option<Regex>,
+        first_only: bool,
+    ) -> Result<Vec<FileWithMeta>> {
+        let root_meta = operator.stat(path).await;
+        match root_meta {
+            Ok(meta) => match meta.mode() {
+                EntryMode::FILE => return Ok(vec![FileWithMeta::new(path, meta)]),
+                EntryMode::DIR => {}
+                EntryMode::Unknown => {
+                    return Err(ErrorCode::BadArguments("object mode is unknown"));
+                }
+            },
+            Err(e) => {
+                if e.kind() == opendal::ErrorKind::NotFound {
+                    return Ok(vec![]);
+                } else {
+                    return Err(e.into());
+                }
+            }
+        };
+
+        // path is a dir
+        let mut files = Vec::new();
+        let mut list = operator.scan(path).await?;
+        while let Some(obj) = list.try_next().await? {
+            // todo(youngsofun): not always need Metakey::Complete
+            let meta = operator.metadata(&obj, Metakey::Complete).await?;
+            if check_file(obj.path(), meta.mode(), &pattern) {
+                files.push(FileWithMeta::new(obj.path(), meta));
+                if first_only {
+                    return Ok(files);
+                }
             }
         }
-    };
-
-    // path is a dir
-    let mut files = Vec::new();
-    let mut list = operator.scan(path).await?;
-    while let Some(obj) = list.try_next().await? {
-        let meta = operator.metadata(&obj, Metakey::Mode).await?;
-        if check_file(obj.path(), meta.mode(), &pattern) {
-            files.push(FileWithMeta::new(obj.path()));
-            if first_only {
-                return Ok(files);
-            }
-        }
+        Ok(files)
     }
-    Ok(files)
 }
 
 fn check_file(path: &str, mode: EntryMode, pattern: &Option<Regex>) -> bool {
@@ -208,7 +259,7 @@ fn blocking_list_files_with_pattern(
     let root_meta = operator.stat(path);
     match root_meta {
         Ok(meta) => match meta.mode() {
-            EntryMode::FILE => return Ok(vec![FileWithMeta::new(path)]),
+            EntryMode::FILE => return Ok(vec![FileWithMeta::new(path, meta)]),
             EntryMode::DIR => {}
             EntryMode::Unknown => return Err(ErrorCode::BadArguments("object mode is unknown")),
         },
@@ -226,13 +277,38 @@ fn blocking_list_files_with_pattern(
     let list = operator.list(path)?;
     for obj in list {
         let obj = obj?;
-        let meta = operator.metadata(&obj, Metakey::Mode)?;
+        let meta = operator.metadata(&obj, Metakey::Complete)?;
         if check_file(obj.path(), meta.mode(), &pattern) {
-            files.push(FileWithMeta::new(obj.path()));
+            files.push(FileWithMeta::new(obj.path(), meta));
             if first_only {
                 return Ok(files);
             }
         }
     }
     Ok(files)
+}
+
+/// # Behavior
+///
+///
+/// - `Ok(Some(v))` if given object is a file and no error happened.
+/// - `Ok(None)` if given object is not a file.
+/// - `Err(err)` if there is an error happened.
+#[allow(unused)]
+pub async fn stat_file(op: Operator, de: Entry) -> Result<Option<StageFileInfo>> {
+    let meta = op
+        .metadata(&de, {
+            Metakey::Mode
+                | Metakey::ContentLength
+                | Metakey::ContentMd5
+                | Metakey::LastModified
+                | Metakey::Etag
+        })
+        .await?;
+
+    if !meta.mode().is_file() {
+        return Ok(None);
+    }
+
+    Ok(Some(StageFileInfo::new(de.path().to_string(), &meta)))
 }

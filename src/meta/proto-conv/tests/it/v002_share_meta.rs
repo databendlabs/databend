@@ -44,7 +44,7 @@ fn test_decode_v2_share_meta() -> anyhow::Result<()> {
     ];
 
     let want = || {
-        let now = Utc.ymd(2014, 11, 28).and_hms(12, 0, 9);
+        let now = Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap();
 
         let db_entry = share::ShareGrantEntry::new(
             share::ShareGrantObject::Database(1),
@@ -66,8 +66,8 @@ fn test_decode_v2_share_meta() -> anyhow::Result<()> {
             accounts: BTreeSet::from_iter(vec![s("a"), s("b")].into_iter()),
             share_from_db_ids: BTreeSet::new(),
             comment: Some(s("comment")),
-            share_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
-            update_on: Some(Utc.ymd(2014, 11, 29).and_hms(12, 0, 9)),
+            share_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
+            update_on: Some(Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap()),
         }
     };
 

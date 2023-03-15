@@ -148,7 +148,7 @@ impl Binder {
     /// in this function.
     pub(super) async fn normalize_select_list<'a>(
         &mut self,
-        input_context: &BindContext,
+        input_context: &mut BindContext,
         select_list: &'a [SelectTarget],
     ) -> Result<SelectList<'a>> {
         let mut output = SelectList::default();
@@ -196,6 +196,14 @@ impl Binder {
                         &[],
                     );
                     let (bound_expr, _) = scalar_binder.bind(expr).await?;
+                    // if `Expr` is internal column, then add this internal column into `BindContext`
+                    if let ScalarExpr::BoundInternalColumnRef(ref internal_column) = bound_expr {
+                        // add internal column binding into `BindContext`
+                        input_context.add_internal_column_binding(
+                            &internal_column.column,
+                            self.metadata.clone(),
+                        );
+                    }
 
                     // If alias is not specified, we will generate a name for the scalar expression.
                     let expr_name = match alias {

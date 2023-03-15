@@ -241,7 +241,7 @@ pub fn adjust_threads_and_request(
                     let to_read_rows = part
                         .columns_meta
                         .values()
-                        .map(|meta| meta.read_rows(&part.range))
+                        .map(|meta| meta.read_rows(part.range()))
                         .find(|rows| *rows > 0)
                         .unwrap_or(part.nums_rows as u64);
 

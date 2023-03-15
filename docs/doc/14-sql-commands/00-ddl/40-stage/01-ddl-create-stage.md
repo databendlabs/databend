@@ -2,7 +2,7 @@
 title: CREATE STAGE
 ---
 
-Creates a stage.
+Creates an internal or external stage.
 
 ## Syntax
 
@@ -21,16 +21,18 @@ CREATE STAGE [ IF NOT EXISTS ] <external_stage_name>
   [ COMMENT = '<string_literal>' ]
 ```
 
-Where:
-
 ### externalStageParams
+
+:::note
+If the `ENDPOINT_URL` parameter is not specified in the command, Databend will create the stage on Amazon S3 by default. Therefore, when you create an external stage on an S3-compatible object storage or other object storage solutions, be sure to include the `ENDPOINT_URL` parameter.
+:::
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 <Tabs groupId="externalstageparams">
 
-<TabItem value="Amazon S3-compatible Storage" label="Amazon S3-compatible Storage">
+<TabItem value="Amazon S3-compatible Storage" label="Amazon S3-compatible">
 
 ```sql
 externalStageParams ::=
@@ -46,7 +48,7 @@ externalStageParams ::=
 
 | Parameter                 | Description                                                                                                                                                                           | Required     |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| URL                       | External files located at the AWS S3 compatible object storage.                                                                                                                       | **Required** |
+| URL                       | External files located at the AWS S3 compatible object storage.                                                                                                                       | Required |
 | ENDPOINT_URL              | The bucket endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`. | Optional     |
 | ACCESS_KEY_ID             | Your access key ID for connecting the AWS S3 compatible object storage. If not provided, Databend will access the bucket anonymously.                                                 | Optional     |
 | SECRET_ACCESS_KEY         | Your secret access key for connecting the AWS S3 compatible object storage.                                                                                                           | Optional     |
@@ -55,7 +57,7 @@ externalStageParams ::=
 
 </TabItem>
 
-<TabItem value="Azure Blob Storage" label="Azure Blob Storage">
+<TabItem value="Azure Blob Storage" label="Azure Blob">
 
 ```sql
 externalStageParams ::=
@@ -69,14 +71,14 @@ externalStageParams ::=
 
 | Parameter    | Description                                                                                                                                                                              | Required     |
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| URL          | External files located at the Azure Blob storage.                                                                                                                                        | **Required** |
-| ENDPOINT_URL | The container endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`. | Optional     |
+| URL          | External files located at the Azure Blob storage.                                                                                                                                        | Required |
+| ENDPOINT_URL | The container endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`. | Required     |
 | ACCOUNT_NAME | Your account name for connecting the Azure Blob storage. If not provided, Databend will access the container anonymously.                                                                | Optional     |
 | ACCOUNT_KEY  | Your account key for connecting the Azure Blob storage.                                                                                                                                  | Optional     |
 
 </TabItem>
 
-<TabItem value="Google Cloud Storage" label="Google Cloud Storage">
+<TabItem value="Google Cloud Storage" label="Google Cloud">
 
 ```sql
 externalLocation ::=
@@ -89,13 +91,13 @@ externalLocation ::=
 
 | Parameter    | Description                                                                                                                                                                              | Required     |
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| URL          | External files located at the Google Cloud Storage                                                                                                                                       | **Required** |
-| ENDPOINT_URL | The container endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`. | Optional     |
+| URL          | External files located at the Google Cloud Storage                                                                                                                                       | Required |
+| ENDPOINT_URL | The container endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`. | Required     |
 | CREDENTIAL   | Your credential for connecting the GCS. If not provided, Databend will access the container anonymously.                                                                                 | Optional     |
 
 </TabItem>
 
-<TabItem value="Huawei Object Storage" label="Huawei Object Storage">
+<TabItem value="Huawei Object Storage" label="Huawei OBS">
 
 ```sql
 externalLocation ::=
@@ -109,14 +111,14 @@ externalLocation ::=
 
 | Parameter         | Description                                                                                                                                                                              | Required     |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| URL               | External files located at the obs                                                                                                                                                        | **Required** |
-| ENDPOINT_URL      | The container endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`. | **Required** |
+| URL               | External files located at the obs                                                                                                                                                        | Required |
+| ENDPOINT_URL      | The container endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`. | Required |
 | ACCESS_KEY_ID     | Your access key ID for connecting the OBS. If not provided, Databend will access the bucket anonymously.                                                                                 | Optional     |
 | SECRET_ACCESS_KEY | Your secret access key for connecting the OBS.                                                                                                                                           | Optional     |
 
 </TabItem>
 
-<TabItem value="WebHDFS Storage" label="WebHDFS Storage">
+<TabItem value="WebHDFS Storage" label="WebHDFS">
 
 ```sql
 externalLocation ::=
@@ -129,7 +131,7 @@ externalLocation ::=
 
 | Parameter  | Description                                                                                                                                                                                                                                         | Required     |
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| URL        | External endpoint and location of files.                                                                                                                                                                                                            | **Required** |
+| URL        | External endpoint and location of files.                                                                                                                                                                                                            | Required |
 | HTTPS      | Connect to RESTful API with HTTP or HTTPS, set to `true` will use `HTTPS`, else `HTTP`. Use `HTTPS` by default. To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`. | Optional     |
 | DELEGATION | Delegation token of WebHDFS for authentication. If not set, no tokens will be used in further operations.                                                                                                                                           | Optional     |
 
@@ -156,19 +158,13 @@ copyOptions ::=
 
 ## Examples
 
-### Internal Stages
-
 ```sql
+-- This example creates an internal stage.
 CREATE STAGE my_internal_stage;
-```
 
-### External Stages
-
-```sql
+-- This example creates an external stage on Amazon S3.
 CREATE STAGE my_s3_stage URL='s3://load/files/' CONNECTION = (ACCESS_KEY_ID = '<your-access-key-id>' SECRET_ACCESS_KEY = '<your-secret-access-key>');
-```
 
-```sql
 DESC STAGE my_s3_stage;
 +-------------+------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------+--------------------------------------------------------------------------------------------------------------------+---------+
 | name        | stage_type | stage_params                                                                                                                                                           | copy_options                                  | file_format_options                                                                                                | comment |

@@ -21,6 +21,7 @@ use crate::ast::format::syntax::interweave_comma;
 use crate::ast::format::syntax::parenthenized;
 use crate::ast::format::syntax::NEST_FACTOR;
 use crate::ast::Expr;
+use crate::ast::GroupBy;
 use crate::ast::JoinCondition;
 use crate::ast::JoinOperator;
 use crate::ast::OrderByExpr;
@@ -194,12 +195,19 @@ fn pretty_selection(selection: Option<Expr>) -> RcDoc<'static> {
     }
 }
 
-fn pretty_group_by(group_by: Vec<Expr>) -> RcDoc<'static> {
-    if !group_by.is_empty() {
-        RcDoc::line()
+fn pretty_group_set(set: Vec<Expr>) -> RcDoc<'static> {
+    RcDoc::nil()
+        .append(RcDoc::text("("))
+        .append(inline_comma(set.into_iter().map(pretty_expr)))
+        .append(RcDoc::text(")"))
+}
+
+fn pretty_group_by(group_by: Option<GroupBy>) -> RcDoc<'static> {
+    match group_by {
+        Some(GroupBy::Normal(exprs)) => RcDoc::line()
             .append(
                 RcDoc::text("GROUP BY").append(
-                    if group_by.len() > 1 {
+                    if exprs.len() > 1 {
                         RcDoc::line()
                     } else {
                         RcDoc::space()
@@ -208,12 +216,20 @@ fn pretty_group_by(group_by: Vec<Expr>) -> RcDoc<'static> {
                 ),
             )
             .append(
-                interweave_comma(group_by.into_iter().map(pretty_expr))
+                interweave_comma(exprs.into_iter().map(pretty_expr))
+                    .nest(NEST_FACTOR)
+                    .group(),
+            ),
+        Some(GroupBy::GroupingSets(sets)) => RcDoc::line()
+            .append(RcDoc::text("GROUP BY GROUPING SETS (").append(RcDoc::line().nest(NEST_FACTOR)))
+            .append(
+                interweave_comma(sets.into_iter().map(pretty_group_set))
                     .nest(NEST_FACTOR)
                     .group(),
             )
-    } else {
-        RcDoc::nil()
+            .append(RcDoc::line())
+            .append(RcDoc::text(")")),
+        _ => RcDoc::nil(),
     }
 }
 

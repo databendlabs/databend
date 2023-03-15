@@ -99,6 +99,12 @@ impl FastFieldDecoderValues {
         }
     }
 
+    fn pop_inner_values(&self, column: &mut ColumnBuilder, size: usize) {
+        for _ in 0..size {
+            let _ = column.pop();
+        }
+    }
+
     pub fn read_field<R: AsRef<[u8]>>(
         &self,
         column: &mut ColumnBuilder,
@@ -285,10 +291,16 @@ impl FastFieldDecoderValues {
                 break;
             }
             if idx != 0 {
-                reader.must_ignore_byte(b',')?;
+                if let Err(err) = reader.must_ignore_byte(b',') {
+                    self.pop_inner_values(&mut column.builder, idx);
+                    return Err(err.into());
+                }
             }
             let _ = reader.ignore_white_spaces();
-            self.read_field(&mut column.builder, reader, positions)?;
+            if let Err(err) = self.read_field(&mut column.builder, reader, positions) {
+                self.pop_inner_values(&mut column.builder, idx);
+                return Err(err);
+            }
         }
         column.commit_row();
         Ok(())
@@ -311,14 +323,23 @@ impl FastFieldDecoderValues {
                 break;
             }
             if idx != 0 {
-                reader.must_ignore_byte(b',')?;
+                if let Err(err) = reader.must_ignore_byte(b',') {
+                    self.pop_inner_values(&mut map_builder[KEY], idx);
+                    self.pop_inner_values(&mut map_builder[VALUE], idx);
+                    return Err(err.into());
+                }
             }
             let _ = reader.ignore_white_spaces();
-            self.read_field(&mut map_builder[KEY], reader, positions)?;
+            if let Err(err) = self.read_field(&mut map_builder[KEY], reader, positions) {
+                self.pop_inner_values(&mut map_builder[KEY], idx);
+                self.pop_inner_values(&mut map_builder[VALUE], idx);
+                return Err(err);
+            }
             // check duplicate map keys
             let key = map_builder[KEY].pop().unwrap();
             if set.contains(&key) {
-                column.commit_row();
+                self.pop_inner_values(&mut map_builder[KEY], idx);
+                self.pop_inner_values(&mut map_builder[VALUE], idx);
                 return Err(ErrorCode::BadBytes(
                     "map keys have to be unique".to_string(),
                 ));
@@ -326,9 +347,17 @@ impl FastFieldDecoderValues {
             set.insert(key.clone());
             map_builder[KEY].push(key.as_ref());
             let _ = reader.ignore_white_spaces();
-            reader.must_ignore_byte(b':')?;
+            if let Err(err) = reader.must_ignore_byte(b':') {
+                self.pop_inner_values(&mut map_builder[KEY], idx + 1);
+                self.pop_inner_values(&mut map_builder[VALUE], idx);
+                return Err(err.into());
+            }
             let _ = reader.ignore_white_spaces();
-            self.read_field(&mut map_builder[VALUE], reader, positions)?;
+            if let Err(err) = self.read_field(&mut map_builder[VALUE], reader, positions) {
+                self.pop_inner_values(&mut map_builder[KEY], idx + 1);
+                self.pop_inner_values(&mut map_builder[VALUE], idx);
+                return Err(err);
+            }
         }
         column.commit_row();
         Ok(())
@@ -341,15 +370,30 @@ impl FastFieldDecoderValues {
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
         reader.must_ignore_byte(b'(')?;
-        for (idx, field) in fields.iter_mut().enumerate() {
+        for idx in 0..fields.len() {
             let _ = reader.ignore_white_spaces();
             if idx != 0 {
-                reader.must_ignore_byte(b',')?;
+                if let Err(err) = reader.must_ignore_byte(b',') {
+                    for field in fields.iter_mut().take(idx) {
+                        self.pop_inner_values(field, 1);
+                    }
+                    return Err(err.into());
+                }
             }
             let _ = reader.ignore_white_spaces();
-            self.read_field(field, reader, positions)?;
+            if let Err(err) = self.read_field(&mut fields[idx], reader, positions) {
+                for field in fields.iter_mut().take(idx) {
+                    self.pop_inner_values(field, 1);
+                }
+                return Err(err);
+            }
         }
-        reader.must_ignore_byte(b')')?;
+        if let Err(err) = reader.must_ignore_byte(b')') {
+            for field in fields.iter_mut() {
+                self.pop_inner_values(field, 1);
+            }
+            return Err(err.into());
+        }
         Ok(())
     }
 

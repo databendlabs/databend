@@ -27,6 +27,7 @@ use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
+use crate::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
 pub enum AggregateMode {
@@ -48,6 +49,10 @@ pub struct Aggregate {
     // True if the plan is generated from distinct, else the plan is a normal aggregate;
     pub from_distinct: bool,
     pub limit: Option<usize>,
+    /// The index of the virtual column `_grouping_id`. It's valid only if `grouping_sets` is not empty.
+    pub grouping_id_index: IndexType,
+    /// The grouping sets, each grouping set is a list of `group_items` indices.
+    pub grouping_sets: Vec<Vec<IndexType>>,
 }
 
 impl Aggregate {

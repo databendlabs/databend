@@ -6,6 +6,7 @@ BENCHMARK_ID=${BENCHMARK_ID:-$(date +%s)}
 BENCHMARK_DATASET=${BENCHMARK_DATASET:-hits}
 BENCHMARK_SIZE=${BENCHMARK_SIZE:-Medium}
 BENCHMARK_IMAGE_TAG=${BENCHMARK_IMAGE_TAG:-}
+BENCHMARK_DATABASE=${BENCHMARK_DATABASE:-default}
 
 if [[ -z "${BENCHMARK_IMAGE_TAG}" ]]; then
     echo "Please set BENCHMARK_IMAGE_TAG to run the benchmark."
@@ -36,14 +37,15 @@ bendsql cloud login \
     --endpoint "${CLOUD_ENDPOINT}" \
     --email "${CLOUD_EMAIL}" \
     --password "${CLOUD_PASSWORD}" \
-    --org "${CLOUD_ORG}"
+    --org "${CLOUD_ORG}" \
+    --database "${BENCHMARK_DATABASE}"
 
 bendsql cloud warehouse ls
 bendsql cloud warehouse create "${CLOUD_WAREHOUSE}" --size "${BENCHMARK_SIZE}" --tag "${BENCHMARK_IMAGE_TAG}"
 bendsql cloud warehouse ls
 bendsql cloud warehouse resume "${CLOUD_WAREHOUSE}" --wait
 
-bendsql cloud use "${CLOUD_WAREHOUSE}"
+bendsql cloud warehouse use "${CLOUD_WAREHOUSE}"
 
 # Data loaded before the benchmark starts
 # bendsql query <"${BENCHMARK_DATASET}/create.sql"

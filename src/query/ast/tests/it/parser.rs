@@ -368,12 +368,15 @@ fn test_statement() {
             type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;"#,
         r#"SHOW FILE FORMATS"#,
         r#"DROP FILE FORMAT my_csv"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS (a, b, c, d)"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS (a, b, (c, d))"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (c), (d, e))"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (), (d, e))"#,
     ];
 
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
-        let backtrace = Backtrace::new();
-        let (stmt, fmt) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace).unwrap();
+        let (stmt, fmt) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
@@ -425,12 +428,13 @@ fn test_statement_error() {
         r#"CALL system$test(a"#,
         r#"show settings ilike 'enable%'"#,
         r#"PRESIGN INVALID @my_stage/path/to/file"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS a, b"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS ()"#,
     ];
 
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
-        let backtrace = Backtrace::new();
-        let err = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace).unwrap_err();
+        let err = parse_sql(&tokens, Dialect::PostgreSQL).unwrap_err();
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();

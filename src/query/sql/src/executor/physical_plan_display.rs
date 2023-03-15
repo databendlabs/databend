@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
+use super::AggregateExpand;
 use super::DistributedInsertSelect;
 use super::Unnest;
 use crate::executor::AggregateFinal;
@@ -57,6 +58,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::Filter(filter) => write!(f, "{}", filter)?,
             PhysicalPlan::Project(project) => write!(f, "{}", project)?,
             PhysicalPlan::EvalScalar(eval_scalar) => write!(f, "{}", eval_scalar)?,
+            PhysicalPlan::AggregateExpand(aggregate) => write!(f, "{}", aggregate)?,
             PhysicalPlan::AggregatePartial(aggregate) => write!(f, "{}", aggregate)?,
             PhysicalPlan::AggregateFinal(aggregate) => write!(f, "{}", aggregate)?,
             PhysicalPlan::Sort(sort) => write!(f, "{}", sort)?,
@@ -143,6 +145,24 @@ impl Display for EvalScalar {
             .collect::<Vec<String>>();
 
         write!(f, "EvalScalar: [{}]", scalars.join(", "))
+    }
+}
+
+impl Display for AggregateExpand {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let sets = self
+            .grouping_sets
+            .iter()
+            .map(|set| {
+                set.iter()
+                    .map(|index| index.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            })
+            .map(|s| format!("[{}]", s))
+            .collect::<Vec<String>>()
+            .join(", ");
+        write!(f, "Aggregate(Expand): grouping sets: [{}]", sets)
     }
 }
 

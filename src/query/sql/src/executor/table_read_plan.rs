@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::InternalColumn;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::FieldIndex;
 
 #[async_trait::async_trait]
 pub trait ToReadDataSourcePlan {
@@ -28,7 +31,7 @@ pub trait ToReadDataSourcePlan {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
     ) -> Result<DataSourcePlan> {
-        self.read_plan_with_catalog(ctx, "default".to_owned(), push_downs)
+        self.read_plan_with_catalog(ctx, "default".to_owned(), push_downs, None)
             .await
     }
 
@@ -37,6 +40,7 @@ pub trait ToReadDataSourcePlan {
         ctx: Arc<dyn TableContext>,
         catalog: String,
         push_downs: Option<PushDownInfo>,
+        internal_columns: Option<BTreeMap<FieldIndex, InternalColumn>>,
     ) -> Result<DataSourcePlan>;
 }
 
@@ -47,6 +51,7 @@ impl ToReadDataSourcePlan for dyn Table {
         ctx: Arc<dyn TableContext>,
         catalog: String,
         push_downs: Option<PushDownInfo>,
+        internal_columns: Option<BTreeMap<FieldIndex, InternalColumn>>,
     ) -> Result<DataSourcePlan> {
         let (statistics, parts) = self
             .read_partitions(ctx.clone(), push_downs.clone())
@@ -63,7 +68,7 @@ impl ToReadDataSourcePlan for dyn Table {
         let schema = &source_info.schema();
         let description = statistics.get_description(&source_info.desc());
 
-        let output_schema = match (self.benefit_column_prune(), &push_downs) {
+        let mut output_schema = match (self.benefit_column_prune(), &push_downs) {
             (true, Some(push_downs)) => match &push_downs.prewhere {
                 Some(prewhere) => Arc::new(prewhere.output_columns.project_schema(schema)),
                 _ => match &push_downs.projection {
@@ -74,6 +79,17 @@ impl ToReadDataSourcePlan for dyn Table {
             _ => schema.clone(),
         };
 
+        if let Some(ref internal_columns) = internal_columns {
+            let mut schema = output_schema.as_ref().clone();
+            for internal_column in internal_columns.values() {
+                schema.add_internal_column(
+                    internal_column.column_name(),
+                    internal_column.table_data_type(),
+                    internal_column.column_id(),
+                );
+            }
+            output_schema = Arc::new(schema);
+        }
         // TODO pass in catalog name
 
         Ok(DataSourcePlan {
@@ -85,6 +101,7 @@ impl ToReadDataSourcePlan for dyn Table {
             description,
             tbl_args: self.table_args(),
             push_downs,
+            query_internal_columns: internal_columns.is_some(),
         })
     }
 }

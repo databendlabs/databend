@@ -72,6 +72,7 @@ use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
 use crate::operations::AppendOperationLogEntry;
 use crate::pipelines::Pipeline;
+use crate::table_functions::unwrap_tuple;
 use crate::NavigationPoint;
 use crate::Table;
 use crate::TableStatistics;
@@ -344,7 +345,12 @@ impl Table for FuseTable {
     fn cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
         let table_meta = Arc::new(self.clone());
         if let Some((_, order)) = &self.cluster_key_meta {
-            let cluster_keys = parse_exprs(ctx, table_meta.clone(), true, order).unwrap();
+            let cluster_keys = parse_exprs(ctx, table_meta.clone(), order).unwrap();
+            let cluster_keys = if cluster_keys.len() == 1 {
+                unwrap_tuple(&cluster_keys[0]).unwrap_or(cluster_keys)
+            } else {
+                cluster_keys
+            };
             let cluster_keys = cluster_keys
                 .iter()
                 .map(|k| {
