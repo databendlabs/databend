@@ -1215,18 +1215,6 @@ pub struct QueryConfig {
     #[clap(skip)]
     pub jwt_key_files: Vec<String>,
 
-    /// The maximum memory size of the buffered data collected per insert before being inserted.
-    #[clap(long, default_value = "10000")]
-    pub async_insert_max_data_size: u64,
-
-    /// The maximum timeout in milliseconds since the first insert before inserting collected data.
-    #[clap(long, default_value = "200")]
-    pub async_insert_busy_timeout: u64,
-
-    /// The maximum timeout in milliseconds since the last insert before inserting collected data.
-    #[clap(long, default_value = "0")]
-    pub async_insert_stale_timeout: u64,
-
     #[clap(long, default_value = "auto")]
     pub default_storage_format: String,
 
@@ -1254,6 +1242,18 @@ pub struct QueryConfig {
 
     // ----- the following options/args are all deprecated               ----
     // ----- and turned into Option<T>, to help user migrate the configs ----
+    /// OBSOLETED: The maximum memory size of the buffered data collected per insert before being inserted.
+    #[clap(long)]
+    pub async_insert_max_data_size: Option<u64>,
+
+    /// OBSOLETED: The maximum timeout in milliseconds since the first insert before inserting collected data.
+    #[clap(long)]
+    pub async_insert_busy_timeout: Option<u64>,
+
+    /// OBSOLETED: The maximum timeout in milliseconds since the last insert before inserting collected data.
+    #[clap(long)]
+    pub async_insert_stale_timeout: Option<u64>,
+
     /// OBSOLETED: Table disk cache size (mb).
     #[clap(long)]
     pub table_disk_cache_mb_size: Option<u64>,
@@ -1349,9 +1349,6 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             management_mode: self.management_mode,
             jwt_key_file: self.jwt_key_file,
             jwt_key_files: self.jwt_key_files,
-            async_insert_max_data_size: self.async_insert_max_data_size,
-            async_insert_busy_timeout: self.async_insert_busy_timeout,
-            async_insert_stale_timeout: self.async_insert_stale_timeout,
             default_storage_format: self.default_storage_format,
             default_compression: self.default_compression,
             idm: InnerIDMConfig {
@@ -1409,9 +1406,6 @@ impl From<InnerQueryConfig> for QueryConfig {
             management_mode: inner.management_mode,
             jwt_key_file: inner.jwt_key_file,
             jwt_key_files: inner.jwt_key_files,
-            async_insert_max_data_size: inner.async_insert_max_data_size,
-            async_insert_busy_timeout: inner.async_insert_busy_timeout,
-            async_insert_stale_timeout: inner.async_insert_stale_timeout,
             default_storage_format: inner.default_storage_format,
             default_compression: inner.default_compression,
 
@@ -1422,6 +1416,9 @@ impl From<InnerQueryConfig> for QueryConfig {
             internal_enable_sandbox_tenant: inner.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: false,
             // obsoleted config entries
+            async_insert_max_data_size: None,
+            async_insert_busy_timeout: None,
+            async_insert_stale_timeout: None,
             table_disk_cache_mb_size: None,
             table_meta_cache_enabled: None,
             table_cache_block_meta_count: None,
