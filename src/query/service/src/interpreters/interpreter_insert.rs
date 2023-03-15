@@ -97,20 +97,14 @@ pub struct InsertInterpreter {
     ctx: Arc<QueryContext>,
     plan: Insert,
     source_pipe_builder: Mutex<Option<SourcePipeBuilder>>,
-    async_insert: bool,
 }
 
 impl InsertInterpreter {
-    pub fn try_create(
-        ctx: Arc<QueryContext>,
-        plan: Insert,
-        async_insert: bool,
-    ) -> Result<InterpreterPtr> {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: Insert) -> Result<InterpreterPtr> {
         Ok(Arc::new(InsertInterpreter {
             ctx,
             plan,
             source_pipe_builder: Mutex::new(None),
-            async_insert,
         }))
     }
 
@@ -360,132 +354,121 @@ impl Interpreter for InsertInterpreter {
 
         let mut build_res = PipelineBuildResult::create();
 
-        if self.async_insert {
-            build_res.main_pipeline.add_pipe(
-                ((*self.source_pipe_builder.lock()).clone())
-                    .ok_or_else(|| ErrorCode::EmptyData("empty source pipe builder"))?
-                    .finalize(),
-            );
-        } else {
-            match &self.plan.source {
-                InsertInputSource::Values(data) => {
-                    let settings = self.ctx.get_settings();
+        match &self.plan.source {
+            InsertInputSource::Values(data) => {
+                let settings = self.ctx.get_settings();
 
-                    build_res.main_pipeline.add_source(
-                        |output| {
-                            let name_resolution_ctx =
-                                NameResolutionContext::try_from(settings.as_ref())?;
-                            let inner = ValueSource::new(
-                                data.to_string(),
-                                self.ctx.clone(),
-                                name_resolution_ctx,
-                                plan.schema(),
-                            );
-                            AsyncSourcer::create(self.ctx.clone(), output, inner)
-                        },
-                        1,
-                    )?;
-                }
-                InsertInputSource::StreamingWithFormat(_, _, input_context) => {
-                    let input_context = input_context.as_ref().expect("must success").clone();
-                    input_context
-                        .format
-                        .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
-                }
-                InsertInputSource::StreamingWithFileFormat(_, _, input_context) => {
-                    let input_context = input_context.as_ref().expect("must success").clone();
-                    input_context
-                        .format
-                        .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
-                }
-                InsertInputSource::Stage(opts) => {
-                    tracing::info!("insert: from stage with options {:?}", opts);
-                    self.build_insert_from_stage_pipeline(
-                        table.clone(),
-                        opts.clone(),
-                        &mut build_res.main_pipeline,
-                    )
-                    .await?;
-                    return Ok(build_res);
-                }
-                InsertInputSource::SelectPlan(plan) => {
-                    let table1 = table.clone();
-                    let (mut select_plan, select_column_bindings) = match plan.as_ref() {
-                        Plan::Query {
-                            s_expr,
-                            metadata,
-                            bind_context,
-                            ..
-                        } => {
-                            let mut builder1 =
-                                PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone());
-                            (builder1.build(s_expr).await?, bind_context.columns.clone())
-                        }
-                        _ => unreachable!(),
-                    };
+                build_res.main_pipeline.add_source(
+                    |output| {
+                        let name_resolution_ctx =
+                            NameResolutionContext::try_from(settings.as_ref())?;
+                        let inner = ValueSource::new(
+                            data.to_string(),
+                            self.ctx.clone(),
+                            name_resolution_ctx,
+                            plan.schema(),
+                        );
+                        AsyncSourcer::create(self.ctx.clone(), output, inner)
+                    },
+                    1,
+                )?;
+            }
+            InsertInputSource::StreamingWithFormat(_, _, input_context) => {
+                let input_context = input_context.as_ref().expect("must success").clone();
+                input_context
+                    .format
+                    .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
+            }
+            InsertInputSource::StreamingWithFileFormat(_, _, input_context) => {
+                let input_context = input_context.as_ref().expect("must success").clone();
+                input_context
+                    .format
+                    .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
+            }
+            InsertInputSource::Stage(opts) => {
+                tracing::info!("insert: from stage with options {:?}", opts);
+                self.build_insert_from_stage_pipeline(
+                    table.clone(),
+                    opts.clone(),
+                    &mut build_res.main_pipeline,
+                )
+                .await?;
+                return Ok(build_res);
+            }
+            InsertInputSource::SelectPlan(plan) => {
+                let table1 = table.clone();
+                let (mut select_plan, select_column_bindings) = match plan.as_ref() {
+                    Plan::Query {
+                        s_expr,
+                        metadata,
+                        bind_context,
+                        ..
+                    } => {
+                        let mut builder1 =
+                            PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone());
+                        (builder1.build(s_expr).await?, bind_context.columns.clone())
+                    }
+                    _ => unreachable!(),
+                };
 
-                    let catalog = self.plan.catalog.clone();
+                let catalog = self.plan.catalog.clone();
 
-                    let insert_select_plan = match select_plan {
-                        PhysicalPlan::Exchange(ref mut exchange) => {
-                            // insert can be dispatched to different nodes
-                            let input = exchange.input.clone();
-                            exchange.input = Box::new(PhysicalPlan::DistributedInsertSelect(
-                                Box::new(DistributedInsertSelect {
-                                    input,
-                                    catalog,
-                                    table_info: table1.get_table_info().clone(),
-                                    select_schema: plan.schema(),
-                                    select_column_bindings,
-                                    insert_schema: self.plan.schema(),
-                                    cast_needed: self.check_schema_cast(plan)?,
-                                }),
-                            ));
-                            select_plan
-                        }
-                        other_plan => {
-                            // insert should wait until all nodes finished
-                            PhysicalPlan::DistributedInsertSelect(Box::new(
-                                DistributedInsertSelect {
-                                    input: Box::new(other_plan),
-                                    catalog,
-                                    table_info: table1.get_table_info().clone(),
-                                    select_schema: plan.schema(),
-                                    select_column_bindings,
-                                    insert_schema: self.plan.schema(),
-                                    cast_needed: self.check_schema_cast(plan)?,
-                                },
-                            ))
-                        }
-                    };
+                let insert_select_plan = match select_plan {
+                    PhysicalPlan::Exchange(ref mut exchange) => {
+                        // insert can be dispatched to different nodes
+                        let input = exchange.input.clone();
+                        exchange.input = Box::new(PhysicalPlan::DistributedInsertSelect(Box::new(
+                            DistributedInsertSelect {
+                                input,
+                                catalog,
+                                table_info: table1.get_table_info().clone(),
+                                select_schema: plan.schema(),
+                                select_column_bindings,
+                                insert_schema: self.plan.schema(),
+                                cast_needed: self.check_schema_cast(plan)?,
+                            },
+                        )));
+                        select_plan
+                    }
+                    other_plan => {
+                        // insert should wait until all nodes finished
+                        PhysicalPlan::DistributedInsertSelect(Box::new(DistributedInsertSelect {
+                            input: Box::new(other_plan),
+                            catalog,
+                            table_info: table1.get_table_info().clone(),
+                            select_schema: plan.schema(),
+                            select_column_bindings,
+                            insert_schema: self.plan.schema(),
+                            cast_needed: self.check_schema_cast(plan)?,
+                        }))
+                    }
+                };
 
-                    let mut build_res =
-                        build_query_pipeline(&self.ctx, &[], &insert_select_plan, false, false)
-                            .await?;
+                let mut build_res =
+                    build_query_pipeline(&self.ctx, &[], &insert_select_plan, false, false).await?;
 
-                    let ctx = self.ctx.clone();
-                    let overwrite = self.plan.overwrite;
-                    build_res.main_pipeline.set_on_finished(move |may_error| {
-                        // capture out variable
-                        let overwrite = overwrite;
-                        let ctx = ctx.clone();
-                        let table = table.clone();
+                let ctx = self.ctx.clone();
+                let overwrite = self.plan.overwrite;
+                build_res.main_pipeline.set_on_finished(move |may_error| {
+                    // capture out variable
+                    let overwrite = overwrite;
+                    let ctx = ctx.clone();
+                    let table = table.clone();
 
-                        if may_error.is_none() {
-                            let append_entries = ctx.consume_precommit_blocks();
-                            // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
-                            return GlobalIORuntime::instance().block_on(async move {
-                                table.commit_insertion(ctx, append_entries, overwrite).await
-                            });
-                        }
+                    if may_error.is_none() {
+                        let append_entries = ctx.consume_precommit_blocks();
+                        // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
+                        return GlobalIORuntime::instance().block_on(async move {
+                            table.commit_insertion(ctx, append_entries, overwrite).await
+                        });
+                    }
 
-                        Err(may_error.as_ref().unwrap().clone())
-                    });
+                    Err(may_error.as_ref().unwrap().clone())
+                });
 
-                    return Ok(build_res);
-                }
-            };
-        }
+                return Ok(build_res);
+            }
+        };
 
         let append_mode = match &self.plan.source {
             InsertInputSource::StreamingWithFormat(..)
