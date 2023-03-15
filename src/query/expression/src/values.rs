@@ -239,10 +239,10 @@ impl Value<AnyType> {
         Some(self.as_ref().try_downcast::<T>()?.to_owned())
     }
 
-    pub fn wrap_nullable(&self) -> Self {
+    pub fn wrap_nullable(self) -> Self {
         match self {
             Value::Column(c) => Value::Column(c.wrap_nullable()),
-            scalar => scalar.clone(),
+            scalar => scalar,
         }
     }
 }
@@ -1486,14 +1486,14 @@ impl Column {
         }
     }
 
-    pub fn wrap_nullable(&self) -> Self {
+    pub fn wrap_nullable(self) -> Self {
         match self {
-            col @ Column::Nullable(_) => col.clone(),
-            col => {
-                let mut validity = MutableBitmap::with_capacity(col.len());
-                validity.extend_constant(col.len(), true);
+            column @ Column::Nullable(_) => column,
+            column => {
+                let mut validity = MutableBitmap::with_capacity(column.len());
+                validity.extend_constant(column.len(), true);
                 Column::Nullable(Box::new(NullableColumn {
-                    column: col.clone(),
+                    column,
                     validity: validity.into(),
                 }))
             }
