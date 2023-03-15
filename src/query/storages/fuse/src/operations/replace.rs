@@ -280,7 +280,7 @@ impl FuseTable {
         Ok(items)
     }
 
-    fn partition_segments(
+    pub fn partition_segments(
         segments: &[Location],
         num_partition: usize,
     ) -> Vec<Vec<(SegmentIndex, Location)>> {
@@ -363,44 +363,5 @@ impl FuseTable {
             None,
             None,
         )
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_partition() -> Result<()> {
-        use rand::Rng;
-
-        let mut rng = rand::thread_rng();
-
-        for _ in 0..100 {
-            let number_segment: usize = rng.gen_range(1..100);
-
-            // do not matter, arbitrarily picked
-            let format_version = 2;
-
-            let segments = (0..number_segment)
-                .into_iter()
-                .map(|idx| (format!("{idx}"), format_version))
-                .collect::<Vec<_>>();
-
-            for _ in 0..100 {
-                let num_partition: usize = if number_segment == 1 {
-                    1
-                } else {
-                    rng.gen_range(1..number_segment)
-                };
-
-                let chunks = FuseTable::partition_segments(&segments, num_partition);
-                assert_eq!(chunks.len(), num_partition);
-                for (idx, (segment_idx, _)) in chunks.clone().into_iter().flatten().enumerate() {
-                    assert_eq!(idx, segment_idx)
-                }
-            }
-        }
-        Ok(())
     }
 }

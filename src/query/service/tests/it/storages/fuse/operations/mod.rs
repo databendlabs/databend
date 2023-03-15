@@ -24,5 +24,6 @@ mod optimize;
 mod purge_drop;
 mod purge_truncate;
 mod read_plan;
+mod replace_into;
 mod table_analyze;
 mod truncate;
