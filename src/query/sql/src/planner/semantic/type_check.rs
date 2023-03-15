@@ -685,6 +685,22 @@ impl<'a> TypeChecker<'a> {
                     }
                     self.in_aggregate_function = false;
 
+                    if func_name.eq_ignore_ascii_case("grouping") {
+                        // `grouping` will be rewrite after resolving grouping sets.
+                        return Ok(Box::new((
+                            AggregateFunction {
+                                display_name: format!("{:#}", expr),
+                                func_name: func_name.to_string(),
+                                distinct: false,
+                                params,
+                                args: arguments,
+                                return_type: Box::new(DataType::Number(NumberDataType::UInt32)),
+                            }
+                            .into(),
+                            DataType::Number(NumberDataType::UInt32),
+                        )));
+                    }
+
                     // Rewrite `xxx(distinct)` to `xxx_distinct(...)`
                     let (func_name, distinct) =
                         if func_name.eq_ignore_ascii_case("count") && *distinct {

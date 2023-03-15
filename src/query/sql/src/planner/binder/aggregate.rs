@@ -80,7 +80,7 @@ pub struct AggregateInfo {
     pub group_items_map: HashMap<String, usize>,
 
     /// Index for virtual column `grouping_id`. It's valid only if `grouping_sets` is not empty.
-    pub grouping_id_index: IndexType,
+    pub grouping_id_column: Option<ColumnBinding>,
     /// Each grouping set is a list of column indices in `group_items`.
     pub grouping_sets: Vec<Vec<IndexType>>,
 }
@@ -158,6 +158,10 @@ impl<'a> AggregateRewriter<'a> {
     /// Replace the arguments of aggregate function with a BoundColumnRef, and
     /// add the replaced aggregate function and the arguments into `AggregateInfo`.
     fn replace_aggregate_function(&mut self, aggregate: &AggregateFunction) -> Result<ScalarExpr> {
+        if aggregate.func_name.eq_ignore_ascii_case("grouping") {
+            return self.replace_grouping(aggregate);
+        }
+
         let agg_info = &mut self.bind_context.aggregate_info;
         let mut replaced_args: Vec<ScalarExpr> = Vec::with_capacity(aggregate.args.len());
 
@@ -211,6 +215,63 @@ impl<'a> AggregateRewriter<'a> {
             distinct: aggregate.distinct,
             params: aggregate.params.clone(),
             args: replaced_args,
+            return_type: aggregate.return_type.clone(),
+        };
+
+        agg_info.aggregate_functions.push(ScalarItem {
+            scalar: replaced_agg.clone().into(),
+            index,
+        });
+        agg_info.aggregate_functions_map.insert(
+            replaced_agg.display_name.clone(),
+            agg_info.aggregate_functions.len() - 1,
+        );
+
+        Ok(replaced_agg.into())
+    }
+
+    fn replace_grouping(&mut self, aggregate: &AggregateFunction) -> Result<ScalarExpr> {
+        let agg_info = &mut self.bind_context.aggregate_info;
+        if agg_info.grouping_id_column.is_none() {
+            return Err(ErrorCode::SemanticError(
+                "grouping can only be called in GROUP BY GROUPING SETS clauses",
+            ));
+        }
+        let grouping_id_column = agg_info.grouping_id_column.clone().unwrap();
+
+        // Rewrite the args to params.
+        // The params are the index offset in `grouping_id`.
+        // Here is an example:
+        // If the query is `select grouping(b, a) from group by grouping sets ((a, b), (a));`
+        // The group-by items are: [a, b].
+        // The group ids will be (a: 0, b: 1):
+        // ba -> 00 -> 0
+        // _a -> 01 -> 1
+        // grouping(b, a) will be rewritten to grouping<1, 0>(grouping_id).
+        let mut replaced_params = Vec::with_capacity(aggregate.args.len());
+        for arg in &aggregate.args {
+            if let Some(index) = agg_info.group_items_map.get(&format!("{:?}", arg)) {
+                replaced_params.push(common_expression::Literal::UInt32(*index as u32));
+            } else {
+                return Err(ErrorCode::BadArguments(
+                    "Arguments of grouping should be group by expressions",
+                ));
+            }
+        }
+
+        let index = self.metadata.write().add_derived_column(
+            aggregate.display_name.clone(),
+            *aggregate.return_type.clone(),
+        );
+
+        let replaced_agg = AggregateFunction {
+            display_name: aggregate.display_name.clone(),
+            func_name: aggregate.func_name.clone(),
+            distinct: aggregate.distinct,
+            params: replaced_params,
+            args: vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
+                column: grouping_id_column,
+            })],
             return_type: aggregate.return_type.clone(),
         };
 
@@ -331,8 +392,12 @@ impl Binder {
             aggregate_functions: bind_context.aggregate_info.aggregate_functions.clone(),
             from_distinct: false,
             limit: None,
-            grouping_id_index: agg_info.grouping_id_index,
             grouping_sets: agg_info.grouping_sets.clone(),
+            grouping_id_index: agg_info
+                .grouping_id_column
+                .as_ref()
+                .map(|g| g.index)
+                .unwrap_or(0),
         };
         new_expr = SExpr::create_unary(aggregate_plan.into(), new_expr);
 
@@ -384,7 +449,7 @@ impl Binder {
             DataType::Number(NumberDataType::UInt32),
         );
         let index = grouping_id_column.index;
-        bind_context.aggregate_info.grouping_id_index = index;
+        bind_context.aggregate_info.grouping_id_column = Some(grouping_id_column.clone());
         bind_context.aggregate_info.group_items.push(ScalarItem {
             index,
             scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {

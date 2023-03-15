@@ -54,6 +54,13 @@ impl AggregateGroupingFunction {
         arguments: Vec<DataType>,
     ) -> Result<Arc<dyn AggregateFunction>> {
         assert_unary_arguments(display_name, arguments.len())?;
+        if params.is_empty() {
+            return Err(ErrorCode::NumberArgumentsNotMatch(format!(
+                "{} expect to have at least 1 parameter",
+                display_name
+            )));
+        }
+
         let cols = params
             .into_iter()
             .map(|s| {
@@ -77,14 +84,18 @@ impl AggregateGroupingFunction {
     #[inline(always)]
     pub fn compute_grouping(&self, grouping_id: u32) -> u32 {
         let mut grouping = 0;
-        for (i, &j) in self.cols.iter().enumerate() {
-            grouping |= (grouping_id & (1 << j)) >> (j - i as u32);
+        for (i, &j) in self.cols.iter().rev().enumerate() {
+            grouping |= ((grouping_id & (1 << j)) >> j) << i;
         }
         grouping
     }
 
     pub fn desc() -> AggregateFunctionDescription {
-        let features = super::aggregate_function_factory::AggregateFunctionFeatures::default();
+        let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+            // grouping column will never be NULL.
+            returns_default_when_only_null: true,
+            ..Default::default()
+        };
         AggregateFunctionDescription::creator_with_features(Box::new(Self::try_create), features)
     }
 }
