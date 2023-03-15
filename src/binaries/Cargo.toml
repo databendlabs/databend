@@ -59,7 +59,7 @@ anyerror = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 comfy-table = "6.1.3"
-limits-rs = "0.1.0"
+limits-rs = "0.2.0"
 poem = { version = "1", features = ["rustls", "multipart", "compression"] }
 sentry = { version = "0.30", default-features = false, features = [
     "backtrace",

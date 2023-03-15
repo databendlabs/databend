@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use base64::engine::general_purpose;
+use base64::prelude::*;
 use poem::async_trait;
 use poem::Endpoint;
 use poem::IntoResponse;
@@ -50,7 +52,7 @@ impl<E: Endpoint> Endpoint for SharingAuthImpl<E> {
             .unwrap();
         let auth_header = auth_header.split(' ').collect::<Vec<&str>>();
         let auth_header = auth_header[1];
-        let auth_header = base64::decode(auth_header).unwrap();
+        let auth_header = general_purpose::STANDARD.decode(auth_header).unwrap();
         let auth_header = String::from_utf8(auth_header).unwrap();
         req.extensions_mut()
             .insert(Credentials { token: auth_header });

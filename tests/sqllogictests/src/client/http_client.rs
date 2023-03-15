@@ -19,8 +19,8 @@ use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
 use reqwest::Client;
 use reqwest::ClientBuilder;
-use sqllogictest::ColumnType;
 use sqllogictest::DBOutput;
+use sqllogictest::DefaultColumnType;
 
 use crate::error::Result;
 use crate::util::parser_rows;
@@ -57,7 +57,7 @@ impl HttpClient {
         })
     }
 
-    pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
+    pub async fn query(&mut self, sql: &str) -> Result<DBOutput<DefaultColumnType>> {
         let start = Instant::now();
 
         let url = "http://127.0.0.1:8000/v1/query".to_string();
@@ -85,7 +85,7 @@ impl HttpClient {
         // Todo: add types to compare
         let mut types = vec![];
         if !parsed_rows.is_empty() {
-            types = vec![ColumnType::Any; parsed_rows[0].len()];
+            types = vec![DefaultColumnType::Any; parsed_rows[0].len()];
         }
 
         if self.debug {

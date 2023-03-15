@@ -27,7 +27,7 @@ serde = { workspace = true }
 tracing = "0.1.36"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-procfs = "0.12.0"
+procfs = "0.15.1"
 
 [dev-dependencies]
 anyhow = { workspace = true }
