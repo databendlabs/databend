@@ -64,7 +64,8 @@ impl Interpreter for AlterShareTenantsInterpreter {
             save_share_spec(
                 &self.ctx.get_tenant(),
                 self.ctx.get_data_operator()?.operator(),
-                resp.spec_vec,
+                resp.share_spec,
+                None,
             )
             .await?;
         } else {
@@ -81,7 +82,8 @@ impl Interpreter for AlterShareTenantsInterpreter {
             save_share_spec(
                 &self.ctx.get_tenant(),
                 self.ctx.get_data_operator()?.operator(),
-                resp.spec_vec,
+                resp.share_spec,
+                None,
             )
             .await?;
         };

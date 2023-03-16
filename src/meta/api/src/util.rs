@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt::Display;
+use std::sync::Arc;
 
 use common_meta_app::app_error::AppError;
 use common_meta_app::app_error::ShareHasNoGrantedDatabase;
@@ -21,13 +22,23 @@ use common_meta_app::app_error::UnknownShare;
 use common_meta_app::app_error::UnknownShareAccounts;
 use common_meta_app::app_error::UnknownShareId;
 use common_meta_app::app_error::UnknownTable;
+use common_meta_app::app_error::UnknownTableId;
+use common_meta_app::app_error::WrongShare;
+use common_meta_app::schema::DBIdTableName;
 use common_meta_app::schema::DatabaseId;
 use common_meta_app::schema::DatabaseIdToName;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::DatabaseType;
+use common_meta_app::schema::TableId;
+use common_meta_app::schema::TableIdToName;
+use common_meta_app::schema::TableIdent;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::*;
 use common_meta_kvapi::kvapi;
+use common_meta_kvapi::kvapi::Key;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::txn_condition::Target;
 use common_meta_types::txn_op::Request;
@@ -558,4 +569,155 @@ pub async fn get_object_shared_by_share_ids(
         Some(share_ids) => Ok((seq, share_ids)),
         None => Ok((0, ObjectSharedByShareIds::default())),
     }
+}
+
+pub async fn get_table_names_by_ids(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    ids: &[u64],
+) -> Result<Vec<String>, KVAppError> {
+    let mut table_names = vec![];
+
+    for id in ids.iter() {
+        let key = TableIdToName { table_id: *id };
+        let (_table_id_to_name_seq, table_name_opt): (_, Option<DBIdTableName>) =
+            get_pb_value(kv_api, &key).await?;
+
+        match table_name_opt {
+            Some(table_name) => table_names.push(table_name.table_name),
+            None => {
+                return Err(KVAppError::AppError(AppError::UnknownTableId(
+                    UnknownTableId::new(*id, "get_table_names_by_ids"),
+                )));
+            }
+        }
+    }
+    Ok(table_names)
+}
+
+pub async fn get_tableinfos_by_ids(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    ids: &[u64],
+    tenant_dbname: &DatabaseNameIdent,
+    dbid_tbnames_opt: Option<Vec<DBIdTableName>>,
+    db_type: DatabaseType,
+) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
+    let mut tb_meta_keys = Vec::with_capacity(ids.len());
+    for id in ids.iter() {
+        let tbid = TableId { table_id: *id };
+
+        tb_meta_keys.push(tbid.to_string_key());
+    }
+
+    // mget() corresponding table_metas
+
+    let seq_tb_metas = kv_api.mget_kv(&tb_meta_keys).await?;
+
+    let mut tb_infos = Vec::with_capacity(ids.len());
+
+    let tbnames = match dbid_tbnames_opt {
+        Some(dbid_tbnames) => Vec::<String>::from_iter(
+            dbid_tbnames
+                .into_iter()
+                .map(|dbid_tbname| dbid_tbname.table_name),
+        ),
+
+        None => get_table_names_by_ids(kv_api, ids).await?,
+    };
+
+    for (i, seq_meta_opt) in seq_tb_metas.iter().enumerate() {
+        if let Some(seq_meta) = seq_meta_opt {
+            let tb_meta: TableMeta = deserialize_struct(&seq_meta.data)?;
+
+            let tb_info = TableInfo {
+                ident: TableIdent {
+                    table_id: ids[i],
+                    seq: seq_meta.seq,
+                },
+                desc: format!("'{}'.'{}'", tenant_dbname.db_name, tbnames[i]),
+                meta: tb_meta,
+                name: tbnames[i].clone(),
+                tenant: tenant_dbname.tenant.clone(),
+                db_type: db_type.clone(),
+            };
+            tb_infos.push(Arc::new(tb_info));
+        } else {
+            debug!(
+                k = display(&tb_meta_keys[i]),
+                "db_meta not found, maybe just deleted after listing names and before listing meta"
+            );
+        }
+    }
+
+    Ok(tb_infos)
+}
+
+pub async fn list_tables_from_share_db(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    share: ShareNameIdent,
+    db_id: u64,
+    tenant_dbname: DatabaseNameIdent,
+) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
+    let res = get_share_or_err(
+        kv_api,
+        &share,
+        format!("list_tables_from_share_db: {}", share),
+    )
+    .await;
+
+    let (share_id_seq, _share_id, _share_meta_seq, share_meta) = match res {
+        Ok(x) => x,
+        Err(e) => {
+            return Err(e);
+        }
+    };
+    if share_id_seq == 0 {
+        return Err(KVAppError::AppError(AppError::WrongShare(WrongShare::new(
+            share.to_string_key(),
+        ))));
+    }
+    if !share_meta.share_from_db_ids.contains(&db_id) {
+        return Err(KVAppError::AppError(AppError::ShareHasNoGrantedDatabase(
+            ShareHasNoGrantedDatabase::new(&share.tenant, &share.share_name),
+        )));
+    }
+
+    let mut ids = Vec::with_capacity(share_meta.entries.len());
+    for (_, entry) in share_meta.entries.iter() {
+        if let ShareGrantObject::Table(table_id) = entry.object {
+            ids.push(table_id);
+        }
+    }
+    get_tableinfos_by_ids(
+        kv_api,
+        &ids,
+        &tenant_dbname,
+        None,
+        DatabaseType::ShareDB(share),
+    )
+    .await
+}
+
+pub async fn list_tables_from_unshare_db(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    db_id: u64,
+    tenant_dbname: &DatabaseNameIdent,
+) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
+    // List tables by tenant, db_id, table_name.
+
+    let dbid_tbname = DBIdTableName {
+        db_id,
+        // Use empty name to scan all tables
+        table_name: "".to_string(),
+    };
+
+    let (dbid_tbnames, ids) = list_u64_value(kv_api, &dbid_tbname).await?;
+
+    get_tableinfos_by_ids(
+        kv_api,
+        &ids,
+        tenant_dbname,
+        Some(dbid_tbnames),
+        DatabaseType::NormalDB,
+    )
+    .await
 }

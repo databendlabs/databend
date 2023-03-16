@@ -26,6 +26,7 @@ use enumflags2::BitFlags;
 use crate::app_error::AppError;
 use crate::app_error::WrongShareObject;
 use crate::schema::DatabaseMeta;
+use crate::schema::TableInfo;
 use crate::schema::TableMeta;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
@@ -89,7 +90,7 @@ pub struct CreateShareReq {
 pub struct CreateShareReply {
     pub share_id: u64,
 
-    pub spec_vec: Option<Vec<ShareSpec>>,
+    pub share_spec: Option<Vec<ShareSpec>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -101,7 +102,7 @@ pub struct DropShareReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropShareReply {
     pub share_id: Option<u64>,
-    pub spec_vec: Option<Vec<ShareSpec>>,
+    pub share_spec: Option<Vec<ShareSpec>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -115,7 +116,7 @@ pub struct AddShareAccountsReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AddShareAccountsReply {
     pub share_id: Option<u64>,
-    pub spec_vec: Option<Vec<ShareSpec>>,
+    pub share_spec: Option<Vec<ShareSpec>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -128,7 +129,7 @@ pub struct RemoveShareAccountsReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RemoveShareAccountsReply {
     pub share_id: Option<u64>,
-    pub spec_vec: Option<Vec<ShareSpec>>,
+    pub share_spec: Option<Vec<ShareSpec>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -168,6 +169,9 @@ pub enum ShareGrantObjectSeqAndId {
     Table(u64, u64, u64, TableMeta),
 }
 
+// share name and shared (table name, table info) map
+pub type ShareTableInfoMap = (String, Option<BTreeMap<String, TableInfo>>);
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GrantShareObjectReq {
     pub share_name: ShareNameIdent,
@@ -179,7 +183,8 @@ pub struct GrantShareObjectReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GrantShareObjectReply {
     pub share_id: u64,
-    pub spec_vec: Option<Vec<ShareSpec>>,
+    pub share_spec: Option<Vec<ShareSpec>>,
+    pub share_table_info: ShareTableInfoMap,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -193,7 +198,8 @@ pub struct RevokeShareObjectReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RevokeShareObjectReply {
     pub share_id: u64,
-    pub spec_vec: Option<Vec<ShareSpec>>,
+    pub share_spec: Option<Vec<ShareSpec>>,
+    pub share_table_info: ShareTableInfoMap,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

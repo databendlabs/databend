@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use common_exception::Result;
 use common_meta_app::share::ShareDatabaseSpec;
 use common_meta_app::share::ShareSpec;
+use common_meta_app::share::ShareTableInfoMap;
 use common_meta_app::share::ShareTableSpec;
 use opendal::Operator;
 
@@ -30,12 +31,13 @@ pub struct ShareSpecVec {
 pub async fn save_share_spec(
     tenant: &String,
     operator: Operator,
-    spec_vec: Option<Vec<ShareSpec>>,
+    share_spec: Option<Vec<ShareSpec>>,
+    share_table_info: Option<&ShareTableInfoMap>,
 ) -> Result<()> {
-    if let Some(spec_vec) = spec_vec {
+    if let Some(share_spec) = share_spec {
         let location = format!("{}/{}/share_specs.json", tenant, SHARE_CONFIG_PREFIX);
         let mut share_spec_vec = ShareSpecVec::default();
-        for spec in spec_vec {
+        for spec in share_spec {
             let share_name = spec.name.clone();
             let share_spec_ext = ext::ShareSpecExt::from_share_spec(spec, &operator);
             share_spec_vec
@@ -45,6 +47,25 @@ pub async fn save_share_spec(
         operator
             .write(&location, serde_json::to_vec(&share_spec_vec)?)
             .await?;
+    }
+
+    // save share table info
+    if let Some((share_name, share_table_info)) = share_table_info {
+        let share_name = share_name.clone();
+        let location = format!(
+            "{}/{}/{}_table_info.json",
+            tenant, SHARE_CONFIG_PREFIX, share_name
+        );
+        match share_table_info {
+            Some(table_info_map) => {
+                operator
+                    .write(&location, serde_json::to_vec(table_info_map)?)
+                    .await?;
+            }
+            None => {
+                operator.delete(&location).await?;
+            }
+        }
     }
 
     Ok(())
