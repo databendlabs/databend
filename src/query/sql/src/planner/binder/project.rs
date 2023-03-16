@@ -363,7 +363,8 @@ impl Binder {
                         "Unknown table '{}'.'{}'",
                         db_name.name.clone(),
                         table_name.name.clone()
-                    )));
+                    ))
+                    .set_span(span));
                 }
             }
             _ => {
