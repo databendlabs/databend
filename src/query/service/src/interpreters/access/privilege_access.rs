@@ -14,9 +14,11 @@
 
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::UserPrivilegeType;
+use common_sql::plans::CopyPlan;
 
 use crate::interpreters::access::AccessChecker;
 use crate::sessions::QueryContext;
@@ -51,52 +53,72 @@ impl AccessChecker for PrivilegeAccess {
                                 table.database().to_string(),
                                 table.name().to_string(),
                             ),
-                            UserPrivilegeType::Select,
+                            vec![UserPrivilegeType::Select],
                         )
                         .await?
                 }
             }
-            Plan::Explain { .. } => {}
-            Plan::ExplainAnalyze { .. } => {}
-            Plan::Copy(_) => {}
-            Plan::Call(_) => {}
-            // Catalog
-            Plan::ShowCreateCatalog(_) => {}
-            Plan::CreateCatalog(_) => {}
-            Plan::DropCatalog(_) => {}
+            Plan::ExplainAnalyze { plan } | Plan::Explain { plan, .. } => self.check(plan).await?,
 
             // Database.
-            Plan::ShowCreateDatabase(_) => {}
-            Plan::CreateDatabase(_) => {
+            Plan::ShowCreateDatabase(plan) => {
                 session
-                    .validate_privilege(&GrantObject::Global, UserPrivilegeType::Create)
+                    .validate_privilege(
+                        &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
+                        vec![UserPrivilegeType::Select],
+                    )
+                    .await?
+            }
+            Plan::CreateUDF(_) | Plan::CreateDatabase(_) => {
+                session
+                    .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Create])
                     .await?;
             }
-            Plan::DropDatabase(_) => {
+            Plan::DropDatabase(_) | Plan::UndropDatabase(_) | Plan::DropUDF(_) => {
                 session
-                    .validate_privilege(&GrantObject::Global, UserPrivilegeType::Drop)
+                    .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Drop])
                     .await?;
             }
-            Plan::UndropDatabase(_) => {
+            Plan::UseDatabase(plan) => {
+                let catalog = self.ctx.get_current_catalog();
                 session
-                    .validate_privilege(&GrantObject::Global, UserPrivilegeType::Drop)
-                    .await?;
+                    .validate_privilege(
+                        &GrantObject::Database(catalog, plan.database.clone()),
+                        vec![UserPrivilegeType::Select],
+                    )
+                    .await?
             }
-            Plan::RenameDatabase(_) => {
-                session
-                    .validate_privilege(&GrantObject::Global, UserPrivilegeType::Alter)
-                    .await?;
-            }
-            Plan::UseDatabase(_) => {}
 
             // Table.
-            Plan::ShowCreateTable(_) => {}
-            Plan::DescribeTable(_) => {}
+            Plan::ShowCreateTable(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Select],
+                    )
+                    .await?
+            }
+            Plan::DescribeTable(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Select],
+                    )
+                    .await?
+            }
             Plan::CreateTable(plan) => {
                 session
                     .validate_privilege(
                         &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
-                        UserPrivilegeType::Create,
+                        vec![UserPrivilegeType::Create],
                     )
                     .await?;
             }
@@ -104,7 +126,7 @@ impl AccessChecker for PrivilegeAccess {
                 session
                     .validate_privilege(
                         &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
-                        UserPrivilegeType::Drop,
+                        vec![UserPrivilegeType::Drop],
                     )
                     .await?;
             }
@@ -112,11 +134,34 @@ impl AccessChecker for PrivilegeAccess {
                 session
                     .validate_privilege(
                         &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
-                        UserPrivilegeType::Drop,
+                        vec![UserPrivilegeType::Drop],
                     )
                     .await?;
             }
-            Plan::RenameTable(_) => {}
+            Plan::RenameTable(plan) => {
+                // You must have ALTER and DROP privileges for the original table,
+                // and CREATE and INSERT privileges for the new table.
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Alter, UserPrivilegeType::Drop],
+                    )
+                    .await?;
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.new_database.clone(),
+                            plan.new_table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Create, UserPrivilegeType::Insert],
+                    )
+                    .await?;
+            }
             Plan::AddTableColumn(plan) => {
                 session
                     .validate_privilege(
@@ -125,7 +170,7 @@ impl AccessChecker for PrivilegeAccess {
                             plan.database.clone(),
                             plan.table.clone(),
                         ),
-                        UserPrivilegeType::Alter,
+                        vec![UserPrivilegeType::Alter],
                     )
                     .await?;
             }
@@ -137,7 +182,7 @@ impl AccessChecker for PrivilegeAccess {
                             plan.database.clone(),
                             plan.table.clone(),
                         ),
-                        UserPrivilegeType::Alter,
+                        vec![UserPrivilegeType::Alter],
                     )
                     .await?;
             }
@@ -149,7 +194,7 @@ impl AccessChecker for PrivilegeAccess {
                             plan.database.clone(),
                             plan.table.clone(),
                         ),
-                        UserPrivilegeType::Alter,
+                        vec![UserPrivilegeType::Alter],
                     )
                     .await?;
             }
@@ -161,7 +206,7 @@ impl AccessChecker for PrivilegeAccess {
                             plan.database.clone(),
                             plan.table.clone(),
                         ),
-                        UserPrivilegeType::Drop,
+                        vec![UserPrivilegeType::Drop],
                     )
                     .await?;
             }
@@ -173,7 +218,7 @@ impl AccessChecker for PrivilegeAccess {
                             plan.database.clone(),
                             plan.table.clone(),
                         ),
-                        UserPrivilegeType::Alter,
+                        vec![UserPrivilegeType::Alter],
                     )
                     .await?;
             }
@@ -185,7 +230,7 @@ impl AccessChecker for PrivilegeAccess {
                             plan.database.clone(),
                             plan.table.clone(),
                         ),
-                        UserPrivilegeType::Delete,
+                        vec![UserPrivilegeType::Delete],
                     )
                     .await?;
             }
@@ -197,13 +242,22 @@ impl AccessChecker for PrivilegeAccess {
                             plan.database.clone(),
                             plan.table.clone(),
                         ),
-                        UserPrivilegeType::Super,
+                        vec![UserPrivilegeType::Super],
                     )
                     .await?;
             }
-            Plan::AnalyzeTable(_) => {}
-            Plan::ExistsTable(_) => {}
-
+            Plan::AnalyzeTable(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Super],
+                    )
+                    .await?;
+            }
             // Others.
             Plan::Insert(plan) => {
                 session
@@ -213,7 +267,7 @@ impl AccessChecker for PrivilegeAccess {
                             plan.database.clone(),
                             plan.table.clone(),
                         ),
-                        UserPrivilegeType::Insert,
+                        vec![UserPrivilegeType::Insert],
                     )
                     .await?;
             }
@@ -225,18 +279,7 @@ impl AccessChecker for PrivilegeAccess {
                             plan.database.clone(),
                             plan.table.clone(),
                         ),
-                        UserPrivilegeType::Insert,
-                    )
-                    .await?;
-                // TODO batch privilege checking api?
-                session
-                    .validate_privilege(
-                        &GrantObject::Table(
-                            plan.catalog.clone(),
-                            plan.database.clone(),
-                            plan.table.clone(),
-                        ),
-                        UserPrivilegeType::Delete,
+                        vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete],
                     )
                     .await?;
             }
@@ -248,7 +291,7 @@ impl AccessChecker for PrivilegeAccess {
                             plan.database_name.clone(),
                             plan.table_name.clone(),
                         ),
-                        UserPrivilegeType::Delete,
+                        vec![UserPrivilegeType::Delete],
                     )
                     .await?;
             }
@@ -260,7 +303,7 @@ impl AccessChecker for PrivilegeAccess {
                             plan.database.clone(),
                             plan.table.clone(),
                         ),
-                        UserPrivilegeType::Update,
+                        vec![UserPrivilegeType::Update],
                     )
                     .await?;
             }
@@ -268,7 +311,7 @@ impl AccessChecker for PrivilegeAccess {
                 session
                     .validate_privilege(
                         &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
-                        UserPrivilegeType::Alter,
+                        vec![UserPrivilegeType::Create],
                     )
                     .await?;
             }
@@ -276,7 +319,7 @@ impl AccessChecker for PrivilegeAccess {
                 session
                     .validate_privilege(
                         &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
-                        UserPrivilegeType::Alter,
+                        vec![UserPrivilegeType::Alter],
                     )
                     .await?;
             }
@@ -284,56 +327,125 @@ impl AccessChecker for PrivilegeAccess {
                 session
                     .validate_privilege(
                         &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
-                        UserPrivilegeType::Drop,
+                        vec![UserPrivilegeType::Drop],
                     )
                     .await?;
             }
-            Plan::AlterUser(_) => {}
-            Plan::CreateUser(_) => {}
-            Plan::DropUser(_) => {}
-            Plan::CreateUDF(_) => {}
-            Plan::AlterUDF(_) => {}
-            Plan::DropUDF(_) => {}
-            Plan::CreateRole(_) => {}
-            Plan::DropRole(_) => {}
-            Plan::GrantRole(_) => {}
-            Plan::GrantPriv(_) => {}
-            Plan::ShowGrants(_) => {}
-            Plan::ShowRoles(_) => {}
-            Plan::RevokePriv(_) => {}
-            Plan::RevokeRole(_) => {}
-            Plan::ListStage(_) => {}
-            Plan::CreateStage(_) => {}
-            Plan::DropStage(_) => {}
-            Plan::RemoveStage(_) => {}
-            Plan::CreateFileFormat(_) => {}
-            Plan::DropFileFormat(_) => {}
-            Plan::ShowFileFormats(_) => {}
-            Plan::Presign(_) => {}
-            Plan::SetVariable(_) => {}
-            Plan::UnSetVariable(_) => {}
-            Plan::SetRole(_) => {}
-            Plan::Kill(_) => {
+            Plan::CreateUser(_) => {
                 session
-                    .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super)
+                    .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::CreateUser])
                     .await?;
             }
-            Plan::CreateShare(_) => {}
-            Plan::DropShare(_) => {}
-            Plan::GrantShareObject(_) => {}
-            Plan::RevokeShareObject(_) => {}
-            Plan::AlterShareTenants(_) => {}
-            Plan::DescShare(_) => {}
-            Plan::ShowShares(_) => {}
-            Plan::ShowObjectGrantPrivileges(_) => {}
-            Plan::ShowGrantTenantsOfShare(_) => {}
+            Plan::DropUser(_) => {
+                session
+                    .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::DropUser])
+                    .await?;
+            }
+            Plan::CreateRole(_) => {
+                session
+                    .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::CreateRole])
+                    .await?;
+            }
+            Plan::DropRole(_) => {
+                session
+                    .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::DropRole])
+                    .await?;
+            }
+            Plan::GrantShareObject(_)
+            | Plan::RevokeShareObject(_)
+            | Plan::AlterShareTenants(_)
+            | Plan::ShowObjectGrantPrivileges(_)
+            | Plan::ShowGrantTenantsOfShare(_)
+            | Plan::SetRole(_)
+            | Plan::ShowGrants(_)
+            | Plan::ShowRoles(_)
+            | Plan::GrantRole(_)
+            | Plan::GrantPriv(_)
+            | Plan::RevokePriv(_)
+            | Plan::RevokeRole(_) => {
+                session
+                    .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Grant])
+                    .await?;
+            }
+            Plan::SetVariable(_) | Plan::UnSetVariable(_) | Plan::Kill(_) => {
+                session
+                    .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Super])
+                    .await?;
+            }
+            Plan::AlterUser(_)
+            | Plan::AlterUDF(_)
+            | Plan::RenameDatabase(_)
+            | Plan::RevertTable(_) => {
+                session
+                    .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Alter])
+                    .await?;
+            }
+            Plan::Copy(plan) => match plan.as_ref() {
+                CopyPlan::IntoTable {
+                    catalog_name,
+                    database_name,
+                    table_name,
+                    ..
+                } => {
+                    session
+                        .validate_privilege(
+                            &GrantObject::Table(
+                                catalog_name.to_string(),
+                                database_name.to_string(),
+                                table_name.to_string(),
+                            ),
+                            vec![UserPrivilegeType::Insert],
+                        )
+                        .await?;
+                }
+                CopyPlan::IntoTableWithTransform {
+                    catalog_name,
+                    database_name,
+                    table_name,
+                    ..
+                } => {
+                    session
+                        .validate_privilege(
+                            &GrantObject::Table(
+                                catalog_name.to_string(),
+                                database_name.to_string(),
+                                table_name.to_string(),
+                            ),
+                            vec![UserPrivilegeType::Insert],
+                        )
+                        .await?;
+                }
+                CopyPlan::IntoStage { .. } => {
+                    session
+                        .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Super])
+                        .await?;
+                }
+            },
+            Plan::CreateShare(_)
+            | Plan::DropShare(_)
+            | Plan::DescShare(_)
+            | Plan::ShowShares(_)
+            | Plan::Call(_)
+            | Plan::ShowCreateCatalog(_)
+            | Plan::CreateCatalog(_)
+            | Plan::DropCatalog(_)
+            | Plan::ListStage(_)
+            | Plan::CreateStage(_)
+            | Plan::DropStage(_)
+            | Plan::RemoveStage(_)
+            | Plan::CreateFileFormat(_)
+            | Plan::DropFileFormat(_)
+            | Plan::ShowFileFormats(_) => {
+                session
+                    .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Super])
+                    .await?;
+            }
+            // Note: No need to check privileges
+            Plan::Presign(_) => {}
             Plan::ExplainAst { .. } => {}
             Plan::ExplainSyntax { .. } => {}
-            Plan::RevertTable(_) => {
-                session
-                    .validate_privilege(&GrantObject::Global, UserPrivilegeType::Alter)
-                    .await?;
-            }
+            // just used in clickhouse-sqlalchemy, no need to check
+            Plan::ExistsTable(_) => {}
         }
 
         Ok(())

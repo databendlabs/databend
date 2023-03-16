@@ -132,11 +132,6 @@ impl AnalyzeTablePlan {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenameTablePlan {
     pub tenant: String,
-    pub entities: Vec<RenameTableEntity>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RenameTableEntity {
     pub if_exists: bool,
     pub catalog: String,
     pub database: String,
