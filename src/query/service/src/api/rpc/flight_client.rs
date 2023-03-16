@@ -26,14 +26,15 @@ use async_channel::WeakSender;
 use common_arrow::arrow_format::flight::data::Action;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
+use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::time::Duration;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use futures::StreamExt;
 use futures_util::future::BoxFuture;
 use futures_util::future::Either;
-use futures_util::StreamExt;
 use parking_lot::Mutex;
 use tonic::transport::channel::Channel;
 use tonic::Request;
@@ -204,167 +205,213 @@ impl FlightExchange {
         let (tx, rx) = async_channel::bounded(1);
         let (response_tx, response_rx) = async_channel::bounded(1);
 
-        Self::start_push_worker(query_id.clone(), fragment, network_tx.clone(), response_rx);
+        Self::start_push_worker(
+            query_id.clone(),
+            fragment,
+            network_tx.clone(),
+            response_rx,
+            state.clone(),
+        );
 
         let f = Arc::new(f);
         GlobalIORuntime::instance().spawn({
+            let channel_state = state.clone();
             let response_tx = response_tx.clone();
+
             async move {
-                let mut send_closing_input = false;
-                let mut send_closing_output = false;
+                let mut notified = Box::pin(channel_state.shutdown_notify.notified());
                 let mut futures = Vec::<BoxFuture<'static, _>>::new();
 
-                'worker: while let Some(message) = streaming.next().await {
-                    match message {
-                        Ok(message) if DataPacket::is_closing_input(&message) => {
-                            if !send_closing_output {
-                                send_closing_output = true;
+                'loop_worker: loop {
+                    if channel_state.closed_both() {
+                        break 'loop_worker;
+                    }
 
-                                if let Some(query_id) = &query_id {
-                                    info!(
-                                        "First recv closing input query: {:?}, fragment:{}",
-                                        query_id,
-                                        fragment.unwrap()
-                                    );
-                                }
+                    match futures::future::select(notified, streaming.next()).await {
+                        Either::Left((_, right)) => {
+                            debug_assert!(state.closed_both());
 
-                                // create new future send packet to remote for avoid blocking recv data
-                                futures.push(Box::pin(common_base::base::tokio::spawn({
-                                    let f = f.clone();
-                                    let response_tx = response_tx.clone();
-                                    let query_id = query_id.clone();
-                                    let fragment = fragment.clone();
+                            // break 'loop_worker;
+                            tx.close();
+                            drop(network_tx);
+                            response_tx.close();
 
-                                    async move {
-                                        if let Some(query_id) = &query_id {
-                                            info!(
-                                                "Prepare send closing output query: {:?}. fragment: {}",
-                                                query_id,
-                                                fragment.unwrap(),
-                                            );
-                                        }
-
-                                        let response_t = f(DataPacket::ClosingOutput);
-                                        let res = response_tx.send(response_t).await.is_ok();
-
-                                        response_tx.close();
-
-                                        if let Some(query_id) = &query_id {
-                                            info!(
-                                                "Send closing output query: {:?}. fragment: {}, {}",
-                                                query_id,
-                                                fragment.unwrap(),
-                                                res
-                                            );
-                                        }
-                                    }
-                                })));
+                            if let Some(Ok(_message)) = right.await {
+                                let _ = StreamExt::count(streaming).await;
                             }
+
+                            return;
                         }
-                        Ok(message) if DataPacket::is_closing_output(&message) => {
-                            if !tx.is_closed() {
-                                tx.close();
-                            }
-
-                            if !send_closing_input {
-                                send_closing_input = true;
-
-                                if let Some(query_id) = &query_id {
-                                    info!(
-                                        "First recv closing output query: {:?}, fragment:{}",
-                                        query_id,
-                                        fragment.unwrap()
-                                    );
-                                }
-
-                                // create new future send packet to remote for avoid blocking recv data
+                        Either::Right((None, _notified)) => {
+                            if !state.acquire_close_input() {
                                 futures.push(Box::pin(common_base::base::tokio::spawn({
                                     let f = f.clone();
                                     let network_tx = network_tx.clone();
-                                    let query_id = query_id.clone();
-                                    let fragment = fragment.clone();
+                                    let channel_state = channel_state.clone();
 
                                     async move {
-                                        if let Some(query_id) = &query_id {
-                                            info!(
-                                                "Prepare send closing input query: {:?}. fragment: {}",
-                                                query_id,
-                                                fragment.unwrap(),
-                                            );
-                                        }
-
                                         let response_t = f(DataPacket::ClosingInput);
-                                        let res = network_tx.send(response_t).await.is_ok();
-                                        if let Some(query_id) = &query_id {
-                                            info!(
-                                                "Send closing input query: {:?}. fragment: {}, {}",
-                                                query_id,
-                                                fragment.unwrap(),
-                                                res
-                                            );
+                                        let _ = network_tx.send(response_t).await;
+
+                                        if channel_state.close_input() {
+                                            channel_state.shutdown_notify.notify_waiters();
                                         }
                                     }
                                 })));
                             }
-                        }
-                        other => {
-                            if let Err(status) = &other {
-                                let mut may_recv_error = state.may_recv_error.lock();
-                                *may_recv_error = Some(match match_for_io_error(status) {
-                                    Some(error) => std::io::Error::new(error.kind(), ""),
-                                    None => std::io::Error::new(
-                                        ErrorKind::Other,
-                                        format!("{:?}", status),
-                                    ),
-                                });
 
-                                tx.close();
-                                response_tx.close();
-                                network_tx.close();
-                                return;
+                            if !state.acquire_close_output() {
+                                futures.push(Box::pin(common_base::base::tokio::spawn({
+                                    let f = f.clone();
+                                    let response_tx = response_tx.clone();
+                                    let channel_state = channel_state.clone();
+                                    async move {
+                                        let response_t = f(DataPacket::ClosingOutput);
+                                        let _ = response_tx.send(response_t).await;
+                                        response_tx.close();
+
+                                        if channel_state.close_output() {
+                                            channel_state.shutdown_notify.notify_waiters();
+                                        }
+                                    }
+                                })));
                             }
 
-                            // We need to continue consume stream for avoid stream die message blocking io buffer.
-                            let _ = tx.send(other).await;
+                            break 'loop_worker;
                         }
-                    };
+                        Either::Right((Some(message), left)) => {
+                            notified = left;
 
-                    if send_closing_input && send_closing_output {
-                        break 'worker;
+                            match message {
+                                Ok(message) if DataPacket::is_closing_input(&message) => {
+                                    if !channel_state.acquire_close_output() {
+                                        if let Some(query_id) = &query_id {
+                                            info!(
+                                                "First recv closing input query: {:?}, fragment:{}",
+                                                query_id,
+                                                fragment.unwrap()
+                                            );
+                                        }
+
+                                        // create new future send packet to remote for avoid blocking recv data
+                                        futures.push(Box::pin(common_base::base::tokio::spawn({
+                                            let f = f.clone();
+                                            let response_tx = response_tx.clone();
+                                            let query_id = query_id.clone();
+                                            let fragment = fragment.clone();
+                                            let channel_state = channel_state.clone();
+
+                                            async move {
+                                                if let Some(query_id) = &query_id {
+                                                    info!(
+                                                        "Prepare send closing output query: {:?}. fragment: {}",
+                                                        query_id,
+                                                        fragment.unwrap(),
+                                                    );
+                                                }
+
+                                                let response_t = f(DataPacket::ClosingOutput);
+                                                let res = response_tx.send(response_t).await.is_ok();
+
+                                                response_tx.close();
+
+                                                if channel_state.close_output() {
+                                                    channel_state.shutdown_notify.notify_waiters();
+                                                }
+
+                                                if let Some(query_id) = &query_id {
+                                                    info!(
+                                                        "Send closing output query: {:?}. fragment: {}, {}",
+                                                        query_id,
+                                                        fragment.unwrap(),
+                                                        res
+                                                    );
+                                                }
+                                            }
+                                        })));
+                                    }
+                                }
+                                Ok(message) if DataPacket::is_closing_output(&message) => {
+                                    if !tx.is_closed() {
+                                        tx.close();
+                                    }
+
+                                    if channel_state.acquire_close_input() {
+                                        if let Some(query_id) = &query_id {
+                                            info!(
+                                                "First recv closing output query: {:?}, fragment:{}",
+                                                query_id,
+                                                fragment.unwrap()
+                                            );
+                                        }
+
+                                        // create new future send packet to remote for avoid blocking recv data
+                                        futures.push(Box::pin(common_base::base::tokio::spawn({
+                                            let f = f.clone();
+                                            let network_tx = network_tx.clone();
+                                            let query_id = query_id.clone();
+                                            let fragment = fragment.clone();
+                                            let channel_state = channel_state.clone();
+
+                                            async move {
+                                                if let Some(query_id) = &query_id {
+                                                    info!(
+                                                        "Prepare send closing input query: {:?}. fragment: {}",
+                                                        query_id,
+                                                        fragment.unwrap(),
+                                                    );
+                                                }
+
+                                                let response_t = f(DataPacket::ClosingInput);
+                                                let res = network_tx.send(response_t).await.is_ok();
+
+                                                if channel_state.close_input() {
+                                                    channel_state.shutdown_notify.notify_waiters();
+                                                }
+
+                                                if let Some(query_id) = &query_id {
+                                                    info!(
+                                                        "Send closing input query: {:?}. fragment: {}, {}",
+                                                        query_id,
+                                                        fragment.unwrap(),
+                                                        res
+                                                    );
+                                                }
+                                            }
+                                        })));
+                                    }
+                                }
+                                other => {
+                                    if let Err(status) = &other {
+                                        let mut may_recv_error = state.may_recv_error.lock();
+                                        *may_recv_error = Some(match match_for_io_error(status) {
+                                            Some(error) => std::io::Error::new(error.kind(), ""),
+                                            None => std::io::Error::new(
+                                                ErrorKind::Other,
+                                                format!("{:?}", status),
+                                            ),
+                                        });
+
+                                        tx.close();
+                                        response_tx.close();
+                                        network_tx.close();
+                                        return;
+                                    }
+
+                                    // We need to continue consume stream for avoid stream die message blocking io buffer.
+                                    let _ = tx.send(other).await;
+                                }
+                            };
+                        }
                     }
-                }
-
-                if !send_closing_input {
-                    futures.push(Box::pin(common_base::base::tokio::spawn({
-                        let f = f.clone();
-                        let network_tx = network_tx.clone();
-
-                        async move {
-                            let response_t = f(DataPacket::ClosingInput);
-                            let _ = network_tx.send(response_t).await;
-                        }
-                    })));
-                }
-
-                if !send_closing_output {
-                    futures.push(Box::pin(common_base::base::tokio::spawn({
-                        let f = f.clone();
-                        let response_tx = response_tx.clone();
-                        async move {
-                            let response_t = f(DataPacket::ClosingOutput);
-                            let _ = response_tx.send(response_t).await;
-                            response_tx.close();
-                        }
-                    })));
                 }
 
                 if let Some(query_id) = &query_id {
                     info!(
-                        "Break flight listener query: {:?}, fragment:{}, {}, {}",
+                        "Break flight listener query: {:?}, fragment:{}, {}",
                         query_id,
                         fragment.unwrap(),
-                        send_closing_input,
-                        send_closing_output,
+                        channel_state.closed_both(),
                     );
                 }
 
@@ -374,8 +421,9 @@ impl FlightExchange {
                 match futures::future::select(send_all, recv_all).await {
                     Either::Left((_, recv_all)) => {
                         tx.close();
-                        response_tx.close();
                         drop(network_tx);
+                        response_tx.close();
+
                         let _ = recv_all.await;
 
                         if let Some(query_id) = query_id {
@@ -389,8 +437,9 @@ impl FlightExchange {
                     Either::Right((_, send_all)) => {
                         let _ = send_all.await;
                         tx.close();
-                        response_tx.close();
                         drop(network_tx);
+                        response_tx.close();
+
                         if let Some(query_id) = query_id {
                             info!(
                                 "Shutdown flight listener query: {:?}, fragment:{}",
@@ -411,11 +460,36 @@ impl FlightExchange {
         fragment: Option<usize>,
         network_tx: Sender<ResponseT>,
         response_rx: Receiver<ResponseT>,
+        channel_state: Arc<ChannelState>,
     ) {
         GlobalIORuntime::instance().spawn(async move {
-            while let Ok(response) = response_rx.recv().await {
-                if network_tx.send(response).await.is_err() {
-                    break;
+            let mut notified = Box::pin(channel_state.shutdown_notify.notified());
+
+            'publisher_worker: loop {
+                if channel_state.closed_both() {
+                    break 'publisher_worker;
+                }
+
+                match futures::future::select(notified, response_rx.recv()).await {
+                    Either::Right((Err(_), _left)) => {
+                        break 'publisher_worker;
+                    }
+                    Either::Left((_, _recv)) => {
+                        while let Ok(response) = response_rx.try_recv() {
+                            if network_tx.send(response).await.is_err() {
+                                break 'publisher_worker;
+                            }
+                        }
+
+                        break 'publisher_worker;
+                    }
+                    Either::Right((Ok(response), left)) => {
+                        notified = left;
+
+                        if network_tx.send(response).await.is_err() {
+                            break 'publisher_worker;
+                        }
+                    }
                 }
             }
 
@@ -571,9 +645,16 @@ impl FlightExchangeRef {
     }
 }
 
+static SENDING_CLOSING_INPUT: usize = 1;
+static SENT_CLOSING_INPUT: usize = 1 << 1;
+static SENDING_CLOSING_OUTPUT: usize = 1 << 2;
+static SENT_CLOSING_OUTPUT: usize = 1 << 3;
+
 struct ChannelState {
     request_count: AtomicUsize,
     response_count: AtomicUsize,
+    flags: AtomicUsize,
+    shutdown_notify: Notify,
     may_recv_error: Mutex<Option<std::io::Error>>,
 }
 
@@ -583,7 +664,34 @@ impl ChannelState {
             may_recv_error: Mutex::new(None),
             request_count: AtomicUsize::new(0),
             response_count: AtomicUsize::new(0),
+            flags: AtomicUsize::new(0),
+            shutdown_notify: Notify::new(),
         }
+    }
+
+    pub fn closed_both(&self) -> bool {
+        let flags = self.flags.load(Ordering::Acquire);
+        (flags & SENT_CLOSING_INPUT != 0) && (flags & SENDING_CLOSING_OUTPUT != 0)
+    }
+
+    pub fn close_input(&self) -> bool {
+        (self.flags.fetch_or(SENT_CLOSING_INPUT, Ordering::SeqCst) & SENT_CLOSING_OUTPUT) != 0
+    }
+
+    pub fn close_output(&self) -> bool {
+        (self.flags.fetch_or(SENT_CLOSING_OUTPUT, Ordering::SeqCst) & SENT_CLOSING_INPUT) != 0
+    }
+
+    pub fn acquire_close_input(&self) -> bool {
+        (self.flags.fetch_or(SENDING_CLOSING_INPUT, Ordering::SeqCst) & SENDING_CLOSING_INPUT) == 0
+    }
+
+    pub fn acquire_close_output(&self) -> bool {
+        (self
+            .flags
+            .fetch_or(SENDING_CLOSING_OUTPUT, Ordering::SeqCst)
+            & SENDING_CLOSING_OUTPUT)
+            == 0
     }
 }
 
@@ -637,24 +745,42 @@ impl ClientFlightExchange {
     }
 
     pub async fn close_input(&self) -> bool {
-        // Close local channel first.
-        // NOTE: this is very important. When we open the local channel while pushing closing input, it may cause distributed deadlock.
-        self.request_rx.close();
+        if self.state.acquire_close_input() {
+            // Close local channel first.
+            // NOTE: this is very important. When we open the local channel while pushing closing input, it may cause distributed deadlock.
+            self.request_rx.close();
 
-        // Notify remote not to send messages.
-        // We send it directly to the network channel avoid response channel is closed
-        if let Some(network_tx) = self.network_tx.upgrade() {
-            let packet = FlightData::from(DataPacket::ClosingInput);
-            return network_tx.send(packet).await.is_ok();
+            // Notify remote not to send messages.
+            // We send it directly to the network channel avoid response channel is closed
+            if let Some(network_tx) = self.network_tx.upgrade() {
+                let packet = FlightData::from(DataPacket::ClosingInput);
+                if network_tx.send(packet).await.is_ok() {
+                    if self.state.close_input() {
+                        self.state.shutdown_notify.notify_waiters();
+                    }
+
+                    return true;
+                }
+            }
         }
 
         false
     }
 
     pub async fn close_output(&self) -> bool {
-        // Notify remote that no message will be sent.
-        let packet = FlightData::from(DataPacket::ClosingOutput);
-        self.response_tx.send(packet).await.is_ok()
+        if !self.state.acquire_close_output() {
+            // Notify remote that no message will be sent.
+            let packet = FlightData::from(DataPacket::ClosingOutput);
+            if self.response_tx.send(packet).await.is_ok() {
+                if self.state.close_output() {
+                    self.state.shutdown_notify.notify_waiters();
+                }
+
+                return true;
+            }
+        }
+
+        false
     }
 }
 
@@ -708,24 +834,42 @@ impl ServerFlightExchange {
     }
 
     pub async fn close_input(&self) -> bool {
-        // Close local channel first.
-        // NOTE: this is very important. When we open the local channel while pushing closing input, it may cause distributed deadlock.
-        self.request_rx.close();
+        if self.state.acquire_close_input() {
+            // Close local channel first.
+            // NOTE: this is very important. When we open the local channel while pushing closing input, it may cause distributed deadlock.
+            self.request_rx.close();
 
-        // Notify remote not to send messages.
-        // We send it directly to the network channel avoid response channel is closed
-        if let Some(network_tx) = self.network_tx.upgrade() {
-            let packet = FlightData::from(DataPacket::ClosingInput);
-            return network_tx.send(Ok(packet)).await.is_ok();
+            // Notify remote not to send messages.
+            // We send it directly to the network channel avoid response channel is closed
+            if let Some(network_tx) = self.network_tx.upgrade() {
+                let packet = FlightData::from(DataPacket::ClosingInput);
+                if network_tx.send(Ok(packet)).await.is_ok() {
+                    if self.state.close_input() {
+                        self.state.shutdown_notify.notify_waiters();
+                    }
+
+                    return true;
+                }
+            }
         }
 
         false
     }
 
     pub async fn close_output(&self) -> bool {
-        // Notify remote that no message will be sent.
-        let packet = FlightData::from(DataPacket::ClosingOutput);
-        self.response_tx.send(Ok(packet)).await.is_ok()
+        if self.state.acquire_close_output() {
+            // Notify remote that no message will be sent.
+            let packet = FlightData::from(DataPacket::ClosingOutput);
+            if self.response_tx.send(Ok(packet)).await.is_ok() {
+                if self.state.close_output() {
+                    self.state.shutdown_notify.notify_waiters();
+                }
+
+                return true;
+            }
+        }
+
+        false
     }
 }
 
