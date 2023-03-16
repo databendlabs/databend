@@ -525,7 +525,11 @@ CreateTable(
                         select_list: [
                             QualifiedName {
                                 qualified: [
-                                    Star,
+                                    Star(
+                                        Some(
+                                            83..84,
+                                        ),
+                                    ),
                                 ],
                                 exclude: None,
                             },
@@ -2404,7 +2408,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -2460,7 +2468,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -2524,7 +2536,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -2612,7 +2628,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -2741,7 +2761,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -2873,7 +2897,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -3005,7 +3033,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -3137,7 +3169,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -3269,7 +3305,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -3401,7 +3441,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -3533,7 +3577,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -3665,7 +3713,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -3797,7 +3849,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -3929,7 +3985,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4061,7 +4121,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4193,7 +4257,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4284,7 +4352,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4375,7 +4447,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4466,7 +4542,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4557,7 +4637,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4716,7 +4800,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4875,7 +4963,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -5034,7 +5126,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -5297,7 +5393,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -5479,7 +5579,11 @@ Insert(
                         select_list: [
                             QualifiedName {
                                 qualified: [
-                                    Star,
+                                    Star(
+                                        Some(
+                                            27..28,
+                                        ),
+                                    ),
                                 ],
                                 exclude: None,
                             },
@@ -8719,7 +8823,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -8844,7 +8952,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -8967,7 +9079,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -9104,7 +9220,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
