@@ -231,7 +231,6 @@ impl FlightExchange {
                         Either::Left((_, right)) => {
                             debug_assert!(state.closed_both());
 
-                            // break 'loop_worker;
                             tx.close();
                             drop(network_tx);
                             response_tx.close();
@@ -467,6 +466,12 @@ impl FlightExchange {
 
             'publisher_worker: loop {
                 if channel_state.closed_both() {
+                    while let Ok(response) = response_rx.try_recv() {
+                        if network_tx.send(response).await.is_err() {
+                            break 'publisher_worker;
+                        }
+                    }
+
                     break 'publisher_worker;
                 }
 
@@ -630,6 +635,12 @@ impl FlightExchangeRef {
         }
 
         false
+    }
+
+    pub fn dec_output_ref(&self) {
+        if !self.is_closed_response.fetch_or(true, Ordering::SeqCst) {
+            self.state.response_count.fetch_sub(1, Ordering::SeqCst);
+        }
     }
 
     pub async fn close_output(&self) -> bool {
