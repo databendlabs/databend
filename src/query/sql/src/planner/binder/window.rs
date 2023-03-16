@@ -28,6 +28,7 @@ use crate::binder::sort::OrderItems;
 use crate::binder::NameResolutionResult;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
+use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
@@ -35,12 +36,16 @@ use crate::plans::ScalarItem;
 use crate::plans::Sort;
 use crate::plans::SortItem;
 use crate::plans::Window;
+use crate::plans::WindowFunc;
+use crate::plans::WindowFuncFrame;
 use crate::BindContext;
 use crate::Binder;
 use crate::ColumnBinding;
 use crate::IndexType;
+use crate::MetadataRef;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
+use crate::Visibility;
 
 impl Binder {
     pub(super) async fn fetch_window_order_by_expr(
@@ -152,6 +157,14 @@ impl Binder {
                                 need_eval_scalar: false,
                             });
                         }
+                        NameResolutionResult::InternalColumn(column) => {
+                            order_items.push(OrderItem {
+                                expr: order.clone(),
+                                name: column.internal_column.column_name().clone(),
+                                index: column.index,
+                                need_eval_scalar: false,
+                            });
+                        }
                         NameResolutionResult::Alias { .. } => {
                             return Err(ErrorCode::Internal("Invalid name resolution result"));
                         }
@@ -244,17 +257,6 @@ impl Binder {
         let mut scalars = vec![];
 
         for order in order_by.items {
-            // if from_context.in_grouping {
-            //     let mut group_checker = GroupingChecker::new(from_context);
-            //     // Perform grouping check on original scalar expression if order item is alias.
-            //     if let Some(scalar_item) = select_list
-            //         .items
-            //         .iter()
-            //         .find(|item| item.alias == order.name)
-            //     {
-            //         group_checker.resolve(&scalar_item.scalar, None)?;
-            //     }
-            // }
             if let Expr::ColumnRef {
                 database: ref database_name,
                 table: ref table_name,
@@ -281,10 +283,6 @@ impl Binder {
                     if let ScalarExpr::AggregateFunction(_) = scalar {
                         need_group_check = true;
                     }
-                    // if from_context.in_grouping || need_group_check {
-                    //     let mut group_checker = GroupingChecker::new(from_context);
-                    //     scalar = group_checker.resolve(&scalar, None)?;
-                    // }
                     scalars.push(ScalarItem { scalar, index });
                 }
             }
@@ -361,19 +359,161 @@ impl Binder {
             new_expr = SExpr::create_unary(eval_scalar.into(), new_expr);
         }
 
-        let window_plan = Window {
-            mode: AggregateMode::Initial,
-            aggregate_functions: bind_context.aggregate_info.aggregate_functions.clone(),
-            partition_by: bind_context
-                .aggregate_info
-                .window_info
-                .as_ref()
-                .unwrap()
-                .partition_by_items
-                .clone(),
-        };
-        new_expr = SExpr::create_unary(window_plan.into(), new_expr);
+        for window in bind_context.windows {
+            let window_plan = Window {
+                aggregate_function: window.aggregate_function,
+                partition_by: window.partition_by_items.clone(),
+                frame: window.frame,
+            };
+            new_expr = SExpr::create_unary(window_plan.into(), new_expr);
+        }
 
         Ok(new_expr)
     }
+
+    /// Analyze window functions in select clause, this will rewrite window functions.
+    pub(crate) fn analyze_window_select(
+        &mut self,
+        bind_context: &mut BindContext,
+        select_list: &mut SelectList,
+    ) -> Result<()> {
+        for item in select_list.items.iter_mut() {
+            if let ScalarExpr::WindowFunction(window_func) = &item.scalar {
+                let new_scalar =
+                    self.replace_window_function(bind_context, self.metadata.clone(), window_func)?;
+                item.scalar = new_scalar;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn replace_window_function(
+        &mut self,
+        bind_context: &mut BindContext,
+        metadata: MetadataRef,
+        window: &WindowFunc,
+    ) -> Result<ScalarExpr> {
+        let agg_info = &mut bind_context.aggregate_info;
+        let window_infos = &mut bind_context.windows;
+        let mut replaced_args: Vec<ScalarExpr> = Vec::with_capacity(window.agg_func.args.len());
+        let mut replaced_partition_items: Vec<ScalarExpr> =
+            Vec::with_capacity(window.partition_by.len());
+
+        let mut window_info = WindowInfo::default();
+        window_info.frame = Some(window.frame.clone());
+
+        // resolve aggregate function args in window function.
+        for (i, arg) in window.agg_func.args.iter().enumerate() {
+            let name = format!("{}_arg_{}", &window.agg_func.func_name, i);
+            if let ScalarExpr::BoundColumnRef(column_ref) = arg {
+                replaced_args.push(column_ref.clone().into());
+                agg_info.aggregate_arguments.push(ScalarItem {
+                    index: column_ref.column.index,
+                    scalar: arg.clone(),
+                });
+            } else {
+                let index = metadata
+                    .write()
+                    .add_derived_column(name.clone(), arg.data_type()?);
+
+                // Generate a ColumnBinding for each argument of aggregates
+                let column_binding = ColumnBinding {
+                    database_name: None,
+                    table_name: None,
+                    column_name: name,
+                    index,
+                    data_type: Box::new(arg.data_type()?),
+                    visibility: Visibility::Visible,
+                };
+                replaced_args.push(
+                    BoundColumnRef {
+                        column: column_binding.clone(),
+                    }
+                    .into(),
+                );
+                agg_info.aggregate_arguments.push(ScalarItem {
+                    index,
+                    scalar: arg.clone(),
+                });
+            }
+        }
+
+        // resolve partition by
+        for (i, part) in window.partition_by.iter().enumerate() {
+            let name = format!("{}_part_{}", &window.agg_func.func_name, i);
+            if let ScalarExpr::BoundColumnRef(column_ref) = part {
+                replaced_partition_items.push(column_ref.clone().into());
+                window_info.partition_by_items.push(ScalarItem {
+                    index: column_ref.column.index,
+                    scalar: part.clone(),
+                });
+            } else {
+                let index = metadata
+                    .write()
+                    .add_derived_column(name.clone(), part.data_type()?);
+
+                // Generate a ColumnBinding for each argument of aggregates
+                let column_binding = ColumnBinding {
+                    database_name: None,
+                    table_name: None,
+                    column_name: name,
+                    index,
+                    data_type: Box::new(part.data_type()?),
+                    visibility: Visibility::Visible,
+                };
+                replaced_partition_items.push(
+                    BoundColumnRef {
+                        column: column_binding.clone(),
+                    }
+                    .into(),
+                );
+                window_info.partition_by_items.push(ScalarItem {
+                    index,
+                    scalar: part.clone(),
+                });
+            }
+        }
+
+        let index = metadata
+            .write()
+            .add_derived_column(window.display_name(), *window.agg_func.return_type.clone());
+
+        let replaced_agg = AggregateFunction {
+            display_name: window.agg_func.display_name.clone(),
+            func_name: window.agg_func.func_name.clone(),
+            distinct: window.agg_func.distinct,
+            params: window.agg_func.params.clone(),
+            args: replaced_args,
+            return_type: window.agg_func.return_type.clone(),
+        };
+
+        agg_info.aggregate_functions.push(ScalarItem {
+            scalar: replaced_agg.clone().into(),
+            index,
+        });
+        agg_info.aggregate_functions_map.insert(
+            replaced_agg.display_name.clone(),
+            agg_info.aggregate_functions.len() - 1,
+        );
+
+        window_info.aggregate_function = replaced_agg.clone().into();
+
+        window_infos.push(window_info);
+
+        let replaced_window = WindowFunc {
+            agg_func: replaced_agg,
+            partition_by: replaced_partition_items,
+            frame: window.frame.clone(),
+        };
+
+        Ok(replaced_window.into())
+    }
+}
+
+#[derive(Default, Clone, PartialEq, Eq, Debug)]
+pub struct WindowInfo {
+    pub aggregate_function: ScalarItem,
+    pub partition_by_items: Vec<ScalarItem>,
+    pub frame: Option<WindowFuncFrame>,
 }

@@ -29,27 +29,30 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
 use crate::plans::WindowFunc;
+use crate::plans::WindowFuncFrame;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Window {
-    pub mode: AggregateMode,
     // aggregate scalar expressions, such as: sum(col1), count(*);
-    pub aggregate_functions: Vec<ScalarItem>,
+    pub aggregate_function: ScalarItem,
     // partition by scalar expressions
     pub partition_by: Vec<ScalarItem>,
+    // window frames
+    pub frame: Option<WindowFuncFrame>,
 }
 
 impl Window {
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
-        for agg in self.aggregate_functions.iter() {
-            used_columns.insert(agg.index);
-            used_columns.extend(agg.scalar.used_columns())
-        }
+
+        used_columns.insert(self.aggregate_function.index);
+        used_columns.extend(self.aggregate_function.scalar.used_columns());
+
         for part in self.partition_by.iter() {
             used_columns.insert(part.index);
             used_columns.extend(part.scalar.used_columns())
         }
+
         Ok(used_columns)
     }
 }
@@ -108,13 +111,7 @@ impl Operator for Window {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
 
         // Derive output columns
-        let mut output_columns = ColumnSet::new();
-        for part in self.partition_by.iter() {
-            output_columns.insert(part.index);
-        }
-        for agg in self.aggregate_functions.iter() {
-            output_columns.insert(agg.index);
-        }
+        let output_columns = ColumnSet::from([self.aggregate_function.index]);
 
         // Derive outer columns
         let outer_columns = input_prop

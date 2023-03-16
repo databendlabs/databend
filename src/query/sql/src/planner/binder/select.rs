@@ -109,6 +109,8 @@ impl Binder {
                 .await?;
         }
 
+        self.analyze_window_select(&mut from_context, &mut select_list)?;
+
         self.analyze_aggregate_select(&mut from_context, &mut select_list)?;
 
         // `analyze_projection` should behind `analyze_aggregate_select` because `analyze_aggregate_select` will rewrite `grouping`.
@@ -155,20 +157,21 @@ impl Binder {
                 .await?;
         }
 
-        // Window run after the HAVING clause but before the ORDER BY clause.
-        if !window_order_by_expr.is_empty() {
-            s_expr = self
-                .bind_window_order_by(
-                    &from_context,
-                    window_order_items,
-                    &select_list,
-                    &mut scalar_items,
-                    s_expr,
-                )
-                .await?;
-        }
+        // bind window functions
+        if !from_context.windows.is_empty() {
+            // Window run after the HAVING clause but before the ORDER BY clause.
+            if !window_order_by_expr.is_empty() {
+                s_expr = self
+                    .bind_window_order_by(
+                        &from_context,
+                        window_order_items,
+                        &select_list,
+                        &mut scalar_items,
+                        s_expr,
+                    )
+                    .await?;
+            }
 
-        if from_context.aggregate_info.window_info.is_some() {
             s_expr = self.bind_window_function(&mut from_context, s_expr).await?;
         }
 

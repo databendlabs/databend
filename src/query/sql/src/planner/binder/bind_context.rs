@@ -30,7 +30,7 @@ use dashmap::DashMap;
 
 use super::AggregateInfo;
 use super::INTERNAL_COLUMN_FACTORY;
-use crate::binder::aggregate::WindowInfo;
+use crate::binder::window::WindowInfo;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::ScalarExpr;
