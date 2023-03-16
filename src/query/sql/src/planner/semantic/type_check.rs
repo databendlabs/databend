@@ -1974,7 +1974,7 @@ impl<'a> TypeChecker<'a> {
             self.resolve(&udf_expr, None).await
         } else {
             Err(ErrorCode::UnknownFunction(format!(
-                "No function matches the given name: {func_name}"
+                "no function matches the given name: {func_name}"
             ))
             .set_span(span))
         }
