@@ -1,3 +1,10 @@
+query I
+select (number % 2) as a from numbers(5) group by grouping sets (a) order by a;
+----
+0
+1
+
+
 statement ok
 drop table if exists t;
 
