@@ -768,7 +768,7 @@ impl ClientFlightExchange {
     }
 
     pub async fn close_output(&self) -> bool {
-        if !self.state.acquire_close_output() {
+        if self.state.acquire_close_output() {
             // Notify remote that no message will be sent.
             let packet = FlightData::from(DataPacket::ClosingOutput);
             if self.response_tx.send(packet).await.is_ok() {
