@@ -29,18 +29,10 @@ mysql -h127.0.0.1 -uroot -P3307
 
 There are four built-in accounts in Databend that can be accessed from a local machine without requiring a password. These accounts are immutable and possess the highest level of privileges, meaning their settings cannot be altered or removed. Additionally, it is not possible to change or update their passwords.
 
-- root@127.0.0.1
-- root@localhost
-- default@127.0.0.1
-- default@localhost
-
-## Default SQL Dialect
-
-If you have logged into Databend through the MySQL protocol, it is important to note that the default SQL dialect is `PostgreSQL`. If you wish to use `MySQL`, change it by executing the following command:
-
-```sql
-set global sql_dialect='MySQL'
-```
+- `root@127.0.0.1`
+- `root@localhost`
+- `default@127.0.0.1`
+- `default@localhost`
 
 ## Example: Connect from DBeaver
 
