@@ -65,6 +65,7 @@ impl RulePushDownFilterScan {
             for column_entry in column_entries {
                 match column_entry {
                     ColumnEntry::BaseTableColumn(_) => {}
+                    ColumnEntry::InternalColumn(_) => {}
                     ColumnEntry::DerivedColumn(column) => {
                         // Don't push down predicate that contains derived column
                         // Because storage can't know such columns.

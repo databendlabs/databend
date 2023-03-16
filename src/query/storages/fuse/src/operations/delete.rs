@@ -202,7 +202,7 @@ impl FuseTable {
         )
         .await?;
 
-        let block_reader = self.create_block_reader(projection, ctx.clone())?;
+        let block_reader = self.create_block_reader(projection, false, ctx.clone())?;
         let schema = block_reader.schema();
         let filter = Arc::new(Some(
             filter
@@ -223,6 +223,7 @@ impl FuseTable {
             Arc::new(Some(
                 (*self.create_block_reader(
                     Projection::Columns(remain_column_indices),
+                    false,
                     ctx.clone(),
                 )?)
                 .clone(),
@@ -273,12 +274,12 @@ impl FuseTable {
             self.table_info.schema(),
             &push_down,
         )?;
-        let block_metas = pruner.pruning(segment_locations).await?;
+        let block_metas = pruner.pruning(segment_locations, None, None).await?;
 
         let range_block_metas = block_metas
             .clone()
             .into_iter()
-            .map(|(a, b)| (a.range, b))
+            .map(|(a, b)| (Some(a), b))
             .collect::<Vec<_>>();
 
         let (_, inner_parts) = self.read_partitions_with_metas(

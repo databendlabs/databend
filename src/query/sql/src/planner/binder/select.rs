@@ -93,19 +93,21 @@ impl Binder {
         };
 
         if let Some(expr) = &stmt.selection {
-            s_expr = self.bind_where(&from_context, expr, s_expr).await?;
+            s_expr = self.bind_where(&mut from_context, expr, s_expr).await?;
         }
 
         // Generate a analyzed select list with from context
         let mut select_list = self
-            .normalize_select_list(&from_context, &stmt.select_list)
+            .normalize_select_list(&mut from_context, &stmt.select_list)
             .await?;
 
         let (mut scalar_items, projections) = self.analyze_projection(&select_list)?;
 
         // This will potentially add some alias group items to `from_context` if find some.
-        self.analyze_group_items(&mut from_context, &select_list, &stmt.group_by)
-            .await?;
+        if let Some(group_by) = stmt.group_by.as_ref() {
+            self.analyze_group_items(&mut from_context, &select_list, group_by)
+                .await?;
+        }
 
         self.analyze_aggregate_select(&mut from_context, &mut select_list)?;
 
@@ -157,6 +159,9 @@ impl Binder {
         }
 
         s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
+
+        // add internal column binding into expr
+        s_expr = from_context.add_internal_column_into_expr(s_expr);
 
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
@@ -253,7 +258,7 @@ impl Binder {
 
     pub(super) async fn bind_where(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         expr: &Expr,
         child: SExpr,
     ) -> Result<SExpr> {
@@ -265,6 +270,12 @@ impl Binder {
             &[],
         );
         let (scalar, _) = scalar_binder.bind(expr).await?;
+        // if `Expr` is internal column, then add this internal column into `BindContext`
+        if let ScalarExpr::BoundInternalColumnRef(ref internal_column) = scalar {
+            bind_context
+                .add_internal_column_binding(&internal_column.column, self.metadata.clone());
+        };
+
         let filter_plan = Filter {
             predicates: split_conjunctions(&scalar),
             is_having: false,

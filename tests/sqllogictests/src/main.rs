@@ -21,10 +21,11 @@ use clap::Parser;
 use client::ClickhouseHttpClient;
 use futures_util::stream;
 use futures_util::StreamExt;
+use sqllogictest::default_column_validator;
 use sqllogictest::default_validator;
 use sqllogictest::parse_file;
-use sqllogictest::update_test_file;
 use sqllogictest::DBOutput;
+use sqllogictest::DefaultColumnType;
 use sqllogictest::Record;
 use sqllogictest::Runner;
 use sqllogictest::TestError;
@@ -60,8 +61,9 @@ impl Databend {
 #[async_trait::async_trait]
 impl sqllogictest::AsyncDB for Databend {
     type Error = DSqlLogicTestError;
+    type ColumnType = DefaultColumnType;
 
-    async fn run(&mut self, sql: &str) -> Result<DBOutput> {
+    async fn run(&mut self, sql: &str) -> Result<DBOutput<Self::ColumnType>> {
         self.client.query(sql).await
     }
 
@@ -187,12 +189,21 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
                     continue;
                 }
             }
-            num_of_tests += parse_file(file.as_ref().unwrap().path()).unwrap().len();
+            num_of_tests += parse_file::<DefaultColumnType>(file.as_ref().unwrap().path())
+                .unwrap()
+                .len();
             if args.complete {
                 let col_separator = " ";
                 let validator = default_validator;
+                let column_validator = default_column_validator;
                 let mut runner = Runner::new(create_databend(&client_type).await?);
-                update_test_file(file.unwrap().path(), &mut runner, col_separator, validator)
+                runner
+                    .update_test_file(
+                        file.unwrap().path(),
+                        col_separator,
+                        validator,
+                        column_validator,
+                    )
                     .await
                     .unwrap();
             } else {

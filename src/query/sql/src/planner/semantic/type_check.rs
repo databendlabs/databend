@@ -65,6 +65,7 @@ use crate::planner::metadata::optimize_remove_count_args;
 use crate::plans::AggregateFunction;
 use crate::plans::AndExpr;
 use crate::plans::BoundColumnRef;
+use crate::plans::BoundInternalColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ComparisonExpr;
 use crate::plans::ComparisonOp;
@@ -186,6 +187,10 @@ impl<'a> TypeChecker<'a> {
                     NameResolutionResult::Column(column) => {
                         let data_type = *column.data_type.clone();
                         (BoundColumnRef { column }.into(), data_type)
+                    }
+                    NameResolutionResult::InternalColumn(column) => {
+                        let data_type = column.internal_column.data_type();
+                        (BoundInternalColumnRef { column }.into(), data_type)
                     }
                     NameResolutionResult::Alias { scalar, .. } => {
                         (scalar.clone(), scalar.data_type()?)
@@ -2143,6 +2148,10 @@ impl<'a> TypeChecker<'a> {
                     NameResolutionResult::Column(column) => {
                         let data_type = *column.data_type.clone();
                         (BoundColumnRef { column }.into(), data_type)
+                    }
+                    NameResolutionResult::InternalColumn(column) => {
+                        let data_type = column.internal_column.data_type();
+                        (BoundInternalColumnRef { column }.into(), data_type)
                     }
                     NameResolutionResult::Alias { scalar, .. } => {
                         (scalar.clone(), scalar.data_type()?)

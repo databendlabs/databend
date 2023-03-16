@@ -120,7 +120,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let ctx: Arc<dyn TableContext> = ctx.clone();
     let segment_locations = base_snapshot.segments.clone();
     let block_metas = FusePruner::create(&ctx, data_accessor.clone(), schema, &None)?
-        .pruning(segment_locations)
+        .pruning(segment_locations, None, None)
         .await?;
     let mut blocks_map: BTreeMap<i32, Vec<(usize, Arc<BlockMeta>)>> = BTreeMap::new();
     block_metas.iter().for_each(|(idx, b)| {

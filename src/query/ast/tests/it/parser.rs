@@ -368,6 +368,10 @@ fn test_statement() {
             type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;"#,
         r#"SHOW FILE FORMATS"#,
         r#"DROP FILE FORMAT my_csv"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS (a, b, c, d)"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS (a, b, (c, d))"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (c), (d, e))"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (), (d, e))"#,
     ];
 
     for case in cases {
@@ -398,6 +402,7 @@ fn test_statement_error() {
         r#"create table a (c varch)"#,
         r#"create table a (c tuple())"#,
         r#"create table a (c decimal)"#,
+        r#"create table a (b tuple(c int, uint64));"#,
         r#"drop table if a.b"#,
         r#"truncate table a.b.c.d"#,
         r#"truncate a"#,
@@ -424,6 +429,8 @@ fn test_statement_error() {
         r#"CALL system$test(a"#,
         r#"show settings ilike 'enable%'"#,
         r#"PRESIGN INVALID @my_stage/path/to/file"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS a, b"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS ()"#,
     ];
 
     for case in cases {

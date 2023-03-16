@@ -93,8 +93,8 @@ runs:
             exit 1
         esac
         jq ".cluster_size = \"${BENCHMARK_CLUSTER_SIZE}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
-        jq ".machine = \"${{ inputs.size }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
-        jq ".tags = [\"${BENCHMARK_TYPE}\", \"serverless\"]" <result.json >result.json.tmp && mv result.json.tmp result.json
+        jq ".machine = \"${BENCHMARK_CLUSTER_SIZE}×${{ inputs.size }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+        jq ".tags = [\"${BENCHMARK_TYPE}\", \"s3\"]" <result.json >result.json.tmp && mv result.json.tmp result.json
         jq ".comment = \"commit:${{ inputs.sha }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
         mv result.json result-${{ inputs.dataset }}-cloud-${{ inputs.size }}.json
 
@@ -106,7 +106,7 @@ runs:
 
     - name: Remove warehouse
       if: always()
-      shell: bash
       continue-on-error: true
+      shell: bash
       run: |
         bendsql cloud warehouse delete benchmark-${{ inputs.run_id }}

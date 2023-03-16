@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use base64::encode_config;
-use base64::URL_SAFE_NO_PAD;
+use base64::engine::general_purpose;
+use base64::prelude::*;
 use common_base::base::tokio;
 use common_exception::Result;
 use common_users::JwtAuthenticator;
@@ -33,8 +33,8 @@ struct MyAdditionalData {
 fn get_jwks_file_rs256(kid: &str) -> (RS256KeyPair, String) {
     let key_pair = RS256KeyPair::generate(2048).unwrap().with_key_id(kid);
     let rsa_components = key_pair.public_key().to_components();
-    let e = encode_config(rsa_components.e, URL_SAFE_NO_PAD);
-    let n = encode_config(rsa_components.n, URL_SAFE_NO_PAD);
+    let e = general_purpose::URL_SAFE_NO_PAD.encode(rsa_components.e);
+    let n = general_purpose::URL_SAFE_NO_PAD.encode(rsa_components.n);
     let j =
         serde_json::json!({"keys": [ {"kty": "RSA", "kid": kid, "e": e, "n": n, } ] }).to_string();
     (key_pair, j)

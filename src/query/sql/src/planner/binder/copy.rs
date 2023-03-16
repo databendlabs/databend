@@ -256,6 +256,7 @@ impl<'a> Binder {
             description: "".to_string(),
             tbl_args: None,
             push_downs: None,
+            query_internal_columns: false,
         };
 
         Ok(Plan::Copy(Box::new(CopyPlan::IntoTable {
@@ -319,6 +320,7 @@ impl<'a> Binder {
             description: "".to_string(),
             tbl_args: None,
             push_downs: None,
+            query_internal_columns: false,
         };
 
         Ok(Plan::Copy(Box::new(CopyPlan::IntoTable {
@@ -602,7 +604,7 @@ impl<'a> Binder {
 
         // Generate a analyzed select list with from context
         let select_list = self
-            .normalize_select_list(&from_context, select_list)
+            .normalize_select_list(&mut from_context, select_list)
             .await?;
         let (scalar_items, projections) = self.analyze_projection(&select_list)?;
         let s_expr =
@@ -675,7 +677,7 @@ fn check_transform_query(
         && query.with.is_none()
     {
         if let SetExpr::Select(select) = &query.body {
-            if select.group_by.is_empty()
+            if select.group_by.is_none()
                 && !select.distinct
                 && select.having.is_none()
                 && select.from.len() == 1

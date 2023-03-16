@@ -41,17 +41,18 @@ pub enum LogType {
 
 fn date_str<S>(dt: &i32, s: S) -> Result<S::Ok, S::Error>
 where S: Serializer {
-    let t = NaiveDateTime::from_timestamp(i64::from(*dt) * 24 * 3600, 0);
+    let t = NaiveDateTime::from_timestamp_opt(i64::from(*dt) * 24 * 3600, 0).unwrap();
     s.serialize_str(t.format("%Y-%m-%d").to_string().as_str())
 }
 
 fn datetime_str<S>(dt: &i64, s: S) -> Result<S::Ok, S::Error>
 where S: Serializer {
-    let t = NaiveDateTime::from_timestamp(
+    let t = NaiveDateTime::from_timestamp_opt(
         dt / 1_000_000,
         TryFrom::try_from((dt % 1_000_000) * 1000).unwrap_or(0),
         // u32::try_from((dt % 1_000_000) * 1000).unwrap_or(0),
-    );
+    )
+    .unwrap();
     s.serialize_str(t.format("%Y-%m-%d %H:%M:%S%.6f").to_string().as_str())
 }
 

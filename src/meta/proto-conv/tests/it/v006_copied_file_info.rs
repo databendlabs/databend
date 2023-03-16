@@ -37,7 +37,7 @@ fn test_decode_v6_copied_file_info() -> anyhow::Result<()> {
     let want = || mt::TableCopiedFileInfo {
         etag: Some("etag".to_string()),
         content_length: 1024,
-        last_modified: Some(Utc.ymd(2014, 11, 29).and_hms(12, 0, 9)),
+        last_modified: Some(Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap()),
     };
 
     common::test_pb_from_to(func_name!(), want())?;

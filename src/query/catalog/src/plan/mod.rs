@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod datasource;
+mod internal_column;
 mod partition;
 mod partition_statistics;
 mod projection;
@@ -20,6 +21,7 @@ mod pruning_statistics;
 mod pushdown;
 
 pub use datasource::*;
+pub use internal_column::*;
 pub use partition::*;
 pub use partition_statistics::PartStatistics;
 pub use projection::Projection;

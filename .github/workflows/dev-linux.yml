@@ -11,6 +11,9 @@ on:
       - "docker/**"
       - "scripts/setup/**"
       - ".devcontainer/**"
+  merge_group:
+    types:
+      - checks_requested
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}

@@ -135,6 +135,8 @@ build_exceptions! {
     ReadTableDataError(1107),
     AddColumnExistError(1108),
     DropColumnEmptyError(1109),
+    // create table or alter table add column with internal column name
+    TableWithInternalColumnName(1110),
 
     // Data Related Errors
 
@@ -206,6 +208,7 @@ build_exceptions! {
     /// - not exists.
     /// - and without `IF EXISTS`
     CatalogNotFound(2320),
+
 
     // Cluster error codes.
     ClusterUnknownNode(2401),
