@@ -124,6 +124,10 @@ impl<'a> Evaluator<'a> {
     /// Run an expression partially, only the rows that are valid in the validity bitmap
     /// will be evaluated, the rest will be default values and should not throw any error.
     fn run_partially(&self, expr: &Expr, validity: Option<Bitmap>) -> Result<Value<AnyType>> {
+        debug_assert!(
+            validity.is_none() || validity.as_ref().unwrap().len() == self.input_columns.num_rows()
+        );
+
         #[cfg(debug_assertions)]
         self.check_expr(expr);
 
@@ -723,6 +727,7 @@ impl<'a> Evaluator<'a> {
             unreachable!()
         }
 
+        let num_rows = self.input_columns.num_rows();
         let len = self
             .input_columns
             .columns()
@@ -733,25 +738,33 @@ impl<'a> Evaluator<'a> {
             });
 
         // Evaluate the condition first and then partially evaluate the result branches.
-        let mut validity =
-            validity.unwrap_or_else(|| constant_bitmap(true, len.unwrap_or(1)).into());
+        let mut validity = validity.unwrap_or_else(|| constant_bitmap(true, num_rows).into());
         let mut conds = Vec::new();
         let mut flags = Vec::new();
         let mut results = Vec::new();
         for cond_idx in (0..args.len() - 1).step_by(2) {
             let cond = self.run_partially(&args[cond_idx], Some(validity.clone()))?;
-            let flag = match cond.try_downcast::<NullableType<BooleanType>>().unwrap() {
+            match cond.try_downcast::<NullableType<BooleanType>>().unwrap() {
                 Value::Scalar(None | Some(false)) => {
-                    constant_bitmap(false, len.unwrap_or(1)).into()
+                    results.push(Value::Scalar(Scalar::default_value(&generics[0])));
+                    flags.push(constant_bitmap(false, len.unwrap_or(1)).into());
                 }
-                Value::Scalar(Some(true)) => constant_bitmap(true, len.unwrap_or(1)).into(),
-                Value::Column(cond) => (&cond.column) & (&cond.validity),
+                Value::Scalar(Some(true)) => {
+                    results.push(self.run_partially(&args[cond_idx + 1], Some(validity.clone()))?);
+                    validity = constant_bitmap(false, num_rows).into();
+                    flags.push(constant_bitmap(true, len.unwrap_or(1)).into());
+                    break;
+                }
+                Value::Column(cond) => {
+                    let flag = (&cond.column) & (&cond.validity);
+                    results.push(
+                        self.run_partially(&args[cond_idx + 1], Some((&validity) & (&flag)))?,
+                    );
+                    validity = (&validity) & (&flag.not());
+                    flags.push(flag);
+                }
             };
-            let result = self.run_partially(&args[cond_idx + 1], Some((&validity) & (&flag)))?;
-            validity = (&validity) & (&flag.not());
             conds.push(cond);
-            flags.push(flag);
-            results.push(result);
         }
         let else_result = self.run_partially(&args[args.len() - 1], Some(validity))?;
 
